@@ -177,7 +177,7 @@ async function computeTeamEarlyMetrics(teamId: number) {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
   const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${fmt(start)}&endDate=${fmt(end)}&gameType=R`;
-  const r = await fetch(url);
+  const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
   const j: any = await r.json();
   const gamePks: number[] = [];
   for (const dd of j.dates ?? []) {
@@ -190,7 +190,7 @@ async function computeTeamEarlyMetrics(teamId: number) {
   const linescores = await Promise.all(
     recent.map(async (pk) => {
       try {
-        const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`);
+        const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
         return await lr.json() as any;
       } catch { return null; }
     })
@@ -244,7 +244,7 @@ async function computeOpsVsHand(teamId: number, hand: "R" | "L"): Promise<number
     // Team splits vs hand
     const sit = hand === "R" ? "vr" : "vl";
     const url = `https://statsapi.mlb.com/api/v1/teams/${teamId}/stats?season=2026&stats=statSplits&group=hitting&sitCodes=${sit}`;
-    const r = await fetch(url);
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const stat = j.stats?.[0]?.splits?.[0]?.stat;
     if (!stat) return undefined;
@@ -259,7 +259,7 @@ async function computeOpsVsHand(teamId: number, hand: "R" | "L"): Promise<number
 // ──────────────────────────────────────────────────────────────────────────
 async function computeLineupTop3(gamePk: number, teamId: number): Promise<{ obp?: number; k?: number; confirmed: boolean }> {
   try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`);
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const homeId = j.teams?.home?.team?.id;
     const side = homeId === teamId ? "home" : "away";
@@ -289,7 +289,7 @@ async function computeLineupTop3(gamePk: number, teamId: number): Promise<{ obp?
     const players = await Promise.all(
       playerIds.map(async (pid) => {
         try {
-          const pr = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&season=2026&group=hitting`);
+          const pr = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&season=2026&group=hitting`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
           const pj: any = await pr.json();
           const s = pj.stats?.[0]?.splits?.[0]?.stat;
           if (!s) return null;
@@ -329,7 +329,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
   // 1st inning ERA: pitching splits sitCodes=i1 (inning 1)
   try {
     const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01`;
-    const r = await fetch(url);
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const stat = j.stats?.[0]?.splits?.[0]?.stat;
     if (stat) {
@@ -347,7 +347,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
   // TTO1 xwOBA: Savant CSV con hfInn=1
   try {
     const savantUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=1%7C&min_pitches=0&min_results=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
-    const r = await fetch(savantUrl);
+    const r = await fetch(savantUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const csv = await r.text();
     const lines = csv.split("\n");
     if (lines.length >= 2) {
