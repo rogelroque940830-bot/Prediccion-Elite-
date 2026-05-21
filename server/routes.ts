@@ -255,9 +255,11 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     }
   });
 
-  // ── Picks history endpoints ──────────────────────────────────
-  // POST /api/picks  body: SavedPick (sin id, sin ts)
-  app.post("/api/picks", async (req, res) => {
+  // ── Picks history endpoints (SISTEMA NUEVO en /api/picks/v2) ────────────
+  // Renombrados de /api/picks a /api/picks/v2 para no chocar con el sistema viejo
+  // de más abajo (línea ~3490+) que el frontend usa con LOAD_STATE/sync.
+  // POST /api/picks/v2  body: SavedPick (sin id, sin ts)
+  app.post("/api/picks/v2", async (req, res) => {
     try {
       const body = req.body as Omit<SavedPick, "id" | "ts">;
       if (!body || !body.sport || !body.homeTeam || !body.awayTeam || !body.pickType || !body.pickSide || typeof body.confidence !== "number") {
@@ -277,8 +279,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     }
   });
 
-  // GET /api/picks?sport=mlb&days=7&minConfidence=70
-  app.get("/api/picks", async (req, res) => {
+  // GET /api/picks/v2?sport=mlb&days=7&minConfidence=70
+  app.get("/api/picks/v2", async (req, res) => {
     try {
       const sport = (req.query.sport as string | undefined)?.toLowerCase();
       const days = parseInt((req.query.days as string) || "30", 10);
@@ -293,8 +295,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     }
   });
 
-  // DELETE /api/picks/:id
-  app.delete("/api/picks/:id", async (req, res) => {
+  // DELETE /api/picks/v2/:id
+  app.delete("/api/picks/v2/:id", async (req, res) => {
     try {
       const id = req.params.id;
       const picks = loadPicks();
@@ -3469,7 +3471,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
   // ── PICKS PERSISTENCE ──────────────────────────────────────────────────
   // File-based storage — survives server restarts and deployments
-  const PICKS_FILE = path.join(process.cwd(), "picks-data.json");
+  // BUG FIX 2026-05-21: el archivo vivía en /app/picks-data.json (se borraba en
+  // cada redeploy). Ahora vive en /app/data/picks-data.json que es donde Railway
+  // Volume está montado, garantizando persistencia entre deploys.
+  const PICKS_DIR = path.join(process.cwd(), "data");
+  try {
+    if (!fs.existsSync(PICKS_DIR)) fs.mkdirSync(PICKS_DIR, { recursive: true });
+  } catch (e) { console.error("Could not create picks dir:", e); }
+  const PICKS_FILE = path.join(PICKS_DIR, "picks-data.json");
+  // Migration: si existe el archivo viejo /app/picks-data.json y NO existe el nuevo,
+  // copia el viejo al nuevo (preserva picks ya guardados antes del fix)
+  try {
+    const oldFile = path.join(process.cwd(), "picks-data.json");
+    if (fs.existsSync(oldFile) && !fs.existsSync(PICKS_FILE)) {
+      fs.copyFileSync(oldFile, PICKS_FILE);
+      console.log("[Picks] Migrated old picks-data.json to volume");
+    }
+  } catch (e) { console.error("Migration error:", e); }
   const DEFAULT_PICKS = { picks: [], mlbPicks: [], wnbaPicks: [], nhlPicks: [], bankroll: 1000, nextId: 1 };
 
   // Load from disk on startup
