@@ -180,9 +180,17 @@ async function computeTeamEarlyMetrics(teamId: number) {
   const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
   const j: any = await r.json();
   const gamePks: number[] = [];
+  // BUG FIX: /linescore NO devuelve team.id, mapeamos desde el schedule.
+  const gameTeamMap = new Map<number, { homeId: number; awayId: number }>();
   for (const dd of j.dates ?? []) {
     for (const g of dd.games ?? []) {
-      if (g.status?.detailedState === "Final") gamePks.push(g.gamePk);
+      if (g.status?.detailedState === "Final") {
+        gamePks.push(g.gamePk);
+        gameTeamMap.set(g.gamePk, {
+          homeId: g.teams?.home?.team?.id,
+          awayId: g.teams?.away?.team?.id,
+        });
+      }
     }
   }
   const recent = gamePks.slice(-30);
@@ -191,7 +199,13 @@ async function computeTeamEarlyMetrics(teamId: number) {
     recent.map(async (pk) => {
       try {
         const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-        return await lr.json() as any;
+        const data = await lr.json() as any;
+        const ids = gameTeamMap.get(pk);
+        if (ids && data.teams) {
+          if (data.teams.home) data.teams.home.__teamId = ids.homeId;
+          if (data.teams.away) data.teams.away.__teamId = ids.awayId;
+        }
+        return data;
       } catch { return null; }
     })
   );
@@ -201,9 +215,8 @@ async function computeTeamEarlyMetrics(teamId: number) {
 
   for (const ls of linescores) {
     if (!ls) continue;
-    const homeId = ls.teams?.home?.team?.id;
-    const isHome = homeId === teamId;
-    const isAway = ls.teams?.away?.team?.id === teamId;
+    const isHome = ls.teams?.home?.__teamId === teamId;
+    const isAway = ls.teams?.away?.__teamId === teamId;
     if (!isHome && !isAway) continue;
     const innings = ls.innings ?? [];
     if (innings.length < 3) continue;

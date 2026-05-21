@@ -282,12 +282,20 @@ async function computeTeamEarlyMetrics(teamId: number) {
 
   const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${fmt(start)}&endDate=${fmt(end)}&gameType=R`;
   let gamePks: number[] = [];
+  // BUG FIX: /linescore NO devuelve teams.home.team.id, mapeamos desde el schedule.
+  const gameTeamMap = new Map<number, { homeId: number; awayId: number }>();
   try {
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     for (const dd of j.dates ?? []) {
       for (const g of dd.games ?? []) {
-        if (g.status?.detailedState === "Final") gamePks.push(g.gamePk);
+        if (g.status?.detailedState === "Final") {
+          gamePks.push(g.gamePk);
+          gameTeamMap.set(g.gamePk, {
+            homeId: g.teams?.home?.team?.id,
+            awayId: g.teams?.away?.team?.id,
+          });
+        }
       }
     }
     console.log(`[ERE] team ${teamId}: fetched ${gamePks.length} finalized games from schedule`);
@@ -301,7 +309,14 @@ async function computeTeamEarlyMetrics(teamId: number) {
     recent.map(async (pk) => {
       try {
         const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-        return await lr.json() as any;
+        const data = await lr.json() as any;
+        // Inyectar teamIds desde el map porque /linescore no los trae
+        const ids = gameTeamMap.get(pk);
+        if (ids) {
+          if (data.teams?.home) data.teams.home.__teamId = ids.homeId;
+          if (data.teams?.away) data.teams.away.__teamId = ids.awayId;
+        }
+        return data;
       } catch { return null; }
     })
   );
@@ -312,8 +327,9 @@ async function computeTeamEarlyMetrics(teamId: number) {
   for (let idx = 0; idx < linescores.length; idx++) {
     const ls = linescores[idx];
     if (!ls) continue;
-    const isHome = ls.teams?.home?.team?.id === teamId;
-    const isAway = ls.teams?.away?.team?.id === teamId;
+    // Usar el campo inyectado __teamId (ver map arriba). El default team.id no existe en /linescore.
+    const isHome = ls.teams?.home?.__teamId === teamId || ls.teams?.home?.team?.id === teamId;
+    const isAway = ls.teams?.away?.__teamId === teamId || ls.teams?.away?.team?.id === teamId;
     if (!isHome && !isAway) continue;
     const innings = ls.innings ?? [];
     if (innings.length < 3) continue;
