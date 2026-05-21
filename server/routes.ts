@@ -109,6 +109,10 @@ function nbaToISO(nba: string): string {
 // En Railway el puerto cambia (8080), por eso usamos process.env.PORT.
 const SELF_URL = `http://localhost:${process.env.PORT || 5000}`;
 
+import { computeMlbTesi } from "./mlb-tesi.js";
+import { computeMlbEre } from "./mlb-ere.js";
+import { computeEarlyMarkets } from "./mlb-early-markets.js";
+
 // ── Picks history storage (file-based, persists until next Railway redeploy) ──
 interface SavedPick {
   id: string;
@@ -149,6 +153,107 @@ function savePicks(picks: SavedPick[]): void {
 }
 
 export function registerRoutes(httpServer: Server, app: Express): void {
+
+  // ── Early Markets MLB ──────────────────────────────────
+  // F5 ML, F5 O/U, NRFI/YRFI, 1ª-2ª-3ª inning ML
+  // POST body: { homeEreInput, awayEreInput, market lines (opcional) }
+  app.post("/api/mlb/early-markets", async (req, res) => {
+    try {
+      const { home, away, lines } = req.body || {};
+      if (!home?.teamId || !away?.teamId) {
+        return res.status(400).json({ success: false, error: "home y away requieren teamId" });
+      }
+
+      // Calcular ERE para ambos equipos en paralelo
+      const [homeEre, awayEre] = await Promise.all([
+        computeMlbEre({
+          teamId: home.teamId, teamName: home.teamName || "",
+          gamePk: home.gamePk, opposingPitcherId: home.opposingPitcherId,
+          opposingPitcherHand: home.opposingPitcherHand,
+          venue: home.venue, tempF: home.tempF, windMph: home.windMph,
+          windDirOut: home.windDirOut,
+        }),
+        computeMlbEre({
+          teamId: away.teamId, teamName: away.teamName || "",
+          gamePk: away.gamePk, opposingPitcherId: away.opposingPitcherId,
+          opposingPitcherHand: away.opposingPitcherHand,
+          venue: away.venue, tempF: away.tempF, windMph: away.windMph,
+          windDirOut: away.windDirOut,
+        }),
+      ]);
+
+      const markets = computeEarlyMarkets({
+        homeEre, awayEre,
+        f5OverLine: lines?.f5OverLine,
+        f5OverOddsAmerican: lines?.f5OverOdds,
+        f5UnderOddsAmerican: lines?.f5UnderOdds,
+        f5HomeMlOddsAmerican: lines?.f5HomeMlOdds,
+        f5AwayMlOddsAmerican: lines?.f5AwayMlOdds,
+        nrfiOddsAmerican: lines?.nrfiOdds,
+        yrfiOddsAmerican: lines?.yrfiOdds,
+      });
+
+      res.json({ success: true, data: { homeEre, awayEre, markets } });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: String(e?.message || e) });
+    }
+  });
+
+  // ── Early Run Environment (ERE) MLB v3 ──────────────────────
+  // Composite 0-100 score con 16 variables (8 offense + 8 pitcher)
+  // GET /api/mlb/ere/:teamId?name=X&gamePk=Y&pitcherId=Z&hand=R&venue=X&tempF=Y&windMph=Z&windOut=true
+  app.get("/api/mlb/ere/:teamId", async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId, 10);
+      if (isNaN(teamId)) return res.status(400).json({ success: false, error: "teamId inválido" });
+      const teamName = String(req.query.name || "");
+      const gamePk = req.query.gamePk ? parseInt(String(req.query.gamePk), 10) : undefined;
+      const opposingPitcherId = req.query.pitcherId ? parseInt(String(req.query.pitcherId), 10) : undefined;
+      const handStr = String(req.query.hand || "").toUpperCase();
+      const opposingPitcherHand: "R" | "L" | undefined = handStr === "R" || handStr === "L" ? (handStr as "R" | "L") : undefined;
+      const venue = req.query.venue ? String(req.query.venue) : undefined;
+      const tempF = req.query.tempF ? parseFloat(String(req.query.tempF)) : undefined;
+      const windMph = req.query.windMph ? parseFloat(String(req.query.windMph)) : undefined;
+      const windDirOut = String(req.query.windOut || "false").toLowerCase() === "true";
+
+      const data = await computeMlbEre({
+        teamId, teamName,
+        gamePk: isNaN(gamePk as any) ? undefined : gamePk,
+        opposingPitcherId: isNaN(opposingPitcherId as any) ? undefined : opposingPitcherId,
+        opposingPitcherHand,
+        venue,
+        tempF: isNaN(tempF as any) ? undefined : tempF,
+        windMph: isNaN(windMph as any) ? undefined : windMph,
+        windDirOut,
+      });
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: String(e?.message || e) });
+    }
+  });
+
+  // ── Team Early Scoring Index (TESI v2) MLB ──────────────────────
+  // GET /api/mlb/tesi/:teamId?name=X&gamePk=Y&pitcherId=Z&hand=R
+  app.get("/api/mlb/tesi/:teamId", async (req, res) => {
+    try {
+      const teamId = parseInt(req.params.teamId, 10);
+      if (isNaN(teamId)) return res.status(400).json({ success: false, error: "teamId inválido" });
+      const teamName = String(req.query.name || "");
+      const gamePk = req.query.gamePk ? parseInt(String(req.query.gamePk), 10) : undefined;
+      const opposingPitcherId = req.query.pitcherId ? parseInt(String(req.query.pitcherId), 10) : undefined;
+      const handStr = String(req.query.hand || "").toUpperCase();
+      const opposingPitcherHand: "R" | "L" | undefined = handStr === "R" || handStr === "L" ? (handStr as "R" | "L") : undefined;
+
+      const data = await computeMlbTesi({
+        teamId, teamName, gamePk: isNaN(gamePk as any) ? undefined : gamePk,
+        opposingPitcherId: isNaN(opposingPitcherId as any) ? undefined : opposingPitcherId,
+        opposingPitcherHand,
+      });
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: String(e?.message || e) });
+    }
+  });
 
   // ── Picks history endpoints ──────────────────────────────────
   // POST /api/picks  body: SavedPick (sin id, sin ts)
@@ -2351,8 +2456,11 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               awayRecord: awayForm?.awayRecord ?? "",
               recentGames: awayForm?.recentGames ?? [],
             } : null,
-            homePitcher: homePid ? pitcherStatsMap[homePid] ?? null : null,
-            awayPitcher: awayPid ? pitcherStatsMap[awayPid] ?? null : null,
+            // FIX: incluir id de pitcher para que el frontend pueda llamar a TESI/Savant.
+            // gamePk también agregado para que TESI pueda obtener lineup confirmado.
+            gamePk: g.gamePk,
+            homePitcher: homePid ? { id: homePid, ...(pitcherStatsMap[homePid] ?? {}) } : null,
+            awayPitcher: awayPid ? { id: awayPid, ...(pitcherStatsMap[awayPid] ?? {}) } : null,
             venue: g.venue?.name ?? "",
             weather: { tempF, wind: g.weather?.wind ?? "", windFavorable, condition: g.weather?.condition ?? "" },
             isNight,
