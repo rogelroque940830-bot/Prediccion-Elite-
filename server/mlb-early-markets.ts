@@ -127,8 +127,10 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const homeYrfiTeam = homeEre.variables.offense.yrfi?.raw ?? LEAGUE_YRFI_RATE;
   const awayYrfiTeam = awayEre.variables.offense.yrfi?.raw ?? LEAGUE_YRFI_RATE;
   // Pitcher rival vulnerability inning 1 (sobre 50=neutral)
-  const homeFacesPitcherVuln = (100 - awayEre.variables.pitcher.firstInnEra?.score ?? 50) / 100;
-  const awayFacesPitcherVuln = (100 - homeEre.variables.pitcher.firstInnEra?.score ?? 50) / 100;
+  // Pitcher vulnerability inning 1: invertir score (alto = pitcher vuln) y normalizar.
+  // Si firstInnEra es undefined o score es 50 (datos missing), defaulteamos a vuln=0.5.
+  const homeFacesPitcherVuln = (100 - (awayEre.variables.pitcher.firstInnEra?.score ?? 50)) / 100;
+  const awayFacesPitcherVuln = (100 - (homeEre.variables.pitcher.firstInnEra?.score ?? 50)) / 100;
 
   // Probabilidad cada equipo anote en 1er inning (blend team rate + pitcher vuln)
   const probHomeScore1 = clamp(
