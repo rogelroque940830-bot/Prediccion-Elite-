@@ -202,6 +202,31 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   // ── Early Run Environment (ERE) MLB v3 ──────────────────────
   // Composite 0-100 score con 16 variables (8 offense + 8 pitcher)
   // GET /api/mlb/ere/:teamId?name=X&gamePk=Y&pitcherId=Z&hand=R&venue=X&tempF=Y&windMph=Z&windOut=true
+
+  // ── Rotowire daily lineups (FUENTE 2) ────────────────────────────────────
+  app.get("/api/mlb/rotowire/lineup/:gamePk", async (req, res) => {
+    try {
+      const gamePk = parseInt(req.params.gamePk, 10);
+      if (isNaN(gamePk)) return res.status(400).json({ success: false, error: "gamePk inválido" });
+      const { getRotowireLineupForGame } = await import("./mlb-rotowire-lineups.js");
+      const data = await getRotowireLineupForGame(gamePk);
+      if (!data) return res.json({ success: true, data: null, error: "No lineup en Rotowire para ese gamePk" });
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: String(e?.message || e) });
+    }
+  });
+
+  app.get("/api/mlb/rotowire/all", async (_req, res) => {
+    try {
+      const { fetchAllRotowireGames } = await import("./mlb-rotowire-lineups.js");
+      const games = await fetchAllRotowireGames();
+      res.json({ success: true, data: games, count: games.length });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: String(e?.message || e) });
+    }
+  });
+
   app.get("/api/mlb/ere/:teamId", async (req, res) => {
     try {
       const teamId = parseInt(req.params.teamId, 10);
