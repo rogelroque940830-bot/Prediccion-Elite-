@@ -534,10 +534,15 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=gameLog&season=2026&group=pitching`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
-    const splits = (j.stats?.[0]?.splits ?? []).slice().sort((a: any, b: any) => {
+    // BUG FIX: filtrar SOLO starts reales (no relief appearances ni juegos cancelados).
+    // Antes contaba todos los items del game log → reportaba 6 GS cuando el pitcher
+    // tenía 10 GS reales porque entradas con IP≤1 (cancelados, suspendidos, relief) inflaban.
+    const allSplits = (j.stats?.[0]?.splits ?? []).slice().sort((a: any, b: any) => {
       return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
     });
-    const recent10 = splits.slice(0, 10);
+    // Solo partidos donde el pitcher fue starter (gamesStarted >= 1)
+    const startsOnly = allSplits.filter((s: any) => (parseInt(s.stat?.gamesStarted) || 0) >= 1);
+    const recent10 = startsOnly.slice(0, 10);
     if (recent10.length >= 2) {
       const totalGS = recent10.length;
       data.gs = Math.max(data.gs, totalGS);
