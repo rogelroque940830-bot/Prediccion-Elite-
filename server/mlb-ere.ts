@@ -24,6 +24,7 @@
 
 // Node 20+ provides global fetch natively; no need to import node-fetch.
 import { fetchSavantTeamXwobaVsHand } from "./mlb-savant-team.js";
+import { getRotowireLineupForGame, type RotowireGame } from "./mlb-rotowire-lineups.js";
 
 // ── LEAGUE BASELINES (MLB 2026 estándares) ────────────────────────────────
 const LEAGUE = {
@@ -117,17 +118,49 @@ export interface EreResult {
     top5xwoba: "savant" | "proxy" | "none";
     savantXwobaRaw?: number;
     savantPa?: number;
+    lineupSource: "rotowire" | "mlb-boxscore" | "mlb-pa-fallback" | "none";
+    lineupStatus?: "CONFIRMED" | "EXPECTED" | "PROJECTED" | "UNKNOWN";
+    lineupBatters?: number;        // 0-9, cuántos bateadores Rotowire reconoció
   };
 }
 
 export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut } = input;
 
+  // ── 0. Rotowire lineup (anticipa 4-6h, mejor que boxscore que confirma 30min antes)
+  let rotowireLineup: RotowireGame | null = null;
+  let rotowireSide: "visit" | "home" | null = null;
+  let rotowireBatterIds: number[] = [];
+  if (gamePk) {
+    try {
+      rotowireLineup = await getRotowireLineupForGame(gamePk);
+      if (rotowireLineup) {
+        // Detectar si el teamId es visit o home
+        // Estrategia: matchear cualquier batter con MLB ID resuelto
+        const visitIds = rotowireLineup.visit.batters.map((b) => b.mlbId).filter((x): x is number => !!x);
+        const homeIds = rotowireLineup.home.batters.map((b) => b.mlbId).filter((x): x is number => !!x);
+        // Cross-check con boxscore: pedir lado correcto
+        try {
+          const bx = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+          const bj: any = await bx.json();
+          if (bj.teams?.home?.team?.id === teamId) {
+            rotowireSide = "home";
+            rotowireBatterIds = homeIds;
+          } else if (bj.teams?.away?.team?.id === teamId) {
+            rotowireSide = "visit";
+            rotowireBatterIds = visitIds;
+          }
+        } catch { /* keep null */ }
+      }
+    } catch { /* silent */ }
+  }
+
   // ── 1. Offense data (paralelo) ──────────────────────────────────────────
+  const useRotowire = rotowireBatterIds.length >= 5;
   const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba] = await Promise.all([
     computeTeamEarlyMetrics(teamId),
-    gamePk ? computeLineupTop3OBP(gamePk, teamId) : Promise.resolve(null),
-    gamePk ? computeTop5IsoK(gamePk, teamId) : Promise.resolve(null),
+    gamePk ? computeLineupTop3OBP(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
+    gamePk ? computeTop5IsoK(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     opposingPitcherHand ? fetchSavantTeamXwobaVsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
   ]);
 
@@ -201,6 +234,13 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
       top5xwoba: top5XwobaSource,
       savantXwobaRaw: savantTeamXwoba?.xwoba,
       savantPa: savantTeamXwoba?.pa,
+      lineupSource: useRotowire
+        ? "rotowire"
+        : (lineupTop3 || savantTop5 ? "mlb-boxscore" : "none"),
+      lineupStatus: rotowireSide && rotowireLineup
+        ? rotowireLineup[rotowireSide].status
+        : undefined,
+      lineupBatters: useRotowire ? rotowireBatterIds.length : undefined,
     },
   };
 }
@@ -414,23 +454,31 @@ async function computeXwobaTop5VsHand(teamId: number, hand: "R" | "L"): Promise<
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Top-3 lineup OBP (vía boxscore)
 // ──────────────────────────────────────────────────────────────────────────
-async function computeLineupTop3OBP(gamePk: number, teamId: number): Promise<{ obp: number; pa: number } | null> {
+async function computeLineupTop3OBP(
+  gamePk: number,
+  teamId: number,
+  overrideIds?: number[]
+): Promise<{ obp: number; pa: number } | null> {
   try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-    const j: any = await r.json();
-    const side = j.teams?.home?.team?.id === teamId ? "home" : "away";
-    const battingOrder: any[] = j.teams?.[side]?.battingOrder ?? [];
-    const players = j.teams?.[side]?.players || {};
     let ids: number[] = [];
-    if (battingOrder.length >= 3) {
-      ids = battingOrder.slice(0, 3).map((id: any) => typeof id === "string" ? parseInt(id, 10) : id);
+    if (overrideIds && overrideIds.length >= 3) {
+      ids = overrideIds.slice(0, 3);
     } else {
-      ids = Object.values(players)
-        .filter((p: any) => p?.stats?.batting?.plateAppearances)
-        .sort((a: any, b: any) => (b.stats.batting.plateAppearances || 0) - (a.stats.batting.plateAppearances || 0))
-        .slice(0, 3)
-        .map((p: any) => p.person?.id)
-        .filter(Boolean);
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+      const j: any = await r.json();
+      const side = j.teams?.home?.team?.id === teamId ? "home" : "away";
+      const battingOrder: any[] = j.teams?.[side]?.battingOrder ?? [];
+      const players = j.teams?.[side]?.players || {};
+      if (battingOrder.length >= 3) {
+        ids = battingOrder.slice(0, 3).map((id: any) => typeof id === "string" ? parseInt(id, 10) : id);
+      } else {
+        ids = Object.values(players)
+          .filter((p: any) => p?.stats?.batting?.plateAppearances)
+          .sort((a: any, b: any) => (b.stats.batting.plateAppearances || 0) - (a.stats.batting.plateAppearances || 0))
+          .slice(0, 3)
+          .map((p: any) => p.person?.id)
+          .filter(Boolean);
+      }
     }
     if (ids.length === 0) return null;
 
@@ -454,23 +502,31 @@ async function computeLineupTop3OBP(gamePk: number, teamId: number): Promise<{ o
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Top-5 ISO y K% del lineup
 // ──────────────────────────────────────────────────────────────────────────
-async function computeTop5IsoK(gamePk: number, teamId: number): Promise<{ iso: number; kPct: number; xwoba: number; pa: number } | null> {
+async function computeTop5IsoK(
+  gamePk: number,
+  teamId: number,
+  overrideIds?: number[]
+): Promise<{ iso: number; kPct: number; xwoba: number; pa: number } | null> {
   try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-    const j: any = await r.json();
-    const side = j.teams?.home?.team?.id === teamId ? "home" : "away";
-    const battingOrder: any[] = j.teams?.[side]?.battingOrder ?? [];
-    const players = j.teams?.[side]?.players || {};
     let ids: number[] = [];
-    if (battingOrder.length >= 5) {
-      ids = battingOrder.slice(0, 5).map((id: any) => typeof id === "string" ? parseInt(id, 10) : id);
+    if (overrideIds && overrideIds.length >= 5) {
+      ids = overrideIds.slice(0, 5);
     } else {
-      ids = Object.values(players)
-        .filter((p: any) => p?.stats?.batting?.plateAppearances)
-        .sort((a: any, b: any) => (b.stats.batting.plateAppearances || 0) - (a.stats.batting.plateAppearances || 0))
-        .slice(0, 5)
-        .map((p: any) => p.person?.id)
-        .filter(Boolean);
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+      const j: any = await r.json();
+      const side = j.teams?.home?.team?.id === teamId ? "home" : "away";
+      const battingOrder: any[] = j.teams?.[side]?.battingOrder ?? [];
+      const players = j.teams?.[side]?.players || {};
+      if (battingOrder.length >= 5) {
+        ids = battingOrder.slice(0, 5).map((id: any) => typeof id === "string" ? parseInt(id, 10) : id);
+      } else {
+        ids = Object.values(players)
+          .filter((p: any) => p?.stats?.batting?.plateAppearances)
+          .sort((a: any, b: any) => (b.stats.batting.plateAppearances || 0) - (a.stats.batting.plateAppearances || 0))
+          .slice(0, 5)
+          .map((p: any) => p.person?.id)
+          .filter(Boolean);
+      }
     }
     if (ids.length === 0) return null;
 
