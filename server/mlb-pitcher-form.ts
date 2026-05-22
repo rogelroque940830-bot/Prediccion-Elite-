@@ -103,7 +103,14 @@ async function getPitcherForm(pitcherId: number, pitcherName: string, gameDateIs
   const logUrl = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=gameLog&season=${season}&group=pitching`;
   const logData = await fetchJson(logUrl);
   const splits = logData?.stats?.[0]?.splits ?? [];
-  const starts = splits.filter((s: any) => s.stat?.gamesStarted === 1 && s.date);
+  // BUG FIX: filtrar starts incompletos (partido del día actual con IP=1 contamina daysRest)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const starts = splits.filter((s: any) => {
+    if (s.stat?.gamesStarted !== 1 || !s.date) return false;
+    if (s.date === todayStr) return false;
+    const ip = parseFloat(s.stat?.inningsPitched || "0");
+    return ip >= 3;
+  });
   if (starts.length > 0) {
     const lastStart = starts[starts.length - 1];
     const lastDate = new Date(lastStart.date + "T00:00:00Z");
