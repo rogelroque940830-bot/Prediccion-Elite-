@@ -23,6 +23,7 @@
 // SOLO post-cálculo. NO usar para full game total como predictor principal.
 
 // Node 20+ provides global fetch natively; no need to import node-fetch.
+import { fetchSavantTeamXwobaVsHand } from "./mlb-savant-team.js";
 
 // ── LEAGUE BASELINES (MLB 2026 estándares) ────────────────────────────────
 const LEAGUE = {
@@ -111,18 +112,35 @@ export interface EreResult {
   // Recomendaciones de mercado
   marketSuggestions: string[];
   warnings: string[];
+  // Procedencia de top5xwoba (real Savant vs proxy)
+  dataSources?: {
+    top5xwoba: "savant" | "proxy" | "none";
+    savantXwobaRaw?: number;
+    savantPa?: number;
+  };
 }
 
 export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut } = input;
 
   // ── 1. Offense data (paralelo) ──────────────────────────────────────────
-  const [teamMetrics, opsTop5VsHand, lineupTop3, savantTop5] = await Promise.all([
+  const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba] = await Promise.all([
     computeTeamEarlyMetrics(teamId),
-    opposingPitcherHand ? computeXwobaTop5VsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
     gamePk ? computeLineupTop3OBP(gamePk, teamId) : Promise.resolve(null),
     gamePk ? computeTop5IsoK(gamePk, teamId) : Promise.resolve(null),
+    opposingPitcherHand ? fetchSavantTeamXwobaVsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
   ]);
+
+  // Reemplazar proxy xwOBA del lineup top-5 con Savant team xwOBA real cuando esté disponible.
+  // Política: Savant team-level (real) toma precedencia. Si falla, mantener proxy lineup-level.
+  let top5XwobaForEre: number | null = savantTop5?.xwoba ?? null;
+  let top5XwobaPaForEre: number = savantTop5?.pa ?? 0;
+  let top5XwobaSource: "savant" | "proxy" | "none" = top5XwobaForEre !== null ? "proxy" : "none";
+  if (savantTeamXwoba && savantTeamXwoba.xwoba > 0) {
+    top5XwobaForEre = savantTeamXwoba.xwoba;
+    top5XwobaPaForEre = savantTeamXwoba.pa || top5XwobaPaForEre || 100;
+    top5XwobaSource = "savant";
+  }
 
   // ── 2. Pitcher data (paralelo) ──────────────────────────────────────────
   const pitcherData = opposingPitcherId
@@ -134,7 +152,7 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     runs13: normVar(teamMetrics.earlyOff, LEAGUE.RUNS_1_3, LEAGUE.RUNS_1_3_SD, OFFENSE_WEIGHTS.runs13, teamMetrics.gamesAnalyzed, SAMPLE_MIN.TEAM_GP),
     f5: normVar(teamMetrics.f5Runs, LEAGUE.F5_RUNS, LEAGUE.F5_RUNS_SD, OFFENSE_WEIGHTS.f5, teamMetrics.gamesAnalyzed, SAMPLE_MIN.TEAM_GP),
     yrfi: normVar(teamMetrics.probFirstInn, LEAGUE.YRFI_RATE, LEAGUE.YRFI_RATE_SD, OFFENSE_WEIGHTS.yrfi, teamMetrics.gamesAnalyzed, SAMPLE_MIN.TEAM_GP),
-    top5xwoba: normVar(savantTop5?.xwoba ?? null, LEAGUE.TOP5_XWOBA, LEAGUE.TOP5_XWOBA_SD, OFFENSE_WEIGHTS.top5xwoba, savantTop5?.pa ?? 0, SAMPLE_MIN.BATTER_PA),
+    top5xwoba: normVar(top5XwobaForEre, LEAGUE.TOP5_XWOBA, LEAGUE.TOP5_XWOBA_SD, OFFENSE_WEIGHTS.top5xwoba, top5XwobaPaForEre, SAMPLE_MIN.BATTER_PA),
     top3obp: normVar(lineupTop3?.obp ?? null, LEAGUE.TOP3_OBP, LEAGUE.TOP3_OBP_SD, OFFENSE_WEIGHTS.top3obp, lineupTop3?.pa ?? 0, SAMPLE_MIN.BATTER_PA),
     top5k: normVar(savantTop5?.kPct ?? null, LEAGUE.TOP5_K_PCT, LEAGUE.TOP5_K_PCT_SD, OFFENSE_WEIGHTS.top5k, savantTop5?.pa ?? 0, SAMPLE_MIN.BATTER_PA, true), // invertido
     top5iso: normVar(savantTop5?.iso ?? null, LEAGUE.TOP5_ISO, LEAGUE.TOP5_ISO_SD, OFFENSE_WEIGHTS.top5iso, savantTop5?.pa ?? 0, SAMPLE_MIN.BATTER_PA),
@@ -179,6 +197,11 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     parkFactor, weatherModifier,
     variables: { offense: offVars, pitcher: pitVars },
     marketSuggestions, warnings,
+    dataSources: {
+      top5xwoba: top5XwobaSource,
+      savantXwobaRaw: savantTeamXwoba?.xwoba,
+      savantPa: savantTeamXwoba?.pa,
+    },
   };
 }
 
