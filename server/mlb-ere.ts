@@ -540,8 +540,17 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     const allSplits = (j.stats?.[0]?.splits ?? []).slice().sort((a: any, b: any) => {
       return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
     });
-    // Solo partidos donde el pitcher fue starter (gamesStarted >= 1)
-    const startsOnly = allSplits.filter((s: any) => (parseInt(s.stat?.gamesStarted) || 0) >= 1);
+    // Filtrar: gamesStarted >= 1 + IP mínimo 3 (exclude in-progress/cancelled).
+    // El partido del día actual con IP=1 (start en vivo) contamina recentEra y daysRest.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startsOnly = allSplits.filter((s: any) => {
+      const gs = parseInt(s.stat?.gamesStarted) || 0;
+      if (gs < 1) return false;
+      if (s.date === todayStr) return false;
+      const ip = parseFloat(s.stat?.inningsPitched || "0");
+      if (ip < 3) return false;
+      return true;
+    });
     const recent10 = startsOnly.slice(0, 10);
     if (recent10.length >= 2) {
       const totalGS = recent10.length;

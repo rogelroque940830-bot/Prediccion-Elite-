@@ -97,14 +97,26 @@ async function getPitcherRecentForm(pitcherId: number, pitcherName: string, game
   const data = await fetchJson(url);
   let splits: any[] = data?.stats?.[0]?.splits ?? [];
   // Solo titulares
-  let starts = splits.filter((s: any) => s.stat?.gamesStarted === 1);
+  // BUG FIX: filtrar también starts incompletos (en vivo / cancelados) que tienen
+  // gamesStarted=1 pero IP=1. Sin esto, recentEra se contamina con partidos en curso.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let starts = splits.filter((s: any) => {
+    if (s.stat?.gamesStarted !== 1) return false;
+    if (s.date === todayStr) return false;
+    const ip = parseFloat(s.stat?.inningsPitched || "0");
+    return ip >= 3;
+  });
 
   // Si tenemos <3 starts en la temporada actual, complementar con prior season
   if (starts.length < 3) {
     const prevUrl = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=gameLog&season=${season - 1}&group=pitching`;
     const prevData = await fetchJson(prevUrl);
     const prevSplits: any[] = prevData?.stats?.[0]?.splits ?? [];
-    const prevStarts = prevSplits.filter((s: any) => s.stat?.gamesStarted === 1);
+    const prevStarts = prevSplits.filter((s: any) => {
+      if (s.stat?.gamesStarted !== 1) return false;
+      const ip = parseFloat(s.stat?.inningsPitched || "0");
+      return ip >= 3;
+    });
     starts = [...prevStarts.slice(-5), ...starts];
   }
 

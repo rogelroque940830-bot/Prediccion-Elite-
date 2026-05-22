@@ -2076,12 +2076,31 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             // (más viejo primero). Hay que ordenar por fecha desc y tomar los 3 más recientes.
             // Antes: slice(0, 3) tomaba los PRIMEROS 3 (los más VIEJOS),
             // por eso daysRest salía 52+ días (era el primer partido de la temporada).
-            const allLogs = (gameLog?.splits ?? []).slice().sort((a: any, b: any) => {
-              const da = new Date(a.date || 0).getTime();
-              const db = new Date(b.date || 0).getTime();
-              return db - da; // más reciente primero
-            });
-            const logs = allLogs.slice(0, 3); // los 3 starts más recientes
+            // BUG FIX 2026-05-22: filtrar SOLO starts COMPLETOS y NO el del día actual.
+            // Bugs encontrados:
+            //   - gameLog incluye relief appearances (gamesStarted=0)
+            //   - gameLog incluye el start del día actual con IP=1 si está en vivo
+            //     → daysRest salía 0 cuando debería ser 5-7
+            // Solución: filtrar gamesStarted>=1 Y excluir el día actual Y IP mínimo 3
+            const todayStr = dateParam; // formato YYYY-MM-DD
+            const allLogs = (gameLog?.splits ?? [])
+              .filter((s: any) => {
+                const gs = parseInt(s.stat?.gamesStarted) || 0;
+                if (gs < 1) return false;
+                // Excluir partido en curso del día actual
+                if (s.date === todayStr) return false;
+                // Excluir starts incompletos (cancelados, suspendidos): mínimo 3 IP
+                const ip = parseFloat(s.stat?.inningsPitched || "0");
+                if (ip < 3) return false;
+                return true;
+              })
+              .slice()
+              .sort((a: any, b: any) => {
+                const da = new Date(a.date || 0).getTime();
+                const db = new Date(b.date || 0).getTime();
+                return db - da; // más reciente primero
+              });
+            const logs = allLogs.slice(0, 3); // los 3 starts COMPLETOS más recientes
 
             let recentEra: number | undefined;
             if (logs.length >= 2) {
