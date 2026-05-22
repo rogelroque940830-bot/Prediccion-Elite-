@@ -598,11 +598,39 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
   return data;
 }
 
+// CSV parser que respeta valores entre comillas ("Taillon, Jameson" no se rompe en la coma)
+function splitCsvRow(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
 function parseSavantRow(csv: string): { xwoba: number; kPct: number; bbPct: number; pa: number } | null {
   const lines = csv.split("\n").filter(l => l.trim());
   if (lines.length < 2) return null;
-  const header = lines[0].split(",").map(s => s.replace(/"/g, "").trim());
-  const row = lines[1].split(",");
+  // BUG FIX 2026-05-22: 3 bugs corregidos en este parser:
+  //   1. Savant CSV empieza con BOM (\uFEFF) que rompía header match
+  //   2. Row contiene nombres con comas ("Taillon, Jameson") → split(",") destrozaba columnas
+  //   3. Por (2), todos los pa, xwoba, k%, bb% leían valores incorrectos
+  // Ahora: BOM removido + parser CSV-aware con manejo de comillas.
+  const cleanField = (s: string) => s.replace(/[\uFEFF]/g, "").trim();
+  const header = splitCsvRow(lines[0]).map(cleanField);
+  const row = splitCsvRow(lines[1]).map(cleanField);
   const get = (col: string) => {
     const idx = header.indexOf(col);
     if (idx < 0 || !row[idx]) return NaN;
