@@ -1690,8 +1690,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const gamePk = parseInt(req.params.gamePk);
       if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
 
-      const schedJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=lineups,probablePitcher,team`)).json();
-      const game = schedJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? schedJson.dates?.[0]?.games?.[0];
+      // FIX doubleheader: usar feed/live en vez de schedule?gamePk (bug MLB API mezcla pitchers)
+      const game: any = await getGameMeta(gamePk);
       if (!game) return res.status(404).json({ error: "Game not found" });
 
       const homePitcher = game.teams?.home?.probablePitcher;
@@ -4215,9 +4215,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     try {
       const pk = req.params.gamePk;
       const data = await withCache(`mlb-adv-${pk}`, async () => {
-        const schedUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk=${pk}&hydrate=weather,venue,probablePitcher`;
-        const schedJson = await (await fetch(schedUrl)).json();
-        const game = schedJson.dates?.[0]?.games?.find((g: any) => g.gamePk == pk) || schedJson.dates?.[0]?.games?.[0];
+        // FIX doubleheader: usar feed/live (bug MLB API en /schedule con gamePk)
+        const game: any = await getGameMeta(parseInt(pk));
         if (!game) return { error: "Game not found" };
 
         const venue = game.venue || {};
