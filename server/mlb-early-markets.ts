@@ -167,6 +167,7 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   // Para cada inning: P(home gana ese inning) ≈ función de differencial early
   // pero con varianza ALTA. Cada inning individual es ~50/50 ± 8% normalmente.
   // Usamos ereDiff/45 (sensibilidad menor que F5) más home edge tiny.
+  const ereDiff = homeEre.ereScore - awayEre.ereScore;
   const innLogitBase = ereDiff / 45;
   const inning1 = buildInningPred(innLogitBase * 1.1, HOME_INN_EDGE);  // 1st inning depende más de top lineup + pitcher
   const inning2 = buildInningPred(innLogitBase * 0.9, HOME_INN_EDGE);  // 2nd inning más aleatorio
