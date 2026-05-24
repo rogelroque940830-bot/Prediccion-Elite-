@@ -112,6 +112,7 @@ const SELF_URL = `http://localhost:${process.env.PORT || 5000}`;
 import { computeMlbTesi } from "./mlb-tesi.js";
 import { computeMlbEre } from "./mlb-ere.js";
 import { computeEarlyMarkets } from "./mlb-early-markets.js";
+import { computeF5Unified, type PitcherRecentForm, type UmpireData } from "./mlb-f5-unified.js";
 
 // ── Picks history storage (file-based, persists until next Railway redeploy) ──
 interface SavedPick {
@@ -193,7 +194,16 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         yrfiOddsAmerican: lines?.yrfiOdds,
       });
 
-      res.json({ success: true, data: { homeEre, awayEre, markets } });
+      // F5 unificado: ERE core + capas internas (pitcher form, umpire)
+      // El frontend pasa opcionalmente homePitcherForm/awayPitcherForm/umpire.
+      const f5Unified = computeF5Unified({
+        homeEre, awayEre,
+        homePitcherForm: req.body?.homePitcherForm as PitcherRecentForm | undefined,
+        awayPitcherForm: req.body?.awayPitcherForm as PitcherRecentForm | undefined,
+        umpire: req.body?.umpire as UmpireData | undefined,
+      });
+
+      res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified } });
     } catch (e: any) {
       res.status(500).json({ success: false, error: String(e?.message || e) });
     }
