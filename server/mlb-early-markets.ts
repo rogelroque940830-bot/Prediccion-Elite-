@@ -1,4 +1,5 @@
 // ── MLB Early Markets — F5 ML, F5 O/U, NRFI/YRFI, 1-2-3 inning ML ─────────
+import { computeF5Unified, type PitcherRecentForm, type UmpireData } from "./mlb-f5-unified.js";
 // Toma 2 ERE objects (home + away) y deriva probabilidades para todos los
 // mercados early que el modelo full game NO toca. Anti-doble-conteo garantizado.
 //
@@ -67,10 +68,16 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   // ── 1. F5 ML ────────────────────────────────────────────────────────────
   // Diferencial ERE convertido a logit. Divisor 22 = sensibilidad calibrada:
   // gap ERE 22 puntos → ~62% prob lado fuerte (calibración inicial conservadora)
-  const ereDiff = homeEre.ereScore - awayEre.ereScore;
-  const f5Logit = ereDiff / 22 + (HOME_F5_EDGE * 6); // home edge en logit space
-  const f5ProbHome = sigmoid(f5Logit);
-  const f5ProbAway = 1 - f5ProbHome;
+  // F5 ML = modelo unificado (ERE core + form/umpire layers, sin calibración mercado)
+  // Garantiza UNA SOLA fuente de verdad para F5 prob.
+  const f5U = computeF5Unified({
+    homeEre, awayEre,
+    homePitcherForm: (input as any).homePitcherForm as PitcherRecentForm | undefined,
+    awayPitcherForm: (input as any).awayPitcherForm as PitcherRecentForm | undefined,
+    umpire: (input as any).umpire as UmpireData | undefined,
+  });
+  const f5ProbHome = f5U.f5ProbHome;
+  const f5ProbAway = f5U.f5ProbAway;
 
   let f5RecommendedSide: "HOME" | "AWAY" | "PASS" = "PASS";
   if (f5ProbHome >= 0.56) f5RecommendedSide = "HOME";
