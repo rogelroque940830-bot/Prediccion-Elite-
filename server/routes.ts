@@ -1252,8 +1252,25 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           away: { team: awayTeam, probablePitcher: enrich(probAway) },
         },
         lineups: {
-          homePlayers: j.liveData?.boxscore?.teams?.home?.battingOrder?.map((id: number) => ({ id })) ?? [],
-          awayPlayers: j.liveData?.boxscore?.teams?.away?.battingOrder?.map((id: number) => ({ id })) ?? [],
+          // Enriquecemos con fullName + position del index gameData.players (clave "ID<id>")
+          homePlayers: (j.liveData?.boxscore?.teams?.home?.battingOrder ?? []).map((id: number) => {
+            const p = gd.players?.[`ID${id}`];
+            return {
+              id,
+              fullName: p?.fullName,
+              primaryPosition: p?.primaryPosition,
+              batSide: p?.batSide,
+            };
+          }),
+          awayPlayers: (j.liveData?.boxscore?.teams?.away?.battingOrder ?? []).map((id: number) => {
+            const p = gd.players?.[`ID${id}`];
+            return {
+              id,
+              fullName: p?.fullName,
+              primaryPosition: p?.primaryPosition,
+              batSide: p?.batSide,
+            };
+          }),
         },
       };
     } catch {
