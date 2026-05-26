@@ -271,15 +271,43 @@ function normVar(
   return { raw, score: Math.round(score * 10) / 10, weight, sample };
 }
 
+// Pesos totales esperados (offense suma 100%, pitcher suma 100%).
+// Si peso disponible < UMBRAL_FULL, regresamos el score hacia 50 (neutral)
+// para evitar falsa confianza con sample chico (ej. pitcher con 1-2 starts).
+const UMBRAL_FULL = 70; // % de peso disponible para no regresar
+
 function weightedAvg(vars: Record<string, { score: number; weight: number }>): number {
-  let totalWeight = 0;
+  // 1. Suma de pesos OBJETIVO (incluyendo variables N/D con su peso original)
+  //    Para esto necesitamos saber el peso esperado: lo guardamos como
+  //    parte del cierre, pero como aquí solo recibimos vars, lo derivamos
+  //    asumiendo que cada categoría suma a 100%. Si el peso es 0 (N/D),
+  //    significa que la variable no contribuyó — contamos esos huecos.
+  let availableWeight = 0;     // peso de variables con datos
   let weightedSum = 0;
+  let nMissing = 0;
   for (const v of Object.values(vars)) {
-    totalWeight += v.weight;
-    weightedSum += v.score * v.weight;
+    if (v.weight > 0) {
+      availableWeight += v.weight;
+      weightedSum += v.score * v.weight;
+    } else {
+      nMissing++;
+    }
   }
-  if (totalWeight === 0) return 50;
-  return weightedSum / totalWeight;
+  if (availableWeight === 0) return 50;
+  // 2. Score raw (renormalizado solo sobre lo disponible)
+  const rawScore = weightedSum / availableWeight;
+  // 3. Si no hay variables N/D, devolver tal cual
+  if (nMissing === 0) return rawScore;
+  // 4. Regresión hacia 50 proporcional al peso faltante
+  //    Asumimos peso total esperado = 100 (offense y pitcher suman 100 cada uno)
+  const coverage = availableWeight / 100;
+  if (coverage >= UMBRAL_FULL / 100) {
+    // Suficiente cobertura, score raw es confiable
+    return rawScore;
+  }
+  // Cobertura baja: mezclar score con 50 (neutral) proporcionalmente
+  // coverage=0.38 → 0.38 × score + 0.62 × 50
+  return coverage * rawScore + (1 - coverage) * 50;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
