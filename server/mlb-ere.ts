@@ -617,6 +617,93 @@ function emptyPitcherData() {
   };
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// RECENT FORM: extrae stats de 1er inning de las últimas N starts
+// Detecta tendencias (pitcher mejorando o empeorando) que el season-wide oculta.
+// ──────────────────────────────────────────────────────────────────────────
+interface PitcherRecentStats {
+  firstInnEra: number | null;
+  yrfiAllowed: number | null;
+  whip13: number | null;
+  startsAnalyzed: number;
+}
+
+async function computePitcherRecentStats(
+  pitcherId: number,
+  windowStarts: number = 4
+): Promise<PitcherRecentStats> {
+  const empty: PitcherRecentStats = { firstInnEra: null, yrfiAllowed: null, whip13: null, startsAnalyzed: 0 };
+  try {
+    // 1. Obtener gamePks de las últimas N starts completas
+    const lr = await fetch(
+      `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=gameLog&season=2026&group=pitching`,
+      { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } }
+    );
+    const lj: any = await lr.json();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const starts = ((lj.stats?.[0]?.splits ?? []) as any[])
+      .filter((s: any) => {
+        const gs = parseInt(s.stat?.gamesStarted) || 0;
+        const ip = parseFloat(s.stat?.inningsPitched || "0");
+        return gs >= 1 && ip >= 3 && s.date !== todayStr;
+      })
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, windowStarts);
+
+    if (starts.length < 3) return empty; // muestra insuficiente
+
+    // 2. Para cada start, extraer 1er inning del feed/live
+    let totalRuns = 0, totalH = 0, totalBB = 0, totalOuts = 0, yrfiCount = 0;
+    const fetches = starts.map(async (start: any) => {
+      const gpk = start.game?.gamePk;
+      if (!gpk) return null;
+      try {
+        const fr = await fetch(
+          `https://statsapi.mlb.com/api/v1.1/game/${gpk}/feed/live`,
+          { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } }
+        );
+        const fj: any = await fr.json();
+        const plays = fj.liveData?.plays?.allPlays || [];
+        const firstInn = plays.filter((p: any) => p.about?.inning === 1 && p.matchup?.pitcher?.id === pitcherId);
+        let runs = 0, h = 0, bb = 0, outs = 0;
+        for (const p of firstInn) {
+          if (["single", "double", "triple", "home_run"].includes(p.result?.eventType)) h++;
+          if (p.result?.eventType === "walk") bb++;
+          runs += parseInt(p.result?.rbi || "0") || 0;
+          const eventType = p.result?.eventType || "";
+          if (["field_out", "strikeout", "force_out", "grounded_into_double_play", "sac_fly", "sac_bunt"].includes(eventType)) outs++;
+        }
+        return { runs, h, bb, outs };
+      } catch { return null; }
+    });
+    const results = (await Promise.all(fetches)).filter((r): r is { runs: number; h: number; bb: number; outs: number } => r !== null);
+    if (results.length < 3) return empty;
+    for (const r of results) {
+      totalRuns += r.runs;
+      totalH += r.h;
+      totalBB += r.bb;
+      totalOuts += Math.max(3, r.outs); // mínimo 3 outs por start completo
+      if (r.runs > 0) yrfiCount++;
+    }
+    const ipReal = totalOuts / 3;
+    return {
+      firstInnEra: ipReal > 0 ? Math.round((totalRuns / ipReal) * 9 * 100) / 100 : null,
+      yrfiAllowed: results.length > 0 ? Math.round((yrfiCount / results.length) * 100) / 100 : null,
+      whip13: ipReal > 0 ? Math.round(((totalH + totalBB) / ipReal) * 100) / 100 : null,
+      startsAnalyzed: results.length,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+// Mezcla 60% recent + 40% season cuando recent es confiable (>=3 starts)
+function blendRecentSeason(recent: number | null, season: number | null, recentN: number): number | null {
+  if (season === null) return recent;
+  if (recent === null || recentN < 3) return season;
+  return Math.round((0.6 * recent + 0.4 * season) * 100) / 100;
+}
+
 // Calcula prior individual del pitcher (0-100) desde sus stats season completas.
 // Usado cuando faltan variables Statcast específicas — mejor que regresar a 50
 // porque preserva el conocimiento que tenemos del pitcher de toda la temporada.
@@ -731,25 +818,64 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     }
   } catch { /* ignore */ }
 
-  // c) Savant xwOBA TTO1 + TTO2 para TTO penalty
+  // c) Savant xwOBA TTO1 + TTO2 para TTO penalty (con MEZCLA recent + season)
   try {
     const tto1Url = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=1%7C&min_pitches=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
     const tto2Url = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=2%7C&min_pitches=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
 
-    const [r1, r2] = await Promise.all([fetch(tto1Url), fetch(tto2Url)]);
-    const [csv1, csv2] = await Promise.all([r1.text(), r2.text()]);
+    // Versión recent: hace 28 días (≈4 starts)
+    const today = new Date();
+    const past = new Date(today); past.setDate(past.getDate() - 28);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const tto1RecentUrl = `${tto1Url}&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}`;
+    const tto2RecentUrl = `${tto2Url}&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}`;
+
+    const [r1, r2, r1r, r2r] = await Promise.all([
+      fetch(tto1Url), fetch(tto2Url), fetch(tto1RecentUrl), fetch(tto2RecentUrl),
+    ]);
+    const [csv1, csv2, csv1r, csv2r] = await Promise.all([r1.text(), r2.text(), r1r.text(), r2r.text()]);
     const parsed1 = parseSavantRow(csv1);
     const parsed2 = parseSavantRow(csv2);
+    const parsed1r = parseSavantRow(csv1r);
+    const parsed2r = parseSavantRow(csv2r);
 
     if (parsed1) {
-      data.xwobaTto1 = parsed1.xwoba;
+      const seasonXwoba = parsed1.xwoba;
+      const recentXwoba = parsed1r?.xwoba ?? null;
+      const recentPa = parsed1r?.pa ?? 0;
+      // Blend si recent tiene >= 10 PA (≈3 starts)
+      data.xwobaTto1 = (recentXwoba !== null && recentPa >= 10)
+        ? Math.round((0.6 * recentXwoba + 0.4 * seasonXwoba) * 1000) / 1000
+        : seasonXwoba;
       data.tto1Pa = parsed1.pa;
-      data.kbbTto1 = parsed1.kPct - parsed1.bbPct;
+      // K-BB% blend también
+      const seasonKbb = parsed1.kPct - parsed1.bbPct;
+      const recentKbb = parsed1r ? (parsed1r.kPct - parsed1r.bbPct) : null;
+      data.kbbTto1 = (recentKbb !== null && recentPa >= 10)
+        ? Math.round((0.6 * recentKbb + 0.4 * seasonKbb) * 1000) / 1000
+        : seasonKbb;
     }
     if (parsed1 && parsed2) {
       data.ttoPenalty = Math.round((parsed2.xwoba - parsed1.xwoba) * 1000) / 1000;
+      // Si tenemos ambos recent, recalcular ttoPenalty con blend
+      if (parsed1r && parsed2r && parsed1r.pa >= 10 && parsed2r.pa >= 10) {
+        const recentTto = parsed2r.xwoba - parsed1r.xwoba;
+        data.ttoPenalty = Math.round((0.6 * recentTto + 0.4 * data.ttoPenalty!) * 1000) / 1000;
+      }
     }
   } catch { /* ignore */ }
+
+  // d) RECENT FORM: blend de 1Inn ERA, YRFI allowed, WHIP 1-3 con últimas 4 starts
+  //    Detecta tendencias que el season-wide oculta (ej. Alcantara 73% YRFI season,
+  //    pero 50% en recent 4 — mezcla = 59% más realista).
+  try {
+    const recent = await computePitcherRecentStats(pitcherId, 4);
+    if (recent.startsAnalyzed >= 3) {
+      data.firstInnEra = blendRecentSeason(recent.firstInnEra, data.firstInnEra, recent.startsAnalyzed);
+      data.yrfiAllowed = blendRecentSeason(recent.yrfiAllowed, data.yrfiAllowed, recent.startsAnalyzed);
+      data.whip13 = blendRecentSeason(recent.whip13, data.whip13, recent.startsAnalyzed);
+    }
+  } catch { /* ignore, mantener valores season */ }
 
   return data;
 }
