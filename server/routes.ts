@@ -1261,35 +1261,19 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     }
   }
   const BDL_BASE = "https://api.balldontlie.io";
-  const BDL_KEY = process.env.BDL_API_KEY || "d94f53fd-aedc-4da1-952c-5975f51cf732";
+  // Defensa contra env var con valor placeholder (ej. "TU_KEY")
+  const _envBdlKey = (process.env.BDL_API_KEY || "").trim();
+  const _bdlKeyLooksValid = _envBdlKey.length >= 20 && _envBdlKey.includes("-");
+  const BDL_KEY = _bdlKeyLooksValid ? _envBdlKey : "d94f53fd-aedc-4da1-952c-5975f51cf732";
 
   // Mapeo de team abbreviations BALLDONTLIE → MLB Stats team IDs
   const BDL_MLB_TEAM_TO_ID: Record<string, number> = {
-    ARI: 109, ATL: 144, BAL: 110, BOS: 111, CHC: 112, CWS: 145, CIN: 113,
+    ARI: 109, ATL: 144, BAL: 110, BOS: 111, CHC: 112, CWS: 145, CHW: 145, CIN: 113,
     CLE: 114, COL: 115, DET: 116, HOU: 117, KC: 118, LAA: 108, LAD: 119,
     MIA: 146, MIL: 158, MIN: 142, NYM: 121, NYY: 147, OAK: 133, ATH: 133,
     PHI: 143, PIT: 134, SD: 135, SEA: 136, SF: 137, STL: 138, TB: 139,
     TEX: 140, TOR: 141, WSH: 120, WAS: 120,
   };
-
-  // Debug endpoint: prueba la conexión a BDL directamente y devuelve diagnóstico
-  app.get("/api/mlb/_debug/bdl-injuries", async (_req, res) => {
-    try {
-      const url = `${BDL_BASE}/mlb/v1/player_injuries?per_page=5`;
-      const r = await fetch(url, { headers: { Authorization: BDL_KEY } });
-      const txt = await r.text();
-      res.json({
-        status: r.status,
-        ok: r.ok,
-        url,
-        keyLen: BDL_KEY.length,
-        keyPrefix: BDL_KEY.slice(0, 8),
-        body: txt.slice(0, 1000),
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: String(e?.message || e), stack: e?.stack?.slice(0, 500) });
-    }
-  });
 
   // Cache global de lesionados MLB (se refresca cada 30 min)
   let mlbInjuryCache: { ts: number; byTeam: Record<number, any[]> } = { ts: 0, byTeam: {} };
