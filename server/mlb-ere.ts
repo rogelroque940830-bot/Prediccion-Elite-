@@ -121,6 +121,9 @@ export interface EreResult {
     lineupSource: "rotowire" | "mlb-boxscore" | "mlb-pa-fallback" | "none";
     lineupStatus?: "CONFIRMED" | "EXPECTED" | "PROJECTED" | "UNKNOWN";
     lineupBatters?: number;        // 0-9, cuántos bateadores Rotowire reconoció
+    pitcherPrior?: number;         // Prior individual del pitcher (0-100)
+    pitcherPriorUsed?: boolean;    // ¿Se aplicó regresión hacia prior?
+    pitcherSeasonEra?: number;     // ERA season usada para el prior
   };
 }
 
@@ -204,8 +207,12 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   };
 
   // ── 4. Suma ponderada con renormalización (variables N/D no penalizan) ──
+  // Prior individual del pitcher: derivado de su ERA/WHIP/K9 season completos.
+  // Usado para regresión cuando faltan variables Statcast específicas (rookies,
+  // relievers como Fisher con pocas starts, etc.) en vez de regresar a 50.
+  const pitcherPrior = pitcherData.seasonIp >= 10 ? computePitcherPrior(pitcherData) : 50;
   const offenseScore = weightedAvg(offVars);
-  const pitcherSuppressionScore = weightedAvg(pitVars);
+  const pitcherSuppressionScore = weightedAvg(pitVars, pitcherPrior);
   const ereRaw = Math.round((0.5 * offenseScore + 0.5 * (100 - pitcherSuppressionScore)) * 10) / 10;
 
   // ── 5. Park & weather modifier ──────────────────────────────────────────
@@ -241,6 +248,10 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
         ? rotowireLineup[rotowireSide].status
         : undefined,
       lineupBatters: useRotowire ? rotowireBatterIds.length : undefined,
+      pitcherPrior: Math.round(pitcherPrior * 10) / 10,
+      pitcherPriorUsed: pitcherData.seasonIp >= 10 &&
+        Object.values(pitVars).filter((v: any) => v.weight === 0).length > 0,
+      pitcherSeasonEra: pitcherData.seasonEra ?? undefined,
     },
   };
 }
@@ -276,13 +287,11 @@ function normVar(
 // para evitar falsa confianza con sample chico (ej. pitcher con 1-2 starts).
 const UMBRAL_FULL = 70; // % de peso disponible para no regresar
 
-function weightedAvg(vars: Record<string, { score: number; weight: number }>): number {
-  // 1. Suma de pesos OBJETIVO (incluyendo variables N/D con su peso original)
-  //    Para esto necesitamos saber el peso esperado: lo guardamos como
-  //    parte del cierre, pero como aquí solo recibimos vars, lo derivamos
-  //    asumiendo que cada categoría suma a 100%. Si el peso es 0 (N/D),
-  //    significa que la variable no contribuyó — contamos esos huecos.
-  let availableWeight = 0;     // peso de variables con datos
+function weightedAvg(
+  vars: Record<string, { score: number; weight: number }>,
+  prior: number = 50  // Prior individual (e.g. derivado de season stats); default = liga
+): number {
+  let availableWeight = 0;
   let weightedSum = 0;
   let nMissing = 0;
   for (const v of Object.values(vars)) {
@@ -293,21 +302,14 @@ function weightedAvg(vars: Record<string, { score: number; weight: number }>): n
       nMissing++;
     }
   }
-  if (availableWeight === 0) return 50;
-  // 2. Score raw (renormalizado solo sobre lo disponible)
+  if (availableWeight === 0) return prior;
   const rawScore = weightedSum / availableWeight;
-  // 3. Si no hay variables N/D, devolver tal cual
   if (nMissing === 0) return rawScore;
-  // 4. Regresión hacia 50 proporcional al peso faltante
-  //    Asumimos peso total esperado = 100 (offense y pitcher suman 100 cada uno)
   const coverage = availableWeight / 100;
-  if (coverage >= UMBRAL_FULL / 100) {
-    // Suficiente cobertura, score raw es confiable
-    return rawScore;
-  }
-  // Cobertura baja: mezclar score con 50 (neutral) proporcionalmente
-  // coverage=0.38 → 0.38 × score + 0.62 × 50
-  return coverage * rawScore + (1 - coverage) * 50;
+  if (coverage >= UMBRAL_FULL / 100) return rawScore;
+  // Regresión hacia el PRIOR (no 50 fijo). Si tenemos prior individual del
+  // pitcher (ej. ERA 2.73 → prior 65), usamos eso en vez de promedio liga.
+  return coverage * rawScore + (1 - coverage) * prior;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -607,11 +609,58 @@ function emptyPitcherData() {
     whip13: null as number | null,
     gs: 0,
     tto1Pa: 0,
+    // Season-wide stats para usar como PRIOR cuando faltan vars Statcast específicas
+    seasonEra: null as number | null,
+    seasonWhip: null as number | null,
+    seasonK9: null as number | null,
+    seasonIp: 0,
   };
+}
+
+// Calcula prior individual del pitcher (0-100) desde sus stats season completas.
+// Usado cuando faltan variables Statcast específicas — mejor que regresar a 50
+// porque preserva el conocimiento que tenemos del pitcher de toda la temporada.
+function computePitcherPrior(d: ReturnType<typeof emptyPitcherData>): number {
+  if (d.seasonIp < 10 || d.seasonEra == null) return 50; // sin muestra suficiente
+  // ERA: LEAGUE 4.20, SD 1.00. Bajo es bueno (invertido)
+  const eraZ = -(d.seasonEra - 4.20) / 1.00;
+  const eraScore = Math.max(0, Math.min(100, 50 + eraZ * 16.67));
+  // WHIP: LEAGUE 1.30, SD 0.20. Bajo es bueno
+  let whipScore = 50;
+  if (d.seasonWhip != null) {
+    const whipZ = -(d.seasonWhip - 1.30) / 0.20;
+    whipScore = Math.max(0, Math.min(100, 50 + whipZ * 16.67));
+  }
+  // K/9: LEAGUE 8.5, SD 1.5. Alto es bueno
+  let k9Score = 50;
+  if (d.seasonK9 != null) {
+    const k9Z = (d.seasonK9 - 8.5) / 1.5;
+    k9Score = Math.max(0, Math.min(100, 50 + k9Z * 16.67));
+  }
+  // Pesos: 50% ERA, 30% WHIP, 20% K/9 (ERA es la más descriptiva del resultado)
+  return 0.5 * eraScore + 0.3 * whipScore + 0.2 * k9Score;
 }
 
 async function computePitcherEarlyMetrics(pitcherId: number) {
   const data = emptyPitcherData();
+
+  // a0) Season stats completas (ERA, WHIP, K/9) — usado como PRIOR
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=season&season=2026&group=pitching`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+    const j: any = await r.json();
+    const s = j.stats?.[0]?.splits?.[0]?.stat;
+    if (s) {
+      const era = parseFloat(s.era);
+      const whip = parseFloat(s.whip);
+      const k9 = parseFloat(s.strikeoutsPer9Inn);
+      const ip = parseFloat(s.inningsPitched || "0");
+      if (isFinite(era)) data.seasonEra = era;
+      if (isFinite(whip)) data.seasonWhip = whip;
+      if (isFinite(k9)) data.seasonK9 = k9;
+      data.seasonIp = ip;
+    }
+  } catch { /* ignore */ }
 
   // a) 1st inning splits (sitCodes=i01)
   try {
