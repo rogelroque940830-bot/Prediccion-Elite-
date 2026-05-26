@@ -139,18 +139,36 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const homeFacesPitcherVuln = (100 - (awayEre.variables.pitcher.firstInnEra?.score ?? 50)) / 100;
   const awayFacesPitcherVuln = (100 - (homeEre.variables.pitcher.firstInnEra?.score ?? 50)) / 100;
 
-  // Probabilidad cada equipo anote en 1er inning (blend team rate + pitcher vuln)
-  // Pesos 70/30 (era 55/45): la ofensiva del equipo es ASIMÉTRICA — un equipo
-  // débil no capitaliza un pitcher malo tan fácilmente como uno fuerte. Da más
-  // peso a la verdadera capacidad del bateador.
-  const probHomeScore1 = clamp(
-    homeYrfiTeam * 0.70 + homeFacesPitcherVuln * 0.30,
-    0.10, 0.65
-  );
-  const probAwayScore1 = clamp(
-    awayYrfiTeam * 0.70 + awayFacesPitcherVuln * 0.30,
-    0.10, 0.65
-  );
+  // Top-4 lineup wOBA vs mano del pitcher (específico al matchup del día).
+  // Si está disponible, lo usamos como la señal más rica. Convertimos wOBA
+  // a "prob anotar 1er inning" via ratio sobre league mean.
+  const LEAGUE_WOBA = 0.310;
+  const homeTop4 = homeEre.top4LineupWoba?.woba;
+  const awayTop4 = awayEre.top4LineupWoba?.woba;
+  // Probabilidad cada equipo anote en 1er inning con 3 señales:
+  //   40% team YRFI rate (baseline equipo)
+  //   35% top-4 wOBA vs mano del pitcher (específico al día)
+  //   25% pitcher firstInnEra vulnerability
+  // Si top-4 wOBA no disponible (sample chico, lineup no confirmado), repesar a 60/40.
+  function combineSignals(
+    teamYrfi: number,
+    top4Woba: number | undefined,
+    pitcherVuln: number,
+    leagueYrfi: number,
+  ): number {
+    if (top4Woba !== undefined && isFinite(top4Woba) && top4Woba > 0) {
+      // Convertir wOBA a un "effective rate": leagueYrfi * (wOBA / leagueWoba)
+      const top4Signal = leagueYrfi * (top4Woba / LEAGUE_WOBA);
+      return clamp(
+        teamYrfi * 0.40 + top4Signal * 0.35 + pitcherVuln * 0.25,
+        0.10, 0.65
+      );
+    }
+    // Fallback: sin top-4, usar pesos 70/30 (team/pitcher)
+    return clamp(teamYrfi * 0.70 + pitcherVuln * 0.30, 0.10, 0.65);
+  }
+  const probHomeScore1 = combineSignals(homeYrfiTeam, homeTop4, homeFacesPitcherVuln, LEAGUE_YRFI_RATE);
+  const probAwayScore1 = combineSignals(awayYrfiTeam, awayTop4, awayFacesPitcherVuln, LEAGUE_YRFI_RATE);
 
   const probNoRun1stInn = (1 - probHomeScore1) * (1 - probAwayScore1);
   const probAnyRun1stInn = 1 - probNoRun1stInn;
