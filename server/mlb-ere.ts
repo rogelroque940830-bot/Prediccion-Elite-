@@ -113,6 +113,8 @@ export interface EreResult {
   // Recomendaciones de mercado
   marketSuggestions: string[];
   warnings: string[];
+  // Top-4 lineup wOBA vs mano del pitcher (específico para NRFI/YRFI)
+  top4LineupWoba?: { woba: number; pa: number; battersUsed: number } | null;
   // Procedencia de top5xwoba (real Savant vs proxy)
   dataSources?: {
     top5xwoba: "savant" | "proxy" | "none";
@@ -160,11 +162,14 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
 
   // ── 1. Offense data (paralelo) ──────────────────────────────────────────
   const useRotowire = rotowireBatterIds.length >= 5;
-  const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba] = await Promise.all([
+  const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba, lineupTop4Woba] = await Promise.all([
     computeTeamEarlyMetrics(teamId),
     gamePk ? computeLineupTop3OBP(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     gamePk ? computeTop5IsoK(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     opposingPitcherHand ? fetchSavantTeamXwobaVsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
+    (gamePk && opposingPitcherHand)
+      ? computeLineupTop4Woba(gamePk, teamId, opposingPitcherHand, useRotowire ? rotowireBatterIds : undefined)
+      : Promise.resolve(null),
   ]);
 
   // Reemplazar proxy xwOBA del lineup top-5 con Savant team xwOBA real cuando esté disponible.
@@ -236,6 +241,7 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     pitcherSuppressionScore: Math.round(pitcherSuppressionScore * 10) / 10,
     parkFactor, weatherModifier,
     variables: { offense: offVars, pitcher: pitVars },
+    top4LineupWoba: lineupTop4Woba,
     marketSuggestions, warnings,
     dataSources: {
       top5xwoba: top5XwobaSource,
@@ -526,6 +532,89 @@ async function computeLineupTop3OBP(
     const avgObp = valid.reduce((a, b) => a + b.obp, 0) / valid.length;
     const totalPa = valid.reduce((a, b) => a + b.pa, 0);
     return { obp: Math.round(avgObp * 1000) / 1000, pa: totalPa };
+  } catch { return null; }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HELPER: Top-4 lineup wOBA vs mano del pitcher (NRFI/YRFI específico)
+// Pondera por slot (1-2 ven más PA por turno que 3-4)
+// ──────────────────────────────────────────────────────────────────────────
+export async function computeLineupTop4Woba(
+  gamePk: number,
+  teamId: number,
+  opposingPitcherHand: "L" | "R",
+  overrideIds?: number[]
+): Promise<{ woba: number; pa: number; battersUsed: number } | null> {
+  try {
+    let ids: number[] = [];
+    if (overrideIds && overrideIds.length >= 4) {
+      ids = overrideIds.slice(0, 4);
+    } else {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+      const j: any = await r.json();
+      const side = j.teams?.home?.team?.id === teamId ? "home" : "away";
+      const battingOrder: any[] = j.teams?.[side]?.battingOrder ?? [];
+      const players = j.teams?.[side]?.players || {};
+      if (battingOrder.length >= 4) {
+        ids = battingOrder.slice(0, 4).map((id: any) => typeof id === "string" ? parseInt(id, 10) : id);
+      } else {
+        ids = Object.values(players)
+          .filter((p: any) => p?.stats?.batting?.plateAppearances)
+          .sort((a: any, b: any) => (b.stats.batting.plateAppearances || 0) - (a.stats.batting.plateAppearances || 0))
+          .slice(0, 4)
+          .map((p: any) => p.person?.id)
+          .filter(Boolean);
+      }
+    }
+    if (ids.length < 3) return null;
+
+    // Split vs hand del pitcher
+    const sitCode = opposingPitcherHand === "L" ? "vl" : "vr";
+    const stats = await Promise.all(ids.map(async (pid) => {
+      try {
+        const pr = await fetch(
+          `https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=statSplits&season=2026&group=hitting&sitCodes=${sitCode}`,
+          { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } }
+        );
+        const pj: any = await pr.json();
+        const s = pj.stats?.[0]?.splits?.[0]?.stat;
+        if (!s) return null;
+        // wOBA real desde componentes (FanGraphs formula)
+        const ab = parseInt(s.atBats) || 0;
+        const bb = parseInt(s.baseOnBalls) || 0;
+        const ibb = parseInt(s.intentionalWalks) || 0;
+        const hbp = parseInt(s.hitByPitch) || 0;
+        const sf = parseInt(s.sacFlies) || 0;
+        const hits = parseInt(s.hits) || 0;
+        const doubles = parseInt(s.doubles) || 0;
+        const triples = parseInt(s.triples) || 0;
+        const hr = parseInt(s.homeRuns) || 0;
+        const pa = parseInt(s.plateAppearances) || 0;
+        const singles = hits - doubles - triples - hr;
+        const denom = ab + bb - ibb + sf + hbp;
+        if (denom <= 0 || pa < 15) return null;
+        const ubb = bb - ibb;
+        const woba = (0.69 * ubb + 0.72 * hbp + 0.89 * singles + 1.27 * doubles + 1.62 * triples + 2.10 * hr) / denom;
+        return { woba, pa };
+      } catch { return null; }
+    }));
+    const valid = stats.filter((s): s is NonNullable<typeof s> => s !== null);
+    if (valid.length < 3) return null;
+
+    // Slot weights: slots 1-2 ven más PA por turno que 3-4
+    const slotWeights = [1.15, 1.10, 1.05, 1.00];
+    let totalWeight = 0, weightedWoba = 0, totalPa = 0;
+    valid.forEach((s, i) => {
+      const w = slotWeights[i] ?? 1.0;
+      weightedWoba += s.woba * w;
+      totalWeight += w;
+      totalPa += s.pa;
+    });
+    return {
+      woba: Math.round((weightedWoba / totalWeight) * 1000) / 1000,
+      pa: totalPa,
+      battersUsed: valid.length,
+    };
   } catch { return null; }
 }
 
