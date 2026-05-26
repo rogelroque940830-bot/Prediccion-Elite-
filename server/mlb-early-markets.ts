@@ -140,12 +140,15 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const awayFacesPitcherVuln = (100 - (homeEre.variables.pitcher.firstInnEra?.score ?? 50)) / 100;
 
   // Probabilidad cada equipo anote en 1er inning (blend team rate + pitcher vuln)
+  // Pesos 70/30 (era 55/45): la ofensiva del equipo es ASIMÉTRICA — un equipo
+  // débil no capitaliza un pitcher malo tan fácilmente como uno fuerte. Da más
+  // peso a la verdadera capacidad del bateador.
   const probHomeScore1 = clamp(
-    homeYrfiTeam * 0.55 + homeFacesPitcherVuln * 0.45,
+    homeYrfiTeam * 0.70 + homeFacesPitcherVuln * 0.30,
     0.10, 0.65
   );
   const probAwayScore1 = clamp(
-    awayYrfiTeam * 0.55 + awayFacesPitcherVuln * 0.45,
+    awayYrfiTeam * 0.70 + awayFacesPitcherVuln * 0.30,
     0.10, 0.65
   );
 
