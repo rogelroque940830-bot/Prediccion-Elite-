@@ -1272,6 +1272,25 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     TEX: 140, TOR: 141, WSH: 120, WAS: 120,
   };
 
+  // Debug endpoint: prueba la conexión a BDL directamente y devuelve diagnóstico
+  app.get("/api/mlb/_debug/bdl-injuries", async (_req, res) => {
+    try {
+      const url = `${BDL_BASE}/mlb/v1/player_injuries?per_page=5`;
+      const r = await fetch(url, { headers: { Authorization: BDL_KEY } });
+      const txt = await r.text();
+      res.json({
+        status: r.status,
+        ok: r.ok,
+        url,
+        keyLen: BDL_KEY.length,
+        keyPrefix: BDL_KEY.slice(0, 8),
+        body: txt.slice(0, 1000),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e), stack: e?.stack?.slice(0, 500) });
+    }
+  });
+
   // Cache global de lesionados MLB (se refresca cada 30 min)
   let mlbInjuryCache: { ts: number; byTeam: Record<number, any[]> } = { ts: 0, byTeam: {} };
   async function getMLBInjuriesFromBDL(): Promise<Record<number, any[]>> {
