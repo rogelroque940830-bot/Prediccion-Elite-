@@ -153,7 +153,57 @@ async function fetchTeamOpsSeason(teamId: number): Promise<{ ops: number; pa: nu
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Combinador público: xwOBA real-anchored vs hand
+// Recent xwOBA (últimos N días) vía Savant statcast_search agregado por equipo.
+// Usado para detectar momentum reciente que el season-wide oculta.
+// ──────────────────────────────────────────────────────────────────────────
+async function fetchSavantTeamXwobaRecent(abbr: string, hand: "R" | "L", days: number): Promise<{ xwoba: number; pa: number } | null> {
+  const today = new Date();
+  const past = new Date(today); past.setDate(past.getDate() - days);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  // statcast_search agregando por team: filtramos por team del bateador,
+  // mano del pitcher, y rango de fechas
+  const url = `https://baseballsavant.mlb.com/statcast_search/csv?` +
+    `all=true&hfPT=&hfAB=&hfGT=R%7C&hfPR=&hfZ=&hfStadium=&hfBBL=&hfNewZones=&` +
+    `hfPull=&hfC=&hfSit=&player_type=batter&hfOuts=&hfOpponent=&pitcher_throws=${hand}&` +
+    `batter_stands=&hfSA=&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}&` +
+    `hfMo=&hfTeam=${abbr}%7C&home_road=&hfRO=&position=&hfInfield=&hfOutfield=&hfInn=&hfBBT=&` +
+    `hfFlag=&metric_1=&group_by=team&min_pitches=0&min_results=0&min_pas=0&` +
+    `sort_col=pitches&player_event_sort=api_p_release_speed&sort_order=desc&type=details`;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 20000);
+    const r = await fetch(url, { headers: UA, signal: ctrl.signal });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const csv = await r.text();
+    // Aggregamos manualmente: cada fila es un PA, sumar woba_value y woba_denom
+    const lines = csv.split(/\r?\n/);
+    if (lines.length < 2) return null;
+    const hdr = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g, ""));
+    const iEstWoba = hdr.indexOf("estimated_woba_using_speedangle");
+    const iWobaDenom = hdr.indexOf("woba_denom");
+    if (iEstWoba < 0 || iWobaDenom < 0) return null;
+    let totalEstWoba = 0, totalDenom = 0, totalPa = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      const denom = parseFloat(cols[iWobaDenom]) || 0;
+      const est = parseFloat(cols[iEstWoba]);
+      if (denom > 0 && isFinite(est)) {
+        totalEstWoba += est * denom;
+        totalDenom += denom;
+        totalPa++;
+      }
+    }
+    if (totalDenom < 30) return null; // sample insuficiente (<30 PA recent)
+    return {
+      xwoba: Math.round((totalEstWoba / totalDenom) * 1000) / 1000,
+      pa: totalPa,
+    };
+  } catch { return null; }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Combinador público: xwOBA real-anchored vs hand (CON BLEND RECENT 60/40)
 // ──────────────────────────────────────────────────────────────────────────
 export async function fetchSavantTeamXwobaVsHand(
   teamId: number,
@@ -165,10 +215,11 @@ export async function fetchSavantTeamXwobaVsHand(
   const c = splitCache.get(cacheKey);
   if (c && Date.now() - c.ts < SPLIT_TTL) return c.data;
 
-  const [savantMap, opsHand, opsSeason] = await Promise.all([
+  const [savantMap, opsHand, opsSeason, recent15d] = await Promise.all([
     fetchSavantTeamSeasonMap(),
     fetchTeamOpsSplit(teamId, hand),
     fetchTeamOpsSeason(teamId),
+    fetchSavantTeamXwobaRecent(abbr, hand, 15),
   ]);
 
   const savant = savantMap?.get(abbr) || null;
@@ -193,6 +244,13 @@ export async function fetchSavantTeamXwobaVsHand(
     source = "ops_proxy_fallback";
   } else {
     return null;
+  }
+
+  // BLEND con recent 15d (60% recent + 40% season) si sample suficiente (≥30 PA).
+  // Capta momentum reciente del equipo bateador vs ese tipo de mano.
+  if (recent15d && recent15d.pa >= 30) {
+    xwoba = 0.6 * recent15d.xwoba + 0.4 * xwoba;
+    xwoba = Math.round(xwoba * 1000) / 1000;
   }
 
   const result: SavantTeamXwoba = {
