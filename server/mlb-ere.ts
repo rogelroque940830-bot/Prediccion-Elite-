@@ -568,34 +568,60 @@ export async function computeLineupTop4Woba(
     }
     if (ids.length < 3) return null;
 
-    // Split vs hand del pitcher
+    // Split vs hand del pitcher + RECENT 15 días para blend de momentum
     const sitCode = opposingPitcherHand === "L" ? "vl" : "vr";
+    const today = new Date();
+    const past = new Date(today); past.setDate(past.getDate() - 15);
+    const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
+
+    const calcWoba = (s: any): { woba: number; pa: number } | null => {
+      if (!s) return null;
+      const ab = parseInt(s.atBats) || 0;
+      const bb = parseInt(s.baseOnBalls) || 0;
+      const ibb = parseInt(s.intentionalWalks) || 0;
+      const hbp = parseInt(s.hitByPitch) || 0;
+      const sf = parseInt(s.sacFlies) || 0;
+      const hits = parseInt(s.hits) || 0;
+      const doubles = parseInt(s.doubles) || 0;
+      const triples = parseInt(s.triples) || 0;
+      const hr = parseInt(s.homeRuns) || 0;
+      const pa = parseInt(s.plateAppearances) || 0;
+      const singles = hits - doubles - triples - hr;
+      const denom = ab + bb - ibb + sf + hbp;
+      if (denom <= 0) return null;
+      const ubb = bb - ibb;
+      const woba = (0.69 * ubb + 0.72 * hbp + 0.89 * singles + 1.27 * doubles + 1.62 * triples + 2.10 * hr) / denom;
+      return { woba, pa };
+    };
+
     const stats = await Promise.all(ids.map(async (pid) => {
       try {
-        const pr = await fetch(
+        // 1. SEASON vs hand
+        const seasonPr = await fetch(
           `https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=statSplits&season=2026&group=hitting&sitCodes=${sitCode}`,
           { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } }
         );
-        const pj: any = await pr.json();
-        const s = pj.stats?.[0]?.splits?.[0]?.stat;
-        if (!s) return null;
-        // wOBA real desde componentes (FanGraphs formula)
-        const ab = parseInt(s.atBats) || 0;
-        const bb = parseInt(s.baseOnBalls) || 0;
-        const ibb = parseInt(s.intentionalWalks) || 0;
-        const hbp = parseInt(s.hitByPitch) || 0;
-        const sf = parseInt(s.sacFlies) || 0;
-        const hits = parseInt(s.hits) || 0;
-        const doubles = parseInt(s.doubles) || 0;
-        const triples = parseInt(s.triples) || 0;
-        const hr = parseInt(s.homeRuns) || 0;
-        const pa = parseInt(s.plateAppearances) || 0;
-        const singles = hits - doubles - triples - hr;
-        const denom = ab + bb - ibb + sf + hbp;
-        if (denom <= 0 || pa < 15) return null;
-        const ubb = bb - ibb;
-        const woba = (0.69 * ubb + 0.72 * hbp + 0.89 * singles + 1.27 * doubles + 1.62 * triples + 2.10 * hr) / denom;
-        return { woba, pa };
+        const seasonJ: any = await seasonPr.json();
+        const seasonW = calcWoba(seasonJ.stats?.[0]?.splits?.[0]?.stat);
+        if (!seasonW || seasonW.pa < 15) return null;
+
+        // 2. RECENT 15 días (general, no split por mano — sample chico ya)
+        let recentW: { woba: number; pa: number } | null = null;
+        try {
+          const recentPr = await fetch(
+            `https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=byDateRange&startDate=${fmtDate(past)}&endDate=${fmtDate(today)}&group=hitting`,
+            { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } }
+          );
+          const recentJ: any = await recentPr.json();
+          recentW = calcWoba(recentJ.stats?.[0]?.splits?.[0]?.stat);
+        } catch { /* ignore */ }
+
+        // 3. BLEND 60% recent + 40% season cuando recent tiene ≥8 PA
+        let finalWoba = seasonW.woba;
+        if (recentW && recentW.pa >= 8) {
+          finalWoba = 0.6 * recentW.woba + 0.4 * seasonW.woba;
+        }
+        return { woba: finalWoba, pa: seasonW.pa };
       } catch { return null; }
     }));
     const valid = stats.filter((s): s is NonNullable<typeof s> => s !== null);
