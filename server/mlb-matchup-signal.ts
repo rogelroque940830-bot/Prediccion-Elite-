@@ -50,6 +50,10 @@ export interface MatchupSignal {
   homeTop4ExpectedXwoba: number | null;
   // Top-4 bateadores AWAY vs arsenal del SP HOME
   awayTop4ExpectedXwoba: number | null;
+  // Full lineup HOME vs arsenal del SP AWAY (para F5/full game — todos los bateadores)
+  homeLineupAvgXwoba: number | null;
+  // Full lineup AWAY vs arsenal del SP HOME
+  awayLineupAvgXwoba: number | null;
   // Confianza mínima de los dos lados (NONE/LOW/PARTIAL/FULL)
   dataConfidence: "FULL" | "PARTIAL" | "LOW" | "NONE";
   // Razón debug
@@ -114,8 +118,11 @@ export async function computeMatchupSignal(
     const homeSide = combined.homeLineupVsAwaySP ?? null;
     const awaySide = combined.awayLineupVsHomeSP ?? null;
 
-    const homeXw = aggregateTop4(homeSide);
-    const awayXw = aggregateTop4(awaySide);
+    const homeTop4Xw = aggregateTop4(homeSide);
+    const awayTop4Xw = aggregateTop4(awaySide);
+    // Full lineup xwOBA: el matchup module ya provee averageExpectedXwoba
+    const homeLineupXw = (homeSide?.averageExpectedXwoba && isFinite(homeSide.averageExpectedXwoba)) ? homeSide.averageExpectedXwoba : null;
+    const awayLineupXw = (awaySide?.averageExpectedXwoba && isFinite(awaySide.averageExpectedXwoba)) ? awaySide.averageExpectedXwoba : null;
 
     // Confianza = mínimo de ambos lados
     const hRank = confidenceRank(homeSide?.dataConfidence);
@@ -125,8 +132,10 @@ export async function computeMatchupSignal(
     const dataConfidence = order[minRank];
 
     return {
-      homeTop4ExpectedXwoba: homeXw,
-      awayTop4ExpectedXwoba: awayXw,
+      homeTop4ExpectedXwoba: homeTop4Xw,
+      awayTop4ExpectedXwoba: awayTop4Xw,
+      homeLineupAvgXwoba: homeLineupXw,
+      awayLineupAvgXwoba: awayLineupXw,
       dataConfidence,
       reason: dataConfidence === "NONE" ? `home=${homeSide?.signal} away=${awaySide?.signal}` : undefined,
     };
@@ -134,6 +143,8 @@ export async function computeMatchupSignal(
     return {
       homeTop4ExpectedXwoba: null,
       awayTop4ExpectedXwoba: null,
+      homeLineupAvgXwoba: null,
+      awayLineupAvgXwoba: null,
       dataConfidence: "NONE",
       reason: `error: ${String(e?.message || e).slice(0, 100)}`,
     };
