@@ -169,6 +169,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       // Calcular ERE para ambos equipos + matchup signal en paralelo
       const sharedGamePk = home.gamePk || away.gamePk;
       const currentSeason = new Date().getFullYear();
+      // FASE 1 — toggle para A/B testing del matchup signal
+      const disableMatchup = req.body?.disableMatchup === true || req.query?.disableMatchup === "1";
       const [homeEre, awayEre, matchupSignal] = await Promise.all([
         computeMlbEre({
           teamId: home.teamId, teamName: home.teamName || "",
@@ -185,7 +187,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           windDirOut: away.windDirOut,
         }),
         // FASE 1 — matchup pitch-by-pitch para refinar NRFI/YRFI top-4
-        sharedGamePk
+        (sharedGamePk && !disableMatchup)
           ? computeMatchupSignal(sharedGamePk, currentSeason).catch(() => null)
           : Promise.resolve(null),
       ]);
@@ -211,7 +213,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         umpire: req.body?.umpire as UmpireData | undefined,
       });
 
-      res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified } });
+      res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified, matchupSignal: matchupSignal ?? null, matchupDisabled: disableMatchup } });
     } catch (e: any) {
       res.status(500).json({ success: false, error: String(e?.message || e) });
     }
