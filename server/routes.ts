@@ -211,6 +211,12 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         homePitcherForm: req.body?.homePitcherForm as PitcherRecentForm | undefined,
         awayPitcherForm: req.body?.awayPitcherForm as PitcherRecentForm | undefined,
         umpire: req.body?.umpire as UmpireData | undefined,
+        // FASE 1 — matchup pitch-by-pitch signal (lineup completo vs SP arsenal)
+        matchupSignal: matchupSignal ? {
+          homeLineupAvgXwoba: matchupSignal.homeLineupAvgXwoba,
+          awayLineupAvgXwoba: matchupSignal.awayLineupAvgXwoba,
+          dataConfidence: matchupSignal.dataConfidence,
+        } : undefined,
       });
 
       res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified, matchupSignal: matchupSignal ?? null, matchupDisabled: disableMatchup } });
