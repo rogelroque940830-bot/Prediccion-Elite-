@@ -26,11 +26,13 @@ export interface EarlyMarketsInput {
   f5AwayMlOddsAmerican?: number;
   nrfiOddsAmerican?: number;
   yrfiOddsAmerican?: number;
-  // FASE 1 — señal matchup pitch-by-pitch para refinar NRFI/YRFI top-4 signal.
-  // Si no se provee, NRFI/YRFI funciona como antes (back-compatible).
+  // FASE 1 — señal matchup pitch-by-pitch. Usa top-4 para NRFI/YRFI (currently disabled
+  // por redundancia) y lineupAvg para F5. Back-compatible si no se provee.
   matchupSignal?: {
     homeTop4ExpectedXwoba: number | null;
     awayTop4ExpectedXwoba: number | null;
+    homeLineupAvgXwoba: number | null;
+    awayLineupAvgXwoba: number | null;
     dataConfidence: "FULL" | "PARTIAL" | "LOW" | "NONE";
   };
 }
@@ -82,6 +84,12 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     homePitcherForm: (input as any).homePitcherForm as PitcherRecentForm | undefined,
     awayPitcherForm: (input as any).awayPitcherForm as PitcherRecentForm | undefined,
     umpire: (input as any).umpire as UmpireData | undefined,
+    // FASE 1 — propagar matchup signal a F5
+    matchupSignal: input.matchupSignal ? {
+      homeLineupAvgXwoba: (input.matchupSignal as any).homeLineupAvgXwoba ?? null,
+      awayLineupAvgXwoba: (input.matchupSignal as any).awayLineupAvgXwoba ?? null,
+      dataConfidence: input.matchupSignal.dataConfidence,
+    } : undefined,
   });
   const f5ProbHome = f5U.f5ProbHome;
   const f5ProbAway = f5U.f5ProbAway;
@@ -153,16 +161,12 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const homeTop4 = homeEre.top4LineupWoba?.woba;
   const awayTop4 = awayEre.top4LineupWoba?.woba;
 
-  // FASE 1 — Matchup signal pitch-by-pitch (top-4 expected xwOBA vs arsenal SP rival)
-  // Blend con top4Woba general (TEST 60% para validar si la señal aporta vs es redundante):
-  //   - FULL/PARTIAL conf → 40% top4 general + 60% matchup
-  //   - LOW conf         → 70% top4 general + 30% matchup
-  //   - NONE             → 100% top4 general (back-compatible)
+  // FASE 1 RESULT — En NRFI/YRFI, el matchup top-4 vs arsenal resultó
+  // REDUNDANTE con top4LineupWoba (shifts <0.7pp incluso a peso 60%).
+  // Peso revertido a 0: NRFI/YRFI usa SOLO top4 general (back-compatible total).
+  // Documentado para no perder el aprendizaje.
   const ms = input.matchupSignal;
-  const matchupWeight: number =
-    ms?.dataConfidence === "FULL" || ms?.dataConfidence === "PARTIAL" ? 0.60
-    : ms?.dataConfidence === "LOW" ? 0.30
-    : 0.0;
+  const matchupWeight: number = 0.0;  // disabled - signal redundant in NRFI/YRFI
   const homeTop4Blended =
     homeTop4 !== undefined && isFinite(homeTop4) && homeTop4 > 0
       ? (ms?.homeTop4ExpectedXwoba && isFinite(ms.homeTop4ExpectedXwoba) && ms.homeTop4ExpectedXwoba > 0
