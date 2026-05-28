@@ -33,6 +33,12 @@ export interface F5UnifiedInput {
   homePitcherForm?: PitcherRecentForm;
   awayPitcherForm?: PitcherRecentForm;
   umpire?: UmpireData;
+  // FASE 1 — matchup pitch-by-pitch signal para F5 (full lineup vs SP arsenal)
+  matchupSignal?: {
+    homeLineupAvgXwoba: number | null;
+    awayLineupAvgXwoba: number | null;
+    dataConfidence: "FULL" | "PARTIAL" | "LOW" | "NONE";
+  };
 }
 
 export interface F5UnifiedResult {
@@ -47,7 +53,8 @@ export interface F5UnifiedResult {
     ereF5Base: number;                  // antes de ajustes
     formAdjustment: number;             // ±pp aplicados por form
     umpireAdjustment: number;           // ±pp por umpire
-    finalProb: number;                  // = ereF5Base + form + umpire
+    matchupAdjustment: number;          // ±pp por matchup lineup vs SP arsenal (FASE 1)
+    finalProb: number;                  // = ereF5Base + form + umpire + matchup
   };
   // Sub-scores que entran al cálculo (para UI)
   components: {
@@ -115,6 +122,34 @@ function umpireAdjPp(input: F5UnifiedInput): number {
 // ──────────────────────────────────────────────────────────────────────────
 // Cálculo principal
 // ──────────────────────────────────────────────────────────────────────────
+// FASE 1 — Ajuste pp para F5 basado en matchup lineup vs arsenal SP rival.
+// Lógica: differential = (homeLineupXw - LEAGUE_WOBA) - (awayLineupXw - LEAGUE_WOBA)
+//                       = homeLineupXw - awayLineupXw
+// Positivo → lineup HOME tiene mejor matchup que AWAY → +pp HOME
+// Escala conservadora: 50 pp por unit xwOBA differential, cap ±3pp.
+// Confianza modula peso: FULL/PARTIAL = 100%, LOW = 50%, NONE = 0.
+const LEAGUE_WOBA_F5 = 0.310;
+function matchupAdjPp(input: F5UnifiedInput): number {
+  const ms = input.matchupSignal;
+  if (!ms || ms.dataConfidence === "NONE") return 0;
+  if (ms.homeLineupAvgXwoba === null || ms.awayLineupAvgXwoba === null) return 0;
+  if (!isFinite(ms.homeLineupAvgXwoba) || !isFinite(ms.awayLineupAvgXwoba)) return 0;
+  // Differential: home matchup advantage − away matchup advantage
+  const homeAdv = ms.homeLineupAvgXwoba - LEAGUE_WOBA_F5;
+  const awayAdv = ms.awayLineupAvgXwoba - LEAGUE_WOBA_F5;
+  // F5: ofensiva fuerte HOME = MENOS prob HOME (porque la prob es "home WIN F5",
+  // no "home anota más"). Pero la convención del modelo: más ofensiva home reduce
+  // prob HOME-win en F5 cuando el SP rival es bueno; equivalentemente, más ofensiva
+  // AWAY reduce prob HOME-win. La fórmula F5 actual es ERE diff → home - away.
+  // El matchup advantage es ofensiva: si HOME batea mejor vs el SP rival = HOME mete
+  // más runs → ayuda HOME ganar F5 → +pp HOME. Por eso: home - away.
+  const differential = homeAdv - awayAdv;
+  let scale = 50; // 1 xwOBA point → ~0.5pp
+  if (ms.dataConfidence === "LOW") scale *= 0.5;
+  const adj = differential * scale;
+  return Math.max(-3, Math.min(3, adj)); // cap ±3pp
+}
+
 export function computeF5Unified(input: F5UnifiedInput): F5UnifiedResult {
   const { homeEre, awayEre } = input;
 
@@ -135,8 +170,11 @@ export function computeF5Unified(input: F5UnifiedInput): F5UnifiedResult {
   // 3. Umpire
   const umpireAdjustment = umpireAdjPp(input);
 
-  // 4. Final
-  const finalPp = clamp(ereF5BasePp + formAdjustment + umpireAdjustment, 8, 92);
+  // 4. Matchup (FASE 1 — NUEVO)
+  const matchupAdjustment = matchupAdjPp(input);
+
+  // 5. Final
+  const finalPp = clamp(ereF5BasePp + formAdjustment + umpireAdjustment + matchupAdjustment, 8, 92);
   const f5ProbHome = finalPp / 100;
   const f5ProbAway = 1 - f5ProbHome;
 
@@ -160,6 +198,7 @@ export function computeF5Unified(input: F5UnifiedInput): F5UnifiedResult {
       ereF5Base: Math.round(ereF5BasePp * 10) / 10,
       formAdjustment: Math.round(formAdjustment * 10) / 10,
       umpireAdjustment: Math.round(umpireAdjustment * 10) / 10,
+      matchupAdjustment: Math.round(matchupAdjustment * 10) / 10,
       finalProb: Math.round(finalPp * 10) / 10,
     },
     components: {
