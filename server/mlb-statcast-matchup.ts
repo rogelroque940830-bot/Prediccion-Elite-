@@ -332,6 +332,99 @@ async function loadPitcherArsenal(year: number): Promise<Record<number, PitcherA
   return byPitcher;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FALLBACK: MLB Stats API pitchArsenal (MLB + AAA) para pitchers sin Savant
+//   - Savant requiere min_pitches=qualified → excluye rookies con muestra chica
+//   - MLB Stats API expone pitchArsenal con sportId=1 (MLB) y sportId=11 (AAA)
+//   - Solo devuelve % uso + velocidad → usamos league-avg wOBA por pitch type
+//   - Confidence ajustada según fuente (MLB > AAA > AAA prior)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// League-average wOBA against / whiff% por pitch type (baseline 2023-2025)
+const LEAGUE_BY_PITCH: Record<string, { woba: number; whiff: number; name: string }> = {
+  FF: { woba: 0.345, whiff: 22.0, name: "4-Seam Fastball" },
+  FT: { woba: 0.340, whiff: 18.0, name: "2-Seam Fastball" },
+  SI: { woba: 0.340, whiff: 17.0, name: "Sinker" },
+  FC: { woba: 0.295, whiff: 27.0, name: "Cutter" },
+  SL: { woba: 0.270, whiff: 35.0, name: "Slider" },
+  ST: { woba: 0.275, whiff: 34.0, name: "Sweeper" },
+  SV: { woba: 0.270, whiff: 35.0, name: "Slurve" },
+  CU: { woba: 0.270, whiff: 32.0, name: "Curveball" },
+  KC: { woba: 0.270, whiff: 33.0, name: "Knuckle-Curve" },
+  CS: { woba: 0.270, whiff: 32.0, name: "Slow Curve" },
+  CH: { woba: 0.280, whiff: 31.0, name: "Changeup" },
+  FS: { woba: 0.265, whiff: 36.0, name: "Splitter" },
+  FO: { woba: 0.265, whiff: 36.0, name: "Forkball" },
+  KN: { woba: 0.320, whiff: 25.0, name: "Knuckleball" },
+  EP: { woba: 0.310, whiff: 20.0, name: "Eephus" },
+};
+
+type ArsenalSource = "SAVANT_MLB" | "STATSAPI_MLB" | "STATSAPI_AAA" | "STATSAPI_AAA_PRIOR" | "NONE";
+
+async function fetchArsenalFromStatsApi(
+  pitcherId: number,
+  pitcherName: string,
+  sportId: number,
+  season: number,
+  minPitches: number = 100,
+): Promise<PitcherArsenal | null> {
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=pitchArsenal&sportId=${sportId}&season=${season}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const d: any = await r.json();
+    const splits = d?.stats?.[0]?.splits ?? [];
+    if (splits.length === 0) return null;
+    const totalPitches = splits[0]?.stat?.totalPitches ?? 0;
+    if (totalPitches < minPitches) return null;
+    const pitches = splits
+      .map((s: any) => {
+        const code: string = s?.stat?.type?.code ?? "";
+        const descFallback: string = s?.stat?.type?.description ?? code;
+        const usagePct: number = (s?.stat?.percentage ?? 0) * 100;
+        if (!code || usagePct <= 0) return null;
+        const lg = LEAGUE_BY_PITCH[code] ?? { woba: 0.310, whiff: 25.0, name: descFallback };
+        return {
+          type: code,
+          name: lg.name,
+          usage: usagePct,
+          wobaAgainst: lg.woba,
+          whiff: lg.whiff,
+        };
+      })
+      .filter((p: any): p is { type: string; name: string; usage: number; wobaAgainst: number; whiff: number } => p !== null);
+    if (pitches.length === 0) return null;
+    return { pitcherId, pitcherName, pitches };
+  } catch {
+    return null;
+  }
+}
+
+async function resolveArsenal(
+  pitcherId: number,
+  pitcherName: string,
+  season: number,
+): Promise<{ arsenal: PitcherArsenal | null; source: ArsenalSource }> {
+  // 1. Savant MLB current season
+  let pa = await loadPitcherArsenal(season);
+  let ar = pa[pitcherId];
+  if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
+  // 2. Savant MLB prev season
+  pa = await loadPitcherArsenal(season - 1);
+  ar = pa[pitcherId];
+  if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
+  // 3. MLB Stats API MLB current season
+  let api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 1, season, 100);
+  if (api) return { arsenal: api, source: "STATSAPI_MLB" };
+  // 4. MLB Stats API AAA current season
+  api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 11, season, 100);
+  if (api) return { arsenal: api, source: "STATSAPI_AAA" };
+  // 5. MLB Stats API AAA prev season
+  api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 11, season - 1, 100);
+  if (api) return { arsenal: api, source: "STATSAPI_AAA_PRIOR" };
+  return { arsenal: null, source: "NONE" };
+}
+
 // ─── Core matchup analysis ──────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 // MOMENTUM: stats últimos 15 días (peso 50% en xwOBA final)
@@ -535,18 +628,13 @@ export async function getLineupVsPitcherMatchup(
     // Continuar pero marcar como BAJA confianza
   }
 
-  // 2. Cargar arsenales (current season; fallback prev si vacío)
-  let pitcherArsenals = await loadPitcherArsenal(season);
-  let arsenal = pitcherArsenals[pitcherId];
-  if (!arsenal || arsenal.pitches.length === 0) {
-    pitcherArsenals = await loadPitcherArsenal(season - 1);
-    arsenal = pitcherArsenals[pitcherId];
-  }
+  // 2. Cargar arsenales con cadena de fallbacks (Savant MLB → StatsAPI MLB → AAA → AAA prior)
+  const { arsenal, source: arsenalSource } = await resolveArsenal(pitcherId, pitcherName, season);
   if (!arsenal) {
     return { pitcherId, pitcherName, arsenal: [], lineupSize: lineup.length, battersAnalyzed: 0,
       averageExpectedXwoba: 0.310, expectedTeamRunsDelta: 0, topVulnerabilities: [], topStrengths: [], perBatter: [],
       signal: "Sin arsenal Statcast del pitcher", dataConfidence: "LOW", lineupSource,
-      reason: `NO_ARSENAL: ${pitcherName} aún no tiene perfil en Baseball Savant (rookie con <30 pitches o anuncio tardío). Imposible análisis pitch-by-pitch.` };
+      reason: `NO_ARSENAL: ${pitcherName} sin perfil en Baseball Savant ni MLB/AAA Stats API. Imposible análisis pitch-by-pitch.` };
   }
 
   let batterStats = await loadBatterArsenal(season);
@@ -714,6 +802,11 @@ export async function getLineupVsPitcherMatchup(
   // ⚠️ Si el lineup viene de roster genérico (no del último juego ni confirmado),
   // forzar BAJA confianza porque puede haber lesionados/banca
   if (lineupSource === "PROJECTED_ROSTER") dataConfidence = "LOW";
+  // ⚠️ Si arsenal viene de fallback no-Savant, capar confianza
+  //   - STATSAPI_MLB: máx PARTIAL (tiene % uso pero wOBA es league-avg)
+  //   - STATSAPI_AAA / AAA_PRIOR: forzar LOW (arsenal de minors, no MLB)
+  if (arsenalSource === "STATSAPI_MLB" && dataConfidence === "FULL") dataConfidence = "PARTIAL";
+  if (arsenalSource === "STATSAPI_AAA" || arsenalSource === "STATSAPI_AAA_PRIOR") dataConfidence = "LOW";
 
   const reasonParts: string[] = [];
   if (lineupSource === "PROJECTED_ROSTER") {
@@ -721,7 +814,14 @@ export async function getLineupVsPitcherMatchup(
   } else if (lineupSource === "PROJECTED_LAST_GAME") {
     reasonParts.push("LINEUP_PROYECTADO: del último juego del equipo. Confirmado real sale 1-2h antes del juego.");
   }
-  if (dataConfidence === "LOW" && lineupSource !== "PROJECTED_ROSTER") {
+  if (arsenalSource === "STATSAPI_MLB") {
+    reasonParts.push(`ARSENAL_FALLBACK: ${pitcherName} sin perfil Savant calificado. Usando %uso MLB Stats API + wOBA league-avg por pitch type.`);
+  } else if (arsenalSource === "STATSAPI_AAA") {
+    reasonParts.push(`ARSENAL_AAA: ${pitcherName} sin perfil MLB. Usando arsenal AAA temporada actual (rookie recién subido). Confianza baja.`);
+  } else if (arsenalSource === "STATSAPI_AAA_PRIOR") {
+    reasonParts.push(`ARSENAL_AAA_PRIOR: ${pitcherName} sin perfil MLB ni AAA actual. Usando AAA temporada previa. Confianza baja.`);
+  }
+  if (dataConfidence === "LOW" && lineupSource !== "PROJECTED_ROSTER" && arsenalSource === "SAVANT_MLB") {
     reasonParts.push(`LOW_SAMPLE: solo ${directCount}/${lineupSizeAnalyzed} bateadores con datos directos.`);
   }
   const reason = reasonParts.length > 0 ? reasonParts.join(" \u00b7 ") : undefined;
