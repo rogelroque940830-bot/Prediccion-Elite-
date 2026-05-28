@@ -113,6 +113,7 @@ import { computeMlbTesi } from "./mlb-tesi.js";
 import { computeMlbEre } from "./mlb-ere.js";
 import { computeEarlyMarkets } from "./mlb-early-markets.js";
 import { computeF5Unified, type PitcherRecentForm, type UmpireData } from "./mlb-f5-unified.js";
+import { computeMatchupSignal } from "./mlb-matchup-signal.js";
 
 // ── Picks history storage (file-based, persists until next Railway redeploy) ──
 interface SavedPick {
@@ -165,8 +166,10 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         return res.status(400).json({ success: false, error: "home y away requieren teamId" });
       }
 
-      // Calcular ERE para ambos equipos en paralelo
-      const [homeEre, awayEre] = await Promise.all([
+      // Calcular ERE para ambos equipos + matchup signal en paralelo
+      const sharedGamePk = home.gamePk || away.gamePk;
+      const currentSeason = new Date().getFullYear();
+      const [homeEre, awayEre, matchupSignal] = await Promise.all([
         computeMlbEre({
           teamId: home.teamId, teamName: home.teamName || "",
           gamePk: home.gamePk, opposingPitcherId: home.opposingPitcherId,
@@ -181,6 +184,10 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           venue: away.venue, tempF: away.tempF, windMph: away.windMph,
           windDirOut: away.windDirOut,
         }),
+        // FASE 1 — matchup pitch-by-pitch para refinar NRFI/YRFI top-4
+        sharedGamePk
+          ? computeMatchupSignal(sharedGamePk, currentSeason).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       const markets = computeEarlyMarkets({
@@ -192,6 +199,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         f5AwayMlOddsAmerican: lines?.f5AwayMlOdds,
         nrfiOddsAmerican: lines?.nrfiOdds,
         yrfiOddsAmerican: lines?.yrfiOdds,
+        matchupSignal: matchupSignal ?? undefined,
       });
 
       // F5 unificado: ERE core + capas internas (pitcher form, umpire)
