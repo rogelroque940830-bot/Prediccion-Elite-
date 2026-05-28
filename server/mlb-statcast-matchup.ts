@@ -359,7 +359,7 @@ const LEAGUE_BY_PITCH: Record<string, { woba: number; whiff: number; name: strin
   EP: { woba: 0.310, whiff: 20.0, name: "Eephus" },
 };
 
-type ArsenalSource = "SAVANT_MLB" | "STATSAPI_MLB" | "STATSAPI_AAA" | "STATSAPI_AAA_PRIOR" | "NONE";
+type ArsenalSource = "SAVANT_MLB" | "STATSAPI_MLB" | "NONE";
 
 async function fetchArsenalFromStatsApi(
   pitcherId: number,
@@ -405,7 +405,7 @@ async function resolveArsenal(
   pitcherName: string,
   season: number,
 ): Promise<{ arsenal: PitcherArsenal | null; source: ArsenalSource }> {
-  // 1. Savant MLB current season
+  // 1. Savant MLB current season (datos reales pitch-by-pitch)
   let pa = await loadPitcherArsenal(season);
   let ar = pa[pitcherId];
   if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
@@ -413,15 +413,13 @@ async function resolveArsenal(
   pa = await loadPitcherArsenal(season - 1);
   ar = pa[pitcherId];
   if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
-  // 3. MLB Stats API MLB current season
-  let api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 1, season, 100);
+  // 3. MLB Stats API MLB current season (rescata rookies con MLB pitches < qualified)
+  //    Solo % uso real, wOBA por pitch viene de league-avg → confidence capeada a PARTIAL.
+  const api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 1, season, 100);
   if (api) return { arsenal: api, source: "STATSAPI_MLB" };
-  // 4. MLB Stats API AAA current season
-  api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 11, season, 100);
-  if (api) return { arsenal: api, source: "STATSAPI_AAA" };
-  // 5. MLB Stats API AAA prev season
-  api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 11, season - 1, 100);
-  if (api) return { arsenal: api, source: "STATSAPI_AAA_PRIOR" };
+  // ⛔ NO usamos AAA fallback: si el pitcher no tiene >=100 pitches en MLB esta temporada,
+  //    el sistema debe devolver NO_ARSENAL y dejar que mlb-ere.ts caiga al prior individual
+  //    (ERA/WHIP/K9 vía computePitcherPrior). Más honesto que inventar matchup con data de minors.
   return { arsenal: null, source: "NONE" };
 }
 
@@ -802,11 +800,8 @@ export async function getLineupVsPitcherMatchup(
   // ⚠️ Si el lineup viene de roster genérico (no del último juego ni confirmado),
   // forzar BAJA confianza porque puede haber lesionados/banca
   if (lineupSource === "PROJECTED_ROSTER") dataConfidence = "LOW";
-  // ⚠️ Si arsenal viene de fallback no-Savant, capar confianza
-  //   - STATSAPI_MLB: máx PARTIAL (tiene % uso pero wOBA es league-avg)
-  //   - STATSAPI_AAA / AAA_PRIOR: forzar LOW (arsenal de minors, no MLB)
+  // ⚠️ STATSAPI_MLB: tiene % uso real pero wOBA por pitch es league-avg → capar a PARTIAL
   if (arsenalSource === "STATSAPI_MLB" && dataConfidence === "FULL") dataConfidence = "PARTIAL";
-  if (arsenalSource === "STATSAPI_AAA" || arsenalSource === "STATSAPI_AAA_PRIOR") dataConfidence = "LOW";
 
   const reasonParts: string[] = [];
   if (lineupSource === "PROJECTED_ROSTER") {
@@ -815,11 +810,7 @@ export async function getLineupVsPitcherMatchup(
     reasonParts.push("LINEUP_PROYECTADO: del último juego del equipo. Confirmado real sale 1-2h antes del juego.");
   }
   if (arsenalSource === "STATSAPI_MLB") {
-    reasonParts.push(`ARSENAL_FALLBACK: ${pitcherName} sin perfil Savant calificado. Usando %uso MLB Stats API + wOBA league-avg por pitch type.`);
-  } else if (arsenalSource === "STATSAPI_AAA") {
-    reasonParts.push(`ARSENAL_AAA: ${pitcherName} sin perfil MLB. Usando arsenal AAA temporada actual (rookie recién subido). Confianza baja.`);
-  } else if (arsenalSource === "STATSAPI_AAA_PRIOR") {
-    reasonParts.push(`ARSENAL_AAA_PRIOR: ${pitcherName} sin perfil MLB ni AAA actual. Usando AAA temporada previa. Confianza baja.`);
+    reasonParts.push(`ARSENAL_FALLBACK: ${pitcherName} sin perfil Savant calificado. Usando %uso real MLB Stats API + wOBA league-avg por pitch type.`);
   }
   if (dataConfidence === "LOW" && lineupSource !== "PROJECTED_ROSTER" && arsenalSource === "SAVANT_MLB") {
     reasonParts.push(`LOW_SAMPLE: solo ${directCount}/${lineupSizeAnalyzed} bateadores con datos directos.`);
