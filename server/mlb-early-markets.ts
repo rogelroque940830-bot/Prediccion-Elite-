@@ -26,6 +26,13 @@ export interface EarlyMarketsInput {
   f5AwayMlOddsAmerican?: number;
   nrfiOddsAmerican?: number;
   yrfiOddsAmerican?: number;
+  // FASE 1 — señal matchup pitch-by-pitch para refinar NRFI/YRFI top-4 signal.
+  // Si no se provee, NRFI/YRFI funciona como antes (back-compatible).
+  matchupSignal?: {
+    homeTop4ExpectedXwoba: number | null;
+    awayTop4ExpectedXwoba: number | null;
+    dataConfidence: "FULL" | "PARTIAL" | "LOW" | "NONE";
+  };
 }
 
 export interface EarlyMarketsResult {
@@ -145,9 +152,37 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const LEAGUE_WOBA = 0.310;
   const homeTop4 = homeEre.top4LineupWoba?.woba;
   const awayTop4 = awayEre.top4LineupWoba?.woba;
+
+  // FASE 1 — Matchup signal pitch-by-pitch (top-4 expected xwOBA vs arsenal SP rival)
+  // Blend conservador con top4Woba general:
+  //   - FULL/PARTIAL conf → 70% top4 general + 30% matchup
+  //   - LOW conf         → 85% top4 general + 15% matchup
+  //   - NONE             → 100% top4 general (back-compatible)
+  const ms = input.matchupSignal;
+  const matchupWeight: number =
+    ms?.dataConfidence === "FULL" || ms?.dataConfidence === "PARTIAL" ? 0.30
+    : ms?.dataConfidence === "LOW" ? 0.15
+    : 0.0;
+  const homeTop4Blended =
+    homeTop4 !== undefined && isFinite(homeTop4) && homeTop4 > 0
+      ? (ms?.homeTop4ExpectedXwoba && isFinite(ms.homeTop4ExpectedXwoba) && ms.homeTop4ExpectedXwoba > 0
+          ? homeTop4 * (1 - matchupWeight) + ms.homeTop4ExpectedXwoba * matchupWeight
+          : homeTop4)
+      : (ms?.homeTop4ExpectedXwoba && isFinite(ms.homeTop4ExpectedXwoba) && ms.homeTop4ExpectedXwoba > 0
+          ? ms.homeTop4ExpectedXwoba  // solo matchup disponible
+          : undefined);
+  const awayTop4Blended =
+    awayTop4 !== undefined && isFinite(awayTop4) && awayTop4 > 0
+      ? (ms?.awayTop4ExpectedXwoba && isFinite(ms.awayTop4ExpectedXwoba) && ms.awayTop4ExpectedXwoba > 0
+          ? awayTop4 * (1 - matchupWeight) + ms.awayTop4ExpectedXwoba * matchupWeight
+          : awayTop4)
+      : (ms?.awayTop4ExpectedXwoba && isFinite(ms.awayTop4ExpectedXwoba) && ms.awayTop4ExpectedXwoba > 0
+          ? ms.awayTop4ExpectedXwoba
+          : undefined);
+
   // Probabilidad cada equipo anote en 1er inning con 3 señales:
   //   40% team YRFI rate (baseline equipo)
-  //   35% top-4 wOBA vs mano del pitcher (específico al día)
+  //   35% top-4 wOBA blended (general 70-100% + matchup 0-30%)
   //   25% pitcher firstInnEra vulnerability
   // Si top-4 wOBA no disponible (sample chico, lineup no confirmado), repesar a 60/40.
   function combineSignals(
@@ -167,8 +202,8 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     // Fallback: sin top-4, usar pesos 70/30 (team/pitcher)
     return clamp(teamYrfi * 0.70 + pitcherVuln * 0.30, 0.10, 0.65);
   }
-  const probHomeScore1 = combineSignals(homeYrfiTeam, homeTop4, homeFacesPitcherVuln, LEAGUE_YRFI_RATE);
-  const probAwayScore1 = combineSignals(awayYrfiTeam, awayTop4, awayFacesPitcherVuln, LEAGUE_YRFI_RATE);
+  const probHomeScore1 = combineSignals(homeYrfiTeam, homeTop4Blended, homeFacesPitcherVuln, LEAGUE_YRFI_RATE);
+  const probAwayScore1 = combineSignals(awayYrfiTeam, awayTop4Blended, awayFacesPitcherVuln, LEAGUE_YRFI_RATE);
 
   const probNoRun1stInn = (1 - probHomeScore1) * (1 - probAwayScore1);
   const probAnyRun1stInn = 1 - probNoRun1stInn;
