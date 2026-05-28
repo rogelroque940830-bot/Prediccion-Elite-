@@ -154,14 +154,14 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const awayTop4 = awayEre.top4LineupWoba?.woba;
 
   // FASE 1 — Matchup signal pitch-by-pitch (top-4 expected xwOBA vs arsenal SP rival)
-  // Blend conservador con top4Woba general:
-  //   - FULL/PARTIAL conf → 70% top4 general + 30% matchup
-  //   - LOW conf         → 85% top4 general + 15% matchup
+  // Blend con top4Woba general (TEST 60% para validar si la señal aporta vs es redundante):
+  //   - FULL/PARTIAL conf → 40% top4 general + 60% matchup
+  //   - LOW conf         → 70% top4 general + 30% matchup
   //   - NONE             → 100% top4 general (back-compatible)
   const ms = input.matchupSignal;
   const matchupWeight: number =
-    ms?.dataConfidence === "FULL" || ms?.dataConfidence === "PARTIAL" ? 0.30
-    : ms?.dataConfidence === "LOW" ? 0.15
+    ms?.dataConfidence === "FULL" || ms?.dataConfidence === "PARTIAL" ? 0.60
+    : ms?.dataConfidence === "LOW" ? 0.30
     : 0.0;
   const homeTop4Blended =
     homeTop4 !== undefined && isFinite(homeTop4) && homeTop4 > 0
