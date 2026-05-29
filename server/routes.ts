@@ -114,6 +114,7 @@ import { computeMlbEre } from "./mlb-ere.js";
 import { computeEarlyMarkets } from "./mlb-early-markets.js";
 import { computeF5Unified, type PitcherRecentForm, type UmpireData } from "./mlb-f5-unified.js";
 import { computeMatchupSignal } from "./mlb-matchup-signal.js";
+import { computeUncertainty } from "./mlb-uncertainty.js";
 
 // ── Picks history storage (file-based, persists until next Railway redeploy) ──
 interface SavedPick {
@@ -219,7 +220,16 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         } : undefined,
       });
 
-      res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified, matchupSignal: matchupSignal ?? null, matchupDisabled: disableMatchup } });
+      // Uncertainty assessment (overlay informativo, no afecta predicción)
+      const uncertainty = await computeUncertainty(
+        home.teamId,
+        away.teamId,
+        homeEre,
+        awayEre,
+        matchupSignal,
+      ).catch(() => null);
+
+      res.json({ success: true, data: { homeEre, awayEre, markets, f5Unified, matchupSignal: matchupSignal ?? null, matchupDisabled: disableMatchup, uncertainty: uncertainty ?? null } });
     } catch (e: any) {
       res.status(500).json({ success: false, error: String(e?.message || e) });
     }
