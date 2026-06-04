@@ -3863,7 +3863,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   // Así el CLV no depende de que el usuario abra la app a tiempo — antes era el
   // problema #1: si nadie cargaba odds en los últimos 60 min antes de un juego,
   // ese partido se perdía para siempre.
-  const ODDS_API_KEY_BG = "b6bab898f7a8879e95adf2290aac4184";
+  const ODDS_API_KEY_BG = process.env.ODDS_API_KEY || "5ef5173481f2e5037f22e9c94ab327a7";
   const SPORT_MAP_BG: Record<string, string> = {
     nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb",
   };
@@ -3948,7 +3948,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
   // ── GET /api/odds/:sport ───────────────────────────────────────────────
   // Fetches odds from The Odds API (DraftKings = same platform as Hard Rock)
-  const ODDS_API_KEY = "b6bab898f7a8879e95adf2290aac4184";
+  const ODDS_API_KEY = process.env.ODDS_API_KEY || "5ef5173481f2e5037f22e9c94ab327a7";
   const SPORT_MAP: Record<string, string> = {
     nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb", wnba: "basketball_wnba",
   };
