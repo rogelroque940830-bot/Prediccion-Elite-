@@ -934,9 +934,13 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
   } catch { /* ignore */ }
 
   // c) Savant xwOBA TTO1 + TTO2 para TTO penalty (con MEZCLA recent + season)
+  // FIX 14 jun 2026: Savant timeout-ea con hfInn=1/2 para muchos pitchers (incluyendo veteranos).
+  // Estrategia: intentar primero con hfInn (TTO real). Si timeout o sin data,
+  // FALLBACK a season-aggregate (sin hfInn). El ttoPenalty queda en null en fallback.
   try {
     const tto1Url = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=1%7C&min_pitches=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
     const tto2Url = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=2%7C&min_pitches=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
+    const seasonUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&min_pitches=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
 
     // Versión recent: hace 28 días (≈4 starts)
     const today = new Date();
@@ -944,41 +948,69 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const tto1RecentUrl = `${tto1Url}&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}`;
     const tto2RecentUrl = `${tto2Url}&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}`;
+    const seasonRecentUrl = `${seasonUrl}&game_date_gt=${fmt(past)}&game_date_lt=${fmt(today)}`;
 
-    const [r1, r2, r1r, r2r] = await Promise.all([
-      fetch(tto1Url), fetch(tto2Url), fetch(tto1RecentUrl), fetch(tto2RecentUrl),
+    // Helper: detecta respuestas error de Savant
+    const isSavantError = (csv: string) =>
+      csv.includes("Error: Query Timeout") || csv.includes("\"error\"");
+
+    const fetchCsv = async (url: string): Promise<string | null> => {
+      try {
+        const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+        if (!r.ok) return null;
+        const csv = await r.text();
+        return isSavantError(csv) ? null : csv;
+      } catch { return null; }
+    };
+
+    // Intento 1: TTO1 + TTO2 con hfInn (TTO real)
+    const [csv1, csv2, csv1r, csv2r] = await Promise.all([
+      fetchCsv(tto1Url), fetchCsv(tto2Url), fetchCsv(tto1RecentUrl), fetchCsv(tto2RecentUrl),
     ]);
-    const [csv1, csv2, csv1r, csv2r] = await Promise.all([r1.text(), r2.text(), r1r.text(), r2r.text()]);
-    const parsed1 = parseSavantRow(csv1);
-    const parsed2 = parseSavantRow(csv2);
-    const parsed1r = parseSavantRow(csv1r);
-    const parsed2r = parseSavantRow(csv2r);
+    let parsed1 = csv1 ? parseSavantRow(csv1) : null;
+    const parsed2 = csv2 ? parseSavantRow(csv2) : null;
+    const parsed1r = csv1r ? parseSavantRow(csv1r) : null;
+    const parsed2r = csv2r ? parseSavantRow(csv2r) : null;
+
+    // FALLBACK: si TTO1 falló, usar season aggregate (sin hfInn)
+    let seasonFallback: ReturnType<typeof parseSavantRow> = null;
+    let seasonRecentFallback: ReturnType<typeof parseSavantRow> = null;
+    if (!parsed1) {
+      const [csvS, csvSR] = await Promise.all([fetchCsv(seasonUrl), fetchCsv(seasonRecentUrl)]);
+      seasonFallback = csvS ? parseSavantRow(csvS) : null;
+      seasonRecentFallback = csvSR ? parseSavantRow(csvSR) : null;
+      if (seasonFallback) {
+        console.warn(`[mlb-ere] TTO1 falló para pitcher ${pitcherId}, usando season aggregate`);
+        parsed1 = seasonFallback;
+      }
+    }
 
     if (parsed1) {
       const seasonXwoba = parsed1.xwoba;
-      const recentXwoba = parsed1r?.xwoba ?? null;
-      const recentPa = parsed1r?.pa ?? 0;
-      // Blend si recent tiene >= 10 PA (≈3 starts)
+      const recentXwoba = (parsed1r ?? seasonRecentFallback)?.xwoba ?? null;
+      const recentPa = (parsed1r ?? seasonRecentFallback)?.pa ?? 0;
       data.xwobaTto1 = (recentXwoba !== null && recentPa >= 10)
         ? Math.round((0.6 * recentXwoba + 0.4 * seasonXwoba) * 1000) / 1000
         : seasonXwoba;
       data.tto1Pa = parsed1.pa;
-      // K-BB% blend también
       const seasonKbb = parsed1.kPct - parsed1.bbPct;
-      const recentKbb = parsed1r ? (parsed1r.kPct - parsed1r.bbPct) : null;
+      const recentSource = parsed1r ?? seasonRecentFallback;
+      const recentKbb = recentSource ? (recentSource.kPct - recentSource.bbPct) : null;
       data.kbbTto1 = (recentKbb !== null && recentPa >= 10)
         ? Math.round((0.6 * recentKbb + 0.4 * seasonKbb) * 1000) / 1000
         : seasonKbb;
     }
     if (parsed1 && parsed2) {
       data.ttoPenalty = Math.round((parsed2.xwoba - parsed1.xwoba) * 1000) / 1000;
-      // Si tenemos ambos recent, recalcular ttoPenalty con blend
       if (parsed1r && parsed2r && parsed1r.pa >= 10 && parsed2r.pa >= 10) {
         const recentTto = parsed2r.xwoba - parsed1r.xwoba;
         data.ttoPenalty = Math.round((0.6 * recentTto + 0.4 * data.ttoPenalty!) * 1000) / 1000;
       }
     }
-  } catch { /* ignore */ }
+    // En fallback (sin TTO2), no calculamos ttoPenalty (queda null/undefined)
+  } catch (e) {
+    console.warn(`[mlb-ere] Savant fetch error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
+  }
 
   // d) RECENT FORM: blend de 1Inn ERA, YRFI allowed, WHIP 1-3 con últimas 4 starts
   //    Detecta tendencias que el season-wide oculta (ej. Alcantara 73% YRFI season,

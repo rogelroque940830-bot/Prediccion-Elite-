@@ -357,22 +357,36 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     name = j.stats?.[0]?.splits?.[0]?.player?.fullName;
   } catch { /* ignore */ }
 
-  // TTO1 xwOBA: Savant CSV con hfInn=1
+  // xwOBA del pitcher en la temporada (REMOVIDO hfInn=1 que causaba Query Timeout en Savant)
+  // FIX 14 jun 2026: Savant timeout-ea con hfInn=1 incluso para veteranos como Yamamoto.
+  // Cambiado a full-season xwOBA (más estable y disponible para todos los pitchers).
+  // El nombre tto1xwoba se mantiene por compatibilidad con consumers downstream.
   try {
-    const savantUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&hfInn=1%7C&min_pitches=0&min_results=0&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
+    const savantUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
     const r = await fetch(savantUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-    const csv = await r.text();
-    const lines = csv.split("\n");
-    if (lines.length >= 2) {
-      const header = lines[0].split(",").map(s => s.replace(/"/g, "").trim());
-      const xwobaIdx = header.indexOf("xwoba");
-      const row = lines[1].split(",");
-      if (xwobaIdx >= 0 && row[xwobaIdx]) {
-        const v = parseFloat(row[xwobaIdx]);
-        if (!isNaN(v) && v > 0) tto1xwoba = Math.round(v * 1000) / 1000;
+    if (!r.ok) {
+      console.warn(`[mlb-tesi] Savant HTTP ${r.status} para pitcher ${pitcherId}`);
+    } else {
+      const csv = await r.text();
+      // Detectar respuesta de error de Savant ANTES de parsear como CSV
+      if (csv.includes("Error: Query Timeout") || csv.includes("\"error\"")) {
+        console.warn(`[mlb-tesi] Savant Query Timeout para pitcher ${pitcherId}`);
+      } else {
+        const lines = csv.split("\n").filter(l => l.trim());
+        if (lines.length >= 2) {
+          const header = lines[0].split(",").map(s => s.replace(/"/g, "").trim());
+          const xwobaIdx = header.indexOf("xwoba");
+          const row = lines[1].split(",");
+          if (xwobaIdx >= 0 && row[xwobaIdx]) {
+            const v = parseFloat(row[xwobaIdx]);
+            if (!isNaN(v) && v > 0) tto1xwoba = Math.round(v * 1000) / 1000;
+          }
+        }
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.warn(`[mlb-tesi] Savant fetch error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
+  }
 
   return { firstInnEra, tto1xwoba, name };
 }
