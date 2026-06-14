@@ -132,19 +132,26 @@ export interface EreResult {
   };
   // F5 INNING-BY-INNING DATA (nuevo — 14 jun 2026)
   // ERA por cada inning 1-9 + TTO penalty real basado en ERA.
+  // Los valores principales (f5Era, ttoXEraProxy) son BLENDED: 60% recent + 40% season.
+  // Los *Season fields exponen season-only para comparación.
   f5InningData?: {
     inningsByInning: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null;
-    f5Era: number | null;     // ERA agregada innings 1-5
+    f5Era: number | null;     // BLENDED (recent 60% + season 40%)
+    f5EraSeason: number | null;  // Season only (referencia)
     f5K9: number | null;
     f5Bb9: number | null;
     f5KbbPct: number | null;
     f5Whip: number | null;
     f5Hr9: number | null;
     f5Ip: number;
-    tto1EraProxy: number | null;  // ERA innings 1-3
-    tto2EraProxy: number | null;  // ERA innings 4-6
-    tto3EraProxy: number | null;  // ERA innings 7-9
-    ttoPenaltyEra: number | null; // TTO2 - TTO1
+    hasRecentForm: boolean;   // True si recent 28d tiene sample suficiente
+    tto1EraProxy: number | null;     // BLENDED
+    tto1EraSeason: number | null;    // Season only
+    tto2EraProxy: number | null;     // BLENDED
+    tto2EraSeason: number | null;
+    tto3EraProxy: number | null;     // BLENDED
+    tto3EraSeason: number | null;
+    ttoPenaltyEra: number | null;    // TTO2 - TTO1 (blended)
     tto3PenaltyEra: number | null;
   };
 }
@@ -298,15 +305,20 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     f5InningData: {
       inningsByInning: pitcherData.f5InningsByInning,
       f5Era: pitcherData.f5Era,
+      f5EraSeason: pitcherData.f5EraSeason,
       f5K9: pitcherData.f5K9,
       f5Bb9: pitcherData.f5Bb9,
       f5KbbPct: pitcherData.f5KbbPct,
       f5Whip: pitcherData.f5Whip,
       f5Hr9: pitcherData.f5Hr9,
       f5Ip: pitcherData.f5Ip,
+      hasRecentForm: pitcherData.hasRecentForm,
       tto1EraProxy: pitcherData.tto1EraProxy,
+      tto1EraSeason: pitcherData.tto1EraSeason,
       tto2EraProxy: pitcherData.tto2EraProxy,
+      tto2EraSeason: pitcherData.tto2EraSeason,
       tto3EraProxy: pitcherData.tto3EraProxy,
+      tto3EraSeason: pitcherData.tto3EraSeason,
       ttoPenaltyEra: pitcherData.ttoPenaltyEra,
       tto3PenaltyEra: pitcherData.tto3PenaltyEra,
     },
@@ -781,7 +793,9 @@ function emptyPitcherData() {
     seasonK9: null as number | null,
     seasonIp: 0,
     // F5 AGREGADO (innings 1-5 desde MLB Stats API sitCodes) — NEW 14 jun 2026
-    f5Era: null as number | null,
+    // BLEND recent (60%) + season (40%) cuando hay sample suficiente
+    f5Era: null as number | null,           // VALOR BLENDED (default a season si no hay recent)
+    f5EraSeason: null as number | null,     // Season only (referencia)
     f5K9: null as number | null,
     f5Bb9: null as number | null,
     f5KbbPct: null as number | null,
@@ -789,15 +803,19 @@ function emptyPitcherData() {
     f5Hr9: null as number | null,
     f5Ip: 0,
     f5InningsByInning: null as Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null,
-    // TTO penalty REAL basado en ERA (reemplaza ttoPenalty xwOBA roto)
-    tto1EraProxy: null as number | null,   // ERA innings 1-3
+    hasRecentForm: false,                   // True si tenemos sample reciente suficiente
+    // TTO penalty REAL basado en ERA (BLENDED recent + season)
+    tto1EraProxy: null as number | null,    // BLENDED
+    tto1EraSeason: null as number | null,   // Season only (referencia)
     tto1Whip: null as number | null,
     tto1K9: null as number | null,
-    tto2EraProxy: null as number | null,   // ERA innings 4-6
+    tto2EraProxy: null as number | null,    // BLENDED
+    tto2EraSeason: null as number | null,
     tto2Whip: null as number | null,
-    tto3EraProxy: null as number | null,   // ERA innings 7-9
-    ttoPenaltyEra: null as number | null,  // TTO2 - TTO1 (qué tanto empeora 2da vuelta)
-    tto3PenaltyEra: null as number | null, // TTO3 - TTO2 (qué tanto empeora 3ra vuelta/bullpen)
+    tto3EraProxy: null as number | null,    // BLENDED
+    tto3EraSeason: null as number | null,
+    ttoPenaltyEra: null as number | null,   // TTO2 - TTO1 (blended)
+    tto3PenaltyEra: null as number | null,
   };
 }
 
@@ -1023,33 +1041,96 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       data.f5InningsByInning = innByInn;
     }
 
-    // TTO PROXIES desde ERA real (reemplaza xwOBA TTO que está roto en Savant)
-    // TTO1 = first time through order ≈ innings 1-3 (lineup completo de 9)
-    // TTO2 = second time through order ≈ innings 4-6
-    // TTO3 = third time through order ≈ innings 7-9
+    // TTO PROXIES desde ERA real (season)
     const tto1 = aggregate(["i01", "i02", "i03"]);
     const tto2 = aggregate(["i04", "i05", "i06"]);
     const tto3 = aggregate(["i07", "i08", "i09"]);
 
+    // SEASON values (referencia)
+    let seasonF5Era = f5?.era ?? null;
+    let seasonTto1Era = tto1?.era ?? null;
+    let seasonTto2Era = tto2?.era ?? null;
+    let seasonTto3Era = tto3?.era ?? null;
+
+    // === RECENT FORM (últimos 28 días) =================================
+    // FIX 14 jun 2026: blend recent (60%) + season (40%) para capturar tendencias
+    // actuales como el decline de Nola (season 6.06 → últimas 5 = 7.34).
+    let recentBlend: { f5Era: number | null; tto1Era: number | null; tto2Era: number | null; tto3Era: number | null } = {
+      f5Era: seasonF5Era, tto1Era: seasonTto1Era, tto2Era: seasonTto2Era, tto3Era: seasonTto3Era,
+    };
+    let hasRecent = false;
+    try {
+      const today = new Date();
+      const past = new Date(today); past.setDate(past.getDate() - 28);
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const recentUrl = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01,i02,i03,i04,i05,i06,i07,i08,i09&startDate=${fmt(past)}&endDate=${fmt(today)}`;
+      const rR = await fetch(recentUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+      const jR: any = await rR.json();
+      const recentSplits = jR.stats?.[0]?.splits ?? [];
+      const recentMap: Record<string, any> = {};
+      for (const s of recentSplits) {
+        const c = s.split?.code;
+        if (c) recentMap[c] = s.stat;
+      }
+      const aggregateRecent = (codes: string[]) => {
+        let ip = 0, er = 0;
+        for (const c of codes) {
+          const s = recentMap[c];
+          if (!s) continue;
+          ip += parseFloat(s.inningsPitched || "0");
+          er += parseInt(s.earnedRuns) || 0;
+        }
+        if (ip === 0) return null;
+        return { ip, era: Math.round((er / ip) * 9 * 100) / 100 };
+      };
+      const recentF5 = aggregateRecent(["i01", "i02", "i03", "i04", "i05"]);
+      const recentTto1 = aggregateRecent(["i01", "i02", "i03"]);
+      const recentTto2 = aggregateRecent(["i04", "i05", "i06"]);
+      const recentTto3 = aggregateRecent(["i07", "i08", "i09"]);
+      // Blend 60% recent / 40% season si recent tiene >=8 IP (sample mínimo)
+      const blend = (rec: number | null, recIp: number, season: number | null): number | null => {
+        if (rec === null || recIp < 8) return season;
+        if (season === null) return rec;
+        return Math.round((0.6 * rec + 0.4 * season) * 100) / 100;
+      };
+      if (recentF5 || recentTto1 || recentTto2 || recentTto3) hasRecent = true;
+      recentBlend = {
+        f5Era: blend(recentF5?.era ?? null, recentF5?.ip ?? 0, seasonF5Era),
+        tto1Era: blend(recentTto1?.era ?? null, recentTto1?.ip ?? 0, seasonTto1Era),
+        tto2Era: blend(recentTto2?.era ?? null, recentTto2?.ip ?? 0, seasonTto2Era),
+        tto3Era: blend(recentTto3?.era ?? null, recentTto3?.ip ?? 0, seasonTto3Era),
+      };
+    } catch (e) {
+      console.warn(`[mlb-ere] recent form fetch error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
+    }
+
+    // Aplicar valores BLENDED al data
+    if (recentBlend.f5Era !== null) {
+      data.f5EraSeason = seasonF5Era;
+      data.f5Era = recentBlend.f5Era;  // blended (recent 60% + season 40%)
+      data.hasRecentForm = hasRecent;
+    }
     if (tto1) {
-      data.tto1EraProxy = tto1.era;
+      data.tto1EraProxy = recentBlend.tto1Era;
+      data.tto1EraSeason = seasonTto1Era;
       data.tto1Whip = tto1.whip;
       data.tto1K9 = tto1.k9;
     }
     if (tto2) {
-      data.tto2EraProxy = tto2.era;
+      data.tto2EraProxy = recentBlend.tto2Era;
+      data.tto2EraSeason = seasonTto2Era;
       data.tto2Whip = tto2.whip;
     }
     if (tto3) {
-      data.tto3EraProxy = tto3.era;
+      data.tto3EraProxy = recentBlend.tto3Era;
+      data.tto3EraSeason = seasonTto3Era;
     }
-    // TTO penalty REAL: cuánto empeora la 2da vuelta vs 1ra
-    if (tto1 && tto2) {
-      data.ttoPenaltyEra = Math.round((tto2.era - tto1.era) * 100) / 100;
+    // TTO penalty con valores blended
+    if (recentBlend.tto1Era !== null && recentBlend.tto2Era !== null) {
+      data.ttoPenaltyEra = Math.round((recentBlend.tto2Era - recentBlend.tto1Era) * 100) / 100;
     }
-    // F6+ penalty (3ra vuelta / bullpen vs 2da)
-    if (tto2 && tto3) {
-      data.tto3PenaltyEra = Math.round((tto3.era - tto2.era) * 100) / 100;
+    if (recentBlend.tto2Era !== null && recentBlend.tto3Era !== null) {
+      data.tto3PenaltyEra = Math.round((recentBlend.tto3Era - recentBlend.tto2Era) * 100) / 100;
     }
   } catch (e) {
     console.warn(`[mlb-ere] inning splits error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
