@@ -738,6 +738,15 @@ function emptyPitcherData() {
     f5Hr9: null as number | null,
     f5Ip: 0,
     f5InningsByInning: null as Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null,
+    // TTO penalty REAL basado en ERA (reemplaza ttoPenalty xwOBA roto)
+    tto1EraProxy: null as number | null,   // ERA innings 1-3
+    tto1Whip: null as number | null,
+    tto1K9: null as number | null,
+    tto2EraProxy: null as number | null,   // ERA innings 4-6
+    tto2Whip: null as number | null,
+    tto3EraProxy: null as number | null,   // ERA innings 7-9
+    ttoPenaltyEra: null as number | null,  // TTO2 - TTO1 (qué tanto empeora 2da vuelta)
+    tto3PenaltyEra: null as number | null, // TTO3 - TTO2 (qué tanto empeora 3ra vuelta/bullpen)
   };
 }
 
@@ -873,11 +882,13 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     }
   } catch { /* ignore */ }
 
-  // a) F5 inning-by-inning splits (sitCodes=i01,i02,i03,i04,i05)
-  // NEW 14 jun 2026: extiende de solo i01 a innings 1-5 completos para soportar
-  // análisis F5 real. Cubre el gap del Savant timeout en inning-specific xwOBA.
+  // a) Inning-by-inning splits (sitCodes=i01,i02,i03,i04,i05,i06,i07,i08,i09)
+  // NEW 14 jun 2026: extiende para soportar F5 + TTO penalty real basado en ERA.
+  // Reemplaza el TTO penalty xwOBA (roto por Savant timeout) con un proxy ERA más
+  // directo: TTO1=ERA innings 1-3, TTO2=ERA innings 4-6, TTO3=ERA innings 7-9.
+  // TTO penalty real = TTO2_era - TTO1_era (cómo empeora segunda vez orden).
   try {
-    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01,i02,i03,i04,i05`;
+    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01,i02,i03,i04,i05,i06,i07,i08,i09`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const splits = j.stats?.[0]?.splits ?? [];
@@ -905,40 +916,92 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       if (ip > 0) data.whip13 = Math.round(((h + bb) / ip) * 100) / 100;
     }
 
-    // F5 AGREGADO: ERA, K/9, BB/9, WHIP, BABIP, HR/9 sumando innings 1-5
-    // Esto le da al predictor visión REAL del comportamiento F5 del pitcher,
-    // sin depender de Savant Statcast que timeout-ea.
-    let f5Ip = 0, f5Er = 0, f5K = 0, f5Bb = 0, f5H = 0, f5Hr = 0, f5R = 0;
+    // Helper: aggregate stats for a group of innings
+    const aggregate = (codes: string[]) => {
+      let ip = 0, er = 0, k = 0, bb = 0, h = 0, hr = 0, r = 0;
+      for (const c of codes) {
+        const s = inningMap[c];
+        if (!s) continue;
+        ip += parseFloat(s.inningsPitched || "0");
+        er += parseInt(s.earnedRuns) || 0;
+        k += parseInt(s.strikeOuts) || 0;
+        bb += parseInt(s.baseOnBalls) || 0;
+        h += parseInt(s.hits) || 0;
+        hr += parseInt(s.homeRuns) || 0;
+        r += parseInt(s.runs) || 0;
+      }
+      if (ip === 0) return null;
+      return {
+        ip,
+        era: Math.round((er / ip) * 9 * 100) / 100,
+        k9: Math.round((k / ip) * 9 * 100) / 100,
+        bb9: Math.round((bb / ip) * 9 * 100) / 100,
+        whip: Math.round(((h + bb) / ip) * 100) / 100,
+        hr9: Math.round((hr / ip) * 9 * 100) / 100,
+        er, k, bb, h, hr, r,
+      };
+    };
+
+    // F5 AGREGADO (innings 1-5)
     const innByInn: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
-    for (let i = 1; i <= 5; i++) {
-      const code = `i0${i}`;
+    for (let i = 1; i <= 9; i++) {
+      const code = i < 10 ? `i0${i}` : `i${i}`;
       const s = inningMap[code];
       if (!s) continue;
       const ip = parseFloat(s.inningsPitched || "0");
-      const er = parseInt(s.earnedRuns) || 0;
-      const k = parseInt(s.strikeOuts) || 0;
-      const bb = parseInt(s.baseOnBalls) || 0;
-      const h = parseInt(s.hits) || 0;
-      const hr = parseInt(s.homeRuns) || 0;
-      const r = parseInt(s.runs) || 0;
-      f5Ip += ip; f5Er += er; f5K += k; f5Bb += bb; f5H += h; f5Hr += hr; f5R += r;
       innByInn[code] = {
-        era: ip > 0 ? Math.round((er / ip) * 9 * 100) / 100 : 0,
-        ip, er, k, bb, h, hr,
+        era: ip > 0 ? Math.round(((parseInt(s.earnedRuns) || 0) / ip) * 9 * 100) / 100 : 0,
+        ip,
+        er: parseInt(s.earnedRuns) || 0,
+        k: parseInt(s.strikeOuts) || 0,
+        bb: parseInt(s.baseOnBalls) || 0,
+        h: parseInt(s.hits) || 0,
+        hr: parseInt(s.homeRuns) || 0,
       };
     }
-    if (f5Ip > 0) {
-      data.f5Era = Math.round((f5Er / f5Ip) * 9 * 100) / 100;
-      data.f5K9 = Math.round((f5K / f5Ip) * 9 * 100) / 100;
-      data.f5Bb9 = Math.round((f5Bb / f5Ip) * 9 * 100) / 100;
-      data.f5Whip = Math.round(((f5H + f5Bb) / f5Ip) * 100) / 100;
-      data.f5Hr9 = Math.round((f5Hr / f5Ip) * 9 * 100) / 100;
-      data.f5KbbPct = Math.round((data.f5K9 - data.f5Bb9) * 100) / 100;
-      data.f5Ip = f5Ip;
+
+    const f5 = aggregate(["i01", "i02", "i03", "i04", "i05"]);
+    if (f5) {
+      data.f5Era = f5.era;
+      data.f5K9 = f5.k9;
+      data.f5Bb9 = f5.bb9;
+      data.f5Whip = f5.whip;
+      data.f5Hr9 = f5.hr9;
+      data.f5KbbPct = Math.round((f5.k9 - f5.bb9) * 100) / 100;
+      data.f5Ip = f5.ip;
       data.f5InningsByInning = innByInn;
     }
+
+    // TTO PROXIES desde ERA real (reemplaza xwOBA TTO que está roto en Savant)
+    // TTO1 = first time through order ≈ innings 1-3 (lineup completo de 9)
+    // TTO2 = second time through order ≈ innings 4-6
+    // TTO3 = third time through order ≈ innings 7-9
+    const tto1 = aggregate(["i01", "i02", "i03"]);
+    const tto2 = aggregate(["i04", "i05", "i06"]);
+    const tto3 = aggregate(["i07", "i08", "i09"]);
+
+    if (tto1) {
+      data.tto1EraProxy = tto1.era;
+      data.tto1Whip = tto1.whip;
+      data.tto1K9 = tto1.k9;
+    }
+    if (tto2) {
+      data.tto2EraProxy = tto2.era;
+      data.tto2Whip = tto2.whip;
+    }
+    if (tto3) {
+      data.tto3EraProxy = tto3.era;
+    }
+    // TTO penalty REAL: cuánto empeora la 2da vuelta vs 1ra
+    if (tto1 && tto2) {
+      data.ttoPenaltyEra = Math.round((tto2.era - tto1.era) * 100) / 100;
+    }
+    // F6+ penalty (3ra vuelta / bullpen vs 2da)
+    if (tto2 && tto3) {
+      data.tto3PenaltyEra = Math.round((tto3.era - tto2.era) * 100) / 100;
+    }
   } catch (e) {
-    console.warn(`[mlb-ere] F5 splits error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
+    console.warn(`[mlb-ere] inning splits error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
   }
 
   // b) Season game logs para runs 1-3/GS y pitch count 1-2 (approx via averages)
