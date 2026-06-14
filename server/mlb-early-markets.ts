@@ -233,10 +233,26 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   const inning2 = buildInningPred(innLogitBase * 0.9, HOME_INN_EDGE);  // 2nd inning más aleatorio
   const inning3 = buildInningPred(innLogitBase * 1.0, HOME_INN_EDGE);
 
-  // ── Confidence based on warnings ────────────────────────────────────────
+  // ── Confidence based on warnings + ERE N/D coverage (FIX 14 jun 2026) ──
+  // Reconcilia con el badge BAJA CONFIANZA del ERE card. Antes solo miraba
+  // warnings.length, ahora tambien degrada cuando pitcher tiene muchos N/D.
+  const countNd = (ere: EreResult) => {
+    const p = Object.values(ere.variables.pitcher).filter(v => v.raw === null).length;
+    const o = Object.values(ere.variables.offense).filter(v => v.raw === null).length;
+    return { pitcherNd: p, totalNd: p + o };
+  };
+  const homeNd = countNd(homeEre);
+  const awayNd = countNd(awayEre);
+  const maxPitcherNd = Math.max(homeNd.pitcherNd, awayNd.pitcherNd);
+  const maxTotalNd = Math.max(homeNd.totalNd, awayNd.totalNd);
+
   let confidence: "HIGH" | "MEDIUM" | "LOW" = "HIGH";
-  if (warnings.length >= 4) confidence = "LOW";
-  else if (warnings.length >= 2) confidence = "MEDIUM";
+  // LOW si cualquier lado tiene cobertura colapsada
+  if (warnings.length >= 4 || maxPitcherNd >= 3 || maxTotalNd >= 5) confidence = "LOW";
+  // MEDIUM si cobertura parcial en algun lado
+  else if (warnings.length >= 2 || maxTotalNd >= 2) confidence = "MEDIUM";
+
+  if (maxPitcherNd >= 3) warnings.push(`Pitcher con ${maxPitcherNd} variables N/D — modelo apoyado en prior`);
 
   return {
     f5ProbHome: Math.round(f5ProbHome * 1000) / 1000,
