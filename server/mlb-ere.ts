@@ -49,6 +49,11 @@ const LEAGUE = {
   // Liga promedio: TTO1 ERA ≈4.20, TTO2 ERA ≈4.55 → penalty +0.35 ± 0.45
   TTO_PENALTY_ERA: 0.35, TTO_PENALTY_ERA_SD: 0.45,
   WHIP_1_3: 1.20, WHIP_1_3_SD: 0.18,
+  // NEW 14 jun 2026: F5 ERA blended y inning 2-3 ERA
+  // Liga promedio F5 ERA ≈4.30 ± 1.00
+  // Liga promedio innings 2-3 ERA ≈4.40 ± 1.20 (mayor varianza que F5 total)
+  F5_ERA: 4.30, F5_ERA_SD: 1.00,
+  INNING_2_3_ERA: 4.40, INNING_2_3_ERA_SD: 1.20,
 };
 
 // ── PESOS (deben sumar 1.0 en cada componente) ─────────────────────────────
@@ -56,9 +61,17 @@ const OFFENSE_WEIGHTS = {
   runs13: 0.20, f5: 0.15, yrfi: 0.10, top5xwoba: 0.18,
   top3obp: 0.10, top5k: 0.12, top5iso: 0.08, l7rpg: 0.07,
 };
+// PITCHER_WEIGHTS REBALANCED 14 jun 2026:
+// - xwobaTto1: 20% → 14% (Savant post-fix es season aggregate, no TTO1 real)
+// - runs13Gs: 12% → 10%
+// - pitchCount: 7% → 0% (eliminado, mostly N/D)
+// - NEW f5EraBlended: 10% (F5 ERA blended recent 60% + season 40%)
+// - NEW inning23Era: 5% (ERA innings 2-3 — captura patrón Nola explota 2-3)
+// Total: 100%
 const PITCHER_WEIGHTS = {
-  firstInnEra: 0.22, xwobaTto1: 0.20, kbbTto1: 0.13, runs13Gs: 0.12,
-  yrfiAllowed: 0.08, pitchCount: 0.07, ttoPenalty: 0.10, whip13: 0.08,
+  firstInnEra: 0.22, xwobaTto1: 0.14, kbbTto1: 0.13, runs13Gs: 0.10,
+  yrfiAllowed: 0.08, pitchCount: 0.00, ttoPenalty: 0.10, whip13: 0.08,
+  f5EraBlended: 0.10, inning23Era: 0.05,
 };
 
 // ── SAMPLE THRESHOLDS (mínimos para no aplicar shrinkage) ─────────────────
@@ -252,6 +265,21 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
       ? normVar(pitcherData.ttoPenalty, LEAGUE.TTO_PENALTY, LEAGUE.TTO_PENALTY_SD, PITCHER_WEIGHTS.ttoPenalty, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA, true)
       : normVar(pitcherData.ttoPenaltyEra, LEAGUE.TTO_PENALTY_ERA, LEAGUE.TTO_PENALTY_ERA_SD, PITCHER_WEIGHTS.ttoPenalty, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
     whip13: normVar(pitcherData.whip13, LEAGUE.WHIP_1_3, LEAGUE.WHIP_1_3_SD, PITCHER_WEIGHTS.whip13, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
+    // NEW 14 jun 2026: F5 ERA blended (recent 60% + season 40%)
+    // Captura tendencia actual del pitcher en F5, no solo promedio season.
+    f5EraBlended: normVar(pitcherData.f5Era, LEAGUE.F5_ERA, LEAGUE.F5_ERA_SD, PITCHER_WEIGHTS.f5EraBlended, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
+    // NEW 14 jun 2026: ERA innings 2-3 (captura patrón Nola: bueno I1, explota I2-3)
+    inning23Era: normVar(
+      pitcherData.f5InningsByInning && pitcherData.f5InningsByInning["i02"] && pitcherData.f5InningsByInning["i03"]
+        ? (() => {
+            const i2 = pitcherData.f5InningsByInning!["i02"];
+            const i3 = pitcherData.f5InningsByInning!["i03"];
+            const totalIp = i2.ip + i3.ip;
+            return totalIp > 0 ? Math.round(((i2.er + i3.er) / totalIp) * 9 * 100) / 100 : null;
+          })()
+        : null,
+      LEAGUE.INNING_2_3_ERA, LEAGUE.INNING_2_3_ERA_SD, PITCHER_WEIGHTS.inning23Era, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true
+    ),
   };
 
   // ── 4. Suma ponderada con renormalización (variables N/D no penalizan) ──
