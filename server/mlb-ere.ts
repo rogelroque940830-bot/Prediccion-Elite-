@@ -45,6 +45,9 @@ const LEAGUE = {
   YRFI_ALLOWED: 0.28, YRFI_ALLOWED_SD: 0.07,
   PITCH_COUNT_1_2: 28, PITCH_COUNT_1_2_SD: 4,
   TTO_PENALTY: 0.020, TTO_PENALTY_SD: 0.025,
+  // ERA-based TTO penalty (fallback cuando Savant xwOBA falla)
+  // Liga promedio: TTO1 ERA ≈4.20, TTO2 ERA ≈4.55 → penalty +0.35 ± 0.45
+  TTO_PENALTY_ERA: 0.35, TTO_PENALTY_ERA_SD: 0.45,
   WHIP_1_3: 1.20, WHIP_1_3_SD: 0.18,
 };
 
@@ -204,10 +207,26 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     firstInnEra: normVar(pitcherData.firstInnEra, LEAGUE.FIRST_INN_ERA, LEAGUE.FIRST_INN_ERA_SD, PITCHER_WEIGHTS.firstInnEra, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
     xwobaTto1: normVar(pitcherData.xwobaTto1, LEAGUE.XWOBA_TTO1, LEAGUE.XWOBA_TTO1_SD, PITCHER_WEIGHTS.xwobaTto1, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA, true),
     kbbTto1: normVar(pitcherData.kbbTto1, LEAGUE.K_BB_PCT_TTO1, LEAGUE.K_BB_PCT_TTO1_SD, PITCHER_WEIGHTS.kbbTto1, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA),
-    runs13Gs: normVar(pitcherData.runs13Gs, LEAGUE.RUNS_1_3_GS, LEAGUE.RUNS_1_3_GS_SD, PITCHER_WEIGHTS.runs13Gs, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
+    // runs13Gs: si el gameLog approach falló, usa la versión calculada desde sitCodes
+    // (ERA innings 1-3 × IP/9 × starts ratio). FIX 14 jun 2026.
+    runs13Gs: pitcherData.runs13Gs !== null
+      ? normVar(pitcherData.runs13Gs, LEAGUE.RUNS_1_3_GS, LEAGUE.RUNS_1_3_GS_SD, PITCHER_WEIGHTS.runs13Gs, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true)
+      : normVar(
+          // proxy: derivar runs 1-3 por start desde TTO1 ERA (innings 1-3)
+          // runs = (era / 9) × ip_per_3_innings = era / 3
+          pitcherData.tto1EraProxy !== null && pitcherData.gs > 0
+            ? Math.round((pitcherData.tto1EraProxy / 3) * 100) / 100
+            : null,
+          LEAGUE.RUNS_1_3_GS, LEAGUE.RUNS_1_3_GS_SD, PITCHER_WEIGHTS.runs13Gs, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true
+        ),
     yrfiAllowed: normVar(pitcherData.yrfiAllowed, LEAGUE.YRFI_ALLOWED, LEAGUE.YRFI_ALLOWED_SD, PITCHER_WEIGHTS.yrfiAllowed, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
     pitchCount: normVar(pitcherData.pitchCount12, LEAGUE.PITCH_COUNT_1_2, LEAGUE.PITCH_COUNT_1_2_SD, PITCHER_WEIGHTS.pitchCount, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
-    ttoPenalty: normVar(pitcherData.ttoPenalty, LEAGUE.TTO_PENALTY, LEAGUE.TTO_PENALTY_SD, PITCHER_WEIGHTS.ttoPenalty, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA, true),
+    // ttoPenalty: prefiere xwOBA (Savant) cuando está disponible. Si Savant falló,
+    // fallback a ttoPenaltyEra (MLB Stats API — ERA real innings 1-3 vs 4-6).
+    // FIX 14 jun 2026: resuelve el N/D persistente en TTO pen.
+    ttoPenalty: pitcherData.ttoPenalty !== null
+      ? normVar(pitcherData.ttoPenalty, LEAGUE.TTO_PENALTY, LEAGUE.TTO_PENALTY_SD, PITCHER_WEIGHTS.ttoPenalty, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA, true)
+      : normVar(pitcherData.ttoPenaltyEra, LEAGUE.TTO_PENALTY_ERA, LEAGUE.TTO_PENALTY_ERA_SD, PITCHER_WEIGHTS.ttoPenalty, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
     whip13: normVar(pitcherData.whip13, LEAGUE.WHIP_1_3, LEAGUE.WHIP_1_3_SD, PITCHER_WEIGHTS.whip13, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
   };
 
