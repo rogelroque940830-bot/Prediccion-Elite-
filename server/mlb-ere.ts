@@ -269,13 +269,16 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     // Captura tendencia actual del pitcher en F5, no solo promedio season.
     f5EraBlended: normVar(pitcherData.f5Era, LEAGUE.F5_ERA, LEAGUE.F5_ERA_SD, PITCHER_WEIGHTS.f5EraBlended, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
     // NEW 14 jun 2026: ERA innings 2-3 (captura patrón Nola: bueno I1, explota I2-3)
+    // Requiere mínimo 6 IP en innings 2+3 combinados (FIX threshold)
     inning23Era: normVar(
       pitcherData.f5InningsByInning && pitcherData.f5InningsByInning["i02"] && pitcherData.f5InningsByInning["i03"]
         ? (() => {
             const i2 = pitcherData.f5InningsByInning!["i02"];
             const i3 = pitcherData.f5InningsByInning!["i03"];
             const totalIp = i2.ip + i3.ip;
-            return totalIp > 0 ? Math.round(((i2.er + i3.er) / totalIp) * 9 * 100) / 100 : null;
+            // THRESHOLD: mínimo 6 IP combinados (≈2 starts completos)
+            if (totalIp < 6) return null;
+            return Math.round(((i2.er + i3.er) / totalIp) * 9 * 100) / 100;
           })()
         : null,
       LEAGUE.INNING_2_3_ERA, LEAGUE.INNING_2_3_ERA_SD, PITCHER_WEIGHTS.inning23Era, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true
@@ -1057,8 +1060,20 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       };
     }
 
+    // THRESHOLDS DE SAMPLE MÍNIMO (FIX 14 jun 2026):
+    // Si pitcher no tiene IP suficientes en cada bucket, NO computar (devolver null).
+    // Esto evita que relievers/openers con sample diminuto produzcan data engañosa
+    // que entre al ERE con peso completo.
+    const MIN_IP = {
+      F5: 15,      // al menos 3 starts completos en F5
+      TTO1: 9,     // al menos 3 starts en innings 1-3
+      TTO2: 6,     // 2 starts mínimo en innings 4-6
+      TTO3: 3,     // sample chico aceptable para innings 7-9
+      INNING_23: 6, // mínimo 6 IP en innings 2+3 combinados
+    };
+
     const f5 = aggregate(["i01", "i02", "i03", "i04", "i05"]);
-    if (f5) {
+    if (f5 && f5.ip >= MIN_IP.F5) {
       data.f5Era = f5.era;
       data.f5K9 = f5.k9;
       data.f5Bb9 = f5.bb9;
@@ -1067,18 +1082,23 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       data.f5KbbPct = Math.round((f5.k9 - f5.bb9) * 100) / 100;
       data.f5Ip = f5.ip;
       data.f5InningsByInning = innByInn;
+    } else if (f5) {
+      // Sample insuficiente: guardar IP para debug pero NO computar métricas
+      data.f5Ip = f5.ip;
+      data.f5InningsByInning = innByInn;
+      // f5Era, f5K9, etc. permanecen null → N/D en UI
     }
 
-    // TTO PROXIES desde ERA real (season)
+    // TTO PROXIES desde ERA real (season) — con thresholds mínimos
     const tto1 = aggregate(["i01", "i02", "i03"]);
     const tto2 = aggregate(["i04", "i05", "i06"]);
     const tto3 = aggregate(["i07", "i08", "i09"]);
 
-    // SEASON values (referencia)
-    let seasonF5Era = f5?.era ?? null;
-    let seasonTto1Era = tto1?.era ?? null;
-    let seasonTto2Era = tto2?.era ?? null;
-    let seasonTto3Era = tto3?.era ?? null;
+    // SEASON values (referencia) — solo si pasan threshold
+    let seasonF5Era = (f5 && f5.ip >= MIN_IP.F5) ? f5.era : null;
+    let seasonTto1Era = (tto1 && tto1.ip >= MIN_IP.TTO1) ? tto1.era : null;
+    let seasonTto2Era = (tto2 && tto2.ip >= MIN_IP.TTO2) ? tto2.era : null;
+    let seasonTto3Era = (tto3 && tto3.ip >= MIN_IP.TTO3) ? tto3.era : null;
 
     // === RECENT FORM (últimos 28 días) =================================
     // FIX 14 jun 2026: blend recent (60%) + season (40%) para capturar tendencias
@@ -1132,32 +1152,35 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       console.warn(`[mlb-ere] recent form fetch error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
     }
 
-    // Aplicar valores BLENDED al data
-    if (recentBlend.f5Era !== null) {
+    // Aplicar valores BLENDED al data — solo si season pasa threshold (no fabricar data)
+    if (seasonF5Era !== null && recentBlend.f5Era !== null) {
       data.f5EraSeason = seasonF5Era;
       data.f5Era = recentBlend.f5Era;  // blended (recent 60% + season 40%)
       data.hasRecentForm = hasRecent;
     }
-    if (tto1) {
+    // Si season pasó threshold, aplicar TTO
+    if (tto1 && tto1.ip >= MIN_IP.TTO1) {
       data.tto1EraProxy = recentBlend.tto1Era;
       data.tto1EraSeason = seasonTto1Era;
       data.tto1Whip = tto1.whip;
       data.tto1K9 = tto1.k9;
     }
-    if (tto2) {
+    if (tto2 && tto2.ip >= MIN_IP.TTO2) {
       data.tto2EraProxy = recentBlend.tto2Era;
       data.tto2EraSeason = seasonTto2Era;
       data.tto2Whip = tto2.whip;
     }
-    if (tto3) {
+    if (tto3 && tto3.ip >= MIN_IP.TTO3) {
       data.tto3EraProxy = recentBlend.tto3Era;
       data.tto3EraSeason = seasonTto3Era;
     }
-    // TTO penalty con valores blended
-    if (recentBlend.tto1Era !== null && recentBlend.tto2Era !== null) {
+    // TTO penalty con valores blended — SOLO si AMBOS lados pasan threshold
+    if (tto1 && tto1.ip >= MIN_IP.TTO1 && tto2 && tto2.ip >= MIN_IP.TTO2 &&
+        recentBlend.tto1Era !== null && recentBlend.tto2Era !== null) {
       data.ttoPenaltyEra = Math.round((recentBlend.tto2Era - recentBlend.tto1Era) * 100) / 100;
     }
-    if (recentBlend.tto2Era !== null && recentBlend.tto3Era !== null) {
+    if (tto2 && tto2.ip >= MIN_IP.TTO2 && tto3 && tto3.ip >= MIN_IP.TTO3 &&
+        recentBlend.tto2Era !== null && recentBlend.tto3Era !== null) {
       data.tto3PenaltyEra = Math.round((recentBlend.tto3Era - recentBlend.tto2Era) * 100) / 100;
     }
   } catch (e) {
