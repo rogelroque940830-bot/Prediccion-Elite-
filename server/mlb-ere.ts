@@ -729,6 +729,15 @@ function emptyPitcherData() {
     seasonWhip: null as number | null,
     seasonK9: null as number | null,
     seasonIp: 0,
+    // F5 AGREGADO (innings 1-5 desde MLB Stats API sitCodes) — NEW 14 jun 2026
+    f5Era: null as number | null,
+    f5K9: null as number | null,
+    f5Bb9: null as number | null,
+    f5KbbPct: null as number | null,
+    f5Whip: null as number | null,
+    f5Hr9: null as number | null,
+    f5Ip: 0,
+    f5InningsByInning: null as Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null,
   };
 }
 
@@ -864,28 +873,73 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     }
   } catch { /* ignore */ }
 
-  // a) 1st inning splits (sitCodes=i01)
+  // a) F5 inning-by-inning splits (sitCodes=i01,i02,i03,i04,i05)
+  // NEW 14 jun 2026: extiende de solo i01 a innings 1-5 completos para soportar
+  // análisis F5 real. Cubre el gap del Savant timeout en inning-specific xwOBA.
   try {
-    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01`;
+    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01,i02,i03,i04,i05`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
-    const stat = j.stats?.[0]?.splits?.[0]?.stat;
-    if (stat) {
-      const er = parseInt(stat.earnedRuns) || 0;
-      const ip = parseFloat(stat.inningsPitched || "0");
+    const splits = j.stats?.[0]?.splits ?? [];
+
+    // Map per-inning stats indexed by inning code (i01-i05)
+    const inningMap: Record<string, any> = {};
+    for (const s of splits) {
+      const code = s.split?.code; // e.g. "i01"
+      if (code) inningMap[code] = s.stat;
+    }
+
+    // Inning 1 stats — mantiene firstInnEra/yrfiAllowed/whip13 para compatibilidad
+    const i01 = inningMap["i01"];
+    if (i01) {
+      const er = parseInt(i01.earnedRuns) || 0;
+      const ip = parseFloat(i01.inningsPitched || "0");
       if (ip > 0) data.firstInnEra = Math.round((er / ip) * 9 * 100) / 100;
-      const gs = parseInt(stat.gamesStarted) || 0;
+      const gs = parseInt(i01.gamesStarted) || 0;
       data.gs = Math.max(data.gs, gs);
-      // YRFI allowed = runs allowed / starts
-      const r1 = parseInt(stat.runs) || 0;
-      const gp = parseInt(stat.gamesPlayed) || 0;
+      const r1 = parseInt(i01.runs) || 0;
+      const gp = parseInt(i01.gamesPlayed) || 0;
       if (gp > 0) data.yrfiAllowed = Math.min(1, r1 / gp);
-      // WHIP approx for 1st inning
-      const h = parseInt(stat.hits) || 0;
-      const bb = parseInt(stat.baseOnBalls) || 0;
+      const h = parseInt(i01.hits) || 0;
+      const bb = parseInt(i01.baseOnBalls) || 0;
       if (ip > 0) data.whip13 = Math.round(((h + bb) / ip) * 100) / 100;
     }
-  } catch { /* ignore */ }
+
+    // F5 AGREGADO: ERA, K/9, BB/9, WHIP, BABIP, HR/9 sumando innings 1-5
+    // Esto le da al predictor visión REAL del comportamiento F5 del pitcher,
+    // sin depender de Savant Statcast que timeout-ea.
+    let f5Ip = 0, f5Er = 0, f5K = 0, f5Bb = 0, f5H = 0, f5Hr = 0, f5R = 0;
+    const innByInn: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
+    for (let i = 1; i <= 5; i++) {
+      const code = `i0${i}`;
+      const s = inningMap[code];
+      if (!s) continue;
+      const ip = parseFloat(s.inningsPitched || "0");
+      const er = parseInt(s.earnedRuns) || 0;
+      const k = parseInt(s.strikeOuts) || 0;
+      const bb = parseInt(s.baseOnBalls) || 0;
+      const h = parseInt(s.hits) || 0;
+      const hr = parseInt(s.homeRuns) || 0;
+      const r = parseInt(s.runs) || 0;
+      f5Ip += ip; f5Er += er; f5K += k; f5Bb += bb; f5H += h; f5Hr += hr; f5R += r;
+      innByInn[code] = {
+        era: ip > 0 ? Math.round((er / ip) * 9 * 100) / 100 : 0,
+        ip, er, k, bb, h, hr,
+      };
+    }
+    if (f5Ip > 0) {
+      data.f5Era = Math.round((f5Er / f5Ip) * 9 * 100) / 100;
+      data.f5K9 = Math.round((f5K / f5Ip) * 9 * 100) / 100;
+      data.f5Bb9 = Math.round((f5Bb / f5Ip) * 9 * 100) / 100;
+      data.f5Whip = Math.round(((f5H + f5Bb) / f5Ip) * 100) / 100;
+      data.f5Hr9 = Math.round((f5Hr / f5Ip) * 9 * 100) / 100;
+      data.f5KbbPct = Math.round((data.f5K9 - data.f5Bb9) * 100) / 100;
+      data.f5Ip = f5Ip;
+      data.f5InningsByInning = innByInn;
+    }
+  } catch (e) {
+    console.warn(`[mlb-ere] F5 splits error para pitcher ${pitcherId}:`, e instanceof Error ? e.message : e);
+  }
 
   // b) Season game logs para runs 1-3/GS y pitch count 1-2 (approx via averages)
   try {
