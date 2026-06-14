@@ -130,6 +130,23 @@ export interface EreResult {
     pitcherPriorUsed?: boolean;    // ¿Se aplicó regresión hacia prior?
     pitcherSeasonEra?: number;     // ERA season usada para el prior
   };
+  // F5 INNING-BY-INNING DATA (nuevo — 14 jun 2026)
+  // ERA por cada inning 1-9 + TTO penalty real basado en ERA.
+  f5InningData?: {
+    inningsByInning: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null;
+    f5Era: number | null;     // ERA agregada innings 1-5
+    f5K9: number | null;
+    f5Bb9: number | null;
+    f5KbbPct: number | null;
+    f5Whip: number | null;
+    f5Hr9: number | null;
+    f5Ip: number;
+    tto1EraProxy: number | null;  // ERA innings 1-3
+    tto2EraProxy: number | null;  // ERA innings 4-6
+    tto3EraProxy: number | null;  // ERA innings 7-9
+    ttoPenaltyEra: number | null; // TTO2 - TTO1
+    tto3PenaltyEra: number | null;
+  };
 }
 
 export async function computeMlbEre(input: EreInput): Promise<EreResult> {
@@ -277,6 +294,21 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
       pitcherPriorUsed: pitcherData.seasonIp >= 10 &&
         Object.values(pitVars).filter((v: any) => v.weight === 0).length > 0,
       pitcherSeasonEra: pitcherData.seasonEra ?? undefined,
+    },
+    f5InningData: {
+      inningsByInning: pitcherData.f5InningsByInning,
+      f5Era: pitcherData.f5Era,
+      f5K9: pitcherData.f5K9,
+      f5Bb9: pitcherData.f5Bb9,
+      f5KbbPct: pitcherData.f5KbbPct,
+      f5Whip: pitcherData.f5Whip,
+      f5Hr9: pitcherData.f5Hr9,
+      f5Ip: pitcherData.f5Ip,
+      tto1EraProxy: pitcherData.tto1EraProxy,
+      tto2EraProxy: pitcherData.tto2EraProxy,
+      tto3EraProxy: pitcherData.tto3EraProxy,
+      ttoPenaltyEra: pitcherData.ttoPenaltyEra,
+      tto3PenaltyEra: pitcherData.tto3PenaltyEra,
     },
   };
 }
