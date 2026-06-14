@@ -240,8 +240,15 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
     l7rpg: normVar(teamMetrics.l7Rpg, LEAGUE.L7_RPG, LEAGUE.L7_RPG_SD, OFFENSE_WEIGHTS.l7rpg, Math.min(teamMetrics.gamesAnalyzed, 7), SAMPLE_MIN.RECENT_GP),
   };
 
+  // FIX 14 jun 2026 (parte 2 del MIN_IP threshold):
+  // firstInnEra peso 22% no debe activarse para relievers/openers con gs<5.
+  // normVar shrinks z-score pero mantiene weight; forzamos null explícito para weight=0.
+  const MIN_GS_FIRST_INN = 5;
+  const firstInnEraSafe = pitcherData.gs >= MIN_GS_FIRST_INN ? pitcherData.firstInnEra : null;
+  const yrfiAllowedSafe = pitcherData.gs >= MIN_GS_FIRST_INN ? pitcherData.yrfiAllowed : null;
+
   const pitVars: EreResult["variables"]["pitcher"] = {
-    firstInnEra: normVar(pitcherData.firstInnEra, LEAGUE.FIRST_INN_ERA, LEAGUE.FIRST_INN_ERA_SD, PITCHER_WEIGHTS.firstInnEra, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
+    firstInnEra: normVar(firstInnEraSafe, LEAGUE.FIRST_INN_ERA, LEAGUE.FIRST_INN_ERA_SD, PITCHER_WEIGHTS.firstInnEra, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
     xwobaTto1: normVar(pitcherData.xwobaTto1, LEAGUE.XWOBA_TTO1, LEAGUE.XWOBA_TTO1_SD, PITCHER_WEIGHTS.xwobaTto1, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA, true),
     kbbTto1: normVar(pitcherData.kbbTto1, LEAGUE.K_BB_PCT_TTO1, LEAGUE.K_BB_PCT_TTO1_SD, PITCHER_WEIGHTS.kbbTto1, pitcherData.tto1Pa, SAMPLE_MIN.TTO1_PA),
     // runs13Gs: si el gameLog approach falló, usa la versión calculada desde sitCodes
@@ -256,7 +263,7 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
             : null,
           LEAGUE.RUNS_1_3_GS, LEAGUE.RUNS_1_3_GS_SD, PITCHER_WEIGHTS.runs13Gs, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true
         ),
-    yrfiAllowed: normVar(pitcherData.yrfiAllowed, LEAGUE.YRFI_ALLOWED, LEAGUE.YRFI_ALLOWED_SD, PITCHER_WEIGHTS.yrfiAllowed, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
+    yrfiAllowed: normVar(yrfiAllowedSafe, LEAGUE.YRFI_ALLOWED, LEAGUE.YRFI_ALLOWED_SD, PITCHER_WEIGHTS.yrfiAllowed, pitcherData.gs, SAMPLE_MIN.FIRST_INN_GS, true),
     pitchCount: normVar(pitcherData.pitchCount12, LEAGUE.PITCH_COUNT_1_2, LEAGUE.PITCH_COUNT_1_2_SD, PITCHER_WEIGHTS.pitchCount, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true),
     // ttoPenalty: prefiere xwOBA (Savant) cuando está disponible. Si Savant falló,
     // fallback a ttoPenaltyEra (MLB Stats API — ERA real innings 1-3 vs 4-6).
