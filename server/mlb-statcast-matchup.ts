@@ -405,18 +405,49 @@ async function resolveArsenal(
   pitcherName: string,
   season: number,
 ): Promise<{ arsenal: PitcherArsenal | null; source: ArsenalSource }> {
-  // 1. Savant MLB current season (datos reales pitch-by-pitch)
+  // FIX 17 jun 2026: Arsenal completo prioridad.
+  // Bug: Savant CSV con min_pa=q excluye pitchers con sample bajo por pitch type.
+  // Resultado anterior: pitchers tipo Mize devolvían solo 2 pitches (FF+FS) cuando realmente
+  // lanzan 5 (FF+FS+SL+SI+SV). Cache stale agravaba el problema.
+  //
+  // Solucion: MLB Stats API SIEMPRE da arsenal completo (% por pitch type real).
+  // Si Savant tiene >=3 pitches qualifying: usar Savant (preferido por wOBA real).
+  // Si Savant tiene <3 pitches: hacer MERGE - usar % de Stats API + enrichment wOBA Savant
+  // donde coincida.
+
+  // 1. Stats API arsenal (siempre completo si hay >=100 pitches season)
+  const api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 1, season, 100);
+
+  // 2. Savant current season
   let pa = await loadPitcherArsenal(season);
   let ar = pa[pitcherId];
-  if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
-  // 2. Savant MLB prev season
-  pa = await loadPitcherArsenal(season - 1);
-  ar = pa[pitcherId];
-  if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
-  // 3. MLB Stats API MLB current season (rescata rookies con MLB pitches < qualified)
-  //    Solo % uso real, wOBA por pitch viene de league-avg → confidence capeada a PARTIAL.
-  const api = await fetchArsenalFromStatsApi(pitcherId, pitcherName, 1, season, 100);
+
+  // 3. Savant prev season fallback
+  if (!ar || ar.pitches.length === 0) {
+    pa = await loadPitcherArsenal(season - 1);
+    ar = pa[pitcherId];
+  }
+
+  // Decision logic:
+  // - Savant >=3 pitches → arsenal Savant completo (datos wOBA reales)
+  if (ar && ar.pitches.length >= 3) return { arsenal: ar, source: "SAVANT_MLB" };
+
+  // - Savant <3 pitches + Stats API disponible → MERGE
+  //   Usar % de Stats API (completo) + wOBA Savant cuando exista, defaults para resto
+  if (api && ar && ar.pitches.length > 0) {
+    const savantByType = new Map(ar.pitches.map(p => [p.type, p]));
+    const merged = api.pitches.map(p => {
+      const sv = savantByType.get(p.type);
+      return sv ? { ...p, wobaAgainst: sv.wobaAgainst, whiff: sv.whiff } : p;
+    });
+    return { arsenal: { pitcherId, pitcherName, pitches: merged }, source: "SAVANT_MLB" };
+  }
+
+  // - Solo Stats API → arsenal completo con wOBA league-avg defaults
   if (api) return { arsenal: api, source: "STATSAPI_MLB" };
+
+  // - Solo Savant con 1-2 pitches → mejor que nada
+  if (ar && ar.pitches.length > 0) return { arsenal: ar, source: "SAVANT_MLB" };
   // ⛔ NO usamos AAA fallback: si el pitcher no tiene >=100 pitches en MLB esta temporada,
   //    el sistema debe devolver NO_ARSENAL y dejar que mlb-ere.ts caiga al prior individual
   //    (ERA/WHIP/K9 vía computePitcherPrior). Más honesto que inventar matchup con data de minors.
