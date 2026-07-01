@@ -63,6 +63,16 @@ export interface EarlyMarketsResult {
   // Meta
   confidence: "HIGH" | "MEDIUM" | "LOW";  // baja si warnings significativos
   warnings: string[];
+  // Recomendación final agregada (aplica reglas descubiertas 23 jun + 1 jul):
+  // - Excluye Conf HIGH (ROI histórico −0.3%, backend etiqueta "seguro" invertido)
+  // - Solo mercados core F5_ML + INNING_1_ML
+  // - Warning Light bucket 55–65% (overconfidence +18 pts)
+  finalRecommendation: {
+    market: "F5_ML" | "INNING_1_ML" | "PASS";
+    side: "HOME" | "AWAY" | "PASS";
+    action: "BET" | "PASS";
+    reason: string;
+  };
 }
 
 const LEAGUE_F5_TOTAL = 4.65;             // baseline F5 total runs
@@ -254,6 +264,49 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
 
   if (maxPitcherNd >= 3) warnings.push(`Pitcher con ${maxPitcherNd} variables N/D — modelo apoyado en prior`);
 
+  // ---- Recomendación FINAL (reglas descubiertas 23 jun + recalibración 1 jul) ----
+  // Regla 1: Conf HIGH => PASS siempre (backend "seguro" estructuralmente invertido).
+  // Regla 2: Solo mercados core (F5_ML + INNING_1_ML). NRFI/YRFI/I2/I3 nunca BET.
+  // Regla 3: F5_ML prob en 0.55–0.65 (Light bucket) marca warning — sigue siendo BET
+  //          pero el UI puede pedir verificación manual de banderas verdes.
+  const finalRecommendation: EarlyMarketsResult["finalRecommendation"] = (() => {
+    if (confidence === "HIGH") {
+      return {
+        market: "PASS" as const,
+        side: "PASS" as const,
+        action: "PASS" as const,
+        reason: "Conf HIGH — backtest histórico ROI −0.3%, backend etiqueta 'seguro' estructuralmente invertido",
+      };
+    }
+    if (f5RecommendedSide !== "PASS") {
+      const winProb = f5RecommendedSide === "HOME" ? f5ProbHome : f5ProbAway;
+      const inLightBucket = winProb >= 0.55 && winProb < 0.65;
+      return {
+        market: "F5_ML" as const,
+        side: f5RecommendedSide,
+        action: "BET" as const,
+        reason: inLightBucket
+          ? `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}% · Conf ${confidence} · ⚠️ Light bucket 55–65% (overconfidence histórico +18 pts), verificar 2+ banderas verdes`
+          : `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}% · Conf ${confidence}`,
+      };
+    }
+    if (inning1.side !== "PASS") {
+      const winProb = inning1.side === "HOME" ? inning1.homeProb : inning1.awayProb;
+      return {
+        market: "INNING_1_ML" as const,
+        side: inning1.side,
+        action: "BET" as const,
+        reason: `Inning 1 ML ${inning1.side} ${Math.round(winProb*100)}% · Conf ${confidence}`,
+      };
+    }
+    return {
+      market: "PASS" as const,
+      side: "PASS" as const,
+      action: "PASS" as const,
+      reason: "Sin edge en mercados core (F5_ML + INNING_1_ML)",
+    };
+  })();
+
   return {
     f5ProbHome: Math.round(f5ProbHome * 1000) / 1000,
     f5ProbAway: Math.round(f5ProbAway * 1000) / 1000,
@@ -275,6 +328,7 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     inning3,
     confidence,
     warnings,
+    finalRecommendation,
   };
 }
 
