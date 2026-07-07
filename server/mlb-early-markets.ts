@@ -60,20 +60,52 @@ export interface EarlyMarketsResult {
   inning1: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
   inning2: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
   inning3: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
+  // Team Total F5 markets (agregados 7 jul basados en estudio ERE n=60):
+  // Over 1.5: SLIGHT_OVER 78% · STRONG_EARLY 75% · ELITE_EARLY 80% (base)
+  // Under 2.5: SLOW_START 71% · STRONG_SLOW 75% (base)
+  teamTotalOver15F5: {
+    homeProb: number;
+    awayProb: number;
+    side: "HOME" | "AWAY" | "PASS";
+  };
+  teamTotalUnder25F5: {
+    homeProb: number;
+    awayProb: number;
+    side: "HOME" | "AWAY" | "PASS";
+  };
   // Meta
   confidence: "HIGH" | "MEDIUM" | "LOW";  // baja si warnings significativos
   warnings: string[];
-  // Recomendación final agregada (aplica reglas descubiertas 23 jun + 1 jul):
-  // - Excluye Conf HIGH (ROI histórico −0.3%, backend etiqueta "seguro" invertido)
-  // - Solo mercados core F5_ML + INNING_1_ML
-  // - Warning Light bucket 55–65% (overconfidence +18 pts)
+  // Recomendación final agregada (reglas 23 jun + 1 jul + 7 jul TT F5):
+  // - Excluye Conf HIGH
+  // - Prioriza mercado con mayor edge (TT F5 > F5_ML > INNING_1_ML)
   finalRecommendation: {
-    market: "F5_ML" | "INNING_1_ML" | "PASS";
+    market: "F5_ML" | "INNING_1_ML" | "TT_OVER_15_F5" | "TT_UNDER_25_F5" | "PASS";
     side: "HOME" | "AWAY" | "PASS";
     action: "BET" | "PASS";
     reason: string;
   };
 }
+
+// Team Total F5 probabilities by ERE category (from 7 jul empirical study, n=60):
+// Over 1.5 hit rate given category:
+const TT_OVER15_PROB_BY_CAT: Record<string, number> = {
+  ELITE_EARLY: 0.80,
+  STRONG_EARLY: 0.75,
+  SLIGHT_OVER: 0.78,
+  NEUTRAL: 0.62,
+  SLOW_START: 0.46,
+  STRONG_SLOW: 0.50,
+};
+// Under 2.5 hit rate given category (1 - P(>=3 runs)):
+const TT_UNDER25_PROB_BY_CAT: Record<string, number> = {
+  ELITE_EARLY: 0.20,
+  STRONG_EARLY: 0.42,
+  SLIGHT_OVER: 0.46,
+  NEUTRAL: 0.59,
+  SLOW_START: 0.71,
+  STRONG_SLOW: 0.75,
+};
 
 const LEAGUE_F5_TOTAL = 4.65;             // baseline F5 total runs
 const LEAGUE_YRFI_RATE = 0.28;            // prob históricamente liga
@@ -264,6 +296,34 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
 
   if (maxPitcherNd >= 3) warnings.push(`Pitcher con ${maxPitcherNd} variables N/D — modelo apoyado en prior`);
 
+  // ---- Team Total F5 by ERE category (empirical study 7 jul, n=60 games) ----
+  const homeTtOver15 = TT_OVER15_PROB_BY_CAT[homeEre.category] ?? 0.55;
+  const awayTtOver15 = TT_OVER15_PROB_BY_CAT[awayEre.category] ?? 0.55;
+  const homeTtUnder25 = TT_UNDER25_PROB_BY_CAT[homeEre.category] ?? 0.55;
+  const awayTtUnder25 = TT_UNDER25_PROB_BY_CAT[awayEre.category] ?? 0.55;
+
+  // Threshold: 0.70 hit rate = clear edge over -110 breakeven (52.4%)
+  const TT_THRESHOLD = 0.70;
+  const ttOver15Side: "HOME" | "AWAY" | "PASS" =
+    Math.max(homeTtOver15, awayTtOver15) >= TT_THRESHOLD
+      ? homeTtOver15 >= awayTtOver15 ? "HOME" : "AWAY"
+      : "PASS";
+  const ttUnder25Side: "HOME" | "AWAY" | "PASS" =
+    Math.max(homeTtUnder25, awayTtUnder25) >= TT_THRESHOLD
+      ? homeTtUnder25 >= awayTtUnder25 ? "HOME" : "AWAY"
+      : "PASS";
+
+  const teamTotalOver15F5 = {
+    homeProb: Math.round(homeTtOver15 * 1000) / 1000,
+    awayProb: Math.round(awayTtOver15 * 1000) / 1000,
+    side: ttOver15Side,
+  };
+  const teamTotalUnder25F5 = {
+    homeProb: Math.round(homeTtUnder25 * 1000) / 1000,
+    awayProb: Math.round(awayTtUnder25 * 1000) / 1000,
+    side: ttUnder25Side,
+  };
+
   // ---- Recomendación FINAL (reglas descubiertas 23 jun + recalibración 1 jul) ----
   // Regla 1: Conf HIGH => PASS siempre (backend "seguro" estructuralmente invertido).
   // Regla 2: Solo mercados core (F5_ML + INNING_1_ML). NRFI/YRFI/I2/I3 nunca BET.
@@ -275,35 +335,58 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         market: "PASS" as const,
         side: "PASS" as const,
         action: "PASS" as const,
-        reason: "Conf HIGH — backtest histórico ROI −0.3%, backend etiqueta 'seguro' estructuralmente invertido",
+        reason: "Conf HIGH — revisión pendiente (muestra actual divergente), pasar hasta recalibración 15 jul",
       };
     }
+
+    // Recolectar candidatos con su probabilidad y ranking
+    type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string };
+    const candidates: Candidate[] = [];
+
+    // TT Over 1.5 F5 (nuevo mercado 7 jul — hit rate 75–78% según estudio ERE)
+    if (ttOver15Side !== "PASS") {
+      const prob = ttOver15Side === "HOME" ? homeTtOver15 : awayTtOver15;
+      const cat = ttOver15Side === "HOME" ? homeEre.category : awayEre.category;
+      candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob,
+        label: `TT Over 1.5 F5 ${ttOver15Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
+    }
+    // TT Under 2.5 F5 (nuevo mercado 7 jul — hit rate 71–75% para SLOW_START/STRONG_SLOW)
+    if (ttUnder25Side !== "PASS") {
+      const prob = ttUnder25Side === "HOME" ? homeTtUnder25 : awayTtUnder25;
+      const cat = ttUnder25Side === "HOME" ? homeEre.category : awayEre.category;
+      candidates.push({ market: "TT_UNDER_25_F5", side: ttUnder25Side, prob,
+        label: `TT Under 2.5 F5 ${ttUnder25Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
+    }
+    // F5 ML tradicional
     if (f5RecommendedSide !== "PASS") {
       const winProb = f5RecommendedSide === "HOME" ? f5ProbHome : f5ProbAway;
       const inLightBucket = winProb >= 0.55 && winProb < 0.65;
-      return {
-        market: "F5_ML" as const,
-        side: f5RecommendedSide,
-        action: "BET" as const,
-        reason: inLightBucket
-          ? `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}% · Conf ${confidence} · ⚠️ Light bucket 55–65% (overconfidence histórico +18 pts), verificar 2+ banderas verdes`
-          : `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}% · Conf ${confidence}`,
-      };
+      candidates.push({ market: "F5_ML", side: f5RecommendedSide, prob: winProb,
+        label: `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}` });
     }
+    // Inning 1 ML
     if (inning1.side !== "PASS") {
       const winProb = inning1.side === "HOME" ? inning1.homeProb : inning1.awayProb;
+      candidates.push({ market: "INNING_1_ML", side: inning1.side, prob: winProb,
+        label: `Inning 1 ML ${inning1.side} ${Math.round(winProb*100)}%` });
+    }
+
+    if (candidates.length === 0) {
       return {
-        market: "INNING_1_ML" as const,
-        side: inning1.side,
-        action: "BET" as const,
-        reason: `Inning 1 ML ${inning1.side} ${Math.round(winProb*100)}% · Conf ${confidence}`,
+        market: "PASS" as const,
+        side: "PASS" as const,
+        action: "PASS" as const,
+        reason: "Sin edge en mercados core (F5 ML, INNING 1 ML, TT F5)",
       };
     }
+    // Elegir el candidato con mayor probabilidad
+    candidates.sort((a, b) => b.prob - a.prob);
+    const best = candidates[0];
     return {
-      market: "PASS" as const,
-      side: "PASS" as const,
-      action: "PASS" as const,
-      reason: "Sin edge en mercados core (F5_ML + INNING_1_ML)",
+      market: best.market,
+      side: best.side,
+      action: "BET" as const,
+      reason: `${best.label} · Conf ${confidence}`,
     };
   })();
 
@@ -326,6 +409,8 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     inning1,
     inning2,
     inning3,
+    teamTotalOver15F5,
+    teamTotalUnder25F5,
     confidence,
     warnings,
     finalRecommendation,
