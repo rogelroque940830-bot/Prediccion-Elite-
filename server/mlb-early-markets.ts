@@ -329,54 +329,92 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   // Regla 2: Solo mercados core (F5_ML + INNING_1_ML). NRFI/YRFI/I2/I3 nunca BET.
   // Regla 3: F5_ML prob en 0.55–0.65 (Light bucket) marca warning — sigue siendo BET
   //          pero el UI puede pedir verificación manual de banderas verdes.
-  const finalRecommendation: EarlyMarketsResult["finalRecommendation"] = (() => {
-    if (confidence === "HIGH") {
-      return {
-        market: "PASS" as const,
-        side: "PASS" as const,
-        action: "PASS" as const,
-        reason: "Conf HIGH — revisión pendiente (muestra actual divergente), pasar hasta recalibración 15 jul",
-      };
-    }
+  // ============================================================================
+  // FILTROS DUROS validados out-of-sample (backtest 7 jul, n=304 F5_ML)
+  // TEST set n=27 filtrado: 24W-3L = 88.9% hit, +18.84u, ROI +69.8%
+  // Aplican a F5_ML e INNING_1_ML. TT F5 usa regla legacy HIGH=PASS hasta
+  // tener su propio backtest out-of-sample.
+  // ============================================================================
+  function coreMarketFilter(pickSide: "HOME"|"AWAY", pickProb: number, market: "F5_ML"|"INNING_1_ML"): { pass: true; reason: string } | null {
+    const erePick = pickSide === "HOME" ? homeEre.ereScore : awayEre.ereScore;
+    const ereRival = pickSide === "HOME" ? awayEre.ereScore : homeEre.ereScore;
+    const ereDiff = (erePick ?? 0) - (ereRival ?? 0);
 
-    // Recolectar candidatos con su probabilidad y ranking
-    type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string };
+    // Filtro 1: ERE_diff < 10 (bloquéa 55 picks en TEST, hit 43.6%, −9.16u)
+    if (ereDiff < 10) {
+      return { pass: true, reason: `ERE_diff=${ereDiff.toFixed(0)} <10 — histórico 40–50% hit rate (backtest 7 jul)` };
+    }
+    // Filtro 2: ERE del equipo apostado < 45 (bloqueó 8 picks TEST, hit 25%, −4.18u)
+    if ((erePick ?? 100) < 45) {
+      return { pass: true, reason: `ERE_pick=${erePick?.toFixed(0)} <45 — equipo apostado sin edge ofensivo (histórico 34–41% hit)` };
+    }
+    // Filtro 3: solo F5_ML — Prob >=0.65 + Conf=HIGH (bloquéa 13 picks TEST, hit 46%, −1.54u)
+    if (market === "F5_ML" && pickProb >= 0.65 && confidence === "HIGH") {
+      return { pass: true, reason: `Prob=${Math.round(pickProb*100)}% + Conf=HIGH — trampa favorito seguro (histórico 46% hit)` };
+    }
+    return null;
+  }
+
+  const finalRecommendation: EarlyMarketsResult["finalRecommendation"] = (() => {
+    // Recolectar candidatos con su probabilidad
+    type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string; blockedReason?: string };
     const candidates: Candidate[] = [];
 
-    // TT Over 1.5 F5 (nuevo mercado 7 jul — hit rate 75–78% según estudio ERE)
-    if (ttOver15Side !== "PASS") {
+    // TT Over 1.5 F5 (regla legacy: Conf=HIGH → PASS hasta backtest propio)
+    if (ttOver15Side !== "PASS" && confidence !== "HIGH") {
       const prob = ttOver15Side === "HOME" ? homeTtOver15 : awayTtOver15;
       const cat = ttOver15Side === "HOME" ? homeEre.category : awayEre.category;
       candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob,
         label: `TT Over 1.5 F5 ${ttOver15Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
     }
-    // TT Under 2.5 F5 (nuevo mercado 7 jul — hit rate 71–75% para SLOW_START/STRONG_SLOW)
-    if (ttUnder25Side !== "PASS") {
+    // TT Under 2.5 F5 (misma regla legacy)
+    if (ttUnder25Side !== "PASS" && confidence !== "HIGH") {
       const prob = ttUnder25Side === "HOME" ? homeTtUnder25 : awayTtUnder25;
       const cat = ttUnder25Side === "HOME" ? homeEre.category : awayEre.category;
       candidates.push({ market: "TT_UNDER_25_F5", side: ttUnder25Side, prob,
         label: `TT Under 2.5 F5 ${ttUnder25Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
     }
-    // F5 ML tradicional
+    // F5 ML — usa los 3 filtros duros validados
     if (f5RecommendedSide !== "PASS") {
       const winProb = f5RecommendedSide === "HOME" ? f5ProbHome : f5ProbAway;
-      const inLightBucket = winProb >= 0.55 && winProb < 0.65;
-      candidates.push({ market: "F5_ML", side: f5RecommendedSide, prob: winProb,
-        label: `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}` });
+      const blocked = coreMarketFilter(f5RecommendedSide, winProb, "F5_ML");
+      if (!blocked) {
+        const inLightBucket = winProb >= 0.55 && winProb < 0.65;
+        candidates.push({ market: "F5_ML", side: f5RecommendedSide, prob: winProb,
+          label: `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}` });
+      }
     }
-    // Inning 1 ML
+    // Inning 1 ML — usa filtros 1 y 2 (no aplica filtro 3 según estudio)
     if (inning1.side !== "PASS") {
       const winProb = inning1.side === "HOME" ? inning1.homeProb : inning1.awayProb;
-      candidates.push({ market: "INNING_1_ML", side: inning1.side, prob: winProb,
-        label: `Inning 1 ML ${inning1.side} ${Math.round(winProb*100)}%` });
+      const blocked = coreMarketFilter(inning1.side, winProb, "INNING_1_ML");
+      if (!blocked) {
+        candidates.push({ market: "INNING_1_ML", side: inning1.side, prob: winProb,
+          label: `Inning 1 ML ${inning1.side} ${Math.round(winProb*100)}%` });
+      }
     }
 
     if (candidates.length === 0) {
+      // Construir razón explicando el motivo del PASS (más útil que genérico)
+      const reasons: string[] = [];
+      if (f5RecommendedSide !== "PASS") {
+        const winProb = f5RecommendedSide === "HOME" ? f5ProbHome : f5ProbAway;
+        const blocked = coreMarketFilter(f5RecommendedSide, winProb, "F5_ML");
+        if (blocked) reasons.push(`F5 ML bloqueado: ${blocked.reason}`);
+      }
+      if (inning1.side !== "PASS") {
+        const winProb = inning1.side === "HOME" ? inning1.homeProb : inning1.awayProb;
+        const blocked = coreMarketFilter(inning1.side, winProb, "INNING_1_ML");
+        if (blocked) reasons.push(`I1 ML bloqueado: ${blocked.reason}`);
+      }
+      if (confidence === "HIGH" && (ttOver15Side !== "PASS" || ttUnder25Side !== "PASS")) {
+        reasons.push("TT F5 disponible pero Conf=HIGH (regla legacy pendiente de backtest propio)");
+      }
       return {
         market: "PASS" as const,
         side: "PASS" as const,
         action: "PASS" as const,
-        reason: "Sin edge en mercados core (F5 ML, INNING 1 ML, TT F5)",
+        reason: reasons.length ? reasons.join(" · ") : "Sin edge en mercados core (F5 ML, INNING 1 ML, TT F5)",
       };
     }
     // Elegir el candidato con mayor probabilidad
