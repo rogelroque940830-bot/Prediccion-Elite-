@@ -330,14 +330,18 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
   // Regla 3: F5_ML prob en 0.55–0.65 (Light bucket) marca warning — sigue siendo BET
   //          pero el UI puede pedir verificación manual de banderas verdes.
   // ============================================================================
-  // FILTROS DUROS validados out-of-sample (backtest 7 jul, n=304 F5_ML)
-  // TEST set n=27 filtrado: 24W-3L = 88.9% hit, +18.84u, ROI +69.8%
+  // FILTROS DUROS validados out-of-sample (backtest 7 jul, n=481 F5+I1)
+  // F5_ML TEST n=27 filtrado: 24W-3L = 88.9% hit, +18.84u, ROI +69.8%
+  // Filtros 4 y 5 agregados 7 jul (2° iteración) tras backtest de nuevas reglas
+  // sobre variables secundarias.
   // Aplican a F5_ML e INNING_1_ML. TT F5 usa regla legacy HIGH=PASS hasta
   // tener su propio backtest out-of-sample.
   // ============================================================================
   function coreMarketFilter(pickSide: "HOME"|"AWAY", pickProb: number, market: "F5_ML"|"INNING_1_ML"): { pass: true; reason: string } | null {
-    const erePick = pickSide === "HOME" ? homeEre.ereScore : awayEre.ereScore;
-    const ereRival = pickSide === "HOME" ? awayEre.ereScore : homeEre.ereScore;
+    const erePickObj = pickSide === "HOME" ? homeEre : awayEre;
+    const ereRivalObj = pickSide === "HOME" ? awayEre : homeEre;
+    const erePick = erePickObj.ereScore;
+    const ereRival = ereRivalObj.ereScore;
     const ereDiff = (erePick ?? 0) - (ereRival ?? 0);
 
     // Filtro 1: ERE_diff < 10 (bloquéa 55 picks en TEST, hit 43.6%, −9.16u)
@@ -351,6 +355,22 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     // Filtro 3: solo F5_ML — Prob >=0.65 + Conf=HIGH (bloquéa 13 picks TEST, hit 46%, −1.54u)
     if (market === "F5_ML" && pickProb >= 0.65 && confidence === "HIGH") {
       return { pass: true, reason: `Prob=${Math.round(pickProb*100)}% + Conf=HIGH — trampa favorito seguro (histórico 46% hit)` };
+    }
+    // Filtro 4 (NUEVO 2° iter): solo F5_ML — rival xwOBA TTO1 en [0.28, 0.32)
+    // TRAIN 42.1% hit (n=76) · TEST 36.4% hit (n=22, −6.72u) — pitcher rival "gris"
+    if (market === "F5_ML") {
+      const rivalXwobaTto1 = ereRivalObj.variables?.pitcher?.xwobaTto1?.raw;
+      if (rivalXwobaTto1 !== null && rivalXwobaTto1 !== undefined && rivalXwobaTto1 >= 0.28 && rivalXwobaTto1 < 0.32) {
+        return { pass: true, reason: `Rival xwOBA TTO1=${rivalXwobaTto1.toFixed(3)} en zona gris [0.28, 0.32) — pitcher rival ni elite ni malo, histórico 36–42% hit` };
+      }
+    }
+    // Filtro 5 (NUEVO 2° iter): solo INNING_1_ML — own top5 xwOBA en [0.33, 0.36)
+    // TRAIN 48.1% hit (n=79) · TEST 36.7% hit (n=30, −8.99u) — ofensa "bueno no elite"
+    if (market === "INNING_1_ML") {
+      const ownTop5Xwoba = erePickObj.variables?.offense?.top5xwoba?.raw;
+      if (ownTop5Xwoba !== null && ownTop5Xwoba !== undefined && ownTop5Xwoba >= 0.33 && ownTop5Xwoba < 0.36) {
+        return { pass: true, reason: `xwOBA top-5 propio=${ownTop5Xwoba.toFixed(3)} en zona [0.33, 0.36) — ofensa "buena pero no elite" en I1, histórico 37–48% hit` };
+      }
     }
     return null;
   }
