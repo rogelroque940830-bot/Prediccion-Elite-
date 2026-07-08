@@ -380,15 +380,21 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string; blockedReason?: string };
     const candidates: Candidate[] = [];
 
-    // TT Over 1.5 F5 (regla legacy: Conf=HIGH → PASS hasta backtest propio)
-    if (ttOver15Side !== "PASS" && confidence !== "HIGH") {
+    // TT Over 1.5 F5 (7 jul iter 3: quitada la regla HIGH=PASS tras backtest
+    // propio out-of-sample. Baseline TEST n=78 = 82.1% hit, HIGH TEST n=38 = 71.1%.
+    // La restricción previa filtraba ganadores. Badge PREMIUM para STRONG_EARLY
+    // que ganó 95.5% en TEST (n=22).
+    if (ttOver15Side !== "PASS") {
       const prob = ttOver15Side === "HOME" ? homeTtOver15 : awayTtOver15;
       const cat = ttOver15Side === "HOME" ? homeEre.category : awayEre.category;
-      candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob,
-        label: `TT Over 1.5 F5 ${ttOver15Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
+      const isPremium = cat === "STRONG_EARLY";
+      const premiumTag = isPremium ? "🏆 PREMIUM · " : "";
+      const histPct = isPremium ? 96 : Math.round(prob*100);
+      candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob: isPremium ? Math.max(prob, 0.85) : prob,
+        label: `${premiumTag}TT Over 1.5 F5 ${ttOver15Side} (ERE ${cat} — ${histPct}% hit histórico)` });
     }
-    // TT Under 2.5 F5 (misma regla legacy)
-    if (ttUnder25Side !== "PASS" && confidence !== "HIGH") {
+    // TT Under 2.5 F5
+    if (ttUnder25Side !== "PASS") {
       const prob = ttUnder25Side === "HOME" ? homeTtUnder25 : awayTtUnder25;
       const cat = ttUnder25Side === "HOME" ? homeEre.category : awayEre.category;
       candidates.push({ market: "TT_UNDER_25_F5", side: ttUnder25Side, prob,
@@ -427,9 +433,7 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         const blocked = coreMarketFilter(inning1.side, winProb, "INNING_1_ML");
         if (blocked) reasons.push(`I1 ML bloqueado: ${blocked.reason}`);
       }
-      if (confidence === "HIGH" && (ttOver15Side !== "PASS" || ttUnder25Side !== "PASS")) {
-        reasons.push("TT F5 disponible pero Conf=HIGH (regla legacy pendiente de backtest propio)");
-      }
+
       return {
         market: "PASS" as const,
         side: "PASS" as const,
