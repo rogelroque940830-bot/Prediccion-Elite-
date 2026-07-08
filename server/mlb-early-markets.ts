@@ -364,12 +364,19 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         return { pass: true, reason: `Rival xwOBA TTO1=${rivalXwobaTto1.toFixed(3)} en zona gris [0.28, 0.32) — pitcher rival ni elite ni malo, histórico 36–42% hit` };
       }
     }
-    // Filtro 5 (NUEVO 2° iter): solo INNING_1_ML — own top5 xwOBA en [0.33, 0.36)
-    // TRAIN 48.1% hit (n=79) · TEST 36.7% hit (n=30, −8.99u) — ofensa "bueno no elite"
+    // Filtro 5 (iter 3 - 8 jul): INNING_1_ML solo BET si own_top5_xwoba está
+    // en el sweet spot [0.29, 0.33). Fuera de ese rango → PASS.
+    // Justificación: I1 baseline general = 57% (flojo). Solo el bucket
+    // own_top5_xwoba [0.29, 0.33) sobrevivió out-of-sample con 75% hit (n=20).
+    // Los otros rangos: <0.29 (n<12 muestra chica), [0.33, 0.36) 37% hit (loser),
+    // >=0.36 (mixed). Restricción dura: solo BET en el sweet spot.
     if (market === "INNING_1_ML") {
       const ownTop5Xwoba = erePickObj.variables?.offense?.top5xwoba?.raw;
-      if (ownTop5Xwoba !== null && ownTop5Xwoba !== undefined && ownTop5Xwoba >= 0.33 && ownTop5Xwoba < 0.36) {
-        return { pass: true, reason: `xwOBA top-5 propio=${ownTop5Xwoba.toFixed(3)} en zona [0.33, 0.36) — ofensa "buena pero no elite" en I1, histórico 37–48% hit` };
+      if (ownTop5Xwoba === null || ownTop5Xwoba === undefined) {
+        return { pass: true, reason: `INNING_1_ML sin datos xwOBA top-5 — requerido para validar sweet spot` };
+      }
+      if (ownTop5Xwoba < 0.29 || ownTop5Xwoba >= 0.33) {
+        return { pass: true, reason: `INNING_1_ML: xwOBA top-5 propio=${ownTop5Xwoba.toFixed(3)} fuera del sweet spot [0.29, 0.33) — solo esa zona rinde 75% hit histórico` };
       }
     }
     return null;
