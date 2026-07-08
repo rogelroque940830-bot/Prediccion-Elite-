@@ -76,15 +76,23 @@ export interface EarlyMarketsResult {
   // Meta
   confidence: "HIGH" | "MEDIUM" | "LOW";  // baja si warnings significativos
   warnings: string[];
-  // Recomendación final agregada (reglas 23 jun + 1 jul + 7 jul TT F5):
-  // - Excluye Conf HIGH
-  // - Prioriza mercado con mayor edge (TT F5 > F5_ML > INNING_1_ML)
+  // Recomendación final: pick con mayor prob (o PREMIUM si hay)
   finalRecommendation: {
     market: "F5_ML" | "INNING_1_ML" | "TT_OVER_15_F5" | "TT_UNDER_25_F5" | "PASS";
     side: "HOME" | "AWAY" | "PASS";
     action: "BET" | "PASS";
     reason: string;
+    isPremium?: boolean;
   };
+  // Picks alternos válidos (BET adicionales más allá del top). Cuando hay 2 PREMIUM,
+  // el segundo aparece aquí para que el usuario decida cuál jugar.
+  alternativePicks?: Array<{
+    market: "F5_ML" | "INNING_1_ML" | "TT_OVER_15_F5" | "TT_UNDER_25_F5";
+    side: "HOME" | "AWAY";
+    prob: number;
+    reason: string;
+    isPremium: boolean;
+  }>;
 }
 
 // Team Total F5 probabilities by ERE category (from 7 jul empirical study, n=60):
@@ -382,9 +390,12 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     return null;
   }
 
+  // Container compartido para exponer los candidatos al calculo de alternativePicks
+  type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string; blockedReason?: string };
+  const _rankedCandidates: Candidate[] = [];
+
   const finalRecommendation: EarlyMarketsResult["finalRecommendation"] = (() => {
     // Recolectar candidatos con su probabilidad
-    type Candidate = { market: EarlyMarketsResult["finalRecommendation"]["market"]; side: "HOME"|"AWAY"; prob: number; label: string; blockedReason?: string };
     const candidates: Candidate[] = [];
 
     // TT Over 1.5 F5 (7 jul iter 3: quitada la regla HIGH=PASS tras backtest
@@ -407,14 +418,30 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
       candidates.push({ market: "TT_UNDER_25_F5", side: ttUnder25Side, prob,
         label: `TT Under 2.5 F5 ${ttUnder25Side} (ERE ${cat} — ${Math.round(prob*100)}% hit histórico)` });
     }
-    // F5 ML — usa los 3 filtros duros validados
+    // F5 ML — usa los 4 filtros duros validados + PREMIUM detection
+    // PREMIUM: ERE_diff >= 20 o ERE_pick >= 65 (dentro de supervivientes)
+    // Backtest 8 jul TEST: ambos rangos = 100% hit (6/6 cada uno).
     if (f5RecommendedSide !== "PASS") {
       const winProb = f5RecommendedSide === "HOME" ? f5ProbHome : f5ProbAway;
       const blocked = coreMarketFilter(f5RecommendedSide, winProb, "F5_ML");
       if (!blocked) {
+        const erePick = f5RecommendedSide === "HOME" ? homeEre.ereScore : awayEre.ereScore;
+        const ereRival = f5RecommendedSide === "HOME" ? awayEre.ereScore : homeEre.ereScore;
+        const ereDiff = (erePick ?? 0) - (ereRival ?? 0);
+        const isPremiumF5 = ereDiff >= 20 || (erePick !== undefined && erePick !== null && erePick >= 65);
         const inLightBucket = winProb >= 0.55 && winProb < 0.65;
-        candidates.push({ market: "F5_ML", side: f5RecommendedSide, prob: winProb,
-          label: `F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}` });
+        const premiumTag = isPremiumF5 ? "🏆 PREMIUM · " : "";
+        const premiumStats = isPremiumF5
+          ? ereDiff >= 20
+            ? " · ERE_diff=" + ereDiff.toFixed(0) + " ≥ 20, histórico 100% hit (n=18)"
+            : " · ERE_pick=" + (erePick?.toFixed(0) ?? "?") + " ≥ 65, histórico 100% hit TEST (n=6)"
+          : "";
+        candidates.push({
+          market: "F5_ML",
+          side: f5RecommendedSide,
+          prob: isPremiumF5 ? Math.max(winProb, 0.97) : winProb,
+          label: `${premiumTag}F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}${premiumStats}`,
+        });
       }
     }
     // Inning 1 ML — usa filtros 1 y 2 (no aplica filtro 3 según estudio)
@@ -450,14 +477,31 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     }
     // Elegir el candidato con mayor probabilidad
     candidates.sort((a, b) => b.prob - a.prob);
+    _rankedCandidates.push(...candidates); // exponer para alternativePicks
     const best = candidates[0];
     return {
       market: best.market,
       side: best.side,
       action: "BET" as const,
       reason: `${best.label} · Conf ${confidence}`,
+      isPremium: best.label.includes("🏆 PREMIUM"),
     };
   })();
+
+  // alternativePicks: cuando hay 2+ PREMIUM (o BET con label PREMIUM), mostrar todos
+  const alternativePicks: EarlyMarketsResult["alternativePicks"] =
+    finalRecommendation.action === "BET"
+      ? _rankedCandidates
+          .slice(1) // skip el top (ya está en finalRecommendation)
+          .filter(c => c.label.includes("🏆 PREMIUM"))
+          .map(c => ({
+            market: c.market as "F5_ML" | "INNING_1_ML" | "TT_OVER_15_F5" | "TT_UNDER_25_F5",
+            side: c.side,
+            prob: Math.round(c.prob * 1000) / 1000,
+            reason: `${c.label} · Conf ${confidence}`,
+            isPremium: true,
+          }))
+      : [];
 
   return {
     f5ProbHome: Math.round(f5ProbHome * 1000) / 1000,
@@ -483,6 +527,7 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     confidence,
     warnings,
     finalRecommendation,
+    alternativePicks,
   };
 }
 
