@@ -414,6 +414,27 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         return { pass: true, reason: `Rival F5 ERA=${rivalF5Era.toFixed(2)} >=5.5 — pitcher rival terrible, juego high-variance (backtest 10 jul TEST 36% hit)` };
       }
     }
+    // Filtro 9 (iter 5 - 10 jul, auditoría bypass): solo F5_ML — rival pitcher
+    // sin f5InningData confiable o f5_ip <25 → PASS.
+    // Descubierto tras Padres vs Blue Jays 10 jul: Shane Bieber (comeback) no tenía
+    // data f5InningData, por lo que F6/F7/F8 no aplicaban. Pick pasó como quasi-
+    // premium (prob 79.6%, ERE_diff=19) y perdió F5 5-2. Auditoría reveló que 5.8%
+    // de picks históricos tienen rival sin data — bypass total de los filtros F6-F8.
+    // Sin data confiable del rival, no podemos validar edge. Mejor pasar.
+    if (market === "F5_ML") {
+      const rivalF5 = ereRivalObj.f5InningData;
+      const rivalF5Ip = rivalF5?.f5Ip;
+      const hasRecent = rivalF5?.hasRecentForm;
+      const rivalWhip = rivalF5?.f5Whip;
+      const rivalEra = rivalF5?.f5Era;
+      // Rival sin data completa (whip Y era ambos null) o con muestra insuficiente
+      const dataMissing = (rivalWhip === null || rivalWhip === undefined) &&
+                          (rivalEra === null || rivalEra === undefined);
+      const lowSample = rivalF5Ip !== null && rivalF5Ip !== undefined && rivalF5Ip < 25;
+      if (dataMissing || lowSample || hasRecent === false) {
+        return { pass: true, reason: `Rival pitcher sin muestra F5 confiable (IP=${rivalF5Ip ?? 'null'}, whip=${rivalWhip ?? 'null'}, recent=${hasRecent}) — filtros F6-F8 no pueden validar edge` };
+      }
+    }
     // Filtro 5 (iter 3 - 8 jul): INNING_1_ML solo BET si own_top5_xwoba está
     // en el sweet spot [0.29, 0.33). Fuera de ese rango → PASS.
     // Justificación: I1 baseline general = 57% (flojo). Solo el bucket
