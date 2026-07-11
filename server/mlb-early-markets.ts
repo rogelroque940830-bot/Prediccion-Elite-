@@ -372,6 +372,36 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         return { pass: true, reason: `Rival xwOBA TTO1=${rivalXwobaTto1.toFixed(3)} en zona gris [0.28, 0.32) — pitcher rival ni elite ni malo, histórico 36–42% hit` };
       }
     }
+    // Filtro 6 (iter 4 - 10 jul, Fase 1 backtest deep n=522): solo F5_ML
+    // rival_f5_whip en [1.2, 1.7) → PASS. TRAIN 46% (n=124) · TEST 40.5% (n=42, -9.53u)
+    // Interpretación: pitcher rival mediocre = juego caótico, alta varianza,
+    // favorito puede voltearse. F5 ML gana MEJOR contra pitchers buenos-a-elite.
+    if (market === "F5_ML") {
+      const rivalF5Whip = ereRivalObj.f5InningData?.f5Whip;
+      if (rivalF5Whip !== null && rivalF5Whip !== undefined && rivalF5Whip >= 1.2 && rivalF5Whip < 1.7) {
+        return { pass: true, reason: `Rival F5 WHIP=${rivalF5Whip.toFixed(2)} en [1.2, 1.7) — pitcher rival mediocre, juego high-variance (backtest 10 jul TEST 40.5% hit)` };
+      }
+    }
+    // Filtro 7 (iter 4 - 10 jul): solo F5_ML — psuppr_pick (pitcher del equipo
+    // apostado) en [60, 75) → PASS. TRAIN 51.1% (n=45) · TEST 25% (n=16, -8.36u)
+    // Interpretación contraintuitiva: cuando TU pitcher tiene score suppression
+    // "élite" (60-75), la línea ya cobra premium y el pick pierde brutalmente.
+    if (market === "F5_ML") {
+      const psupprPick = erePickObj.pitcherSuppressionScore;
+      if (psupprPick !== undefined && psupprPick !== null && psupprPick >= 60 && psupprPick < 75) {
+        return { pass: true, reason: `Pitcher suppression pick=${psupprPick.toFixed(0)} en [60, 75) — línea inflada por premium ace (backtest 10 jul TEST 25% hit)` };
+      }
+    }
+    // Filtro 8 (iter 4 - 10 jul): solo F5_ML — rival_f5era >= 5.5 → PASS.
+    // TRAIN 35% (n=20) · TEST 36.4% (n=11, -3.36u)
+    // Interpretación: pitcher rival terrible = juego high-scoring, alta varianza,
+    // favorito puede voltearse. Similar a F6 pero por ERA directa.
+    if (market === "F5_ML") {
+      const rivalF5Era = ereRivalObj.f5InningData?.f5Era;
+      if (rivalF5Era !== null && rivalF5Era !== undefined && rivalF5Era >= 5.5) {
+        return { pass: true, reason: `Rival F5 ERA=${rivalF5Era.toFixed(2)} >=5.5 — pitcher rival terrible, juego high-variance (backtest 10 jul TEST 36% hit)` };
+      }
+    }
     // Filtro 5 (iter 3 - 8 jul): INNING_1_ML solo BET si own_top5_xwoba está
     // en el sweet spot [0.29, 0.33). Fuera de ese rango → PASS.
     // Justificación: I1 baseline general = 57% (flojo). Solo el bucket
