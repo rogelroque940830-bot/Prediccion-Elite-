@@ -193,6 +193,83 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           : Promise.resolve(null),
       ]);
 
+      // BOOST signals — Fase 2 backtest 10 jul (n=522).
+      // Llamadas paralelas a servicios internos (usan cache) para detectar señales
+      // ganadoras que suben hit rate del F5_ML PREMIUM. NO afecta filtros; solo
+      // agrega badges al finalRecommendation.
+      // homeProbPitcher (pitcher DEL HOME team) = away.opposingPitcherId (el que enfrenta el AWAY lineup)
+      // awayProbPitcher (pitcher DEL AWAY team) = home.opposingPitcherId
+      const homeProbPid = away.opposingPitcherId as number | undefined;
+      const awayProbPid = home.opposingPitcherId as number | undefined;
+      let boostSignalsInput:
+        | { home: Array<{ type: any; label: string }>; away: Array<{ type: any; label: string }> }
+        | undefined = undefined;
+      try {
+        const gameDateIso = (req.body?.gameDate as string) || new Date().toISOString().slice(0, 10);
+        const [{ getPitcherRecentCombined }, { analyzePitcherVsTeamMatchup }, { getTeamSos }, { getPitcherQualityMap }] = await Promise.all([
+          import("./mlb-pitcher-recent"),
+          import("./mlb-pitcher-vs-team"),
+          import("./mlb-sos"),
+          import("./mlb-statcast-quality"),
+        ]);
+        const [recent, pvt, sosHome, sosAway, qualityMap] = await Promise.all([
+          (homeProbPid || awayProbPid)
+            ? getPitcherRecentCombined(homeProbPid ?? null, "?", awayProbPid ?? null, "?", gameDateIso).catch(() => null)
+            : Promise.resolve(null),
+          (homeProbPid && awayProbPid)
+            ? analyzePitcherVsTeamMatchup(
+                home.teamId, home.teamName || "", homeProbPid, "?",
+                away.teamId, away.teamName || "", awayProbPid, "?"
+              ).catch(() => null)
+            : Promise.resolve(null),
+          getTeamSos(home.teamId, home.teamName || "").catch(() => null),
+          getTeamSos(away.teamId, away.teamName || "").catch(() => null),
+          getPitcherQualityMap().catch(() => ({} as Record<number, any>)),
+        ]);
+
+        // Construir boost signals para cada lado del pick
+        // Cuando pick=HOME: rival pitcher es awayProbPid, se evalúan sus stats
+        // Cuando pick=AWAY: rival pitcher es homeProbPid, se evalúan sus stats
+        const buildBoosts = (pickSide: "HOME" | "AWAY"): Array<{ type: any; label: string }> => {
+          const boosts: Array<{ type: any; label: string }> = [];
+          const rivalRecent = pickSide === "HOME" ? recent?.away : recent?.home;
+          const rivalPid = pickSide === "HOME" ? awayProbPid : homeProbPid;
+          const rivalPvt = pickSide === "HOME" ? pvt?.awayVsHome : pvt?.homeVsAway;
+          const sosPick = pickSide === "HOME" ? sosHome : sosAway;
+          const rivalQual = rivalPid ? qualityMap[rivalPid] : null;
+
+          // BOOST 1: IMPLOSION — rival pitcher en últimas 5 aperturas muy malas
+          if (rivalRecent?.trend === "IMPLOSION") {
+            boosts.push({ type: "IMPLOSION", label: `Rival IMPLOSION (ERA ${rivalRecent.recentEra?.toFixed(2)})` });
+          }
+          // BOOST 2: ERA_DECLINE — rival empeorando (recent > season)
+          if (rivalRecent?.recencyEraDelta && rivalRecent.recencyEraDelta >= 0.3) {
+            boosts.push({ type: "ERA_DECLINE", label: `Rival ERA +${rivalRecent.recencyEraDelta.toFixed(2)} recent` });
+          }
+          // BOOST 3: QUALITY_BAD — Statcast xERA malo (>=5)
+          if (rivalQual?.xera && rivalQual.xera >= 5) {
+            boosts.push({ type: "QUALITY_BAD", label: `Rival xERA=${rivalQual.xera.toFixed(2)} elite malo` });
+          }
+          // BOOST 4: H2H_STRUGGLE — rival sufre H2H vs equipo pick
+          if (rivalPvt && rivalPvt.significantSample && rivalPvt.era !== null && rivalPvt.era >= 5) {
+            boosts.push({ type: "H2H_STRUGGLE", label: `Rival ERA H2H=${rivalPvt.era.toFixed(2)} (${rivalPvt.totalStarts} starts)` });
+          }
+          // BOOST 5: SOS_INFLATED — pick team viene de calendario duro
+          if (sosPick?.tier === "INFLATED") {
+            boosts.push({ type: "SOS_INFLATED", label: `Ofensiva reprimida (SOS INFLATED)` });
+          }
+          return boosts;
+        };
+
+        boostSignalsInput = {
+          home: buildBoosts("HOME"),
+          away: buildBoosts("AWAY"),
+        };
+      } catch (err) {
+        // Boost signals opcionales — si fallan, el flujo continúa sin ellos
+        boostSignalsInput = undefined;
+      }
+
       const markets = computeEarlyMarkets({
         homeEre, awayEre,
         f5OverLine: lines?.f5OverLine,
@@ -203,6 +280,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         nrfiOddsAmerican: lines?.nrfiOdds,
         yrfiOddsAmerican: lines?.yrfiOdds,
         matchupSignal: matchupSignal ?? undefined,
+        boostSignals: boostSignalsInput,
       });
 
       // F5 unificado: ERE core + capas internas (pitcher form, umpire)

@@ -35,6 +35,18 @@ export interface EarlyMarketsInput {
     awayLineupAvgXwoba: number | null;
     dataConfidence: "FULL" | "PARTIAL" | "LOW" | "NONE";
   };
+  // BOOST signals validados out-of-sample (backtest 10 jul, Fase 2 n=522).
+  // Señales positivas por lado del pick. Solo se muestran cuando pick es F5_ML PREMIUM.
+  // 2+ boosts = ULTRA PREMIUM (badge extra fuerte).
+  boostSignals?: {
+    home: BoostSignal[];
+    away: BoostSignal[];
+  };
+}
+
+export interface BoostSignal {
+  type: "IMPLOSION" | "ERA_DECLINE" | "QUALITY_BAD" | "H2H_STRUGGLE" | "SOS_INFLATED" | "SHORT_START";
+  label: string;
 }
 
 export interface EarlyMarketsResult {
@@ -460,6 +472,22 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         const ereDiff = (erePick ?? 0) - (ereRival ?? 0);
         const isPremiumF5 = ereDiff >= 20 || (erePick !== undefined && erePick !== null && erePick >= 65);
         const inLightBucket = winProb >= 0.55 && winProb < 0.65;
+
+        // BOOST signals validados out-of-sample (Fase 2 backtest 10 jul, n=522)
+        // Cada boost representa una señal positiva independiente que históricamente
+        // sube el hit rate cuando aparece encima de los 8 filtros F1-F8.
+        // 2+ boosts → ULTRA PREMIUM (rocket)
+        // 3+ boosts → confidence máxima
+        const sideBoosts = input.boostSignals
+          ? (f5RecommendedSide === "HOME" ? input.boostSignals.home : input.boostSignals.away)
+          : [];
+        const boostCount = sideBoosts.length;
+        const isUltra = boostCount >= 2;
+        const boostTag = isUltra ? "🚀 ULTRA " : "";
+        const boostText = boostCount > 0
+          ? " · " + sideBoosts.map(b => `⚡ ${b.label}`).join(" · ")
+          : "";
+
         const premiumTag = isPremiumF5 ? "🏆 PREMIUM · " : "";
         const premiumStats = isPremiumF5
           ? ereDiff >= 20
@@ -469,8 +497,8 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
         candidates.push({
           market: "F5_ML",
           side: f5RecommendedSide,
-          prob: isPremiumF5 ? Math.max(winProb, 0.97) : winProb,
-          label: `${premiumTag}F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}${premiumStats}`,
+          prob: isPremiumF5 ? Math.max(winProb, 0.97) : (isUltra ? Math.max(winProb, 0.85) : winProb),
+          label: `${boostTag}${premiumTag}F5 ML ${f5RecommendedSide} ${Math.round(winProb*100)}%${inLightBucket ? " · ⚠️ Light bucket" : ""}${premiumStats}${boostText}`,
         });
       }
     }
