@@ -464,14 +464,19 @@ export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResul
     // TT Over 1.5 F5 (7 jul iter 3: quitada la regla HIGH=PASS tras backtest
     // propio out-of-sample. Baseline TEST n=78 = 82.1% hit, HIGH TEST n=38 = 71.1%.
     // La restricción previa filtraba ganadores. Badge PREMIUM para STRONG_EARLY
-    // que ganó 95.5% en TEST (n=22).
+    // (75% hit, prob 0.85) y ELITE_EARLY (80% hit, prob 0.88).
+    // Fix 21 jul: ELITE_EARLY tiene MEJOR edge que STRONG_EARLY (80% vs 75%) pero
+    // no marcaba PREMIUM — bug corregido. Rockies@Nats 21 jul (Nats ELITE_EARLY)
+    // ahora aparecerá con 🏆 correctamente.
     if (ttOver15Side !== "PASS") {
       const prob = ttOver15Side === "HOME" ? homeTtOver15 : awayTtOver15;
       const cat = ttOver15Side === "HOME" ? homeEre.category : awayEre.category;
-      const isPremium = cat === "STRONG_EARLY";
+      const isElite = cat === "ELITE_EARLY";
+      const isPremium = cat === "STRONG_EARLY" || isElite;
       const premiumTag = isPremium ? "🏆 PREMIUM · " : "";
-      const histPct = isPremium ? 96 : Math.round(prob*100);
-      candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob: isPremium ? Math.max(prob, 0.85) : prob,
+      const histPct = isElite ? 80 : (isPremium ? 96 : Math.round(prob*100));
+      const premiumFloor = isElite ? 0.88 : (isPremium ? 0.85 : 0);
+      candidates.push({ market: "TT_OVER_15_F5", side: ttOver15Side, prob: isPremium ? Math.max(prob, premiumFloor) : prob,
         label: `${premiumTag}TT Over 1.5 F5 ${ttOver15Side} (ERE ${cat} — ${histPct}% hit histórico)` });
     }
     // TT Under 2.5 F5
