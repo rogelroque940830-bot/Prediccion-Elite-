@@ -1,0 +1,87 @@
+name: Court Edge Frontend Staging Sprint 2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - staging/frontend-sprint2
+    paths:
+      - 'staging/**'
+      - '.github/workflows/frontend-staging-sprint2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout isolated staging branch
+        uses: actions/checkout@v4
+
+      - name: Verify staging package exists
+        run: |
+          test -f staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip
+          sha256sum -c staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip.sha256
+
+      - name: Extract candidate
+        run: |
+          mkdir -p .staging-work
+          unzip -q staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip -d .staging-work
+          PROJECT_DIR=$(find .staging-work -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: '${{ env.PROJECT_DIR }}/package-lock.json'
+
+      - name: Install dependencies reproducibly
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm ci
+
+      - name: Static verification and type-check
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run verify
+
+      - name: Production build
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          VITE_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+        run: npm run build
+
+      - name: Dist smoke test
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run smoke:dist
+
+      - name: Backend read-only smoke test
+        if: ${{ vars.STAGING_API_BASE_URL != '' }}
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+        run: npm run smoke:backend
+
+      - name: Create release manifest
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run release:manifest
+
+      - name: Upload verified frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: court-edge-frontend-staging-dist
+          path: ${{ env.PROJECT_DIR }}/dist
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: court-edge-frontend-staging-qa
+          path: |
+            ${{ env.PROJECT_DIR }}/qa
+            ${{ env.PROJECT_DIR }}/docs
+          if-no-files-found: warn
+          retention-days: 30
