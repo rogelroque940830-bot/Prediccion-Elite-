@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 # Deterministic reconciliation for the imported Sprint 2 source.
@@ -30,11 +31,17 @@ replace_or_confirm(
 
 mlb = ROOT / "frontend/client/src/pages/mlb-predictor.tsx"
 replace_or_confirm(mlb, "MLBPredictorResult", "MLBResult", minimum=3)
-replace_or_confirm(
-    mlb,
-    "       homeStats: any; awayStats: any;\n       homePitcher: any; awayPitcher: any;\n       venue: string;\n     }>;",
-    "       homeStats: any; awayStats: any;\n       homePitcher: any; awayPitcher: any;\n       venue: string;\n       gameDate?: string;\n     }>;",
-)
+mlb_text = mlb.read_text(encoding="utf-8")
+if "gameDate?: string;" not in mlb_text:
+    mlb_text, count = re.subn(
+        r"(games:\s*Array<\{[\s\S]*?\n)(\s+venue:\s*string;\n)(\s+\}>;)",
+        lambda match: f"{match.group(1)}{match.group(2)}{match.group(2).split('venue:')[0]}gameDate?: string;\n{match.group(3)}",
+        mlb_text,
+        count=1,
+    )
+    if count != 1:
+        raise RuntimeError(f"{mlb}: unable to insert optional gameDate into MLB game response type")
+    mlb.write_text(mlb_text, encoding="utf-8")
 
 predictor = ROOT / "frontend/client/src/pages/predictor.tsx"
 replace_or_confirm(
