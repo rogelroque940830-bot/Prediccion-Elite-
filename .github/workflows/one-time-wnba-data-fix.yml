@@ -1,0 +1,143 @@
+name: One-time WNBA data wiring repair
+
+on:
+  push:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - .github/workflows/one-time-wnba-data-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-staging-secure
+          fetch-depth: 0
+
+      - name: Repair WNBA selector wiring and resilient stats fetch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          frontend_path = Path('frontend/client/src/pages/wnba-predictor.tsx')
+          frontend = frontend_path.read_text(encoding='utf-8')
+
+          old_query = 'const { data: wnbaData, isLoading: wnbaLoading, refetch: refetchWNBA } = useQuery<{ success: boolean; data: any[] }>({' 
+          new_query = 'const { data: wnbaData, isLoading: wnbaLoading, isError: wnbaError, refetch: refetchWNBA } = useQuery<{ success: boolean; data: any[] }>({' 
+          if old_query not in frontend:
+              raise SystemExit('Expected WNBA query declaration not found')
+          frontend = frontend.replace(old_query, new_query, 1)
+
+          old_select = '<Select value={team} onValueChange={setTeam}>'
+          new_select = '<Select value={team} onValueChange={(value) => wnbaTeams.length > 0 ? autoFillWNBA(value, side) : setTeam(value)}>'
+          if old_select not in frontend:
+              raise SystemExit('Expected WNBA team selector not found')
+          frontend = frontend.replace(old_select, new_select, 1)
+
+          old_loading = '{wnbaLoading && <p className="text-xs text-muted-foreground italic"><RefreshCw className="h-3 w-3 inline animate-spin mr-1" /> Cargando stats de equipos...</p>}'
+          new_loading = '''{wnbaLoading && <p className="text-xs text-muted-foreground italic"><RefreshCw className="h-3 w-3 inline animate-spin mr-1" /> Cargando stats de equipos...</p>}
+          {wnbaError && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
+              <span>No se pudieron cargar las estadísticas WNBA. Los campos permanecen en modo manual hasta recuperar datos verificados.</span>
+              <Button size="sm" variant="outline" onClick={() => refetchWNBA()} className="h-7 border-red-500/30 text-red-300">
+                <RefreshCw className="h-3 w-3 mr-1" /> Reintentar
+              </Button>
+            </div>
+          )}'''
+          if old_loading not in frontend:
+              raise SystemExit('Expected WNBA loading label not found')
+          frontend = frontend.replace(old_loading, new_loading, 1)
+          frontend_path.write_text(frontend, encoding='utf-8')
+
+          routes_path = Path('server/routes.ts')
+          routes = routes_path.read_text(encoding='utf-8')
+
+          old_fetch = '''async function nbaFetch(url: string) {
+  const res = await fetch(url, { headers: NBA_HEADERS });
+  if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
+  return res.json();
+}'''
+          new_fetch = '''async function nbaFetch(
+  url: string,
+  headers: Record<string, string> = NBA_HEADERS,
+  timeoutMs = 20_000,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const WNBA_HEADERS: Record<string, string> = {
+  ...NBA_HEADERS,
+  Referer: "https://www.wnba.com/",
+  Origin: "https://www.wnba.com",
+};
+
+async function wnbaFetch(url: string) {
+  const candidates = url.includes("stats.nba.com")
+    ? [url.replace("https://stats.nba.com", "https://stats.wnba.com"), url]
+    : [url];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return await nbaFetch(candidate, WNBA_HEADERS, 20_000);
+    } catch (error) {
+      lastError = error;
+      console.warn(`WNBA stats source failed: ${candidate}`, error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("WNBA stats sources unavailable");
+}'''
+          if old_fetch not in routes:
+              raise SystemExit('Expected nbaFetch helper not found')
+          routes = routes.replace(old_fetch, new_fetch, 1)
+
+          wnba_marker = '// WNBA ROUTES (same NBA API with LeagueID=10)'
+          nhl_marker = '// NHL ROUTES'
+          start = routes.index(wnba_marker)
+          end = routes.index(nhl_marker, start)
+          wnba_section = routes[start:end]
+          replacements = wnba_section.count('nbaFetch(')
+          if replacements < 5:
+              raise SystemExit(f'Expected multiple WNBA nbaFetch calls, found {replacements}')
+          wnba_section = wnba_section.replace('nbaFetch(', 'wnbaFetch(')
+          routes = routes[:start] + wnba_section + routes[end:]
+          routes_path.write_text(routes, encoding='utf-8')
+
+          print(f'Patched frontend selector/error handling and {replacements} WNBA backend fetch calls')
+          PY
+
+      - name: Verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+          npm run build
+
+      - name: Verify backend types
+        run: |
+          npm ci
+          npm run check
+
+      - name: Commit isolated fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/client/src/pages/wnba-predictor.tsx server/routes.ts
+          git commit -m "fix(wnba): load verified team stats from selectors" || exit 0
+          git push origin HEAD:integration/p0-staging-secure
