@@ -102,6 +102,10 @@ export default function WNBAPredictor() {
     queryKey: ["/api/wnba/all"], staleTime: 30 * 60 * 1000, retry: 0,
   });
   const wnbaTeams = wnbaData?.data ?? [];
+  const manualTeamOptions = wnbaTeams.length > 0
+    ? wnbaTeams.map((team: any) => ({ teamId: String(team.teamId), teamName: team.teamName }))
+    : WNBA_TEAMS.map((teamName, index) => ({ teamId: `manual-${index}`, teamName }));
+  const hasVerifiedWNBAStats = wnbaTeams.length > 0 && !wnbaError;
 
   // Roster de jugadores WNBA — para selector de lesionadas con Star Power Index
   const { data: wnbaPlayersData } = useQuery<{ success: boolean; data: Record<string, any[]> }>({
@@ -146,7 +150,30 @@ export default function WNBAPredictor() {
 
   const autoFillWNBA = (teamName: string, side: "home" | "away") => {
     const t = wnbaTeams.find(x => x.teamName === teamName);
-    if (!t) return;
+    if (!t) {
+      if (side === "home") {
+        setHomeTeam(teamName);
+        setHomeNetRtg(""); setHomeOffRtg(""); setHomeDefRtg(""); setHomePace("");
+        setHomeDaysRest(""); setHomeWinRate(""); setHomeB2B(false); setHomeStreak("0");
+        setHomeRecentPace(""); setHomeRecentPPG("");
+        setHomeRecentNetRtg(undefined); setHomeRecentOffRtg(undefined); setHomeRecentDefRtg(undefined);
+        setHomeRecentWinRate(undefined); setHomeGamesPlayed(undefined); setHomeTeamId(undefined);
+        setHomeInactives([]);
+      } else {
+        setAwayTeam(teamName);
+        setAwayNetRtg(""); setAwayOffRtg(""); setAwayDefRtg(""); setAwayPace("");
+        setAwayDaysRest(""); setAwayWinRate(""); setAwayB2B(false); setAwayStreak("0");
+        setAwayRecentPace(""); setAwayRecentPPG("");
+        setAwayRecentNetRtg(undefined); setAwayRecentOffRtg(undefined); setAwayRecentDefRtg(undefined);
+        setAwayRecentWinRate(undefined); setAwayGamesPlayed(undefined); setAwayTeamId(undefined);
+        setAwayInactives([]);
+      }
+      toast({
+        title: "Modo manual WNBA",
+        description: "Equipo seleccionado. Introduce estadísticas verificadas antes de generar la predicción.",
+      });
+      return;
+    }
     const setters = side === "home"
       ? { team: setHomeTeam, net: setHomeNetRtg, off: setHomeOffRtg, def: setHomeDefRtg, pace: setHomePace, wr: setHomeWinRate, ppg: setHomeRecentPPG, rPace: setHomeRecentPace, rNet: setHomeRecentNetRtg, rOff: setHomeRecentOffRtg, rDef: setHomeRecentDefRtg, rWr: setHomeRecentWinRate, gp: setHomeGamesPlayed }
       : { team: setAwayTeam, net: setAwayNetRtg, off: setAwayOffRtg, def: setAwayDefRtg, pace: setAwayPace, wr: setAwayWinRate, ppg: setAwayRecentPPG, rPace: setAwayRecentPace, rNet: setAwayRecentNetRtg, rOff: setAwayRecentOffRtg, rDef: setAwayRecentDefRtg, rWr: setAwayRecentWinRate, gp: setAwayGamesPlayed };
@@ -198,12 +225,12 @@ export default function WNBAPredictor() {
 
   // ── Home state ──────────────────────────────────────────────────────────
   const [homeTeam, setHomeTeam] = useState("");
-  const [homeNetRtg, setHomeNetRtg] = useState("3");
-  const [homeOffRtg, setHomeOffRtg] = useState("102");
-  const [homeDefRtg, setHomeDefRtg] = useState("99");
-  const [homePace, setHomePace] = useState("80");
-  const [homeDaysRest, setHomeDaysRest] = useState("2");
-  const [homeWinRate, setHomeWinRate] = useState("0.55");
+  const [homeNetRtg, setHomeNetRtg] = useState("");
+  const [homeOffRtg, setHomeOffRtg] = useState("");
+  const [homeDefRtg, setHomeDefRtg] = useState("");
+  const [homePace, setHomePace] = useState("");
+  const [homeDaysRest, setHomeDaysRest] = useState("");
+  const [homeWinRate, setHomeWinRate] = useState("");
   const [homeB2B, setHomeB2B] = useState(false);
   const [homeStreak, setHomeStreak] = useState("0");
   const [homeInjury, setHomeInjury] = useState("0");
@@ -220,12 +247,12 @@ export default function WNBAPredictor() {
 
   // ── Away state ──────────────────────────────────────────────────────────
   const [awayTeam, setAwayTeam] = useState("");
-  const [awayNetRtg, setAwayNetRtg] = useState("3");
-  const [awayOffRtg, setAwayOffRtg] = useState("102");
-  const [awayDefRtg, setAwayDefRtg] = useState("99");
-  const [awayPace, setAwayPace] = useState("80");
-  const [awayDaysRest, setAwayDaysRest] = useState("2");
-  const [awayWinRate, setAwayWinRate] = useState("0.55");
+  const [awayNetRtg, setAwayNetRtg] = useState("");
+  const [awayOffRtg, setAwayOffRtg] = useState("");
+  const [awayDefRtg, setAwayDefRtg] = useState("");
+  const [awayPace, setAwayPace] = useState("");
+  const [awayDaysRest, setAwayDaysRest] = useState("");
+  const [awayWinRate, setAwayWinRate] = useState("");
   const [awayB2B, setAwayB2B] = useState(false);
   const [awayStreak, setAwayStreak] = useState("0");
   const [awayInjury, setAwayInjury] = useState("0");
@@ -349,14 +376,14 @@ export default function WNBAPredictor() {
           {/* Team selector */}
           <div>
             <Label className="text-xs text-muted-foreground">Equipo</Label>
-            <Select value={team} onValueChange={(value) => autoFillWNBA(value, side)} disabled={wnbaLoading || wnbaError || wnbaTeams.length === 0}>
+            <Select value={team} onValueChange={(value) => autoFillWNBA(value, side)} disabled={wnbaLoading}>
               <SelectTrigger className="mt-1" data-testid={`select-${side}-team`}>
                 <SelectValue placeholder="Seleccionar equipo" />
               </SelectTrigger>
               <SelectContent>
-                {WNBA_TEAMS.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
+                {manualTeamOptions.map((t) => (
+                  <SelectItem key={t.teamId} value={t.teamName}>
+                    {t.teamName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -550,6 +577,22 @@ export default function WNBAPredictor() {
 
   // ── Run Prediction ───────────────────────────────────────────────────────
   const runPrediction = useCallback(() => {
+    const requiredStats = [
+      homeNetRtg, homeOffRtg, homeDefRtg, homePace, homeDaysRest, homeWinRate,
+      awayNetRtg, awayOffRtg, awayDefRtg, awayPace, awayDaysRest, awayWinRate,
+    ];
+    const hasInvalidRequiredStats = requiredStats.some((value) =>
+      value.trim() === "" || !Number.isFinite(Number(value))
+    );
+    if (!homeTeam || !awayTeam || homeTeam === awayTeam || hasInvalidRequiredStats) {
+      toast({
+        title: "Faltan datos WNBA",
+        description: homeTeam === awayTeam
+          ? "Selecciona dos equipos diferentes."
+          : "Selecciona ambos equipos y completa NetRtg, OffRtg, DefRtg, Pace, descanso y Win Rate con datos verificados.",
+      });
+      return;
+    }
     // ── Star Power Index: calcula impacto automático de inactives ──
     // El usuario marca quien está fuera; el modelo deriva NetRtg perdido por tier real.
     const calcInjuryImpact = (teamId: number | undefined, inactives: string[], teamName: string): { delta: number; tiers: { name: string; tier: string; score: number; impact: number; days?: number; decay?: number }[] } => {
@@ -861,40 +904,40 @@ export default function WNBAPredictor() {
               </Select>
             </div>
           )}
-          {/* Selector manual fallback */}
-          {wnbaTeams.length > 0 && (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-primary/70 hover:text-primary">Selector manual de equipos</summary>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <Label className="text-xs">Equipo Local</Label>
-                  <Select onValueChange={(v) => autoFillWNBA(v, "home")}>
-                    <SelectTrigger className="border-primary/30"><SelectValue placeholder="Local..." /></SelectTrigger>
-                    <SelectContent>{wnbaTeams.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Equipo Visitante</Label>
-                  <Select onValueChange={(v) => autoFillWNBA(v, "away")}>
-                    <SelectTrigger className="border-primary/30"><SelectValue placeholder="Visitante..." /></SelectTrigger>
-                    <SelectContent>{wnbaTeams.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+          {/* Selector manual fallback — always available */}
+          <div className="rounded-md border border-primary/20 bg-background/30 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-primary">Selector manual de equipos</span>
+              <Badge variant="outline" className={`text-[10px] ${hasVerifiedWNBAStats ? "border-green-500/40 text-green-400" : "border-amber-500/40 text-amber-300"}`}>
+                {hasVerifiedWNBAStats ? "Autollenado verificado" : "Entrada manual"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Equipo Local</Label>
+                <Select value={homeTeam} onValueChange={(v) => autoFillWNBA(v, "home")} disabled={wnbaLoading}>
+                  <SelectTrigger className="border-primary/30"><SelectValue placeholder="Local..." /></SelectTrigger>
+                  <SelectContent>{manualTeamOptions.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
-            </details>
-          )}
+              <div>
+                <Label className="text-xs">Equipo Visitante</Label>
+                <Select value={awayTeam} onValueChange={(v) => autoFillWNBA(v, "away")} disabled={wnbaLoading}>
+                  <SelectTrigger className="border-primary/30"><SelectValue placeholder="Visitante..." /></SelectTrigger>
+                  <SelectContent>{manualTeamOptions.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            {!hasVerifiedWNBAStats && !wnbaLoading && (
+              <p className="text-[11px] text-amber-200/80">
+                Autollenado no disponible. Selecciona los equipos y completa manualmente las estadísticas verificadas en las tarjetas inferiores.
+              </p>
+            )}
+          </div>
           {wnbaLoading && <p className="text-xs text-muted-foreground italic"><RefreshCw className="h-3 w-3 inline animate-spin mr-1" /> Cargando stats de equipos...</p>}
           {wnbaError && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
-              <span>No se pudieron cargar estadísticas WNBA verificadas. No se usarán valores predeterminados como si fueran reales.</span>
-              <Button size="sm" variant="outline" onClick={() => refetchWNBA()} className="h-7 border-red-500/30 text-red-300">
-                <RefreshCw className="h-3 w-3 mr-1" /> Reintentar
-              </Button>
-            </div>
-          )}
-          {wnbaError && (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
-              <span>No se pudieron cargar estadísticas WNBA verificadas. No se usarán valores predeterminados como si fueran reales.</span>
+              <span>No se pudieron cargar estadísticas WNBA verificadas. El modo manual permanece disponible y los campos no usarán valores predeterminados.</span>
               <Button size="sm" variant="outline" onClick={() => refetchWNBA()} className="h-7 border-red-500/30 text-red-300">
                 <RefreshCw className="h-3 w-3 mr-1" /> Reintentar
               </Button>
