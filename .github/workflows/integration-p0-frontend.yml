@@ -48,6 +48,9 @@ jobs:
       - name: Run P0 middleware smoke test
         run: npx tsx scripts/p0-security-smoke.ts
 
+      - name: Run session and CSRF integration smoke test
+        run: npx tsx scripts/integration-auth-smoke.ts
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 30
