@@ -22,12 +22,22 @@ def replace_or_confirm(path: Path, old: str, new: str, minimum: int = 1) -> int:
 
 
 context = ROOT / "frontend/client/src/lib/context.tsx"
-replace_or_confirm(
-    context,
-    'Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit">',
-    'Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit">',
-    minimum=2,
-)
+context_text = context.read_text(encoding="utf-8")
+if "type NewHistoryPick =" not in context_text:
+    marker = "export type Action =\n"
+    if marker not in context_text:
+        raise RuntimeError(f"{context}: Action declaration marker not found")
+    alias = (
+        'type NewHistoryPick = Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> '
+        '& { sport?: Pick["sport"] };\n\n'
+    )
+    context_text = context_text.replace(marker, alias + marker, 1)
+
+legacy_payload = 'Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit">'
+reconciled_payload = 'Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit">'
+context_text = context_text.replace(legacy_payload, "NewHistoryPick")
+context_text = context_text.replace(reconciled_payload, "NewHistoryPick")
+context.write_text(context_text, encoding="utf-8")
 
 mlb = ROOT / "frontend/client/src/pages/mlb-predictor.tsx"
 replace_or_confirm(mlb, "MLBPredictorResult", "MLBResult", minimum=3)
@@ -41,7 +51,24 @@ if "gameDate?: string;" not in mlb_text:
     )
     if count != 1:
         raise RuntimeError(f"{mlb}: unable to insert optional gameDate into MLB game response type")
-    mlb.write_text(mlb_text, encoding="utf-8")
+
+if "pickQuality?: PickQualityResult;" not in mlb_text:
+    quality_block = (
+        "  pickQualities?: {\n"
+        "    ml?: PickQualityResult;\n"
+        "    f5?: PickQualityResult;\n"
+        "    runLine?: PickQualityResult;\n"
+        "    ou?: PickQualityResult;\n"
+        "  };\n"
+    )
+    if quality_block not in mlb_text:
+        raise RuntimeError(f"{mlb}: pickQualities block not found")
+    mlb_text = mlb_text.replace(
+        quality_block,
+        quality_block + "  // Compatibility field used by the legacy single-market quality helper.\n  pickQuality?: PickQualityResult;\n",
+        1,
+    )
+mlb.write_text(mlb_text, encoding="utf-8")
 
 predictor = ROOT / "frontend/client/src/pages/predictor.tsx"
 replace_or_confirm(
