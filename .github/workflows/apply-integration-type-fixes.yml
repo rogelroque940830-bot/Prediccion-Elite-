@@ -1,0 +1,39 @@
+name: Apply Integration Frontend Type Fixes
+
+on:
+  push:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'scripts/fix-integration-frontend-types.py'
+      - '.github/workflows/apply-integration-type-fixes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-frontend-session
+          fetch-depth: 0
+
+      - name: Apply deterministic type fixes
+        run: python3 scripts/fix-integration-frontend-types.py
+
+      - name: Commit reconciled frontend types
+        run: |
+          if git diff --quiet -- frontend/client/src; then
+            echo 'Type reconciliation already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src
+          git commit -m 'fix(frontend): reconcile imported predictor types'
+          git push origin HEAD:integration/p0-frontend-session
