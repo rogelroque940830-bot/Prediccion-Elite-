@@ -1,4 +1,4 @@
-// Cliente canónico de picks. Todas las escrituras usan /api/picks/v2.
+// Cliente del historial manual de picks. Usa el API v2 del backend vigente.
 import { fetchJson } from "./queryClient";
 
 export interface SavedPick {
@@ -11,32 +11,12 @@ export interface SavedPick {
   pickSide: string;
   confidence: number;
   edge?: number;
-  odds?: string | number;
+  odds?: string;
   line?: string;
   notes?: string;
-  source?: "app" | "manual" | "migration";
-  clientId?: number;
-  date?: string;
-  team?: string;
-  opponent?: string;
-  market?: string;
-  pick?: string;
-  modelProb?: number;
-  impliedProb?: number;
-  stake?: number;
-  result?: string;
-  profit?: number;
-  closingOdds?: number;
-  closingImpliedProb?: number;
-  clvPercent?: number;
 }
 
-export type NewPick = Omit<SavedPick, "id" | "ts"> & {
-  id?: string;
-  ts?: number;
-};
-
-export type PickPatch = Partial<Omit<SavedPick, "id" | "ts">>;
+export type NewPick = Omit<SavedPick, "id" | "ts">;
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -60,18 +40,6 @@ export async function savePick(pick: NewPick): Promise<SavedPick> {
   return unwrap(response, "Error guardando pick");
 }
 
-export async function updatePick(id: string, patch: PickPatch): Promise<SavedPick> {
-  const response = await fetchJson<ApiEnvelope<SavedPick>>(
-    `/api/picks/v2/${encodeURIComponent(id)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    },
-  );
-  return unwrap(response, "Error actualizando pick");
-}
-
 export async function listPicks(opts: {
   sport?: "mlb" | "nba" | "nhl" | "wnba";
   days?: number;
@@ -92,19 +60,4 @@ export async function deletePick(id: string): Promise<void> {
     { method: "DELETE" },
   );
   if (!response.success) throw new Error(response.error || "Error borrando pick");
-}
-
-export async function refreshClv(): Promise<{ updated: number; totalProcessed: number }> {
-  const response = await fetchJson<{
-    success: boolean;
-    updated?: number;
-    totalProcessed?: number;
-    error?: string;
-  }>("/api/clv/refresh", { method: "POST" });
-
-  if (!response.success) throw new Error(response.error || "Error actualizando CLV");
-  return {
-    updated: response.updated || 0,
-    totalProcessed: response.totalProcessed || 0,
-  };
 }
