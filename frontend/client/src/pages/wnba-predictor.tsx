@@ -98,8 +98,8 @@ export default function WNBAPredictor() {
   const wnbaGames = wnbaSchedule?.data ?? [];
 
   // 🏀 Stats de todos los equipos — carga automática al montar (no on-demand)
-  const { data: wnbaData, isLoading: wnbaLoading, refetch: refetchWNBA } = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ["/api/wnba/all"], staleTime: 30 * 60 * 1000, retry: 1,
+  const { data: wnbaData, isLoading: wnbaLoading, isError: wnbaError, refetch: refetchWNBA } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ["/api/wnba/all"], staleTime: 30 * 60 * 1000, retry: 0,
   });
   const wnbaTeams = wnbaData?.data ?? [];
 
@@ -349,7 +349,7 @@ export default function WNBAPredictor() {
           {/* Team selector */}
           <div>
             <Label className="text-xs text-muted-foreground">Equipo</Label>
-            <Select value={team} onValueChange={setTeam}>
+            <Select value={team} onValueChange={(value) => autoFillWNBA(value, side)} disabled={wnbaLoading || wnbaError || wnbaTeams.length === 0}>
               <SelectTrigger className="mt-1" data-testid={`select-${side}-team`}>
                 <SelectValue placeholder="Seleccionar equipo" />
               </SelectTrigger>
@@ -884,6 +884,14 @@ export default function WNBAPredictor() {
             </details>
           )}
           {wnbaLoading && <p className="text-xs text-muted-foreground italic"><RefreshCw className="h-3 w-3 inline animate-spin mr-1" /> Cargando stats de equipos...</p>}
+          {wnbaError && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
+              <span>No se pudieron cargar estadísticas WNBA verificadas. No se usarán valores predeterminados como si fueran reales.</span>
+              <Button size="sm" variant="outline" onClick={() => refetchWNBA()} className="h-7 border-red-500/30 text-red-300">
+                <RefreshCw className="h-3 w-3 mr-1" /> Reintentar
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

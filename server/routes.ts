@@ -63,10 +63,42 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return data;
 }
 
-async function nbaFetch(url: string) {
-  const res = await fetch(url, { headers: NBA_HEADERS });
-  if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
-  return res.json();
+async function nbaFetch(
+  url: string,
+  headers: Record<string, string> = NBA_HEADERS,
+  timeoutMs = 12_000,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const WNBA_HEADERS: Record<string, string> = {
+  ...NBA_HEADERS,
+  Referer: "https://www.wnba.com/",
+  Origin: "https://www.wnba.com",
+};
+
+async function wnbaFetch(url: string) {
+  const candidates = url.includes("stats.nba.com")
+    ? [url.replace("https://stats.nba.com", "https://stats.wnba.com"), url]
+    : [url];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return await nbaFetch(candidate, WNBA_HEADERS, 12_000);
+    } catch (error) {
+      lastError = error;
+      console.warn(`WNBA stats source failed: ${candidate}`, error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("WNBA stats sources unavailable");
 }
 
 function idx(headers: string[], name: string) {
@@ -2730,10 +2762,10 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const buildUrl = (lastN: number, measureType: "Advanced" | "Base") =>
           `https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&Height=&ISTRound=&LastNGames=${lastN}&LeagueID=10&Location=&MeasureType=${measureType}&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=`;
         const [advSeasonJson, baseSeasonJson, advL10Json, baseL10Json] = await Promise.all([
-          nbaFetch(buildUrl(0, "Advanced")),
-          nbaFetch(buildUrl(0, "Base")),
-          nbaFetch(buildUrl(10, "Advanced")),
-          nbaFetch(buildUrl(10, "Base")),
+          wnbaFetch(buildUrl(0, "Advanced")),
+          wnbaFetch(buildUrl(0, "Base")),
+          wnbaFetch(buildUrl(10, "Advanced")),
+          wnbaFetch(buildUrl(10, "Base")),
         ]);
         const parseAdv = (json: any) => {
           const H: string[] = json.resultSets[0].headers;
@@ -2807,7 +2839,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const data = await withCache(cacheKey, async () => {
         const encoded = encodeURIComponent(date);
         const url = `https://stats.nba.com/stats/scoreboardV3?LeagueID=10&gameDate=${encoded}&DayOffset=0`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const games: unknown[] = json.scoreboard?.games ?? [];
         return (games as any[]).map((g) => ({
           gameId: g.gameId,
@@ -2831,9 +2863,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const buildUrl = (lastN: number) =>
           `https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&Height=&LastNGames=${lastN}&LeagueID=10&Location=&MeasureType=Advanced&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=`;
         const [advSeasonJson, advL10Json, logJson] = await Promise.all([
-          nbaFetch(buildUrl(0)),
-          nbaFetch(buildUrl(10)),
-          nbaFetch(`https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`),
+          wnbaFetch(buildUrl(0)),
+          wnbaFetch(buildUrl(10)),
+          wnbaFetch(`https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`),
         ]);
 
         const sH: string[] = advSeasonJson.resultSets[0].headers;
@@ -2923,7 +2955,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     try {
       const data = await withCache("wnba-fatigue-v1", async () => {
         const url = `https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const H: string[] = json.resultSets[0].headers;
         const R: unknown[][] = json.resultSets[0].rowSet;
         // Por equipo: lista [{date, isHome, opponent, win}]
@@ -3029,7 +3061,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     try {
       const data = await withCache("wnba-players-v1", async () => {
         const url = `https://stats.nba.com/stats/leaguedashplayerstats?College=&Conference=&Country=&DateFrom=&DateTo=&Division=&DraftPick=&DraftYear=&GameScope=&GameSegment=&Height=&LastNGames=0&LeagueID=10&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=&Weight=`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const H: string[] = json.resultSets[0].headers;
         const R: unknown[][] = json.resultSets[0].rowSet;
         const players: Record<number, any[]> = {};
