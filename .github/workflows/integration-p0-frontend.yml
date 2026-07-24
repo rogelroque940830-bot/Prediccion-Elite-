@@ -1,0 +1,81 @@
+name: Court Edge P0 Frontend Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'server/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/integration-p0-frontend.yml'
+  pull_request:
+    branches:
+      - security/p0-remediation
+    paths:
+      - 'server/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/integration-p0-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Run P0 middleware smoke test
+        run: npx tsx scripts/p0-security-smoke.ts
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Static frontend audit
+        run: npm run audit:static
+
+      - name: TypeScript type-check
+        run: npm run check
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: npm run build
+
+      - name: Distribution smoke test
+        run: npm run check:dist
