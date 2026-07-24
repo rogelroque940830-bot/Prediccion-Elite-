@@ -1,0 +1,77 @@
+name: One-time integration conflict scan
+
+on:
+  push:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - .github/workflows/integration-conflict-scan-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout isolated integration base
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-staging-secure
+          fetch-depth: 0
+
+      - name: Detect merge conflicts without merging
+        shell: bash
+        run: |
+          set -u
+          git fetch origin integration/p0-frontend-session
+
+          BASE_SHA="$(git rev-parse HEAD)"
+          HEAD_SHA="$(git rev-parse origin/integration/p0-frontend-session)"
+
+          set +e
+          git merge --no-commit --no-ff origin/integration/p0-frontend-session
+          MERGE_EXIT=$?
+          set -e
+
+          CONFLICTS="$(git diff --name-only --diff-filter=U || true)"
+          STATUS="$(git status --short || true)"
+
+          mkdir -p docs
+          {
+            echo "# Integration Conflict Report"
+            echo
+            echo "- Base branch: \`integration/p0-staging-secure\`"
+            echo "- Base SHA: \`$BASE_SHA\`"
+            echo "- Head branch: \`integration/p0-frontend-session\`"
+            echo "- Head SHA: \`$HEAD_SHA\`"
+            echo "- Merge exit code: \`$MERGE_EXIT\`"
+            echo
+            echo "## Unmerged files"
+            echo
+            if [ -n "$CONFLICTS" ]; then
+              while IFS= read -r file; do
+                [ -n "$file" ] && echo "- \`$file\`"
+              done <<< "$CONFLICTS"
+            else
+              echo "No unmerged files detected."
+            fi
+            echo
+            echo "## Git status snapshot"
+            echo
+            echo '```text'
+            printf '%s\n' "$STATUS"
+            echo '```'
+            echo
+            echo "The merge was aborted. No source changes from the head branch were committed."
+          } > docs/INTEGRATION_CONFLICT_REPORT.md
+
+          git merge --abort || true
+          git rm .github/workflows/integration-conflict-scan-once.yml
+
+          git config user.name "rogelroque940830-bot"
+          git config user.email "272644701+rogelroque940830-bot@users.noreply.github.com"
+          git add docs/INTEGRATION_CONFLICT_REPORT.md
+          git commit -m "docs(integration): record secure frontend merge conflicts"
+          git push origin HEAD:integration/p0-staging-secure
