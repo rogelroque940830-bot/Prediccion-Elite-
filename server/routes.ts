@@ -27,6 +27,14 @@ import {
 import { computeContextual } from "./nba-contextual";
 import { computeMLBContextual } from "./mlb-contextual";
 
+function requireSecret(name: string): string {
+  const value = (process.env[name] || "").trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 // ── NBA Stats API Headers ────────────────────────────────────────────────────
 const NBA_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1382,10 +1390,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     }
   }
   const BDL_BASE = "https://api.balldontlie.io";
-  // Defensa contra env var con valor placeholder (ej. "TU_KEY")
-  const _envBdlKey = (process.env.BDL_API_KEY || "").trim();
-  const _bdlKeyLooksValid = _envBdlKey.length >= 20 && _envBdlKey.includes("-");
-  const BDL_KEY = _bdlKeyLooksValid ? _envBdlKey : "d94f53fd-aedc-4da1-952c-5975f51cf732";
+  // Provider credential is required at runtime; no source-code fallback.
+  const BDL_KEY = requireSecret("BDL_API_KEY");
 
   // Mapeo de team abbreviations BALLDONTLIE → MLB Stats team IDs
   const BDL_MLB_TEAM_TO_ID: Record<string, number> = {
@@ -3941,16 +3947,12 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   // Así el CLV no depende de que el usuario abra la app a tiempo — antes era el
   // problema #1: si nadie cargaba odds en los últimos 60 min antes de un juego,
   // ese partido se perdía para siempre.
-  const ODDS_API_KEY_BG = process.env.ODDS_API_KEY;
+  const ODDS_API_KEY_BG = requireSecret("ODDS_API_KEY");
   const SPORT_MAP_BG: Record<string, string> = {
     nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb",
   };
   async function pollOddsForSport(sport: string) {
     try {
-      if (!ODDS_API_KEY_BG) {
-        console.warn("[odds-poll] ODDS_API_KEY no configurada; consulta omitida.");
-        return 0;
-      }
       const apiSport = SPORT_MAP_BG[sport]; if (!apiSport) return 0;
       const url = `https://api.the-odds-api.com/v4/sports/${apiSport}/odds/?apiKey=${ODDS_API_KEY_BG}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american&bookmakers=hardrockbet_fl,hardrockbet,hardrockbet_az,draftkings,fanduel,betmgm`;
       const resp = await fetch(url);
@@ -4030,7 +4032,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
   // ── GET /api/odds/:sport ───────────────────────────────────────────────
   // Fetches odds from The Odds API (DraftKings = same platform as Hard Rock)
-  const ODDS_API_KEY = process.env.ODDS_API_KEY;
+  const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
   const SPORT_MAP: Record<string, string> = {
     nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb", wnba: "basketball_wnba",
   };
@@ -4042,12 +4044,6 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   ];
 
   app.get("/api/odds/:sport", async (req, res) => {
-    if (!ODDS_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        error: "ODDS_API_KEY no configurada en el entorno",
-      });
-    }
     try {
       const sport = req.params.sport.toLowerCase();
       const apiSport = SPORT_MAP[sport];

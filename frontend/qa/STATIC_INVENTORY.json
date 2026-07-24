@@ -1,0 +1,155 @@
+{
+  "routes": [
+    [
+      "/",
+      "Dashboard"
+    ],
+    [
+      "/predictor",
+      "Predictor"
+    ],
+    [
+      "/calculator",
+      "CalculatorPage"
+    ],
+    [
+      "/mlb",
+      "MLBPredictor"
+    ],
+    [
+      "/history",
+      "HistoryPage"
+    ],
+    [
+      "/mlb-history",
+      "MLBHistory"
+    ],
+    [
+      "/wnba",
+      "WNBAPredictor"
+    ],
+    [
+      "/wnba-history",
+      "WNBAHistory"
+    ],
+    [
+      "/nhl",
+      "NHLPredictor"
+    ],
+    [
+      "/nhl-history",
+      "NHLHistory"
+    ],
+    [
+      "/picks",
+      "PicksPage"
+    ]
+  ],
+  "routeCount": 11,
+  "endpointFiles": {
+    "client/src/lib/mlb-model.ts": [
+      "/api/mlb/pitcher-form"
+    ],
+    "client/src/lib/context.tsx": [
+      "/api/picks",
+      "/api/picks/sync"
+    ],
+    "client/src/lib/picks-api.ts": [
+      "/api/picks/v2",
+      "/api/picks/v2${suffix}",
+      "/api/picks/v2/${encodeURIComponent(id)}"
+    ],
+    "client/src/pages/nhl-predictor.tsx": [
+      "/api/nhl/all",
+      "/api/nhl/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/nhl?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/mlb-predictor.tsx": [
+      "/api/mlb/advanced/${gameId}",
+      "/api/mlb/all",
+      "/api/mlb/all)",
+      "/api/mlb/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/mlb/archetype-matchup/${gameId}",
+      "/api/mlb/bullpen-status/${gameId}",
+      "/api/mlb/catcher-framing/${gameId}",
+      "/api/mlb/context?home=${encodeURIComponent(homeTri)}&away=${encodeURIComponent(awayTri)}&gamePk=${gameId}",
+      "/api/mlb/discipline-speed/${gameId}",
+      "/api/mlb/lineup-matchup/${gameId}",
+      "/api/mlb/park-pitcher/${gameId}",
+      "/api/mlb/pitcher-form/${gameId}",
+      "/api/mlb/pitcher-recent/${gameId}",
+      "/api/mlb/pitcher-vs-team/${gameId}",
+      "/api/mlb/quality/${gameId}",
+      "/api/mlb/rookie-pitcher/${gameId}",
+      "/api/mlb/sos/${gameId}",
+      "/api/mlb/statcast-matchup/${gameId}",
+      "/api/mlb/team-fatigue/${gameId}",
+      "/api/mlb/umpire/${gameId}",
+      "/api/mlb/wind-park/${gameId}",
+      "/api/odds/mlb/f5?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/mlb?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/predictor.tsx": [
+      "/api/nba/all",
+      "/api/nba/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/nba?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/wnba-predictor.tsx": [
+      "/api/wnba/all",
+      "/api/wnba/fatigue",
+      "/api/wnba/games?date=${selectedDate}",
+      "/api/wnba/h2h?home=${homeEspnId}&away=${awayEspnId}",
+      "/api/wnba/injuries",
+      "/api/wnba/players",
+      "/api/wnba/shot-profile/${awayEspnId}",
+      "/api/wnba/shot-profile/${homeEspnId}",
+      "/api/wnba/sos"
+    ],
+    "client/src/components/mlb-early-markets-card.tsx": [
+      "/api/mlb/early-markets"
+    ],
+    "client/src/components/mlb-ere-card.tsx": [
+      "/api/mlb/ere/${awayTeamId}?${qs}",
+      "/api/mlb/ere/${homeTeamId}?${qs}"
+    ],
+    "client/src/components/mlb-tesi-card.tsx": [
+      "/api/mlb/tesi/${awayTeamId}?${qs}",
+      "/api/mlb/tesi/${homeTeamId}?${qs}"
+    ],
+    "client/src/components/elite-factors.tsx": [
+      "/api/mlb/advanced/${gamePk}",
+      "/api/mlb/context?${qs.toString()}",
+      "/api/mlb/umpire/${gamePk}",
+      "/api/nba/context?${qs.toString()}",
+      "/api/nba/refs/${gameId}",
+      "/api/nhl/goalies/${gameId}",
+      "/api/sharp/${sport.toLowerCase()}/${encodeURIComponent(gameKey)}"
+    ],
+    "client/src/components/clv-tracker.tsx": [
+      "/api/clv/refresh",
+      "/api/picks"
+    ]
+  },
+  "endpointReferenceCount": 58,
+  "referenceBuild": {
+    "path": "original export dist/public",
+    "files": [
+      {
+        "path": "assets/index-DkK0bCR_.js",
+        "bytes": 1211695,
+        "sha256": "49304205c7d98029c72d67c4f1ffdd7387957e5a3912d50ae1916378f482faa6"
+      },
+      {
+        "path": "assets/index-zk3OyqaD.css",
+        "bytes": 93811,
+        "sha256": "0210e2ff9f7d770c86bad9d83c666a7bd73ff42ace99e01bd3be7fd4dd3dccce"
+      },
+      {
+        "path": "index.html",
+        "bytes": 640,
+        "sha256": "827644b0d99abf0978c14452b9b7eb02b17d43cd592f50fc8408d43ab53c7660"
+      }
+    ],
+    "totalBytes": 1306146
+  }
+}

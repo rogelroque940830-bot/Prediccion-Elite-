@@ -1,0 +1,54 @@
+{
+  "candidate": "CourtEdge_Phase3_Sprint2_Staging_Candidate",
+  "version": "1.0.0-phase3-sprint2",
+  "sourceAudit": {
+    "status": "pass",
+    "codeFiles": 81,
+    "errors": 0,
+    "warnings": 0
+  },
+  "syntaxAudit": {
+    "status": "pass",
+    "transpiledFiles": 80,
+    "errors": 0
+  },
+  "npmInstall": {
+    "status": "blocked",
+    "reason": "HTTP 503 from internal npm mirror"
+  },
+  "liveBackendSmoke": {
+    "status": "blocked",
+    "reason": "container DNS/network restrictions"
+  },
+  "visualAutomation": {
+    "status": "blocked",
+    "reason": "Chromium ERR_BLOCKED_BY_ADMINISTRATOR for localhost"
+  },
+  "productionModified": false,
+  "routeInventory": {
+    "status": "pass",
+    "routes": 11
+  },
+  "referenceBuild": {
+    "status": "captured",
+    "files": 3,
+    "totalBytes": 1306146
+  },
+  "backendAuthority": {
+    "repositoryCommit": "6c523757fcb2a7fb852a017f643020105ab5f1eb",
+    "railwayDeploymentStatus": "success (GitHub commit status observed during audit)"
+  },
+  "smokeHarnessValidation": {
+    "status": "pass",
+    "coreRequests": 4,
+    "extendedRequests": 5,
+    "mode": "local deterministic mock"
+  },
+  "referenceDistributionCheck": {
+    "status": "pass",
+    "jsBytes": 1211695,
+    "cssBytes": 93811,
+    "totalBytes": 1306146,
+    "note": "checks the original compiled reference build, not the Sprint 2 candidate build"
+  }
+}
