@@ -70,7 +70,25 @@ jobs:
         run: npm ci
 
       - name: Static frontend audit
-        run: npm run audit:static
+        id: static_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run audit:static 2>&1 | tee frontend-static-audit.txt
+
+      - name: Upload frontend audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-static-audit
+          path: frontend/frontend-static-audit.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce static audit result
+        if: ${{ steps.static_audit.outcome == 'failure' }}
+        run: exit 1
 
       - name: TypeScript type-check
         run: npm run check
