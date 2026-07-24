@@ -24,15 +24,43 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-frontend-session
+          fetch-depth: 0
+
+      - name: Reconcile imported frontend types
+        run: python3 scripts/fix-integration-frontend-types.py
+
+      - name: Commit reconciliation when required
+        run: |
+          if git diff --quiet -- frontend/client/src; then
+            echo 'Frontend types already reconciled.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src
+          git commit -m 'fix(frontend): reconcile imported predictor types'
+          git push origin HEAD:integration/p0-frontend-session
+
   backend:
+    needs: reconcile
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout integration revision
+      - name: Checkout reconciled integration branch
         uses: actions/checkout@v4
+        with:
+          ref: integration/p0-frontend-session
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
@@ -52,14 +80,17 @@ jobs:
         run: npx tsx scripts/integration-auth-smoke.ts
 
   frontend:
+    needs: reconcile
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
     steps:
-      - name: Checkout integration revision
+      - name: Checkout reconciled integration branch
         uses: actions/checkout@v4
+        with:
+          ref: integration/p0-frontend-session
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
