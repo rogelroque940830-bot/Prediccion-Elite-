@@ -1,9 +1,21 @@
-import { createContext, useContext, useReducer, useEffect, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type ReactNode,
+} from "react";
 import { americanToProb, americanToDecimal } from "./model";
-import { API_BASE } from "./queryClient";
+import { deletePick, listPicks, savePick, updatePick, type SavedPick } from "./picks-api";
+import { useAuth } from "./auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 export interface Pick {
   id: number;
+  serverId?: string;
   date: string;
   sport: "NBA" | "MLB" | "WNBA" | "NHL";
   team: string;
@@ -15,12 +27,11 @@ export interface Pick {
   impliedProb: number;
   edge: number;
   stake: number;
-  result: string; // "W" | "L" | "P"
+  result: string;
   profit: number;
-  // CLV — Closing Line Value
-  closingOdds?: number;        // Cuota al cierre
-  closingImpliedProb?: number; // Prob implícita al cierre
-  clvPercent?: number;         // % de CLV (positivo = ganaste valor)
+  closingOdds?: number;
+  closingImpliedProb?: number;
+  clvPercent?: number;
 }
 
 export interface AppState {
@@ -33,29 +44,63 @@ export interface AppState {
 }
 
 export type Action =
-  | { type: "ADD_PICK"; payload: Omit<Pick, "id" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_PICK"; payload: Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit"> }
   | { type: "UPDATE_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_PICK"; payload: number }
-  | { type: "ADD_MLB_PICK"; payload: Omit<Pick, "id" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_MLB_PICK"; payload: Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit"> }
   | { type: "UPDATE_MLB_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_MLB_PICK"; payload: number }
-  | { type: "ADD_WNBA_PICK"; payload: Omit<Pick, "id" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_WNBA_PICK"; payload: Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit"> }
   | { type: "UPDATE_WNBA_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_WNBA_PICK"; payload: number }
-  | { type: "ADD_NHL_PICK"; payload: Omit<Pick, "id" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_NHL_PICK"; payload: Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit"> }
   | { type: "UPDATE_NHL_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_NHL_PICK"; payload: number }
   | { type: "UPDATE_PICK_CLV"; payload: { id: number; sport: string; closingOdds: number; closingImpliedProb: number; clvPercent: number } }
   | { type: "SET_BANKROLL"; payload: number }
   | { type: "LOAD_STATE"; payload: AppState };
 
+type SportCode = "nba" | "mlb" | "wnba" | "nhl";
+type SportLabel = Pick["sport"];
+
+const SPORT_CODE: Record<SportLabel, SportCode> = {
+  NBA: "nba",
+  MLB: "mlb",
+  WNBA: "wnba",
+  NHL: "nhl",
+};
+
 function calcProfit(result: string, stake: number, odds: number): number {
-  if (result === "W") {
-    const decimal = americanToDecimal(odds);
-    return stake * (decimal - 1);
-  }
+  if (result === "W") return stake * (americanToDecimal(odds) - 1);
   if (result === "L") return -stake;
   return 0;
+}
+
+function serverId(sport: SportLabel, id: number): string {
+  return `ui-${SPORT_CODE[sport]}-${id}`;
+}
+
+function createPick(
+  state: AppState,
+  payload: Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit">,
+  sport: SportLabel,
+): Pick {
+  const impliedProb = americanToProb(payload.odds) * 100;
+  return {
+    ...payload,
+    sport,
+    id: state.nextId,
+    serverId: serverId(sport, state.nextId),
+    impliedProb,
+    edge: payload.modelProb - impliedProb,
+    profit: calcProfit(payload.result, payload.stake, payload.odds),
+  };
+}
+
+function updateResult(items: Pick[], id: number, result: string): Pick[] {
+  return items.map((pick) => pick.id === id
+    ? { ...pick, result, profit: calcProfit(result, pick.stake, pick.odds) }
+    : pick);
 }
 
 function appReducer(state: AppState, action: Action): AppState {
@@ -63,108 +108,50 @@ function appReducer(state: AppState, action: Action): AppState {
     case "LOAD_STATE":
       return action.payload;
     case "ADD_PICK": {
-      const { payload } = action;
-      const impliedProb = americanToProb(payload.odds);
-      const edge = (payload.modelProb / 100 - impliedProb) * 100;
-      const profit = calcProfit(payload.result, payload.stake, payload.odds);
-      const newPick: Pick = {
-        ...payload,
-        id: state.nextId,
-        impliedProb: impliedProb * 100,
-        edge,
-        profit,
-      };
-      return {
-        ...state,
-        picks: [...state.picks, newPick],
-        nextId: state.nextId + 1,
-      };
+      const pick = createPick(state, action.payload, "NBA");
+      return { ...state, picks: [...state.picks, pick], nextId: state.nextId + 1 };
     }
-    case "UPDATE_PICK": {
-      const { id, result } = action.payload;
-      return {
-        ...state,
-        picks: state.picks.map((p) => {
-          if (p.id !== id) return p;
-          const profit = calcProfit(result, p.stake, p.odds);
-          return { ...p, result, profit };
-        }),
-      };
-    }
+    case "UPDATE_PICK":
+      return { ...state, picks: updateResult(state.picks, action.payload.id, action.payload.result) };
     case "DELETE_PICK":
-      return {
-        ...state,
-        picks: state.picks.filter((p) => p.id !== action.payload),
-      };
+      return { ...state, picks: state.picks.filter((pick) => pick.id !== action.payload) };
     case "ADD_MLB_PICK": {
-      const { payload } = action;
-      const impliedProb = americanToProb(payload.odds);
-      const edge = (payload.modelProb / 100 - impliedProb) * 100;
-      const profit = calcProfit(payload.result, payload.stake, payload.odds);
-      const newPick: Pick = {
-        ...payload,
-        id: state.nextId,
-        impliedProb: impliedProb * 100,
-        edge,
-        profit,
-      };
-      return {
-        ...state,
-        mlbPicks: [...state.mlbPicks, newPick],
-        nextId: state.nextId + 1,
-      };
+      const pick = createPick(state, action.payload, "MLB");
+      return { ...state, mlbPicks: [...state.mlbPicks, pick], nextId: state.nextId + 1 };
     }
-    case "UPDATE_MLB_PICK": {
-      const { id, result } = action.payload;
-      return {
-        ...state,
-        mlbPicks: state.mlbPicks.map((p) => {
-          if (p.id !== id) return p;
-          const profit = calcProfit(result, p.stake, p.odds);
-          return { ...p, result, profit };
-        }),
-      };
-    }
+    case "UPDATE_MLB_PICK":
+      return { ...state, mlbPicks: updateResult(state.mlbPicks, action.payload.id, action.payload.result) };
     case "DELETE_MLB_PICK":
-      return {
-        ...state,
-        mlbPicks: state.mlbPicks.filter((p) => p.id !== action.payload),
-      };
+      return { ...state, mlbPicks: state.mlbPicks.filter((pick) => pick.id !== action.payload) };
     case "ADD_WNBA_PICK": {
-      const { payload } = action;
-      const impliedProb = americanToProb(payload.odds);
-      const edge = (payload.modelProb / 100 - impliedProb) * 100;
-      const profit = calcProfit(payload.result, payload.stake, payload.odds);
-      const newPick: Pick = { ...payload, id: state.nextId, impliedProb: impliedProb * 100, edge, profit };
-      return { ...state, wnbaPicks: [...state.wnbaPicks, newPick], nextId: state.nextId + 1 };
+      const pick = createPick(state, action.payload, "WNBA");
+      return { ...state, wnbaPicks: [...state.wnbaPicks, pick], nextId: state.nextId + 1 };
     }
-    case "UPDATE_WNBA_PICK": {
-      const { id, result } = action.payload;
-      return { ...state, wnbaPicks: state.wnbaPicks.map((p) => p.id !== id ? p : { ...p, result, profit: calcProfit(result, p.stake, p.odds) }) };
-    }
+    case "UPDATE_WNBA_PICK":
+      return { ...state, wnbaPicks: updateResult(state.wnbaPicks, action.payload.id, action.payload.result) };
     case "DELETE_WNBA_PICK":
-      return { ...state, wnbaPicks: state.wnbaPicks.filter((p) => p.id !== action.payload) };
+      return { ...state, wnbaPicks: state.wnbaPicks.filter((pick) => pick.id !== action.payload) };
     case "ADD_NHL_PICK": {
-      const { payload } = action;
-      const impliedProb = americanToProb(payload.odds);
-      const edge = (payload.modelProb / 100 - impliedProb) * 100;
-      const profit = calcProfit(payload.result, payload.stake, payload.odds);
-      const newPick: Pick = { ...payload, id: state.nextId, impliedProb: impliedProb * 100, edge, profit };
-      return { ...state, nhlPicks: [...state.nhlPicks, newPick], nextId: state.nextId + 1 };
+      const pick = createPick(state, action.payload, "NHL");
+      return { ...state, nhlPicks: [...state.nhlPicks, pick], nextId: state.nextId + 1 };
     }
-    case "UPDATE_NHL_PICK": {
-      const { id, result } = action.payload;
-      return { ...state, nhlPicks: state.nhlPicks.map((p) => p.id !== id ? p : { ...p, result, profit: calcProfit(result, p.stake, p.odds) }) };
-    }
+    case "UPDATE_NHL_PICK":
+      return { ...state, nhlPicks: updateResult(state.nhlPicks, action.payload.id, action.payload.result) };
     case "DELETE_NHL_PICK":
-      return { ...state, nhlPicks: state.nhlPicks.filter((p) => p.id !== action.payload) };
+      return { ...state, nhlPicks: state.nhlPicks.filter((pick) => pick.id !== action.payload) };
     case "UPDATE_PICK_CLV": {
-      const { id, sport, closingOdds, closingImpliedProb, clvPercent } = action.payload;
-      const updateIn = (arr: Pick[]) => arr.map(p => p.id === id ? { ...p, closingOdds, closingImpliedProb, clvPercent } : p);
-      if (sport === "MLB") return { ...state, mlbPicks: updateIn(state.mlbPicks) };
-      if (sport === "NHL") return { ...state, nhlPicks: updateIn(state.nhlPicks) };
-      if (sport === "WNBA") return { ...state, wnbaPicks: updateIn(state.wnbaPicks) };
-      return { ...state, picks: updateIn(state.picks) };
+      const update = (items: Pick[]) => items.map((pick) => pick.id === action.payload.id
+        ? {
+          ...pick,
+          closingOdds: action.payload.closingOdds,
+          closingImpliedProb: action.payload.closingImpliedProb,
+          clvPercent: action.payload.clvPercent,
+        }
+        : pick);
+      if (action.payload.sport === "MLB") return { ...state, mlbPicks: update(state.mlbPicks) };
+      if (action.payload.sport === "NHL") return { ...state, nhlPicks: update(state.nhlPicks) };
+      if (action.payload.sport === "WNBA") return { ...state, wnbaPicks: update(state.wnbaPicks) };
+      return { ...state, picks: update(state.picks) };
     }
     case "SET_BANKROLL":
       return { ...state, bankrollInitial: action.payload };
@@ -182,67 +169,252 @@ const initialState: AppState = {
   nextId: 1,
 };
 
+function numericOdds(value: string | number | undefined): number {
+  const parsed = typeof value === "number" ? value : Number(String(value || "-110").replace(/^\+/, ""));
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : -110;
+}
+
+function recordToPick(record: SavedPick, fallbackId: number): Pick {
+  const sport = record.sport.toUpperCase() as SportLabel;
+  const odds = numericOdds(record.odds);
+  const modelProb = record.modelProb ?? record.confidence;
+  const impliedProb = record.impliedProb ?? americanToProb(odds) * 100;
+  const idMatch = record.id.match(/-(\d+)$/);
+  const id = record.clientId ?? (idMatch ? Number(idMatch[1]) : fallbackId);
+  const pickSide = record.pick || record.pickSide;
+  const homeSelected = /home|local/i.test(record.pickSide) || record.pickSide.toLowerCase().includes(record.homeTeam.toLowerCase());
+  const team = record.team || (homeSelected ? record.homeTeam : record.awayTeam);
+  const opponent = record.opponent || (homeSelected ? record.awayTeam : record.homeTeam);
+  const result = record.result || "";
+  const stake = record.stake ?? 0;
+
+  return {
+    id,
+    serverId: record.id,
+    date: record.date || new Date(record.ts).toISOString().slice(0, 10),
+    sport,
+    team,
+    opponent,
+    market: record.market || record.pickType,
+    pick: pickSide,
+    odds,
+    modelProb,
+    impliedProb,
+    edge: record.edge ?? modelProb - impliedProb,
+    stake,
+    result,
+    profit: record.profit ?? calcProfit(result, stake, odds),
+    closingOdds: record.closingOdds,
+    closingImpliedProb: record.closingImpliedProb,
+    clvPercent: record.clvPercent,
+  };
+}
+
+function recordsToState(records: SavedPick[], bankrollInitial: number): AppState {
+  const usedIds = new Set<number>();
+  let fallbackId = 1;
+  const mapped = records.map((record) => {
+    while (usedIds.has(fallbackId)) fallbackId += 1;
+    let pick = recordToPick(record, fallbackId);
+    while (usedIds.has(pick.id)) pick = { ...pick, id: ++fallbackId };
+    usedIds.add(pick.id);
+    fallbackId = Math.max(fallbackId, pick.id + 1);
+    return pick;
+  });
+
+  return {
+    picks: mapped.filter((pick) => pick.sport === "NBA"),
+    mlbPicks: mapped.filter((pick) => pick.sport === "MLB"),
+    wnbaPicks: mapped.filter((pick) => pick.sport === "WNBA"),
+    nhlPicks: mapped.filter((pick) => pick.sport === "NHL"),
+    bankrollInitial,
+    nextId: Math.max(1, ...mapped.map((pick) => pick.id + 1)),
+  };
+}
+
+function pickToRecord(pick: Pick): Parameters<typeof savePick>[0] {
+  return {
+    id: pick.serverId || serverId(pick.sport, pick.id),
+    ts: Number.isFinite(Date.parse(pick.date)) ? Date.parse(pick.date) : Date.now(),
+    sport: SPORT_CODE[pick.sport],
+    homeTeam: pick.team,
+    awayTeam: pick.opponent,
+    pickType: pick.market,
+    pickSide: pick.pick,
+    confidence: pick.modelProb,
+    edge: pick.edge,
+    odds: pick.odds,
+    notes: "Court Edge application history; venue orientation was not supplied by the legacy UI.",
+    source: "app",
+    clientId: pick.id,
+    date: pick.date,
+    team: pick.team,
+    opponent: pick.opponent,
+    market: pick.market,
+    pick: pick.pick,
+    modelProb: pick.modelProb,
+    impliedProb: pick.impliedProb,
+    stake: pick.stake,
+    result: pick.result,
+    profit: pick.profit,
+    closingOdds: pick.closingOdds,
+    closingImpliedProb: pick.closingImpliedProb,
+    clvPercent: pick.clvPercent,
+  };
+}
+
+function listForSport(state: AppState, sport: SportLabel): Pick[] {
+  if (sport === "MLB") return state.mlbPicks;
+  if (sport === "WNBA") return state.wnbaPicks;
+  if (sport === "NHL") return state.nhlPicks;
+  return state.picks;
+}
+
+function actionSport(action: Action): SportLabel | null {
+  if (action.type.includes("MLB")) return "MLB";
+  if (action.type.includes("WNBA")) return "WNBA";
+  if (action.type.includes("NHL")) return "NHL";
+  if (["ADD_PICK", "UPDATE_PICK", "DELETE_PICK"].includes(action.type)) return "NBA";
+  if (action.type === "UPDATE_PICK_CLV") return action.payload.sport.toUpperCase() as SportLabel;
+  return null;
+}
+
+function isServerMutation(action: Action): boolean {
+  return action.type.startsWith("ADD_")
+    || action.type.startsWith("UPDATE_")
+    || action.type.startsWith("DELETE_");
+}
+
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<Action>;
+  reloadFromServer: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
+  const [state, baseDispatch] = useReducer(appReducer, initialState);
+  const stateRef = useRef(state);
+  const pendingActionRef = useRef<Action | null>(null);
+  const { authenticated, requestLogin } = useAuth();
+  const { toast } = useToast();
 
-  const loadedRef = useRef(false);
-
-  // Load picks from server on mount
   useEffect(() => {
-    fetch(`${API_BASE}/api/picks`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success && (data.picks?.length || data.mlbPicks?.length || data.wnbaPicks?.length || data.nhlPicks?.length)) {
-          dispatch({
-            type: "LOAD_STATE",
-            payload: {
-              picks: data.picks || [],
-              mlbPicks: data.mlbPicks || [],
-              wnbaPicks: data.wnbaPicks || [],
-              nhlPicks: data.nhlPicks || [],
-              bankrollInitial: data.bankroll ?? 1000,
-              nextId: data.nextId ?? 1,
-            },
-          });
-        }
-        loadedRef.current = true;
-      })
-      .catch(() => { loadedRef.current = true; });
-  }, []);
-
-  // Sync entire state to server on every change (debounced 500ms)
-  // Skip the initial sync that happens before server data is loaded
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    const timer = setTimeout(() => {
-      fetch(`${API_BASE}/api/picks/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          picks: state.picks,
-          mlbPicks: state.mlbPicks,
-          wnbaPicks: state.wnbaPicks,
-          nhlPicks: state.nhlPicks,
-          bankroll: state.bankrollInitial,
-          nextId: state.nextId,
-        }),
-      }).catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
+    stateRef.current = state;
   }, [state]);
 
-  return (
-    <AppContext.Provider value={{ state, dispatch }}>
-      {children}
-    </AppContext.Provider>
-  );
+  const reloadFromServer = useCallback(async () => {
+    const storedBankroll = Number(localStorage.getItem("courtedge.bankrollInitial"));
+    const bankroll = Number.isFinite(storedBankroll) && storedBankroll > 0 ? storedBankroll : stateRef.current.bankrollInitial;
+    const records = await listPicks({ days: 3650 });
+    const next = recordsToState(records, bankroll);
+    stateRef.current = next;
+    baseDispatch({ type: "LOAD_STATE", payload: next });
+  }, []);
+
+  useEffect(() => {
+    void reloadFromServer().catch((error) => {
+      console.error("Unable to load picks v2", error);
+    });
+  }, [reloadFromServer]);
+
+  const persistAction = useCallback(async (action: Action, before: AppState, after: AppState) => {
+    if (action.type === "SET_BANKROLL") {
+      localStorage.setItem("courtedge.bankrollInitial", String(action.payload));
+      return;
+    }
+    if (action.type === "LOAD_STATE") return;
+
+    const sport = actionSport(action);
+    if (!sport) return;
+
+    if (action.type.startsWith("ADD_")) {
+      const created = listForSport(after, sport).find((pick) => pick.id === before.nextId);
+      if (created) await savePick(pickToRecord(created));
+      return;
+    }
+
+    if (action.type.startsWith("UPDATE_") && action.type !== "UPDATE_PICK_CLV") {
+      const id = action.payload.id;
+      const updated = listForSport(after, sport).find((pick) => pick.id === id);
+      if (updated) {
+        await updatePick(updated.serverId || serverId(sport, updated.id), {
+          result: updated.result,
+          profit: updated.profit,
+        });
+      }
+      return;
+    }
+
+    if (action.type.startsWith("DELETE_")) {
+      const id = action.payload as number;
+      const deleted = listForSport(before, sport).find((pick) => pick.id === id);
+      if (deleted) await deletePick(deleted.serverId || serverId(sport, deleted.id));
+      return;
+    }
+
+    if (action.type === "UPDATE_PICK_CLV") {
+      const updated = listForSport(after, sport).find((pick) => pick.id === action.payload.id);
+      if (updated) {
+        await updatePick(updated.serverId || serverId(sport, updated.id), {
+          closingOdds: updated.closingOdds,
+          closingImpliedProb: updated.closingImpliedProb,
+          clvPercent: updated.clvPercent,
+        });
+      }
+    }
+  }, []);
+
+  const executeAction = useCallback((action: Action) => {
+    const before = stateRef.current;
+    const after = appReducer(before, action);
+    stateRef.current = after;
+    baseDispatch(action);
+
+    void persistAction(action, before, after).catch(async (error) => {
+      toast({
+        title: "No se guardó el cambio",
+        description: error instanceof Error ? error.message : "Error de persistencia",
+        variant: "destructive",
+      });
+      try {
+        await reloadFromServer();
+      } catch {
+        // The UI remains usable; the next manual refresh can retry the canonical load.
+      }
+    });
+  }, [persistAction, reloadFromServer, toast]);
+
+  const dispatch = useCallback<React.Dispatch<Action>>((action) => {
+    if (action.type === "SET_BANKROLL" || action.type === "LOAD_STATE") {
+      executeAction(action);
+      return;
+    }
+
+    if (isServerMutation(action) && !authenticated) {
+      pendingActionRef.current = action;
+      requestLogin();
+      toast({
+        title: "Inicia sesión para guardar",
+        description: "El cambio se aplicará después de autenticar la sesión.",
+      });
+      return;
+    }
+
+    executeAction(action);
+  }, [authenticated, executeAction, requestLogin, toast]);
+
+  useEffect(() => {
+    if (!authenticated || !pendingActionRef.current) return;
+    const pending = pendingActionRef.current;
+    pendingActionRef.current = null;
+    executeAction(pending);
+  }, [authenticated, executeAction]);
+
+  const value = useMemo(() => ({ state, dispatch, reloadFromServer }), [dispatch, reloadFromServer, state]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useAppContext() {
