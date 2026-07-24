@@ -14,7 +14,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
-    sourcemap: true,
+    // Public source maps expose the full client source and dramatically increase
+    // the release artifact. Keep them outside the deployable distribution.
+    sourcemap: false,
   },
   server: {
     host: "0.0.0.0",
