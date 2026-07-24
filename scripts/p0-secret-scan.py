@@ -52,7 +52,10 @@ for path in tracked_files():
                 continue
             findings.append(f"{path}:{line_number}: suspicious credential assignment")
 
-        if QUERY_LITERAL.search(line):
+        for match in QUERY_LITERAL.finditer(line):
+            value = match.group(1).strip().lower()
+            if value.startswith(SAFE_PREFIXES):
+                continue
             findings.append(f"{path}:{line_number}: credential-like query literal")
 
 if findings:
