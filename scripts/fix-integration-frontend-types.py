@@ -23,20 +23,25 @@ def replace_or_confirm(path: Path, old: str, new: str, minimum: int = 1) -> int:
 
 context = ROOT / "frontend/client/src/lib/context.tsx"
 context_text = context.read_text(encoding="utf-8")
+correct_alias = (
+    'type NewHistoryPick = Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> '
+    '& { sport?: Pick["sport"] };'
+)
+circular_alias = 'type NewHistoryPick = NewHistoryPick & { sport?: Pick["sport"] };'
+context_text = context_text.replace(circular_alias, correct_alias)
 if "type NewHistoryPick =" not in context_text:
     marker = "export type Action =\n"
     if marker not in context_text:
         raise RuntimeError(f"{context}: Action declaration marker not found")
-    alias = (
-        'type NewHistoryPick = Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> '
-        '& { sport?: Pick["sport"] };\n\n'
-    )
-    context_text = context_text.replace(marker, alias + marker, 1)
+    context_text = context_text.replace(marker, correct_alias + "\n\n" + marker, 1)
 
+alias_placeholder = "__COURTEDGE_NEW_HISTORY_PICK_ALIAS__"
+context_text = context_text.replace(correct_alias, alias_placeholder, 1)
 legacy_payload = 'Omit<Pick, "id" | "serverId" | "impliedProb" | "edge" | "profit">'
 reconciled_payload = 'Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit">'
 context_text = context_text.replace(legacy_payload, "NewHistoryPick")
 context_text = context_text.replace(reconciled_payload, "NewHistoryPick")
+context_text = context_text.replace(alias_placeholder, correct_alias, 1)
 context.write_text(context_text, encoding="utf-8")
 
 mlb = ROOT / "frontend/client/src/pages/mlb-predictor.tsx"
