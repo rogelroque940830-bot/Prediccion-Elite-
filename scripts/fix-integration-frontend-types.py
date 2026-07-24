@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# One-shot deterministic reconciliation for the imported Sprint 2 source.
 ROOT = Path(__file__).resolve().parents[1]
 
 
