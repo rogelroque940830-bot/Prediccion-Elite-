@@ -7,26 +7,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: staging-mlb-smoke
   cancel-in-progress: true
 
 jobs:
-  smoke:
-    name: Validate Railway p0-staging
+  cleanup:
+    name: Apply one-time credential cleanup
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout p0-staging
         uses: actions/checkout@v4
+        with:
+          ref: p0-staging
+          fetch-depth: 0
 
-      - name: Wait for Railway and run MLB regression suite
-        env:
-          BASE_URL: https://web-p0-staging.up.railway.app
-          EXPECTED_COMMIT: ${{ github.sha }}
-          STARTUP_DELAY_MS: "75000"
-          REQUEST_TIMEOUT_MS: "120000"
-        run: node scripts/staging-smoke.mjs
+      - name: Remove hardcoded credentials and restore regression workflow
+        run: node scripts/staging-secret-cleanup-once.cjs
