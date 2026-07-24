@@ -53,7 +53,7 @@ function sameRecord(a = {}, b = {}) {
 
 for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
   if (!sameRecord(pkg[group] ?? {}, lockRoot[group] ?? {})) {
-    errors.push(`package-lock packages[\"\"].${group} no coincide con package.json`);
+    errors.push(`package-lock packages[""].${group} no coincide con package.json`);
   }
 }
 
@@ -61,13 +61,21 @@ const requiredFiles = [
   ".env.example",
   ".env.staging.example",
   ".env.production.example",
-  ".github/workflows/ci.yml",
   "DEPLOYMENT_CHECKLIST.md",
+  "SOURCE_PROVENANCE.md",
   "vite.config.ts",
   "client/src/vite-env.d.ts",
 ];
 for (const file of requiredFiles) {
   if (!fs.existsSync(path.join(root, file))) errors.push(`Falta archivo requerido: ${file}`);
+}
+
+const workflowCandidates = [
+  path.join(root, ".github", "workflows", "ci.yml"),
+  path.join(root, "..", ".github", "workflows", "integration-p0-frontend.yml"),
+];
+if (!workflowCandidates.some((file) => fs.existsSync(file))) {
+  errors.push("No se encontró un workflow de CI válido para el frontend");
 }
 
 const sourceFiles = walk(srcRoot).filter((f) => /\.(ts|tsx|css)$/.test(f));
@@ -124,6 +132,8 @@ for (const pattern of forbiddenBackendPatterns) {
 const queryClient = fs.readFileSync(path.join(srcRoot, "lib", "queryClient.ts"), "utf8");
 if (!queryClient.includes("VITE_API_BASE_URL")) errors.push("queryClient.ts no usa VITE_API_BASE_URL");
 if (!queryClient.includes("replace(/\\/+$/, \"\")")) warnings.push("queryClient.ts podría no normalizar la barra final del API base");
+if (!queryClient.includes('credentials: "include"')) errors.push("queryClient.ts no incluye cookies de sesión en las solicitudes");
+if (!queryClient.includes("X-CourtEdge-CSRF")) errors.push("queryClient.ts no aplica el encabezado CSRF a las escrituras");
 
 const picksApi = fs.readFileSync(path.join(srcRoot, "lib", "picks-api.ts"), "utf8");
 if (!picksApi.includes("/api/picks/v2")) {
@@ -133,6 +143,10 @@ if (!picksApi.includes("URLSearchParams") || !picksApi.includes("minConfidence")
   errors.push("picks-api.ts no conserva los filtros de consulta del API v2");
 }
 if (picksApi.includes('apiUrl("/api/picks")')) errors.push("picks-api.ts apunta al store legacy en vez de /api/picks/v2");
+
+const contextSource = fs.readFileSync(path.join(srcRoot, "lib", "context.tsx"), "utf8");
+if (contextSource.includes("/api/picks/sync")) errors.push("context.tsx conserva la sincronización legacy de estado completo");
+if (contextSource.includes('`${API_BASE}/api/picks`')) errors.push("context.tsx conserva lecturas del store legacy");
 
 const summary = {
   sourceFiles: sourceFiles.length,
@@ -154,4 +168,4 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }
-console.log("\nPASS: frontend separado, imports resueltos, manifest consistente y sin URL backend fija.");
+console.log("\nPASS: frontend separado, sesión protegida, picks v2 canónicos y sin URL backend fija.");
