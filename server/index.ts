@@ -7,6 +7,8 @@ import {
   restrictedCors,
   securityHeaders,
 } from "./security";
+import { createSessionMiddleware, registerAuthRoutes } from "./auth";
+import { registerPicksV2Routes } from "./picks-v2";
 
 const app = express();
 // Railway terminates TLS and forwards one trusted proxy hop.
@@ -19,12 +21,12 @@ declare module "http" {
   }
 }
 
-// P0 security middleware. Production must configure COURTEDGE_ALLOWED_ORIGINS
-// and COURTEDGE_WRITE_TOKEN before this branch can be promoted.
+// Security boundary. Production must configure the exact frontend origin,
+// session secret and administrator password hash before promotion.
 app.use(securityHeaders);
 app.use(restrictedCors);
 app.use(apiRateLimit);
-app.use(requireWriteAuth);
+app.use(createSessionMiddleware());
 
 app.use(
   express.json({
@@ -36,6 +38,7 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || "256kb" }));
+app.use(requireWriteAuth);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -73,6 +76,10 @@ app.get("/health", (_req, res) => {
 });
 
 (async () => {
+  registerAuthRoutes(app);
+  // Register the canonical v2 store before historical routes so duplicate
+  // legacy handlers cannot receive the request.
+  registerPicksV2Routes(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
