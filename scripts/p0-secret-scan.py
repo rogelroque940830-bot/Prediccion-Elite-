@@ -19,6 +19,11 @@ SAFE_PREFIXES = (
 )
 SKIP_SUFFIXES = {".lock", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx"}
 SKIP_NAMES = {"package-lock.json"}
+SKIP_PATHS = {
+    Path("scripts/p0-secret-scan.py"),
+    Path("scripts/p0-sanitize-routes.py"),
+    Path(".github/workflows/p0-security-remediation.yml"),
+}
 
 
 def tracked_files() -> list[Path]:
@@ -30,7 +35,7 @@ def tracked_files() -> list[Path]:
 
 findings: list[str] = []
 for path in tracked_files():
-    if path.name in SKIP_NAMES or path.suffix.lower() in SKIP_SUFFIXES:
+    if path in SKIP_PATHS or path.name in SKIP_NAMES or path.suffix.lower() in SKIP_SUFFIXES:
         continue
     try:
         text = path.read_text(encoding="utf-8")
@@ -42,7 +47,6 @@ for path in tracked_files():
             value = match.group(1).strip().lower()
             if value.startswith(SAFE_PREFIXES):
                 continue
-            # Ignore ordinary public protocol markers and very repetitive template strings.
             if value in {"application/json", "courtedge backend"}:
                 continue
             findings.append(f"{path}:{line_number}: suspicious credential assignment")
