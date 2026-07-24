@@ -154,9 +154,8 @@ jobs:
         if: ${{ steps.dist_smoke.outcome == 'failure' }}
         run: exit 1
 
-  # BEGIN ONE-TIME WNBA REPAIR
   repair-wnba:
-    if: github.ref == 'refs/heads/integration/p0-staging-secure' && github.actor != 'github-actions[bot]'
+    if: github.ref == 'refs/heads/integration/p0-staging-secure' && github.event.head_commit.message == 'chore(staging): finalize WNBA repair'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -194,7 +193,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add server/routes.ts frontend/client/src/pages/wnba-predictor.tsx
           git commit -m "fix(wnba): prevent hanging stats and wire verified autofill"
           git push origin HEAD:integration/p0-staging-secure
-  # END ONE-TIME WNBA REPAIR
