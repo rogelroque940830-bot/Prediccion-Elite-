@@ -462,7 +462,7 @@ function computePickQuality(input: {
   statcastDataQuality: "OK" | "MISSING";
   statcastRunsDelta: number;
   injuryProbDelta: number;
-}): NonNullable<MLBPredictorResult["pickQuality"]> {
+}): NonNullable<MLBResult["pickQuality"]> {
   const warnings: string[] = [];
   const confirms: string[] = [];
 
@@ -539,7 +539,7 @@ function computePickQuality(input: {
   score = Math.max(1, Math.min(10, score));
 
   // ─── RATING TIER ───
-  let rating: NonNullable<MLBPredictorResult["pickQuality"]>["rating"] = "F";
+  let rating: NonNullable<MLBResult["pickQuality"]>["rating"] = "F";
   if (score >= 9) rating = "S+";
   else if (score >= 8) rating = "S";
   else if (score >= 7) rating = "A";
@@ -581,7 +581,7 @@ function computePickQuality(input: {
   }
 
   // ─── RECOMENDACIÓN ───
-  let recommendation: NonNullable<MLBPredictorResult["pickQuality"]>["recommendation"] = "PASS";
+  let recommendation: NonNullable<MLBResult["pickQuality"]>["recommendation"] = "PASS";
   if (hardVetoToPass) {
     recommendation = "PASS";
     warnings.unshift(`🚫 VETO: ${hardVetoReason}`);
@@ -672,6 +672,7 @@ export default function MLBPredictor() {
       homeStats: any; awayStats: any;
       homePitcher: any; awayPitcher: any;
       venue: string;
+      gameDate?: string;
     }>;
   }>({
     queryKey: ["/api/mlb/all", selectedDate],

@@ -31,7 +31,7 @@ interface PredictionResult {
   odds: number;            // odds del lado recomendado
   pickedSide?: "home" | "away"; // qué lado eligió el modelo
   spread?: { expectedMargin: number; edgeVsSpread: number; signal: "BET"|"LEAN"|"PASS"; side: string; pickedSide?: "home"|"away"; coverProb?: number; confidence?: string };
-  total?: { estimatedTotal: number; edge: number; signal: "BET"|"LEAN"|"PASS"; side: "OVER"|"UNDER" };
+  total?: { estimatedTotal: number; edge: number; signal: "BET"|"LEAN"|"PASS"; side: "OVER"|"UNDER"; hitProb?: number; confidence?: string };
   homeInjuryAdj: number;
   awayInjuryAdj: number;
   bestPlay: BestPlay | null;
@@ -61,6 +61,10 @@ interface NBATeamStats {
   oppEFGPct?: number; oppFTRate?: number; oppTovPct?: number; oppOrebPct?: number;
   l10EFGPct?: number; l10OppEFGPct?: number; l10TovPct?: number; l10OppTovPct?: number;
   gamesPlayed?: number;
+  // Provider aliases consumed by the current auto-fill path.
+  gamesLast7Days?: number; gp?: number;
+  l10eFGPct?: number; l10FTRate?: number; l10OrebPct?: number;
+  l10OppFTRate?: number; l10OppOrebPct?: number;
   // Home/Away splits
   homeOffRtg?: number; homeDefRtg?: number; homeNetRtg?: number; homeRecord?: string;
   awayOffRtg?: number; awayDefRtg?: number; awayNetRtg?: number; awayRecord?: string;
@@ -1215,7 +1219,7 @@ export default function Predictor() {
           </div>
 
           <EliteBanner sport="NBA" />
-          {selectedGameId && <NBARefsCard gameId={selectedGameId} onComposite={setRefComposite} />}
+          {selectedGameId && <NBARefsCard gameId={selectedGameId} onComposite={(value) => setRefComposite(value ?? null)} />}
           {contextTri.home && contextTri.away && (
             <NBAContextualCard
               homeTri={contextTri.home}
