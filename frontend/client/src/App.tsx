@@ -6,8 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SessionControl } from "@/components/session-control";
-import { AuthProvider } from "@/lib/auth-context";
 import { AppProvider } from "@/lib/context";
 import Dashboard from "@/pages/dashboard";
 import Predictor from "@/pages/predictor";
@@ -52,9 +50,8 @@ function AppLayout() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-3 h-12 px-3 border-b border-border shrink-0">
+          <header className="flex items-center h-12 px-3 border-b border-border shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <SessionControl />
           </header>
           <main className="flex-1 overflow-y-auto overscroll-contain">
             <AppRouter />
@@ -68,16 +65,14 @@ function AppLayout() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppProvider>
-          <TooltipProvider>
-            <Router hook={useHashLocation}>
-              <AppLayout />
-            </Router>
-            <Toaster />
-          </TooltipProvider>
-        </AppProvider>
-      </AuthProvider>
+      <AppProvider>
+        <TooltipProvider>
+          <Router hook={useHashLocation}>
+            <AppLayout />
+          </Router>
+          <Toaster />
+        </TooltipProvider>
+      </AppProvider>
     </QueryClientProvider>
   );
 }
