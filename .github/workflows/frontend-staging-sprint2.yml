@@ -15,37 +15,48 @@ permissions:
 jobs:
   verify-frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout isolated staging branch
         uses: actions/checkout@v4
 
-      - name: Verify staging package exists
+      - name: Verify staging package and checksum
         run: |
           test -f staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip
-          sha256sum -c staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip.sha256
+          test -f staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip.sha256
+          cd staging
+          sha256sum -c CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip.sha256
 
       - name: Extract candidate
         run: |
+          rm -rf .staging-work
           mkdir -p .staging-work
           unzip -q staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip -d .staging-work
           PROJECT_DIR=$(find .staging-work -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          test -n "$PROJECT_DIR"
+          test -f "$PROJECT_DIR/package-lock.json"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: '${{ env.PROJECT_DIR }}/package-lock.json'
 
       - name: Install dependencies reproducibly
         working-directory: ${{ env.PROJECT_DIR }}
         run: npm ci
 
-      - name: Static verification and type-check
+      - name: Static frontend audit
         working-directory: ${{ env.PROJECT_DIR }}
-        run: npm run verify
+        run: npm run audit:static
+
+      - name: Syntax validation
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run check:syntax
+
+      - name: TypeScript type-check
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run check
 
       - name: Production build
         working-directory: ${{ env.PROJECT_DIR }}
@@ -53,16 +64,16 @@ jobs:
           VITE_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
         run: npm run build
 
-      - name: Dist smoke test
+      - name: Distribution smoke test
         working-directory: ${{ env.PROJECT_DIR }}
-        run: npm run smoke:dist
+        run: npm run check:dist
 
       - name: Backend read-only smoke test
         if: ${{ vars.STAGING_API_BASE_URL != '' }}
         working-directory: ${{ env.PROJECT_DIR }}
         env:
-          API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
-        run: npm run smoke:backend
+          COURTEDGE_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+        run: npm run check:backend
 
       - name: Create release manifest
         working-directory: ${{ env.PROJECT_DIR }}
