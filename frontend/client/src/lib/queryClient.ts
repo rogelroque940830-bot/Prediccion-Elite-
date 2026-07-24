@@ -6,10 +6,16 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim() ?? "";
 export const API_BASE = configuredApiBase.replace(/\/+$/, "");
 
+let csrfToken: string | null = null;
+
 if (import.meta.env.DEV && !configuredApiBase) {
   console.warn(
     "VITE_API_BASE_URL no está definida; las solicitudes usarán el mismo origen.",
   );
+}
+
+export function setCsrfToken(value: string | null): void {
+  csrfToken = value?.trim() || null;
 }
 
 export function apiUrl(path: string): string {
@@ -17,10 +23,52 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${normalizedPath}`;
 }
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function requestInit(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers || {});
+  const method = (init.method || "GET").toUpperCase();
+  const write = !["GET", "HEAD", "OPTIONS"].includes(method);
+
+  if (write && csrfToken && !headers.has("X-CourtEdge-CSRF")) {
+    headers.set("X-CourtEdge-CSRF", csrfToken);
+  }
+
+  return {
+    ...init,
+    headers,
+    credentials: "include",
+  };
+}
+
+async function responseMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  if (!text) return res.statusText || "Request failed";
+  try {
+    const parsed = JSON.parse(text);
+    return parsed.error || parsed.message || text;
+  } catch {
+    return text;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const message = await responseMessage(res);
+    if (res.status === 401 || res.status === 403) {
+      window.dispatchEvent(new CustomEvent("courtedge:auth-required", {
+        detail: { status: res.status, message },
+      }));
+    }
+    throw new ApiError(res.status, message);
   }
 }
 
@@ -28,7 +76,7 @@ export async function fetchJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(apiUrl(path), init);
+  const res = await fetch(apiUrl(path), requestInit(init));
   await throwIfResNotOk(res);
   return (await res.json()) as T;
 }
@@ -38,11 +86,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(apiUrl(url), {
+  const headers = new Headers();
+  if (data !== undefined) headers.set("Content-Type", "application/json");
+
+  const res = await fetch(apiUrl(url), requestInit({
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-  });
+    headers,
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  }));
 
   await throwIfResNotOk(res);
   return res;
@@ -54,7 +105,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(apiUrl(queryKey.join("/")));
+    const res = await fetch(apiUrl(queryKey.join("/")), requestInit());
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
