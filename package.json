@@ -4,9 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "build:backend": "esbuild server/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:better-sqlite3 --external:bufferutil",
+    "build:backend": "esbuild server/staging-entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:better-sqlite3 --external:bufferutil",
     "start": "node dist/index.cjs",
-    "dev": "tsx server/index.ts"
+    "dev": "tsx server/staging-entry.ts"
   },
   "engines": {
     "node": ">=20"
@@ -35,6 +35,6 @@
     "@types/ws": "^8.5.13"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.8"
+    "bufferutil": "^8.5.13"
   }
 }
