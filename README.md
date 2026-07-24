@@ -31,9 +31,11 @@ En el proyecto Railway → **Variables**:
 ```
 NODE_ENV=production
 PORT=5000
-BDL_API_KEY=d94f53fd-aedc-4da1-952c-5975f51cf732
-ODDS_API_KEY=b6bab898f7a8879e95adf2290aac4184
+BDL_API_KEY=your_bdl_api_key
+ODDS_API_KEY=your_odds_api_key
 ```
+
+> Configura las claves reales solamente en Railway Variables. Nunca guardes claves reales en GitHub.
 
 ### 5. Generar el dominio público
 - Railway → **Settings** → **Networking** → **Generate Domain**

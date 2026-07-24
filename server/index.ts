@@ -5,6 +5,15 @@ import { createServer } from "http";
 export const app = express();
 const httpServer = createServer(app);
 
+const missingApiVariables = ["BDL_API_KEY", "ODDS_API_KEY"].filter(
+  (name) => !process.env[name],
+);
+if (missingApiVariables.length > 0) {
+  console.warn(
+    `[config] Variables API faltantes: ${missingApiVariables.join(", ")}`,
+  );
+}
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
