@@ -1,20 +1,20 @@
-// CLV (Closing Line Value) Tracker — canonical picks v2 integration.
+// CLV (Closing Line Value) Tracker — TOTALMENTE AUTOMÁTICO
+// Cuando el partido termina, el servidor busca el snapshot más cercano al
+// commence_time del partido y calcula CLV. Tú no haces nada manualmente.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, RefreshCw, CheckCircle2, LockKeyhole } from "lucide-react";
+import { TrendingUp, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useAppContext, type Pick } from "@/lib/context";
 import { useToast } from "@/hooks/use-toast";
-import { refreshClv } from "@/lib/picks-api";
-import { useAuth } from "@/lib/auth-context";
+import { API_BASE } from "@/lib/queryClient";
 
 interface AllPick extends Pick { sportTag: string }
 
 export function CLVTracker() {
-  const { state, reloadFromServer } = useAppContext();
-  const { authenticated, requestLogin } = useAuth();
+  const { state, dispatch } = useAppContext();
   const { toast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function CLVTracker() {
     ...state.wnbaPicks.map(p => ({ ...p, sportTag: "WNBA" })),
   ], [state]);
 
+  // Stats CLV
   const clvStats = useMemo(() => {
     const withClv = allPicks.filter(p => p.clvPercent !== undefined && p.clvPercent !== null);
     const totalCLV = withClv.reduce((s, p) => s + (p.clvPercent ?? 0), 0);
@@ -36,40 +37,50 @@ export function CLVTracker() {
     return { withClv, total: withClv.length, avgCLV, positiveCLV, negativeCLV, positiveCLVRate };
   }, [allPicks]);
 
-  const refreshCLV = useCallback(async () => {
-    if (!authenticated) {
-      requestLogin();
-      return;
-    }
-
+  // Refresh CLV automáticamente al cargar el dashboard y cada 5 minutos
+  const refreshCLV = async () => {
     setRefreshing(true);
     try {
-      const result = await refreshClv();
-      await reloadFromServer();
-      setLastRefresh(new Date().toLocaleTimeString("es-ES"));
-      if (result.updated > 0) {
-        toast({
-          title: "CLV actualizado",
-          description: `${result.updated} pick${result.updated === 1 ? "" : "s"} con cuota de cierre nueva`,
-        });
+      const res = await fetch(`${API_BASE}/api/clv/refresh`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        // Recargar picks del servidor
+        const picksRes = await fetch(`${API_BASE}/api/picks`);
+        const picksData = await picksRes.json();
+        if (picksData.success) {
+          dispatch({
+            type: "LOAD_STATE",
+            payload: {
+              picks: picksData.picks || [],
+              mlbPicks: picksData.mlbPicks || [],
+              nhlPicks: picksData.nhlPicks || [],
+              wnbaPicks: picksData.wnbaPicks || [],
+              bankrollInitial: picksData.bankroll ?? 1000,
+              nextId: picksData.nextId ?? 1,
+            },
+          });
+        }
+        setLastRefresh(new Date().toLocaleTimeString("es-ES"));
+        if (data.updated > 0) {
+          toast({
+            title: `✓ CLV actualizado`,
+            description: `${data.updated} pick${data.updated === 1 ? "" : "s"} con cuota de cierre nueva`,
+          });
+        }
       }
-    } catch (error) {
-      toast({
-        title: "No se pudo actualizar CLV",
-        description: error instanceof Error ? error.message : "Error desconocido",
-        variant: "destructive",
-      });
+    } catch (e) {
+      console.error("CLV refresh failed", e);
     } finally {
       setRefreshing(false);
     }
-  }, [authenticated, reloadFromServer, requestLogin, toast]);
+  };
 
   useEffect(() => {
-    if (!authenticated) return;
-    void refreshCLV();
-    const interval = setInterval(() => void refreshCLV(), 5 * 60 * 1000);
+    refreshCLV(); // primer refresh al montar
+    const interval = setInterval(refreshCLV, 5 * 60 * 1000); // cada 5 min
     return () => clearInterval(interval);
-  }, [authenticated, refreshCLV]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Card className="border-cyan-500/30 bg-cyan-500/5">
@@ -85,14 +96,12 @@ export function CLVTracker() {
               </Badge>
             </CardTitle>
             <p className="text-[10px] text-muted-foreground mt-1">
-              Compara tu cuota vs la cuota de cierre. CLV positivo sostenido ayuda a evaluar si obtienes mejor precio que el mercado.
+              Compara tu cuota vs la cuota de cierre. CLV positivo sostenido (≥2%) significa que vences al mercado a largo plazo, aunque pierdas hoy.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => void refreshCLV()} disabled={refreshing} className="h-7 text-[10px] border-cyan-500/30 text-cyan-300 shrink-0">
-            {authenticated
-              ? <RefreshCw className={`h-3 w-3 mr-1 ${refreshing ? "animate-spin" : ""}`} />
-              : <LockKeyhole className="h-3 w-3 mr-1" />}
-            {refreshing ? "..." : authenticated ? "Refrescar" : "Iniciar sesión"}
+          <Button size="sm" variant="outline" onClick={refreshCLV} disabled={refreshing} className="h-7 text-[10px] border-cyan-500/30 text-cyan-300 shrink-0">
+            <RefreshCw className={`h-3 w-3 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "..." : "Refrescar"}
           </Button>
         </div>
         {lastRefresh && (
@@ -100,6 +109,7 @@ export function CLVTracker() {
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className="p-2 rounded bg-slate-800/50 border border-slate-700">
             <p className="text-[10px] text-muted-foreground">CLV Promedio</p>
@@ -114,7 +124,7 @@ export function CLVTracker() {
             <p className="text-[10px] text-muted-foreground">Picks con CLV</p>
             <p className="text-lg font-bold font-mono text-white">{clvStats.total}</p>
             <p className="text-[9px] text-muted-foreground">
-              {clvStats.total >= 50 ? "Muestra amplia" : `Faltan ${Math.max(0, 50 - clvStats.total)} para 50`}
+              {clvStats.total >= 50 ? "Muestra confiable" : `Necesitas ${50 - clvStats.total} más`}
             </p>
           </div>
           <div className="p-2 rounded bg-slate-800/50 border border-slate-700">
@@ -123,7 +133,7 @@ export function CLVTracker() {
               {clvStats.positiveCLVRate.toFixed(1)}%
             </p>
             <p className="text-[9px] text-muted-foreground">
-              {clvStats.positiveCLV} positivo · {clvStats.negativeCLV} negativo
+              {clvStats.positiveCLV}V - {clvStats.negativeCLV}D
             </p>
           </div>
           <div className="p-2 rounded bg-slate-800/50 border border-slate-700">
@@ -135,13 +145,14 @@ export function CLVTracker() {
               clvStats.avgCLV >= 0 ? "text-yellow-400" : "text-red-400"
             }`}>
               {clvStats.total < 20 ? "Datos insuficientes" :
-                clvStats.avgCLV >= 2 ? "Precio favorable" :
+                clvStats.avgCLV >= 2 ? "Vences al mercado" :
                 clvStats.avgCLV >= 0.5 ? "Edge ligero" :
-                clvStats.avgCLV >= 0 ? "Neutral" : "Precio desfavorable"}
+                clvStats.avgCLV >= 0 ? "Break-even" : "Pierdes valor"}
             </p>
           </div>
         </div>
 
+        {/* Recent picks with CLV */}
         {clvStats.withClv.length > 0 ? (
           <div>
             <h4 className="text-xs font-semibold text-cyan-300 mb-2">
@@ -179,15 +190,19 @@ export function CLVTracker() {
           <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-center">
             <p className="text-xs text-amber-300 font-semibold">Aún no hay picks con CLV calculado</p>
             <p className="text-[10px] text-muted-foreground mt-1">
-              El servidor utiliza snapshots de cuotas cercanos al inicio del partido. El cálculo solo se ejecuta en una sesión autenticada.
+              CLV se calcula automáticamente cuando un partido empieza. Para que funcione, debes haber consultado las cuotas del partido en CourtEdge antes del primer pitch (eso registra los snapshots de cuotas que el sistema usa como cierre). El próximo partido que apuestes y mires en la app tendrá CLV en automático.
             </p>
           </div>
         )}
 
+        {/* Educational footer */}
         <div className="p-2 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px] text-cyan-200/90 space-y-1">
-          <p><strong>Interpretación:</strong> CLV compara la probabilidad implícita de la cuota tomada con la cuota de cierre disponible.</p>
+          <p><strong>¿Cómo lo calcula?</strong> Cada vez que abres un partido en CourtEdge, el sistema guarda un snapshot de las cuotas. Cuando el partido empieza, automáticamente toma el snapshot más cercano al inicio como "cuota de cierre" y compara con tu apuesta.</p>
           <p className="pt-1 border-t border-cyan-500/20">
-            CLV es una señal de calidad de precio; no garantiza que una apuesta individual gane ni demuestra rentabilidad por sí solo.
+            <span className="text-green-400">+2% sostenido</span> = ganarás dinero a largo plazo · {" "}
+            <span className="text-cyan-400">+0.5%</span> = edge ligero · {" "}
+            <span className="text-yellow-400">0%</span> = break-even · {" "}
+            <span className="text-red-400">Negativo</span> = pierdes valor
           </p>
         </div>
       </CardContent>
