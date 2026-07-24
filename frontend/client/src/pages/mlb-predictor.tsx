@@ -287,6 +287,8 @@ interface MLBResult {
     runLine?: PickQualityResult;
     ou?: PickQualityResult;
   };
+  // Compatibility field used by the legacy single-market quality helper.
+  pickQuality?: PickQualityResult;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

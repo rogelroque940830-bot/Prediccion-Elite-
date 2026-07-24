@@ -43,17 +43,19 @@ export interface AppState {
   nextId: number;
 }
 
+type NewHistoryPick = NewHistoryPick & { sport?: Pick["sport"] };
+
 export type Action =
-  | { type: "ADD_PICK"; payload: Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_PICK"; payload: NewHistoryPick }
   | { type: "UPDATE_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_PICK"; payload: number }
-  | { type: "ADD_MLB_PICK"; payload: Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_MLB_PICK"; payload: NewHistoryPick }
   | { type: "UPDATE_MLB_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_MLB_PICK"; payload: number }
-  | { type: "ADD_WNBA_PICK"; payload: Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_WNBA_PICK"; payload: NewHistoryPick }
   | { type: "UPDATE_WNBA_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_WNBA_PICK"; payload: number }
-  | { type: "ADD_NHL_PICK"; payload: Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> }
+  | { type: "ADD_NHL_PICK"; payload: NewHistoryPick }
   | { type: "UPDATE_NHL_PICK"; payload: { id: number; result: string } }
   | { type: "DELETE_NHL_PICK"; payload: number }
   | { type: "UPDATE_PICK_CLV"; payload: { id: number; sport: string; closingOdds: number; closingImpliedProb: number; clvPercent: number } }
@@ -82,7 +84,7 @@ function canonicalId(sport: SportLabel, id: number): string {
 
 function createPick(
   state: AppState,
-  payload: Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit">,
+  payload: NewHistoryPick,
   sport: SportLabel,
 ): Pick {
   const impliedProb = americanToProb(payload.odds) * 100;
