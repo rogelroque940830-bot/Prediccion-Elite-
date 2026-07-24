@@ -6,6 +6,7 @@ const root = process.cwd();
 const srcRoot = path.join(root, "client", "src");
 const errors = [];
 const warnings = [];
+const standaloneDockerBuild = process.env.COURTEDGE_STANDALONE_DOCKER_BUILD === "true";
 
 function walk(dir) {
   const out = [];
@@ -75,7 +76,11 @@ const workflowCandidates = [
   path.join(root, "..", ".github", "workflows", "integration-p0-frontend.yml"),
 ];
 if (!workflowCandidates.some((file) => fs.existsSync(file))) {
-  errors.push("No se encontró un workflow de CI válido para el frontend");
+  if (standaloneDockerBuild) {
+    warnings.push("La comprobación del workflow CI se delega al repositorio raíz durante el build Docker aislado");
+  } else {
+    errors.push("No se encontró un workflow de CI válido para el frontend");
+  }
 }
 
 const sourceFiles = walk(srcRoot).filter((f) => /\.(ts|tsx|css)$/.test(f));
