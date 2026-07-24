@@ -150,9 +150,16 @@ async function main() {
   console.log(`Smoke test MLB staging: ${BASE_URL}`);
   await waitForExpectedDeployment();
 
-  const { gamePk, game } = await discoverTestGame();
+  const { gamePk, date, game } = await discoverTestGame();
   assert(game?.weather && typeof game.weather === "object", "/api/mlb/all: falta objeto weather");
   console.log("PASS /api/mlb/all — calendario, pitchers y weather presentes");
+
+  await runTest("weather", `/api/mlb/weather/${gamePk}?date=${date}`, (body) => {
+    assert(body?.success === true, "weather: success no es true");
+    assert(Number(body?.gamePk) === Number(gamePk), "weather: gamePk no coincide");
+    assert(body?.weather && typeof body.weather === "object", "weather: falta objeto weather");
+    assert(body?.source === "/api/mlb/all", "weather: fuente inesperada");
+  });
 
   await runTest("lineup-matchup", `/api/mlb/lineup-matchup/${gamePk}`, (body) => {
     assert(body?.homeLineup && body?.awayLineup, "lineup-matchup: faltan lineups");
