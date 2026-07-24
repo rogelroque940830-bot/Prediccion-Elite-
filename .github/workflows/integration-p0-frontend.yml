@@ -24,61 +24,30 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  reconcile:
+  source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout integration branch
+      - name: Checkout current integration revision
         uses: actions/checkout@v4
-        with:
-          ref: integration/p0-frontend-session
-          fetch-depth: 0
 
-      - name: Reconcile imported frontend types
-        id: reconcile_types
-        continue-on-error: true
+      - name: Verify imported frontend types are reconciled
         shell: bash
         run: |
-          set -o pipefail
-          python3 scripts/fix-integration-frontend-types.py 2>&1 | tee reconciliation-report.txt
-
-      - name: Upload reconciliation diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-type-reconciliation
-          path: reconciliation-report.txt
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Enforce reconciliation result
-        if: ${{ steps.reconcile_types.outcome == 'failure' }}
-        run: exit 1
-
-      - name: Commit reconciliation when required
-        run: |
-          if git diff --quiet -- frontend/client/src; then
-            echo 'Frontend types already reconciled.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/client/src
-          git commit -m 'fix(frontend): reconcile imported predictor types'
-          git push origin HEAD:integration/p0-frontend-session
+          set -euo pipefail
+          python3 scripts/fix-integration-frontend-types.py
+          git diff --exit-code -- frontend/client/src
 
   backend:
-    needs: reconcile
+    needs: source-gate
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout reconciled integration branch
+      - name: Checkout current integration revision
         uses: actions/checkout@v4
-        with:
-          ref: integration/p0-frontend-session
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
@@ -98,17 +67,15 @@ jobs:
         run: npx tsx scripts/integration-auth-smoke.ts
 
   frontend:
-    needs: reconcile
+    needs: source-gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
     steps:
-      - name: Checkout reconciled integration branch
+      - name: Checkout current integration revision
         uses: actions/checkout@v4
-        with:
-          ref: integration/p0-frontend-session
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
