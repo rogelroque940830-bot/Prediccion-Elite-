@@ -7,7 +7,16 @@ on:
       - security/p0-remediation
     paths:
       - 'server/**'
-      - 'scripts/p0-sanitize-routes.py'
+      - 'scripts/p0-**'
+      - '.github/workflows/p0-security-remediation.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - 'scripts/p0-**'
       - '.github/workflows/p0-security-remediation.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -29,23 +38,11 @@ jobs:
       - name: Remove hardcoded provider-key fallbacks
         run: python3 scripts/p0-sanitize-routes.py
 
-      - name: Verify no provider-key literal remains
-        run: |
-          python3 - <<'PY'
-          import pathlib, re, sys
-          text = pathlib.Path('server/routes.ts').read_text(encoding='utf-8')
-          checks = {
-              'Odds API key literal': r'ODDS_API_KEY(?:_BG)?\s*=.*["\'][0-9a-fA-F]{24,}["\']',
-              'BDL key literal': r'BDL_KEY\s*=.*["\'][0-9a-fA-F-]{30,}["\']',
-          }
-          failed = [name for name, pattern in checks.items() if re.search(pattern, text)]
-          if failed:
-              print('FAIL:', ', '.join(failed))
-              sys.exit(1)
-          print('PASS: provider-key fallbacks removed from current source')
-          PY
+      - name: Scan tracked source for credential-like literals
+        run: python3 scripts/p0-secret-scan.py
 
       - name: Commit sanitized source to isolated branch
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           if git diff --quiet -- server/routes.ts; then
             echo 'No routes.ts sanitation commit required.'
@@ -69,11 +66,17 @@ jobs:
       - name: Build backend
         run: npm run build:backend
 
+      - name: Execute P0 middleware smoke test
+        run: npx tsx scripts/p0-security-smoke.ts
+
       - name: Verify required P0 controls are present
         run: |
+          grep -q 'trust proxy' server/index.ts
           grep -q 'restrictedCors' server/index.ts
           grep -q 'apiRateLimit' server/index.ts
           grep -q 'requireWriteAuth' server/index.ts
           grep -q 'COURTEDGE_WRITE_TOKEN' server/security.ts
           grep -q 'ALLOW_LEGACY_PICKS_SYNC' server/security.ts
-          echo 'PASS: P0 middleware controls detected'
+          grep -q 'requireSecret("ODDS_API_KEY")' server/routes.ts
+          grep -q 'requireSecret("BDL_API_KEY")' server/routes.ts
+          echo 'PASS: P0 middleware and runtime-secret controls detected'
