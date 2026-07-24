@@ -14,9 +14,9 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 }
 
 function clientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(",")[0];
-  return (first || req.ip || req.socket.remoteAddress || "unknown").trim();
+  // Express resolves the trusted Railway proxy chain after app.set("trust proxy", 1).
+  // Do not read x-forwarded-for directly because an untrusted client can spoof it.
+  return (req.ip || req.socket.remoteAddress || "unknown").trim();
 }
 
 function isWriteMethod(method: string): boolean {
@@ -86,8 +86,9 @@ export function apiRateLimit(req: Request, res: Response, next: NextFunction): v
   }
 
   const now = Date.now();
-  const limit = isWriteMethod(req.method) ? WRITE_LIMIT : READ_LIMIT;
-  const key = `${clientIp(req)}:${isWriteMethod(req.method) ? "write" : "read"}`;
+  const write = isWriteMethod(req.method);
+  const limit = write ? WRITE_LIMIT : READ_LIMIT;
+  const key = `${clientIp(req)}:${write ? "write" : "read"}`;
   const current = buckets.get(key);
   const bucket = !current || now >= current.resetAt
     ? { count: 0, resetAt: now + WINDOW_MS }
