@@ -1,0 +1,32 @@
+name: Staging MLB Smoke Tests
+
+on:
+  push:
+    branches:
+      - p0-staging
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-mlb-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Validate Railway p0-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout p0-staging
+        uses: actions/checkout@v4
+
+      - name: Wait for Railway and run MLB regression suite
+        env:
+          BASE_URL: https://web-p0-staging.up.railway.app
+          EXPECTED_COMMIT: ${{ github.sha }}
+          STARTUP_DELAY_MS: "75000"
+          REQUEST_TIMEOUT_MS: "120000"
+        run: node scripts/staging-smoke.mjs
