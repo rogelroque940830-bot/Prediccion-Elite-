@@ -43,7 +43,7 @@ export interface AppState {
   nextId: number;
 }
 
-type NewHistoryPick = NewHistoryPick & { sport?: Pick["sport"] };
+type NewHistoryPick = Omit<Pick, "id" | "serverId" | "sport" | "impliedProb" | "edge" | "profit"> & { sport?: Pick["sport"] };
 
 export type Action =
   | { type: "ADD_PICK"; payload: NewHistoryPick }
