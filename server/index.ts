@@ -9,6 +9,8 @@ import {
 } from "./security";
 
 const app = express();
+// Railway terminates TLS and forwards one trusted proxy hop.
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {
