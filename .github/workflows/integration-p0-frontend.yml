@@ -155,7 +155,7 @@ jobs:
         run: exit 1
 
   repair-wnba:
-    if: github.ref == 'refs/heads/integration/p0-staging-secure' && github.event.head_commit.message == 'chore(staging): finalize WNBA repair'
+    if: ${{ github.ref == 'refs/heads/integration/p0-staging-secure' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
