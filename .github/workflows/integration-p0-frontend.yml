@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - integration/p0-frontend-session
+      - integration/p0-staging-secure
     paths:
       - 'server/**'
       - 'frontend/**'
