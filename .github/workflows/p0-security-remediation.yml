@@ -78,7 +78,25 @@ jobs:
           node-version: '20'
 
       - name: Install backend dependencies reproducibly
-        run: npm ci
+        id: npm_ci
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee p0-npm-ci-report.txt
+
+      - name: Upload npm ci report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-npm-ci-report
+          path: p0-npm-ci-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce npm ci result
+        if: ${{ steps.npm_ci.outcome == 'failure' }}
+        run: exit 1
 
       - name: Build backend
         run: npm run build:backend
