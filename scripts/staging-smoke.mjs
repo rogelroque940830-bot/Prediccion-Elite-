@@ -169,6 +169,18 @@ async function validateAdminAuthObservation() {
     assert(status.protectedRoutes.includes(route), `admin-auth-status: falta ${route}`);
   }
 
+  const selfTestResponse = await fetchJson("/api/staging/admin-auth-self-test");
+  const selfTest = selfTestResponse.body;
+  assert(selfTest?.success === true, "admin-auth-self-test: success no es true");
+  assert(selfTest?.mode === "observe", "admin-auth-self-test: mode no es observe");
+  assert(selfTest?.blocking === false, "admin-auth-self-test: blocking debe ser false");
+  assert(selfTest?.tokenConfigured === true, "admin-auth-self-test: token no configurado");
+  assert(selfTest?.states?.missing === "missing", "admin-auth-self-test: estado missing incorrecto");
+  assert(selfTest?.states?.invalid === "invalid", "admin-auth-self-test: estado invalid incorrecto");
+  assert(selfTest?.states?.valid === "valid", "admin-auth-self-test: estado valid incorrecto");
+  assert(selfTest?.tokenExposed === false, "admin-auth-self-test: tokenExposed debe ser false");
+  assert(selfTest?.mutatedData === false, "admin-auth-self-test: mutatedData debe ser false");
+
   const probeResponse = await fetchJson(
     "/api/staging/admin-auth-probe",
     REQUEST_TIMEOUT_MS,
@@ -188,10 +200,7 @@ async function validateAdminAuthObservation() {
     observation?.route === "/api/staging/admin-auth-probe",
     "admin-auth-probe: route inesperada",
   );
-  assert(
-    observation?.state === "not_configured" || observation?.state === "missing",
-    `admin-auth-probe: state inesperado ${observation?.state}`,
-  );
+  assert(observation?.state === "missing", `admin-auth-probe: state inesperado ${observation?.state}`);
   assert(
     probeResponse.headers.get("x-admin-auth-mode") === "observe",
     "admin-auth-probe: falta X-Admin-Auth-Mode",
@@ -206,7 +215,7 @@ async function validateAdminAuthObservation() {
   );
 
   console.log(
-    `PASS admin-auth observation — state=${observation.state}, blocking=false, mutatedData=false`,
+    "PASS admin-auth observation — missing/invalid/valid verificados, blocking=false, tokenExposed=false, mutatedData=false",
   );
 }
 
