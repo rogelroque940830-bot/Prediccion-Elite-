@@ -15,6 +15,7 @@ SAFE_PREFIXES = (
     "your-",
     "example-",
     "placeholder-",
+    "test-",
     "${",
 )
 SKIP_SUFFIXES = {".lock", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx"}
