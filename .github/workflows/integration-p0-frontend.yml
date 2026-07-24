@@ -38,7 +38,25 @@ jobs:
           fetch-depth: 0
 
       - name: Reconcile imported frontend types
-        run: python3 scripts/fix-integration-frontend-types.py
+        id: reconcile_types
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/fix-integration-frontend-types.py 2>&1 | tee reconciliation-report.txt
+
+      - name: Upload reconciliation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-type-reconciliation
+          path: reconciliation-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce reconciliation result
+        if: ${{ steps.reconcile_types.outcome == 'failure' }}
+        run: exit 1
 
       - name: Commit reconciliation when required
         run: |
