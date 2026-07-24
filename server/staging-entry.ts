@@ -1,5 +1,5 @@
 import express from "express";
-import "./index";
+import { app } from "./index";
 
 type Confidence = "FULL" | "PARTIAL" | "LOW" | "UNKNOWN";
 type AnalysisStage = "PROVISIONAL" | "FINAL";
@@ -144,3 +144,83 @@ responsePrototype.json = function stagingJson(body: any) {
   this.setHeader?.("X-Staging-Commit", deployedCommit);
   return originalJson.call(this, addAnalysisStatus(requestPath, body));
 };
+
+// Endpoint exclusivo de staging. Reutiliza exactamente el objeto weather ya
+// calculado por /api/mlb/all para evitar dos implementaciones divergentes.
+app.get("/api/mlb/weather/:gamePk", async (req, res) => {
+  const gamePk = Number(req.params.gamePk);
+  if (!Number.isInteger(gamePk) || gamePk <= 0) {
+    return res.status(400).json({ success: false, error: "Invalid gamePk" });
+  }
+
+  const date = typeof req.query.date === "string" ? req.query.date.trim() : "";
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  const selfUrl = `http://127.0.0.1:${process.env.PORT || 5000}`;
+
+  try {
+    const upstream = await fetch(`${selfUrl}/api/mlb/all${query}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(120_000),
+    });
+    const text = await upstream.text();
+    let payload: any;
+
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      return res.status(502).json({
+        success: false,
+        error: "MLB all endpoint returned non-JSON content",
+      });
+    }
+
+    if (!upstream.ok || payload?.success !== true) {
+      return res.status(502).json({
+        success: false,
+        error: "Unable to load MLB game weather",
+        upstreamStatus: upstream.status,
+      });
+    }
+
+    const games = Array.isArray(payload.games) ? payload.games : [];
+    const game = games.find(
+      (candidate: any) => Number(candidate?.gamePk ?? candidate?.gameId) === gamePk,
+    );
+
+    if (!game) {
+      return res.status(404).json({
+        success: false,
+        error: "Game not found in requested MLB slate",
+        gamePk,
+        date: date || null,
+        hint: "Use ?date=YYYY-MM-DD when requesting a game outside today's slate.",
+      });
+    }
+
+    if (!game.weather || typeof game.weather !== "object") {
+      return res.status(404).json({
+        success: false,
+        error: "Weather not available for this game",
+        gamePk,
+      });
+    }
+
+    return res.json({
+      success: true,
+      gamePk,
+      date: date || null,
+      gameTime: game.gameTime ?? game.gameDate ?? null,
+      venue: game.venue ?? null,
+      homeTeam: game.homeTeam ?? null,
+      awayTeam: game.awayTeam ?? null,
+      weather: game.weather,
+      source: "/api/mlb/all",
+      note: "Mismos datos meteorológicos usados por el predictor principal.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Weather endpoint failed",
+    });
+  }
+});
