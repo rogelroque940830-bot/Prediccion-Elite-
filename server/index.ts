@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerStagingAdminAuthObservation } from "./staging-admin-auth";
 import { createServer } from "http";
 
 export const app = express();
@@ -24,7 +25,11 @@ declare module "http" {
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token");
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "X-Admin-Auth-Mode, X-Admin-Auth-State, X-Admin-Auth-Configured, X-Admin-Auth-Blocking, X-Staging-Commit",
+  );
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
@@ -73,6 +78,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Exclusivo de p0-staging: observa credenciales en rutas de escritura sin bloquearlas.
+registerStagingAdminAuthObservation(app);
 
 // Health check endpoint para Railway
 app.get("/", (_req, res) => {
