@@ -11,6 +11,7 @@ on:
       - '.github/workflows/p0-security-remediation.yml'
       - 'package.json'
       - 'package-lock.json'
+      - 'README.md'
   pull_request:
     branches:
       - main
@@ -20,27 +21,27 @@ on:
       - '.github/workflows/p0-security-remediation.yml'
       - 'package.json'
       - 'package-lock.json'
+      - 'README.md'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  sanitize-and-build:
+  security-build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout P0 branch
+      - name: Checkout current revision
         uses: actions/checkout@v4
         with:
-          ref: security/p0-remediation
           fetch-depth: 0
 
-      - name: Remove hardcoded provider-key fallbacks
-        run: python3 scripts/p0-sanitize-routes.py
+      - name: Verify source is already sanitized
+        run: |
+          python3 scripts/p0-sanitize-routes.py
+          git diff --exit-code -- server/routes.ts
 
       - name: Scan tracked source for credential-like literals
-        id: secret_scan
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -52,71 +53,20 @@ jobs:
         with:
           name: p0-secret-scan-report
           path: p0-secret-scan-report.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
-
-      - name: Enforce credential scan result
-        if: ${{ steps.secret_scan.outcome == 'failure' }}
-        run: exit 1
-
-      - name: Commit sanitized source to isolated branch
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if git diff --quiet -- server/routes.ts; then
-            echo 'No routes.ts sanitation commit required.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add server/routes.ts
-            git commit -m 'security(p0): remove hardcoded provider credentials'
-            git push origin HEAD:security/p0-remediation
-          fi
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
         with:
           node-version: '20'
+          cache: npm
 
-      - name: Generate dependency lockfile when missing
-        run: |
-          if [ ! -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          fi
-          test -f package-lock.json
-
-      - name: Commit generated lockfile to isolated branch
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if git status --porcelain -- package-lock.json | grep -q .; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add package-lock.json
-            git commit -m 'build(p0): add reproducible backend lockfile'
-            git push origin HEAD:security/p0-remediation
-          else
-            echo 'Dependency lockfile already tracked and unchanged.'
-          fi
+      - name: Require reproducible lockfile
+        run: test -f package-lock.json
 
       - name: Install backend dependencies reproducibly
-        id: npm_ci
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          npm ci 2>&1 | tee p0-npm-ci-report.txt
-
-      - name: Upload npm ci report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p0-npm-ci-report
-          path: p0-npm-ci-report.txt
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Enforce npm ci result
-        if: ${{ steps.npm_ci.outcome == 'failure' }}
-        run: exit 1
+        run: npm ci
 
       - name: Build backend
         run: npm run build:backend
