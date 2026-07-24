@@ -3052,8 +3052,44 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       });
       res.json({ success: true, data });
     } catch (e) {
-      console.error("wnba fatigue error", e);
-      res.status(500).json({ success: false, error: "No se pudo calcular fatigue WNBA" });
+      console.error("wnba fatigue direct source error", e);
+      try {
+        const fallbackUrl = (process.env.WNBA_READONLY_FATIGUE_FALLBACK_URL || "https://web-production-7067b.up.railway.app/api/wnba/fatigue").trim();
+        const currentHost = (req.get("host") || "").toLowerCase();
+        if (currentHost && fallbackUrl.toLowerCase().includes(currentHost)) {
+          throw new Error("Refusing recursive WNBA fatigue fallback");
+        }
+
+        const fallbackData = await withCache("wnba-fatigue-production-fallback-v1", async () => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          try {
+            const fallbackRes = await fetch(fallbackUrl, {
+              headers: { Accept: "application/json" },
+              signal: controller.signal,
+            });
+            if (!fallbackRes.ok) {
+              throw new Error(`WNBA fatigue fallback HTTP ${fallbackRes.status}`);
+            }
+            const payload: any = await fallbackRes.json();
+            if (!payload?.success || !Array.isArray(payload.data) || payload.data.length === 0) {
+              throw new Error("WNBA fatigue fallback returned invalid or empty data");
+            }
+            return payload.data;
+          } finally {
+            clearTimeout(timer);
+          }
+        });
+
+        return res.json({
+          success: true,
+          data: fallbackData,
+          source: "production-readonly-fallback",
+        });
+      } catch (fallbackError) {
+        console.error("wnba fatigue production fallback error", fallbackError);
+        return res.status(500).json({ success: false, error: "No se pudo calcular fatigue WNBA" });
+      }
     }
   });
 

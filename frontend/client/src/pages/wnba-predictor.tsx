@@ -578,19 +578,29 @@ export default function WNBAPredictor() {
   // ── Run Prediction ───────────────────────────────────────────────────────
   const runPrediction = useCallback(() => {
     const requiredStats = [
-      homeNetRtg, homeOffRtg, homeDefRtg, homePace, homeDaysRest, homeWinRate,
-      awayNetRtg, awayOffRtg, awayDefRtg, awayPace, awayDaysRest, awayWinRate,
+      { label: "NetRtg Local", value: homeNetRtg },
+      { label: "OffRtg Local", value: homeOffRtg },
+      { label: "DefRtg Local", value: homeDefRtg },
+      { label: "Pace Local", value: homePace },
+      { label: "Descanso Local", value: homeDaysRest },
+      { label: "Win Rate Local", value: homeWinRate },
+      { label: "NetRtg Visitante", value: awayNetRtg },
+      { label: "OffRtg Visitante", value: awayOffRtg },
+      { label: "DefRtg Visitante", value: awayDefRtg },
+      { label: "Pace Visitante", value: awayPace },
+      { label: "Descanso Visitante", value: awayDaysRest },
+      { label: "Win Rate Visitante", value: awayWinRate },
     ];
-    const hasInvalidRequiredStats = requiredStats.some((value) =>
-      value.trim() === "" || !Number.isFinite(Number(value))
-    );
-    if (!homeTeam || !awayTeam || homeTeam === awayTeam || hasInvalidRequiredStats) {
-      toast({
-        title: "Faltan datos WNBA",
-        description: homeTeam === awayTeam
+    const missingStats = requiredStats
+      .filter(({ value }) => value.trim() === "" || !Number.isFinite(Number(value)))
+      .map(({ label }) => label);
+    if (!homeTeam || !awayTeam || homeTeam === awayTeam || missingStats.length > 0) {
+      const description = !homeTeam || !awayTeam
+        ? "Selecciona el equipo Local y el Visitante."
+        : homeTeam === awayTeam
           ? "Selecciona dos equipos diferentes."
-          : "Selecciona ambos equipos y completa NetRtg, OffRtg, DefRtg, Pace, descanso y Win Rate con datos verificados.",
-      });
+          : `Faltan: ${missingStats.join(", ")}.`;
+      toast({ title: "Faltan datos WNBA", description });
       return;
     }
     // ── Star Power Index: calcula impacto automático de inactives ──
