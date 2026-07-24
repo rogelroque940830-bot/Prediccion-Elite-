@@ -892,6 +892,14 @@ export default function WNBAPredictor() {
               </Button>
             </div>
           )}
+          {wnbaError && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
+              <span>No se pudieron cargar estadísticas WNBA verificadas. No se usarán valores predeterminados como si fueran reales.</span>
+              <Button size="sm" variant="outline" onClick={() => refetchWNBA()} className="h-7 border-red-500/30 text-red-300">
+                <RefreshCw className="h-3 w-3 mr-1" /> Reintentar
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
