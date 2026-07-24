@@ -1,0 +1,91 @@
+name: Import Sprint 2 Frontend Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/import-sprint2-frontend.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-frontend-session
+          fetch-depth: 0
+
+      - name: Retrieve certified Sprint 2 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin staging/frontend-sprint2
+          git show origin/staging/frontend-sprint2:staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip > /tmp/candidate.zip
+          git show origin/staging/frontend-sprint2:staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip.sha256 > /tmp/candidate.sha256
+          EXPECTED="$(awk '{print $1}' /tmp/candidate.sha256 | head -n 1)"
+          ACTUAL="$(sha256sum /tmp/candidate.zip | awk '{print $1}')"
+          test -n "$EXPECTED"
+          test "$ACTUAL" = "$EXPECTED"
+          echo "Candidate checksum verified: $ACTUAL"
+
+      - name: Extract frontend-only source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/candidate frontend
+          mkdir -p /tmp/candidate frontend
+          unzip -q /tmp/candidate.zip -d /tmp/candidate
+          PACKAGE_JSON="$(find /tmp/candidate -type f -name package.json -not -path '*/node_modules/*' | head -n 1)"
+          test -n "$PACKAGE_JSON"
+          PROJECT_DIR="$(dirname "$PACKAGE_JSON")"
+          test -d "$PROJECT_DIR/client/src"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='node_modules/' \
+            --exclude='dist/' \
+            --exclude='server/' \
+            --exclude='data/' \
+            --exclude='*.zip' \
+            "$PROJECT_DIR/" frontend/
+          test -f frontend/package.json
+          test -d frontend/client/src
+          test ! -d frontend/server
+          test ! -d frontend/dist
+
+      - name: Record source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL="$(sha256sum /tmp/candidate.zip | awk '{print $1}')"
+          cat > frontend/SOURCE_PROVENANCE.md <<EOF
+          # Frontend source provenance
+
+          Imported from the isolated Sprint 2 staging candidate.
+
+          - Source branch: \`staging/frontend-sprint2\`
+          - Source artifact: \`staging/CourtEdge_Phase3_Sprint2_Staging_Candidate_v1.0.zip\`
+          - SHA-256: \`$ACTUAL\`
+          - Historical backend, compiled output and local data were intentionally excluded.
+          EOF
+
+      - name: Commit imported frontend source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add frontend
+          if git diff --cached --quiet; then
+            echo 'Frontend source already matches the certified Sprint 2 candidate.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(integration): import certified Sprint 2 frontend source'
+          git push origin HEAD:integration/p0-frontend-session
