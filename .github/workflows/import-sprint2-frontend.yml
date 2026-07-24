@@ -2,16 +2,6 @@ name: Import Sprint 2 Frontend Source
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - integration/p0-frontend-session
-    paths:
-      - '.github/workflows/import-sprint2-frontend.yml'
-  pull_request:
-    branches:
-      - security/p0-remediation
-    paths:
-      - '.github/workflows/import-sprint2-frontend.yml'
 
 permissions:
   contents: write
