@@ -9,14 +9,26 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function fetchJson(path, timeoutMs = REQUEST_TIMEOUT_MS) {
+async function fetchJson(path, timeoutMs = REQUEST_TIMEOUT_MS, options = {}) {
   const url = `${BASE_URL}${path}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const requestHeaders = {
+    Accept: "application/json",
+    ...(options.headers || {}),
+  };
+  const requestBody =
+    options.body === undefined
+      ? undefined
+      : typeof options.body === "string"
+        ? options.body
+        : JSON.stringify(options.body);
 
   try {
     const response = await fetch(url, {
-      headers: { Accept: "application/json" },
+      method: options.method || "GET",
+      headers: requestHeaders,
+      body: requestBody,
       signal: controller.signal,
     });
     const text = await response.text();
@@ -146,9 +158,62 @@ async function runTest(name, path, validator) {
   console.log(`PASS ${name} (${elapsed}s)`);
 }
 
+async function validateAdminAuthObservation() {
+  const statusResponse = await fetchJson("/api/staging/admin-auth-status");
+  const status = statusResponse.body;
+  assert(status?.success === true, "admin-auth-status: success no es true");
+  assert(status?.mode === "observe", "admin-auth-status: mode no es observe");
+  assert(status?.blocking === false, "admin-auth-status: blocking debe ser false");
+  assert(Array.isArray(status?.protectedRoutes), "admin-auth-status: faltan protectedRoutes");
+  for (const route of ["/api/picks/sync", "/api/clv/reset", "/api/clv/refresh"]) {
+    assert(status.protectedRoutes.includes(route), `admin-auth-status: falta ${route}`);
+  }
+
+  const probeResponse = await fetchJson(
+    "/api/staging/admin-auth-probe",
+    REQUEST_TIMEOUT_MS,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: { source: "staging-smoke", mutate: false },
+    },
+  );
+  const probe = probeResponse.body;
+  const observation = probe?.observation;
+  assert(probe?.success === true, "admin-auth-probe: success no es true");
+  assert(probe?.mutatedData === false, "admin-auth-probe: mutatedData debe ser false");
+  assert(observation?.mode === "observe", "admin-auth-probe: mode no es observe");
+  assert(observation?.blocking === false, "admin-auth-probe: blocking debe ser false");
+  assert(
+    observation?.route === "/api/staging/admin-auth-probe",
+    "admin-auth-probe: route inesperada",
+  );
+  assert(
+    observation?.state === "not_configured" || observation?.state === "missing",
+    `admin-auth-probe: state inesperado ${observation?.state}`,
+  );
+  assert(
+    probeResponse.headers.get("x-admin-auth-mode") === "observe",
+    "admin-auth-probe: falta X-Admin-Auth-Mode",
+  );
+  assert(
+    probeResponse.headers.get("x-admin-auth-blocking") === "false",
+    "admin-auth-probe: X-Admin-Auth-Blocking debe ser false",
+  );
+  assert(
+    probeResponse.headers.get("x-admin-auth-state") === observation.state,
+    "admin-auth-probe: encabezado y body no coinciden",
+  );
+
+  console.log(
+    `PASS admin-auth observation — state=${observation.state}, blocking=false, mutatedData=false`,
+  );
+}
+
 async function main() {
   console.log(`Smoke test MLB staging: ${BASE_URL}`);
   await waitForExpectedDeployment();
+  await validateAdminAuthObservation();
 
   const { gamePk, date, game } = await discoverTestGame();
   assert(game?.weather && typeof game.weather === "object", "/api/mlb/all: falta objeto weather");
