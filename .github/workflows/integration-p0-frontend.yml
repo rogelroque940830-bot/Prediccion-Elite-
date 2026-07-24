@@ -91,7 +91,25 @@ jobs:
         run: exit 1
 
       - name: TypeScript type-check
-        run: npm run check
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee frontend-typecheck.txt
+
+      - name: Upload TypeScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-typecheck
+          path: frontend/frontend-typecheck.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce TypeScript result
+        if: ${{ steps.typecheck.outcome == 'failure' }}
+        run: exit 1
 
       - name: Build frontend
         env:
