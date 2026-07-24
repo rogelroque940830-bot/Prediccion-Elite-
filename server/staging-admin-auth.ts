@@ -40,14 +40,18 @@ function credentialsMatch(provided: string, expected: string): boolean {
   return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
+function classifyCredential(
+  provided: string | null,
+  expected = process.env.ADMIN_API_TOKEN?.trim() ?? "",
+): AdminAuthState {
+  if (!expected) return "not_configured";
+  if (!provided) return "missing";
+  return credentialsMatch(provided, expected) ? "valid" : "invalid";
+}
+
 function observeRequest(req: Request): AdminAuthObservation {
   const expected = process.env.ADMIN_API_TOKEN?.trim() ?? "";
   const provided = extractCredential(req);
-
-  let state: AdminAuthState;
-  if (!expected) state = "not_configured";
-  else if (!provided) state = "missing";
-  else state = credentialsMatch(provided, expected) ? "valid" : "invalid";
 
   return {
     mode: "observe",
@@ -55,7 +59,7 @@ function observeRequest(req: Request): AdminAuthObservation {
     route: req.path,
     tokenConfigured: Boolean(expected),
     credentialPresented: Boolean(provided),
-    state,
+    state: classifyCredential(provided, expected),
   };
 }
 
@@ -92,6 +96,27 @@ export function registerStagingAdminAuthObservation(app: Express): void {
         "X-Admin-Token: <token>",
       ],
       note: "Observation only: write requests are logged and always forwarded.",
+    });
+  });
+
+  app.get("/api/staging/admin-auth-self-test", (_req, res) => {
+    const expected = process.env.ADMIN_API_TOKEN?.trim() ?? "";
+    const tokenConfigured = Boolean(expected);
+    const invalidCandidate = expected ? `${expected}__invalid` : "__invalid";
+
+    return res.json({
+      success: true,
+      mode: "observe",
+      blocking: false,
+      tokenConfigured,
+      states: {
+        missing: classifyCredential(null, expected),
+        invalid: classifyCredential(invalidCandidate, expected),
+        valid: classifyCredential(expected || null, expected),
+      },
+      tokenExposed: false,
+      mutatedData: false,
+      note: "In-memory classification only. No protected route was executed.",
     });
   });
 
