@@ -2832,8 +2832,44 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       });
       res.json({ success: true, data });
     } catch (e) {
-      console.error("wnba error", e);
-      res.status(500).json({ success: false, error: "No se pudieron obtener datos WNBA" });
+      console.error("wnba direct source error", e);
+      try {
+        const fallbackUrl = (process.env.WNBA_READONLY_FALLBACK_URL || "https://web-production-7067b.up.railway.app/api/wnba/all").trim();
+        const currentHost = (req.get("host") || "").toLowerCase();
+        if (currentHost && fallbackUrl.toLowerCase().includes(currentHost)) {
+          throw new Error("Refusing recursive WNBA fallback");
+        }
+
+        const fallbackData = await withCache("wnba-all-production-fallback-v1", async () => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          try {
+            const fallbackRes = await fetch(fallbackUrl, {
+              headers: { Accept: "application/json" },
+              signal: controller.signal,
+            });
+            if (!fallbackRes.ok) {
+              throw new Error(`WNBA fallback HTTP ${fallbackRes.status}`);
+            }
+            const payload: any = await fallbackRes.json();
+            if (!payload?.success || !Array.isArray(payload.data) || payload.data.length === 0) {
+              throw new Error("WNBA fallback returned invalid or empty data");
+            }
+            return payload.data;
+          } finally {
+            clearTimeout(timer);
+          }
+        });
+
+        return res.json({
+          success: true,
+          data: fallbackData,
+          source: "production-readonly-fallback",
+        });
+      } catch (fallbackError) {
+        console.error("wnba production fallback error", fallbackError);
+        return res.status(500).json({ success: false, error: "No se pudieron obtener datos WNBA" });
+      }
     }
   });
 
