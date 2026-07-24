@@ -14,6 +14,11 @@ interface CountSummary {
   proxy: number;
 }
 
+const deployedCommit =
+  process.env.RAILWAY_GIT_COMMIT_SHA ??
+  process.env.GIT_COMMIT_SHA ??
+  "unknown";
+
 function normalizeConfidence(value: unknown): Confidence {
   return value === "FULL" || value === "PARTIAL" || value === "LOW"
     ? value
@@ -136,5 +141,6 @@ const originalJson = responsePrototype.json;
 
 responsePrototype.json = function stagingJson(body: any) {
   const requestPath = this.req?.path ?? "";
+  this.setHeader?.("X-Staging-Commit", deployedCommit);
   return originalJson.call(this, addAnalysisStatus(requestPath, body));
 };
