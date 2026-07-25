@@ -207,6 +207,8 @@ export default function NHLPredictor() {
   const [sharpDir, setSharpDir] = useState<SharpDirection | null>(null);
   const [homeManualStatus, setHomeManualStatus] = useState<"idle" | "verified" | "manual">("idle");
   const [awayManualStatus, setAwayManualStatus] = useState<"idle" | "verified" | "manual">("idle");
+  const [homeGoalieConfirmed, setHomeGoalieConfirmed] = useState(false);
+  const [awayGoalieConfirmed, setAwayGoalieConfirmed] = useState(false);
   const { data: nhlData, isLoading: nhlLoading, refetch: refetchNHL, error: nhlError } = useQuery<{ success: boolean; games: any[] }>({
     queryKey: ["/api/nhl/all", selectedDate],
     queryFn: async () => {
@@ -284,6 +286,7 @@ export default function NHLPredictor() {
     setSelNHLGame("");
     setSharpGameKey(null);
     setGoalieData(null);
+    if (isHome) setHomeGoalieConfirmed(false); else setAwayGoalieConfirmed(false);
     setH2hLabel("");
     setH2hHomeWins(0);
     setH2hAwayWins(0);
@@ -378,15 +381,19 @@ export default function NHLPredictor() {
       if (hs.l10GF) setHomeRecentGF(String(hs.l10GF));
       if (hs.l10GA) setHomeRecentGA(String(hs.l10GA));
     }
-    // Home goalie
+    // Home goalie — only populate a named goalie with real numeric stats.
     const hg = game.homeGoalie;
-    if (hg) {
-      setHomeGoalieName(hg.name || "");
+    const homeConfirmed = hg?.confirmed === true;
+    setHomeGoalieConfirmed(homeConfirmed);
+    if (hg?.name && Number.isFinite(Number(hg.savePct)) && Number.isFinite(Number(hg.gaa))) {
+      setHomeGoalieName(hg.name);
       setHomeSavePct(String(hg.savePct));
       setHomeGAA(String(hg.gaa));
-      setHomeRecord(hg.record);
+      setHomeRecord(hg.record || "");
       if (hg.recentGAA !== undefined) setHomeRecentGAA(String(hg.recentGAA));
       if (hg.recentSvPct !== undefined) setHomeRecentSvPct(String(hg.recentSvPct));
+    } else {
+      setHomeGoalieName(""); setHomeSavePct(""); setHomeGAA(""); setHomeRecord("");
     }
 
     setAwayTeam(game.awayTeam.name);
@@ -400,15 +407,19 @@ export default function NHLPredictor() {
       if (as_.l10GF) setAwayRecentGF(String(as_.l10GF));
       if (as_.l10GA) setAwayRecentGA(String(as_.l10GA));
     }
-    // Away goalie
+    // Away goalie — only populate a named goalie with real numeric stats.
     const ag = game.awayGoalie;
-    if (ag) {
-      setAwayGoalieName(ag.name || "");
+    const awayConfirmed = ag?.confirmed === true;
+    setAwayGoalieConfirmed(awayConfirmed);
+    if (ag?.name && Number.isFinite(Number(ag.savePct)) && Number.isFinite(Number(ag.gaa))) {
+      setAwayGoalieName(ag.name);
       setAwaySavePct(String(ag.savePct));
       setAwayGAA(String(ag.gaa));
-      setAwayRecord(ag.record);
+      setAwayRecord(ag.record || "");
       if (ag.recentGAA !== undefined) setAwayRecentGAA(String(ag.recentGAA));
       if (ag.recentSvPct !== undefined) setAwayRecentSvPct(String(ag.recentSvPct));
+    } else {
+      setAwayGoalieName(""); setAwaySavePct(""); setAwayGAA(""); setAwayRecord("");
     }
     // SOS: opponent quality — the rival's GF tells us how strong the opponents were
     // SOS = opponent avg GF / league avg GF (>1 = tough schedule, <1 = easy)
@@ -602,6 +613,8 @@ export default function NHLPredictor() {
     // Goalie options for switching
     const goalieOpts = isHome ? homeGoalieOptions : awayGoalieOptions;
     const setGoalieName = isHome ? setHomeGoalieName : setAwayGoalieName;
+    const goalieConfirmed = isHome ? homeGoalieConfirmed : awayGoalieConfirmed;
+    const setGoalieConfirmed = isHome ? setHomeGoalieConfirmed : setAwayGoalieConfirmed;
 
     // Recent form / SOS
     const recentGFVal = isHome ? homeRecentGF : awayRecentGF;
@@ -707,7 +720,7 @@ export default function NHLPredictor() {
               <Input
                 type="text"
                 value={goalieName}
-                onChange={(e) => setGoalieName(e.target.value)}
+                onChange={(e) => { setGoalieName(e.target.value); setGoalieConfirmed(false); }}
                 data-testid={`input-${side}-goalie-name`}
                 placeholder="Nombre del portero"
                 className="mt-1 border-cyan-500/40 text-white font-bold text-base bg-cyan-500/10"
@@ -723,6 +736,7 @@ export default function NHLPredictor() {
                       type="button"
                       onClick={() => {
                         setGoalieName(opt.name);
+                        setGoalieConfirmed(false);
                         setSavePct(String(opt.svPct));
                         setGaa(String(opt.gaa));
                         setRecord(opt.record);
@@ -743,6 +757,17 @@ export default function NHLPredictor() {
                 </div>
               </div>
             )}
+            <div className="flex items-center gap-2 rounded-md border border-cyan-500/20 bg-slate-950/30 p-2">
+              <Switch
+                checked={goalieConfirmed}
+                onCheckedChange={setGoalieConfirmed}
+                data-testid={`switch-${side}-goalie-confirmed`}
+              />
+              <div>
+                <Label className="text-xs text-cyan-200">Confirmé este portero en una fuente confiable</Label>
+                <p className="text-[10px] text-muted-foreground">Sin esta confirmación, cualquier señal BET se degrada a LEAN.</p>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               {numInput("Save% (ej: 0.910)", savePct, setSavePct, `input-${side}-savepct`, "decimal", "0.910")}
               {numInput("GAA", gaa, setGaa, `input-${side}-gaa`, "decimal", "2.80")}
@@ -925,8 +950,8 @@ export default function NHLPredictor() {
       return;
     }
     const homeGoalie: NHLGoalie = {
-      savesPct: parseFloat(homeSavePct) || 0.910,
-      gaa: parseFloat(homeGAA) || 2.80,
+      savesPct: Number(homeSavePct),
+      gaa: Number(homeGAA),
       record: homeRecord || "0-0-0",
       recentGAA: homeRecentGAA.trim() ? parseFloat(homeRecentGAA) || undefined : undefined,
       recentSvPct: homeRecentSvPct.trim() ? parseFloat(homeRecentSvPct) || undefined : undefined,
@@ -934,8 +959,8 @@ export default function NHLPredictor() {
     };
 
     const awayGoalie: NHLGoalie = {
-      savesPct: parseFloat(awaySavePct) || 0.910,
-      gaa: parseFloat(awayGAA) || 2.80,
+      savesPct: Number(awaySavePct),
+      gaa: Number(awayGAA),
       record: awayRecord || "0-0-0",
       recentGAA: awayRecentGAA.trim() ? parseFloat(awayRecentGAA) || undefined : undefined,
       recentSvPct: awayRecentSvPct.trim() ? parseFloat(awayRecentSvPct) || undefined : undefined,
@@ -948,17 +973,17 @@ export default function NHLPredictor() {
 
     const home: NHLTeamStats = {
       name: homeTeam || "Local",
-      goalsFor: parseFloat(homeGF) || 3.2,
-      goalsAgainst: parseFloat(homeGA) || 2.9,
-      ppPct: parseFloat(homePP) || 22,
-      pkPct: parseFloat(homePK) || 80,
-      corsi: parseFloat(homeCorsi) || 51,
-      shotsFor: parseFloat(homeShotsFor) || 32,
-      shotsAgainst: parseFloat(homeShotsAgainst) || 29,
-      winRate: parseFloat(homeWinRate10) || 0.6,
+      goalsFor: Number(homeGF),
+      goalsAgainst: Number(homeGA),
+      ppPct: Number(homePP),
+      pkPct: Number(homePK),
+      corsi: Number(homeCorsi),
+      shotsFor: Number(homeShotsFor),
+      shotsAgainst: Number(homeShotsAgainst),
+      winRate: Number(homeWinRate10),
       streak: parseInt(homeStreak) || 0,
       isB2B: homeB2B,
-      daysRest: parseInt(homeDaysRest) || 2,
+      daysRest: Number(homeDaysRest),
       goalie: homeGoalie,
       recentGF: homeRecentGF.trim() ? parseFloat(homeRecentGF) || undefined : undefined,
       recentGA: homeRecentGA.trim() ? parseFloat(homeRecentGA) || undefined : undefined,
@@ -989,17 +1014,17 @@ export default function NHLPredictor() {
 
     const away: NHLTeamStats = {
       name: awayTeam || "Visitante",
-      goalsFor: parseFloat(awayGF) || 3.2,
-      goalsAgainst: parseFloat(awayGA) || 2.9,
-      ppPct: parseFloat(awayPP) || 22,
-      pkPct: parseFloat(awayPK) || 80,
-      corsi: parseFloat(awayCorsi) || 49,
-      shotsFor: parseFloat(awayShotsFor) || 30,
-      shotsAgainst: parseFloat(awayShotsAgainst) || 31,
-      winRate: parseFloat(awayWinRate10) || 0.5,
+      goalsFor: Number(awayGF),
+      goalsAgainst: Number(awayGA),
+      ppPct: Number(awayPP),
+      pkPct: Number(awayPK),
+      corsi: Number(awayCorsi),
+      shotsFor: Number(awayShotsFor),
+      shotsAgainst: Number(awayShotsAgainst),
+      winRate: Number(awayWinRate10),
       streak: parseInt(awayStreak) || 0,
       isB2B: awayB2B,
-      daysRest: parseInt(awayDaysRest) || 2,
+      daysRest: Number(awayDaysRest),
       travelPenalty: travelPenalty(getAwayTravelDistance(awayAbbr, homeAbbr, "nhl")),
       goalie: awayGoalie,
       recentGF: awayRecentGF.trim() ? parseFloat(awayRecentGF) || undefined : undefined,
@@ -1046,25 +1071,20 @@ export default function NHLPredictor() {
 
     // ÉLITE: aplicar ajuste por goalie confirmado
     const factorNotes: string[] = [];
-    let goalieUnconfirmed = false;
-    if (goalieData) {
+    const goaliesConfirmed = goalieData?.confirmed === true || (homeGoalieConfirmed && awayGoalieConfirmed);
+    const goalieUnconfirmed = !goaliesConfirmed;
+    if (goalieData?.confirmed) {
       const probPre = homeProb;
       const adj = applyConfirmedGoalieAdjustment(
-        homeProb, goalieData.home, goalieData.away, goalieData.confirmed
+        homeProb, goalieData.home, goalieData.away, true
       );
       homeProb = adj.adjustedProb;
-      if (!goalieData.confirmed) {
-        goalieUnconfirmed = true;
-        factorNotes.push("⚠️ Goalie sin confirmar — BET bloqueado");
-      } else {
-        const delta = (homeProb - probPre) * 100;
-        if (Math.abs(delta) >= 0.2) {
-          factorNotes.push(`Goalies ${delta > 0 ? "+" : ""}${delta.toFixed(1)}pp`);
-        } else {
-          factorNotes.push("Goalies confirmados (impacto mínimo)");
-        }
-      }
+      const delta = (homeProb - probPre) * 100;
+      factorNotes.push(Math.abs(delta) >= 0.2
+        ? `Goalies ${delta > 0 ? "+" : ""}${delta.toFixed(1)}pp`
+        : "Goalies confirmados (impacto mínimo)");
     }
+    if (goalieUnconfirmed) factorNotes.push("⚠️ Porteros sin confirmar — todas las señales BET quedan bloqueadas");
 
     // Evaluar edge en AMBOS lados ML (no solo local)
     const mlOddsAwayNum = parseInt(mlOddsAway) || 130;
@@ -1085,10 +1105,14 @@ export default function NHLPredictor() {
     const mlStake = kellyFraction(mlPickProb, recommendedOdds) * bankroll;
 
     const puckLineNum = parseFloat(puckLine) || -1.5;
-    const puckLineResult = evaluatePuckLine(homeProb, puckLineNum);
+    let puckLineResult = evaluatePuckLine(homeProb, puckLineNum);
 
     const ouLineNum = parseFloat(ouLine) || 6.0;
-    const totalResult = nhlEvaluateTotal(estimatedTotal, ouLineNum);
+    let totalResult = nhlEvaluateTotal(estimatedTotal, ouLineNum);
+    if (goalieUnconfirmed) {
+      if (puckLineResult.signal === "BET") puckLineResult = { ...puckLineResult, signal: "LEAN" };
+      if (totalResult.signal === "BET") totalResult = { ...totalResult, signal: "LEAN" };
+    }
 
     const plays: NHLBestPlay[] = [
       {
@@ -1122,7 +1146,7 @@ export default function NHLPredictor() {
     const poisson = nhlPoissonTotal(home, away, ouLineNum);
 
     // Safe Play 90%+
-    const safePlay = nhlFindSafePlay(home, away, ctx, homeProb, poisson, ouLineNum);
+    const safePlay = goalieUnconfirmed ? null : nhlFindSafePlay(home, away, ctx, homeProb, poisson, ouLineNum);
 
     setResult({
       homeProb: homeProb * 100,
@@ -1168,6 +1192,7 @@ export default function NHLPredictor() {
     homeHomeSplitGF, homeHomeSplitGA, homeAwaySpGF, homeAwaySpGA,
     awayHomeSplitGF, awayHomeSplitGA, awayAwaySpGF, awayAwaySpGA,
     goalieData,
+    homeGoalieConfirmed, awayGoalieConfirmed,
   ]);
 
   // ── Save Pick (reuse mlbPicks for NHL) ───────────────────────────────────
@@ -1295,7 +1320,10 @@ export default function NHLPredictor() {
           </p>
 
           <EliteBanner sport="NHL" />
-          {selNHLGame && <NHLGoalieCard gameId={selNHLGame} onData={(d) => setGoalieData({ confirmed: d.confirmed, home: d.home || null, away: d.away || null })} />}
+          {selNHLGame && <NHLGoalieCard gameId={selNHLGame} onData={(d) => {
+            setGoalieData({ confirmed: d.confirmed, home: d.home || null, away: d.away || null });
+            if (d.confirmed) { setHomeGoalieConfirmed(true); setAwayGoalieConfirmed(true); }
+          }} />}
           {sharpGameKey && <SharpSignalsCard sport="nhl" gameKey={sharpGameKey} onDirection={setSharpDir} />}
         </CardContent>
       </Card>

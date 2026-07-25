@@ -3,8 +3,10 @@ import type { Express } from "express";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 let cache: { key: string; ts: number; payload: unknown } | null = null;
 
-function seasonContext(): { seasonId: string; moneyPuckYear: string } {
-  const now = new Date();
+function seasonContext(targetIso?: string): { seasonId: string; moneyPuckYear: string } {
+  const now = targetIso && /^\d{4}-\d{2}-\d{2}$/.test(targetIso)
+    ? new Date(`${targetIso}T12:00:00Z`)
+    : new Date();
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth() + 1;
   const startYear = month >= 8 ? year : year - 1;
@@ -161,7 +163,7 @@ export function registerNhlManualRoutes(app: Express): void {
   app.get("/api/nhl/manual-teams", async (req, res) => {
     try {
       const date = String(req.query.date || new Date().toISOString().slice(0, 10));
-      const { seasonId, moneyPuckYear } = seasonContext();
+      const { seasonId, moneyPuckYear } = seasonContext(date);
       const key = `nhl-manual:${seasonId}:${date}`;
       const now = Date.now();
       if (cache && cache.key === key && now - cache.ts < CACHE_TTL_MS) {

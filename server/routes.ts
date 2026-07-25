@@ -3189,10 +3189,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   // NHL ROUTES
   // ════════════════════════════════════════════════════════════════════════════
 
+  function nhlSeasonContext(dateIso: string): { seasonId: string; moneyPuckYear: string } {
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(dateIso)
+      ? new Date(`${dateIso}T12:00:00Z`)
+      : new Date();
+    const year = parsed.getUTCFullYear();
+    const month = parsed.getUTCMonth() + 1;
+    // NHL/MoneyPuck season folders use the year in which the season starts.
+    // During the summer offseason we keep the completed season until August.
+    const startYear = month >= 8 ? year : year - 1;
+    return { seasonId: `${startYear}${startYear + 1}`, moneyPuckYear: String(startYear) };
+  }
+
   app.get("/api/nhl/all", async (req, res) => {
     try {
       const dateParam = (req.query.date as string) || todayISO();
-      const cacheKey = `nhl-all-v9-${dateParam}`;
+      const { seasonId: nhlSeasonId, moneyPuckYear: nhlMoneyPuckYear } = nhlSeasonContext(dateParam);
+      const cacheKey = `nhl-all-v10-${nhlSeasonId}-${dateParam}`;
 
       const data = await withCache(cacheKey, async () => {
         // 1. Schedule
@@ -3242,7 +3255,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         // 4. Fetch team detailed stats (PP%, PK%, Shots, Corsi)
         const teamDetailMap: Record<string, any> = {};
         try {
-          const summJson = await (await fetch("https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=20252026")).json();
+          const summJson = await (await fetch(`https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=${nhlSeasonId}`)).json();
           for (const t of summJson.data ?? []) {
             // Find matching team by name
             const abbr = Object.entries(teamMap).find(([_, v]) => (v as any).name === t.teamFullName)?.[0];
@@ -3264,8 +3277,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const mpGoalieMap: Record<string, any> = {};
         try {
           const [mpTeamRes, mpGRes] = await Promise.all([
-            fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/teams.csv"),
-            fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/goalies.csv"),
+            fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/teams.csv`),
+            fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/goalies.csv`),
           ]);
           
           // Parse team CSV
@@ -3328,7 +3341,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           // Parse skater data for top players per team (injury impact)
           const mpSkaterMap: Record<string, { name: string; pos: string; gp: number; gameScore: number }[]> = {};
           try {
-            const mpSRes = await fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/skaters.csv");
+            const mpSRes = await fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/skaters.csv`);
             const mpSCsv = await mpSRes.text();
             const mpSRows = mpSCsv.split("\n").map(r => r.split(","));
             const mpSH = mpSRows[0];
@@ -3376,7 +3389,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
         // Step A: Get probable starters from DailyFaceoff + RotoWire (cross-reference)
         //   DailyFaceoff sometimes lags behind; we also try RotoWire as secondary
-        const dfGoalieMap: Record<string, { name: string; svPct: number; gaa: number; wins: number; losses: number; otl: number; status: string }> = {};
+        const dfGoalieMap: Record<string, { name: string; svPct?: number; gaa?: number; wins: number; losses: number; otl: number; status: string }> = {};
 
         // A1: DailyFaceoff
         try {
@@ -3396,8 +3409,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (homeAbbr && dg.homeGoalieName) {
                 dfGoalieMap[homeAbbr] = {
                   name: dg.homeGoalieName,
-                  svPct: dg.homeGoalieSavePercentage ? Math.round(dg.homeGoalieSavePercentage * 1000) / 1000 : 0.900,
-                  gaa: dg.homeGoalieGoalsAgainstAvg ? Math.round(dg.homeGoalieGoalsAgainstAvg * 100) / 100 : 3.00,
+                  svPct: Number.isFinite(Number(dg.homeGoalieSavePercentage)) ? Math.round(Number(dg.homeGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: Number.isFinite(Number(dg.homeGoalieGoalsAgainstAvg)) ? Math.round(Number(dg.homeGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.homeGoalieWins || 0,
                   losses: dg.homeGoalieLosses || 0,
                   otl: dg.homeGoalieOvertimeLosses || 0,
@@ -3412,8 +3425,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (awayAbbr && dg.awayGoalieName) {
                 dfGoalieMap[awayAbbr] = {
                   name: dg.awayGoalieName,
-                  svPct: dg.awayGoalieSavePercentage ? Math.round(dg.awayGoalieSavePercentage * 1000) / 1000 : 0.900,
-                  gaa: dg.awayGoalieGoalsAgainstAvg ? Math.round(dg.awayGoalieGoalsAgainstAvg * 100) / 100 : 3.00,
+                  svPct: Number.isFinite(Number(dg.awayGoalieSavePercentage)) ? Math.round(Number(dg.awayGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: Number.isFinite(Number(dg.awayGoalieGoalsAgainstAvg)) ? Math.round(Number(dg.awayGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.awayGoalieWins || 0,
                   losses: dg.awayGoalieLosses || 0,
                   otl: dg.awayGoalieOvertimeLosses || 0,
@@ -3468,12 +3481,12 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
           // Find the correct goalie: prefer DailyFaceoff name, match to NHL ID
           let starterName = dfGoalie?.name || "";
-          let starterSvPct = dfGoalie?.svPct || 0.900;
-          let starterGaa = dfGoalie?.gaa || 3.00;
-          let starterRecord = dfGoalie ? `${dfGoalie.wins}-${dfGoalie.losses}-${dfGoalie.otl}` : "0-0";
+          let starterSvPct: number | undefined = dfGoalie?.svPct;
+          let starterGaa: number | undefined = dfGoalie?.gaa;
+          let starterRecord = dfGoalie ? `${dfGoalie.wins}-${dfGoalie.losses}-${dfGoalie.otl}` : "";
           let starterGP = 0;
           let starterPlayerId: number | null = null;
-          let confirmStatus = dfGoalie?.status || "Unknown";
+          let confirmStatus = dfGoalie?.status || "UNCONFIRMED";
 
           if (dfGoalie && nhlGoalies.length > 0) {
             // Match DailyFaceoff name to NHL player ID (fuzzy: last name match)
@@ -3488,15 +3501,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               starterRecord = matched.record;
             }
           } else if (!dfGoalie && nhlGoalies.length > 0) {
-            // Fallback: pick goalie with most GP from NHL data
-            const best = nhlGoalies.reduce((a, b) => a.gp > b.gp ? a : b);
-            starterName = best.name;
-            starterSvPct = best.svPct;
-            starterGaa = best.gaa;
-            starterRecord = best.record;
-            starterGP = best.gp;
-            starterPlayerId = best.playerId;
-            confirmStatus = "Fallback";
+            // NHL goalieComparison contains team leaders/candidates, not a confirmed starter.
+            // Keep them only in goalieOptions; never promote the highest-GP goalie automatically.
+            confirmStatus = "UNCONFIRMED";
           }
 
           // Fetch recent game log (last 5 starts) for the probable starter
@@ -3505,7 +3512,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           let last5Record = "";
           if (starterPlayerId) {
             try {
-              const glRes = await fetch(`https://api-web.nhle.com/v1/player/${starterPlayerId}/game-log/20252026/2`);
+              const glRes = await fetch(`https://api-web.nhle.com/v1/player/${starterPlayerId}/game-log/${nhlSeasonId}/2`);
               const glJson = await glRes.json();
               const glGames: any[] = (glJson.gameLog ?? []).slice(0, 5);
               if (glGames.length >= 3) {
@@ -3533,18 +3540,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             if (mpG) gsax = mpG.gsax;
           }
 
-          goalieMap[abbr] = {
-            name: starterName,
-            savePct: starterSvPct,
-            gaa: starterGaa,
-            record: starterRecord,
-            gamesPlayed: starterGP,
-            recentGAA,
-            recentSvPct,
-            last5Record,
-            confirmStatus,
-            gsax,
-          };
+          if (starterName && Number.isFinite(starterSvPct) && Number.isFinite(starterGaa)) {
+            const normalizedStatus = String(confirmStatus || "UNCONFIRMED").toUpperCase();
+            goalieMap[abbr] = {
+              name: starterName,
+              savePct: starterSvPct,
+              gaa: starterGaa,
+              record: starterRecord,
+              gamesPlayed: starterGP,
+              recentGAA,
+              recentSvPct,
+              last5Record,
+              confirmStatus,
+              confirmed: normalizedStatus.includes("CONFIRMED") && !normalizedStatus.includes("UNCONFIRMED"),
+              source: "dailyfaceoff",
+              gsax,
+            };
+          }
         });
         await Promise.all(goalieLogPromises);
 
@@ -3570,7 +3582,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const rosterPromises = Array.from(rosterAbbrs).map(async (tricode) => {
           try {
             const rosterData = await withCache(`nhl-roster-${tricode}`, async () => {
-              const rRes = await fetch(`https://api-web.nhle.com/v1/club-stats/${tricode}/20252026/2`);
+              const rRes = await fetch(`https://api-web.nhle.com/v1/club-stats/${tricode}/${nhlSeasonId}/2`);
               if (!rRes.ok) return null;
               return rRes.json();
             });
@@ -3637,7 +3649,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const oppsPromises = Array.from(rosterAbbrs).map(async (tricode) => {
           try {
             const schedData = await withCache(`nhl-sched-${tricode}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3667,7 +3679,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         for (const tricode of Array.from(rosterAbbrs)) {
           try {
             const schedData = await withCache(`nhl-sched-${tricode}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3708,7 +3720,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           let hWins = 0, aWins = 0;
           try {
             const schedData = await withCache(`nhl-sched-${hA}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${hA}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${hA}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3814,7 +3826,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         });
       });
 
-      res.json({ success: true, games: data, date: dateParam });
+      res.json({ success: true, games: data, date: dateParam, seasonId: nhlSeasonId, asOf: new Date().toISOString() });
     } catch (e) {
       console.error("nhl error", e);
       res.status(500).json({ success: false, error: "No se pudieron obtener datos NHL" });
@@ -4454,7 +4466,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const gc = data?.matchup?.goalieComparison;
       const homeStarter = gc?.homeTeam?.leaders?.[0] ?? null;
       const awayStarter = gc?.awayTeam?.leaders?.[0] ?? null;
-      const confirmed = !!(homeStarter && awayStarter);
+      // goalieComparison exposes statistical leaders/candidates. It does not prove who starts.
+      const confirmed = false;
       const minutesUntilGame = data?.startTimeUTC ? (new Date(data.startTimeUTC).getTime() - Date.now()) / 60000 : null;
       const name = (p: any) => p ? `${p.firstName?.default || p.firstName || ""} ${p.lastName?.default || p.lastName || ""}`.trim() : null;
       res.json({
@@ -4463,6 +4476,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         minutesUntilGame,
         home: homeStarter ? { name: name(homeStarter), svPct: homeStarter.savePctg, gaa: homeStarter.goalsAgainstAverage } : null,
         away: awayStarter ? { name: name(awayStarter), svPct: awayStarter.savePctg, gaa: awayStarter.goalsAgainstAverage } : null,
+        source: "nhl-gamecenter-candidates",
+        note: "Goalie comparison lists candidates/leaders; verify the official starter before betting.",
       });
     } catch (e: any) {
       res.json({ success: false, error: e.message });
