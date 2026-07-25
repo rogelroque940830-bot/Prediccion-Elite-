@@ -78,6 +78,11 @@ interface NBAGame {
   awayStats: NBATeamStats | null;
 }
 
+interface NBAManualTeam extends NBATeamStats {
+  teamId: number;
+  teamName: string;
+}
+
 function gameTimeLabel(utc: string): string {
   try {
     const d = new Date(utc);
@@ -270,12 +275,12 @@ export default function Predictor() {
 
   // Home
   const [homeTeam, setHomeTeam] = useState("");
-  const [homeNetRtg, setHomeNetRtg] = useState("5.0");
-  const [homeOffRtg, setHomeOffRtg] = useState("115.0");
-  const [homeDefRtg, setHomeDefRtg] = useState("110.0");
-  const [homePace, setHomePace] = useState("100.0");
-  const [homeDaysRest, setHomeDaysRest] = useState("2");
-  const [homeWinRate, setHomeWinRate] = useState("0.60");
+  const [homeNetRtg, setHomeNetRtg] = useState("");
+  const [homeOffRtg, setHomeOffRtg] = useState("");
+  const [homeDefRtg, setHomeDefRtg] = useState("");
+  const [homePace, setHomePace] = useState("");
+  const [homeDaysRest, setHomeDaysRest] = useState("");
+  const [homeWinRate, setHomeWinRate] = useState("");
   const [homeB2B, setHomeB2B] = useState(false);
   const [homeGamesLast7, setHomeGamesLast7] = useState(2);
   const [homeInjury, setHomeInjury] = useState("0");
@@ -289,12 +294,12 @@ export default function Predictor() {
 
   // Away
   const [awayTeam, setAwayTeam] = useState("");
-  const [awayNetRtg, setAwayNetRtg] = useState("2.0");
-  const [awayOffRtg, setAwayOffRtg] = useState("112.0");
-  const [awayDefRtg, setAwayDefRtg] = useState("110.0");
-  const [awayPace, setAwayPace] = useState("98.0");
-  const [awayDaysRest, setAwayDaysRest] = useState("1");
-  const [awayWinRate, setAwayWinRate] = useState("0.50");
+  const [awayNetRtg, setAwayNetRtg] = useState("");
+  const [awayOffRtg, setAwayOffRtg] = useState("");
+  const [awayDefRtg, setAwayDefRtg] = useState("");
+  const [awayPace, setAwayPace] = useState("");
+  const [awayDaysRest, setAwayDaysRest] = useState("");
+  const [awayWinRate, setAwayWinRate] = useState("");
   const [awayB2B, setAwayB2B] = useState(false);
   const [awayGamesLast7, setAwayGamesLast7] = useState(2);
   const [awayInjury, setAwayInjury] = useState("0");
@@ -346,6 +351,8 @@ export default function Predictor() {
   // Auto-fill
   const [selectedGameId, setSelectedGameId] = useState("");
   const [autoFillStatus, setAutoFillStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
+  const [homeManualStatus, setHomeManualStatus] = useState<"idle"|"verified"|"manual">("idle");
+  const [awayManualStatus, setAwayManualStatus] = useState<"idle"|"verified"|"manual">("idle");
   const [h2hRecord, setH2HRecord] = useState("");
   const [h2hHomeWins, setH2HHomeWins] = useState(0);
   const [h2hAwayWins, setH2HAwayWins] = useState(0);
@@ -401,6 +408,82 @@ export default function Predictor() {
   });
 
   const todayGames: NBAGame[] = nbaData?.games ?? [];
+
+  const { data: manualTeamPayload, isLoading: manualTeamsLoading } = useQuery<{ success: boolean; data: NBAManualTeam[]; source: string }>({
+    queryKey: ["/api/nba/manual-teams", selectedDate],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/nba/manual-teams?date=${encodeURIComponent(selectedDate)}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  });
+  const manualTeams: NBAManualTeam[] = manualTeamPayload?.data ?? [];
+
+  const applyManualTeam = (side: "home" | "away", teamName: string) => {
+    const isHome = side === "home";
+    const setTeam = isHome ? setHomeTeam : setAwayTeam;
+    const setStatus = isHome ? setHomeManualStatus : setAwayManualStatus;
+    setTeam(teamName);
+    setResult(null);
+
+    const team = manualTeams.find((row) => row.teamName === teamName);
+    const setters = isHome
+      ? {
+          net: setHomeNetRtg, off: setHomeOffRtg, def: setHomeDefRtg, pace: setHomePace,
+          rest: setHomeDaysRest, win: setHomeWinRate, b2b: setHomeB2B, streak: setHomeStreak,
+          games7: setHomeGamesLast7, recentPace: setHomeRecentPace, recentPPG: setHomeRecentPPG,
+          oppDef: setHomeOppDefRtg, oppOff: setHomeOppOffRtg,
+        }
+      : {
+          net: setAwayNetRtg, off: setAwayOffRtg, def: setAwayDefRtg, pace: setAwayPace,
+          rest: setAwayDaysRest, win: setAwayWinRate, b2b: setAwayB2B, streak: setAwayStreak,
+          games7: setAwayGamesLast7, recentPace: setAwayRecentPace, recentPPG: setAwayRecentPPG,
+          oppDef: setAwayOppDefRtg, oppOff: setAwayOppOffRtg,
+        };
+
+    if (!team) {
+      setters.net(""); setters.off(""); setters.def(""); setters.pace("");
+      setters.rest(""); setters.win(""); setters.b2b(false); setters.streak("0");
+      setters.games7(0); setters.recentPace(""); setters.recentPPG("");
+      setters.oppDef(""); setters.oppOff("");
+      setStatus("manual");
+      toast({
+        title: manualTeamsLoading ? "Cargando estadísticas NBA" : "Entrada manual NBA",
+        description: manualTeamsLoading
+          ? "Espera a que termine la carga y vuelve a seleccionar el equipo."
+          : "No hay estadísticas verificadas disponibles; los campos permanecen vacíos.",
+      });
+      return;
+    }
+
+    setters.net(team.netRtg.toFixed(1));
+    setters.off(team.offRtg.toFixed(1));
+    setters.def(team.defRtg.toFixed(1));
+    setters.pace(team.pace.toFixed(1));
+    setters.win(team.winPct.toFixed(2));
+    setters.rest(team.daysRest !== undefined ? String(team.daysRest) : "");
+    setters.b2b(team.isB2B ?? false);
+    setters.streak(team.streak !== undefined ? String(team.streak) : "0");
+    setters.games7(team.gamesLast7Days ?? 0);
+    setters.recentPace(team.pace5 !== undefined ? team.pace5.toFixed(1) : "");
+    setters.recentPPG(team.ppg5 !== undefined ? team.ppg5.toFixed(1) : "");
+    setters.oppDef(team.oppAvgDefRtg !== undefined ? team.oppAvgDefRtg.toFixed(1) : "");
+    setters.oppOff(team.oppAvgOffRtg !== undefined ? team.oppAvgOffRtg.toFixed(1) : "");
+    (window as any)[isHome ? "__homeSOS" : "__awaySOS"] = {
+      label: team.sosLabel,
+      netRtg: team.oppAvgNetRtg,
+      opps: team.opponents,
+    };
+    setStatus("verified");
+    toast({
+      title: `✅ ${teamName} cargado`,
+      description: team.daysRest === undefined
+        ? "Stats de temporada verificadas. Descanso pendiente porque no hay juego activo en la fecha seleccionada."
+        : "Stats y contexto reciente cargados.",
+    });
+  };
 
   const handleAutoFill = async (gameId: string) => {
     setAutoFillStatus("loading");
@@ -530,6 +613,33 @@ export default function Predictor() {
   };
 
   const runPrediction = useCallback(() => {
+    const requiredStats = [
+      { label: "NetRtg Local", value: homeNetRtg },
+      { label: "OffRtg Local", value: homeOffRtg },
+      { label: "DefRtg Local", value: homeDefRtg },
+      { label: "Pace Local", value: homePace },
+      { label: "Descanso Local", value: homeDaysRest },
+      { label: "Win Rate Local", value: homeWinRate },
+      { label: "NetRtg Visitante", value: awayNetRtg },
+      { label: "OffRtg Visitante", value: awayOffRtg },
+      { label: "DefRtg Visitante", value: awayDefRtg },
+      { label: "Pace Visitante", value: awayPace },
+      { label: "Descanso Visitante", value: awayDaysRest },
+      { label: "Win Rate Visitante", value: awayWinRate },
+    ];
+    const missingStats = requiredStats
+      .filter(({ value }) => value.trim() === "" || !Number.isFinite(Number(value)))
+      .map(({ label }) => label);
+    if (!homeTeam || !awayTeam || homeTeam === awayTeam || missingStats.length > 0) {
+      const description = !homeTeam || !awayTeam
+        ? "Selecciona el equipo Local y el Visitante."
+        : homeTeam === awayTeam
+          ? "Selecciona dos equipos diferentes."
+          : `Faltan: ${missingStats.join(", ")}.`;
+      toast({ title: "Faltan datos NBA", description });
+      return;
+    }
+
     const homeAdj = parseFloat(homeInjury) || 0;
     const awayAdj = parseFloat(awayInjury) || 0;
 
@@ -851,7 +961,7 @@ export default function Predictor() {
           {/* Team selector */}
           <div>
             <Label className="text-xs text-muted-foreground">Equipo</Label>
-            <Select value={team} onValueChange={setTeam}>
+            <Select value={team} onValueChange={(value) => applyManualTeam(side, value)}>
               <SelectTrigger data-testid={`select-${side}-team`} className="mt-1">
                 <SelectValue placeholder="Seleccionar equipo" />
               </SelectTrigger>
@@ -859,6 +969,19 @@ export default function Predictor() {
                 {NBA_TEAMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
+            {team && (
+              <p className={`mt-1 text-[11px] ${
+                (isHome ? homeManualStatus : awayManualStatus) === "verified"
+                  ? "text-green-400"
+                  : "text-amber-400"
+              }`}>
+                {(isHome ? homeManualStatus : awayManualStatus) === "verified"
+                  ? `Autollenado verificado · ${manualTeamPayload?.source === "production-readonly-fallback" ? "respaldo de solo lectura" : "fuente directa"}`
+                  : manualTeamsLoading
+                    ? "Cargando estadísticas verificadas…"
+                    : "Entrada manual · no usar valores sin verificar"}
+              </p>
+            )}
           </div>
 
           {/* Stats grid */}

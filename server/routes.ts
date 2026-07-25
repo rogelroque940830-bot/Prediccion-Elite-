@@ -26,6 +26,7 @@ import {
 } from "./sharp-signals";
 import { computeContextual } from "./nba-contextual";
 import { computeMLBContextual } from "./mlb-contextual";
+import { registerNbaManualRoutes } from "./nba-manual-routes";
 
 function requireSecret(name: string): string {
   const value = (process.env[name] || "").trim();
@@ -202,6 +203,8 @@ function savePicks(picks: SavedPick[]): void {
 }
 
 export function registerRoutes(httpServer: Server, app: Express): void {
+  registerNbaManualRoutes(app);
+
 
   // ── Early Markets MLB ──────────────────────────────────
   // F5 ML, F5 O/U, NRFI/YRFI, 1ª-2ª-3ª inning ML
