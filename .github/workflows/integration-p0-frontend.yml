@@ -44,6 +44,40 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Align MLB hardening migrator with current predictor
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/apply-mlb-injury-stake-hardening.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''page = replace_once(
+              page,
+              \'''        const injuryProbDelta = Math.abs(parseFloat(homeInjury) || 0) + Math.abs(parseFloat(awayInjury) || 0);\''',
+              \'''        const injuryProbDelta = Math.abs(parseFloat(homeInjury) || 0) + Math.abs(parseFloat(awayInjury) || 0);
+                  const injuryDataQuality: "VERIFIED" | "DEGRADED" =
+                    homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED"
+                      ? "VERIFIED"
+                      : "DEGRADED";\''',
+              "derive MLB injury data quality",
+          )'''
+          new = '''page = replace_once(
+              page,
+              \'''    let injuryProbDelta = 0;
+              let injuryTotalDelta = 0;\''',
+              \'''    let injuryProbDelta = 0;
+              let injuryTotalDelta = 0;
+              const injuryDataQuality: "VERIFIED" | "DEGRADED" =
+                homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED"
+                  ? "VERIFIED"
+                  : "DEGRADED";\''',
+              "derive MLB injury data quality",
+          )'''
+          if old not in text:
+              raise RuntimeError("old injuryDataQuality migrator block not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Apply MLB injury and stake hardening
         id: migration
         continue-on-error: true
