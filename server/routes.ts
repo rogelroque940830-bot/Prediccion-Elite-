@@ -28,6 +28,7 @@ import { computeContextual } from "./nba-contextual";
 import { computeMLBContextual } from "./mlb-contextual";
 import { registerNbaManualRoutes } from "./nba-manual-routes";
 import { registerNhlManualRoutes } from "./nhl-manual-routes";
+import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";
 
 function requireSecret(name: string): string {
   const value = (process.env[name] || "").trim();
@@ -206,6 +207,7 @@ function savePicks(picks: SavedPick[]): void {
 export function registerRoutes(httpServer: Server, app: Express): void {
   registerNbaManualRoutes(app);
   registerNhlManualRoutes(app);
+  registerIndependentWnbaRoutes(app);
 
 
   // ── Early Markets MLB ──────────────────────────────────
