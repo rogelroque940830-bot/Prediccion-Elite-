@@ -350,7 +350,10 @@ async function fetchBdlSnapshot(): Promise<LocalSnapshot> {
 async function resolveSnapshot(): Promise<{ snapshot: LocalSnapshot; source: string; stale: boolean }> {
   const now = Date.now();
   if (memorySnapshot && now - memoryLoadedAt < CACHE_TTL_MS) {
-    return { snapshot: memorySnapshot, source: memorySnapshot.source, stale: false };
+    const source = memorySnapshot.source === "production-bootstrap-cache"
+      ? "integration-local-cache"
+      : memorySnapshot.source;
+    return { snapshot: memorySnapshot, source, stale: false };
   }
 
   try {
