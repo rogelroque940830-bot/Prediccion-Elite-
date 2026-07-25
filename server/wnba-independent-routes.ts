@@ -43,7 +43,6 @@ type LocalSnapshot = {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_FILE = path.join(process.cwd(), "data", "wnba-independent-cache.json");
 const BDL_BASE = "https://api.balldontlie.io/wnba/v1";
-const DEFAULT_BOOTSTRAP_BASE = "https://web-production-7067b.up.railway.app";
 
 let memorySnapshot: LocalSnapshot | null = null;
 let memoryLoadedAt = 0;
@@ -348,30 +347,7 @@ async function fetchBdlSnapshot(): Promise<LocalSnapshot> {
   };
 }
 
-async function fetchBootstrapSnapshot(req: Request): Promise<LocalSnapshot> {
-  const base = (process.env.WNBA_BOOTSTRAP_READONLY_BASE || DEFAULT_BOOTSTRAP_BASE).replace(/\/$/, "");
-  const currentOrigin = `${req.protocol}://${req.get("host")}`.replace(/\/$/, "");
-  if (base.toLowerCase() === currentOrigin.toLowerCase()) throw new Error("Refusing recursive WNBA bootstrap");
-
-  const [teamPayload, fatiguePayload] = await Promise.all([
-    fetchJson(`${base}/api/wnba/all`, { Accept: "application/json" }, 10_000),
-    fetchJson(`${base}/api/wnba/fatigue`, { Accept: "application/json" }, 10_000),
-  ]);
-  const teams = Array.isArray(teamPayload?.data) ? teamPayload.data : [];
-  const fatigue = Array.isArray(fatiguePayload?.data) ? fatiguePayload.data : [];
-  if (teams.length < 10) throw new Error("WNBA bootstrap returned incomplete team data");
-
-  return {
-    schemaVersion: 1,
-    fetchedAt: new Date().toISOString(),
-    season: currentWnbaSeason(),
-    teams,
-    fatigue,
-    source: "production-bootstrap-cache",
-  };
-}
-
-async function resolveSnapshot(req: Request): Promise<{ snapshot: LocalSnapshot; source: string; stale: boolean }> {
+async function resolveSnapshot(): Promise<{ snapshot: LocalSnapshot; source: string; stale: boolean }> {
   const now = Date.now();
   if (memorySnapshot && now - memoryLoadedAt < CACHE_TTL_MS) {
     return { snapshot: memorySnapshot, source: memorySnapshot.source, stale: false };
@@ -389,16 +365,14 @@ async function resolveSnapshot(req: Request): Promise<{ snapshot: LocalSnapshot;
       return { snapshot: local, source: "integration-local-cache", stale: ageMs > CACHE_TTL_MS };
     }
 
-    const bootstrap = await fetchBootstrapSnapshot(req);
-    saveLocalSnapshot(bootstrap);
-    return { snapshot: bootstrap, source: bootstrap.source, stale: false };
+    throw new Error("WNBA direct source unavailable and integration cache is empty");
   }
 }
 
 export function registerIndependentWnbaRoutes(app: Express): void {
   app.get("/api/wnba/all", async (req, res) => {
     try {
-      const resolved = await resolveSnapshot(req);
+      const resolved = await resolveSnapshot();
       return res.json({
         success: true,
         data: resolved.snapshot.teams,
@@ -414,7 +388,7 @@ export function registerIndependentWnbaRoutes(app: Express): void {
 
   app.get("/api/wnba/fatigue", async (req, res) => {
     try {
-      const resolved = await resolveSnapshot(req);
+      const resolved = await resolveSnapshot();
       return res.json({
         success: true,
         data: resolved.snapshot.fatigue,
@@ -430,7 +404,7 @@ export function registerIndependentWnbaRoutes(app: Express): void {
 
   app.get("/api/wnba/independent-status", async (req, res) => {
     try {
-      const resolved = await resolveSnapshot(req);
+      const resolved = await resolveSnapshot();
       return res.json({
         success: true,
         source: resolved.source,
