@@ -45,7 +45,9 @@ jobs:
           node-version: '20'
 
       - name: Apply MLB P0 data-integrity migration
-        run: python3 scripts/apply-mlb-p0-data-integrity.py
+        run: |
+          python3 scripts/fix-mlb-p0-migrator.py
+          python3 scripts/apply-mlb-p0-data-integrity.py
 
       - name: Validate backend and security
         run: |
