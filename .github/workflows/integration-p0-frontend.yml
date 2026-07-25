@@ -30,7 +30,7 @@ permissions:
 jobs:
   # BEGIN ONE-TIME NHL P0 MIGRATION
   apply-nhl-p0:
-    if: github.ref == 'refs/heads/integration/p0-staging-secure'
+    if: github.ref == 'refs/heads/integration/p0-staging-secure' || github.head_ref == 'integration/p0-staging-secure'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
