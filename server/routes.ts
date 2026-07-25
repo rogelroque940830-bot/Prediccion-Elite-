@@ -2592,17 +2592,20 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               const lookupUrl = `${MLB_BASE}/people/search?names=${encodeURIComponent(name)}&season=${MLB_SEASON_CURRENT}`;
               const lookupJson = await (await fetch(lookupUrl)).json();
               const people = lookupJson.people ?? [];
-              // Filtrar por equipo correcto
-              const match = people.find((p: any) => p.currentTeam?.id === tid) ?? people[0];
+              // Verificación estricta: mismo nombre normalizado Y equipo MLB actual.
+              // Nunca usar el primer resultado como fallback: eso mezclaba jugadores de otros clubes.
+              const normalizePersonName = (value: string) => String(value || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]/gi, "")
+                .toLowerCase();
+              const targetName = normalizePersonName(name);
+              const match = people.find((p: any) =>
+                p.currentTeam?.id === tid && normalizePersonName(p.fullName) === targetName
+              );
               const pid = match?.id;
               const positionAbbr = match?.primaryPosition?.abbreviation || (isPitcher ? "P" : pos.split(" ").map((w: string) => w[0]).join("").toUpperCase());
-              if (!pid) {
-                return {
-                  name, position: positionAbbr, status: fullStatus, isPitcher,
-                  returnDate, shortComment,
-                  source: "BDL",
-                };
-              }
+              if (!pid) return null;
               if (isPitcher) {
                 const sJ = await (await fetch(`${MLB_BASE}/people/${pid}/stats?stats=season&group=pitching&season=${MLB_SEASON_CURRENT}`)).json();
                 const s = sJ.stats?.[0]?.splits?.[0]?.stat ?? {};
@@ -2612,7 +2615,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                   st = fb.stats?.[0]?.splits?.[0]?.stat ?? s;
                 }
                 const playerGP = parseInt(st.gamesPlayed) || 0;
-                const gamesMissed = Math.max(0, teamGP - playerGP);
+                // No inferir juegos perdidos con teamGP-playerGP: banca, menores, trades y descansos lo vuelven inválido.
+                const gamesMissed = 0;
                 // Bullpen leverage data — saves/holds/games finished diferencian closer real vs setup vs middle
                 const ipPitcher = parseIP(st.inningsPitched || "0");
                 return {
@@ -2645,7 +2649,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                   st = fb.stats?.[0]?.splits?.[0]?.stat ?? st;
                 }
                 const playerGP = parseInt(st.gamesPlayed) || 0;
-                const gamesMissed = Math.max(0, teamGP - playerGP);
+                // No inferir juegos perdidos con teamGP-playerGP: banca, menores, trades y descansos lo vuelven inválido.
+                const gamesMissed = 0;
                 // Star Power: slugging y composición para proxy de WAR
                 const slg = parseFloat(st.slg) || 0;
                 const obp = parseFloat(st.obp) || 0;
@@ -2674,10 +2679,33 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                 };
               }
             } catch {
-              return { name, position: pos, status: fullStatus, isPitcher, returnDate, shortComment, source: "BDL" };
+              // Una búsqueda o enriquecimiento fallido no puede convertirse en una ausencia verificada.
+              return null;
             }
           }));
-          injuryMap[tid] = list;
+          const verifiedList = list.filter(Boolean) as any[];
+          const rejectedCount = rawBdlList.length - verifiedList.length;
+          injuryMap[tid] = verifiedList;
+
+          // Con ausencias presentes todavía no tenemos duración oficial verificable.
+          // Se muestran para revisión, pero jamás se aplican automáticamente al modelo.
+          const identityComplete = injuryFeed.status === "VERIFIED" && rejectedCount === 0;
+          const safeStatus = identityComplete && verifiedList.length === 0 ? "VERIFIED" : "PARTIAL";
+          injuryMetaMap[tid] = {
+            source: injuryFeed.source,
+            status: safeStatus,
+            fetchedAt: injuryFeed.fetchedAt,
+            stale: injuryFeed.stale,
+            sourceErrors: injuryFeed.sourceErrors,
+            count: verifiedList.length,
+            rejectedCount,
+            autoApplyAllowed: false,
+            note: rejectedCount > 0
+              ? `${rejectedCount} registro(s) descartado(s) por no coincidir con el equipo MLB actual; ajuste automático bloqueado`
+              : verifiedList.length > 0
+                ? "Jugador y equipo verificados; duración real de la ausencia no verificada. Selección manual requerida"
+                : "Fuente verificada: no hay ausencias activas confirmadas para este equipo",
+          };
         });
         await Promise.all(injuryPromises);
 
