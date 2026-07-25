@@ -25,58 +25,9 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # BEGIN ONE-TIME NHL P0 MIGRATION
-  apply-nhl-p0:
-    if: github.event_name == 'pull_request' && github.head_ref == 'integration/p0-staging-secure'
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - name: Checkout integration branch
-        uses: actions/checkout@v4
-        with:
-          ref: integration/p0-staging-secure
-          fetch-depth: 0
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v5
-        with:
-          node-version: '20'
-
-      - name: Apply NHL P0 hardening
-        run: python3 scripts/apply-nhl-p0-hardening.py
-
-      - name: Validate backend
-        run: |
-          npm ci
-          npm run build:backend
-          npx tsx scripts/p0-security-smoke.ts
-          npx tsx scripts/integration-auth-smoke.ts
-
-      - name: Validate frontend
-        working-directory: frontend
-        env:
-          VITE_API_BASE_URL: https://p0-staging.invalid
-        run: |
-          npm ci
-          npm run audit:static
-          npm run check
-          npm run build
-          npm run check:dist
-
-      - name: Commit validated NHL source changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/routes.ts server/nhl-manual-routes.ts frontend/client/src/pages/nhl-predictor.tsx
-          git commit -m "fix(nhl): harden season and goalie verification"
-          git push origin HEAD:integration/p0-staging-secure
-  # END ONE-TIME NHL P0 MIGRATION
-
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
