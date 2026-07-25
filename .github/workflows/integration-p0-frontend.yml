@@ -45,11 +45,36 @@ jobs:
           node-version: '20'
 
       - name: Apply MLB P0 data-integrity migration
+        id: migration
+        continue-on-error: true
+        shell: bash
         run: |
-          python3 scripts/fix-mlb-p0-migrator.py
-          python3 scripts/apply-mlb-p0-data-integrity.py
+          set +e
+          : > /tmp/mlb-migration.log
+          python3 scripts/fix-mlb-p0-migrator.py >> /tmp/mlb-migration.log 2>&1
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            python3 scripts/apply-mlb-p0-data-integrity.py >> /tmp/mlb-migration.log 2>&1
+            status=$?
+          fi
+          cat /tmp/mlb-migration.log
+          exit "$status"
+
+      - name: Upload MLB migration diagnostics
+        if: ${{ steps.migration.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-migration-diagnostic
+          path: /tmp/mlb-migration.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Enforce MLB migration result
+        if: ${{ steps.migration.outcome == 'failure' }}
+        run: exit 1
 
       - name: Validate backend and security
+        if: ${{ steps.migration.outcome == 'success' }}
         run: |
           npm ci
           npm run build:backend
@@ -57,6 +82,7 @@ jobs:
           npx tsx scripts/integration-auth-smoke.ts
 
       - name: Validate frontend
+        if: ${{ steps.migration.outcome == 'success' }}
         working-directory: frontend
         env:
           VITE_API_BASE_URL: https://p0-staging.invalid
@@ -68,6 +94,7 @@ jobs:
           npm run check:dist
 
       - name: Commit validated MLB source changes
+        if: ${{ steps.migration.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
