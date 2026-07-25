@@ -233,6 +233,9 @@ export default function NHLPredictor() {
     retry: 1,
   });
   const manualTeams: NHLManualTeam[] = manualTeamPayload?.data ?? [];
+  const selectableNhlTeams = manualTeams.length > 0
+    ? manualTeams.map((row) => row.teamName).sort((a, b) => a.localeCompare(b))
+    : NHL_TEAMS;
 
   const applyManualNHLTeam = (side: "home" | "away", teamName: string) => {
     const isHome = side === "home";
@@ -672,7 +675,7 @@ export default function NHLPredictor() {
                 <SelectValue placeholder="Seleccionar equipo" />
               </SelectTrigger>
               <SelectContent>
-                {NHL_TEAMS.map((t) => (
+                {selectableNhlTeams.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
                   </SelectItem>

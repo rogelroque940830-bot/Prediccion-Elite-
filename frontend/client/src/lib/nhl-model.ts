@@ -621,7 +621,7 @@ export function nhlGetBestPlay(plays: NHLBestPlay[]): NHLBestPlay | null {
 }
 
 export const NHL_TEAMS = [
-  "Anaheim Ducks", "Arizona Coyotes", "Boston Bruins", "Buffalo Sabres",
+  "Anaheim Ducks", "Boston Bruins", "Buffalo Sabres",
   "Calgary Flames", "Carolina Hurricanes", "Chicago Blackhawks", "Colorado Avalanche",
   "Columbus Blue Jackets", "Dallas Stars", "Detroit Red Wings", "Edmonton Oilers",
   "Florida Panthers", "Los Angeles Kings", "Minnesota Wild", "Montréal Canadiens",
