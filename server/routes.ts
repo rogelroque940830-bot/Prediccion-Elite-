@@ -27,6 +27,7 @@ import {
 import { computeContextual } from "./nba-contextual";
 import { computeMLBContextual } from "./mlb-contextual";
 import { registerNbaManualRoutes } from "./nba-manual-routes";
+import { registerIndependentNbaRoutes } from "./nba-independent-routes";
 import { registerNhlManualRoutes } from "./nhl-manual-routes";
 import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";
 
@@ -205,6 +206,7 @@ function savePicks(picks: SavedPick[]): void {
 }
 
 export function registerRoutes(httpServer: Server, app: Express): void {
+  registerIndependentNbaRoutes(app);
   registerNbaManualRoutes(app);
   registerNhlManualRoutes(app);
   registerIndependentWnbaRoutes(app);
