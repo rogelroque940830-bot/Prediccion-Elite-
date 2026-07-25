@@ -982,6 +982,11 @@ export default function Predictor() {
                     : "Entrada manual · no usar valores sin verificar"}
               </p>
             )}
+            {team && (isHome ? homeManualStatus : awayManualStatus) === "verified" && !daysRest.trim() && (
+              <p className="mt-1 text-[11px] text-amber-400">
+                Descanso pendiente · no hay partido activo en la fecha seleccionada.
+              </p>
+            )}
           </div>
 
           {/* Stats grid */}
@@ -1329,16 +1334,37 @@ export default function Predictor() {
             )}
           </div>
 
-          {nbaError && (
-            <p className="text-xs text-red-400">⚠️ No se pudo conectar con NBA.com. Llena los datos manualmente.</p>
+          {nbaError && manualTeams.length > 0 && (
+            <p className="text-xs text-amber-400">
+              ⚠️ No hay partidos NBA disponibles para esta fecha o el calendario no respondió. El selector manual sigue disponible con estadísticas verificadas.
+            </p>
+          )}
+          {nbaError && manualTeams.length === 0 && !manualTeamsLoading && (
+            <p className="text-xs text-red-400">
+              ⚠️ No se pudo cargar el calendario ni las estadísticas verificadas NBA. Completa los datos manualmente.
+            </p>
+          )}
+          {!nbaError && nbaData?.success && todayGames.length === 0 && (
+            <p className="text-xs text-amber-400">
+              ℹ️ No hay partidos NBA programados para esta fecha. Puedes usar el selector manual con estadísticas verificadas.
+            </p>
           )}
           {autoFillStatus === "success" && (
             <p className="text-xs text-green-400">✅ Todo cargado — solo agrega Lesiones y Líneas de Hard Rock</p>
           )}
 
           <div className="text-xs text-muted-foreground border-t border-border pt-2">
-            <span className="font-medium text-foreground">Se llena solo:</span> Todo (Stats · Racha · B2B · Descanso · O/U · SOS)
-            &nbsp;&nbsp;<span className="font-medium text-amber-400">Tú solo agregas:</span> Lesiones · Líneas Hard Rock
+            {selectedGameId && autoFillStatus === "success" ? (
+              <>
+                <span className="font-medium text-foreground">Partido cargado:</span> Stats · Racha · B2B · Descanso · O/U · SOS
+                &nbsp;&nbsp;<span className="font-medium text-amber-400">Tú agregas:</span> Lesiones · Líneas Hard Rock
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-foreground">Selector manual:</span> Stats de temporada · Pace · Win Rate · contexto disponible
+                &nbsp;&nbsp;<span className="font-medium text-amber-400">Tú agregas:</span> Descanso si no hay partido activo · Lesiones · Líneas Hard Rock
+              </>
+            )}
           </div>
 
           <EliteBanner sport="NBA" />
