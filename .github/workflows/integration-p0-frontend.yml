@@ -25,9 +25,60 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  apply-mlb-p0-data-integrity:
+    if: github.event_name == 'pull_request' && github.head_ref == 'integration/p0-staging-secure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-staging-secure
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Apply MLB P0 data-integrity migration
+        run: python3 scripts/apply-mlb-p0-data-integrity.py
+
+      - name: Validate backend and security
+        run: |
+          npm ci
+          npm run build:backend
+          npx tsx scripts/p0-security-smoke.ts
+          npx tsx scripts/integration-auth-smoke.ts
+
+      - name: Validate frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: |
+          npm ci
+          npm run audit:static
+          npm run check
+          npm run build
+          npm run check:dist
+
+      - name: Commit validated MLB source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/mlb-ere.ts server/mlb-tesi.ts server/mlb-early-markets.ts server/routes.ts \
+            frontend/client/src/components/mlb-tesi-card.tsx \
+            frontend/client/src/components/mlb-ere-card.tsx \
+            frontend/client/src/components/mlb-early-markets-card.tsx \
+            frontend/client/src/pages/mlb-predictor.tsx
+          git commit -m "fix(mlb): fail closed on incomplete early data"
+          git push origin HEAD:integration/p0-staging-secure
+
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
