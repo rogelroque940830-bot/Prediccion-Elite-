@@ -25,7 +25,7 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   source-gate:
@@ -153,46 +153,3 @@ jobs:
       - name: Enforce distribution smoke result
         if: ${{ steps.dist_smoke.outcome == 'failure' }}
         run: exit 1
-
-  apply-nba-manual-autofill:
-    if: ${{ github.ref == 'refs/heads/integration/p0-staging-secure' && github.actor != 'github-actions[bot]' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout isolated integration branch
-        uses: actions/checkout@v4
-        with:
-          ref: integration/p0-staging-secure
-          fetch-depth: 0
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v5
-        with:
-          node-version: '20'
-
-      - name: Apply NBA manual autofill migration
-        run: python3 scripts/apply-nba-manual-autofill.py
-
-      - name: Verify backend build
-        run: |
-          npm ci
-          npm run build:backend
-
-      - name: Verify frontend type-check and build
-        working-directory: frontend
-        env:
-          VITE_API_BASE_URL: https://p0-staging.invalid
-        run: |
-          npm ci
-          npm run check
-          npm run build
-
-      - name: Commit verified NBA manual autofill
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/routes.ts frontend/client/src/pages/predictor.tsx
-          git commit -m "fix(nba): verified manual team autofill and safe validation"
-          git push origin HEAD:integration/p0-staging-secure
