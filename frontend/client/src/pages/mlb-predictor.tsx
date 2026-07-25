@@ -4476,7 +4476,11 @@ export default function MLBPredictor() {
                     <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-purple-500/10 text-center">
                       <div><p className="text-xs text-slate-500">Cuota ({result.runLine.pickedSide === "away" ? "V" : "L"})</p><p className="text-sm font-mono">{_o > 0 ? "+" : ""}{_o}</p></div>
                       <div><p className="text-xs text-slate-500">Edge</p><p className={`text-base font-bold ${_e > 0 ? "text-green-400" : "text-red-400"}`}>{_e > 0 ? "+" : ""}{_e.toFixed(1)}%</p></div>
-                      <div><p className="text-xs text-slate-500">Kelly</p><p className="text-base font-bold text-green-400">${_k.toFixed(2)}</p></div>
+                      <div>
+                          <p className="text-xs text-slate-500">Kelly teórico</p>
+                          <p className="text-base font-bold text-green-400">{(_k / 10).toFixed(1)}% banca</p>
+                          <p className="text-[9px] text-cyan-300">Stake permitido: máx. 1.0u</p>
+                        </div>
                     </div>
                   );
                 })()}
@@ -4547,7 +4551,11 @@ export default function MLBPredictor() {
                     <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-amber-500/10 text-center">
                       <div><p className="text-xs text-slate-500">Cuota O/U</p><p className="text-sm font-mono">{_o > 0 ? "+" : ""}{_o}</p></div>
                       <div><p className="text-xs text-slate-500">Edge</p><p className={`text-base font-bold ${_e > 0 ? "text-green-400" : "text-red-400"}`}>{_e > 0 ? "+" : ""}{_e.toFixed(1)}%</p></div>
-                      <div><p className="text-xs text-slate-500">Kelly</p><p className="text-base font-bold text-green-400">${_k.toFixed(2)}</p></div>
+                      <div>
+                          <p className="text-xs text-slate-500">Kelly teórico</p>
+                          <p className="text-base font-bold text-green-400">{(_k / 10).toFixed(1)}% banca</p>
+                          <p className="text-[9px] text-cyan-300">Stake permitido: máx. 1.0u</p>
+                        </div>
                     </div>
                   );
                 })()}
@@ -4593,7 +4601,11 @@ export default function MLBPredictor() {
                       <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-emerald-500/10 text-center">
                         <div><p className="text-xs text-slate-500">Cuota F5 O/U</p><p className="text-sm font-mono">{_o > 0 ? "+" : ""}{_o}</p></div>
                         <div><p className="text-xs text-slate-500">Edge</p><p className={`text-base font-bold ${_e > 0 ? "text-green-400" : "text-red-400"}`}>{_e > 0 ? "+" : ""}{_e.toFixed(1)}%</p></div>
-                        <div><p className="text-xs text-slate-500">Kelly</p><p className="text-base font-bold text-green-400">${_k.toFixed(2)}</p></div>
+                        <div>
+                          <p className="text-xs text-slate-500">Kelly teórico</p>
+                          <p className="text-base font-bold text-green-400">{(_k / 10).toFixed(1)}% banca</p>
+                          <p className="text-[9px] text-cyan-300">Stake permitido: máx. 1.0u</p>
+                        </div>
                       </div>
                     );
                   })()}
