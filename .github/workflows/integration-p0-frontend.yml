@@ -75,7 +75,18 @@ jobs:
           )'''
           if old not in text:
               raise RuntimeError("old injuryDataQuality migrator block not found")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'if page.count("injuryProbDelta, injuryDataQuality") != 4:',
+              'if page.count("injuryProbDelta, injuryDataQuality") != 3:',
+              1,
+          )
+          text = text.replace(
+              'PQS injuryDataQuality propagation: expected 4 calls',
+              'PQS injuryDataQuality propagation: expected 3 calls',
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Apply MLB injury and stake hardening
