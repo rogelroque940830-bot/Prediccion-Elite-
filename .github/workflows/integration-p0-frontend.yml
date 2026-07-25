@@ -28,10 +28,10 @@ permissions:
   contents: write
 
 jobs:
-  apply-mlb-injury-stake-hardening:
+  apply-mlb-f5-injury-quality:
     if: github.event_name == 'pull_request' && github.head_ref == 'integration/p0-staging-secure'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
@@ -44,77 +44,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Align MLB hardening migrator with current predictor
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("scripts/apply-mlb-injury-stake-hardening.py")
-          text = path.read_text(encoding="utf-8")
-          old = '''page = replace_once(
-              page,
-              \'''        const injuryProbDelta = Math.abs(parseFloat(homeInjury) || 0) + Math.abs(parseFloat(awayInjury) || 0);\''',
-              \'''        const injuryProbDelta = Math.abs(parseFloat(homeInjury) || 0) + Math.abs(parseFloat(awayInjury) || 0);
-                  const injuryDataQuality: "VERIFIED" | "DEGRADED" =
-                    homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED"
-                      ? "VERIFIED"
-                      : "DEGRADED";\''',
-              "derive MLB injury data quality",
-          )'''
-          new = '''page = replace_once(
-              page,
-              \'''    let injuryProbDelta = 0;
-              let injuryTotalDelta = 0;\''',
-              \'''    let injuryProbDelta = 0;
-              let injuryTotalDelta = 0;
-              const injuryDataQuality: "VERIFIED" | "DEGRADED" =
-                homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED"
-                  ? "VERIFIED"
-                  : "DEGRADED";\''',
-              "derive MLB injury data quality",
-          )'''
-          if old not in text:
-              raise RuntimeError("old injuryDataQuality migrator block not found")
-          text = text.replace(old, new, 1)
-          text = text.replace(
-              'if page.count("injuryProbDelta, injuryDataQuality") != 4:',
-              'if page.count("injuryProbDelta, injuryDataQuality") != 3:',
-              1,
-          )
-          text = text.replace(
-              'PQS injuryDataQuality propagation: expected 4 calls',
-              'PQS injuryDataQuality propagation: expected 3 calls',
-              1,
-          )
-          path.write_text(text, encoding="utf-8")
-          PY
-
-      - name: Apply MLB injury and stake hardening
-        id: migration
-        continue-on-error: true
-        shell: bash
-        run: |
-          set +e
-          python3 scripts/apply-mlb-injury-stake-hardening.py > /tmp/mlb-injury-stake-hardening.log 2>&1
-          status=$?
-          cat /tmp/mlb-injury-stake-hardening.log
-          exit "$status"
-
-      - name: Upload MLB hardening diagnostics
-        if: ${{ steps.migration.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlb-injury-stake-hardening-diagnostic
-          path: /tmp/mlb-injury-stake-hardening.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Enforce MLB hardening migration result
-        if: ${{ steps.migration.outcome == 'failure' }}
-        run: exit 1
+      - name: Apply MLB F5 injury quality propagation
+        run: python3 scripts/apply-mlb-f5-injury-quality.py
 
       - name: Validate backend and security
-        if: ${{ steps.migration.outcome == 'success' }}
         run: |
           npm ci
           npm run build:backend
@@ -122,7 +55,6 @@ jobs:
           npx tsx scripts/integration-auth-smoke.ts
 
       - name: Validate frontend
-        if: ${{ steps.migration.outcome == 'success' }}
         working-directory: frontend
         env:
           VITE_API_BASE_URL: https://p0-staging.invalid
@@ -133,15 +65,14 @@ jobs:
           npm run build
           npm run check:dist
 
-      - name: Commit validated MLB hardening
-        if: ${{ steps.migration.outcome == 'success' }}
+      - name: Commit validated MLB F5 guard
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/routes.ts frontend/client/src/pages/mlb-predictor.tsx
-          git commit -m "fix(mlb): verify injury feed and cap stake at one unit"
+          git add frontend/client/src/pages/mlb-predictor.tsx
+          git commit -m "fix(mlb): apply injury quality guard to F5"
           git push origin HEAD:integration/p0-staging-secure
 
   source-gate:
