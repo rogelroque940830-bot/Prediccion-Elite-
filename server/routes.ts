@@ -2581,7 +2581,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             const name = player.full_name || `${player.first_name} ${player.last_name}`.trim();
             const pos = player.position || "";
             const status = inj.status || "";
-            const isPitcher = /pitcher/i.test(pos);
+            const normalizedPos = String(pos).trim().toUpperCase();
+            const isPitcher = /pitcher/i.test(String(pos)) || ["P", "SP", "RP", "LHP", "RHP"].includes(normalizedPos);
             const detailParts = [inj.type, inj.detail, inj.side].filter(Boolean).join(" ");
             const fullStatus = detailParts ? `${status} · ${detailParts}` : status;
             const returnDate = inj.return_date || null;
