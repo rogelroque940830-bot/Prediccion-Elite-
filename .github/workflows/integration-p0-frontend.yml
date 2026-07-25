@@ -25,9 +25,58 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  apply-nhl-manual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout current integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Apply NHL verified selector migration
+        run: python3 scripts/apply-nhl-manual-autofill.py
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: npm run build
+
+      - name: Commit verified NHL selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/routes.ts frontend/client/src/pages/nhl-predictor.tsx
+          if git diff --cached --quiet; then
+            echo "No NHL migration changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(nhl): wire verified manual autofill and strict validation"
+          git push origin HEAD:integration/p0-staging-secure
+
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
