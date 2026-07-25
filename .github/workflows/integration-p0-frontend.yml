@@ -28,10 +28,10 @@ permissions:
   contents: write
 
 jobs:
-  apply-mlb-p0-data-integrity:
+  apply-mlb-p0-followup:
     if: github.event_name == 'pull_request' && github.head_ref == 'integration/p0-staging-secure'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
@@ -44,37 +44,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Apply MLB P0 data-integrity migration
-        id: migration
-        continue-on-error: true
-        shell: bash
-        run: |
-          set +e
-          : > /tmp/mlb-migration.log
-          python3 scripts/fix-mlb-p0-migrator.py >> /tmp/mlb-migration.log 2>&1
-          status=$?
-          if [ "$status" -eq 0 ]; then
-            python3 scripts/apply-mlb-p0-data-integrity.py >> /tmp/mlb-migration.log 2>&1
-            status=$?
-          fi
-          cat /tmp/mlb-migration.log
-          exit "$status"
-
-      - name: Upload MLB migration diagnostics
-        if: ${{ steps.migration.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlb-migration-diagnostic
-          path: /tmp/mlb-migration.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Enforce MLB migration result
-        if: ${{ steps.migration.outcome == 'failure' }}
-        run: exit 1
+      - name: Apply MLB P0 follow-up
+        run: python3 scripts/apply-mlb-p0-followup.py
 
       - name: Validate backend and security
-        if: ${{ steps.migration.outcome == 'success' }}
         run: |
           npm ci
           npm run build:backend
@@ -82,7 +55,6 @@ jobs:
           npx tsx scripts/integration-auth-smoke.ts
 
       - name: Validate frontend
-        if: ${{ steps.migration.outcome == 'success' }}
         working-directory: frontend
         env:
           VITE_API_BASE_URL: https://p0-staging.invalid
@@ -93,19 +65,14 @@ jobs:
           npm run build
           npm run check:dist
 
-      - name: Commit validated MLB source changes
-        if: ${{ steps.migration.outcome == 'success' }}
+      - name: Commit validated MLB follow-up
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/mlb-ere.ts server/mlb-tesi.ts server/mlb-early-markets.ts server/routes.ts \
-            frontend/client/src/components/mlb-tesi-card.tsx \
-            frontend/client/src/components/mlb-ere-card.tsx \
-            frontend/client/src/components/mlb-early-markets-card.tsx \
-            frontend/client/src/pages/mlb-predictor.tsx
-          git commit -m "fix(mlb): fail closed on incomplete early data"
+          git add server/mlb-ere.ts server/mlb-early-markets.ts server/routes.ts
+          git commit -m "fix(mlb): block partial early data and resolve game date"
           git push origin HEAD:integration/p0-staging-secure
 
   source-gate:
