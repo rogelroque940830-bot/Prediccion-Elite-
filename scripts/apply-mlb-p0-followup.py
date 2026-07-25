@@ -123,23 +123,14 @@ routes = replace_once(
     "boost date reuse",
 )
 
-routes = replace_once(
-    routes,
-    '''      const gameDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(req.query.date || ""))
+old_route_date = '''      const gameDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(req.query.date || ""))
         ? String(req.query.date)
-        : new Date().toISOString().slice(0, 10);''',
-    '''      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);''',
-    "ERE route game date resolution",
-)
-
-routes = replace_once(
-    routes,
-    '''      const gameDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(req.query.date || ""))
-        ? String(req.query.date)
-        : new Date().toISOString().slice(0, 10);''',
-    '''      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);''',
-    "TESI route game date resolution",
-)
+        : new Date().toISOString().slice(0, 10);'''
+new_route_date = '''      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);'''
+route_date_count = routes.count(old_route_date)
+if route_date_count != 2:
+    raise RuntimeError(f"ERE/TESI route game-date blocks: expected 2 matches, found {route_date_count}")
+routes = routes.replace(old_route_date, new_route_date, 2)
 
 routes_path.write_text(routes, encoding="utf-8")
 print("MLB P0 follow-up applied: partial fail-closed + gamePk date resolution")
