@@ -319,8 +319,8 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const ereScore = Math.max(0, Math.min(100, Math.round(ereRaw * parkFactor * weatherModifier * 10) / 10));
 
   // ── 6. Categoría + sugerencias de mercado ───────────────────────────────
-  const dataIncomplete = teamMetrics.dataStatus === "DATA_INCOMPLETE";
-  const classified = dataIncomplete
+  const dataUnverified = teamMetrics.dataStatus !== "VERIFIED";
+  const classified = dataUnverified
     ? { category: "NEUTRAL" as EreResult["category"], marketSuggestions: [] as string[] }
     : classifyEre(ereScore, offenseScore, pitcherSuppressionScore, teamMetrics.probFirstInn);
   const { category, marketSuggestions } = classified;

@@ -135,9 +135,12 @@ const HOME_INN_EDGE = 0.006;              // inning-level home edge (muy pequeñ
 
 export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResult {
   const { homeEre, awayEre } = input;
-  const dataIncomplete = homeEre.dataStatus === "DATA_INCOMPLETE" || awayEre.dataStatus === "DATA_INCOMPLETE";
+  const dataIncomplete = homeEre.dataStatus !== "VERIFIED" || awayEre.dataStatus !== "VERIFIED";
   if (dataIncomplete) {
-    const warning = "DATA_INCOMPLETE: faltan linescores verificados; NRFI/YRFI/F5/Team Totals bloqueados";
+    const statusLabel = homeEre.dataStatus === "DATA_INCOMPLETE" || awayEre.dataStatus === "DATA_INCOMPLETE"
+      ? "DATA_INCOMPLETE"
+      : "PARTIAL_DATA";
+    const warning = `${statusLabel}: faltan linescores verificados suficientes; NRFI/YRFI/F5/Team Totals bloqueados`;
     return {
       f5ProbHome: 0.5,
       f5ProbAway: 0.5,

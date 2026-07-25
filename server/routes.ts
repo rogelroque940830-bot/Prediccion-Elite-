@@ -205,6 +205,31 @@ function savePicks(picks: SavedPick[]): void {
   }
 }
 
+async function resolveMlbAnalysisDate(rawDate: unknown, gamePk?: number): Promise<string> {
+  const candidate = String(rawDate || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+
+  if (Number.isFinite(gamePk) && Number(gamePk) > 0) {
+    try {
+      const response = await fetch(
+        `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePks=${Number(gamePk)}`,
+        { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } },
+      );
+      if (response.ok) {
+        const payload: any = await response.json();
+        const resolved = payload?.dates?.[0]?.date;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(resolved || ""))) {
+          return String(resolved);
+        }
+      }
+    } catch (error) {
+      console.warn("[MLB] Could not resolve analysis date from gamePk", gamePk, error);
+    }
+  }
+
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function registerRoutes(httpServer: Server, app: Express): void {
   registerIndependentNbaRoutes(app);
   registerNbaManualRoutes(app);
@@ -224,10 +249,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
       // Calcular ERE para ambos equipos + matchup signal en paralelo
       const sharedGamePk = home.gamePk || away.gamePk;
-      const currentSeason = new Date().getFullYear();
-      const analysisDateIso = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.gameDate || ""))
-        ? String(req.body.gameDate)
-        : new Date().toISOString().slice(0, 10);
+      const analysisDateIso = await resolveMlbAnalysisDate(req.body?.gameDate, sharedGamePk);
+      const currentSeason = Number(analysisDateIso.slice(0, 4));
       // FASE 1 — toggle para A/B testing del matchup signal
       const disableMatchup = req.body?.disableMatchup === true || req.query?.disableMatchup === "1";
       const [homeEre, awayEre, matchupSignal] = await Promise.all([
@@ -263,7 +286,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         | { home: Array<{ type: any; label: string }>; away: Array<{ type: any; label: string }> }
         | undefined = undefined;
       try {
-        const gameDateIso = (req.body?.gameDate as string) || new Date().toISOString().slice(0, 10);
+        const gameDateIso = analysisDateIso;
         const [{ getPitcherRecentCombined }, { analyzePitcherVsTeamMatchup }, { getTeamSos }, { getPitcherQualityMap }] = await Promise.all([
           import("./mlb-pitcher-recent"),
           import("./mlb-pitcher-vs-team"),
@@ -412,9 +435,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const tempF = req.query.tempF ? parseFloat(String(req.query.tempF)) : undefined;
       const windMph = req.query.windMph ? parseFloat(String(req.query.windMph)) : undefined;
       const windDirOut = String(req.query.windOut || "false").toLowerCase() === "true";
-      const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
-        ? String(req.query.date)
-        : new Date().toISOString().slice(0, 10);
+      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);
 
       const data = await computeMlbEre({
         teamId, teamName,
@@ -444,9 +465,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const opposingPitcherId = req.query.pitcherId ? parseInt(String(req.query.pitcherId), 10) : undefined;
       const handStr = String(req.query.hand || "").toUpperCase();
       const opposingPitcherHand: "R" | "L" | undefined = handStr === "R" || handStr === "L" ? (handStr as "R" | "L") : undefined;
-      const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
-        ? String(req.query.date)
-        : new Date().toISOString().slice(0, 10);
+      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);
 
       const data = await computeMlbTesi({
         teamId, teamName, gamePk: isNaN(gamePk as any) ? undefined : gamePk,
