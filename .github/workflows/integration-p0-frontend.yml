@@ -25,9 +25,73 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  # BEGIN ONE-TIME NHL P0 MIGRATION
+  apply-nhl-p0:
+    if: github.ref == 'refs/heads/integration/p0-staging-secure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/p0-staging-secure
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Apply NHL P0 hardening
+        run: python3 scripts/apply-nhl-p0-hardening.py
+
+      - name: Validate backend
+        run: |
+          npm ci
+          npm run build:backend
+          npx tsx scripts/p0-security-smoke.ts
+          npx tsx scripts/integration-auth-smoke.ts
+
+      - name: Validate frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: |
+          npm ci
+          npm run audit:static
+          npm run check
+          npm run build
+          npm run check:dist
+
+      - name: Remove one-time migration machinery
+        shell: bash
+        run: |
+          rm scripts/apply-nhl-p0-hardening.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/integration-p0-frontend.yml')
+          s = p.read_text()
+          s = s.replace('permissions:\n  contents: write', 'permissions:\n  contents: read', 1)
+          start = s.index('  # BEGIN ONE-TIME NHL P0 MIGRATION\n')
+          end = s.index('  # END ONE-TIME NHL P0 MIGRATION\n', start) + len('  # END ONE-TIME NHL P0 MIGRATION\n')
+          s = s[:start] + s[end:]
+          p.write_text(s)
+          PY
+
+      - name: Commit verified NHL hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/routes.ts server/nhl-manual-routes.ts frontend/client/src/pages/nhl-predictor.tsx .github/workflows/integration-p0-frontend.yml scripts/apply-nhl-p0-hardening.py
+          git commit -m "fix(nhl): harden season and goalie verification"
+          git push origin HEAD:integration/p0-staging-secure
+  # END ONE-TIME NHL P0 MIGRATION
+
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
