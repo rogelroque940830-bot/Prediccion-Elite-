@@ -3409,8 +3409,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (homeAbbr && dg.homeGoalieName) {
                 dfGoalieMap[homeAbbr] = {
                   name: dg.homeGoalieName,
-                  svPct: Number.isFinite(Number(dg.homeGoalieSavePercentage)) ? Math.round(Number(dg.homeGoalieSavePercentage) * 1000) / 1000 : undefined,
-                  gaa: Number.isFinite(Number(dg.homeGoalieGoalsAgainstAvg)) ? Math.round(Number(dg.homeGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
+                  svPct: dg.homeGoalieSavePercentage !== "" && dg.homeGoalieSavePercentage != null && Number.isFinite(Number(dg.homeGoalieSavePercentage)) && Number(dg.homeGoalieSavePercentage) > 0 && Number(dg.homeGoalieSavePercentage) <= 1 ? Math.round(Number(dg.homeGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: dg.homeGoalieGoalsAgainstAvg !== "" && dg.homeGoalieGoalsAgainstAvg != null && Number.isFinite(Number(dg.homeGoalieGoalsAgainstAvg)) && Number(dg.homeGoalieGoalsAgainstAvg) >= 0 ? Math.round(Number(dg.homeGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.homeGoalieWins || 0,
                   losses: dg.homeGoalieLosses || 0,
                   otl: dg.homeGoalieOvertimeLosses || 0,
@@ -3425,8 +3425,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (awayAbbr && dg.awayGoalieName) {
                 dfGoalieMap[awayAbbr] = {
                   name: dg.awayGoalieName,
-                  svPct: Number.isFinite(Number(dg.awayGoalieSavePercentage)) ? Math.round(Number(dg.awayGoalieSavePercentage) * 1000) / 1000 : undefined,
-                  gaa: Number.isFinite(Number(dg.awayGoalieGoalsAgainstAvg)) ? Math.round(Number(dg.awayGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
+                  svPct: dg.awayGoalieSavePercentage !== "" && dg.awayGoalieSavePercentage != null && Number.isFinite(Number(dg.awayGoalieSavePercentage)) && Number(dg.awayGoalieSavePercentage) > 0 && Number(dg.awayGoalieSavePercentage) <= 1 ? Math.round(Number(dg.awayGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: dg.awayGoalieGoalsAgainstAvg !== "" && dg.awayGoalieGoalsAgainstAvg != null && Number.isFinite(Number(dg.awayGoalieGoalsAgainstAvg)) && Number(dg.awayGoalieGoalsAgainstAvg) >= 0 ? Math.round(Number(dg.awayGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.awayGoalieWins || 0,
                   losses: dg.awayGoalieLosses || 0,
                   otl: dg.awayGoalieOvertimeLosses || 0,
@@ -3455,14 +3455,22 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               const abbr = g[side]?.abbrev;
               const leaders = gc[side]?.leaders;
               if (!abbr || !leaders) continue;
-              nhlGoalieIdMap[abbr] = leaders.map((l: any) => ({
-                playerId: l.playerId,
-                name: ((l.firstName?.default || "") + " " + (l.lastName?.default || "")).trim(),
-                svPct: l.savePctg ? Math.round(l.savePctg * 1000) / 1000 : 0.900,
-                gaa: l.gaa ? Math.round(l.gaa * 100) / 100 : 3.00,
-                record: l.record || "0-0",
-                gp: l.gamesPlayed || 0,
-              }));
+              nhlGoalieIdMap[abbr] = leaders.flatMap((l: any) => {
+                const goalieName = ((l.firstName?.default || "") + " " + (l.lastName?.default || "")).trim();
+                const rawSvPct = Number(l.savePctg);
+                const rawGaa = Number(l.gaa ?? l.goalsAgainstAverage);
+                if (!goalieName || !Number.isFinite(rawSvPct) || rawSvPct <= 0 || rawSvPct > 1 || !Number.isFinite(rawGaa) || rawGaa < 0) {
+                  return [];
+                }
+                return [{
+                  playerId: l.playerId,
+                  name: goalieName,
+                  svPct: Math.round(rawSvPct * 1000) / 1000,
+                  gaa: Math.round(rawGaa * 100) / 100,
+                  record: typeof l.record === "string" ? l.record : "",
+                  gp: l.gamesPlayed || 0,
+                }];
+              });
             }
           } catch {}
         });
