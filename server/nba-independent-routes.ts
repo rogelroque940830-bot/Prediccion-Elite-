@@ -15,7 +15,6 @@ type NbaSnapshot = {
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_FILE = path.join(process.cwd(), "data", "nba-independent-cache.json");
-const DEFAULT_BOOTSTRAP_BASE = "https://web-production-7067b.up.railway.app";
 let memorySnapshot: NbaSnapshot | null = null;
 let memoryLoadedAt = 0;
 
@@ -169,23 +168,13 @@ async function fetchDirectSnapshot(rawDate: string): Promise<NbaSnapshot> {
   };
 }
 
-async function fetchBootstrapSnapshot(rawDate: string): Promise<NbaSnapshot> {
-  const base = (process.env.NBA_BOOTSTRAP_READONLY_BASE || DEFAULT_BOOTSTRAP_BASE).replace(/\/$/, "");
-  const data = await buildDirectory(base, rawDate);
-  if (data.length < 25) throw new Error(`NBA bootstrap returned only ${data.length} teams`);
-  return {
-    schemaVersion: 1,
-    fetchedAt: new Date().toISOString(),
-    date: rawDate,
-    data,
-    source: "production-bootstrap-cache",
-  };
-}
-
 async function resolveSnapshot(rawDate: string): Promise<{ snapshot: NbaSnapshot; source: Source; stale: boolean }> {
   const now = Date.now();
   if (memorySnapshot && now - memoryLoadedAt < CACHE_TTL_MS) {
-    return { snapshot: memorySnapshot, source: memorySnapshot.source, stale: false };
+    const source: Source = memorySnapshot.source === "production-bootstrap-cache"
+      ? "integration-local-cache"
+      : memorySnapshot.source;
+    return { snapshot: memorySnapshot, source, stale: false };
   }
 
   try {
@@ -200,9 +189,7 @@ async function resolveSnapshot(rawDate: string): Promise<{ snapshot: NbaSnapshot
       return { snapshot: local, source: "integration-local-cache", stale: ageMs > CACHE_TTL_MS };
     }
 
-    const bootstrap = await fetchBootstrapSnapshot(rawDate);
-    saveLocalSnapshot(bootstrap);
-    return { snapshot: bootstrap, source: "production-bootstrap-cache", stale: false };
+    throw new Error("NBA direct source unavailable and integration cache is empty");
   }
 }
 
