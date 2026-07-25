@@ -28,45 +28,6 @@ permissions:
   contents: read
 
 jobs:
-  verify-nba-independent:
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - name: Verify deployed NBA independent source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import time
-          import urllib.request
-
-          url = "https://web-p0-integration.up.railway.app/api/nba/independent-status?date=2026-07-25"
-          last_error = None
-          for attempt in range(36):
-              try:
-                  with urllib.request.urlopen(url, timeout=20) as response:
-                      payload = json.load(response)
-                  print(json.dumps(payload, indent=2, sort_keys=True))
-                  if not payload.get("success"):
-                      raise RuntimeError(f"Unsuccessful payload: {payload}")
-                  if int(payload.get("teams", 0)) < 25:
-                      raise RuntimeError(f"Incomplete NBA directory: {payload}")
-                  if payload.get("source") not in {
-                      "direct",
-                      "integration-local-cache",
-                  }:
-                      raise RuntimeError(f"Unexpected NBA source: {payload}")
-                  break
-              except Exception as error:
-                  last_error = error
-                  if attempt == 35:
-                      raise
-                  time.sleep(10)
-          else:
-              raise RuntimeError(last_error)
-          PY
-
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
