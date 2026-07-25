@@ -22,6 +22,25 @@ import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 
 // ── MLB INJURY TYPES & CALC ──────────────────────────────────────────────────
+type MLBInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE" | "ANOMALOUS";
+interface MLBInjuryFeedMeta {
+  source: string;
+  status: MLBInjuryFeedStatus;
+  fetchedAt?: string;
+  stale?: boolean;
+  sourceErrors?: string[];
+  count: number;
+  autoApplyAllowed: boolean;
+  note?: string;
+}
+const EMPTY_MLB_INJURY_FEED: MLBInjuryFeedMeta = {
+  source: "BALLDONTLIE",
+  status: "SOURCE_UNAVAILABLE",
+  count: 0,
+  autoApplyAllowed: false,
+  note: "Fuente de lesiones pendiente",
+};
+
 interface MLBInjury {
   name: string;
   position: string;
@@ -327,6 +346,7 @@ function computePickQualityGeneric(input: {
   statcastDataQuality: "OK" | "MISSING";
   statcastSignal: number;     // qué tan claro es el signal Statcast (0-1)
   injuryProbDelta: number;
+  injuryDataQuality?: "VERIFIED" | "DEGRADED";
   sharpAgainst: boolean;
   sharpStrong: boolean;
 }): PickQualityResult {
@@ -343,6 +363,7 @@ function computePickQualityGeneric(input: {
   if (input.marketGap >= 0.25) warnings.push(`🚨 Gap >25pp con mercado (${(input.marketGap*100).toFixed(0)}pp) — sobre-confianza`);
   else if (input.marketGap >= 0.15) warnings.push(`⚠️ Gap moderado con mercado (${(input.marketGap*100).toFixed(0)}pp)`);
   if (input.sharpAgainst) warnings.push(`🚨 Dinero sharp en CONTRA`);
+  if (input.injuryDataQuality !== "VERIFIED") warnings.push("⚠️ Cobertura de lesiones no verificada — señal degradada");
   if (input.oddsAmerican > 200 || input.oddsAmerican < -300) warnings.push("⚠️ Cuotas extremas");
 
   // ─── CONFIRMS POSITIVOS ───
@@ -416,7 +437,12 @@ function computePickQualityGeneric(input: {
   else if (score >= 7 && edgeReal >= 5 && factorsAlignment >= 5) recommendation = "BET";
   else if (score >= 6 && edgeReal >= 3) recommendation = "LEAN";
 
-  // ─── STAKE KELLY FRACCIONAL ───
+  if (input.injuryDataQuality !== "VERIFIED" && (recommendation === "BET" || recommendation === "BET_FUERTE")) {
+    recommendation = "LEAN";
+    warnings.unshift("🛡️ BET bloqueado hasta verificar lesiones de ambos equipos");
+  }
+
+  // ─── STAKE KELLY FRACCIONAL — CAP TEMPORAL 1.0u ───
   let stakeUnits = 0;
   if (recommendation !== "PASS" && edgeReal > 0) {
     const decimalOdds = input.oddsAmerican > 0 ? (input.oddsAmerican / 100) + 1 : (100 / (-input.oddsAmerican)) + 1;
@@ -424,10 +450,9 @@ function computePickQualityGeneric(input: {
     const p = input.modelProb;
     const fullKelly = (b * p - (1 - p)) / b;
     const fractionalKelly = Math.max(0, fullKelly * 0.25);
-    stakeUnits = Math.round(Math.min(5, fractionalKelly * 100) * 2) / 2;
-    if (recommendation === "LEAN") stakeUnits = Math.min(stakeUnits, 1);
-    else if (recommendation === "BET") stakeUnits = Math.min(stakeUnits, 3);
-    else if (recommendation === "BET_FUERTE") stakeUnits = Math.min(stakeUnits, 5);
+    const rawStakeUnits = Math.round(fractionalKelly * 100 * 2) / 2;
+    stakeUnits = Math.min(1, rawStakeUnits);
+    if (rawStakeUnits > 1) warnings.push(`🛡️ Stake reducido de ${rawStakeUnits.toFixed(1)}u a 1.0u por cap de calibración`);
   }
 
   let reasoning = `Edge ${edgeReal.toFixed(1)}pp, ${factorsAlignment} factores, gap ${(input.marketGap*100).toFixed(0)}pp`;
@@ -732,6 +757,8 @@ export default function MLBPredictor() {
   // Rosters de lesionados (auto-rellenados desde /api/mlb/all)
   const [homeInjuryRoster, setHomeInjuryRoster] = useState<MLBInjury[]>([]);
   const [awayInjuryRoster, setAwayInjuryRoster] = useState<MLBInjury[]>([]);
+  const [homeInjuryFeed, setHomeInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
+  const [awayInjuryFeed, setAwayInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
   const [homeInjuryMissing, setHomeInjuryMissing] = useState<Set<string>>(new Set());
   const [awayInjuryMissing, setAwayInjuryMissing] = useState<Set<string>>(new Set());
   // Override de juegos perdidos por jugador (si el usuario lo ajusta manualmente)
@@ -1042,35 +1069,44 @@ export default function MLBPredictor() {
     if (hp?.homeRuns !== undefined) setHomeIP(String(hp.inningsPitched ?? ""));
     if (ap?.homeRuns !== undefined) setAwayIP(String(ap.inningsPitched ?? ""));
 
-    // Lesiones — auto-rellenar con todos los lesionados marcados
+    // Lesiones — solo auto-aplicar cuando la fuente y el tamaño de lista son verificables.
     const homeInj: MLBInjury[] = (game as any).homeInjuries ?? [];
     const awayInj: MLBInjury[] = (game as any).awayInjuries ?? [];
+    const homeFeed: MLBInjuryFeedMeta = (game as any).homeInjuryData ?? EMPTY_MLB_INJURY_FEED;
+    const awayFeed: MLBInjuryFeedMeta = (game as any).awayInjuryData ?? EMPTY_MLB_INJURY_FEED;
     setHomeInjuryRoster(homeInj);
     setAwayInjuryRoster(awayInj);
-    const homeMissingSet = new Set(homeInj.map(p => p.name));
-    const awayMissingSet = new Set(awayInj.map(p => p.name));
+    setHomeInjuryFeed(homeFeed);
+    setAwayInjuryFeed(awayFeed);
+
+    const homeAutoApply = homeFeed.status === "VERIFIED" && homeFeed.autoApplyAllowed && homeInj.length <= 18;
+    const awayAutoApply = awayFeed.status === "VERIFIED" && awayFeed.autoApplyAllowed && awayInj.length <= 18;
+    const homeMissingSet = homeAutoApply ? new Set(homeInj.map(p => p.name)) : new Set<string>();
+    const awayMissingSet = awayAutoApply ? new Set(awayInj.map(p => p.name)) : new Set<string>();
     setHomeInjuryMissing(homeMissingSet);
     setAwayInjuryMissing(awayMissingSet);
-    // Inicializar gamesOut con los valores que vienen del API
+
+    // Inicializar gamesOut con los valores que vienen del API.
     const homeGO: Record<string, number> = {};
     const awayGO: Record<string, number> = {};
     for (const p of homeInj) homeGO[p.name] = p.gamesMissed ?? 0;
     for (const p of awayInj) awayGO[p.name] = p.gamesMissed ?? 0;
     setHomeInjuryGamesOut(homeGO);
     setAwayInjuryGamesOut(awayGO);
+
     const homeImpact = calcMLBInjuryImpact(homeInj, homeMissingSet, homeGO);
     const awayImpact = calcMLBInjuryImpact(awayInj, awayMissingSet, awayGO);
-    setHomeInjury(homeImpact.runs !== 0 ? homeImpact.runs.toFixed(1) : "0");
-    setAwayInjury(awayImpact.runs !== 0 ? awayImpact.runs.toFixed(1) : "0");
+    setHomeInjury(homeAutoApply && homeImpact.runs !== 0 ? homeImpact.runs.toFixed(1) : "0");
+    setAwayInjury(awayAutoApply && awayImpact.runs !== 0 ? awayImpact.runs.toFixed(1) : "0");
     setHomeInjuryFactors({
-      off: homeImpact.offFactor,
-      def: homeImpact.defFactor,
-      type: homeImpact.runs !== 0 ? "Auto" : "Mixto",
+      off: homeAutoApply ? homeImpact.offFactor : 1.0,
+      def: homeAutoApply ? homeImpact.defFactor : 0.5,
+      type: homeAutoApply && homeImpact.runs !== 0 ? "Auto verificado" : "Sin ajuste automático",
     });
     setAwayInjuryFactors({
-      off: awayImpact.offFactor,
-      def: awayImpact.defFactor,
-      type: awayImpact.runs !== 0 ? "Auto" : "Mixto",
+      off: awayAutoApply ? awayImpact.offFactor : 1.0,
+      def: awayAutoApply ? awayImpact.defFactor : 0.5,
+      type: awayAutoApply && awayImpact.runs !== 0 ? "Auto verificado" : "Sin ajuste automático",
     });
 
     // Lineup matchup hombre-por-hombre (lineup vs pitcher rival)
@@ -1708,6 +1744,10 @@ export default function MLBPredictor() {
     const hasInjuries = Math.abs(hInjVal) > 0.001 || Math.abs(aInjVal) > 0.001;
     let injuryProbDelta = 0;
     let injuryTotalDelta = 0;
+    const injuryDataQuality: "VERIFIED" | "DEGRADED" =
+      homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED"
+        ? "VERIFIED"
+        : "DEGRADED";
     if (hasInjuries) {
       const homeCleanObj: MLBTeam = {
         ...homeTeamObj,
@@ -2156,7 +2196,7 @@ export default function MLBPredictor() {
           market: "ML", modelProb: sideProbML, marketImpliedProb: impliedML, oddsAmerican: sideOddsML,
           pickedSideLabel: pickedSide === "away" ? (awayTeam || "Visitante") : (homeTeam || "Local"),
           marketGap: marketGapML, eliteFactorsActive, rookieAlert, recentImplosion,
-          statcastDataQuality, statcastSignal, injuryProbDelta,
+          statcastDataQuality, statcastSignal, injuryProbDelta, injuryDataQuality,
           sharpAgainst: sharpAgainstML, sharpStrong,
         });
 
@@ -2214,7 +2254,7 @@ export default function MLBPredictor() {
           pickedSideLabel: runLineResult.pickedSide === "away" ? (awayTeam || "Visitante") : (homeTeam || "Local"),
           pickedSideExtra: runLineResult.side,
           marketGap: rlMarketGap, eliteFactorsActive, rookieAlert, recentImplosion,
-          statcastDataQuality, statcastSignal, injuryProbDelta,
+          statcastDataQuality, statcastSignal, injuryProbDelta, injuryDataQuality,
           sharpAgainst: false, sharpStrong: false, // sharps de RL no se trackean separado
         });
 
@@ -2228,7 +2268,7 @@ export default function MLBPredictor() {
           market: "O/U", modelProb: ouModelProb, marketImpliedProb: ouImplied, oddsAmerican: ouSideOdds,
           pickedSideLabel: ouResult.side === "OVER" ? `Over ${ouLineVal}` : `Under ${ouLineVal}`,
           marketGap: ouMarketGap, eliteFactorsActive, rookieAlert, recentImplosion,
-          statcastDataQuality, statcastSignal, injuryProbDelta,
+          statcastDataQuality, statcastSignal, injuryProbDelta, injuryDataQuality,
           sharpAgainst: false, sharpStrong: false,
         });
 
@@ -2270,7 +2310,7 @@ export default function MLBPredictor() {
     homeBpEra, homeBpWhip, homeBpTired, homeCloser, homeBpEra14d, homeBpIp48h, homePitcherGS,
     homeKPct, homeBbPct, homeSiera,
     homeStreak, homeWinRate,
-    homeInjury, homeInjuryFactors, awayInjury, awayInjuryFactors,
+    homeInjury, homeInjuryFactors, awayInjury, awayInjuryFactors, homeInjuryFeed, awayInjuryFeed,
     lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher,
     pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, sharpDir,
     mlbCtxAdj,
@@ -2368,6 +2408,7 @@ export default function MLBPredictor() {
     const injuryFactors = isHome ? homeInjuryFactors : awayInjuryFactors;
     const setInjuryFactors = isHome ? setHomeInjuryFactors : setAwayInjuryFactors;
     const injuryRoster = isHome ? homeInjuryRoster : awayInjuryRoster;
+    const injuryFeed = isHome ? homeInjuryFeed : awayInjuryFeed;
     const injuryMissing = isHome ? homeInjuryMissing : awayInjuryMissing;
     const setInjuryMissing = isHome ? setHomeInjuryMissing : setAwayInjuryMissing;
     const injuryGamesOut = isHome ? homeInjuryGamesOut : awayInjuryGamesOut;
@@ -2510,7 +2551,27 @@ export default function MLBPredictor() {
                   </div>
                 )}
 
-                {/* Auto-rellenado de lesionados desde BALLDONTLIE (incluye DTD + IL) */}
+                {/* Estado verificable de la fuente de lesiones */}
+                <div className={`mt-2 p-2 rounded border text-[10px] ${
+                  injuryFeed.status === "VERIFIED"
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : injuryFeed.status === "ANOMALOUS"
+                      ? "bg-red-500/10 border-red-500/40 text-red-300"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                }`}>
+                  <p className="font-semibold">
+                    {injuryFeed.status === "VERIFIED"
+                      ? `✓ Fuente verificada · ${injuryFeed.count} ausencia(s) activa(s)`
+                      : injuryFeed.status === "ANOMALOUS"
+                        ? `🚫 Lista anormal (${injuryFeed.count}) · ajuste automático bloqueado`
+                        : injuryFeed.status === "PARTIAL"
+                          ? "⚠ Datos de lesiones degradados/caché · revisión manual"
+                          : "⚠ Fuente de lesiones no disponible · no equivale a cero lesionados"}
+                  </p>
+                  {injuryFeed.note && <p className="mt-0.5 opacity-80">{injuryFeed.note}</p>}
+                </div>
+
+                {/* Auto-rellenado de lesionados desde BALLDONTLIE (solo listas confiables) */}
                 {injuryRoster.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-amber-500/20 space-y-1.5">
                     <div className="flex items-center justify-between">

@@ -1479,39 +1479,134 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     TEX: 140, TOR: 141, WSH: 120, WAS: 120,
   };
 
-  // Cache global de lesionados MLB (se refresca cada 30 min)
-  let mlbInjuryCache: { ts: number; byTeam: Record<number, any[]> } = { ts: 0, byTeam: {} };
-  async function getMLBInjuriesFromBDL(): Promise<Record<number, any[]>> {
-    const now = Date.now();
-    if (now - mlbInjuryCache.ts < 30 * 60 * 1000 && Object.keys(mlbInjuryCache.byTeam).length > 0) {
-      return mlbInjuryCache.byTeam;
+  type MlbInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE";
+  interface MlbInjuryFeed {
+    status: MlbInjuryFeedStatus;
+    source: "BALLDONTLIE";
+    fetchedAt: string;
+    stale: boolean;
+    sourceErrors: string[];
+    totalRecords: number;
+    activeRecords: number;
+    byTeam: Record<number, any[]>;
+  }
+
+  const MLB_INJURY_TTL_MS = 5 * 60 * 1000;
+  const MLB_MAX_TRUSTED_INJURIES_PER_TEAM = 18;
+  let mlbInjuryCache: { ts: number; feed: MlbInjuryFeed } | null = null;
+
+  function isActiveMlbInjuryRecord(injury: any): boolean {
+    const text = [
+      injury?.status,
+      injury?.type,
+      injury?.detail,
+      injury?.description,
+      injury?.short_comment,
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    if (!text) return false;
+    if (/\b(reinstated|activated|available|healthy|returned|cleared|probable)\b/.test(text)) return false;
+    return /\b(out|injured list|day[- ]to[- ]day|dtd|doubtful|questionable|suspended|bereavement|paternity|restricted list)\b/.test(text)
+      || /\b(10|15|60)[- ]day il\b/.test(text)
+      || /\bil\b/.test(text);
+  }
+
+  function dedupeMlbInjuries(records: any[]): any[] {
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const injury of records) {
+      const player = injury?.player ?? {};
+      const key = String(player.id || player.player_id || player.full_name || `${player.first_name || ""}-${player.last_name || ""}`).toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(injury);
     }
+    return result;
+  }
+
+  async function getMLBInjuriesFromBDL(): Promise<MlbInjuryFeed> {
+    const now = Date.now();
+    if (mlbInjuryCache && now - mlbInjuryCache.ts < MLB_INJURY_TTL_MS) {
+      return mlbInjuryCache.feed;
+    }
+
+    const previous = mlbInjuryCache?.feed;
     const byTeam: Record<number, any[]> = {};
+    let totalRecords = 0;
+    let activeRecords = 0;
+    const sourceErrors: string[] = [];
+
     try {
       let cursor: number | null = null;
       let pages = 0;
       while (pages < 10) {
         const url: string = `${BDL_BASE}/mlb/v1/player_injuries?per_page=100${cursor ? `&cursor=${cursor}` : ""}`;
-        const r = await fetch(url, { headers: { Authorization: BDL_KEY } });
-        if (!r.ok) break;
+        const r = await fetch(url, { headers: { Authorization: BDL_KEY, Accept: "application/json" } });
+        if (!r.ok) throw new Error(`BALLDONTLIE injuries HTTP ${r.status}`);
         const j: any = await r.json();
-        const data: any[] = j.data ?? [];
-        for (const inj of data) {
-          const abbr = (inj.player?.team?.abbreviation || "").toUpperCase();
+        const data: any[] = Array.isArray(j.data) ? j.data : [];
+        totalRecords += data.length;
+
+        for (const injury of data) {
+          if (!isActiveMlbInjuryRecord(injury)) continue;
+          const abbr = (injury.player?.team?.abbreviation || "").toUpperCase();
           const mlbTeamId = BDL_MLB_TEAM_TO_ID[abbr];
           if (!mlbTeamId) continue;
           if (!byTeam[mlbTeamId]) byTeam[mlbTeamId] = [];
-          byTeam[mlbTeamId].push(inj);
+          byTeam[mlbTeamId].push(injury);
+          activeRecords++;
         }
+
+        pages++;
         cursor = j.meta?.next_cursor ?? null;
         if (!cursor) break;
-        pages++;
       }
-      mlbInjuryCache = { ts: now, byTeam };
-    } catch (e) {
-      console.error("BDL MLB injuries fetch failed:", e);
+
+      for (const teamId of Object.keys(byTeam).map(Number)) {
+        byTeam[teamId] = dedupeMlbInjuries(byTeam[teamId]);
+      }
+
+      const feed: MlbInjuryFeed = {
+        status: "VERIFIED",
+        source: "BALLDONTLIE",
+        fetchedAt: new Date(now).toISOString(),
+        stale: false,
+        sourceErrors,
+        totalRecords,
+        activeRecords,
+        byTeam,
+      };
+      mlbInjuryCache = { ts: now, feed };
+      return feed;
+    } catch (error: any) {
+      const message = String(error?.message || error || "Unknown injury-source failure");
+      sourceErrors.push(message);
+      console.error("BDL MLB injuries fetch failed:", error);
+
+      if (previous && Object.keys(previous.byTeam).length > 0) {
+        const feed: MlbInjuryFeed = {
+          ...previous,
+          status: "PARTIAL",
+          stale: true,
+          sourceErrors: [...previous.sourceErrors, ...sourceErrors],
+        };
+        mlbInjuryCache = { ts: now, feed };
+        return feed;
+      }
+
+      const feed: MlbInjuryFeed = {
+        status: "SOURCE_UNAVAILABLE",
+        source: "BALLDONTLIE",
+        fetchedAt: new Date(now).toISOString(),
+        stale: false,
+        sourceErrors,
+        totalRecords: 0,
+        activeRecords: 0,
+        byTeam: {},
+      };
+      mlbInjuryCache = { ts: now, feed };
+      return feed;
     }
-    return byTeam;
   }
 
   function parseIP(ip: string): number {
@@ -2445,11 +2540,36 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         });
         await Promise.all(pitcherPromises);
 
-        // 5a. Fetch injuries from BALLDONTLIE (incluye Day-To-Day + IL)
-        const bdlInjuriesByTeam = await getMLBInjuriesFromBDL();
+        // 5a. Fetch injuries from BALLDONTLIE with explicit source quality.
+        const injuryFeed = await getMLBInjuriesFromBDL();
+        const bdlInjuriesByTeam = injuryFeed.byTeam;
         const injuryMap: Record<number, any[]> = {};
+        const injuryMetaMap: Record<number, any> = {};
         const injuryPromises = [...teamIds].map(async (tid) => {
-          const bdlList = bdlInjuriesByTeam[tid] ?? [];
+          const rawBdlList = bdlInjuriesByTeam[tid] ?? [];
+          const anomalous = rawBdlList.length > MLB_MAX_TRUSTED_INJURIES_PER_TEAM;
+          const teamStatus = anomalous ? "ANOMALOUS" : injuryFeed.status;
+          const autoApplyAllowed = teamStatus === "VERIFIED";
+          injuryMetaMap[tid] = {
+            source: injuryFeed.source,
+            status: teamStatus,
+            fetchedAt: injuryFeed.fetchedAt,
+            stale: injuryFeed.stale,
+            sourceErrors: injuryFeed.sourceErrors,
+            count: rawBdlList.length,
+            autoApplyAllowed,
+            note: anomalous
+              ? `Lista anormal (${rawBdlList.length}); ajuste automático bloqueado`
+              : teamStatus === "SOURCE_UNAVAILABLE"
+                ? "Fuente de lesiones no disponible"
+                : teamStatus === "PARTIAL"
+                  ? "Datos de lesiones en caché/degradados; revisión manual requerida"
+                  : rawBdlList.length === 0
+                    ? "Fuente verificada: no hay ausencias activas reportadas"
+                    : "Ausencias activas verificadas por la fuente",
+          };
+
+          const bdlList = anomalous ? [] : rawBdlList;
           if (bdlList.length === 0) {
             injuryMap[tid] = [];
             return;
@@ -2783,6 +2903,24 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             h2hAwayWins: h2h?.awayWins ?? 0,
             homeInjuries: injuryMap[homeId] ?? [],
             awayInjuries: injuryMap[awayId] ?? [],
+            homeInjuryData: injuryMetaMap[homeId] ?? {
+              source: injuryFeed.source,
+              status: injuryFeed.status,
+              fetchedAt: injuryFeed.fetchedAt,
+              stale: injuryFeed.stale,
+              sourceErrors: injuryFeed.sourceErrors,
+              count: 0,
+              autoApplyAllowed: injuryFeed.status === "VERIFIED",
+            },
+            awayInjuryData: injuryMetaMap[awayId] ?? {
+              source: injuryFeed.source,
+              status: injuryFeed.status,
+              fetchedAt: injuryFeed.fetchedAt,
+              stale: injuryFeed.stale,
+              sourceErrors: injuryFeed.sourceErrors,
+              count: 0,
+              autoApplyAllowed: injuryFeed.status === "VERIFIED",
+            },
           };
         });
       });
