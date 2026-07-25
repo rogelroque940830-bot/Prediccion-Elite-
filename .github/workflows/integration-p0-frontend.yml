@@ -25,44 +25,9 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  remove-nba-production-bootstrap:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout current integration revision
-        uses: actions/checkout@v4
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v5
-        with:
-          node-version: '20'
-
-      - name: Remove production bootstrap from NBA source
-        run: python3 scripts/remove-nba-production-bootstrap.py
-
-      - name: Install backend dependencies
-        run: npm ci
-
-      - name: Build backend
-        run: npm run build:backend
-
-      - name: Commit NBA bootstrap removal
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/nba-independent-routes.ts
-          if git diff --cached --quiet; then
-            echo "No NBA bootstrap changes to commit"
-            exit 0
-          fi
-          git commit -m "fix(nba): remove production runtime bootstrap"
-          git push origin HEAD:integration/p0-staging-secure
-
   verify-nba-independent:
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -89,7 +54,6 @@ jobs:
                       raise RuntimeError(f"Incomplete NBA directory: {payload}")
                   if payload.get("source") not in {
                       "direct",
-                      "production-bootstrap-cache",
                       "integration-local-cache",
                   }:
                       raise RuntimeError(f"Unexpected NBA source: {payload}")
