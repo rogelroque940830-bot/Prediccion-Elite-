@@ -45,9 +45,31 @@ jobs:
           node-version: '20'
 
       - name: Apply MLB injury and stake hardening
-        run: python3 scripts/apply-mlb-injury-stake-hardening.py
+        id: migration
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/apply-mlb-injury-stake-hardening.py > /tmp/mlb-injury-stake-hardening.log 2>&1
+          status=$?
+          cat /tmp/mlb-injury-stake-hardening.log
+          exit "$status"
+
+      - name: Upload MLB hardening diagnostics
+        if: ${{ steps.migration.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-injury-stake-hardening-diagnostic
+          path: /tmp/mlb-injury-stake-hardening.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Enforce MLB hardening migration result
+        if: ${{ steps.migration.outcome == 'failure' }}
+        run: exit 1
 
       - name: Validate backend and security
+        if: ${{ steps.migration.outcome == 'success' }}
         run: |
           npm ci
           npm run build:backend
@@ -55,6 +77,7 @@ jobs:
           npx tsx scripts/integration-auth-smoke.ts
 
       - name: Validate frontend
+        if: ${{ steps.migration.outcome == 'success' }}
         working-directory: frontend
         env:
           VITE_API_BASE_URL: https://p0-staging.invalid
@@ -66,6 +89,7 @@ jobs:
           npm run check:dist
 
       - name: Commit validated MLB hardening
+        if: ${{ steps.migration.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
