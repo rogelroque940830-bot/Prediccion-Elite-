@@ -25,9 +25,52 @@ on:
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  apply-nhl-active-teams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout current integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Apply active NHL selector migration
+        run: python3 scripts/fix-nhl-active-team-selector.py
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: npm run build
+
+      - name: Commit active NHL selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/client/src/pages/nhl-predictor.tsx frontend/client/src/lib/nhl-model.ts
+          if git diff --cached --quiet; then
+            echo "No NHL selector changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(nhl): use verified active team directory"
+          git push origin HEAD:integration/p0-staging-secure
+
   source-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
