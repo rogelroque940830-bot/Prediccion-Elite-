@@ -106,11 +106,16 @@ export interface EreInput {
   tempF?: number;
   windMph?: number;
   windDirOut?: boolean;
+  gameDate?: string;          // YYYY-MM-DD; all recent windows end before this game
 }
 
 export interface EreResult {
   teamId: number;
   teamName: string;
+  dataStatus: "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE";
+  asOfDate: string;
+  windowStart: string;
+  sourceErrors: string[];
   // Composite
   ereScore: number;            // 0-100 final con park/weather modifier
   ereRaw: number;              // 0-100 sin modifiers
@@ -170,7 +175,10 @@ export interface EreResult {
 }
 
 export async function computeMlbEre(input: EreInput): Promise<EreResult> {
-  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut } = input;
+  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut, gameDate } = input;
+  const asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || "")
+    ? String(gameDate)
+    : new Date().toISOString().slice(0, 10);
 
   // ── 0. Rotowire lineup (anticipa 4-6h, mejor que boxscore que confirma 30min antes)
   let rotowireLineup: RotowireGame | null = null;
@@ -203,7 +211,7 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   // ── 1. Offense data (paralelo) ──────────────────────────────────────────
   const useRotowire = rotowireBatterIds.length >= 5;
   const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba, lineupTop4Woba] = await Promise.all([
-    computeTeamEarlyMetrics(teamId),
+    computeTeamEarlyMetrics(teamId, asOfDate),
     gamePk ? computeLineupTop3OBP(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     gamePk ? computeTop5IsoK(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     opposingPitcherHand ? fetchSavantTeamXwobaVsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
@@ -311,11 +319,24 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const ereScore = Math.max(0, Math.min(100, Math.round(ereRaw * parkFactor * weatherModifier * 10) / 10));
 
   // ── 6. Categoría + sugerencias de mercado ───────────────────────────────
-  const { category, marketSuggestions } = classifyEre(ereScore, offenseScore, pitcherSuppressionScore, teamMetrics.probFirstInn);
+  const dataIncomplete = teamMetrics.dataStatus === "DATA_INCOMPLETE";
+  const classified = dataIncomplete
+    ? { category: "NEUTRAL" as EreResult["category"], marketSuggestions: [] as string[] }
+    : classifyEre(ereScore, offenseScore, pitcherSuppressionScore, teamMetrics.probFirstInn);
+  const { category, marketSuggestions } = classified;
   const warnings = collectWarnings(offVars, pitVars, teamMetrics, pitcherData);
+  if (teamMetrics.dataStatus === "DATA_INCOMPLETE") {
+    warnings.unshift("DATA_INCOMPLETE: no se validaron linescores suficientes; mercados early bloqueados");
+  } else if (teamMetrics.dataStatus === "PARTIAL") {
+    warnings.unshift(`Cobertura early parcial (${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto`);
+  }
 
   return {
     teamId, teamName,
+    dataStatus: teamMetrics.dataStatus,
+    asOfDate: teamMetrics.asOfDate,
+    windowStart: teamMetrics.windowStart,
+    sourceErrors: teamMetrics.sourceErrors,
     ereScore, ereRaw,
     category,
     offenseScore: Math.round(offenseScore * 10) / 10,
@@ -475,17 +496,42 @@ function collectWarnings(
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Team early metrics (runs 1-3, F5, prob 1st inn, L7 RPG)
 // ──────────────────────────────────────────────────────────────────────────
-async function computeTeamEarlyMetrics(teamId: number) {
-  const end = new Date();
+async function computeTeamEarlyMetrics(teamId: number, asOfDate: string) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? new Date(`${asOfDate}T12:00:00Z`)
+    : new Date();
+  // The selected game must never enter its own pre-game sample.
+  const end = new Date(parsed);
+  end.setUTCDate(end.getUTCDate() - 1);
   const start = new Date(end.getTime() - 60 * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const windowStart = fmt(start);
+  const windowEnd = fmt(end);
+  const sourceErrors: string[] = [];
 
-  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${fmt(start)}&endDate=${fmt(end)}&gameType=R`;
+  const baseline = (status: "DATA_INCOMPLETE" | "PARTIAL" = "DATA_INCOMPLETE") => ({
+    gamesAnalyzed: 0,
+    earlyOff: LEAGUE.RUNS_1_3,
+    f5Runs: LEAGUE.F5_RUNS,
+    probFirstInn: LEAGUE.YRFI_RATE,
+    l7Rpg: LEAGUE.L7_RPG,
+    dataStatus: status as "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE",
+    asOfDate,
+    windowStart,
+    sourceErrors,
+  });
+
+  if (end.getTime() < start.getTime()) {
+    sourceErrors.push("invalid_date_window");
+    return baseline();
+  }
+
+  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${windowStart}&endDate=${windowEnd}&gameType=R`;
   let gamePks: number[] = [];
-  // BUG FIX: /linescore NO devuelve teams.home.team.id, mapeamos desde el schedule.
   const gameTeamMap = new Map<number, { homeId: number; awayId: number }>();
   try {
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+    if (!r.ok) throw new Error(`schedule_http_${r.status}`);
     const j: any = await r.json();
     for (const dd of j.dates ?? []) {
       for (const g of dd.games ?? []) {
@@ -498,36 +544,44 @@ async function computeTeamEarlyMetrics(teamId: number) {
         }
       }
     }
-    console.log(`[ERE] team ${teamId}: fetched ${gamePks.length} finalized games from schedule`);
+    console.log(`[ERE] team ${teamId}: fetched ${gamePks.length} finalized games through ${windowEnd}`);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    sourceErrors.push(`schedule:${msg}`);
     console.error(`[ERE] team ${teamId}: schedule fetch FAILED:`, e);
-    return { gamesAnalyzed: 0, earlyOff: 0, f5Runs: 0, probFirstInn: 0, l7Rpg: LEAGUE.L7_RPG };
+    return baseline();
   }
+
   const recent = gamePks.slice(-30);
+  if (recent.length === 0) {
+    sourceErrors.push("schedule:no_final_games");
+    return baseline();
+  }
 
   const linescores = await Promise.all(
     recent.map(async (pk) => {
       try {
         const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+        if (!lr.ok) throw new Error(`http_${lr.status}`);
         const data = await lr.json() as any;
-        // Inyectar teamIds desde el map porque /linescore no los trae
         const ids = gameTeamMap.get(pk);
         if (ids) {
           if (data.teams?.home) data.teams.home.__teamId = ids.homeId;
           if (data.teams?.away) data.teams.away.__teamId = ids.awayId;
         }
         return data;
-      } catch { return null; }
+      } catch (e) {
+        sourceErrors.push(`linescore:${pk}:${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
     })
   );
 
   let totalEarlyOff = 0, totalF5 = 0, firstInnScored = 0, gamesAnalyzed = 0;
   const l7Runs: number[] = [];
 
-  for (let idx = 0; idx < linescores.length; idx++) {
-    const ls = linescores[idx];
+  for (const ls of linescores) {
     if (!ls) continue;
-    // Usar el campo inyectado __teamId (ver map arriba). El default team.id no existe en /linescore.
     const isHome = ls.teams?.home?.__teamId === teamId || ls.teams?.home?.team?.id === teamId;
     const isAway = ls.teams?.away?.__teamId === teamId || ls.teams?.away?.team?.id === teamId;
     if (!isHome && !isAway) continue;
@@ -551,16 +605,25 @@ async function computeTeamEarlyMetrics(teamId: number) {
     l7Runs.push(fullGameRuns);
   }
 
-  const g = Math.max(1, gamesAnalyzed);
+  if (gamesAnalyzed === 0) {
+    sourceErrors.push("linescore:no_valid_games");
+    return baseline();
+  }
+
   const last7 = l7Runs.slice(-7);
   const l7Rpg = last7.length > 0 ? last7.reduce((a, b) => a + b, 0) / last7.length : LEAGUE.L7_RPG;
+  const dataStatus: "VERIFIED" | "PARTIAL" = gamesAnalyzed >= 10 ? "VERIFIED" : "PARTIAL";
 
   return {
     gamesAnalyzed,
-    earlyOff: Math.round((totalEarlyOff / g) * 100) / 100,
-    f5Runs: Math.round((totalF5 / g) * 100) / 100,
-    probFirstInn: Math.round((firstInnScored / g) * 100) / 100,
+    earlyOff: Math.round((totalEarlyOff / gamesAnalyzed) * 100) / 100,
+    f5Runs: Math.round((totalF5 / gamesAnalyzed) * 100) / 100,
+    probFirstInn: Math.round((firstInnScored / gamesAnalyzed) * 100) / 100,
     l7Rpg: Math.round(l7Rpg * 100) / 100,
+    dataStatus,
+    asOfDate,
+    windowStart,
+    sourceErrors,
   };
 }
 

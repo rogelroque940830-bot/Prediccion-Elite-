@@ -8,6 +8,10 @@ interface TesiData {
   teamId: number;
   teamName: string;
   gamesAnalyzed: number;
+  dataStatus: "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE";
+  asOfDate: string;
+  windowStart: string;
+  sourceErrors: string[];
   earlyOff: number;
   earlyDef: number;
   f5Runs: number;
@@ -41,6 +45,7 @@ interface Props {
   homePitcherHand?: "R" | "L";
   awayPitcherId?: number;
   awayPitcherHand?: "R" | "L";
+  gameDate?: string;
 }
 
 const signalColor = (s: string): string => {
@@ -60,6 +65,13 @@ const scoreColor = (s: number): string => {
 function TeamTesiPanel({ data, label }: { data: TesiData; label: string }) {
   return (
     <div className="space-y-2 p-3 rounded-lg bg-slate-800/40">
+      {data.dataStatus !== "VERIFIED" && (
+        <div className={`rounded border p-2 text-[11px] ${data.dataStatus === "DATA_INCOMPLETE" ? "border-red-500/50 bg-red-500/10 text-red-300" : "border-yellow-500/50 bg-yellow-500/10 text-yellow-300"}`}>
+          {data.dataStatus === "DATA_INCOMPLETE"
+            ? "Datos incompletos: no se autoriza señal NRFI/YRFI/F5."
+            : `Muestra parcial (${data.gamesAnalyzed} juegos): usar solo como contexto.`}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">{label}</h4>
         <Badge variant="outline" className={`text-xs ${signalColor(data.signal)}`}>
@@ -159,11 +171,11 @@ function TeamTesiPanel({ data, label }: { data: TesiData; label: string }) {
 
 export function MlbTesiCard({
   homeTeamId, awayTeamId, homeTeamName, awayTeamName,
-  gamePk, homePitcherId, homePitcherHand, awayPitcherId, awayPitcherHand,
+  gamePk, homePitcherId, homePitcherHand, awayPitcherId, awayPitcherHand, gameDate,
 }: Props) {
   // Para HOME: el pitcher rival es el AWAY
   const homeQ = useQuery<{ success: boolean; data: TesiData }>({
-    queryKey: [`tesi-home-${homeTeamId}-${gamePk}-${awayPitcherId}-${awayPitcherHand}`],
+    queryKey: [`tesi-home-${homeTeamId}-${gamePk}-${awayPitcherId}-${awayPitcherHand}-${gameDate}`],
     enabled: !!homeTeamId,
     queryFn: async () => {
       const qs = new URLSearchParams();
@@ -171,6 +183,7 @@ export function MlbTesiCard({
       if (gamePk) qs.set("gamePk", String(gamePk));
       if (awayPitcherId) qs.set("pitcherId", String(awayPitcherId));
       if (awayPitcherHand) qs.set("hand", awayPitcherHand);
+      if (gameDate) qs.set("date", gameDate);
       const r = await fetch(`${API_BASE}/api/mlb/tesi/${homeTeamId}?${qs}`);
       return r.json();
     },
@@ -180,7 +193,7 @@ export function MlbTesiCard({
 
   // Para AWAY: el pitcher rival es el HOME
   const awayQ = useQuery<{ success: boolean; data: TesiData }>({
-    queryKey: [`tesi-away-${awayTeamId}-${gamePk}-${homePitcherId}-${homePitcherHand}`],
+    queryKey: [`tesi-away-${awayTeamId}-${gamePk}-${homePitcherId}-${homePitcherHand}-${gameDate}`],
     enabled: !!awayTeamId,
     queryFn: async () => {
       const qs = new URLSearchParams();
@@ -188,6 +201,7 @@ export function MlbTesiCard({
       if (gamePk) qs.set("gamePk", String(gamePk));
       if (homePitcherId) qs.set("pitcherId", String(homePitcherId));
       if (homePitcherHand) qs.set("hand", homePitcherHand);
+      if (gameDate) qs.set("date", gameDate);
       const r = await fetch(`${API_BASE}/api/mlb/tesi/${awayTeamId}?${qs}`);
       return r.json();
     },
@@ -203,7 +217,7 @@ export function MlbTesiCard({
 
   // Edge combinado: si un equipo tiene mejor netTesi por +0.8 R/g → ventaja early clara
   let combinedEdge: { side: "Home" | "Away"; diff: number } | null = null;
-  if (homeData && awayData) {
+  if (homeData && awayData && homeData.dataStatus === "VERIFIED" && awayData.dataStatus === "VERIFIED") {
     const diff = homeData.netTesi - awayData.netTesi;
     if (Math.abs(diff) >= 0.8) {
       combinedEdge = { side: diff > 0 ? "Home" : "Away", diff: Math.abs(diff) };

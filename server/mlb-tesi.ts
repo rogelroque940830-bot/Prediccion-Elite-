@@ -21,6 +21,10 @@ export interface TesiResult {
   teamId: number;
   teamName: string;
   gamesAnalyzed: number;
+  dataStatus: "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE";
+  asOfDate: string;
+  windowStart: string;
+  sourceErrors: string[];
 
   // Team metrics
   earlyOff: number;
@@ -68,19 +72,24 @@ interface TesiInput {
   gamePk?: number;             // si se pasa, podemos buscar lineup confirmado
   opposingPitcherId?: number;  // para 1st inn ERA y TTO1 xwOBA
   opposingPitcherHand?: "R" | "L";
+  gameDate?: string;
 }
 
 export async function computeMlbTesi(input: TesiInput): Promise<TesiResult> {
-  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand } = input;
+  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, gameDate } = input;
+  const asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || "")
+    ? String(gameDate)
+    : new Date().toISOString().slice(0, 10);
+  const season = Number(asOfDate.slice(0, 4));
 
   // ── 1. Team early stats (innings 1-3, F5, prob 1st inn) ────────────────
-  const teamMetrics = await computeTeamEarlyMetrics(teamId);
+  const teamMetrics = await computeTeamEarlyMetrics(teamId, asOfDate);
 
   // ── 2. OPS vs hand del rival ────────────────────────────────────────────
   let opsVsHand: number | undefined;
   let opsVsHandLabel: string | undefined;
   if (opposingPitcherHand) {
-    opsVsHand = await computeOpsVsHand(teamId, opposingPitcherHand);
+    opsVsHand = await computeOpsVsHand(teamId, opposingPitcherHand, season);
     opsVsHandLabel = opposingPitcherHand === "R" ? "vs RHP" : "vs LHP";
   }
 
@@ -89,7 +98,7 @@ export async function computeMlbTesi(input: TesiInput): Promise<TesiResult> {
   let lineupTop3K: number | undefined;
   let lineupConfirmed: boolean | undefined;
   if (gamePk) {
-    const lineupData = await computeLineupTop3(gamePk, teamId);
+    const lineupData = await computeLineupTop3(gamePk, teamId, season);
     lineupTop3Obp = lineupData.obp;
     lineupTop3K = lineupData.k;
     lineupConfirmed = lineupData.confirmed;
@@ -100,7 +109,7 @@ export async function computeMlbTesi(input: TesiInput): Promise<TesiResult> {
   let pitcherTto1xwoba: number | undefined;
   let pitcherName: string | undefined;
   if (opposingPitcherId) {
-    const pm = await computePitcherEarlyMetrics(opposingPitcherId);
+    const pm = await computePitcherEarlyMetrics(opposingPitcherId, season);
     pitcher1stInnEra = pm.firstInnEra;
     pitcherTto1xwoba = pm.tto1xwoba;
     pitcherName = pm.name;
@@ -135,15 +144,23 @@ export async function computeMlbTesi(input: TesiInput): Promise<TesiResult> {
   }
 
   // ── Signal y recomendación ──────────────────────────────────────────────
-  const { signal, recommendation } = classifyTesi({
-    scoreOff, scoreDef, scoreLineup, scorePitcherVuln,
-    probFirstInn: teamMetrics.probFirstInn,
-  });
+  const { signal, recommendation } = teamMetrics.dataStatus === "VERIFIED"
+    ? classifyTesi({
+        scoreOff, scoreDef, scoreLineup, scorePitcherVuln,
+        probFirstInn: teamMetrics.probFirstInn,
+      })
+    : teamMetrics.dataStatus === "PARTIAL"
+      ? { signal: "PARTIAL_DATA", recommendation: "Muestra early limitada — usar solo como contexto; no autoriza NRFI/YRFI/F5" }
+      : { signal: "DATA_INCOMPLETE", recommendation: "No se validaron linescores suficientes — mercados early bloqueados" };
 
   return {
     teamId,
     teamName,
     gamesAnalyzed: teamMetrics.gamesAnalyzed,
+    dataStatus: teamMetrics.dataStatus,
+    asOfDate: teamMetrics.asOfDate,
+    windowStart: teamMetrics.windowStart,
+    sourceErrors: teamMetrics.sourceErrors,
     earlyOff: teamMetrics.earlyOff,
     earlyDef: teamMetrics.earlyDef,
     f5Runs: teamMetrics.f5Runs,
@@ -171,16 +188,41 @@ export async function computeMlbTesi(input: TesiInput): Promise<TesiResult> {
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: team early metrics (innings 1-3 + F5)
 // ──────────────────────────────────────────────────────────────────────────
-async function computeTeamEarlyMetrics(teamId: number) {
-  const end = new Date();
+async function computeTeamEarlyMetrics(teamId: number, asOfDate: string) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? new Date(`${asOfDate}T12:00:00Z`)
+    : new Date();
+  const end = new Date(parsed);
+  end.setUTCDate(end.getUTCDate() - 1);
   const start = new Date(end.getTime() - 60 * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const windowStart = fmt(start);
+  const windowEnd = fmt(end);
+  const sourceErrors: string[] = [];
+  const baseline = () => ({
+    gamesAnalyzed: 0,
+    earlyOff: LEAGUE_BASELINE_EARLY,
+    earlyDef: LEAGUE_BASELINE_EARLY,
+    f5Runs: LEAGUE_BASELINE_F5,
+    probFirstInn: 0.28,
+    dataStatus: "DATA_INCOMPLETE" as const,
+    asOfDate,
+    windowStart,
+    sourceErrors,
+  });
 
-  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${fmt(start)}&endDate=${fmt(end)}&gameType=R`;
-  const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
-  const j: any = await r.json();
+  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${windowStart}&endDate=${windowEnd}&gameType=R`;
+  let j: any;
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+    if (!r.ok) throw new Error(`schedule_http_${r.status}`);
+    j = await r.json();
+  } catch (e) {
+    sourceErrors.push(`schedule:${e instanceof Error ? e.message : String(e)}`);
+    return baseline();
+  }
+
   const gamePks: number[] = [];
-  // BUG FIX: /linescore NO devuelve team.id, mapeamos desde el schedule.
   const gameTeamMap = new Map<number, { homeId: number; awayId: number }>();
   for (const dd of j.dates ?? []) {
     for (const g of dd.games ?? []) {
@@ -194,11 +236,16 @@ async function computeTeamEarlyMetrics(teamId: number) {
     }
   }
   const recent = gamePks.slice(-30);
+  if (recent.length === 0) {
+    sourceErrors.push("schedule:no_final_games");
+    return baseline();
+  }
 
   const linescores = await Promise.all(
     recent.map(async (pk) => {
       try {
         const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+        if (!lr.ok) throw new Error(`http_${lr.status}`);
         const data = await lr.json() as any;
         const ids = gameTeamMap.get(pk);
         if (ids && data.teams) {
@@ -206,13 +253,15 @@ async function computeTeamEarlyMetrics(teamId: number) {
           if (data.teams.away) data.teams.away.__teamId = ids.awayId;
         }
         return data;
-      } catch { return null; }
+      } catch (e) {
+        sourceErrors.push(`linescore:${pk}:${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
     })
   );
 
   let totalEarlyOff = 0, totalEarlyDef = 0, totalF5 = 0;
   let firstInnScored = 0, gamesAnalyzed = 0;
-
   for (const ls of linescores) {
     if (!ls) continue;
     const isHome = ls.teams?.home?.__teamId === teamId;
@@ -239,24 +288,32 @@ async function computeTeamEarlyMetrics(teamId: number) {
     gamesAnalyzed++;
   }
 
-  const g = Math.max(1, gamesAnalyzed);
+  if (gamesAnalyzed === 0) {
+    sourceErrors.push("linescore:no_valid_games");
+    return baseline();
+  }
+  const dataStatus: "VERIFIED" | "PARTIAL" = gamesAnalyzed >= 10 ? "VERIFIED" : "PARTIAL";
   return {
     gamesAnalyzed,
-    earlyOff: Math.round((totalEarlyOff / g) * 100) / 100,
-    earlyDef: Math.round((totalEarlyDef / g) * 100) / 100,
-    f5Runs: Math.round((totalF5 / g) * 100) / 100,
-    probFirstInn: Math.round((firstInnScored / g) * 100) / 100,
+    earlyOff: Math.round((totalEarlyOff / gamesAnalyzed) * 100) / 100,
+    earlyDef: Math.round((totalEarlyDef / gamesAnalyzed) * 100) / 100,
+    f5Runs: Math.round((totalF5 / gamesAnalyzed) * 100) / 100,
+    probFirstInn: Math.round((firstInnScored / gamesAnalyzed) * 100) / 100,
+    dataStatus,
+    asOfDate,
+    windowStart,
+    sourceErrors,
   };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: OPS del equipo vs mano del pitcher rival
 // ──────────────────────────────────────────────────────────────────────────
-async function computeOpsVsHand(teamId: number, hand: "R" | "L"): Promise<number | undefined> {
+async function computeOpsVsHand(teamId: number, hand: "R" | "L", season: number): Promise<number | undefined> {
   try {
     // Team splits vs hand
     const sit = hand === "R" ? "vr" : "vl";
-    const url = `https://statsapi.mlb.com/api/v1/teams/${teamId}/stats?season=2026&stats=statSplits&group=hitting&sitCodes=${sit}`;
+    const url = `https://statsapi.mlb.com/api/v1/teams/${teamId}/stats?season=${season}&stats=statSplits&group=hitting&sitCodes=${sit}`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const stat = j.stats?.[0]?.splits?.[0]?.stat;
@@ -270,7 +327,7 @@ async function computeOpsVsHand(teamId: number, hand: "R" | "L"): Promise<number
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Top-3 lineup OBP y K%
 // ──────────────────────────────────────────────────────────────────────────
-async function computeLineupTop3(gamePk: number, teamId: number): Promise<{ obp?: number; k?: number; confirmed: boolean }> {
+async function computeLineupTop3(gamePk: number, teamId: number, season: number): Promise<{ obp?: number; k?: number; confirmed: boolean }> {
   try {
     const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
@@ -302,7 +359,7 @@ async function computeLineupTop3(gamePk: number, teamId: number): Promise<{ obp?
     const players = await Promise.all(
       playerIds.map(async (pid) => {
         try {
-          const pr = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&season=2026&group=hitting`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+          const pr = await fetch(`https://statsapi.mlb.com/api/v1/people/${pid}/stats?stats=season&season=${season}&group=hitting`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
           const pj: any = await pr.json();
           const s = pj.stats?.[0]?.splits?.[0]?.stat;
           if (!s) return null;
@@ -334,14 +391,14 @@ async function computeLineupTop3(gamePk: number, teamId: number): Promise<{ obp?
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Pitcher 1st inning ERA + TTO1 xwOBA
 // ──────────────────────────────────────────────────────────────────────────
-async function computePitcherEarlyMetrics(pitcherId: number) {
+async function computePitcherEarlyMetrics(pitcherId: number, season: number) {
   let firstInnEra: number | undefined;
   let tto1xwoba: number | undefined;
   let name: string | undefined;
 
   // 1st inning ERA: pitching splits sitCodes=i1 (inning 1)
   try {
-    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=2026&group=pitching&sitCodes=i01`;
+    const url = `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&season=${season}&group=pitching&sitCodes=i01`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     const j: any = await r.json();
     const stat = j.stats?.[0]?.splits?.[0]?.stat;
@@ -362,7 +419,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
   // Cambiado a full-season xwOBA (más estable y disponible para todos los pitchers).
   // El nombre tto1xwoba se mantiene por compatibilidad con consumers downstream.
   try {
-    const savantUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=2026%7C&player_type=pitcher&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
+    const savantUrl = `https://baseballsavant.mlb.com/statcast_search/csv?all=true&hfSea=${season}%7C&player_type=pitcher&group_by=name&sort_col=xwoba&min_pas=10&pitchers_lookup%5B%5D=${pitcherId}`;
     const r = await fetch(savantUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
     if (!r.ok) {
       console.warn(`[mlb-tesi] Savant HTTP ${r.status} para pitcher ${pitcherId}`);

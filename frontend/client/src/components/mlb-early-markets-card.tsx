@@ -20,6 +20,7 @@ interface EarlyMarkets {
   inning3: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
   confidence: "HIGH" | "MEDIUM" | "LOW";
   warnings: string[];
+  dataIncomplete?: boolean;
   // Team Total F5 markets (7 jul): probabilidad por lado según ERE category
   teamTotalOver15F5?: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
   teamTotalUnder25F5?: { homeProb: number; awayProb: number; side: "HOME" | "AWAY" | "PASS" };
@@ -59,6 +60,7 @@ interface Props {
   f5AwayMlOdds?: number;
   nrfiOdds?: number;
   yrfiOdds?: number;
+  gameDate?: string;
 }
 
 const sideBadge = (side: string, label: string): JSX.Element => {
@@ -117,7 +119,7 @@ export function MlbEarlyMarketsCard(props: Props) {
     queryKey: [
       "early-markets", homeTeamId, awayTeamId, gamePk,
       props.f5OverLine, props.f5OverOdds, props.f5UnderOdds,
-      props.nrfiOdds, props.yrfiOdds,
+      props.nrfiOdds, props.yrfiOdds, props.gameDate,
     ],
     enabled: !!homeTeamId && !!awayTeamId,
     queryFn: async () => {
@@ -130,6 +132,7 @@ export function MlbEarlyMarketsCard(props: Props) {
           teamId: awayTeamId, teamName: awayTeamName, gamePk,
           opposingPitcherId: homePitcherId, opposingPitcherHand: homePitcherHand,
         },
+        gameDate: props.gameDate,
         lines: {
           f5OverLine: props.f5OverLine,
           f5OverOdds: props.f5OverOdds, f5UnderOdds: props.f5UnderOdds,
@@ -173,7 +176,14 @@ export function MlbEarlyMarketsCard(props: Props) {
         {isLoading && <div className="text-sm text-slate-400">Calculando mercados early (15-20s)...</div>}
         {!isLoading && !m && <div className="text-sm text-slate-400">Sin datos disponibles</div>}
 
-        {m && (
+        {m?.dataIncomplete && (
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-300">
+            <div className="font-bold">Datos early incompletos — no apostar</div>
+            <div className="mt-1 text-xs">NRFI/YRFI, F5 e innings quedaron bloqueados hasta recuperar linescores verificados.</div>
+          </div>
+        )}
+
+        {m && !m.dataIncomplete && (
           <>
             {/* 🎯 PICK RECOMENDADO (reglas 23 jun + recalibración 1 jul) */}
             {m.finalRecommendation && (

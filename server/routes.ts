@@ -225,6 +225,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       // Calcular ERE para ambos equipos + matchup signal en paralelo
       const sharedGamePk = home.gamePk || away.gamePk;
       const currentSeason = new Date().getFullYear();
+      const analysisDateIso = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.gameDate || ""))
+        ? String(req.body.gameDate)
+        : new Date().toISOString().slice(0, 10);
       // FASE 1 — toggle para A/B testing del matchup signal
       const disableMatchup = req.body?.disableMatchup === true || req.query?.disableMatchup === "1";
       const [homeEre, awayEre, matchupSignal] = await Promise.all([
@@ -233,14 +236,14 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           gamePk: home.gamePk, opposingPitcherId: home.opposingPitcherId,
           opposingPitcherHand: home.opposingPitcherHand,
           venue: home.venue, tempF: home.tempF, windMph: home.windMph,
-          windDirOut: home.windDirOut,
+          windDirOut: home.windDirOut, gameDate: analysisDateIso,
         }),
         computeMlbEre({
           teamId: away.teamId, teamName: away.teamName || "",
           gamePk: away.gamePk, opposingPitcherId: away.opposingPitcherId,
           opposingPitcherHand: away.opposingPitcherHand,
           venue: away.venue, tempF: away.tempF, windMph: away.windMph,
-          windDirOut: away.windDirOut,
+          windDirOut: away.windDirOut, gameDate: analysisDateIso,
         }),
         // FASE 1 — matchup pitch-by-pitch para refinar NRFI/YRFI top-4
         (sharedGamePk && !disableMatchup)
@@ -409,6 +412,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const tempF = req.query.tempF ? parseFloat(String(req.query.tempF)) : undefined;
       const windMph = req.query.windMph ? parseFloat(String(req.query.windMph)) : undefined;
       const windDirOut = String(req.query.windOut || "false").toLowerCase() === "true";
+      const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+        ? String(req.query.date)
+        : new Date().toISOString().slice(0, 10);
 
       const data = await computeMlbEre({
         teamId, teamName,
@@ -419,6 +425,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         tempF: isNaN(tempF as any) ? undefined : tempF,
         windMph: isNaN(windMph as any) ? undefined : windMph,
         windDirOut,
+        gameDate,
       });
       res.json({ success: true, data });
     } catch (e: any) {
@@ -437,11 +444,15 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const opposingPitcherId = req.query.pitcherId ? parseInt(String(req.query.pitcherId), 10) : undefined;
       const handStr = String(req.query.hand || "").toUpperCase();
       const opposingPitcherHand: "R" | "L" | undefined = handStr === "R" || handStr === "L" ? (handStr as "R" | "L") : undefined;
+      const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ""))
+        ? String(req.query.date)
+        : new Date().toISOString().slice(0, 10);
 
       const data = await computeMlbTesi({
         teamId, teamName, gamePk: isNaN(gamePk as any) ? undefined : gamePk,
         opposingPitcherId: isNaN(opposingPitcherId as any) ? undefined : opposingPitcherId,
         opposingPitcherHand,
+        gameDate,
       });
       res.json({ success: true, data });
     } catch (e: any) {

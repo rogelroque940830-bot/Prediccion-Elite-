@@ -14,6 +14,10 @@ interface EreVar {
 interface EreData {
   teamId: number;
   teamName: string;
+  dataStatus: "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE";
+  asOfDate: string;
+  windowStart: string;
+  sourceErrors: string[];
   ereScore: number;
   ereRaw: number;
   category: string;
@@ -74,6 +78,7 @@ interface Props {
   tempF?: number;
   windMph?: number;
   windOut?: boolean;
+  gameDate?: string;
 }
 
 const categoryColor = (c: string): string => {
@@ -138,6 +143,13 @@ function TeamErePanel({ data, label }: { data: EreData; label: string }) {
 
   return (
     <div className="space-y-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700">
+      {data.dataStatus !== "VERIFIED" && (
+        <div className={`rounded border p-2 text-[11px] ${data.dataStatus === "DATA_INCOMPLETE" ? "border-red-500/50 bg-red-500/10 text-red-300" : "border-yellow-500/50 bg-yellow-500/10 text-yellow-300"}`}>
+          {data.dataStatus === "DATA_INCOMPLETE"
+            ? "DATA_INCOMPLETE: mercados early bloqueados; los valores neutrales son priors, no estadísticas verificadas."
+            : `Cobertura parcial (${data.asOfDate}; ventana desde ${data.windowStart}).`}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">{label}</h4>
         <div className="flex gap-1 items-center">
@@ -384,10 +396,10 @@ function TeamErePanel({ data, label }: { data: EreData; label: string }) {
 export function MlbEreCard({
   homeTeamId, awayTeamId, homeTeamName, awayTeamName,
   gamePk, homePitcherId, homePitcherHand, awayPitcherId, awayPitcherHand,
-  venue, tempF, windMph, windOut,
+  venue, tempF, windMph, windOut, gameDate,
 }: Props) {
   const homeQ = useQuery<{ success: boolean; data: EreData }>({
-    queryKey: [`ere-home-${homeTeamId}-${gamePk}-${awayPitcherId}-${awayPitcherHand}-${venue}-${tempF}`],
+    queryKey: [`ere-home-${homeTeamId}-${gamePk}-${awayPitcherId}-${awayPitcherHand}-${venue}-${tempF}-${gameDate}`],
     enabled: !!homeTeamId,
     queryFn: async () => {
       const qs = new URLSearchParams();
@@ -399,6 +411,7 @@ export function MlbEreCard({
       if (tempF !== undefined) qs.set("tempF", String(tempF));
       if (windMph !== undefined) qs.set("windMph", String(windMph));
       if (windOut) qs.set("windOut", "true");
+      if (gameDate) qs.set("date", gameDate);
       const r = await fetch(`${API_BASE}/api/mlb/ere/${homeTeamId}?${qs}`);
       return r.json();
     },
@@ -407,7 +420,7 @@ export function MlbEreCard({
   });
 
   const awayQ = useQuery<{ success: boolean; data: EreData }>({
-    queryKey: [`ere-away-${awayTeamId}-${gamePk}-${homePitcherId}-${homePitcherHand}-${venue}-${tempF}`],
+    queryKey: [`ere-away-${awayTeamId}-${gamePk}-${homePitcherId}-${homePitcherHand}-${venue}-${tempF}-${gameDate}`],
     enabled: !!awayTeamId,
     queryFn: async () => {
       const qs = new URLSearchParams();
@@ -419,6 +432,7 @@ export function MlbEreCard({
       if (tempF !== undefined) qs.set("tempF", String(tempF));
       if (windMph !== undefined) qs.set("windMph", String(windMph));
       if (windOut) qs.set("windOut", "true");
+      if (gameDate) qs.set("date", gameDate);
       const r = await fetch(`${API_BASE}/api/mlb/ere/${awayTeamId}?${qs}`);
       return r.json();
     },
@@ -435,7 +449,7 @@ export function MlbEreCard({
   // Composite del juego: promedio de ambos ERE
   let gameComposite: number | null = null;
   let gameSignal: string | null = null;
-  if (homeData && awayData) {
+  if (homeData && awayData && homeData.dataStatus !== "DATA_INCOMPLETE" && awayData.dataStatus !== "DATA_INCOMPLETE") {
     gameComposite = (homeData.ereScore + awayData.ereScore) / 2;
     if (gameComposite >= 65) gameSignal = "F5 OVER / Full Game OVER lean";
     else if (gameComposite <= 40) gameSignal = "F5 UNDER / NRFI";
