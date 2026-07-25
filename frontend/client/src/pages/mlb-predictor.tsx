@@ -2234,7 +2234,7 @@ export default function MLBPredictor() {
             pickedSideLabel: f5PickedSideLocal === "away" ? (awayTeam || "Visitante") : (homeTeam || "Local"),
             pickedSideExtra: "F5",
             marketGap: f5MarketGap, eliteFactorsActive, rookieAlert, recentImplosion,
-            statcastDataQuality, statcastSignal, injuryProbDelta,
+            statcastDataQuality, statcastSignal, injuryProbDelta, injuryDataQuality,
             sharpAgainst: sharpAgainstML, sharpStrong,
           });
           // Si la fuente fue consenso (no manual de HR), avisar sobre incertidumbre de precio
