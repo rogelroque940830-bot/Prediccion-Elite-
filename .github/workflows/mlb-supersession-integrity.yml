@@ -49,8 +49,26 @@ jobs:
         run: npm ci
 
       - name: Type-check backend contracts
+        id: supersession_typecheck
         if: steps.guard.outputs.skip != 'true'
-        run: npm run typecheck:mlb-ledger
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck:mlb-ledger 2>&1 | tee mlb-supersession-typecheck.txt
+
+      - name: Upload supersession diagnostics
+        if: always() && steps.guard.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-supersession-typecheck
+          path: mlb-supersession-typecheck.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce backend contracts
+        if: steps.supersession_typecheck.outcome == 'failure'
+        run: exit 1
 
       - name: Run ledger and snapshot tests
         if: steps.guard.outputs.skip != 'true'
