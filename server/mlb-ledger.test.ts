@@ -76,7 +76,7 @@ test("prediction writes are idempotent and immutable", () => {
     const first = store.appendPrediction(predictionPayload());
     assert.equal(first.idempotent, false);
     assert.equal(first.data.probabilities.model, 0.61);
-    assert.equal(first.data.probabilities.edgePp, 6.5);
+    assert.ok(Math.abs(first.data.probabilities.edgePp - 6.5) < 1e-9);
 
     const retry = store.appendPrediction(predictionPayload());
     assert.equal(retry.idempotent, true);
