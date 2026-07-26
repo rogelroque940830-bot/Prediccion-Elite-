@@ -5,6 +5,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { computeCLV, getAllSnapshots, type LineSnapshot } from "./sharp-signals";
 import { getMlbLedgerStore } from "./mlb-ledger";
+import { buildMlbLedgerPredictionFromPick, mlbScientificSnapshotSchema } from "./mlb-scientific-snapshot";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const PICKS_FILE = path.join(DATA_DIR, "picks.json");
@@ -40,10 +41,11 @@ const savedPickSchema = z.object({
   closingOdds: z.number().finite().optional(),
   closingImpliedProb: z.number().finite().min(0).max(100).optional(),
   clvPercent: z.number().finite().optional(),
+  scientificSnapshot: mlbScientificSnapshotSchema.optional(),
 }).strict();
 
 const patchSchema = savedPickSchema
-  .omit({ id: true, ts: true, sport: true, homeTeam: true, awayTeam: true, pickType: true, pickSide: true, confidence: true })
+  .omit({ id: true, ts: true, sport: true, homeTeam: true, awayTeam: true, pickType: true, pickSide: true, confidence: true, scientificSnapshot: true })
   .partial()
   .extend({
     sport: sportSchema.optional(),
@@ -207,73 +209,7 @@ function normalizedOptionalProbability(value: number | undefined): number | unde
 
 function mirrorMlbPickToScientificLedger(pick: SavedPickV2): void {
   if (pick.sport !== "mlb") return;
-  const parsedOdds = parseAmericanOdds(pick.odds);
-  if (parsedOdds == null) {
-    console.warn(`[mlb-ledger] pick ${pick.id} not mirrored: missing valid American odds`);
-    return;
-  }
-
-  const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(pick.date || "")
-    ? String(pick.date)
-    : new Date(pick.ts).toISOString().slice(0, 10);
-  const modelProbability = normalizedModelProbability(pick);
-  const impliedProbability = normalizedOptionalProbability(pick.impliedProb);
-
-  getMlbLedgerStore().appendPrediction({
-    schemaVersion: "mlb-ledger.v1",
-    clientRequestId: `picks-v2:${pick.id}`,
-    source: "app",
-    model: {
-      name: "CourtEdge MLB",
-      version: "picks-v2-mirror-v1",
-    },
-    game: {
-      gameDate,
-      homeTeam: pick.homeTeam,
-      awayTeam: pick.awayTeam,
-    },
-    market: {
-      type: mapLedgerMarket(pick.pickType),
-      selection: pick.pickSide,
-      line: parseLineNumber(pick.line || pick.pickSide),
-      oddsAmerican: Math.round(parsedOdds),
-      book: pick.source === "manual" ? "Manual" : undefined,
-      capturedAt: new Date(pick.ts).toISOString(),
-    },
-    probabilities: {
-      model: modelProbability,
-      marketImplied: impliedProbability,
-      edgePp: pick.edge,
-    },
-    decision: {
-      signal: "INFO",
-      confidenceLabel: "LEGACY_SAVED_PICK",
-      confidencePct: pick.confidence,
-      stakeUnits: pick.stake ?? 0,
-      rationale: "Immutable mirror of a user-selected canonical MLB history pick. Exact model authorization was not present in the legacy save payload.",
-    },
-    analysis: {
-      stage: "PROVISIONAL",
-      warnings: [
-        "Legacy picks-v2 mirror: full factor snapshot and final authorization were not included in the original save payload.",
-      ],
-      sources: [
-        {
-          name: "Canonical Picks V2",
-          status: "MANUAL",
-          fetchedAt: new Date(pick.ts).toISOString(),
-          metadata: { canonicalPickId: pick.id },
-        },
-      ],
-      rawInputs: pick,
-      rawOutput: {
-        pickType: pick.pickType,
-        pickSide: pick.pickSide,
-        confidence: pick.confidence,
-        edge: pick.edge,
-      },
-    },
-  });
+  getMlbLedgerStore().appendPrediction(buildMlbLedgerPredictionFromPick(pick as Parameters<typeof buildMlbLedgerPredictionFromPick>[0]));
 }
 
 export function registerPicksV2Routes(app: Express): void {
@@ -305,21 +241,39 @@ export function registerPicksV2Routes(app: Express): void {
       ts: parsed.data.ts || Date.now(),
     };
 
-    const picks = loadPicks();
+    const originalPicks = loadPicks();
+    const picks = originalPicks.map((item) => ({ ...item }));
     const existingIndex = picks.findIndex((item) => item.id === pick.id);
     if (existingIndex >= 0) picks[existingIndex] = { ...picks[existingIndex], ...pick };
     else picks.push(pick);
-    savePicks(picks);
 
+    savePicks(picks);
     try {
       mirrorMlbPickToScientificLedger(pick);
-    } catch (error) {
-      // The editable user history remains available even if scientific mirroring fails.
-      // The ledger error is visible in logs and can be repaired with an explicit backfill.
-      console.error(`[mlb-ledger] mirror failed for canonical pick ${pick.id}`, error);
+    } catch (error: any) {
+      if (pick.scientificSnapshot) {
+        // A full snapshot is one canonical scientific event. Compensate the editable
+        // history write rather than silently leaving it disconnected from the ledger.
+        savePicks(originalPicks);
+        console.error(`[mlb-ledger] canonical snapshot failed for pick ${pick.id}`, error);
+        res.status(error?.status || 500).json({
+          success: false,
+          error: error?.message || "Scientific MLB snapshot could not be recorded",
+        });
+        return;
+      }
+      // Legacy records remain best-effort provisional mirrors.
+      console.error(`[mlb-ledger] provisional mirror failed for canonical pick ${pick.id}`, error);
     }
 
-    res.status(existingIndex >= 0 ? 200 : 201).json({ success: true, data: pick });
+    res.status(existingIndex >= 0 ? 200 : 201).json({
+      success: true,
+      data: pick,
+      ledger: pick.sport === "mlb" ? {
+        mode: pick.scientificSnapshot ? "FULL_SNAPSHOT" : "PROVISIONAL_MIRROR",
+        clientRequestId: `picks-v2:${pick.id}`,
+      } : undefined,
+    });
   });
 
   app.patch("/api/picks/v2/:id", (req, res) => {

@@ -1,5 +1,6 @@
 // Cliente canónico de picks. Todas las escrituras usan /api/picks/v2.
 import { fetchJson } from "./queryClient";
+import type { MlbScientificSnapshot } from "./mlb-scientific-snapshot";
 
 export interface SavedPick {
   id: string;
@@ -29,6 +30,7 @@ export interface SavedPick {
   closingOdds?: number;
   closingImpliedProb?: number;
   clvPercent?: number;
+  scientificSnapshot?: MlbScientificSnapshot;
 }
 
 export type NewPick = Omit<SavedPick, "id" | "ts"> & {

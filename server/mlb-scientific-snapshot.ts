@@ -25,7 +25,7 @@ export type MlbScientificSnapshot = z.infer<typeof mlbScientificSnapshotSchema>;
 export interface SavedMlbPickLike {
   id: string;
   ts: number;
-  sport: "mlb" | "nba" | "nhl" | "wnba";
+  sport?: "mlb" | "nba" | "nhl" | "wnba";
   homeTeam: string;
   awayTeam: string;
   pickType: string;
