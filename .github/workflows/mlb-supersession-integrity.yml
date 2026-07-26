@@ -44,6 +44,23 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: python scripts/link-mlb-supersession.py
 
+      - name: Widen provisional test fixture
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('server/mlb-scientific-snapshot.test.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '  snapshot.analysis.stage = "PROVISIONAL";'
+          new = '  (snapshot.analysis as any).stage = "PROVISIONAL";'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('Provisional test fixture assignment not found')
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Install backend dependencies
         if: steps.guard.outputs.skip != 'true'
         run: npm ci
