@@ -17,6 +17,10 @@ export const app = express();
 // Railway terminates TLS and forwards one trusted proxy hop.
 app.set("trust proxy", 1);
 const httpServer = createServer(app);
+const deploymentCommit =
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.GIT_COMMIT_SHA ||
+  "unknown";
 
 const missingApiVariables = ["BDL_API_KEY", "ODDS_API_KEY"].filter(
   (name) => !process.env[name],
@@ -91,7 +95,12 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "healthy" });
+  res.json({
+    status: "healthy",
+    commit: deploymentCommit,
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
+    mlbLedgerAutoSettlement: process.env.MLB_LEDGER_AUTO_SETTLE !== "false",
+  });
 });
 
 (async () => {
@@ -125,7 +134,7 @@ app.get("/health", (_req, res) => {
       host: "0.0.0.0",
     },
     () => {
-      log(`CourtEdge Backend serving on port ${port}`);
+      log(`CourtEdge Backend serving on port ${port} commit ${deploymentCommit}`);
     },
   );
 })();
