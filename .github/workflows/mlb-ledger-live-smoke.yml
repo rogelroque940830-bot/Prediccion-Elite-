@@ -11,6 +11,16 @@ on:
       - 'server/index.ts'
       - 'server/security.ts'
       - 'server/picks-v2.ts'
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/mlb-ledger-live-smoke.yml'
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'server/picks-v2.ts'
   workflow_dispatch:
 
 permissions:
