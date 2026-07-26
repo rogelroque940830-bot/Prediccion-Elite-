@@ -15,7 +15,7 @@ on:
       - 'server/picks-v2.ts'
       - 'server/index.ts'
       - 'server/security.ts'
-      - 'scripts/mlb-ledger-phase1-e2e.mjs'
+      - 'scripts/mlb-ledger-phase1-e2e-v2.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.mlb-ledger.json'
@@ -33,7 +33,7 @@ on:
       - 'server/picks-v2.ts'
       - 'server/index.ts'
       - 'server/security.ts'
-      - 'scripts/mlb-ledger-phase1-e2e.mjs'
+      - 'scripts/mlb-ledger-phase1-e2e-v2.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.mlb-ledger.json'
@@ -110,7 +110,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node scripts/mlb-ledger-phase1-e2e.mjs 2>&1 | tee phase1-e2e-run.log
+          node scripts/mlb-ledger-phase1-e2e-v2.mjs 2>&1 | tee phase1-e2e-run.log
 
       - name: Upload isolated E2E evidence
         if: always()
