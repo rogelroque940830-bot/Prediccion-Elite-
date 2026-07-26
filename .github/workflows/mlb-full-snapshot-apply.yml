@@ -1,0 +1,78 @@
+name: Apply MLB Full Snapshot Patch
+
+on:
+  push:
+    branches:
+      - integration/mlb-ledger-full-snapshot
+    paths:
+      - 'scripts/apply-mlb-full-snapshot.py'
+      - '.github/workflows/mlb-full-snapshot-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration/mlb-ledger-full-snapshot
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Apply reproducible patch
+        run: python scripts/apply-mlb-full-snapshot.py
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Type-check ledger and snapshot mapper
+        run: npm run typecheck:mlb-ledger
+
+      - name: Test ledger and snapshot mapper
+        run: npm run test:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Commit validated integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "courtedge-ci"
+          git config user.email "courtedge-ci@users.noreply.github.com"
+          git add \
+            frontend/client/src/lib/picks-api.ts \
+            frontend/client/src/lib/context.tsx \
+            frontend/client/src/pages/mlb-predictor.tsx \
+            server/picks-v2.ts \
+            package.json \
+            tsconfig.mlb-ledger.json
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit"
+            exit 0
+          fi
+          git commit -m "feat(mlb): connect full scientific snapshot to ledger [snapshot-applied]"
+          git push origin HEAD:integration/mlb-ledger-full-snapshot
