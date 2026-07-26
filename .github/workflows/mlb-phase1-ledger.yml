@@ -1,0 +1,99 @@
+name: MLB Phase 1 Ledger
+
+on:
+  push:
+    branches:
+      - integration/mlb-phase1-ledger
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-ledger.test.ts'
+      - 'server/better-sqlite3.d.ts'
+      - 'server/picks-v2.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/mlb-phase1-ledger.yml'
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-ledger.test.ts'
+      - 'server/better-sqlite3.d.ts'
+      - 'server/picks-v2.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/mlb-phase1-ledger.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check MLB ledger
+        id: ledger_typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck:mlb-ledger 2>&1 | tee mlb-ledger-typecheck.txt
+
+      - name: Upload typecheck diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-ledger-typecheck
+          path: mlb-ledger-typecheck.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce ledger typecheck
+        if: ${{ steps.ledger_typecheck.outcome == 'failure' }}
+        run: exit 1
+
+      - name: Test immutable MLB ledger
+        id: ledger_tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:mlb-ledger 2>&1 | tee mlb-ledger-tests.txt
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-ledger-tests
+          path: mlb-ledger-tests.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce ledger tests
+        if: ${{ steps.ledger_tests.outcome == 'failure' }}
+        run: exit 1
+
+      - name: Build backend
+        run: npm run build:backend

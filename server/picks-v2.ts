@@ -4,6 +4,7 @@ import path from "path";
 import type { Express } from "express";
 import { z } from "zod";
 import { computeCLV, getAllSnapshots, type LineSnapshot } from "./sharp-signals";
+import { getMlbLedgerStore } from "./mlb-ledger";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const PICKS_FILE = path.join(DATA_DIR, "picks.json");
@@ -174,6 +175,107 @@ function parseNumberQuery(raw: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function mapLedgerMarket(pickType: string): "ML" | "F5_ML" | "RUN_LINE" | "TOTAL" | "F5_TOTAL" | "OTHER" {
+  const normalized = pickType.trim().toLowerCase();
+  if (normalized === "ml" || normalized.includes("moneyline")) return "ML";
+  if (normalized === "f5" || normalized.includes("f5 ml")) return "F5_ML";
+  if (normalized.includes("run line") || normalized.includes("runline") || normalized.includes("spread")) return "RUN_LINE";
+  if (normalized.includes("f5") && (normalized.includes("o/u") || normalized.includes("total"))) return "F5_TOTAL";
+  if (normalized.includes("o/u") || normalized.includes("total")) return "TOTAL";
+  return "OTHER";
+}
+
+function parseLineNumber(line: string | undefined): number | undefined {
+  if (!line) return undefined;
+  const matches = line.match(/[+-]?\d+(?:\.\d+)?/g);
+  if (!matches?.length) return undefined;
+  const value = Number(matches[matches.length - 1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function normalizedModelProbability(pick: SavedPickV2): number {
+  const raw = pick.modelProb ?? pick.confidence;
+  const probability = raw > 1 ? raw / 100 : raw;
+  return Math.min(0.999, Math.max(0.001, probability));
+}
+
+function normalizedOptionalProbability(value: number | undefined): number | undefined {
+  if (value == null || !Number.isFinite(value)) return undefined;
+  const probability = value > 1 ? value / 100 : value;
+  return probability > 0 && probability < 1 ? probability : undefined;
+}
+
+function mirrorMlbPickToScientificLedger(pick: SavedPickV2): void {
+  if (pick.sport !== "mlb") return;
+  const parsedOdds = parseAmericanOdds(pick.odds);
+  if (parsedOdds == null) {
+    console.warn(`[mlb-ledger] pick ${pick.id} not mirrored: missing valid American odds`);
+    return;
+  }
+
+  const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(pick.date || "")
+    ? String(pick.date)
+    : new Date(pick.ts).toISOString().slice(0, 10);
+  const modelProbability = normalizedModelProbability(pick);
+  const impliedProbability = normalizedOptionalProbability(pick.impliedProb);
+
+  getMlbLedgerStore().appendPrediction({
+    schemaVersion: "mlb-ledger.v1",
+    clientRequestId: `picks-v2:${pick.id}`,
+    source: "app",
+    model: {
+      name: "CourtEdge MLB",
+      version: "picks-v2-mirror-v1",
+    },
+    game: {
+      gameDate,
+      homeTeam: pick.homeTeam,
+      awayTeam: pick.awayTeam,
+    },
+    market: {
+      type: mapLedgerMarket(pick.pickType),
+      selection: pick.pickSide,
+      line: parseLineNumber(pick.line || pick.pickSide),
+      oddsAmerican: Math.round(parsedOdds),
+      book: pick.source === "manual" ? "Manual" : undefined,
+      capturedAt: new Date(pick.ts).toISOString(),
+    },
+    probabilities: {
+      model: modelProbability,
+      marketImplied: impliedProbability,
+      edgePp: pick.edge,
+    },
+    decision: {
+      signal: "INFO",
+      confidenceLabel: "LEGACY_SAVED_PICK",
+      confidencePct: pick.confidence,
+      stakeUnits: pick.stake ?? 0,
+      rationale: "Immutable mirror of a user-selected canonical MLB history pick. Exact model authorization was not present in the legacy save payload.",
+    },
+    analysis: {
+      stage: "PROVISIONAL",
+      warnings: [
+        "Legacy picks-v2 mirror: full factor snapshot and final authorization were not included in the original save payload.",
+      ],
+      sources: [
+        {
+          name: "Canonical Picks V2",
+          status: "MANUAL",
+          fetchedAt: new Date(pick.ts).toISOString(),
+          metadata: { canonicalPickId: pick.id },
+        },
+      ],
+      rawInputs: pick,
+      rawOutput: {
+        pickType: pick.pickType,
+        pickSide: pick.pickSide,
+        confidence: pick.confidence,
+        edge: pick.edge,
+      },
+    },
+  });
+}
+
 export function registerPicksV2Routes(app: Express): void {
   app.get("/api/picks/v2", (req, res) => {
     const sport = typeof req.query.sport === "string" ? req.query.sport.toLowerCase() : undefined;
@@ -208,6 +310,14 @@ export function registerPicksV2Routes(app: Express): void {
     if (existingIndex >= 0) picks[existingIndex] = { ...picks[existingIndex], ...pick };
     else picks.push(pick);
     savePicks(picks);
+
+    try {
+      mirrorMlbPickToScientificLedger(pick);
+    } catch (error) {
+      // The editable user history remains available even if scientific mirroring fails.
+      // The ledger error is visible in logs and can be repaired with an explicit backfill.
+      console.error(`[mlb-ledger] mirror failed for canonical pick ${pick.id}`, error);
+    }
 
     res.status(existingIndex >= 0 ? 200 : 201).json({ success: true, data: pick });
   });
