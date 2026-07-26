@@ -122,6 +122,7 @@ const PROTECTED_WRITE_PATHS = [
   /^\/api\/picks(?:\/|$)/,
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/sharp(?:\/|$)/,
+  /^\/api\/mlb\/ledger(?:\/|$)/,
 ];
 
 function isProtectedWrite(req: Request): boolean {
