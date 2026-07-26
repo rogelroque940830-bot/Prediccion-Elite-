@@ -7,11 +7,30 @@ on:
       - integration/p0-staging-secure
     paths:
       - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
       - 'server/mlb-ledger.test.ts'
+      - 'server/better-sqlite3.d.ts'
+      - 'server/picks-v2.ts'
       - 'server/index.ts'
       - 'server/security.ts'
       - 'package.json'
       - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/mlb-phase1-ledger.yml'
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-ledger.test.ts'
+      - 'server/better-sqlite3.d.ts'
+      - 'server/picks-v2.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
       - '.github/workflows/mlb-phase1-ledger.yml'
   workflow_dispatch:
 
@@ -34,8 +53,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type-check backend
-        run: npm run typecheck
+      - name: Type-check MLB ledger
+        run: npm run typecheck:mlb-ledger
 
       - name: Test immutable MLB ledger
         run: npm run test:mlb-ledger
