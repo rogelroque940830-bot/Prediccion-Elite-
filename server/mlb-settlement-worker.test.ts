@@ -24,7 +24,12 @@ const officialGame: OfficialMlbGame = {
   ],
 };
 
-function prediction(type: string, selection: string, line: number | null = null): LedgerPrediction {
+function prediction(
+  type: string,
+  selection: string,
+  line: number | null = null,
+  gameOverrides: Partial<LedgerPrediction["game"]> = {},
+): LedgerPrediction {
   return {
     id: `pred-${type}-${selection}`,
     clientRequestId: null,
@@ -36,6 +41,7 @@ function prediction(type: string, selection: string, line: number | null = null)
       commenceTime: "2026-07-30T23:00:00.000Z",
       homeTeam: officialGame.homeTeam,
       awayTeam: officialGame.awayTeam,
+      ...gameOverrides,
     },
     market: {
       type,
@@ -76,6 +82,19 @@ test("grades full-game ML and run line from official score", () => {
   assert.equal(gradeMlbPrediction(prediction("RUN_LINE", "Home Club -1.5", -1.5), officialGame)?.result, "WIN");
   assert.equal(gradeMlbPrediction(prediction("RUN_LINE", "Away Club +1.5", 1.5), officialGame)?.result, "LOSS");
   assert.equal(gradeMlbPrediction(prediction("RUN_LINE", "Away Club +2", 2), officialGame)?.result, "PUSH");
+});
+
+test("official MLB orientation overrides reversed legacy history fields", () => {
+  const reversedLegacy = prediction(
+    "ML",
+    "Away Club ML",
+    null,
+    {
+      homeTeam: "Away Club",
+      awayTeam: "Home Club",
+    },
+  );
+  assert.equal(gradeMlbPrediction(reversedLegacy, officialGame)?.result, "LOSS");
 });
 
 test("grades F5 markets independently from full-game result", () => {
