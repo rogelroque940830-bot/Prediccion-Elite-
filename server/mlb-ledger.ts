@@ -6,6 +6,7 @@ import {
   canonicalJson,
   recordsToCsv,
 } from "./mlb-ledger-store";
+import { runMlbAutoSettlement } from "./mlb-settlement-worker";
 
 let singletonStore: MlbLedgerStore | null = null;
 
@@ -44,6 +45,18 @@ export function registerMlbLedgerRoutes(app: Express): void {
 
   app.get("/api/mlb/ledger/v1/status", (_req, res) => {
     res.json({ success: true, data: store.status() });
+  });
+
+  app.post("/api/mlb/ledger/v1/settle-pending", async (_req, res) => {
+    try {
+      const data = await runMlbAutoSettlement(store);
+      res.json({ success: true, data });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error?.message || "Unable to settle pending MLB predictions",
+      });
+    }
   });
 
   app.post("/api/mlb/ledger/v1/predictions", (req, res) => {

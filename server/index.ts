@@ -10,7 +10,8 @@ import {
 } from "./security";
 import { createSessionMiddleware, registerAuthRoutes } from "./auth";
 import { registerPicksV2Routes } from "./picks-v2";
-import { registerMlbLedgerRoutes } from "./mlb-ledger";
+import { getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
+import { startMlbSettlementWorker } from "./mlb-settlement-worker";
 
 export const app = express();
 // Railway terminates TLS and forwards one trusted proxy hop.
@@ -99,6 +100,8 @@ app.get("/health", (_req, res) => {
   registerPicksV2Routes(app);
   // Scientific MLB ledger: append-only predictions, settlements and reports.
   registerMlbLedgerRoutes(app);
+  // Official MLB results are checked after startup and every 15 minutes.
+  startMlbSettlementWorker(getMlbLedgerStore());
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
