@@ -1,0 +1,60 @@
+name: MLB Full Scientific Snapshot
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'frontend/client/src/lib/mlb-scientific-snapshot.ts'
+      - 'frontend/client/src/lib/picks-api.ts'
+      - 'frontend/client/src/lib/context.tsx'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'server/mlb-scientific-snapshot.ts'
+      - 'server/mlb-scientific-snapshot.test.ts'
+      - 'server/picks-v2.ts'
+      - 'package.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/mlb-full-snapshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Type-check scientific ledger
+        run: npm run typecheck:mlb-ledger
+
+      - name: Test immutable ledger and full snapshot mapping
+        run: npm run test:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
