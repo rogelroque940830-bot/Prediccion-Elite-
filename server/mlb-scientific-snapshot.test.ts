@@ -1,0 +1,139 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildMlbLedgerPredictionFromPick } from "./mlb-scientific-snapshot";
+
+function basePick() {
+  return {
+    id: "ui-mlb-42",
+    ts: Date.parse("2026-07-26T18:00:00.000Z"),
+    sport: "mlb" as const,
+    homeTeam: "Tampa Bay Rays",
+    awayTeam: "Cleveland Guardians",
+    pickType: "ML",
+    pickSide: "Tampa Bay Rays ML",
+    confidence: 61.2,
+    edge: 8.8,
+    odds: -110,
+    date: "2026-07-26",
+    modelProb: 61.2,
+    impliedProb: 52.38,
+    stake: 1,
+  };
+}
+
+function fullSnapshot() {
+  return {
+    schemaVersion: "mlb-scientific-snapshot.v1" as const,
+    model: {
+      name: "CourtEdge MLB",
+      version: "predictor-full-snapshot-v1",
+    },
+    game: {
+      gamePk: 822950,
+      gameDate: "2026-07-26",
+      commenceTime: "2026-07-26T17:35:00.000Z",
+      homeTeam: "Tampa Bay Rays",
+      awayTeam: "Cleveland Guardians",
+      venue: "George M. Steinbrenner Field",
+    },
+    market: {
+      type: "ML" as const,
+      selection: "Tampa Bay Rays ML",
+      oddsAmerican: -110,
+      book: "Hard Rock",
+      capturedAt: "2026-07-26T18:00:00.000Z",
+    },
+    probabilities: {
+      model: 0.612,
+      marketImplied: 0.5238,
+      noVig: 0.5,
+      edgePp: 8.8,
+    },
+    decision: {
+      signal: "BET" as const,
+      confidenceLabel: "A",
+      confidencePct: 61.2,
+      stakeUnits: 1,
+      rationale: "Edge verified after full predictor calculation.",
+    },
+    analysis: {
+      stage: "FINAL" as const,
+      warnings: [],
+      factors: [
+        {
+          name: "Statcast pitch-by-pitch",
+          direction: "HOME" as const,
+          magnitude: 0.42,
+          units: "runs",
+          confidence: "FULL" as const,
+          source: "MLB Stats API",
+        },
+      ],
+      sources: [
+        {
+          name: "MLB Stats API",
+          status: "VERIFIED" as const,
+          fetchedAt: "2026-07-26T17:55:00.000Z",
+          metadata: { gamePk: 822950 },
+        },
+      ],
+      layers: {
+        pureModel: 0.64,
+        marketCalibration: 0.5238,
+        final: 0.612,
+      },
+      rawInputs: {
+        apiKey: "must-not-survive",
+        Authorization: "Bearer must-not-survive",
+        pitcher: { era: 3.2, whip: 1.1 },
+      },
+      rawOutput: {
+        selectedMarket: "ML",
+      },
+    },
+  };
+}
+
+test("full snapshot becomes the single final ledger payload", () => {
+  const prediction = buildMlbLedgerPredictionFromPick({
+    ...basePick(),
+    scientificSnapshot: fullSnapshot(),
+  });
+
+  assert.equal(prediction.clientRequestId, "picks-v2:ui-mlb-42");
+  assert.equal(prediction.analysis.stage, "FINAL");
+  assert.equal(prediction.decision.signal, "BET");
+  assert.equal(prediction.game.gamePk, 822950);
+  assert.equal(prediction.market.selection, "Tampa Bay Rays ML");
+  assert.equal((prediction.analysis.rawInputs as any).apiKey, "[REDACTED]");
+  assert.equal((prediction.analysis.rawInputs as any).Authorization, "[REDACTED]");
+});
+
+test("orientation mismatch is rejected before the immutable append", () => {
+  const snapshot = fullSnapshot();
+  snapshot.game.homeTeam = "Cleveland Guardians";
+  snapshot.game.awayTeam = "Tampa Bay Rays";
+
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /venue orientation/i,
+  );
+});
+
+test("canonical odds mismatch is rejected", () => {
+  const snapshot = fullSnapshot();
+  snapshot.market.oddsAmerican = -105;
+
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /odds do not match/i,
+  );
+});
+
+test("legacy MLB picks still map to an explicit provisional mirror", () => {
+  const prediction = buildMlbLedgerPredictionFromPick(basePick());
+  assert.equal(prediction.analysis.stage, "PROVISIONAL");
+  assert.equal(prediction.decision.signal, "INFO");
+  assert.equal(prediction.model.version, "picks-v2-mirror-v1");
+  assert.equal(prediction.clientRequestId, "picks-v2:ui-mlb-42");
+});
