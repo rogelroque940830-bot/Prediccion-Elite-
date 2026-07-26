@@ -6,7 +6,10 @@
     "server/mlb-ledger-store.ts",
     "server/mlb-ledger.test.ts",
     "server/mlb-settlement-worker.ts",
-    "server/mlb-settlement-worker.test.ts"
+    "server/mlb-settlement-worker.test.ts",
+    "server/mlb-scientific-snapshot.ts",
+    "server/mlb-scientific-snapshot.test.ts",
+    "server/picks-v2.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {

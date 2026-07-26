@@ -32,6 +32,7 @@ export interface Pick {
   closingOdds?: number;
   closingImpliedProb?: number;
   clvPercent?: number;
+  scientificSnapshot?: SavedPick["scientificSnapshot"];
 }
 
 export interface AppState {
@@ -209,6 +210,7 @@ function recordToPick(record: SavedPick, fallbackId: number): Pick {
     closingOdds: record.closingOdds,
     closingImpliedProb: record.closingImpliedProb,
     clvPercent: record.clvPercent,
+    scientificSnapshot: record.scientificSnapshot,
   };
 }
 
@@ -262,6 +264,7 @@ function pickToRecord(pick: Pick): Parameters<typeof savePick>[0] {
     closingOdds: pick.closingOdds,
     closingImpliedProb: pick.closingImpliedProb,
     clvPercent: pick.clvPercent,
+    scientificSnapshot: pick.scientificSnapshot,
   };
 }
 
