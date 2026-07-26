@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildMlbLedgerPredictionFromPick } from "./mlb-scientific-snapshot";
+import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint } from "./mlb-scientific-snapshot";
 
 function basePick() {
   return {
     id: "ui-mlb-42",
-    ts: Date.parse("2026-07-26T18:00:00.000Z"),
+    ts: Date.parse("2026-07-26T17:30:00.000Z"),
     sport: "mlb" as const,
     homeTeam: "Tampa Bay Rays",
     awayTeam: "Cleveland Guardians",
@@ -41,7 +41,7 @@ function fullSnapshot() {
       selection: "Tampa Bay Rays ML",
       oddsAmerican: -110,
       book: "Hard Rock",
-      capturedAt: "2026-07-26T18:00:00.000Z",
+      capturedAt: "2026-07-26T17:30:00.000Z",
     },
     probabilities: {
       model: 0.612,
@@ -73,7 +73,7 @@ function fullSnapshot() {
         {
           name: "MLB Stats API",
           status: "VERIFIED" as const,
-          fetchedAt: "2026-07-26T17:55:00.000Z",
+          fetchedAt: "2026-07-26T17:25:00.000Z",
           metadata: { gamePk: 822950 },
         },
       ],
@@ -136,4 +136,29 @@ test("legacy MLB picks still map to an explicit provisional mirror", () => {
   assert.equal(prediction.decision.signal, "INFO");
   assert.equal(prediction.model.version, "picks-v2-mirror-v1");
   assert.equal(prediction.clientRequestId, "picks-v2:ui-mlb-42");
+});
+
+
+test("canonical fingerprint suppresses the same pick across different UI ids", () => {
+  const first = basePick();
+  const second = { ...basePick(), id: "ui-mlb-99", ts: first.ts + 15_000 };
+  assert.equal(canonicalMlbPickFingerprint(first), canonicalMlbPickFingerprint(second));
+});
+
+test("FINAL snapshot captured after game start is rejected", () => {
+  const snapshot = fullSnapshot();
+  snapshot.market.capturedAt = "2026-07-26T17:36:00.000Z";
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /captured after the official game start/i,
+  );
+});
+
+test("FINAL snapshot requires the official game identity", () => {
+  const snapshot = fullSnapshot();
+  delete snapshot.game.gamePk;
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /require gamePk/i,
+  );
 });

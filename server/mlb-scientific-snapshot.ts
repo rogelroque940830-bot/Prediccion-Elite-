@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { z } from "zod";
 import {
   MLB_LEDGER_SCHEMA_VERSION,
@@ -83,6 +84,25 @@ function parseLineNumber(line: string | undefined): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+export function canonicalMlbPickFingerprint(pick: SavedMlbPickLike): string {
+  const odds = parseAmericanOdds(pick.odds);
+  const gameDate = /^\d{4}-\d{2}-\d{2}$/.test(pick.date || "")
+    ? String(pick.date)
+    : new Date(pick.ts).toISOString().slice(0, 10);
+  const identity = JSON.stringify({
+    sport: pick.sport,
+    gameDate,
+    homeTeam: normalize(pick.homeTeam),
+    awayTeam: normalize(pick.awayTeam),
+    market: mapLedgerMarket(pick.pickType),
+    selection: normalize(pick.pickSide),
+    line: parseLineNumber(pick.line || pick.pickSide),
+    odds,
+    modelProbability: Math.round(normalizedProbability(pick.modelProb ?? pick.confidence) * 100_000) / 100_000,
+  });
+  return crypto.createHash("sha256").update(identity).digest("hex");
+}
+
 function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 12) return "[MAX_DEPTH]";
   if (value == null || typeof value === "boolean") return value;
@@ -129,6 +149,33 @@ function assertSnapshotMatchesPick(pick: SavedMlbPickLike, snapshot: MlbScientif
     const error = new Error("Scientific snapshot selection does not match the canonical saved pick");
     (error as Error & { status?: number }).status = 409;
     throw error;
+  }
+
+  const expectedDate = /^\d{4}-\d{2}-\d{2}$/.test(pick.date || "")
+    ? String(pick.date)
+    : new Date(pick.ts).toISOString().slice(0, 10);
+  if (snapshot.game.gameDate !== expectedDate) {
+    const error = new Error("Scientific snapshot game date does not match the canonical saved pick");
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
+  if (snapshot.market.type !== mapLedgerMarket(pick.pickType)) {
+    const error = new Error("Scientific snapshot market type does not match the canonical saved pick");
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
+
+  if (snapshot.analysis.stage === "FINAL") {
+    if (!snapshot.game.gamePk || !snapshot.game.commenceTime || !snapshot.market.capturedAt) {
+      const error = new Error("FINAL scientific snapshots require gamePk, commenceTime and capturedAt");
+      (error as Error & { status?: number }).status = 409;
+      throw error;
+    }
+    if (Date.parse(snapshot.market.capturedAt) > Date.parse(snapshot.game.commenceTime)) {
+      const error = new Error("FINAL scientific snapshot was captured after the official game start");
+      (error as Error & { status?: number }).status = 409;
+      throw error;
+    }
   }
 
   const canonicalModel = normalizedProbability(pick.modelProb ?? pick.confidence);

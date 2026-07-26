@@ -154,9 +154,55 @@ export function createMlbScientificSnapshot(
     ...input,
   }) as MlbScientificSnapshot;
 
-  const bytes = snapshotBytes(sanitized);
-  if (bytes > MAX_SNAPSHOT_BYTES) {
-    throw new Error(`El snapshot científico MLB excede ${MAX_SNAPSHOT_BYTES} bytes (${bytes}).`);
-  }
-  return sanitized;
+  if (snapshotBytes(sanitized) <= MAX_SNAPSHOT_BYTES) return sanitized;
+
+  const rawInputs = sanitized.analysis.rawInputs && typeof sanitized.analysis.rawInputs === "object"
+    ? sanitized.analysis.rawInputs as Record<string, unknown>
+    : {};
+  const rawOutput = sanitized.analysis.rawOutput && typeof sanitized.analysis.rawOutput === "object"
+    ? sanitized.analysis.rawOutput as Record<string, unknown>
+    : {};
+  const compacted: MlbScientificSnapshot = {
+    ...sanitized,
+    analysis: {
+      ...sanitized.analysis,
+      warnings: [
+        ...(sanitized.analysis.warnings || []),
+        "SNAPSHOT_COMPACTED: source payloads were omitted to remain below the scientific ledger size limit.",
+      ].slice(0, 100),
+      rawInputs: {
+        compacted: true,
+        selectedDate: rawInputs.selectedDate,
+        selectedGameId: rawInputs.selectedGameId,
+        gamePk: rawInputs.gamePk,
+        teams: rawInputs.teams,
+        pitchers: rawInputs.pitchers,
+        bullpens: rawInputs.bullpens,
+        lines: rawInputs.lines,
+        context: rawInputs.context,
+        injuries: rawInputs.injuries && typeof rawInputs.injuries === "object"
+          ? sanitizeValue(rawInputs.injuries, 8)
+          : rawInputs.injuries,
+        omitted: ["sourcePayloads"],
+      },
+      rawOutput: {
+        compacted: true,
+        factorBreakdown: rawOutput.factorBreakdown,
+        pickQualities: rawOutput.pickQualities,
+        bestPlay: rawOutput.bestPlay,
+        safePlay: rawOutput.safePlay,
+        poisson: rawOutput.poisson,
+      },
+    },
+  };
+  if (snapshotBytes(compacted) <= MAX_SNAPSHOT_BYTES) return compacted;
+
+  return {
+    ...compacted,
+    analysis: {
+      ...compacted.analysis,
+      rawInputs: { compacted: true, omitted: ["rawInputs", "sourcePayloads"] },
+      rawOutput: { compacted: true, omitted: ["rawOutput"] },
+    },
+  };
 }

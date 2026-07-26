@@ -5,7 +5,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { computeCLV, getAllSnapshots, type LineSnapshot } from "./sharp-signals";
 import { getMlbLedgerStore } from "./mlb-ledger";
-import { buildMlbLedgerPredictionFromPick, mlbScientificSnapshotSchema } from "./mlb-scientific-snapshot";
+import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint, mlbScientificSnapshotSchema } from "./mlb-scientific-snapshot";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const PICKS_FILE = path.join(DATA_DIR, "picks.json");
@@ -242,10 +242,32 @@ export function registerPicksV2Routes(app: Express): void {
     };
 
     const originalPicks = loadPicks();
+    if (pick.scientificSnapshot) {
+      const incomingFingerprint = canonicalMlbPickFingerprint(pick as Parameters<typeof canonicalMlbPickFingerprint>[0]);
+      const duplicate = originalPicks.find((item) => {
+        if (item.id === pick.id || item.sport !== "mlb") return false;
+        try {
+          return canonicalMlbPickFingerprint(item as Parameters<typeof canonicalMlbPickFingerprint>[0]) === incomingFingerprint;
+        } catch {
+          return false;
+        }
+      });
+      if (duplicate) {
+        res.status(409).json({
+          success: false,
+          error: "This canonical MLB pick is already saved",
+          existingPickId: duplicate.id,
+        });
+        return;
+      }
+    }
+
+    const { scientificSnapshot: _scientificSnapshot, ...historyData } = pick;
+    const storedPick = historyData as SavedPickV2;
     const picks = originalPicks.map((item) => ({ ...item }));
     const existingIndex = picks.findIndex((item) => item.id === pick.id);
-    if (existingIndex >= 0) picks[existingIndex] = { ...picks[existingIndex], ...pick };
-    else picks.push(pick);
+    if (existingIndex >= 0) picks[existingIndex] = { ...picks[existingIndex], ...storedPick };
+    else picks.push(storedPick);
 
     savePicks(picks);
     try {
@@ -268,7 +290,7 @@ export function registerPicksV2Routes(app: Express): void {
 
     res.status(existingIndex >= 0 ? 200 : 201).json({
       success: true,
-      data: pick,
+      data: storedPick,
       ledger: pick.sport === "mlb" ? {
         mode: pick.scientificSnapshot ? "FULL_SNAPSHOT" : "PROVISIONAL_MIRROR",
         clientRequestId: `picks-v2:${pick.id}`,

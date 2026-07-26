@@ -695,6 +695,20 @@ export default function MLBPredictor() {
     }
 
     resolvedModelProb = Math.max(0.1, Math.min(99.9, resolvedModelProb));
+    const duplicatePick = state.mlbPicks.some((existing) =>
+      existing.date === selectedDate
+      && existing.market.trim().toLowerCase() === normalizedMarket
+      && existing.pick.trim().toLowerCase() === pick.trim().toLowerCase()
+      && existing.odds === odds
+      && Math.abs(existing.modelProb - resolvedModelProb) < 0.01
+    );
+    if (duplicatePick) {
+      toast({
+        title: "Este pick MLB ya está guardado",
+        description: "No se creó otra entrada en el historial ni en el ledger.",
+      });
+      return;
+    }
     const implied = americanImpliedProbability(odds);
     const noVig = noVigSideProbability(odds, oppositeOdds);
     const edgePp = implied == null ? undefined : resolvedModelProb - implied * 100;
@@ -709,8 +723,13 @@ export default function MLBPredictor() {
         : status === "SOURCE_UNAVAILABLE" ? "MISSING" : "UNKNOWN";
     const completeFactorFeeds = [lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed]
       .filter(Boolean).length;
-    const stage = Boolean(gamePkForTesi && selectedGameId && homeInjuryFeed.status === "VERIFIED" && awayInjuryFeed.status === "VERIFIED")
-      ? "FINAL" as const : "PROVISIONAL" as const;
+    const stage = Boolean(
+      gamePkForTesi
+      && selectedGameId
+      && completeFactorFeeds >= 10
+      && homeInjuryFeed.status === "VERIFIED"
+      && awayInjuryFeed.status === "VERIFIED"
+    ) ? "FINAL" as const : "PROVISIONAL" as const;
     const warnings = [
       ...(pq?.warnings || []),
       ...(stage === "PROVISIONAL" ? ["Snapshot provisional: faltan identificador oficial del juego o verificación completa de lesiones."] : []),
@@ -774,14 +793,14 @@ export default function MLBPredictor() {
           {
             name: "BALLDONTLIE injuries home",
             status: injuryStatus(homeInjuryFeed.status),
-            fetchedAt: homeInjuryFeed.fetchedAt || capturedAt,
+            fetchedAt: isoDateTimeOrUndefined(homeInjuryFeed.fetchedAt) || capturedAt,
             sample: homeInjuryFeed.count,
             metadata: { autoApplyAllowed: homeInjuryFeed.autoApplyAllowed, stale: homeInjuryFeed.stale || false },
           },
           {
             name: "BALLDONTLIE injuries away",
             status: injuryStatus(awayInjuryFeed.status),
-            fetchedAt: awayInjuryFeed.fetchedAt || capturedAt,
+            fetchedAt: isoDateTimeOrUndefined(awayInjuryFeed.fetchedAt) || capturedAt,
             sample: awayInjuryFeed.count,
             metadata: { autoApplyAllowed: awayInjuryFeed.autoApplyAllowed, stale: awayInjuryFeed.stale || false },
           },
