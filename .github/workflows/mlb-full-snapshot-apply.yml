@@ -7,6 +7,12 @@ on:
     paths:
       - 'scripts/apply-mlb-full-snapshot.py'
       - '.github/workflows/mlb-full-snapshot-apply.yml'
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/apply-mlb-full-snapshot.py'
+      - '.github/workflows/mlb-full-snapshot-apply.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,40 +30,61 @@ jobs:
           ref: integration/mlb-ledger-full-snapshot
           fetch-depth: 0
 
+      - name: Detect already-applied commit
+        id: guard
+        shell: bash
+        run: |
+          if git log -1 --pretty=%B | grep -q '\[snapshot-applied\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Patch already applied on branch head"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node 20
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
 
       - name: Apply reproducible patch
+        if: steps.guard.outputs.skip != 'true'
         run: python scripts/apply-mlb-full-snapshot.py
 
       - name: Install backend dependencies
+        if: steps.guard.outputs.skip != 'true'
         run: npm ci
 
       - name: Type-check ledger and snapshot mapper
+        if: steps.guard.outputs.skip != 'true'
         run: npm run typecheck:mlb-ledger
 
       - name: Test ledger and snapshot mapper
+        if: steps.guard.outputs.skip != 'true'
         run: npm run test:mlb-ledger
 
       - name: Build backend
+        if: steps.guard.outputs.skip != 'true'
         run: npm run build:backend
 
       - name: Install frontend dependencies
+        if: steps.guard.outputs.skip != 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Type-check frontend
+        if: steps.guard.outputs.skip != 'true'
         working-directory: frontend
         run: npm run check
 
       - name: Build frontend
+        if: steps.guard.outputs.skip != 'true'
         working-directory: frontend
         run: npm run build
 
       - name: Commit validated integration
+        if: steps.guard.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
