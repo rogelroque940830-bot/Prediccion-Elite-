@@ -1,0 +1,87 @@
+name: Authorized MLB Real Ledger NYY-PHI
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/mlb-real-ledger-ui-e2e-nyy-phi.mjs'
+      - '.github/workflows/mlb-real-ledger-nyy-phi.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  real-predictor-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      APP_URL: http://127.0.0.1:4173/#/mlb
+      COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+      EVIDENCE_PATH: mlb-real-ledger-evidence.json
+
+    steps:
+      - name: Checkout authorized test branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Confirm protected write credential is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${COURTEDGE_WRITE_TOKEN:-}" ]]; then
+            echo 'COURTEDGE_WRITE_TOKEN is not configured as a GitHub Actions secret.'
+            exit 2
+          fi
+
+      - name: Install harness dependencies
+        run: |
+          npm ci
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Install and build merged frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://web-p0-integration.up.railway.app
+        run: |
+          npm ci
+          npm run check
+          npm run build
+
+      - name: Serve merged frontend locally
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > ../mlb-real-ledger-preview.log 2>&1 &
+          echo $! > ../mlb-real-ledger-preview.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ../mlb-real-ledger-preview.log || true
+          exit 1
+
+      - name: Generate one real pregame prediction through the UI
+        run: node scripts/mlb-real-ledger-ui-e2e-nyy-phi.mjs
+
+      - name: Upload real-ledger evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-real-ledger-nyy-phi-evidence
+          path: |
+            mlb-real-ledger-evidence.json
+            mlb-real-ledger-ui.png
+            mlb-real-ledger-preview.log
+          if-no-files-found: warn
+          retention-days: 30
