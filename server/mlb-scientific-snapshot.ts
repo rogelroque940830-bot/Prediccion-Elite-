@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   MLB_LEDGER_SCHEMA_VERSION,
   mlbPredictionInputSchema,
+  type LedgerRecord,
   type MlbPredictionInput,
 } from "./mlb-ledger-store";
 
@@ -165,17 +166,17 @@ function assertSnapshotMatchesPick(pick: SavedMlbPickLike, snapshot: MlbScientif
     throw error;
   }
 
-  if (snapshot.analysis.stage === "FINAL") {
-    if (!snapshot.game.gamePk || !snapshot.game.commenceTime || !snapshot.market.capturedAt) {
-      const error = new Error("FINAL scientific snapshots require gamePk, commenceTime and capturedAt");
-      (error as Error & { status?: number }).status = 409;
-      throw error;
-    }
-    if (Date.parse(snapshot.market.capturedAt) > Date.parse(snapshot.game.commenceTime)) {
-      const error = new Error("FINAL scientific snapshot was captured after the official game start");
-      (error as Error & { status?: number }).status = 409;
-      throw error;
-    }
+  if (snapshot.analysis.stage === "FINAL"
+    && (!snapshot.game.gamePk || !snapshot.game.commenceTime || !snapshot.market.capturedAt)) {
+    const error = new Error("FINAL scientific snapshots require gamePk, commenceTime and capturedAt");
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
+  if (snapshot.game.commenceTime && snapshot.market.capturedAt
+    && Date.parse(snapshot.market.capturedAt) > Date.parse(snapshot.game.commenceTime)) {
+    const error = new Error("Scientific snapshot was captured after the official game start");
+    (error as Error & { status?: number }).status = 409;
+    throw error;
   }
 
   const canonicalModel = normalizedProbability(pick.modelProb ?? pick.confidence);
@@ -280,6 +281,35 @@ function provisionalMirrorPrediction(pick: SavedMlbPickLike): MlbPredictionInput
       },
     },
   });
+}
+
+function sameOptionalNumber(left: number | null | undefined, right: number | null | undefined): boolean {
+  if (left == null && right == null) return true;
+  if (left == null || right == null) return false;
+  return Math.abs(left - right) < 0.000001;
+}
+
+export function findMlbSupersedesId(
+  records: LedgerRecord[],
+  next: MlbPredictionInput,
+): string | undefined {
+  const candidates = records.filter(({ prediction }) => {
+    const sameOfficialGame = next.game.gamePk != null && prediction.game.gamePk != null
+      ? next.game.gamePk === prediction.game.gamePk
+      : next.game.gameDate === prediction.game.gameDate
+        && normalize(next.game.homeTeam) === normalize(prediction.game.homeTeam)
+        && normalize(next.game.awayTeam) === normalize(prediction.game.awayTeam);
+    return sameOfficialGame
+      && next.market.type === prediction.market.type
+      && normalize(next.market.selection) === normalize(prediction.market.selection)
+      && sameOptionalNumber(next.market.line, prediction.market.line)
+      && prediction.source === "app";
+  });
+  if (!candidates.length) return undefined;
+  candidates.sort((left, right) =>
+    left.prediction.recordedAtMs - right.prediction.recordedAtMs
+    || left.prediction.id.localeCompare(right.prediction.id));
+  return candidates[candidates.length - 1]?.prediction.id;
 }
 
 export function buildMlbLedgerPredictionFromPick(pick: SavedMlbPickLike): MlbPredictionInput {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint } from "./mlb-scientific-snapshot";
+import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint, findMlbSupersedesId } from "./mlb-scientific-snapshot";
 
 function basePick() {
   return {
@@ -162,3 +162,39 @@ test("FINAL snapshot requires the official game identity", () => {
     /require gamePk/i,
   );
 });
+
+test("latest matching immutable prediction is selected as supersedesId", () => {
+  const next = buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: fullSnapshot() });
+  const record = (id: string, recordedAtMs: number, model: number) => ({
+    prediction: {
+      id,
+      clientRequestId: `picks-v2:${id}`,
+      recordedAt: new Date(recordedAtMs).toISOString(),
+      recordedAtMs,
+      game: { gamePk: 822950, gameDate: "2026-07-26", commenceTime: "2026-07-26T17:35:00.000Z", homeTeam: "Tampa Bay Rays", awayTeam: "Cleveland Guardians" },
+      market: { type: "ML", selection: "Tampa Bay Rays ML", line: null, oddsAmerican: -110, book: "Hard Rock" },
+      probabilities: { model, marketImplied: 0.5238, noVig: 0.5, edgePp: (model - 0.5238) * 100 },
+      decision: { signal: "BET", confidenceLabel: "A", confidencePct: model * 100, stakeUnits: 1 },
+      analysisStage: "FINAL",
+      model: { name: "CourtEdge MLB", version: "predictor-full-snapshot-v1", gitCommit: null, environment: null },
+      supersedesId: null,
+      source: "app",
+      payloadSha256: id.padEnd(64, "0").slice(0, 64),
+      payload: {},
+    },
+    settlement: null,
+  });
+  const records = [record("mlb-pred-old", 1_000, 0.58), record("mlb-pred-newer", 2_000, 0.60)];
+  assert.equal(findMlbSupersedesId(records as any, next), "mlb-pred-newer");
+});
+
+test("provisional snapshot captured after known game start is also rejected", () => {
+  const snapshot = fullSnapshot();
+  (snapshot.analysis as any).stage = "PROVISIONAL";
+  snapshot.market.capturedAt = "2026-07-26T17:36:00.000Z";
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /captured after the official game start/i,
+  );
+});
+

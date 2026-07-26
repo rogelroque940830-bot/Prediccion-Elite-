@@ -5,7 +5,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { computeCLV, getAllSnapshots, type LineSnapshot } from "./sharp-signals";
 import { getMlbLedgerStore } from "./mlb-ledger";
-import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint, mlbScientificSnapshotSchema } from "./mlb-scientific-snapshot";
+import { buildMlbLedgerPredictionFromPick, canonicalMlbPickFingerprint, findMlbSupersedesId, mlbScientificSnapshotSchema } from "./mlb-scientific-snapshot";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const PICKS_FILE = path.join(DATA_DIR, "picks.json");
@@ -209,7 +209,22 @@ function normalizedOptionalProbability(value: number | undefined): number | unde
 
 function mirrorMlbPickToScientificLedger(pick: SavedPickV2): void {
   if (pick.sport !== "mlb") return;
-  getMlbLedgerStore().appendPrediction(buildMlbLedgerPredictionFromPick(pick as Parameters<typeof buildMlbLedgerPredictionFromPick>[0]));
+  const store = getMlbLedgerStore();
+  const prediction = buildMlbLedgerPredictionFromPick(
+    pick as Parameters<typeof buildMlbLedgerPredictionFromPick>[0],
+  );
+  if (pick.scientificSnapshot) {
+    const records = store.listRecords({
+      from: prediction.game.gameDate,
+      to: prediction.game.gameDate,
+      market: prediction.market.type,
+      limit: 1_000,
+    });
+    const supersedesId = findMlbSupersedesId(records, prediction);
+    store.appendPrediction(supersedesId ? { ...prediction, supersedesId } : prediction);
+    return;
+  }
+  store.appendPrediction(prediction);
 }
 
 export function registerPicksV2Routes(app: Express): void {

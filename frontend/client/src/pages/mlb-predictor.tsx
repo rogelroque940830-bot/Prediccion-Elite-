@@ -718,6 +718,14 @@ export default function MLBPredictor() {
     const capturedAt = new Date().toISOString();
     const selectedGame = mlbGames.find((game) => String(game.gameId) === selectedGameId) as any;
     const commenceTime = isoDateTimeOrUndefined(selectedGame?.commenceTime || selectedGame?.gameTime || selectedGame?.gameDate);
+    if (commenceTime && Date.parse(capturedAt) > Date.parse(commenceTime)) {
+      toast({
+        title: "El juego ya comenzó",
+        description: "No se puede guardar una predicción científica pregame después del inicio oficial.",
+        variant: "destructive",
+      });
+      return;
+    }
     const injuryStatus = (status: MLBInjuryFeedStatus): MlbSourceStatus => status === "VERIFIED" ? "VERIFIED"
       : status === "PARTIAL" ? "PARTIAL"
         : status === "SOURCE_UNAVAILABLE" ? "MISSING" : "UNKNOWN";
@@ -726,6 +734,7 @@ export default function MLBPredictor() {
     const stage = Boolean(
       gamePkForTesi
       && selectedGameId
+      && commenceTime
       && completeFactorFeeds >= 10
       && homeInjuryFeed.status === "VERIFIED"
       && awayInjuryFeed.status === "VERIFIED"
