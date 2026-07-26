@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/better-sqlite3.d.ts",
+    "server/mlb-ledger.ts",
+    "server/mlb-ledger-store.ts",
+    "server/mlb-ledger.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  }
+}
