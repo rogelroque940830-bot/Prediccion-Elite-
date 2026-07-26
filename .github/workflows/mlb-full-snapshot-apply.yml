@@ -52,6 +52,23 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: python scripts/apply-mlb-full-snapshot.py
 
+      - name: Align mapper with validated Picks V2 inference
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('server/mlb-scientific-snapshot.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '  sport: "mlb" | "nba" | "nhl" | "wnba";'
+          new = '  sport?: "mlb" | "nba" | "nhl" | "wnba";'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('SavedMlbPickLike sport declaration not found')
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Install backend dependencies
         if: steps.guard.outputs.skip != 'true'
         run: npm ci
@@ -112,6 +129,7 @@ jobs:
             frontend/client/src/lib/picks-api.ts \
             frontend/client/src/lib/context.tsx \
             frontend/client/src/pages/mlb-predictor.tsx \
+            server/mlb-scientific-snapshot.ts \
             server/picks-v2.ts \
             package.json \
             tsconfig.mlb-ledger.json
