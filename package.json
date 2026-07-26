@@ -7,7 +7,7 @@
     "build:backend": "esbuild server/staging-entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:better-sqlite3 --external:bufferutil",
     "start": "node dist/index.cjs",
     "dev": "tsx server/staging-entry.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck:mlb-ledger": "tsc -p tsconfig.mlb-ledger.json",
     "test:mlb-ledger": "tsx --test server/mlb-ledger.test.ts"
   },
   "engines": {
