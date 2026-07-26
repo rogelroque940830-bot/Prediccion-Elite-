@@ -12,6 +12,7 @@ on:
       - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
       - '.github/workflows/integration-p0-frontend.yml'
   pull_request:
     branches:
@@ -22,6 +23,7 @@ on:
       - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
       - '.github/workflows/integration-p0-frontend.yml'
 
 permissions:
@@ -57,6 +59,12 @@ jobs:
 
       - name: Install backend dependencies
         run: npm ci
+
+      - name: Type-check MLB scientific ledger
+        run: npm run typecheck:mlb-ledger
+
+      - name: Test MLB scientific ledger and settlement worker
+        run: npm run test:mlb-ledger
 
       - name: Build backend
         run: npm run build:backend
