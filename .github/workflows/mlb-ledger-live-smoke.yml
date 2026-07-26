@@ -8,6 +8,7 @@ on:
       - '.github/workflows/mlb-ledger-live-smoke.yml'
       - 'server/mlb-ledger.ts'
       - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-settlement-worker.ts'
       - 'server/index.ts'
       - 'server/security.ts'
       - 'server/picks-v2.ts'
@@ -18,6 +19,7 @@ on:
       - '.github/workflows/mlb-ledger-live-smoke.yml'
       - 'server/mlb-ledger.ts'
       - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-settlement-worker.ts'
       - 'server/index.ts'
       - 'server/security.ts'
       - 'server/picks-v2.ts'
@@ -32,6 +34,7 @@ jobs:
     timeout-minutes: 10
     env:
       API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || '' }}
     steps:
       - name: Wait for p0 deployment and verify ledger endpoints
         shell: bash
@@ -43,13 +46,17 @@ jobs:
             report_code=$(curl -sS -o ledger-report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
 
             if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "200" ]]; then
-              node <<'NODE'
+              if node <<'NODE'
           const fs = require('fs');
           const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
           const status = JSON.parse(fs.readFileSync('ledger-status.json', 'utf8'));
           const report = JSON.parse(fs.readFileSync('ledger-report.json', 'utf8'));
+          const expectedCommit = String(process.env.EXPECTED_COMMIT || '').trim();
 
           if (health.status !== 'healthy') throw new Error('health endpoint is not healthy');
+          if (expectedCommit && health.commit !== expectedCommit) {
+            throw new Error(`Railway is serving ${health.commit || 'unknown'}, expected ${expectedCommit}`);
+          }
           if (!status.success || status.data?.schemaVersion !== 'mlb-ledger.v1') throw new Error('invalid ledger status payload');
           if (status.data?.immutable !== true) throw new Error('ledger does not report immutable=true');
           if (!report.success || report.data?.schemaVersion !== 'mlb-ledger.v1') throw new Error('invalid ledger report payload');
@@ -57,6 +64,9 @@ jobs:
 
           console.log(JSON.stringify({
             health: health.status,
+            commit: health.commit,
+            environment: health.environment,
+            mlbLedgerAutoSettlement: health.mlbLedgerAutoSettlement,
             schemaVersion: status.data.schemaVersion,
             immutable: status.data.immutable,
             predictions: status.data.predictions,
@@ -64,7 +74,9 @@ jobs:
             datasetSha256: report.data.datasetSha256,
           }, null, 2));
           NODE
-              exit 0
+              then
+                exit 0
+              fi
             fi
 
             echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code"
