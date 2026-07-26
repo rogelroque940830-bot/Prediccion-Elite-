@@ -1,0 +1,68 @@
+name: MLB Ledger Live Smoke
+
+on:
+  push:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/mlb-ledger-live-smoke.yml'
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'server/picks-v2.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+    steps:
+      - name: Wait for p0 deployment and verify ledger endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 15 "$API_BASE/health" || true)
+            status_code=$(curl -sS -o ledger-status.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            report_code=$(curl -sS -o ledger-report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
+
+            if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "200" ]]; then
+              node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const status = JSON.parse(fs.readFileSync('ledger-status.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync('ledger-report.json', 'utf8'));
+
+          if (health.status !== 'healthy') throw new Error('health endpoint is not healthy');
+          if (!status.success || status.data?.schemaVersion !== 'mlb-ledger.v1') throw new Error('invalid ledger status payload');
+          if (status.data?.immutable !== true) throw new Error('ledger does not report immutable=true');
+          if (!report.success || report.data?.schemaVersion !== 'mlb-ledger.v1') throw new Error('invalid ledger report payload');
+          if (typeof report.data?.datasetSha256 !== 'string' || report.data.datasetSha256.length !== 64) throw new Error('missing dataset fingerprint');
+
+          console.log(JSON.stringify({
+            health: health.status,
+            schemaVersion: status.data.schemaVersion,
+            immutable: status.data.immutable,
+            predictions: status.data.predictions,
+            settlementEvents: status.data.settlementEvents,
+            datasetSha256: report.data.datasetSha256,
+          }, null, 2));
+          NODE
+              exit 0
+            fi
+
+            echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code"
+            sleep 10
+          done
+
+          echo 'Live MLB ledger smoke failed after retries.'
+          echo '--- health'; cat health.json 2>/dev/null || true
+          echo '--- status'; cat ledger-status.json 2>/dev/null || true
+          echo '--- report'; cat ledger-report.json 2>/dev/null || true
+          exit 1
