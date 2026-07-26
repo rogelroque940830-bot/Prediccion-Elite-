@@ -54,7 +54,25 @@ jobs:
         run: npm ci
 
       - name: Type-check MLB ledger
-        run: npm run typecheck:mlb-ledger
+        id: ledger_typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck:mlb-ledger 2>&1 | tee mlb-ledger-typecheck.txt
+
+      - name: Upload typecheck diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-ledger-typecheck
+          path: mlb-ledger-typecheck.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce ledger typecheck
+        if: ${{ steps.ledger_typecheck.outcome == 'failure' }}
+        run: exit 1
 
       - name: Test immutable MLB ledger
         run: npm run test:mlb-ledger
