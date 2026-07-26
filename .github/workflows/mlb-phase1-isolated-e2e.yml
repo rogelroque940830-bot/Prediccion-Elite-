@@ -1,0 +1,70 @@
+name: MLB Phase 1 Isolated E2E
+
+on:
+  push:
+    branches:
+      - test/mlb-phase1-e2e-2026-07-26
+    paths:
+      - 'scripts/mlb-ledger-phase1-e2e.mjs'
+      - '.github/workflows/mlb-phase1-isolated-e2e.yml'
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-settlement-worker.ts'
+      - 'server/mlb-settlement-worker.test.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'server/staging-entry.ts'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mlb-phase1-isolated-e2e
+  cancel-in-progress: true
+
+jobs:
+  isolated-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout isolated test branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Type-check Phase 1 ledger
+        run: npm run typecheck:mlb-ledger
+
+      - name: Run immutable ledger regression suite
+        run: npm run test:mlb-ledger
+
+      - name: Build production backend bundle
+        run: npm run build:backend
+
+      - name: Execute isolated real-MLB E2E
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/mlb-ledger-phase1-e2e.mjs 2>&1 | tee phase1-e2e-run.log
+
+      - name: Upload Phase 1 E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-phase1-isolated-e2e-evidence
+          path: |
+            artifacts/mlb-phase1-e2e/
+            phase1-e2e-run.log
+          if-no-files-found: warn
+          retention-days: 30
