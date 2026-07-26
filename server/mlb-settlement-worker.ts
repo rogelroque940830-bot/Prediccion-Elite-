@@ -44,6 +44,17 @@ function normalize(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function teamAlias(value: string): string {
+  return value
+    .replace(/^oakland/, "")
+    .replace(/^athletics/, "")
+    .replace(/^theathletics/, "");
+}
+
+function sameTeam(left: string, right: string): boolean {
+  return left === right || teamAlias(left) === teamAlias(right);
+}
+
 function parseLine(selection: string, storedLine: number | null): number | null {
   if (storedLine != null && Number.isFinite(storedLine)) return storedLine;
   const signed = selection.match(/[+-]\d+(?:\.\d+)?/g);
@@ -57,13 +68,25 @@ function parseLine(selection: string, storedLine: number | null): number | null 
   return Number.isFinite(value) ? value : null;
 }
 
-function selectedTeam(prediction: LedgerPrediction): "HOME" | "AWAY" | null {
+function selectedTeam(
+  prediction: LedgerPrediction,
+  game?: OfficialMlbGame,
+): "HOME" | "AWAY" | null {
   const selection = normalize(prediction.market.selection);
-  const home = normalize(prediction.game.homeTeam);
-  const away = normalize(prediction.game.awayTeam);
 
-  if (home && selection.includes(home)) return "HOME";
-  if (away && selection.includes(away)) return "AWAY";
+  // Official MLB venue orientation is authoritative. Legacy history sometimes
+  // stored selected-team/opponent in the home/away fields, which can be reversed.
+  if (game) {
+    const officialHome = normalize(game.homeTeam);
+    const officialAway = normalize(game.awayTeam);
+    if (officialHome && selection.includes(officialHome)) return "HOME";
+    if (officialAway && selection.includes(officialAway)) return "AWAY";
+  }
+
+  const recordedHome = normalize(prediction.game.homeTeam);
+  const recordedAway = normalize(prediction.game.awayTeam);
+  if (recordedHome && selection.includes(recordedHome)) return "HOME";
+  if (recordedAway && selection.includes(recordedAway)) return "AWAY";
   if (selection.includes("home") || selection.includes("local")) return "HOME";
   if (selection.includes("away") || selection.includes("visitante") || selection.includes("visitor")) return "AWAY";
   return null;
@@ -76,13 +99,20 @@ function totalDirection(selection: string): "OVER" | "UNDER" | null {
   return null;
 }
 
-function compare(value: number, line: number, direction: "OVER" | "UNDER"): "WIN" | "LOSS" | "PUSH" {
+function compare(
+  value: number,
+  line: number,
+  direction: "OVER" | "UNDER",
+): "WIN" | "LOSS" | "PUSH" {
   if (value === line) return "PUSH";
   if (direction === "OVER") return value > line ? "WIN" : "LOSS";
   return value < line ? "WIN" : "LOSS";
 }
 
-function firstN(game: OfficialMlbGame, innings: number): { home: number; away: number; complete: boolean } {
+function firstN(
+  game: OfficialMlbGame,
+  innings: number,
+): { home: number; away: number; complete: boolean } {
   const included = game.innings.filter((inning) => inning.num >= 1 && inning.num <= innings);
   const numbers = new Set(included.map((inning) => inning.num));
   return {
@@ -92,20 +122,27 @@ function firstN(game: OfficialMlbGame, innings: number): { home: number; away: n
   };
 }
 
-export function gradeMlbPrediction(prediction: LedgerPrediction, game: OfficialMlbGame): GradedMlbPrediction | null {
+export function gradeMlbPrediction(
+  prediction: LedgerPrediction,
+  game: OfficialMlbGame,
+): GradedMlbPrediction | null {
   if (!game.final) return null;
   const market = prediction.market.type;
-  const selectionTeam = selectedTeam(prediction);
+  const selectionTeam = selectedTeam(prediction, game);
   const line = parseLine(prediction.market.selection, prediction.market.line);
   const direction = totalDirection(prediction.market.selection);
 
   if (market === "ML") {
     if (!selectionTeam) return null;
-    if (game.homeScore === game.awayScore) return { result: "PUSH", outcomeValue: 0, notes: "Official full-game tie" };
+    if (game.homeScore === game.awayScore) {
+      return { result: "PUSH", outcomeValue: 0, notes: "Official full-game tie" };
+    }
     const winner = game.homeScore > game.awayScore ? "HOME" : "AWAY";
     return {
       result: winner === selectionTeam ? "WIN" : "LOSS",
-      outcomeValue: selectionTeam === "HOME" ? game.homeScore - game.awayScore : game.awayScore - game.homeScore,
+      outcomeValue: selectionTeam === "HOME"
+        ? game.homeScore - game.awayScore
+        : game.awayScore - game.homeScore,
       notes: `Official final score ${game.awayTeam} ${game.awayScore}-${game.homeScore} ${game.homeTeam}`,
     };
   }
@@ -114,7 +151,9 @@ export function gradeMlbPrediction(prediction: LedgerPrediction, game: OfficialM
     if (!selectionTeam) return null;
     const f5 = firstN(game, 5);
     if (!f5.complete) return null;
-    if (f5.home === f5.away) return { result: "PUSH", outcomeValue: 0, notes: `Official F5 tie ${f5.away}-${f5.home}` };
+    if (f5.home === f5.away) {
+      return { result: "PUSH", outcomeValue: 0, notes: `Official F5 tie ${f5.away}-${f5.home}` };
+    }
     const winner = f5.home > f5.away ? "HOME" : "AWAY";
     return {
       result: winner === selectionTeam ? "WIN" : "LOSS",
@@ -158,11 +197,24 @@ export function gradeMlbPrediction(prediction: LedgerPrediction, game: OfficialM
     };
   }
 
-  if (market === "TEAM_TOTAL" || market === "TT_OVER_15_F5" || market === "TT_UNDER_25_F5") {
+  if (
+    market === "TEAM_TOTAL" ||
+    market === "TT_OVER_15_F5" ||
+    market === "TT_UNDER_25_F5"
+  ) {
     if (!selectionTeam) return null;
-    const useF5 = market === "TT_OVER_15_F5" || market === "TT_UNDER_25_F5" || prediction.market.selection.toLowerCase().includes("f5");
-    const teamDirection = market === "TT_OVER_15_F5" ? "OVER" : market === "TT_UNDER_25_F5" ? "UNDER" : direction;
-    const teamLine = line ?? (market === "TT_OVER_15_F5" ? 1.5 : market === "TT_UNDER_25_F5" ? 2.5 : null);
+    const useF5 =
+      market === "TT_OVER_15_F5" ||
+      market === "TT_UNDER_25_F5" ||
+      prediction.market.selection.toLowerCase().includes("f5");
+    const teamDirection = market === "TT_OVER_15_F5"
+      ? "OVER"
+      : market === "TT_UNDER_25_F5"
+        ? "UNDER"
+        : direction;
+    const teamLine = line ?? (
+      market === "TT_OVER_15_F5" ? 1.5 : market === "TT_UNDER_25_F5" ? 2.5 : null
+    );
     if (!teamDirection || teamLine == null) return null;
 
     let runs: number;
@@ -184,11 +236,19 @@ export function gradeMlbPrediction(prediction: LedgerPrediction, game: OfficialM
     if (!selectionTeam) return null;
     const inning = game.innings.find((item) => item.num === 1);
     if (!inning) return null;
-    if (inning.home === inning.away) return { result: "PUSH", outcomeValue: 0, notes: `Official inning 1 tie ${inning.away}-${inning.home}` };
+    if (inning.home === inning.away) {
+      return {
+        result: "PUSH",
+        outcomeValue: 0,
+        notes: `Official inning 1 tie ${inning.away}-${inning.home}`,
+      };
+    }
     const winner = inning.home > inning.away ? "HOME" : "AWAY";
     return {
       result: winner === selectionTeam ? "WIN" : "LOSS",
-      outcomeValue: selectionTeam === "HOME" ? inning.home - inning.away : inning.away - inning.home,
+      outcomeValue: selectionTeam === "HOME"
+        ? inning.home - inning.away
+        : inning.away - inning.home,
       notes: `Official inning 1 score ${inning.away}-${inning.home}`,
     };
   }
@@ -210,7 +270,10 @@ export function gradeMlbPrediction(prediction: LedgerPrediction, game: OfficialM
 
 async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url, {
-    headers: { "User-Agent": "CourtEdge-MLB-Ledger/1.0", Accept: "application/json" },
+    headers: {
+      "User-Agent": "CourtEdge-MLB-Ledger/1.0",
+      Accept: "application/json",
+    },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`MLB API ${response.status}: ${url}`);
@@ -219,22 +282,37 @@ async function fetchJson(url: string): Promise<any> {
 
 function gameFromFeed(gamePk: number, payload: any): OfficialMlbGame | null {
   const status = payload?.gameData?.status;
-  const final = status?.abstractGameState === "Final" || status?.codedGameState === "F" || status?.detailedState === "Final";
+  const final =
+    status?.abstractGameState === "Final" ||
+    status?.codedGameState === "F" ||
+    status?.detailedState === "Final";
   if (!final) return null;
 
   const linescore = payload?.liveData?.linescore;
-  const innings = (linescore?.innings ?? []).map((inning: any) => ({
-    num: Number(inning.num),
-    home: Number(inning.home?.runs ?? 0),
-    away: Number(inning.away?.runs ?? 0),
-  })).filter((inning: OfficialInning) => Number.isFinite(inning.num));
+  const innings = (linescore?.innings ?? [])
+    .map((inning: any) => ({
+      num: Number(inning.num),
+      home: Number(inning.home?.runs ?? 0),
+      away: Number(inning.away?.runs ?? 0),
+    }))
+    .filter((inning: OfficialInning) => Number.isFinite(inning.num));
 
-  const homeScore = Number(linescore?.teams?.home?.runs ?? innings.reduce((sum: number, inning: OfficialInning) => sum + inning.home, 0));
-  const awayScore = Number(linescore?.teams?.away?.runs ?? innings.reduce((sum: number, inning: OfficialInning) => sum + inning.away, 0));
+  const homeScore = Number(
+    linescore?.teams?.home?.runs ??
+      innings.reduce((sum: number, inning: OfficialInning) => sum + inning.home, 0),
+  );
+  const awayScore = Number(
+    linescore?.teams?.away?.runs ??
+      innings.reduce((sum: number, inning: OfficialInning) => sum + inning.away, 0),
+  );
 
   return {
     gamePk,
-    gameDate: String(payload?.gameData?.datetime?.officialDate || payload?.gameData?.datetime?.dateTime || "").slice(0, 10),
+    gameDate: String(
+      payload?.gameData?.datetime?.officialDate ||
+      payload?.gameData?.datetime?.dateTime ||
+      "",
+    ).slice(0, 10),
     final,
     homeTeam: payload?.gameData?.teams?.home?.name || "Home",
     awayTeam: payload?.gameData?.teams?.away?.name || "Away",
@@ -254,8 +332,9 @@ const scheduleCache = new Map<string, Promise<any[]>>();
 async function gamesForDate(date: string): Promise<any[]> {
   let promise = scheduleCache.get(date);
   if (!promise) {
-    promise = fetchJson(`${MLB_API}/v1/schedule?sportId=1&date=${encodeURIComponent(date)}`)
-      .then((payload) => (payload?.dates ?? []).flatMap((entry: any) => entry.games ?? []));
+    promise = fetchJson(
+      `${MLB_API}/v1/schedule?sportId=1&date=${encodeURIComponent(date)}`,
+    ).then((payload) => (payload?.dates ?? []).flatMap((entry: any) => entry.games ?? []));
     scheduleCache.set(date, promise);
   }
   return promise;
@@ -264,20 +343,48 @@ async function gamesForDate(date: string): Promise<any[]> {
 async function resolveGamePk(prediction: LedgerPrediction): Promise<number | null> {
   if (prediction.game.gamePk) return prediction.game.gamePk;
   const games = await gamesForDate(prediction.game.gameDate);
-  const expectedHome = normalize(prediction.game.homeTeam);
-  const expectedAway = normalize(prediction.game.awayTeam);
-  const aliases = (value: string) => value.replace(/^oakland/, "").replace(/^athletics/, "");
+  const expectedFirst = normalize(prediction.game.homeTeam);
+  const expectedSecond = normalize(prediction.game.awayTeam);
 
-  const matched = games.find((game: any) => {
-    const home = normalize(game?.teams?.home?.team?.name || "");
-    const away = normalize(game?.teams?.away?.team?.name || "");
-    return (home === expectedHome || aliases(home) === aliases(expectedHome)) &&
-      (away === expectedAway || aliases(away) === aliases(expectedAway));
+  // Legacy history may have stored selected-team/opponent rather than venue
+  // orientation. Match the two official teams as an unordered pair.
+  const candidates = games.filter((game: any) => {
+    const officialHome = normalize(game?.teams?.home?.team?.name || "");
+    const officialAway = normalize(game?.teams?.away?.team?.name || "");
+    const ordered =
+      sameTeam(officialHome, expectedFirst) &&
+      sameTeam(officialAway, expectedSecond);
+    const reversed =
+      sameTeam(officialHome, expectedSecond) &&
+      sameTeam(officialAway, expectedFirst);
+    return ordered || reversed;
   });
-  return Number(matched?.gamePk) || null;
+
+  if (candidates.length === 1) return Number(candidates[0]?.gamePk) || null;
+  if (candidates.length === 0) return null;
+
+  // Doubleheader safety: use the recorded start time only when it disambiguates.
+  const expectedStart = prediction.game.commenceTime
+    ? Date.parse(prediction.game.commenceTime)
+    : NaN;
+  if (!Number.isFinite(expectedStart)) return null;
+
+  const ranked = candidates
+    .map((game: any) => ({
+      gamePk: Number(game?.gamePk) || 0,
+      distance: Math.abs(Date.parse(game?.gameDate || "") - expectedStart),
+    }))
+    .filter((item) => item.gamePk > 0 && Number.isFinite(item.distance))
+    .sort((left, right) => left.distance - right.distance);
+
+  if (ranked.length === 0) return null;
+  if (ranked.length > 1 && ranked[0].distance === ranked[1].distance) return null;
+  return ranked[0].gamePk;
 }
 
-export async function runMlbAutoSettlement(store: MlbLedgerStore): Promise<SettlementRunResult> {
+export async function runMlbAutoSettlement(
+  store: MlbLedgerStore,
+): Promise<SettlementRunResult> {
   scheduleCache.clear();
   const pending = store.listRecords({ settled: false, limit: 10_000 });
   const result: SettlementRunResult = {
@@ -335,8 +442,13 @@ let startHandle: NodeJS.Timeout | null = null;
 export function startMlbSettlementWorker(store: MlbLedgerStore): void {
   if (workerStarted || process.env.MLB_LEDGER_AUTO_SETTLE === "false") return;
   workerStarted = true;
-  const intervalMsRaw = Number(process.env.MLB_LEDGER_SETTLEMENT_INTERVAL_MS || DEFAULT_INTERVAL_MS);
-  const intervalMs = Number.isFinite(intervalMsRaw) && intervalMsRaw >= 60_000 ? intervalMsRaw : DEFAULT_INTERVAL_MS;
+  const intervalMsRaw = Number(
+    process.env.MLB_LEDGER_SETTLEMENT_INTERVAL_MS || DEFAULT_INTERVAL_MS,
+  );
+  const intervalMs =
+    Number.isFinite(intervalMsRaw) && intervalMsRaw >= 60_000
+      ? intervalMsRaw
+      : DEFAULT_INTERVAL_MS;
 
   const run = async () => {
     if (workerRunning) return;
