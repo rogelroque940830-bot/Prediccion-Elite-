@@ -1,0 +1,44 @@
+name: MLB Phase 1 Ledger
+
+on:
+  push:
+    branches:
+      - integration/mlb-phase1-ledger
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-ledger.ts'
+      - 'server/mlb-ledger.test.ts'
+      - 'server/index.ts'
+      - 'server/security.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/mlb-phase1-ledger.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check backend
+        run: npm run typecheck
+
+      - name: Test immutable MLB ledger
+        run: npm run test:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
