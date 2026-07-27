@@ -4,25 +4,43 @@ on:
   push:
     branches:
       - test/diagnose-pitcher-vs-team-name-2026-07-27
-  pull_request:
-    branches:
-      - integration/p0-staging-secure
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Locate UI and backend name flow
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== MATCHES ==='
-          grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
-            --exclude-dir=node_modules --exclude-dir=.git --exclude='package-lock.json' || true
-          echo '=== FRONTEND FILES ==='
-          find . -maxdepth 5 -type f \( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' \) \
-            | sort | sed -n '1,240p'
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
