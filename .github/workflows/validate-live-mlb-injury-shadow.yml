@@ -24,12 +24,13 @@ jobs:
       - name: Compare current BALLDONTLIE detections with official MLB evidence
         shell: bash
         run: |
-          cat > /tmp/validate-shadow.ts <<'TS'
+          cat > server/validate-shadow-live.tmp.ts <<'TS'
           import {
             classifyMlbInjuryShadow,
             fetchOfficialMlbInjurySnapshot,
             summarizeMlbInjuryShadow,
-          } from "${GITHUB_WORKSPACE}/server/mlb-injury-shadow.ts";
+            type MlbInjuryShadowResult,
+          } from "./mlb-injury-shadow";
 
           const backend = "https://web-p0-integration.up.railway.app";
           const date = "2026-07-27";
@@ -38,7 +39,7 @@ jobs:
 
           const teamIds = [...new Set(payload.games.flatMap((game: any) => [game.homeTeam.id, game.awayTeam.id]))] as number[];
           const started = Date.now();
-          const snapshots = Object.fromEntries(await Promise.all(teamIds.map(async (teamId) => [
+          const snapshots: Record<number, any> = Object.fromEntries(await Promise.all(teamIds.map(async (teamId) => [
             teamId,
             await fetchOfficialMlbInjurySnapshot(teamId, date),
           ])));
@@ -79,6 +80,7 @@ jobs:
             const injuries: any[] = game[`${side}Injuries`] ?? [];
             const pitcher = game[`${side}Pitcher`];
             const snapshot: any = snapshots[team.id];
+            const shadows: MlbInjuryShadowResult[] = [];
             const results: any[] = [];
             for (const player of injuries) {
               const playerId = await resolvePlayerId(player.name, team.id);
@@ -108,6 +110,7 @@ jobs:
                 slg: player.slg,
                 asOfDate: date,
               });
+              shadows.push(shadow);
               results.push({
                 name: player.name,
                 officialStatus: roster?.statusDescription ?? null,
@@ -116,19 +119,16 @@ jobs:
                 reasonCode: shadow.reasonCode,
               });
             }
-            const classified = results.filter((item) => item.decision !== "UNRESOLVED_IDENTITY");
-            const summary = summarizeMlbInjuryShadow(classified.map((item) => {
-              const original = results.find((candidate) => candidate.name === item.name);
-              return classifyMlbInjuryShadow({
-                playerId: 0,
-                name: original.name,
-                isPitcher: false,
-                rosterStatusCode: original.officialStatus?.includes("60") ? "D60" : "D10",
-                rosterStatusDescription: original.officialStatus,
-                asOfDate: date,
-              });
-            }));
-            return { team: team.name, totalDetected: injuries.length, results, displaySummaryShape: summary };
+            const bdlIds = new Set<number>();
+            for (const player of injuries) {
+              const playerId = await resolvePlayerId(player.name, team.id);
+              if (playerId) bdlIds.add(playerId);
+            }
+            const officialOnly = Object.values(snapshot.rosterByPlayerId)
+              .filter((entry: any) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")))
+              .filter((entry: any) => !bdlIds.has(Number(entry.playerId))).length;
+            const summary = { ...summarizeMlbInjuryShadow(shadows), officialOnly };
+            return { team: team.name, totalDetected: injuries.length, summary, results };
           }
 
           const home = await evaluateSide("home");
@@ -139,5 +139,9 @@ jobs:
           if (allResults.some((item) => item.decision === "UNRESOLVED_IDENTITY")) {
             throw new Error("At least one current injury identity could not be resolved");
           }
+          if (allResults.some((item) => !item.reasonCode || !item.confidence)) {
+            throw new Error("Every classified injury must remain auditable");
+          }
           TS
-          npx tsx /tmp/validate-shadow.ts
+          npx tsx server/validate-shadow-live.tmp.ts
+          rm -f server/validate-shadow-live.tmp.ts
