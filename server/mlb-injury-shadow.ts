@@ -366,6 +366,11 @@ export async function fetchOfficialMlbInjurySnapshot(
       return bDate.localeCompare(aDate);
     });
     for (const transaction of transactions) {
+      const relevantText = [transaction?.typeDesc, transaction?.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!/injured|activated|reinstated|returned|rehab|disabled list/.test(relevantText)) continue;
       const playerId = Number(transaction?.person?.id);
       if (!Number.isFinite(playerId) || latestTransactionByPlayerId[playerId]) continue;
       latestTransactionByPlayerId[playerId] = {

@@ -24,14 +24,29 @@ import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrU
 
 // ── MLB INJURY TYPES & CALC ──────────────────────────────────────────────────
 type MLBInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE" | "ANOMALOUS";
+interface MLBInjuryShadowSummary {
+  total: number;
+  applyCandidates: number;
+  alreadyReflected: number;
+  ignored: number;
+  conflicts: number;
+  pending: number;
+  highConfidence: number;
+  mode: "SHADOW";
+}
 interface MLBInjuryFeedMeta {
   source: string;
+  validationSource?: string;
   status: MLBInjuryFeedStatus;
   fetchedAt?: string;
   stale?: boolean;
   sourceErrors?: string[];
+  officialValidationStatus?: "VERIFIED" | "PARTIAL";
+  officialFetchedAt?: string;
   count: number;
   autoApplyAllowed: boolean;
+  shadowMode?: boolean;
+  shadowSummary?: MLBInjuryShadowSummary;
   note?: string;
 }
 const EMPTY_MLB_INJURY_FEED: MLBInjuryFeedMeta = {
@@ -81,6 +96,25 @@ interface MLBInjury {
   returnDate?: string | null;
   shortComment?: string | null;
   source?: string;
+  playerId?: number;
+  officialStatusCode?: string | null;
+  officialStatus?: string | null;
+  officialTransaction?: {
+    date?: string | null;
+    effectiveDate?: string | null;
+    typeCode?: string | null;
+    typeDesc?: string | null;
+    description?: string | null;
+  } | null;
+  shadow?: {
+    decision: "APPLY_CANDIDATE" | "ALREADY_REFLECTED" | "IGNORE" | "CONFLICT" | "PENDING";
+    confidence: "HIGH" | "MEDIUM" | "LOW";
+    impact: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+    reasonCode: string;
+    reason: string;
+    daysSinceOfficialTransaction?: number | null;
+    shadowOnly: true;
+  };
   // Override de lineup slot (1-9). Si no se pasa, el modelo asume slot por posición.
   lineupSlot?: number;
 }
@@ -2775,12 +2809,30 @@ export default function MLBPredictor() {
                   {injuryFeed.note && <p className="mt-0.5 opacity-80">{injuryFeed.note}</p>}
                 </div>
 
+                {injuryFeed.shadowMode && injuryFeed.shadowSummary && (
+                  <div className="mt-2 p-2 rounded border border-cyan-500/30 bg-cyan-500/10 text-[10px] text-cyan-200 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold uppercase tracking-wider">Automatización · modo sombra</p>
+                      <span className="text-cyan-300/80">BDL detecta · MLB valida</span>
+                    </div>
+                    <p className="text-cyan-100/80">Clasifica automáticamente, pero todavía no modifica la proyección ni el ledger.</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      <span>Candidatos: <b>{injuryFeed.shadowSummary.applyCandidates}</b></span>
+                      <span>Ya reflejados: <b>{injuryFeed.shadowSummary.alreadyReflected}</b></span>
+                      <span>Ignorados: <b>{injuryFeed.shadowSummary.ignored}</b></span>
+                      <span>Conflictos: <b>{injuryFeed.shadowSummary.conflicts}</b></span>
+                      <span>Pendientes: <b>{injuryFeed.shadowSummary.pending}</b></span>
+                      <span>Confianza alta: <b>{injuryFeed.shadowSummary.highConfidence}</b></span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Auto-rellenado de lesionados desde BALLDONTLIE (solo listas confiables) */}
                 {injuryRoster.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-amber-500/20 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">
-                        Lesionados detectados ({injuryRoster.length}) — toca para incluir/excluir:
+                        Lesionados detectados ({injuryRoster.length}) — clasificados automáticamente; toque solo para override manual:
                       </p>
                       <span className="text-[9px] text-cyan-400/70">via BALLDONTLIE</span>
                     </div>
@@ -2812,10 +2864,23 @@ export default function MLBPredictor() {
                                 ? "bg-red-500/30 border-red-400 text-red-200 font-bold"
                                 : "bg-slate-700/40 border-slate-600 text-slate-400"
                             }`}
-                            title={`${t.type} · ${pl.status}${pl.returnDate ? `\nRegreso: ${new Date(pl.returnDate).toLocaleDateString("es-ES")}` : ""}${pl.shortComment ? `\n\n${pl.shortComment}` : ""}`}
+                            title={`${t.type} · ${pl.status}${pl.officialStatus ? `\nMLB: ${pl.officialStatus}` : ""}${pl.shadow?.reason ? `\nAutomático: ${pl.shadow.reason}` : ""}${pl.returnDate ? `\nRegreso: ${new Date(pl.returnDate).toLocaleDateString("es-ES")}` : ""}${pl.shortComment ? `\n\n${pl.shortComment}` : ""}`}
                           >
                             <span className={isOut ? "line-through" : ""}>{pl.name}</span>
                             <span className="text-[9px] text-muted-foreground ml-1">({pl.position} · {statSnip})</span>
+                            {pl.shadow && (
+                              <span className={`text-[9px] ml-1 ${
+                                pl.shadow.decision === "APPLY_CANDIDATE" ? "text-emerald-300" :
+                                pl.shadow.decision === "ALREADY_REFLECTED" ? "text-blue-300" :
+                                pl.shadow.decision === "IGNORE" ? "text-slate-400" :
+                                pl.shadow.decision === "CONFLICT" ? "text-red-300" : "text-amber-300"
+                              }`}>
+                                · {pl.shadow.decision === "APPLY_CANDIDATE" ? "aplicaría" :
+                                  pl.shadow.decision === "ALREADY_REFLECTED" ? "ya reflejado" :
+                                  pl.shadow.decision === "IGNORE" ? "ignorado" :
+                                  pl.shadow.decision === "CONFLICT" ? "conflicto" : "pendiente"}
+                              </span>
+                            )}
                           </button>
                         );
                       })}
