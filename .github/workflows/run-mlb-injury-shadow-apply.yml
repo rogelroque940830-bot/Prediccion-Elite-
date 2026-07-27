@@ -25,6 +25,7 @@ jobs:
         run: |
           set +e
           mkdir -p .diagnostics
+          python scripts/fix-mlb-injury-shadow-script.py
           python scripts/apply-mlb-injury-shadow.py > .diagnostics/mlb-injury-shadow-apply.txt 2>&1
           code=$?
           cat .diagnostics/mlb-injury-shadow-apply.txt
@@ -59,6 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/apply-mlb-injury-shadow.py
+          rm -f scripts/fix-mlb-injury-shadow-script.py
           rm -f .github/workflows/run-mlb-injury-shadow-apply.yml
           rm -f .github/workflows/diagnose-mlb-injury-shadow-sources.yml
           rm -rf .diagnostics
