@@ -1,0 +1,74 @@
+name: Verify CourtEdge write token
+
+on:
+  push:
+    branches:
+      - test/verify-write-token-2026-07-26
+
+permissions:
+  contents: read
+
+jobs:
+  verify-token:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+    steps:
+      - name: Confirm GitHub secret exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${COURTEDGE_WRITE_TOKEN:-}" ]; then
+            echo "COURTEDGE_WRITE_TOKEN is missing from GitHub Actions secrets"
+            exit 1
+          fi
+          echo "GitHub Actions secret is configured"
+
+      - name: Capture ledger status before handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status-before.json
+          jq -e '.success == true' /tmp/status-before.json >/dev/null
+          jq '.data' /tmp/status-before.json
+
+      - name: Verify Railway token with a non-writing invalid payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          http_code=$(curl --silent --show-error \
+            --output /tmp/handshake-body.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $COURTEDGE_WRITE_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "$BACKEND_URL/api/mlb/ledger/v1/predictions")
+          cat /tmp/handshake-body.json
+          if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+            echo "Credential mismatch or write authentication rejected"
+            exit 1
+          fi
+          if [ "$http_code" != "400" ]; then
+            echo "Expected schema validation HTTP 400 after successful authentication; got $http_code"
+            exit 1
+          fi
+          jq -e '.success == false and .error == "Invalid MLB ledger prediction"' /tmp/handshake-body.json >/dev/null
+          echo "Credential handshake succeeded; invalid payload was rejected before any write"
+
+      - name: Confirm ledger remained unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status-after.json
+          jq -e '.success == true' /tmp/status-after.json >/dev/null
+          before=$(jq -S '.data' /tmp/status-before.json)
+          after=$(jq -S '.data' /tmp/status-after.json)
+          if [ "$before" != "$after" ]; then
+            echo "Ledger status changed during credential verification"
+            diff -u <(printf '%s\n' "$before") <(printf '%s\n' "$after") || true
+            exit 1
+          fi
+          echo "Ledger remained unchanged"
+          jq '.data' /tmp/status-after.json
