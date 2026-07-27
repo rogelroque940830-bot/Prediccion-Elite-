@@ -32,6 +32,7 @@ interface MLBInjuryShadowSummary {
   conflicts: number;
   pending: number;
   highConfidence: number;
+  officialOnly: number;
   mode: "SHADOW";
 }
 interface MLBInjuryFeedMeta {
@@ -2823,6 +2824,7 @@ export default function MLBPredictor() {
                       <span>Conflictos: <b>{injuryFeed.shadowSummary.conflicts}</b></span>
                       <span>Pendientes: <b>{injuryFeed.shadowSummary.pending}</b></span>
                       <span>Confianza alta: <b>{injuryFeed.shadowSummary.highConfidence}</b></span>
+                      <span>Solo en MLB: <b>{injuryFeed.shadowSummary.officialOnly}</b></span>
                     </div>
                   </div>
                 )}

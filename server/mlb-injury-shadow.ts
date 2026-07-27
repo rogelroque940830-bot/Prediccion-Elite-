@@ -76,6 +76,7 @@ export interface MlbInjuryShadowSummary {
   conflicts: number;
   pending: number;
   highConfidence: number;
+  officialOnly: number;
   mode: "SHADOW";
 }
 
@@ -199,12 +200,21 @@ export function classifyMlbInjuryShadow(input: MlbInjuryShadowInput): MlbInjuryS
   }
 
   if (isLongTermIl(code, description)) {
+    if (daysSinceTransaction !== null && daysSinceTransaction >= 21) {
+      return result(
+        "IGNORE",
+        "HIGH",
+        "LOW",
+        "LONG_TERM_IL_ALREADY_ADAPTED",
+        "MLB confirma una ausencia de larga duración y al menos tres semanas desde la transacción oficial; el entorno ya tuvo tiempo de adaptarse.",
+      );
+    }
     return result(
-      "IGNORE",
-      "HIGH",
+      "PENDING",
+      "MEDIUM",
       "LOW",
-      "LONG_TERM_IL_ALREADY_ADAPTED",
-      "MLB confirma una ausencia de larga duración; el roster, las estadísticas y el mercado ya han tenido tiempo de adaptarse.",
+      "LONG_TERM_IL_NEEDS_AGE_CONFIRMATION",
+      "La lista de 60 días confirma una ausencia importante, pero la transacción visible es reciente y no basta para medir cuánto tiempo real lleva fuera.",
     );
   }
 
@@ -250,12 +260,21 @@ export function classifyMlbInjuryShadow(input: MlbInjuryShadowInput): MlbInjuryS
     }
     const role = pitcherRole(input);
     if (role === "STARTER") {
+      if (input.probablePitcherId) {
+        return result(
+          "ALREADY_REFLECTED",
+          "HIGH",
+          "HIGH",
+          "STARTER_REPLACEMENT_CAPTURED",
+          "La ausencia del abridor queda capturada al usar las estadísticas del pitcher sustituto anunciado.",
+        );
+      }
       return result(
-        "ALREADY_REFLECTED",
+        "PENDING",
         "HIGH",
         "HIGH",
-        "STARTER_REPLACEMENT_CAPTURED",
-        "La ausencia del abridor queda capturada al usar las estadísticas del pitcher sustituto anunciado.",
+        "STARTER_REPLACEMENT_UNCONFIRMED",
+        "MLB confirma la ausencia del abridor, pero el sustituto todavía no está anunciado; no puede considerarse reflejada.",
       );
     }
     if (role === "HIGH_LEVERAGE") {
@@ -313,6 +332,7 @@ export function summarizeMlbInjuryShadow(results: MlbInjuryShadowResult[]): MlbI
     conflicts: results.filter((item) => item.decision === "CONFLICT").length,
     pending: results.filter((item) => item.decision === "PENDING").length,
     highConfidence: results.filter((item) => item.confidence === "HIGH").length,
+    officialOnly: 0,
     mode: "SHADOW",
   };
 }

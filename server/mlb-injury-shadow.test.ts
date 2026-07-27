@@ -53,10 +53,25 @@ test("recent official activation blocks injury application", () => {
   assert.equal(result.reasonCode, "OFFICIAL_ACTIVATION_CONFLICT");
 });
 
-test("60-day IL is ignored in shadow mode because the team has adapted", () => {
+test("recent 60-day IL stays pending until absence age is established", () => {
   const result = classifyMlbInjuryShadow(base({
     rosterStatusCode: "D60",
     rosterStatusDescription: "Injured 60-Day",
+  }));
+  assert.equal(result.decision, "PENDING");
+  assert.equal(result.reasonCode, "LONG_TERM_IL_NEEDS_AGE_CONFIRMATION");
+});
+
+test("older 60-day IL is ignored after the environment has adapted", () => {
+  const result = classifyMlbInjuryShadow(base({
+    rosterStatusCode: "D60",
+    rosterStatusDescription: "Injured 60-Day",
+    latestTransaction: {
+      date: "2026-06-01",
+      effectiveDate: "2026-06-01",
+      typeDesc: "Status Change",
+      description: "Placed on the 60-day injured list.",
+    },
   }));
   assert.equal(result.decision, "IGNORE");
   assert.equal(result.reasonCode, "LONG_TERM_IL_ALREADY_ADAPTED");
@@ -82,6 +97,17 @@ test("starting pitcher injury is already reflected by replacement starter", () =
   }));
   assert.equal(result.decision, "ALREADY_REFLECTED");
   assert.equal(result.reasonCode, "STARTER_REPLACEMENT_CAPTURED");
+});
+
+test("starting pitcher remains pending while replacement is unconfirmed", () => {
+  const result = classifyMlbInjuryShadow(base({
+    playerId: 10,
+    isPitcher: true,
+    gamesStarted: 18,
+    probablePitcherId: null,
+  }));
+  assert.equal(result.decision, "PENDING");
+  assert.equal(result.reasonCode, "STARTER_REPLACEMENT_UNCONFIRMED");
 });
 
 test("injured pitcher simultaneously listed as probable becomes a conflict", () => {
@@ -154,10 +180,11 @@ test("shadow summary counts all decisions without applying anything", () => {
     total: 3,
     applyCandidates: 1,
     alreadyReflected: 0,
-    ignored: 1,
+    ignored: 0,
     conflicts: 1,
-    pending: 0,
-    highConfidence: 3,
+    pending: 1,
+    highConfidence: 2,
+    officialOnly: 0,
     mode: "SHADOW",
   });
 });

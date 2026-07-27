@@ -2564,29 +2564,53 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           const rawBdlList = bdlInjuriesByTeam[tid] ?? [];
           const anomalous = rawBdlList.length > MLB_MAX_TRUSTED_INJURIES_PER_TEAM;
           const teamStatus = anomalous ? "ANOMALOUS" : injuryFeed.status;
-          const autoApplyAllowed = teamStatus === "VERIFIED";
+          const officialSnapshot = officialInjurySnapshots[tid];
           injuryMetaMap[tid] = {
             source: injuryFeed.source,
+            validationSource: officialSnapshot?.source ?? "MLB_STATS",
             status: teamStatus,
             fetchedAt: injuryFeed.fetchedAt,
             stale: injuryFeed.stale,
-            sourceErrors: injuryFeed.sourceErrors,
+            sourceErrors: [...(injuryFeed.sourceErrors ?? []), ...(officialSnapshot?.errors ?? [])],
+            officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+            officialFetchedAt: officialSnapshot?.fetchedAt,
             count: rawBdlList.length,
-            autoApplyAllowed,
+            autoApplyAllowed: false,
+            shadowMode: true,
             note: anomalous
               ? `Lista anormal (${rawBdlList.length}); ajuste automático bloqueado`
               : teamStatus === "SOURCE_UNAVAILABLE"
                 ? "Fuente de lesiones no disponible"
                 : teamStatus === "PARTIAL"
-                  ? "Datos de lesiones en caché/degradados; revisión manual requerida"
+                  ? "Datos de lesiones en caché/degradados; clasificación conservadora"
                   : rawBdlList.length === 0
-                    ? "Fuente verificada: no hay ausencias activas reportadas"
-                    : "Ausencias activas verificadas por la fuente",
+                    ? "BALLDONTLIE no reporta ausencias; MLB se usa para comprobar cobertura"
+                    : "Ausencias detectadas por BALLDONTLIE y enviadas a validación MLB",
           };
 
           const bdlList = anomalous ? [] : rawBdlList;
           if (bdlList.length === 0) {
+            const officialIlEntries = Object.values(officialSnapshot?.rosterByPlayerId ?? {})
+              .filter((entry: any) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")));
+            const officialOnly = anomalous ? 0 : officialIlEntries.length;
+            const sourcesVerified = !anomalous
+              && injuryFeed.status === "VERIFIED"
+              && officialSnapshot?.status === "VERIFIED";
             injuryMap[tid] = [];
+            injuryMetaMap[tid] = {
+              ...injuryMetaMap[tid],
+              status: anomalous ? "ANOMALOUS" : sourcesVerified && officialOnly === 0 ? "VERIFIED" : "PARTIAL",
+              shadowSummary: {
+                total: 0, applyCandidates: 0, alreadyReflected: 0,
+                ignored: 0, conflicts: 0, pending: 0,
+                highConfidence: 0, officialOnly, mode: "SHADOW",
+              },
+              note: anomalous
+                ? `Lista anormal (${rawBdlList.length}); ajuste automático bloqueado`
+                : officialOnly > 0
+                  ? `BALLDONTLIE no reportó ${officialOnly} jugador(es) que MLB mantiene en lista de lesionados; cobertura en revisión`
+                  : "Ambas fuentes verificadas: no hay ausencias activas confirmadas para este equipo",
+            };
             return;
           }
           const teamGP = teamStatsMap[tid]?.gamesPlayed ?? 0;
@@ -2700,7 +2724,6 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           }));
           const verifiedList = list.filter(Boolean) as any[];
           const rejectedCount = rawBdlList.length - verifiedList.length;
-          const officialSnapshot = officialInjurySnapshots[tid];
           const probablePitcherId = probablePitcherByTeam[tid] ?? null;
           const shadowList = verifiedList.map((player: any) => {
             const rosterEvidence = officialSnapshot?.rosterByPlayerId?.[player.playerId];
@@ -2733,12 +2756,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               shadow,
             };
           });
-          const shadowSummary = summarizeMlbInjuryShadow(shadowList.map((player: any) => player.shadow));
+          const bdlPlayerIds = new Set(shadowList.map((player: any) => Number(player.playerId)));
+          const officialOnly = Object.values(officialSnapshot?.rosterByPlayerId ?? {})
+            .filter((entry: any) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")))
+            .filter((entry: any) => !bdlPlayerIds.has(Number(entry.playerId)))
+            .length;
+          const shadowSummary = {
+            ...summarizeMlbInjuryShadow(shadowList.map((player: any) => player.shadow)),
+            officialOnly,
+          };
           injuryMap[tid] = shadowList;
 
           // Fase A: decide jugador por jugador, pero no altera proyección ni ledger.
-          const identityComplete = injuryFeed.status === "VERIFIED" && rejectedCount === 0;
-          const safeStatus = identityComplete && shadowList.length === 0 ? "VERIFIED" : "PARTIAL";
+          const identityComplete = injuryFeed.status === "VERIFIED"
+            && officialSnapshot?.status === "VERIFIED"
+            && rejectedCount === 0
+            && officialOnly === 0;
+          const safeStatus = identityComplete ? "VERIFIED" : "PARTIAL";
           injuryMetaMap[tid] = {
             source: injuryFeed.source,
             validationSource: officialSnapshot?.source ?? "MLB_STATS",
