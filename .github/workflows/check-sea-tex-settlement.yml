@@ -1,0 +1,35 @@
+name: Check SEA-TEX settlement
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read ledger settlement state
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://web-p0-integration.up.railway.app'
+          curl --fail --silent --show-error "$BASE/api/mlb/ledger/v1/predictions?from=2026-07-27&to=2026-07-27&limit=20" > /tmp/predictions.json
+          jq -e '.success == true' /tmp/predictions.json >/dev/null
+          jq -r '
+            .data[]
+            | select(.prediction.game.homeTeam == "Texas Rangers")
+            | select(.prediction.game.awayTeam == "Seattle Mariners")
+            | select(.prediction.market.selection == "Seattle Mariners")
+            | select(.prediction.market.oddsAmerican == -140)
+            | select(.prediction.market.book == "Hard Rock")
+            | {
+                predictionId: .prediction.id,
+                gamePk: .prediction.game.gamePk,
+                recordedAt: .prediction.recordedAt,
+                settlement: .settlement
+              }
+          ' /tmp/predictions.json
