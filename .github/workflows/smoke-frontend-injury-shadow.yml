@@ -1,0 +1,42 @@
+name: Smoke deployed frontend injury shadow panel
+
+on:
+  push:
+    branches:
+      - test/smoke-mlb-injury-shadow-2026-07-27
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployed shadow panel assets
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          found=0
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error "$FRONTEND_URL/mlb" > /tmp/index.html; then
+              : > /tmp/assets.js
+              while read -r src; do
+                curl --fail --silent --show-error "$FRONTEND_URL$src" >> /tmp/assets.js || true
+              done < <(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | sed -E 's/^src="|"$//g')
+              if grep -Fq 'Automatización · modo sombra' /tmp/assets.js \
+                && grep -Fq 'BDL detecta · MLB valida' /tmp/assets.js \
+                && grep -Fq 'Solo en MLB:' /tmp/assets.js; then
+                echo "Frontend shadow panel detected on attempt $attempt"
+                found=1
+                break
+              fi
+            fi
+            echo "Attempt $attempt: waiting for updated frontend assets"
+            sleep 10
+          done
+          test "$found" -eq 1
