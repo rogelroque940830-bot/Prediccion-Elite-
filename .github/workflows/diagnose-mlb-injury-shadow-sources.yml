@@ -1,0 +1,29 @@
+name: Diagnose MLB injury shadow sources
+
+on:
+  push:
+    branches:
+      - feature/mlb-injury-shadow-automation
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect official roster and transaction response shapes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for team in 136 140; do
+            echo "=== TEAM $team ACTIVE ==="
+            curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1/teams/$team/roster?rosterType=active&date=2026-07-27" \
+              | jq '{rosterType, count:(.roster|length), sample:(.roster[0] | {person,status,position,jerseyNumber,parentTeamId})}'
+            echo "=== TEAM $team 40MAN ==="
+            curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1/teams/$team/roster?rosterType=40Man&date=2026-07-27" \
+              | jq '{rosterType, count:(.roster|length), statuses:(.roster | group_by(.status.code) | map({status:.[0].status,count:length})), sample:(.roster[0] | {person,status,position,parentTeamId})}'
+            echo "=== TEAM $team TRANSACTIONS ==="
+            curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1/transactions?teamId=$team&startDate=2026-06-27&endDate=2026-07-27" \
+              | jq '{count:(.transactions|length), sample:(.transactions[:5] | map({id,person,toTeam,fromTeam,date,effectiveDate,typeCode,typeDesc,description}))}'
+          done
