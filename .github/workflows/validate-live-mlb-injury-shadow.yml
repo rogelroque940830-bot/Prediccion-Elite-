@@ -1,0 +1,143 @@
+name: Validate live MLB injury shadow mode
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  validate-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-injury-shadow-automation
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Compare current BALLDONTLIE detections with official MLB evidence
+        shell: bash
+        run: |
+          cat > /tmp/validate-shadow.ts <<'TS'
+          import {
+            classifyMlbInjuryShadow,
+            fetchOfficialMlbInjurySnapshot,
+            summarizeMlbInjuryShadow,
+          } from "${GITHUB_WORKSPACE}/server/mlb-injury-shadow.ts";
+
+          const backend = "https://web-p0-integration.up.railway.app";
+          const date = "2026-07-27";
+          const payload: any = await (await fetch(`${backend}/api/mlb/all?date=${date}`)).json();
+          if (!payload?.success || !Array.isArray(payload.games)) throw new Error("Invalid p0 MLB payload");
+
+          const teamIds = [...new Set(payload.games.flatMap((game: any) => [game.homeTeam.id, game.awayTeam.id]))] as number[];
+          const started = Date.now();
+          const snapshots = Object.fromEntries(await Promise.all(teamIds.map(async (teamId) => [
+            teamId,
+            await fetchOfficialMlbInjurySnapshot(teamId, date),
+          ])));
+          const elapsedMs = Date.now() - started;
+          const verifiedSnapshots = Object.values(snapshots).filter((snapshot: any) => snapshot.status === "VERIFIED").length;
+          console.log(JSON.stringify({
+            coverage: {
+              teams: teamIds.length,
+              verifiedSnapshots,
+              partialSnapshots: teamIds.length - verifiedSnapshots,
+              elapsedMs,
+            },
+          }, null, 2));
+          if (verifiedSnapshots < Math.ceil(teamIds.length * 0.9)) {
+            throw new Error(`Official MLB source verification below 90%: ${verifiedSnapshots}/${teamIds.length}`);
+          }
+
+          const game = payload.games.find((item: any) => item.gamePk === 822868 || item.gameId === 822868);
+          if (!game) throw new Error("SEA @ TEX game not found in p0 payload");
+
+          async function resolvePlayerId(name: string, teamId: number): Promise<number | null> {
+            const url = new URL("https://statsapi.mlb.com/api/v1/people/search");
+            url.searchParams.set("names", name);
+            url.searchParams.set("season", "2026");
+            url.searchParams.set("hydrate", "currentTeam");
+            const lookup: any = await (await fetch(url)).json();
+            const normalize = (value: string) => String(value || "")
+              .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]/gi, "").toLowerCase();
+            const target = normalize(name);
+            return lookup.people?.find((person: any) =>
+              person.currentTeam?.id === teamId && normalize(person.fullName) === target
+            )?.id ?? null;
+          }
+
+          async function evaluateSide(side: "home" | "away") {
+            const team = game[`${side}Team`];
+            const injuries: any[] = game[`${side}Injuries`] ?? [];
+            const pitcher = game[`${side}Pitcher`];
+            const snapshot: any = snapshots[team.id];
+            const results: any[] = [];
+            for (const player of injuries) {
+              const playerId = await resolvePlayerId(player.name, team.id);
+              if (!playerId) {
+                results.push({ name: player.name, decision: "UNRESOLVED_IDENTITY" });
+                continue;
+              }
+              const roster = snapshot.rosterByPlayerId[playerId];
+              const transaction = snapshot.latestTransactionByPlayerId[playerId] ?? null;
+              const shadow = classifyMlbInjuryShadow({
+                playerId,
+                name: player.name,
+                isPitcher: Boolean(player.isPitcher),
+                position: player.position,
+                rosterStatusCode: roster?.statusCode ?? null,
+                rosterStatusDescription: roster?.statusDescription ?? null,
+                latestTransaction: transaction,
+                probablePitcherId: pitcher?.id ?? null,
+                gamesStarted: player.gamesStarted,
+                saves: player.saves,
+                holds: player.holds,
+                gamesFinished: player.gamesFinished,
+                inningsPitched: player.inningsPitched,
+                plateAppearances: player.plateAppearances,
+                ops: player.ops,
+                obp: player.obp,
+                slg: player.slg,
+                asOfDate: date,
+              });
+              results.push({
+                name: player.name,
+                officialStatus: roster?.statusDescription ?? null,
+                decision: shadow.decision,
+                confidence: shadow.confidence,
+                reasonCode: shadow.reasonCode,
+              });
+            }
+            const classified = results.filter((item) => item.decision !== "UNRESOLVED_IDENTITY");
+            const summary = summarizeMlbInjuryShadow(classified.map((item) => {
+              const original = results.find((candidate) => candidate.name === item.name);
+              return classifyMlbInjuryShadow({
+                playerId: 0,
+                name: original.name,
+                isPitcher: false,
+                rosterStatusCode: original.officialStatus?.includes("60") ? "D60" : "D10",
+                rosterStatusDescription: original.officialStatus,
+                asOfDate: date,
+              });
+            }));
+            return { team: team.name, totalDetected: injuries.length, results, displaySummaryShape: summary };
+          }
+
+          const home = await evaluateSide("home");
+          const away = await evaluateSide("away");
+          console.log(JSON.stringify({ seaTex: { home, away } }, null, 2));
+          const allResults = [...home.results, ...away.results];
+          if (allResults.length === 0) throw new Error("Expected current injury detections for SEA @ TEX");
+          if (allResults.some((item) => item.decision === "UNRESOLVED_IDENTITY")) {
+            throw new Error("At least one current injury identity could not be resolved");
+          }
+          TS
+          npx tsx /tmp/validate-shadow.ts
