@@ -16,79 +16,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error \
-            'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/84dd41c648fb5f7ae161302641610a0ccdd07bd6/server/mlb-injury-shadow.ts' \
-            -o /tmp/mlb-injury-shadow.ts
-          cat > /tmp/validate-shadow.mts <<'TS'
-          import {
-            classifyMlbInjuryShadow,
-            fetchOfficialMlbInjurySnapshot,
-            summarizeMlbInjuryShadow,
-          } from "./mlb-injury-shadow.ts";
-
-          const date = "2026-07-27";
-          const backend = "https://web-p0-integration.up.railway.app";
-          const payload = await (await fetch(`${backend}/api/mlb/all?date=${date}`)).json();
-          const games = payload.games ?? [];
-          const teamIds = [...new Set(games.flatMap((game) => [game.homeTeam.id, game.awayTeam.id]))];
-          const started = Date.now();
-          const snapshots = Object.fromEntries(await Promise.all(teamIds.map(async (teamId) => [teamId, await fetchOfficialMlbInjurySnapshot(teamId, date)])));
-          const verified = Object.values(snapshots).filter((snapshot) => snapshot.status === "VERIFIED").length;
-          console.log(`COVERAGE teams=${teamIds.length} verified=${verified} partial=${teamIds.length - verified} elapsedMs=${Date.now() - started}`);
-          if (verified < Math.ceil(teamIds.length * 0.9)) throw new Error("Official source coverage below 90%");
-
-          const game = games.find((item) => item.gamePk === 822868 || item.gameId === 822868);
-          if (!game) throw new Error("SEA-TEX missing");
-          const normalize = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
-          async function resolve(name, teamId) {
-            const url = new URL("https://statsapi.mlb.com/api/v1/people/search");
-            url.searchParams.set("names", name);
-            url.searchParams.set("season", "2026");
-            url.searchParams.set("hydrate", "currentTeam");
-            const data = await (await fetch(url)).json();
-            return data.people?.find((person) => person.currentTeam?.id === teamId && normalize(person.fullName) === normalize(name))?.id ?? null;
-          }
-          for (const side of ["home", "away"]) {
-            const team = game[`${side}Team`];
-            const pitcher = game[`${side}Pitcher`];
-            const injuries = game[`${side}Injuries`] ?? [];
-            const snapshot = snapshots[team.id];
-            const shadows = [];
-            const bdlIds = new Set();
-            console.log(`TEAM ${team.name} detected=${injuries.length}`);
-            for (const player of injuries) {
-              const playerId = await resolve(player.name, team.id);
-              if (!playerId) throw new Error(`Unresolved identity: ${player.name}`);
-              bdlIds.add(playerId);
-              const roster = snapshot.rosterByPlayerId[playerId];
-              const shadow = classifyMlbInjuryShadow({
-                playerId,
-                name: player.name,
-                isPitcher: Boolean(player.isPitcher),
-                position: player.position,
-                rosterStatusCode: roster?.statusCode ?? null,
-                rosterStatusDescription: roster?.statusDescription ?? null,
-                latestTransaction: snapshot.latestTransactionByPlayerId[playerId] ?? null,
-                probablePitcherId: pitcher?.id ?? null,
-                gamesStarted: player.gamesStarted,
-                saves: player.saves,
-                holds: player.holds,
-                gamesFinished: player.gamesFinished,
-                inningsPitched: player.inningsPitched,
-                plateAppearances: player.plateAppearances,
-                ops: player.ops,
-                obp: player.obp,
-                slg: player.slg,
-                asOfDate: date,
-              });
-              shadows.push(shadow);
-              console.log(`PLAYER ${player.name} | MLB=${roster?.statusDescription ?? "none"} | ${shadow.decision}/${shadow.confidence} | ${shadow.reasonCode}`);
-            }
-            const officialOnly = Object.values(snapshot.rosterByPlayerId)
-              .filter((entry) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")))
-              .filter((entry) => !bdlIds.has(Number(entry.playerId))).length;
-            const summary = { ...summarizeMlbInjuryShadow(shadows), officialOnly };
-            console.log(`SUMMARY ${team.name} ${JSON.stringify(summary)}`);
-          }
-          TS
-          node --experimental-strip-types /tmp/validate-shadow.mts
+          mkdir -p /tmp/live-shadow/server /tmp/live-shadow/scripts
+          curl --fail --silent --show-error 'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/5c21e3a29435e323b4c6d2f6df07e5ab4e6f2a31/server/mlb-injury-shadow.ts' -o /tmp/live-shadow/server/mlb-injury-shadow.ts
+          curl --fail --silent --show-error 'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/5c21e3a29435e323b4c6d2f6df07e5ab4e6f2a31/scripts/validate-live-shadow-evidence.mts' -o /tmp/live-shadow/scripts/validate-live-shadow-evidence.mts
+          cd /tmp/live-shadow
+          node --experimental-strip-types scripts/validate-live-shadow-evidence.mts
