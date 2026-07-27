@@ -17,4 +17,4 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error 'https://web-p0-integration.up.railway.app/api/mlb/ledger/v1/predictions?from=2026-07-27&to=2026-07-27&limit=20' > /tmp/predictions.json
-          jq '.data[] | select(.prediction.game.gamePk == 822868 and .prediction.market.selection == "Seattle Mariners") | {selection:.prediction.market.selection, odds:.prediction.market.oddsAmerican, book:.prediction.market.book, settlement:.settlement}' /tmp/predictions.json
+          jq '.data[] | select(.prediction.game.gamePk == 822868) | {selection:.prediction.market.selection, odds:.prediction.market.oddsAmerican, book:.prediction.market.book, settlement:.settlement}' /tmp/predictions.json
