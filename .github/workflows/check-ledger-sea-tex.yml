@@ -26,3 +26,10 @@ jobs:
           echo "Predictions: $(jq -r '.data.predictions' /tmp/status.json)"
           echo "Settlement events: $(jq -r '.data.settlementEvents' /tmp/status.json)"
           echo "Latest prediction at: $(jq -r '.data.latestPredictionAt' /tmp/status.json)"
+
+      - name: Inspect latest prediction metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/predictions?limit=1" > /tmp/predictions.json
+          jq '.' /tmp/predictions.json
