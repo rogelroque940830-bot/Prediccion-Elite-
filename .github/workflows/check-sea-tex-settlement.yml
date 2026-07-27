@@ -1,9 +1,9 @@
 name: Check SEA-TEX settlement status
 
 on:
-  pull_request:
+  push:
     branches:
-      - integration/p0-staging-secure
+      - test/check-sea-tex-settlement-2026-07-27-1316
 
 permissions:
   contents: read
