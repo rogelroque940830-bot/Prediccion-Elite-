@@ -8,7 +8,8 @@
     "start": "node dist/index.cjs",
     "dev": "tsx server/staging-entry.ts",
     "typecheck:mlb-ledger": "tsc -p tsconfig.mlb-ledger.json",
-    "test:mlb-ledger": "tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts server/mlb-scientific-snapshot.test.ts"
+    "test:mlb-ledger": "tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts server/mlb-scientific-snapshot.test.ts",
+    "test:mlb-injuries": "tsx --test server/mlb-injury-identity.test.ts"
   },
   "engines": {
     "node": ">=20"
