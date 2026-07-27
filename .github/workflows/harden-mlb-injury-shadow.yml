@@ -1,0 +1,52 @@
+name: Harden MLB injury shadow mode
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  harden-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-injury-shadow-automation
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply hardening patch
+        run: python scripts/harden-mlb-injury-shadow.py
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression tests
+        run: npm run test:mlb-ledger
+      - name: Type-check MLB backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Commit validated hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/harden-mlb-injury-shadow.py
+          rm -f .github/workflows/harden-mlb-injury-shadow.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Harden MLB injury shadow safeguards'
+          git push origin HEAD:feature/mlb-injury-shadow-automation
