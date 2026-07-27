@@ -1,0 +1,36 @@
+name: Diagnose MLB injury mapping
+
+on:
+  push:
+    branches:
+      - test/diagnose-mlb-injury-mapping-2026-07-27
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect MLB people search response shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in "Julio Rodriguez" "Adolis Garcia"; do
+            echo "=== $name without hydrate ==="
+            curl --fail --silent --show-error --get \
+              --data-urlencode "names=$name" \
+              --data-urlencode "season=2026" \
+              'https://statsapi.mlb.com/api/v1/people/search' \
+              | jq '{count:(.people|length), first:(.people[0] | {id,fullName,currentTeam,keys:(keys)})}'
+            echo "=== $name with hydrate=currentTeam ==="
+            curl --fail --silent --show-error --get \
+              --data-urlencode "names=$name" \
+              --data-urlencode "season=2026" \
+              --data-urlencode "hydrate=currentTeam" \
+              'https://statsapi.mlb.com/api/v1/people/search' \
+              | jq '{count:(.people|length), first:(.people[0] | {id,fullName,currentTeam,keys:(keys)})}'
+          done
