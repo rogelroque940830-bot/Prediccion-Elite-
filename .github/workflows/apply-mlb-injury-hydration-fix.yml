@@ -1,0 +1,93 @@
+name: Apply MLB injury hydration fix
+
+on:
+  push:
+    branches:
+      - fix/mlb-injury-current-team-hydration
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/mlb-injury-current-team-hydration
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Apply focused repair and regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          routes_path = Path('server/routes.ts')
+          routes = routes_path.read_text(encoding='utf-8')
+
+          import_anchor = 'import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";'
+          import_line = 'import { buildMlbPeopleSearchUrl } from "./mlb-injury-identity";'
+          if import_line not in routes:
+              if import_anchor not in routes:
+                  raise SystemExit('Unable to locate routes import anchor')
+              routes = routes.replace(import_anchor, import_anchor + '\n' + import_line, 1)
+
+          old_lookup = 'const lookupUrl = `${MLB_BASE}/people/search?names=${encodeURIComponent(name)}&season=${MLB_SEASON_CURRENT}`;'
+          new_lookup = 'const lookupUrl = buildMlbPeopleSearchUrl(MLB_BASE, name, MLB_SEASON_CURRENT);'
+          if old_lookup in routes:
+              routes = routes.replace(old_lookup, new_lookup, 1)
+          elif new_lookup not in routes:
+              raise SystemExit('Unable to locate MLB injury lookup URL')
+
+          routes_path.write_text(routes, encoding='utf-8')
+
+          Path('server/mlb-injury-identity.ts').write_text('''export function buildMlbPeopleSearchUrl(\n  baseUrl: string,\n  playerName: string,\n  season: string,\n): string {\n  const normalizedBase = baseUrl.replace(/\\/$/, "");\n  const params = new URLSearchParams({\n    names: playerName,\n    season,\n    hydrate: "currentTeam",\n  });\n  return `${normalizedBase}/people/search?${params.toString()}`;\n}\n''', encoding='utf-8')
+
+          Path('server/mlb-injury-identity.test.ts').write_text('''import assert from "node:assert/strict";\nimport test from "node:test";\nimport { buildMlbPeopleSearchUrl } from "./mlb-injury-identity";\n\ntest("MLB injury identity lookup requests currentTeam hydration", () => {\n  const url = new URL(\n    buildMlbPeopleSearchUrl(\n      "https://statsapi.mlb.com/api/v1/",\n      "Julio Rodríguez",\n      "2026",\n    ),\n  );\n\n  assert.equal(url.pathname, "/api/v1/people/search");\n  assert.equal(url.searchParams.get("names"), "Julio Rodríguez");\n  assert.equal(url.searchParams.get("season"), "2026");\n  assert.equal(url.searchParams.get("hydrate"), "currentTeam");\n});\n\ntest("MLB injury identity lookup does not duplicate the trailing slash", () => {\n  const url = buildMlbPeopleSearchUrl(\n    "https://statsapi.mlb.com/api/v1/",\n    "Adolis García",\n    "2026",\n  );\n  assert.match(url, /^https:\\/\\/statsapi\\.mlb\\.com\\/api\\/v1\\/people\\/search\\?/);\n  assert.doesNotMatch(url, /api\\/v1\\/\\/people/);\n});\n''', encoding='utf-8')
+
+          package_path = Path('package.json')
+          package_data = json.loads(package_path.read_text(encoding='utf-8'))
+          scripts = package_data.setdefault('scripts', {})
+          scripts['test:mlb-injuries'] = 'tsx --test server/mlb-injury-identity.test.ts'
+          package_path.write_text(json.dumps(package_data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/apply-mlb-injury-hydration-fix.yml
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run injury regression tests
+        run: npm run test:mlb-injuries
+
+      - name: Run existing MLB ledger tests
+        run: npm run test:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Validate patch and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git status --short
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No code changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/routes.ts server/mlb-injury-identity.ts server/mlb-injury-identity.test.ts package.json .github/workflows/apply-mlb-injury-hydration-fix.yml
+          git commit -m "fix: hydrate MLB current team for injury validation"
+          git push origin HEAD:fix/mlb-injury-current-team-hydration
