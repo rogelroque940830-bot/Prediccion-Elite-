@@ -1,0 +1,3314 @@
+=== MATCHES ===
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:6:      - test/diagnose-pitcher-vs-team-name-2026-07-27
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:17:          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:26:            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:35:            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:37:          } > .diagnostics/pitcher-vs-team.txt
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:40:          git add .diagnostics/pitcher-vs-team.txt
+./.github/workflows/diagnose-pitcher-vs-team-name.yml:46:          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+./frontend/qa/STATIC_INVENTORY.json:81:      "/api/mlb/pitcher-vs-team/${gameId}",
+./frontend/docs/API_CONTRACT.md:37:- `GET /api/mlb/pitcher-vs-team/:gamePk`
+./frontend/client/src/pages/mlb-predictor.tsx:732:    const completeFactorFeeds = [lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed]
+./frontend/client/src/pages/mlb-predictor.tsx:858:          sourcePayloads: { lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed },
+./frontend/client/src/pages/mlb-predictor.tsx:987:  // Pitcher vs Team — últimos 5 starts contra el rival
+./frontend/client/src/pages/mlb-predictor.tsx:988:  const [pitcherVsTeam, setPitcherVsTeam] = useState<any | null>(null);
+./frontend/client/src/pages/mlb-predictor.tsx:1407:    // Pitcher vs Team — últimos 5 starts contra el rival
+./frontend/client/src/pages/mlb-predictor.tsx:1409:      const pvtRes = await fetch(`${API_BASE}/api/mlb/pitcher-vs-team/${gameId}`);
+./frontend/client/src/pages/mlb-predictor.tsx:1651:    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+./frontend/client/src/pages/mlb-predictor.tsx:1665:    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+./frontend/client/src/pages/mlb-predictor.tsx:1666:      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:1668:      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:1669:      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:1671:    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+./frontend/client/src/pages/mlb-predictor.tsx:1672:      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:1673:      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:1674:      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+./frontend/client/src/pages/mlb-predictor.tsx:2049:    // Pitcher vs Team — histórico contra este rival
+./frontend/client/src/pages/mlb-predictor.tsx:2053:      factorNotes.push(`Pitcher vs Team Δ (L:${hStr} · V:${aStr})`);
+./frontend/client/src/pages/mlb-predictor.tsx:2518:    lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher,
+./frontend/client/src/pages/mlb-predictor.tsx:3148:          {pitcherVsTeam && (
+./frontend/client/src/pages/mlb-predictor.tsx:3152:                  <span className="text-violet-400">📜 Pitcher vs Team — histórico</span>
+./frontend/client/src/pages/mlb-predictor.tsx:3160:                  { side: "home", label: "SP Local vs Visitante", split: pitcherVsTeam.homeVsAway, fallbackName: homePitcherName, fallbackOpp: awayTeam },
+./frontend/client/src/pages/mlb-predictor.tsx:3161:                  { side: "away", label: "SP Visitante vs Local", split: pitcherVsTeam.awayVsHome, fallbackName: awayPitcherName, fallbackOpp: homeTeam },
+./server/routes.ts:293:          import("./mlb-pitcher-vs-team"),
+./server/routes.ts:1686:  // ⚡ EL MOTOR REAL: pitch-by-pitch + batter-vs-team
+./server/routes.ts:1800:  // GET /api/mlb/pitcher-vs-team/:gamePk
+./server/routes.ts:1802:  app.get("/api/mlb/pitcher-vs-team/:gamePk", async (req, res) => {
+./server/routes.ts:1804:      const { analyzePitcherVsTeamMatchup } = await import("./mlb-pitcher-vs-team");
+./server/routes.ts:1820:      console.error("pitcher-vs-team error:", e);
+./server/mlb-pitcher-vs-team.ts:1:// Pitcher vs Team Recent History (MLB)
+./server/mlb-pitcher-vs-team.ts:135:    signal = `⭐ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ${goodStarts} de últimos 3 con 2- ER. ERA ${era.toFixed(2)} en ${filtered.length} starts (vs season ${seasonEra.toFixed(2)})${NOTE_STATCAST}`;
+./server/mlb-pitcher-vs-team.ts:140:      signal = `✓ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
+./README.md:61:- `/api/mlb/pitcher-vs-team/:gamePk`
+=== MATCH CONTEXT ===
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:6 ---
+name: Diagnose pitcher vs team name
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:17 ---
+name: Diagnose pitcher vs team name
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:26 ---
+name: Diagnose pitcher vs team name
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:35 ---
+name: Diagnose pitcher vs team name
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:37 ---
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:40 ---
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:46 ---
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Persist UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          {
+            echo '=== MATCHES ==='
+            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true
+            echo '=== MATCH CONTEXT ==='
+            while IFS=: read -r file line rest; do
+              [ -f "$file" ] || continue
+              start=$((line > 35 ? line - 35 : 1))
+              end=$((line + 55))
+              echo "--- $file:$line ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RInE 'Pitcher vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team' . \
+              --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.diagnostics --exclude='package-lock.json' || true)
+          } > .diagnostics/pitcher-vs-team.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team.txt
+          if git diff --cached --quiet; then
+            echo 'Diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save pitcher name diagnostic [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./frontend/qa/STATIC_INVENTORY.json:81 ---
+    ]
+  ],
+  "routeCount": 11,
+  "endpointFiles": {
+    "client/src/lib/mlb-model.ts": [
+      "/api/mlb/pitcher-form"
+    ],
+    "client/src/lib/context.tsx": [
+      "/api/picks",
+      "/api/picks/sync"
+    ],
+    "client/src/lib/picks-api.ts": [
+      "/api/picks/v2",
+      "/api/picks/v2${suffix}",
+      "/api/picks/v2/${encodeURIComponent(id)}"
+    ],
+    "client/src/pages/nhl-predictor.tsx": [
+      "/api/nhl/all",
+      "/api/nhl/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/nhl?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/mlb-predictor.tsx": [
+      "/api/mlb/advanced/${gameId}",
+      "/api/mlb/all",
+      "/api/mlb/all)",
+      "/api/mlb/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/mlb/archetype-matchup/${gameId}",
+      "/api/mlb/bullpen-status/${gameId}",
+      "/api/mlb/catcher-framing/${gameId}",
+      "/api/mlb/context?home=${encodeURIComponent(homeTri)}&away=${encodeURIComponent(awayTri)}&gamePk=${gameId}",
+      "/api/mlb/discipline-speed/${gameId}",
+      "/api/mlb/lineup-matchup/${gameId}",
+      "/api/mlb/park-pitcher/${gameId}",
+      "/api/mlb/pitcher-form/${gameId}",
+      "/api/mlb/pitcher-recent/${gameId}",
+      "/api/mlb/pitcher-vs-team/${gameId}",
+      "/api/mlb/quality/${gameId}",
+      "/api/mlb/rookie-pitcher/${gameId}",
+      "/api/mlb/sos/${gameId}",
+      "/api/mlb/statcast-matchup/${gameId}",
+      "/api/mlb/team-fatigue/${gameId}",
+      "/api/mlb/umpire/${gameId}",
+      "/api/mlb/wind-park/${gameId}",
+      "/api/odds/mlb/f5?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/mlb?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/predictor.tsx": [
+      "/api/nba/all",
+      "/api/nba/all?date=${encodeURIComponent(selectedDate)}",
+      "/api/odds/nba?date=${encodeURIComponent(selectedDate)}"
+    ],
+    "client/src/pages/wnba-predictor.tsx": [
+      "/api/wnba/all",
+      "/api/wnba/fatigue",
+      "/api/wnba/games?date=${selectedDate}",
+      "/api/wnba/h2h?home=${homeEspnId}&away=${awayEspnId}",
+      "/api/wnba/injuries",
+      "/api/wnba/players",
+      "/api/wnba/shot-profile/${awayEspnId}",
+      "/api/wnba/shot-profile/${homeEspnId}",
+      "/api/wnba/sos"
+    ],
+    "client/src/components/mlb-early-markets-card.tsx": [
+      "/api/mlb/early-markets"
+    ],
+    "client/src/components/mlb-ere-card.tsx": [
+      "/api/mlb/ere/${awayTeamId}?${qs}",
+      "/api/mlb/ere/${homeTeamId}?${qs}"
+    ],
+    "client/src/components/mlb-tesi-card.tsx": [
+      "/api/mlb/tesi/${awayTeamId}?${qs}",
+      "/api/mlb/tesi/${homeTeamId}?${qs}"
+    ],
+    "client/src/components/elite-factors.tsx": [
+      "/api/mlb/advanced/${gamePk}",
+      "/api/mlb/context?${qs.toString()}",
+      "/api/mlb/umpire/${gamePk}",
+      "/api/nba/context?${qs.toString()}",
+      "/api/nba/refs/${gameId}",
+      "/api/nhl/goalies/${gameId}",
+      "/api/sharp/${sport.toLowerCase()}/${encodeURIComponent(gameKey)}"
+    ],
+    "client/src/components/clv-tracker.tsx": [
+      "/api/clv/refresh",
+      "/api/picks"
+    ]
+  },
+  "endpointReferenceCount": 58,
+  "referenceBuild": {
+    "path": "original export dist/public",
+    "files": [
+--- ./frontend/docs/API_CONTRACT.md:37 ---
+
+## Frontera arquitectónica
+
+El frontend solo consume HTTP. No importa archivos de `server/` ni `shared/`, no abre bases de datos y no contiene credenciales de proveedores.
+
+La URL del backend se resuelve en `client/src/lib/queryClient.ts` mediante:
+
+```text
+VITE_API_BASE_URL + /api/...
+```
+
+## Endpoints principales consumidos
+
+### Estado e historial
+
+- `GET /api/picks`
+- `POST /api/picks/sync`
+- `POST /api/picks/v2`
+- `GET /api/picks/v2`
+- `DELETE /api/picks/v2/:id`
+- `POST /api/clv/refresh`
+
+### MLB
+
+- `GET /api/mlb/all`
+- `POST /api/mlb/early-markets`
+- `GET /api/mlb/ere/:teamId`
+- `GET /api/mlb/tesi/:teamId`
+- `GET /api/mlb/lineup-matchup/:gamePk`
+- `GET /api/mlb/archetype-matchup/:gamePk`
+- `GET /api/mlb/bullpen-status/:gamePk`
+- `GET /api/mlb/park-pitcher/:gamePk`
+- `GET /api/mlb/quality/:gamePk`
+- `GET /api/mlb/sos/:gamePk`
+- `GET /api/mlb/discipline-speed/:gamePk`
+- `GET /api/mlb/pitcher-vs-team/:gamePk`
+- `GET /api/mlb/wind-park/:gamePk`
+- `GET /api/mlb/catcher-framing/:gamePk`
+- `GET /api/mlb/rookie-pitcher/:gamePk`
+- `GET /api/mlb/pitcher-form/:gamePk`
+- `GET /api/mlb/team-fatigue/:gamePk`
+- `GET /api/mlb/statcast-matchup/:gamePk`
+- `GET /api/mlb/pitcher-recent/:gamePk`
+- `GET /api/mlb/umpire/:gamePk`
+- `GET /api/mlb/advanced/:gamePk`
+- `GET /api/mlb/context`
+
+### NBA
+
+- `GET /api/nba/all`
+- `GET /api/nba/refs/:gameId`
+- `GET /api/nba/context`
+
+### WNBA
+
+- `GET /api/wnba/all`
+- `GET /api/wnba/games`
+- `GET /api/wnba/players`
+- `GET /api/wnba/injuries`
+- `GET /api/wnba/fatigue`
+- `GET /api/wnba/sos`
+- `GET /api/wnba/h2h`
+- `GET /api/wnba/shot-profile/:teamId`
+
+### NHL
+
+- `GET /api/nhl/all`
+- `GET /api/nhl/goalies/:gameId`
+
+### Mercado y señales
+
+- `GET /api/odds/mlb`
+- `GET /api/odds/mlb/f5`
+- `GET /api/odds/nba`
+- `GET /api/odds/nhl`
+- `GET /api/sharp/:sport/:gameKey`
+
+## Compatibilidad comprobada
+
+La comparación estática encontró 46 familias de rutas usadas por el frontend. Las rutas históricas se contrastaron con el servidor exportado, y las rutas agregadas posteriormente (`early-markets`, `ere`, `tesi` y `picks/v2`) se contrastaron con el backend vigente en GitHub.
+
+## Riesgo que permanece
+
+El contrato no está versionado formalmente mediante OpenAPI. Un cambio de respuesta en Railway puede romper la UI aunque la ruta continúe existiendo. La siguiente mejora recomendada es publicar esquemas Zod/OpenAPI compartidos como paquete de contratos, sin compartir lógica del servidor.
+--- ./frontend/client/src/pages/mlb-predictor.tsx:732 ---
+    resolvedModelProb = Math.max(0.1, Math.min(99.9, resolvedModelProb));
+    const duplicatePick = state.mlbPicks.some((existing) =>
+      existing.date === selectedDate
+      && existing.market.trim().toLowerCase() === normalizedMarket
+      && existing.pick.trim().toLowerCase() === pick.trim().toLowerCase()
+      && existing.odds === odds
+      && Math.abs(existing.modelProb - resolvedModelProb) < 0.01
+    );
+    if (duplicatePick) {
+      toast({
+        title: "Este pick MLB ya está guardado",
+        description: "No se creó otra entrada en el historial ni en el ledger.",
+      });
+      return;
+    }
+    const implied = americanImpliedProbability(odds);
+    const noVig = noVigSideProbability(odds, oppositeOdds);
+    const edgePp = implied == null ? undefined : resolvedModelProb - implied * 100;
+    const b = odds > 0 ? odds / 100 : 100 / Math.abs(odds);
+    const fallbackKelly = Math.max(0, (b * (resolvedModelProb / 100) - (1 - resolvedModelProb / 100)) / b) * 0.25 * 100;
+    const operationalStake = Math.min(1, Math.max(0, pq?.stakeUnits ?? fallbackKelly));
+    const capturedAt = new Date().toISOString();
+    const selectedGame = mlbGames.find((game) => String(game.gameId) === selectedGameId) as any;
+    const commenceTime = isoDateTimeOrUndefined(selectedGame?.commenceTime || selectedGame?.gameTime || selectedGame?.gameDate);
+    if (commenceTime && Date.parse(capturedAt) > Date.parse(commenceTime)) {
+      toast({
+        title: "El juego ya comenzó",
+        description: "No se puede guardar una predicción científica pregame después del inicio oficial.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const injuryStatus = (status: MLBInjuryFeedStatus): MlbSourceStatus => status === "VERIFIED" ? "VERIFIED"
+      : status === "PARTIAL" ? "PARTIAL"
+        : status === "SOURCE_UNAVAILABLE" ? "MISSING" : "UNKNOWN";
+    const completeFactorFeeds = [lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed]
+      .filter(Boolean).length;
+    const stage = Boolean(
+      gamePkForTesi
+      && selectedGameId
+      && commenceTime
+      && completeFactorFeeds >= 10
+      && homeInjuryFeed.status === "VERIFIED"
+      && awayInjuryFeed.status === "VERIFIED"
+    ) ? "FINAL" as const : "PROVISIONAL" as const;
+    const warnings = [
+      ...(pq?.warnings || []),
+      ...(stage === "PROVISIONAL" ? ["Snapshot provisional: faltan identificador oficial del juego o verificación completa de lesiones."] : []),
+    ];
+
+    const scientificSnapshot = createMlbScientificSnapshot({
+      model: {
+        name: "CourtEdge MLB",
+        version: "predictor-full-snapshot-v1",
+      },
+      game: {
+        ...(gamePkForTesi ? { gamePk: gamePkForTesi } : {}),
+        gameDate: selectedDate,
+        ...(commenceTime ? { commenceTime } : {}),
+        homeTeam: homeTeam || "Local",
+        awayTeam: awayTeam || "Visitante",
+        ...(selectedGame?.venue ? { venue: String(selectedGame.venue) } : {}),
+      },
+      market: {
+        type: mapMlbLedgerMarket(market),
+        selection: pick,
+        ...(parseMlbMarketLine(pick) != null ? { line: parseMlbMarketLine(pick) } : {}),
+        oddsAmerican: Math.round(odds),
+        book: normalizedMarket === "f5" && f5OddsSource === "consenso" ? "Consensus FD/BetMGM/DK" : "Hard Rock",
+        capturedAt,
+      },
+      probabilities: {
+        model: resolvedModelProb / 100,
+        ...(implied != null ? { marketImplied: implied } : {}),
+        ...(noVig != null ? { noVig } : {}),
+        ...(edgePp != null ? { edgePp } : {}),
+      },
+      decision: {
+        signal: pq?.recommendation || (normalizedMarket === "ml" ? result.mlSignal
+          : normalizedMarket === "f5" ? result.f5Signal
+            : normalizedMarket.includes("run line") ? result.runLine.signal
+              : normalizedMarket.includes("f5 o/u") ? result.f5OuResult?.signal || "INFO"
+                : result.ouResult.signal),
+        confidenceLabel: pq?.rating || "MODEL",
+        confidencePct: resolvedModelProb,
+        stakeUnits: Math.round(operationalStake * 100) / 100,
+        rationale: pq?.reasoning || result.bestPlay?.reason || "Mercado seleccionado por el usuario después del cálculo completo.",
+      },
+      analysis: {
+        stage,
+        warnings,
+--- ./frontend/client/src/pages/mlb-predictor.tsx:858 ---
+            name: "Sportsbook price",
+            status: "MANUAL",
+            fetchedAt: capturedAt,
+            metadata: { book: normalizedMarket === "f5" && f5OddsSource === "consenso" ? "Consensus FD/BetMGM/DK" : "Hard Rock" },
+          },
+        ],
+        layers: {
+          factorBreakdown: result.factorBreakdown,
+          pickQualities: result.pickQualities,
+          bestPlay: result.bestPlay,
+          safePlay: result.safePlay,
+          poisson: result.poisson,
+        },
+        rawInputs: {
+          selectedDate,
+          selectedGameId,
+          gamePk: gamePkForTesi,
+          teams: {
+            home: { name: homeTeam, mlbId: homeTeamMlbId, ops: homeOps, rpg: homeRpg, obp: homeObp, avg: homeAvg, wOBA: homeWOBA, iso: homeISO, babip: homeBABIP, opsVsL: homeOpsVsL, opsVsR: homeOpsVsR },
+            away: { name: awayTeam, mlbId: awayTeamMlbId, ops: awayOps, rpg: awayRpg, obp: awayObp, avg: awayAvg, wOBA: awayWOBA, iso: awayISO, babip: awayBABIP, opsVsL: awayOpsVsL, opsVsR: awayOpsVsR },
+          },
+          pitchers: {
+            home: { name: homePitcherName, id: homePitcherIdTesi, era: homeEra, whip: homeWhip, fip: homeFip, k9: homeK9, bb9: homeBb9, rest: homeRest, hand: homeHand, recentEra: homeRecentEra, inningsPitched: homeIP, gamesStarted: homePitcherGS, kPct: homeKPct, bbPct: homeBbPct, siera: homeSiera },
+            away: { name: awayPitcherName, id: awayPitcherIdTesi, era: awayEra, whip: awayWhip, fip: awayFip, k9: awayK9, bb9: awayBb9, rest: awayRest, hand: awayHand, recentEra: awayRecentEra, inningsPitched: awayIP, gamesStarted: awayPitcherGS, kPct: awayKPct, bbPct: awayBbPct, siera: awaySiera },
+          },
+          bullpens: {
+            home: { era: homeBpEra, whip: homeBpWhip, tired: homeBpTired, closerAvailable: homeCloser, era14d: homeBpEra14d, ip48h: homeBpIp48h },
+            away: { era: awayBpEra, whip: awayBpWhip, tired: awayBpTired, closerAvailable: awayCloser, era14d: awayBpEra14d, ip48h: awayBpIp48h },
+          },
+          injuries: {
+            home: { adjustment: homeInjury, factors: homeInjuryFactors, feed: homeInjuryFeed, roster: homeInjuryRoster, missing: Array.from(homeInjuryMissing), gamesOut: homeInjuryGamesOut },
+            away: { adjustment: awayInjury, factors: awayInjuryFactors, feed: awayInjuryFeed, roster: awayInjuryRoster, missing: Array.from(awayInjuryMissing), gamesOut: awayInjuryGamesOut },
+          },
+          lines: { mlOdds, mlOddsAway, runLine, rlOdds, rlOddsAway, ouLine, overOdds, underOdds, f5MlHome, f5MlAway, f5OddsSource, f5OuLine },
+          context: { parkFactor, parkName, tempF, windFavorable, isNight, sharpDir, sharpGameKey, mlbCtxAdj, umpireData, advancedData },
+          sourcePayloads: { lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed },
+        },
+        rawOutput: result,
+      },
+    });
+
+    dispatch({
+      type: "ADD_MLB_PICK",
+      payload: {
+        date: selectedDate,
+        sport: "MLB",
+        team: homeTeam || "Local",
+        opponent: awayTeam || "Visitante",
+        market,
+        pick,
+        odds,
+        modelProb: Math.round(resolvedModelProb * 100) / 100,
+        stake: Math.round(operationalStake * 100) / 100,
+        result: "P",
+        scientificSnapshot,
+      },
+    });
+    toast({
+      title: "Pick MLB guardado en historial",
+      description: stage === "FINAL" ? "Snapshot científico FINAL enviado al ledger" : "Snapshot PROVISIONAL enviado al ledger",
+    });
+  };
+
+  // Auto-fill
+  const [selectedGameId, setSelectedGameId] = useState("");
+  const [autoStatus, setAutoStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
+  const [selectedDate, setSelectedDate] = useState<string>(todayFL()); // YYYY-MM-DD Florida
+  const [sharpGameKey, setSharpGameKey] = useState<string | null>(null);
+  const [umpireData, setUmpireData] = useState<MLBUmpireImpact | null>(null);
+  const [advancedData, setAdvancedData] = useState<{ totalAdjustment: number; notes: string[] } | null>(null);
+  const [sharpDir, setSharpDir] = useState<SharpDirection | null>(null);
+  const [mlbCtxAdj, setMlbCtxAdj] = useState<{ homeProbAdjPp: number; totalAdj: number }>({ homeProbAdjPp: 0, totalAdj: 0 });
+  const [contextTri, setContextTri] = useState<{ home: string | null; away: string | null }>({ home: null, away: null });
+
+  const { data: mlbData, isLoading: mlbLoading, refetch: refetchMLB, error: mlbError } = useQuery<{
+    success: boolean;
+    games: Array<{
+      gameId: number; gameTime: string;
+      homeTeam: { id: number; name: string };
+      awayTeam: { id: number; name: string };
+      homeStats: any; awayStats: any;
+      homePitcher: any; awayPitcher: any;
+      venue: string;
+      gameDate?: string;
+    }>;
+  }>({
+    queryKey: ["/api/mlb/all", selectedDate],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/mlb/all?date=${encodeURIComponent(selectedDate)}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+--- ./frontend/client/src/pages/mlb-predictor.tsx:987 ---
+  const [homeRpg, setHomeRpg] = useState("4.5");
+  const [homeObp, setHomeObp] = useState("0.320");
+  const [homeAvg, setHomeAvg] = useState("0.255");
+  // Lesiones MLB: ajuste de runs por lesión + auto-tipo (Slugger/Contact/Defensor)
+  const [homeInjury, setHomeInjury] = useState("0"); // ajuste de runs (-2 a +2)
+  const [homeInjuryFactors, setHomeInjuryFactors] = useState<{off: number; def: number; type: string}>({off: 1.0, def: 0.5, type: "Mixto"});
+  const [awayInjury, setAwayInjury] = useState("0");
+  const [awayInjuryFactors, setAwayInjuryFactors] = useState<{off: number; def: number; type: string}>({off: 1.0, def: 0.5, type: "Mixto"});
+
+  // Rosters de lesionados (auto-rellenados desde /api/mlb/all)
+  const [homeInjuryRoster, setHomeInjuryRoster] = useState<MLBInjury[]>([]);
+  const [awayInjuryRoster, setAwayInjuryRoster] = useState<MLBInjury[]>([]);
+  const [homeInjuryFeed, setHomeInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
+  const [awayInjuryFeed, setAwayInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
+  const [homeInjuryMissing, setHomeInjuryMissing] = useState<Set<string>>(new Set());
+  const [awayInjuryMissing, setAwayInjuryMissing] = useState<Set<string>>(new Set());
+  // Override de juegos perdidos por jugador (si el usuario lo ajusta manualmente)
+  const [homeInjuryGamesOut, setHomeInjuryGamesOut] = useState<Record<string, number>>({});
+  const [awayInjuryGamesOut, setAwayInjuryGamesOut] = useState<Record<string, number>>({});
+
+  // Lineup matchup hombre-por-hombre (lineup vs pitcher rival)
+  const [lineupMatchup, setLineupMatchup] = useState<any | null>(null);
+
+  // Pitcher Archetype Matchup — cómo le pega CADA equipo a CADA tipo de pitcher
+  const [archetypeMatchup, setArchetypeMatchup] = useState<any | null>(null);
+
+  // Bullpen Availability — closer disponible? top 3 cansados? predicción de cerrador HOY
+  const [bullpenStatus, setBullpenStatus] = useState<any | null>(null);
+
+  // Park-Pitcher Splits — cómo le va a este pitcher en ESTE estadio específico
+  const [parkPitcher, setParkPitcher] = useState<any | null>(null);
+  const [statcastQuality, setStatcastQuality] = useState<any | null>(null);
+  const [sos, setSos] = useState<any | null>(null);
+  const [discSpeed, setDiscSpeed] = useState<any | null>(null);
+
+  // Pitcher vs Team — últimos 5 starts contra el rival
+  const [pitcherVsTeam, setPitcherVsTeam] = useState<any | null>(null);
+
+  // Wind-Park combinado — viento + estadio + temperatura
+  const [windPark, setWindPark] = useState<any | null>(null);
+
+  // Catcher Framing — cuánto valor genera el catcher robando strikes
+  const [catcherFraming, setCatcherFraming] = useState<any | null>(null);
+
+  // Rookie Pitcher Penalty — detecta SP con poca experiencia / bullpen games
+  const [rookiePitcher, setRookiePitcher] = useState<any | null>(null);
+
+  // Pitcher Form (Hueco #1+#2) — días descanso + splits home/road
+  const [pitcherForm, setPitcherForm] = useState<any | null>(null);
+
+  // Team Fatigue (Hueco #3) — day-after-night, travel, stretch
+  const [teamFatigue, setTeamFatigue] = useState<any | null>(null);
+
+  // Pitcher Recent (post-mortem fix) — forma reciente, implosion, early-exit
+  const [pitcherRecent, setPitcherRecent] = useState<any | null>(null);
+
+  // ⚡ STATCAST PITCH-BY-PITCH MATCHUP (motor real)
+  const [statcastMatchup, setStatcastMatchup] = useState<any | null>(null);
+  const [homeWOBA, setHomeWOBA] = useState<number | undefined>(undefined);
+  const [homeISO, setHomeISO] = useState<number | undefined>(undefined);
+  const [homeBABIP, setHomeBABIP] = useState<number | undefined>(undefined);
+  const [homeOpsVsL, setHomeOpsVsL] = useState("0.720");
+  const [homeOpsVsR, setHomeOpsVsR] = useState("0.730");
+
+  // Home bullpen
+  const [homeBpEra, setHomeBpEra] = useState("3.80");
+  const [homeBpWhip, setHomeBpWhip] = useState("1.25");
+  const [homeBpTired, setHomeBpTired] = useState(false);
+  const [homeCloser, setHomeCloser] = useState(true);
+  // Auto-cargado del backend, no editable manual
+  const [homeBpEra14d, setHomeBpEra14d] = useState<number | undefined>(undefined);
+  const [homeBpIp48h, setHomeBpIp48h] = useState<number | undefined>(undefined);
+  const [homePitcherGS, setHomePitcherGS] = useState<number | undefined>(undefined);
+  const [homeKPct, setHomeKPct] = useState<number | undefined>(undefined);
+  const [homeBbPct, setHomeBbPct] = useState<number | undefined>(undefined);
+  const [homeSiera, setHomeSiera] = useState<number | undefined>(undefined);
+
+  // Home momentum
+  const [homeStreak, setHomeStreak] = useState("0");
+  const [homeWinRate, setHomeWinRate] = useState("0.55");
+
+  // ── AWAY TEAM STATE ────────────────────────────────────────────────────────
+  const [awayTeam, setAwayTeam] = useState("");
+
+  // Away pitcher
+  const [awayPitcherName, setAwayPitcherName] = useState("");
+  const [awayEra, setAwayEra] = useState("3.80");
+  const [awayWhip, setAwayWhip] = useState("1.20");
+  const [awayFip, setAwayFip] = useState("3.70");
+  const [awayK9, setAwayK9] = useState("9.0");
+  const [awayBb9, setAwayBb9] = useState("3.0");
+--- ./frontend/client/src/pages/mlb-predictor.tsx:988 ---
+  const [homeObp, setHomeObp] = useState("0.320");
+  const [homeAvg, setHomeAvg] = useState("0.255");
+  // Lesiones MLB: ajuste de runs por lesión + auto-tipo (Slugger/Contact/Defensor)
+  const [homeInjury, setHomeInjury] = useState("0"); // ajuste de runs (-2 a +2)
+  const [homeInjuryFactors, setHomeInjuryFactors] = useState<{off: number; def: number; type: string}>({off: 1.0, def: 0.5, type: "Mixto"});
+  const [awayInjury, setAwayInjury] = useState("0");
+  const [awayInjuryFactors, setAwayInjuryFactors] = useState<{off: number; def: number; type: string}>({off: 1.0, def: 0.5, type: "Mixto"});
+
+  // Rosters de lesionados (auto-rellenados desde /api/mlb/all)
+  const [homeInjuryRoster, setHomeInjuryRoster] = useState<MLBInjury[]>([]);
+  const [awayInjuryRoster, setAwayInjuryRoster] = useState<MLBInjury[]>([]);
+  const [homeInjuryFeed, setHomeInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
+  const [awayInjuryFeed, setAwayInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
+  const [homeInjuryMissing, setHomeInjuryMissing] = useState<Set<string>>(new Set());
+  const [awayInjuryMissing, setAwayInjuryMissing] = useState<Set<string>>(new Set());
+  // Override de juegos perdidos por jugador (si el usuario lo ajusta manualmente)
+  const [homeInjuryGamesOut, setHomeInjuryGamesOut] = useState<Record<string, number>>({});
+  const [awayInjuryGamesOut, setAwayInjuryGamesOut] = useState<Record<string, number>>({});
+
+  // Lineup matchup hombre-por-hombre (lineup vs pitcher rival)
+  const [lineupMatchup, setLineupMatchup] = useState<any | null>(null);
+
+  // Pitcher Archetype Matchup — cómo le pega CADA equipo a CADA tipo de pitcher
+  const [archetypeMatchup, setArchetypeMatchup] = useState<any | null>(null);
+
+  // Bullpen Availability — closer disponible? top 3 cansados? predicción de cerrador HOY
+  const [bullpenStatus, setBullpenStatus] = useState<any | null>(null);
+
+  // Park-Pitcher Splits — cómo le va a este pitcher en ESTE estadio específico
+  const [parkPitcher, setParkPitcher] = useState<any | null>(null);
+  const [statcastQuality, setStatcastQuality] = useState<any | null>(null);
+  const [sos, setSos] = useState<any | null>(null);
+  const [discSpeed, setDiscSpeed] = useState<any | null>(null);
+
+  // Pitcher vs Team — últimos 5 starts contra el rival
+  const [pitcherVsTeam, setPitcherVsTeam] = useState<any | null>(null);
+
+  // Wind-Park combinado — viento + estadio + temperatura
+  const [windPark, setWindPark] = useState<any | null>(null);
+
+  // Catcher Framing — cuánto valor genera el catcher robando strikes
+  const [catcherFraming, setCatcherFraming] = useState<any | null>(null);
+
+  // Rookie Pitcher Penalty — detecta SP con poca experiencia / bullpen games
+  const [rookiePitcher, setRookiePitcher] = useState<any | null>(null);
+
+  // Pitcher Form (Hueco #1+#2) — días descanso + splits home/road
+  const [pitcherForm, setPitcherForm] = useState<any | null>(null);
+
+  // Team Fatigue (Hueco #3) — day-after-night, travel, stretch
+  const [teamFatigue, setTeamFatigue] = useState<any | null>(null);
+
+  // Pitcher Recent (post-mortem fix) — forma reciente, implosion, early-exit
+  const [pitcherRecent, setPitcherRecent] = useState<any | null>(null);
+
+  // ⚡ STATCAST PITCH-BY-PITCH MATCHUP (motor real)
+  const [statcastMatchup, setStatcastMatchup] = useState<any | null>(null);
+  const [homeWOBA, setHomeWOBA] = useState<number | undefined>(undefined);
+  const [homeISO, setHomeISO] = useState<number | undefined>(undefined);
+  const [homeBABIP, setHomeBABIP] = useState<number | undefined>(undefined);
+  const [homeOpsVsL, setHomeOpsVsL] = useState("0.720");
+  const [homeOpsVsR, setHomeOpsVsR] = useState("0.730");
+
+  // Home bullpen
+  const [homeBpEra, setHomeBpEra] = useState("3.80");
+  const [homeBpWhip, setHomeBpWhip] = useState("1.25");
+  const [homeBpTired, setHomeBpTired] = useState(false);
+  const [homeCloser, setHomeCloser] = useState(true);
+  // Auto-cargado del backend, no editable manual
+  const [homeBpEra14d, setHomeBpEra14d] = useState<number | undefined>(undefined);
+  const [homeBpIp48h, setHomeBpIp48h] = useState<number | undefined>(undefined);
+  const [homePitcherGS, setHomePitcherGS] = useState<number | undefined>(undefined);
+  const [homeKPct, setHomeKPct] = useState<number | undefined>(undefined);
+  const [homeBbPct, setHomeBbPct] = useState<number | undefined>(undefined);
+  const [homeSiera, setHomeSiera] = useState<number | undefined>(undefined);
+
+  // Home momentum
+  const [homeStreak, setHomeStreak] = useState("0");
+  const [homeWinRate, setHomeWinRate] = useState("0.55");
+
+  // ── AWAY TEAM STATE ────────────────────────────────────────────────────────
+  const [awayTeam, setAwayTeam] = useState("");
+
+  // Away pitcher
+  const [awayPitcherName, setAwayPitcherName] = useState("");
+  const [awayEra, setAwayEra] = useState("3.80");
+  const [awayWhip, setAwayWhip] = useState("1.20");
+  const [awayFip, setAwayFip] = useState("3.70");
+  const [awayK9, setAwayK9] = useState("9.0");
+  const [awayBb9, setAwayBb9] = useState("3.0");
+  const [awayRest, setAwayRest] = useState("5");
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1407 ---
+        const q = await qRes.json();
+        setStatcastQuality(q);
+      } else {
+        setStatcastQuality(null);
+      }
+    } catch {
+      setStatcastQuality(null);
+    }
+
+    // SOS — Strength of Schedule del bateo reciente (anti-rachas-infladas)
+    try {
+      const sosRes = await fetch(`${API_BASE}/api/mlb/sos/${gameId}`);
+      if (sosRes.ok) {
+        const sosData = await sosRes.json();
+        setSos(sosData);
+      } else {
+        setSos(null);
+      }
+    } catch {
+      setSos(null);
+    }
+
+    // Tier B — strikePct (proxy CSW) + Sprint Speed para BABIP correction
+    try {
+      const dsRes = await fetch(`${API_BASE}/api/mlb/discipline-speed/${gameId}`);
+      if (dsRes.ok) {
+        const ds = await dsRes.json();
+        setDiscSpeed(ds);
+      } else {
+        setDiscSpeed(null);
+      }
+    } catch {
+      setDiscSpeed(null);
+    }
+
+    // Pitcher vs Team — últimos 5 starts contra el rival
+    try {
+      const pvtRes = await fetch(`${API_BASE}/api/mlb/pitcher-vs-team/${gameId}`);
+      if (pvtRes.ok) {
+        const pvt = await pvtRes.json();
+        setPitcherVsTeam(pvt);
+      } else {
+        setPitcherVsTeam(null);
+      }
+    } catch {
+      setPitcherVsTeam(null);
+    }
+
+    // Wind-Park — viento + estadio + temperatura
+    try {
+      const wpRes = await fetch(`${API_BASE}/api/mlb/wind-park/${gameId}`);
+      if (wpRes.ok) {
+        const wp = await wpRes.json();
+        setWindPark(wp);
+      } else {
+        setWindPark(null);
+      }
+    } catch {
+      setWindPark(null);
+    }
+
+    // Catcher Framing — cuánto strikes roba el catcher
+    try {
+      const cfRes = await fetch(`${API_BASE}/api/mlb/catcher-framing/${gameId}`);
+      if (cfRes.ok) {
+        const cf = await cfRes.json();
+        setCatcherFraming(cf);
+      } else {
+        setCatcherFraming(null);
+      }
+    } catch {
+      setCatcherFraming(null);
+    }
+
+    // Rookie Pitcher Penalty — detecta pitchers inexpertos / bullpen games
+    try {
+      const rpRes = await fetch(`${API_BASE}/api/mlb/rookie-pitcher/${gameId}`);
+      if (rpRes.ok) {
+        const rp = await rpRes.json();
+        setRookiePitcher(rp);
+      } else {
+        setRookiePitcher(null);
+      }
+    } catch {
+      setRookiePitcher(null);
+    }
+
+    // Hueco #1+#2: Pitcher Form (descanso + splits H/R)
+    try {
+      const pfRes = await fetch(`${API_BASE}/api/mlb/pitcher-form/${gameId}`);
+      if (pfRes.ok) setPitcherForm(await pfRes.json()); else setPitcherForm(null);
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1409 ---
+      } else {
+        setStatcastQuality(null);
+      }
+    } catch {
+      setStatcastQuality(null);
+    }
+
+    // SOS — Strength of Schedule del bateo reciente (anti-rachas-infladas)
+    try {
+      const sosRes = await fetch(`${API_BASE}/api/mlb/sos/${gameId}`);
+      if (sosRes.ok) {
+        const sosData = await sosRes.json();
+        setSos(sosData);
+      } else {
+        setSos(null);
+      }
+    } catch {
+      setSos(null);
+    }
+
+    // Tier B — strikePct (proxy CSW) + Sprint Speed para BABIP correction
+    try {
+      const dsRes = await fetch(`${API_BASE}/api/mlb/discipline-speed/${gameId}`);
+      if (dsRes.ok) {
+        const ds = await dsRes.json();
+        setDiscSpeed(ds);
+      } else {
+        setDiscSpeed(null);
+      }
+    } catch {
+      setDiscSpeed(null);
+    }
+
+    // Pitcher vs Team — últimos 5 starts contra el rival
+    try {
+      const pvtRes = await fetch(`${API_BASE}/api/mlb/pitcher-vs-team/${gameId}`);
+      if (pvtRes.ok) {
+        const pvt = await pvtRes.json();
+        setPitcherVsTeam(pvt);
+      } else {
+        setPitcherVsTeam(null);
+      }
+    } catch {
+      setPitcherVsTeam(null);
+    }
+
+    // Wind-Park — viento + estadio + temperatura
+    try {
+      const wpRes = await fetch(`${API_BASE}/api/mlb/wind-park/${gameId}`);
+      if (wpRes.ok) {
+        const wp = await wpRes.json();
+        setWindPark(wp);
+      } else {
+        setWindPark(null);
+      }
+    } catch {
+      setWindPark(null);
+    }
+
+    // Catcher Framing — cuánto strikes roba el catcher
+    try {
+      const cfRes = await fetch(`${API_BASE}/api/mlb/catcher-framing/${gameId}`);
+      if (cfRes.ok) {
+        const cf = await cfRes.json();
+        setCatcherFraming(cf);
+      } else {
+        setCatcherFraming(null);
+      }
+    } catch {
+      setCatcherFraming(null);
+    }
+
+    // Rookie Pitcher Penalty — detecta pitchers inexpertos / bullpen games
+    try {
+      const rpRes = await fetch(`${API_BASE}/api/mlb/rookie-pitcher/${gameId}`);
+      if (rpRes.ok) {
+        const rp = await rpRes.json();
+        setRookiePitcher(rp);
+      } else {
+        setRookiePitcher(null);
+      }
+    } catch {
+      setRookiePitcher(null);
+    }
+
+    // Hueco #1+#2: Pitcher Form (descanso + splits H/R)
+    try {
+      const pfRes = await fetch(`${API_BASE}/api/mlb/pitcher-form/${gameId}`);
+      if (pfRes.ok) setPitcherForm(await pfRes.json()); else setPitcherForm(null);
+    } catch { setPitcherForm(null); }
+
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1651 ---
+    // El SP visitante rookie → local anota MENOS
+    let rookieAwayRunsDelta = 0;  // visitante anota menos si SP local es rookie
+    let rookieHomeRunsDelta = 0;  // local anota menos si SP visitante es rookie
+    let rookieConfidenceCap = 1.0; // multiplicador para reducir confianza del favorito
+    if (rookiePitcher?.home?.rivalRunsPenalty) {
+      // SP local rookie: visitante "anotará menos de lo esperado"
+      rookieAwayRunsDelta = rookiePitcher.home.rivalRunsPenalty;
+    }
+    if (rookiePitcher?.away?.rivalRunsPenalty) {
+      // SP visitante rookie: local "anotará menos de lo esperado"
+      rookieHomeRunsDelta = rookiePitcher.away.rivalRunsPenalty;
+    }
+    // Reducción de confianza: si el rival es rookie, el favorito no es tan fuerte como parece
+    // + Post-mortem fix: si nuestro SP está COLD/IMPLOSION, no podemos confiar en favorito
+    const recentConfPenalty = (pitcherRecent?.homeConfPenalty ?? 0) + (pitcherRecent?.awayConfPenalty ?? 0);
+    const totalConfReduction = (rookiePitcher?.home?.confidenceReduction ?? 0) + (rookiePitcher?.away?.confidenceReduction ?? 0) + recentConfPenalty;
+    if (totalConfReduction >= 12) rookieConfidenceCap = 0.78;
+    else if (totalConfReduction >= 8) rookieConfidenceCap = 0.85;
+    else if (totalConfReduction >= 4) rookieConfidenceCap = 0.92;
+
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1665 ---
+    const recentConfPenalty = (pitcherRecent?.homeConfPenalty ?? 0) + (pitcherRecent?.awayConfPenalty ?? 0);
+    const totalConfReduction = (rookiePitcher?.home?.confidenceReduction ?? 0) + (rookiePitcher?.away?.confidenceReduction ?? 0) + recentConfPenalty;
+    if (totalConfReduction >= 12) rookieConfidenceCap = 0.78;
+    else if (totalConfReduction >= 8) rookieConfidenceCap = 0.85;
+    else if (totalConfReduction >= 4) rookieConfidenceCap = 0.92;
+
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1666 ---
+    const totalConfReduction = (rookiePitcher?.home?.confidenceReduction ?? 0) + (rookiePitcher?.away?.confidenceReduction ?? 0) + recentConfPenalty;
+    if (totalConfReduction >= 12) rookieConfidenceCap = 0.78;
+    else if (totalConfReduction >= 8) rookieConfidenceCap = 0.85;
+    else if (totalConfReduction >= 4) rookieConfidenceCap = 0.92;
+
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1668 ---
+    else if (totalConfReduction >= 8) rookieConfidenceCap = 0.85;
+    else if (totalConfReduction >= 4) rookieConfidenceCap = 0.92;
+
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1669 ---
+    else if (totalConfReduction >= 4) rookieConfidenceCap = 0.92;
+
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1671 ---
+    // «Catcher Framing» — catcher élite ahorra ERA al SP propio, catcher pobre lo empeora
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+    const ppHomeRunsFromAwaySP = ppAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1672 ---
+    // El catcher LOCAL afecta al SP LOCAL (su ERA mejora si framing es élite)
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+    const ppHomeRunsFromAwaySP = ppAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Bullpen Status» — si el bullpen rival está comprometido, este equipo anotará más en 7-9
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1673 ---
+    let cfHomeEraDelta = 0;
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+    const ppHomeRunsFromAwaySP = ppAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Bullpen Status» — si el bullpen rival está comprometido, este equipo anotará más en 7-9
+    // El ajuste se aplica al equipo que se BENEFICIA del bullpen rival débil
+--- ./frontend/client/src/pages/mlb-predictor.tsx:1674 ---
+    let cfAwayEraDelta = 0;
+    if (catcherFraming?.homeEraImpact !== undefined) {
+      cfHomeEraDelta = catcherFraming.homeEraImpact;
+    }
+    if (catcherFraming?.awayEraImpact !== undefined) {
+      cfAwayEraDelta = catcherFraming.awayEraImpact;
+    }
+    // Si SP local tiene ERA empeorada por catcher pobre → visitante anota más
+    // 1 ERA = 0.6 runs/juego. cfDelta es positivo cuando catcher es malo (= peor ERA)
+    const cfAwayRunsDelta = cfHomeEraDelta * 0.6; // catcher local malo → away anota más
+    const cfHomeRunsFromAway = cfAwayEraDelta * 0.6; // catcher visitante malo → home anota más
+
+    // «Pitcher vs Team» — si el pitcher domina/sufre vs ESTE equipo específico
+    // FIX DOBLE CONTEO: Cuando Statcast (pitch-by-pitch) tiene buena muestra,
+    // PvT se vuelve tie-breaker (peso 20%) porque mide lo mismo desde otro ángulo.
+    // Sin Statcast (LOW o ausente), PvT mantiene su peso 100% como fallback.
+    // (Acceso directo al objeto porque smHomeConf/smAwayConf se definen más abajo)
+    const _smHomeConfPvT = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence;
+    const _smAwayConfPvT = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence;
+    const statcastHomeOk = _smHomeConfPvT === "FULL" || _smHomeConfPvT === "PARTIAL";
+    const statcastAwayOk = _smAwayConfPvT === "FULL" || _smAwayConfPvT === "PARTIAL";
+    const pvtHomeMultiplier = statcastHomeOk ? 0.20 : 1.0; // 80% reducción si Statcast cubre
+    const pvtAwayMultiplier = statcastAwayOk ? 0.20 : 1.0;
+
+    let pvtHomeEraDelta = 0;
+    let pvtAwayEraDelta = 0;
+    if (pitcherVsTeam?.homeVsAway?.significantSample) {
+      pvtHomeEraDelta = pitcherVsTeam.homeVsAway.eraDelta * 0.4 * pvtHomeMultiplier;
+      // Bonus para trends fuertes (también reducidos por multiplicador)
+      if (pitcherVsTeam.homeVsAway.recentTrend === "STRUGGLES") pvtHomeEraDelta += 0.3 * pvtHomeMultiplier;
+      if (pitcherVsTeam.homeVsAway.recentTrend === "DOMINANCE") pvtHomeEraDelta -= 0.3 * pvtHomeMultiplier;
+    }
+    if (pitcherVsTeam?.awayVsHome?.significantSample) {
+      pvtAwayEraDelta = pitcherVsTeam.awayVsHome.eraDelta * 0.4 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "STRUGGLES") pvtAwayEraDelta += 0.3 * pvtAwayMultiplier;
+      if (pitcherVsTeam.awayVsHome.recentTrend === "DOMINANCE") pvtAwayEraDelta -= 0.3 * pvtAwayMultiplier;
+    }
+    // Convertir delta ERA a delta runs (cada 1 ERA = 0.6 runs/juego)
+    const pvtAwayRunsDelta = pvtHomeEraDelta * 0.6; // SP local malo → away anota más
+    const pvtHomeRunsFromAway = pvtAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Wind-Park» — viento + estadio + temperatura. Afecta TOTAL del partido (ambos lados)
+    let wpRunsAdjustment = 0;
+    if (windPark?.runsAdjustment) {
+      wpRunsAdjustment = windPark.runsAdjustment;
+    }
+    // Se distribuye 50/50 a ambos lados (favorece anotación general, no a un equipo)
+    const wpHomeRunsDelta = wpRunsAdjustment * 0.5;
+    const wpAwayRunsDelta = wpRunsAdjustment * 0.5;
+
+    // «Park-Pitcher Split» — cómo le va a ESTE pitcher en ESTE estadio
+    // FIX DOBLE CONTEO: El park factor base ya viene en Wind-Park (windPark.runsAdjustment).
+    // Para evitar contarlo dos veces, restamos el componente "park puro" del eraDelta
+    // y dejamos solo el DELTA del pitcher respecto a su baseline en otros parques.
+    // El park-pitcher delta ya viene calculado vs el resto de parques del pitcher en backend,
+    // pero por seguridad reducimos su peso a 35% cuando Wind-Park está activo (park-extreme).
+    const windParkActive = Math.abs(wpRunsAdjustment) > 0.20; // parque significativo (Coors/Tropicana)
+    const ppMultiplier = windParkActive ? 0.35 : 0.50; // reduce al 35% si park ya cuenta fuerte
+
+    // PISO ABSOLUTO: si el park-ERA real sigue siendo malo (>4.40), no puede contar como "mejora".
+    // Un pitcher con season 6.35 que en este parque tira 5.30 NO ayuda al equipo —
+    // su 5.30 sigue cediendo más runs que el league avg. Anular la mejora aparente.
+    let ppHomeEraDelta = 0;  // delta del SP local en su propio estadio
+    let ppAwayEraDelta = 0;  // delta del SP visitante en este estadio
+    // Proxy por arquetipo entra con peso REDUCIDO según tamaño de muestra:
+    // n≥5 starts en bucket → 50% (confianza MEDIA)
+    // n=3-4 starts en bucket → 35% (confianza BAJA)
+    const evalSplit = (split: any): number => {
+      if (!split) return 0;
+      let delta = split.eraDelta;
+      if (delta < 0 && split.era > 4.40) delta = 0; // piso absoluto
+      if (split.dataSource === "DIRECT" && split.significantSample) {
+        return delta * ppMultiplier;
+      }
+      if (split.dataSource === "BUCKET_PROXY") {
+        const n = split.bucketStarts ?? 0;
+        if (n >= 5) return delta * ppMultiplier * 0.50;
+        if (n >= 3) return delta * ppMultiplier * 0.35;
+      }
+      return 0;
+    };
+    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+    const ppHomeRunsFromAwaySP = ppAwayEraDelta * 0.6; // SP visitante malo → home anota más
+
+    // «Bullpen Status» — si el bullpen rival está comprometido, este equipo anotará más en 7-9
+    // El ajuste se aplica al equipo que se BENEFICIA del bullpen rival débil
+    let bpHomeRunsDelta = 0;
+--- ./frontend/client/src/pages/mlb-predictor.tsx:2049 ---
+    const factorNotes: string[] = [];
+    factorNotes.push(`Regresión al mercado: ${(adaptiveShrink * 100).toFixed(0)}% (${eliteFactorsActive} factores élite activos)`);
+    if (Math.abs(injuryProbDelta) >= 0.1) {
+      factorNotes.push(`Lesiones ${injuryProbDelta > 0 ? "+" : ""}${injuryProbDelta.toFixed(1)}pp`);
+    }
+    if (Math.abs(injuryTotalDelta) >= 0.1) {
+      factorNotes.push(`Total lesiones ${injuryTotalDelta > 0 ? "+" : ""}${injuryTotalDelta.toFixed(1)} runs`);
+    }
+    // Matchup hombre-por-hombre lineup vs pitcher rival
+    if (lineupMatchup?.adjustment) {
+      const lmTotalRuns = (lineupMatchup.adjustment.homeRunsDelta || 0) + (lineupMatchup.adjustment.awayRunsDelta || 0);
+      if (Math.abs(lmTotalRuns) >= 0.1) {
+        const homeStr = lineupMatchup.adjustment.homeRunsDelta > 0 ? `+${lineupMatchup.adjustment.homeRunsDelta.toFixed(1)}` : lineupMatchup.adjustment.homeRunsDelta.toFixed(1);
+        const awayStr = lineupMatchup.adjustment.awayRunsDelta > 0 ? `+${lineupMatchup.adjustment.awayRunsDelta.toFixed(1)}` : lineupMatchup.adjustment.awayRunsDelta.toFixed(1);
+        factorNotes.push(`Lineup vs Pitcher (L:${homeStr} · V:${awayStr}) runs`);
+      }
+    }
+    // Archetype matchup — patrón histórico vs tipo de pitcher
+    if (Math.abs(archHomeRunsDelta) >= 0.2 || Math.abs(archAwayRunsDelta) >= 0.2) {
+      const hStr = archHomeRunsDelta > 0 ? `+${archHomeRunsDelta.toFixed(1)}` : archHomeRunsDelta.toFixed(1);
+      const aStr = archAwayRunsDelta > 0 ? `+${archAwayRunsDelta.toFixed(1)}` : archAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Arquetipo pitcher (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Bullpen status — closer cansado / bullpen comprometido
+    if (Math.abs(bpHomeRunsDelta) >= 0.1 || Math.abs(bpAwayRunsDelta) >= 0.1) {
+      const hStr = bpHomeRunsDelta > 0 ? `+${bpHomeRunsDelta.toFixed(1)}` : bpHomeRunsDelta.toFixed(1);
+      const aStr = bpAwayRunsDelta > 0 ? `+${bpAwayRunsDelta.toFixed(1)}` : bpAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Bullpen fatigue (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Park-Pitcher — cómo le va al pitcher en este estadio
+    if (Math.abs(ppHomeEraDelta) >= 0.3 || Math.abs(ppAwayEraDelta) >= 0.3) {
+      const hStr = ppHomeEraDelta > 0 ? `+${ppHomeEraDelta.toFixed(2)}` : ppHomeEraDelta.toFixed(2);
+      const aStr = ppAwayEraDelta > 0 ? `+${ppAwayEraDelta.toFixed(2)}` : ppAwayEraDelta.toFixed(2);
+      factorNotes.push(`Park-Pitcher ERA Δ (L:${hStr} · V:${aStr})`);
+    }
+    // Pitcher vs Team — histórico contra este rival
+    if (Math.abs(pvtHomeEraDelta) >= 0.3 || Math.abs(pvtAwayEraDelta) >= 0.3) {
+      const hStr = pvtHomeEraDelta > 0 ? `+${pvtHomeEraDelta.toFixed(2)}` : pvtHomeEraDelta.toFixed(2);
+      const aStr = pvtAwayEraDelta > 0 ? `+${pvtAwayEraDelta.toFixed(2)}` : pvtAwayEraDelta.toFixed(2);
+      factorNotes.push(`Pitcher vs Team Δ (L:${hStr} · V:${aStr})`);
+    }
+    // Wind-Park — viento + estadio
+    if (Math.abs(wpRunsAdjustment) >= 0.2) {
+      const wpStr = wpRunsAdjustment > 0 ? `+${wpRunsAdjustment.toFixed(2)}` : wpRunsAdjustment.toFixed(2);
+      factorNotes.push(`Wind-Park ${wpStr} runs`);
+    }
+    // Catcher Framing — catcher élite o pobre
+    if (Math.abs(cfHomeEraDelta) >= 0.10 || Math.abs(cfAwayEraDelta) >= 0.10) {
+      const hStr = cfHomeEraDelta > 0 ? `+${cfHomeEraDelta.toFixed(2)}` : cfHomeEraDelta.toFixed(2);
+      const aStr = cfAwayEraDelta > 0 ? `+${cfAwayEraDelta.toFixed(2)}` : cfAwayEraDelta.toFixed(2);
+      factorNotes.push(`Catcher framing ΔERA (L:${hStr} · V:${aStr})`);
+    }
+    // Rookie Pitcher Penalty
+    if (rookiePitcher?.rookieAlert) {
+      factorNotes.push(`⚠️ Rookie/Bullpen game detectado — confianza reducida`);
+    } else if (Math.abs(rookieHomeRunsDelta) >= 0.3 || Math.abs(rookieAwayRunsDelta) >= 0.3) {
+      const hStr = rookieHomeRunsDelta > 0 ? `+${rookieHomeRunsDelta.toFixed(1)}` : rookieHomeRunsDelta.toFixed(1);
+      const aStr = rookieAwayRunsDelta > 0 ? `+${rookieAwayRunsDelta.toFixed(1)}` : rookieAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Pitcher inexperto (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Hueco #1 + #2: Pitcher Form (descanso + splits H/R)
+    if (Math.abs(pfHomeRivalRunsDelta) >= 0.15 || Math.abs(pfAwayRivalRunsDelta) >= 0.15) {
+      const hStr = pfAwayRivalRunsDelta > 0 ? `+${pfAwayRivalRunsDelta.toFixed(2)}` : pfAwayRivalRunsDelta.toFixed(2);
+      const aStr = pfHomeRivalRunsDelta > 0 ? `+${pfHomeRivalRunsDelta.toFixed(2)}` : pfHomeRivalRunsDelta.toFixed(2);
+      factorNotes.push(`SP forma/descanso (RPG L:${hStr} · V:${aStr})`);
+    }
+    // Hueco #3: Team Fatigue
+    if (Math.abs(tfHomeOwnRunsDelta) >= 0.15 || Math.abs(tfAwayOwnRunsDelta) >= 0.15) {
+      const hStr = tfHomeOwnRunsDelta > 0 ? `+${tfHomeOwnRunsDelta.toFixed(2)}` : tfHomeOwnRunsDelta.toFixed(2);
+      const aStr = tfAwayOwnRunsDelta > 0 ? `+${tfAwayOwnRunsDelta.toFixed(2)}` : tfAwayOwnRunsDelta.toFixed(2);
+      factorNotes.push(`Fatiga/travel (L:${hStr} · V:${aStr}) RPG`);
+    }
+    // Post-mortem fix: SP recent form (implosion / cold / early-exit)
+    if (pitcherRecent?.home?.trend === "IMPLOSION" || pitcherRecent?.home?.trend === "COLD") {
+      factorNotes.push(`🔥 SP local ${pitcherRecent.home.trend} — ERA reciente ${pitcherRecent.home.recentEra.toFixed(2)}`);
+    }
+    if (pitcherRecent?.away?.trend === "IMPLOSION" || pitcherRecent?.away?.trend === "COLD") {
+      factorNotes.push(`🔥 SP visit ${pitcherRecent.away.trend} — ERA reciente ${pitcherRecent.away.recentEra.toFixed(2)}`);
+    }
+    if (pitcherRecent?.home?.earlyExitRisk || pitcherRecent?.away?.earlyExitRisk) {
+      factorNotes.push(`⚡ Riesgo salida temprana SP — bullpen cubre más IP`);
+    }
+    // ⚡ STATCAST pitch-by-pitch
+    if (Math.abs(smHomeOwnRunsDelta) >= 0.20 || Math.abs(smAwayOwnRunsDelta) >= 0.20) {
+      const hStr = smHomeOwnRunsDelta > 0 ? `+${smHomeOwnRunsDelta.toFixed(2)}` : smHomeOwnRunsDelta.toFixed(2);
+      const aStr = smAwayOwnRunsDelta > 0 ? `+${smAwayOwnRunsDelta.toFixed(2)}` : smAwayOwnRunsDelta.toFixed(2);
+      factorNotes.push(`⚡ Statcast pitch-by-pitch (L:${hStr} · V:${aStr}) RPG`);
+    }
+    if (umpireData) {
+      const probPreUmp = homeProb;
+      const hEra = parseFloat(homeEra) || 4.0;
+--- ./frontend/client/src/pages/mlb-predictor.tsx:2053 ---
+    }
+    if (Math.abs(injuryTotalDelta) >= 0.1) {
+      factorNotes.push(`Total lesiones ${injuryTotalDelta > 0 ? "+" : ""}${injuryTotalDelta.toFixed(1)} runs`);
+    }
+    // Matchup hombre-por-hombre lineup vs pitcher rival
+    if (lineupMatchup?.adjustment) {
+      const lmTotalRuns = (lineupMatchup.adjustment.homeRunsDelta || 0) + (lineupMatchup.adjustment.awayRunsDelta || 0);
+      if (Math.abs(lmTotalRuns) >= 0.1) {
+        const homeStr = lineupMatchup.adjustment.homeRunsDelta > 0 ? `+${lineupMatchup.adjustment.homeRunsDelta.toFixed(1)}` : lineupMatchup.adjustment.homeRunsDelta.toFixed(1);
+        const awayStr = lineupMatchup.adjustment.awayRunsDelta > 0 ? `+${lineupMatchup.adjustment.awayRunsDelta.toFixed(1)}` : lineupMatchup.adjustment.awayRunsDelta.toFixed(1);
+        factorNotes.push(`Lineup vs Pitcher (L:${homeStr} · V:${awayStr}) runs`);
+      }
+    }
+    // Archetype matchup — patrón histórico vs tipo de pitcher
+    if (Math.abs(archHomeRunsDelta) >= 0.2 || Math.abs(archAwayRunsDelta) >= 0.2) {
+      const hStr = archHomeRunsDelta > 0 ? `+${archHomeRunsDelta.toFixed(1)}` : archHomeRunsDelta.toFixed(1);
+      const aStr = archAwayRunsDelta > 0 ? `+${archAwayRunsDelta.toFixed(1)}` : archAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Arquetipo pitcher (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Bullpen status — closer cansado / bullpen comprometido
+    if (Math.abs(bpHomeRunsDelta) >= 0.1 || Math.abs(bpAwayRunsDelta) >= 0.1) {
+      const hStr = bpHomeRunsDelta > 0 ? `+${bpHomeRunsDelta.toFixed(1)}` : bpHomeRunsDelta.toFixed(1);
+      const aStr = bpAwayRunsDelta > 0 ? `+${bpAwayRunsDelta.toFixed(1)}` : bpAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Bullpen fatigue (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Park-Pitcher — cómo le va al pitcher en este estadio
+    if (Math.abs(ppHomeEraDelta) >= 0.3 || Math.abs(ppAwayEraDelta) >= 0.3) {
+      const hStr = ppHomeEraDelta > 0 ? `+${ppHomeEraDelta.toFixed(2)}` : ppHomeEraDelta.toFixed(2);
+      const aStr = ppAwayEraDelta > 0 ? `+${ppAwayEraDelta.toFixed(2)}` : ppAwayEraDelta.toFixed(2);
+      factorNotes.push(`Park-Pitcher ERA Δ (L:${hStr} · V:${aStr})`);
+    }
+    // Pitcher vs Team — histórico contra este rival
+    if (Math.abs(pvtHomeEraDelta) >= 0.3 || Math.abs(pvtAwayEraDelta) >= 0.3) {
+      const hStr = pvtHomeEraDelta > 0 ? `+${pvtHomeEraDelta.toFixed(2)}` : pvtHomeEraDelta.toFixed(2);
+      const aStr = pvtAwayEraDelta > 0 ? `+${pvtAwayEraDelta.toFixed(2)}` : pvtAwayEraDelta.toFixed(2);
+      factorNotes.push(`Pitcher vs Team Δ (L:${hStr} · V:${aStr})`);
+    }
+    // Wind-Park — viento + estadio
+    if (Math.abs(wpRunsAdjustment) >= 0.2) {
+      const wpStr = wpRunsAdjustment > 0 ? `+${wpRunsAdjustment.toFixed(2)}` : wpRunsAdjustment.toFixed(2);
+      factorNotes.push(`Wind-Park ${wpStr} runs`);
+    }
+    // Catcher Framing — catcher élite o pobre
+    if (Math.abs(cfHomeEraDelta) >= 0.10 || Math.abs(cfAwayEraDelta) >= 0.10) {
+      const hStr = cfHomeEraDelta > 0 ? `+${cfHomeEraDelta.toFixed(2)}` : cfHomeEraDelta.toFixed(2);
+      const aStr = cfAwayEraDelta > 0 ? `+${cfAwayEraDelta.toFixed(2)}` : cfAwayEraDelta.toFixed(2);
+      factorNotes.push(`Catcher framing ΔERA (L:${hStr} · V:${aStr})`);
+    }
+    // Rookie Pitcher Penalty
+    if (rookiePitcher?.rookieAlert) {
+      factorNotes.push(`⚠️ Rookie/Bullpen game detectado — confianza reducida`);
+    } else if (Math.abs(rookieHomeRunsDelta) >= 0.3 || Math.abs(rookieAwayRunsDelta) >= 0.3) {
+      const hStr = rookieHomeRunsDelta > 0 ? `+${rookieHomeRunsDelta.toFixed(1)}` : rookieHomeRunsDelta.toFixed(1);
+      const aStr = rookieAwayRunsDelta > 0 ? `+${rookieAwayRunsDelta.toFixed(1)}` : rookieAwayRunsDelta.toFixed(1);
+      factorNotes.push(`Pitcher inexperto (L:${hStr} · V:${aStr}) runs`);
+    }
+    // Hueco #1 + #2: Pitcher Form (descanso + splits H/R)
+    if (Math.abs(pfHomeRivalRunsDelta) >= 0.15 || Math.abs(pfAwayRivalRunsDelta) >= 0.15) {
+      const hStr = pfAwayRivalRunsDelta > 0 ? `+${pfAwayRivalRunsDelta.toFixed(2)}` : pfAwayRivalRunsDelta.toFixed(2);
+      const aStr = pfHomeRivalRunsDelta > 0 ? `+${pfHomeRivalRunsDelta.toFixed(2)}` : pfHomeRivalRunsDelta.toFixed(2);
+      factorNotes.push(`SP forma/descanso (RPG L:${hStr} · V:${aStr})`);
+    }
+    // Hueco #3: Team Fatigue
+    if (Math.abs(tfHomeOwnRunsDelta) >= 0.15 || Math.abs(tfAwayOwnRunsDelta) >= 0.15) {
+      const hStr = tfHomeOwnRunsDelta > 0 ? `+${tfHomeOwnRunsDelta.toFixed(2)}` : tfHomeOwnRunsDelta.toFixed(2);
+      const aStr = tfAwayOwnRunsDelta > 0 ? `+${tfAwayOwnRunsDelta.toFixed(2)}` : tfAwayOwnRunsDelta.toFixed(2);
+      factorNotes.push(`Fatiga/travel (L:${hStr} · V:${aStr}) RPG`);
+    }
+    // Post-mortem fix: SP recent form (implosion / cold / early-exit)
+    if (pitcherRecent?.home?.trend === "IMPLOSION" || pitcherRecent?.home?.trend === "COLD") {
+      factorNotes.push(`🔥 SP local ${pitcherRecent.home.trend} — ERA reciente ${pitcherRecent.home.recentEra.toFixed(2)}`);
+    }
+    if (pitcherRecent?.away?.trend === "IMPLOSION" || pitcherRecent?.away?.trend === "COLD") {
+      factorNotes.push(`🔥 SP visit ${pitcherRecent.away.trend} — ERA reciente ${pitcherRecent.away.recentEra.toFixed(2)}`);
+    }
+    if (pitcherRecent?.home?.earlyExitRisk || pitcherRecent?.away?.earlyExitRisk) {
+      factorNotes.push(`⚡ Riesgo salida temprana SP — bullpen cubre más IP`);
+    }
+    // ⚡ STATCAST pitch-by-pitch
+    if (Math.abs(smHomeOwnRunsDelta) >= 0.20 || Math.abs(smAwayOwnRunsDelta) >= 0.20) {
+      const hStr = smHomeOwnRunsDelta > 0 ? `+${smHomeOwnRunsDelta.toFixed(2)}` : smHomeOwnRunsDelta.toFixed(2);
+      const aStr = smAwayOwnRunsDelta > 0 ? `+${smAwayOwnRunsDelta.toFixed(2)}` : smAwayOwnRunsDelta.toFixed(2);
+      factorNotes.push(`⚡ Statcast pitch-by-pitch (L:${hStr} · V:${aStr}) RPG`);
+    }
+    if (umpireData) {
+      const probPreUmp = homeProb;
+      const hEra = parseFloat(homeEra) || 4.0;
+      const aEra = parseFloat(awayEra) || 4.0;
+      homeProb = applyUmpireAdjustment(homeProb, umpireData, hEra, aEra);
+      const umpDelta = (homeProb - probPreUmp) * 100;
+      if (Math.abs(umpDelta) >= 0.1) {
+--- ./frontend/client/src/pages/mlb-predictor.tsx:2518 ---
+      recommendedOdds,
+      f5PickedSide,
+      f5RecommendedOdds,
+      homeTeamName: homeTeam || "Local",
+      awayTeamName: awayTeam || "Visitante",
+      ouLine: ouLineVal,
+      f5OuLine: f5OuLineVal,
+      bestPlay,
+      poisson,
+      safePlay,
+      altLines,
+      factorBreakdown: {
+        baseProb: baseProb * 100,
+        finalProb: homeProb * 100,
+        baseTotal,
+        finalTotal: estimatedTotal,
+        notes: factorNotes,
+        modelHomeProb: modelHomeProb * 100,
+        marketHomeProb: marketHomeProbCal !== undefined ? marketHomeProbCal * 100 : undefined,
+        modelF5HomeProb: modelF5HomeProb * 100,
+        marketF5HomeProb: marketF5HomeProb !== undefined ? marketF5HomeProb * 100 : undefined,
+      },
+    });
+
+    toast({ title: "Predicción generada", description: "Análisis MLB completado" });
+  }, [
+    homeTeam, awayTeam,
+    homeEra, homeWhip, homeFip, homeK9, homeBb9, homeRest, homeHand, homeRecord, homeRecentEra, homeIP,
+    homeOps, homeRpg, homeObp, homeAvg, homeOpsVsL, homeOpsVsR,
+    homeWOBA, homeISO, homeBABIP, awayWOBA, awayISO, awayBABIP,
+    homeHR, homeWalks, homeStrikeouts, awayHR, awayWalks, awayStrikeouts,
+    homeBpEra, homeBpWhip, homeBpTired, homeCloser, homeBpEra14d, homeBpIp48h, homePitcherGS,
+    homeKPct, homeBbPct, homeSiera,
+    homeStreak, homeWinRate,
+    homeInjury, homeInjuryFactors, awayInjury, awayInjuryFactors, homeInjuryFeed, awayInjuryFeed,
+    lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher,
+    pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, sharpDir,
+    mlbCtxAdj,
+    awayEra, awayWhip, awayFip, awayK9, awayBb9, awayRest, awayHand, awayRecord, awayRecentEra, awayIP,
+    awayOps, awayRpg, awayObp, awayAvg, awayOpsVsL, awayOpsVsR,
+    awayBpEra, awayBpWhip, awayBpTired, awayCloser, awayBpEra14d, awayBpIp48h, awayPitcherGS,
+    awayKPct, awayBbPct, awaySiera,
+    awayStreak, awayWinRate,
+    parkFactor, tempF, windFavorable, isNight,
+    mlOdds, mlOddsAway, runLine, ouLine, f5OuLine, f5MlHome, f5MlAway, f5OddsSource,
+    h2hHomeWins, h2hAwayWins,
+    homeHomeRPG, homeHomeERA, homeAwayRPG, homeAwayERA,
+    awayHomeRPG, awayHomeERA, awayAwayRPG, awayAwayERA,
+    homeSeasonWR, awaySeasonWR,
+    umpireData, advancedData,
+    toast,
+  ]);
+
+  // ── INLINE HELPERS (not components) ───────────────────────────────────────
+  const numInput = (
+    label: string,
+    value: string,
+    setter: (v: string) => void,
+    testid: string,
+    mode: "decimal" | "numeric" = "decimal",
+    placeholder?: string
+  ) => (
+    <div>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input
+        type="text"
+        inputMode={mode}
+        value={value}
+        onChange={(e) => setter(e.target.value)}
+        data-testid={testid}
+        placeholder={placeholder ?? ""}
+        className="mt-1"
+      />
+    </div>
+  );
+
+  // ── TEAM CARD BUILDER (inline function returning JSX, not a component) ─────
+  const buildTeamCard = (side: "home" | "away") => {
+    const isHome = side === "home";
+    const label = isHome ? "Local" : "Visitante";
+    const borderColor = isHome ? "border-blue-500/30" : "border-purple-500/30";
+    const titleColor = isHome ? "text-blue-400" : "text-purple-400";
+
+    // State references
+    const team = isHome ? homeTeam : awayTeam;
+    const setTeam = isHome ? (v: string) => (isHome ? handleHomeTeamChange(v) : setAwayTeam(v)) : setAwayTeam;
+    const pitcherName = isHome ? homePitcherName : awayPitcherName;
+    const era = isHome ? homeEra : awayEra;
+    const setEra = isHome ? setHomeEra : setAwayEra;
+    const whip = isHome ? homeWhip : awayWhip;
+    const setWhip = isHome ? setHomeWhip : setAwayWhip;
+--- ./frontend/client/src/pages/mlb-predictor.tsx:3148 ---
+                          <p className="text-muted-foreground">Starts</p>
+                          <p className="font-mono text-white">{sp.starts}</p>
+                        </div>
+                        <div className="text-center bg-slate-800/40 rounded p-1">
+                          <p className="text-muted-foreground">WHIP</p>
+                          <p className="font-mono text-white">{sp.whip.toFixed(2)}</p>
+                        </div>
+                        <div className="text-center bg-slate-800/40 rounded p-1">
+                          <p className="text-muted-foreground">HR/9</p>
+                          <p className="font-mono text-white">{sp.hr9.toFixed(2)}</p>
+                        </div>
+                        <div className="text-center bg-slate-800/40 rounded p-1">
+                          <p className="text-muted-foreground">vs Season</p>
+                          <p className={`font-mono ${sp.eraDelta > 0 ? "text-red-400" : sp.eraDelta < 0 ? "text-green-400" : "text-white"}`}>
+                            {sp.eraDelta > 0 ? "+" : ""}{sp.eraDelta.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 mt-1.5">{sp.signal}</p>
+                      {insufficient && (
+                        <p className="text-[10px] text-slate-400/90 mt-1">
+                          ⚠️ Muestra insuficiente ({sp.starts} start{sp.starts === 1 ? "" : "s"}) — factor NO aplicado a la predicción.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-muted-foreground border-t border-emerald-500/20 pt-2">
+                  Verde: pitcher domina aquí. Rojo: sufre aquí. Punteado: sin muestra. 📊 Proxy por arquetipo: cuando no hay starts directos, estimamos con parques del mismo tipo (peso 50%).
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PITCHER VS TEAM HISTORY — últimos 5 starts vs ESTE equipo */}
+          {pitcherVsTeam && (
+            <Card className="border-violet-500/40 bg-violet-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="text-violet-400">📜 Pitcher vs Team — histórico</span>
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Últimos 5 starts del pitcher contra ESTE equipo específico (3 años). Detecta dominance/struggles repetidas.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[
+                  { side: "home", label: "SP Local vs Visitante", split: pitcherVsTeam.homeVsAway, fallbackName: homePitcherName, fallbackOpp: awayTeam },
+                  { side: "away", label: "SP Visitante vs Local", split: pitcherVsTeam.awayVsHome, fallbackName: awayPitcherName, fallbackOpp: homeTeam },
+                ].map((s) => {
+                  const sp = s.split;
+                  // Sin historial — placeholder con disclaimer
+                  if (!sp) {
+                    return (
+                      <div key={s.side} className="p-2.5 rounded border bg-slate-700/20 border-slate-600/50 border-dashed">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                            <p className="text-sm font-bold text-slate-300 truncate">
+                              {s.fallbackName || "—"} <span className="text-violet-300/60">vs {s.fallbackOpp}</span>
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] border-slate-500/40 text-slate-400">
+                            Sin enfrentamientos previos
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] text-slate-400/80 mt-1.5">
+                          Nunca ha lanzado contra {s.fallbackOpp} en últimos 3 años — factor no aplicado por este lado.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+                    <div key={s.side} className={`p-2.5 rounded border ${
+                      dominating ? "bg-green-500/10 border-green-500/40" :
+                      struggling ? "bg-red-500/10 border-red-500/40" :
+                      "bg-slate-700/30 border-slate-600"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                          <p className="text-sm font-bold text-white truncate">
+                            {sp.pitcherName} <span className="text-violet-300">vs {sp.opponentTeamName}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-mono font-bold ${
+                            dominating ? "text-green-400" : struggling ? "text-red-400" : "text-slate-300"
+                          }`}>
+--- ./frontend/client/src/pages/mlb-predictor.tsx:3152 ---
+                          <p className="text-muted-foreground">WHIP</p>
+                          <p className="font-mono text-white">{sp.whip.toFixed(2)}</p>
+                        </div>
+                        <div className="text-center bg-slate-800/40 rounded p-1">
+                          <p className="text-muted-foreground">HR/9</p>
+                          <p className="font-mono text-white">{sp.hr9.toFixed(2)}</p>
+                        </div>
+                        <div className="text-center bg-slate-800/40 rounded p-1">
+                          <p className="text-muted-foreground">vs Season</p>
+                          <p className={`font-mono ${sp.eraDelta > 0 ? "text-red-400" : sp.eraDelta < 0 ? "text-green-400" : "text-white"}`}>
+                            {sp.eraDelta > 0 ? "+" : ""}{sp.eraDelta.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 mt-1.5">{sp.signal}</p>
+                      {insufficient && (
+                        <p className="text-[10px] text-slate-400/90 mt-1">
+                          ⚠️ Muestra insuficiente ({sp.starts} start{sp.starts === 1 ? "" : "s"}) — factor NO aplicado a la predicción.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-muted-foreground border-t border-emerald-500/20 pt-2">
+                  Verde: pitcher domina aquí. Rojo: sufre aquí. Punteado: sin muestra. 📊 Proxy por arquetipo: cuando no hay starts directos, estimamos con parques del mismo tipo (peso 50%).
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PITCHER VS TEAM HISTORY — últimos 5 starts vs ESTE equipo */}
+          {pitcherVsTeam && (
+            <Card className="border-violet-500/40 bg-violet-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="text-violet-400">📜 Pitcher vs Team — histórico</span>
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Últimos 5 starts del pitcher contra ESTE equipo específico (3 años). Detecta dominance/struggles repetidas.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[
+                  { side: "home", label: "SP Local vs Visitante", split: pitcherVsTeam.homeVsAway, fallbackName: homePitcherName, fallbackOpp: awayTeam },
+                  { side: "away", label: "SP Visitante vs Local", split: pitcherVsTeam.awayVsHome, fallbackName: awayPitcherName, fallbackOpp: homeTeam },
+                ].map((s) => {
+                  const sp = s.split;
+                  // Sin historial — placeholder con disclaimer
+                  if (!sp) {
+                    return (
+                      <div key={s.side} className="p-2.5 rounded border bg-slate-700/20 border-slate-600/50 border-dashed">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                            <p className="text-sm font-bold text-slate-300 truncate">
+                              {s.fallbackName || "—"} <span className="text-violet-300/60">vs {s.fallbackOpp}</span>
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] border-slate-500/40 text-slate-400">
+                            Sin enfrentamientos previos
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] text-slate-400/80 mt-1.5">
+                          Nunca ha lanzado contra {s.fallbackOpp} en últimos 3 años — factor no aplicado por este lado.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+                    <div key={s.side} className={`p-2.5 rounded border ${
+                      dominating ? "bg-green-500/10 border-green-500/40" :
+                      struggling ? "bg-red-500/10 border-red-500/40" :
+                      "bg-slate-700/30 border-slate-600"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                          <p className="text-sm font-bold text-white truncate">
+                            {sp.pitcherName} <span className="text-violet-300">vs {sp.opponentTeamName}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-mono font-bold ${
+                            dominating ? "text-green-400" : struggling ? "text-red-400" : "text-slate-300"
+                          }`}>
+                            {sp.era.toFixed(2)}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">ERA en {sp.totalStarts} starts</p>
+                        </div>
+--- ./frontend/client/src/pages/mlb-predictor.tsx:3160 ---
+                          <p className="text-muted-foreground">vs Season</p>
+                          <p className={`font-mono ${sp.eraDelta > 0 ? "text-red-400" : sp.eraDelta < 0 ? "text-green-400" : "text-white"}`}>
+                            {sp.eraDelta > 0 ? "+" : ""}{sp.eraDelta.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 mt-1.5">{sp.signal}</p>
+                      {insufficient && (
+                        <p className="text-[10px] text-slate-400/90 mt-1">
+                          ⚠️ Muestra insuficiente ({sp.starts} start{sp.starts === 1 ? "" : "s"}) — factor NO aplicado a la predicción.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-muted-foreground border-t border-emerald-500/20 pt-2">
+                  Verde: pitcher domina aquí. Rojo: sufre aquí. Punteado: sin muestra. 📊 Proxy por arquetipo: cuando no hay starts directos, estimamos con parques del mismo tipo (peso 50%).
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PITCHER VS TEAM HISTORY — últimos 5 starts vs ESTE equipo */}
+          {pitcherVsTeam && (
+            <Card className="border-violet-500/40 bg-violet-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="text-violet-400">📜 Pitcher vs Team — histórico</span>
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Últimos 5 starts del pitcher contra ESTE equipo específico (3 años). Detecta dominance/struggles repetidas.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[
+                  { side: "home", label: "SP Local vs Visitante", split: pitcherVsTeam.homeVsAway, fallbackName: homePitcherName, fallbackOpp: awayTeam },
+                  { side: "away", label: "SP Visitante vs Local", split: pitcherVsTeam.awayVsHome, fallbackName: awayPitcherName, fallbackOpp: homeTeam },
+                ].map((s) => {
+                  const sp = s.split;
+                  // Sin historial — placeholder con disclaimer
+                  if (!sp) {
+                    return (
+                      <div key={s.side} className="p-2.5 rounded border bg-slate-700/20 border-slate-600/50 border-dashed">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                            <p className="text-sm font-bold text-slate-300 truncate">
+                              {s.fallbackName || "—"} <span className="text-violet-300/60">vs {s.fallbackOpp}</span>
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] border-slate-500/40 text-slate-400">
+                            Sin enfrentamientos previos
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] text-slate-400/80 mt-1.5">
+                          Nunca ha lanzado contra {s.fallbackOpp} en últimos 3 años — factor no aplicado por este lado.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+                    <div key={s.side} className={`p-2.5 rounded border ${
+                      dominating ? "bg-green-500/10 border-green-500/40" :
+                      struggling ? "bg-red-500/10 border-red-500/40" :
+                      "bg-slate-700/30 border-slate-600"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                          <p className="text-sm font-bold text-white truncate">
+                            {sp.pitcherName} <span className="text-violet-300">vs {sp.opponentTeamName}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-mono font-bold ${
+                            dominating ? "text-green-400" : struggling ? "text-red-400" : "text-slate-300"
+                          }`}>
+                            {sp.era.toFixed(2)}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">ERA en {sp.totalStarts} starts</p>
+                        </div>
+                      </div>
+                      {sp.starts.length > 0 && (
+                        <div className="space-y-0.5">
+                          {sp.starts.slice(0, 5).map((st: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-[10px]">
+                              <span className="text-muted-foreground w-20 shrink-0">{st.date}</span>
+                              <span className="font-mono text-white">{st.ip} IP</span>
+                              <span className={`font-mono font-bold ${st.er <= 2 ? "text-green-400" : st.er >= 4 ? "text-red-400" : "text-amber-400"}`}>
+--- ./frontend/client/src/pages/mlb-predictor.tsx:3161 ---
+                          <p className={`font-mono ${sp.eraDelta > 0 ? "text-red-400" : sp.eraDelta < 0 ? "text-green-400" : "text-white"}`}>
+                            {sp.eraDelta > 0 ? "+" : ""}{sp.eraDelta.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 mt-1.5">{sp.signal}</p>
+                      {insufficient && (
+                        <p className="text-[10px] text-slate-400/90 mt-1">
+                          ⚠️ Muestra insuficiente ({sp.starts} start{sp.starts === 1 ? "" : "s"}) — factor NO aplicado a la predicción.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-muted-foreground border-t border-emerald-500/20 pt-2">
+                  Verde: pitcher domina aquí. Rojo: sufre aquí. Punteado: sin muestra. 📊 Proxy por arquetipo: cuando no hay starts directos, estimamos con parques del mismo tipo (peso 50%).
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PITCHER VS TEAM HISTORY — últimos 5 starts vs ESTE equipo */}
+          {pitcherVsTeam && (
+            <Card className="border-violet-500/40 bg-violet-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="text-violet-400">📜 Pitcher vs Team — histórico</span>
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Últimos 5 starts del pitcher contra ESTE equipo específico (3 años). Detecta dominance/struggles repetidas.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[
+                  { side: "home", label: "SP Local vs Visitante", split: pitcherVsTeam.homeVsAway, fallbackName: homePitcherName, fallbackOpp: awayTeam },
+                  { side: "away", label: "SP Visitante vs Local", split: pitcherVsTeam.awayVsHome, fallbackName: awayPitcherName, fallbackOpp: homeTeam },
+                ].map((s) => {
+                  const sp = s.split;
+                  // Sin historial — placeholder con disclaimer
+                  if (!sp) {
+                    return (
+                      <div key={s.side} className="p-2.5 rounded border bg-slate-700/20 border-slate-600/50 border-dashed">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                            <p className="text-sm font-bold text-slate-300 truncate">
+                              {s.fallbackName || "—"} <span className="text-violet-300/60">vs {s.fallbackOpp}</span>
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] border-slate-500/40 text-slate-400">
+                            Sin enfrentamientos previos
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] text-slate-400/80 mt-1.5">
+                          Nunca ha lanzado contra {s.fallbackOpp} en últimos 3 años — factor no aplicado por este lado.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+                    <div key={s.side} className={`p-2.5 rounded border ${
+                      dominating ? "bg-green-500/10 border-green-500/40" :
+                      struggling ? "bg-red-500/10 border-red-500/40" :
+                      "bg-slate-700/30 border-slate-600"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+                          <p className="text-sm font-bold text-white truncate">
+                            {sp.pitcherName} <span className="text-violet-300">vs {sp.opponentTeamName}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-mono font-bold ${
+                            dominating ? "text-green-400" : struggling ? "text-red-400" : "text-slate-300"
+                          }`}>
+                            {sp.era.toFixed(2)}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">ERA en {sp.totalStarts} starts</p>
+                        </div>
+                      </div>
+                      {sp.starts.length > 0 && (
+                        <div className="space-y-0.5">
+                          {sp.starts.slice(0, 5).map((st: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-[10px]">
+                              <span className="text-muted-foreground w-20 shrink-0">{st.date}</span>
+                              <span className="font-mono text-white">{st.ip} IP</span>
+                              <span className={`font-mono font-bold ${st.er <= 2 ? "text-green-400" : st.er >= 4 ? "text-red-400" : "text-amber-400"}`}>
+                                {st.er} ER
+--- ./server/routes.ts:293 ---
+        computeMlbEre({
+          teamId: home.teamId, teamName: home.teamName || "",
+          gamePk: home.gamePk, opposingPitcherId: home.opposingPitcherId,
+          opposingPitcherHand: home.opposingPitcherHand,
+          venue: home.venue, tempF: home.tempF, windMph: home.windMph,
+          windDirOut: home.windDirOut, gameDate: analysisDateIso,
+        }),
+        computeMlbEre({
+          teamId: away.teamId, teamName: away.teamName || "",
+          gamePk: away.gamePk, opposingPitcherId: away.opposingPitcherId,
+          opposingPitcherHand: away.opposingPitcherHand,
+          venue: away.venue, tempF: away.tempF, windMph: away.windMph,
+          windDirOut: away.windDirOut, gameDate: analysisDateIso,
+        }),
+        // FASE 1 — matchup pitch-by-pitch para refinar NRFI/YRFI top-4
+        (sharedGamePk && !disableMatchup)
+          ? computeMatchupSignal(sharedGamePk, currentSeason).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      // BOOST signals — Fase 2 backtest 10 jul (n=522).
+      // Llamadas paralelas a servicios internos (usan cache) para detectar señales
+      // ganadoras que suben hit rate del F5_ML PREMIUM. NO afecta filtros; solo
+      // agrega badges al finalRecommendation.
+      // homeProbPitcher (pitcher DEL HOME team) = away.opposingPitcherId (el que enfrenta el AWAY lineup)
+      // awayProbPitcher (pitcher DEL AWAY team) = home.opposingPitcherId
+      const homeProbPid = away.opposingPitcherId as number | undefined;
+      const awayProbPid = home.opposingPitcherId as number | undefined;
+      let boostSignalsInput:
+        | { home: Array<{ type: any; label: string }>; away: Array<{ type: any; label: string }> }
+        | undefined = undefined;
+      try {
+        const gameDateIso = analysisDateIso;
+        const [{ getPitcherRecentCombined }, { analyzePitcherVsTeamMatchup }, { getTeamSos }, { getPitcherQualityMap }] = await Promise.all([
+          import("./mlb-pitcher-recent"),
+          import("./mlb-pitcher-vs-team"),
+          import("./mlb-sos"),
+          import("./mlb-statcast-quality"),
+        ]);
+        const [recent, pvt, sosHome, sosAway, qualityMap] = await Promise.all([
+          (homeProbPid || awayProbPid)
+            ? getPitcherRecentCombined(homeProbPid ?? null, "?", awayProbPid ?? null, "?", gameDateIso).catch(() => null)
+            : Promise.resolve(null),
+          (homeProbPid && awayProbPid)
+            ? analyzePitcherVsTeamMatchup(
+                home.teamId, home.teamName || "", homeProbPid, "?",
+                away.teamId, away.teamName || "", awayProbPid, "?"
+              ).catch(() => null)
+            : Promise.resolve(null),
+          getTeamSos(home.teamId, home.teamName || "").catch(() => null),
+          getTeamSos(away.teamId, away.teamName || "").catch(() => null),
+          getPitcherQualityMap().catch(() => ({} as Record<number, any>)),
+        ]);
+
+        // Construir boost signals para cada lado del pick
+        // Cuando pick=HOME: rival pitcher es awayProbPid, se evalúan sus stats
+        // Cuando pick=AWAY: rival pitcher es homeProbPid, se evalúan sus stats
+        const buildBoosts = (pickSide: "HOME" | "AWAY"): Array<{ type: any; label: string }> => {
+          const boosts: Array<{ type: any; label: string }> = [];
+          const rivalRecent = pickSide === "HOME" ? recent?.away : recent?.home;
+          const rivalPid = pickSide === "HOME" ? awayProbPid : homeProbPid;
+          const rivalPvt = pickSide === "HOME" ? pvt?.awayVsHome : pvt?.homeVsAway;
+          const sosPick = pickSide === "HOME" ? sosHome : sosAway;
+          const rivalQual = rivalPid ? qualityMap[rivalPid] : null;
+
+          // BOOST 1: IMPLOSION — rival pitcher en últimas 5 aperturas muy malas
+          if (rivalRecent?.trend === "IMPLOSION") {
+            boosts.push({ type: "IMPLOSION", label: `Rival IMPLOSION (ERA ${rivalRecent.recentEra?.toFixed(2)})` });
+          }
+          // BOOST 2: ERA_DECLINE — rival empeorando (recent > season)
+          if (rivalRecent?.recencyEraDelta && rivalRecent.recencyEraDelta >= 0.3) {
+            boosts.push({ type: "ERA_DECLINE", label: `Rival ERA +${rivalRecent.recencyEraDelta.toFixed(2)} recent` });
+          }
+          // BOOST 3: QUALITY_BAD — Statcast xERA malo (>=5)
+          if (rivalQual?.xera && rivalQual.xera >= 5) {
+            boosts.push({ type: "QUALITY_BAD", label: `Rival xERA=${rivalQual.xera.toFixed(2)} elite malo` });
+          }
+          // BOOST 4: H2H_STRUGGLE — rival sufre H2H vs equipo pick
+          if (rivalPvt && rivalPvt.significantSample && rivalPvt.era !== null && rivalPvt.era >= 5) {
+            boosts.push({ type: "H2H_STRUGGLE", label: `Rival ERA H2H=${rivalPvt.era.toFixed(2)} (${rivalPvt.totalStarts} starts)` });
+          }
+          // BOOST 5: SOS_INFLATED — pick team viene de calendario duro
+          if (sosPick?.tier === "INFLATED") {
+            boosts.push({ type: "SOS_INFLATED", label: `Ofensiva reprimida (SOS INFLATED)` });
+          }
+          return boosts;
+        };
+
+        boostSignalsInput = {
+          home: buildBoosts("HOME"),
+          away: buildBoosts("AWAY"),
+--- ./server/routes.ts:1800 ---
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await getTeamFatigueCombined(
+        game.teams?.home?.team?.id, game.teams?.home?.team?.name,
+        game.teams?.away?.team?.id, game.teams?.away?.team?.name,
+        game.gameDate, game?.venue?.name ?? "",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("team-fatigue error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/catcher-framing/:gamePk
+  // Catcher Framing — cuánto valor genera el catcher robando strikes en zonas borde
+  app.get("/api/mlb/catcher-framing/:gamePk", async (req, res) => {
+    try {
+      const { analyzeCatcherFramingMatchup } = await import("./mlb-catcher-framing");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await analyzeCatcherFramingMatchup(game.teams?.home?.team?.id, game.teams?.away?.team?.id, gamePk);
+      res.json(result);
+    } catch (e: any) {
+      console.error("catcher-framing error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/pitcher-vs-team/:gamePk
+  // Últimos 5 starts del pitcher vs ESTE equipo — detecta dominance/struggles
+  app.get("/api/mlb/pitcher-vs-team/:gamePk", async (req, res) => {
+    try {
+      const { analyzePitcherVsTeamMatchup } = await import("./mlb-pitcher-vs-team");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzePitcherVsTeamMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+        away.team.id, away.team.name,
+        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("pitcher-vs-team error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/wind-park/:gamePk
+  // Wind + Park combinado: ajuste de runs y HR factor por viento + estadio específico
+  app.get("/api/mlb/wind-park/:gamePk", async (req, res) => {
+    try {
+      const { analyzeWindPark } = await import("./mlb-wind-park");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=weather,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const venueName = game.venue?.name ?? "Unknown";
+      const weather = game.weather;
+      const result = analyzeWindPark(venueName, weather);
+      res.json(result ?? { venueName, runsAdjustment: 0, signal: "Sin datos de clima" });
+    } catch (e: any) {
+      console.error("wind-park error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/park-pitcher/:gamePk
+  // Park-Pitcher Splits — cómo le va a este pitcher en este estadio específico (últimos 3 años)
+  app.get("/api/mlb/park-pitcher/:gamePk", async (req, res) => {
+    try {
+      const { analyzeParkPitcherMatchup } = await import("./mlb-park-pitcher");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+--- ./server/routes.ts:1802 ---
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await getTeamFatigueCombined(
+        game.teams?.home?.team?.id, game.teams?.home?.team?.name,
+        game.teams?.away?.team?.id, game.teams?.away?.team?.name,
+        game.gameDate, game?.venue?.name ?? "",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("team-fatigue error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/catcher-framing/:gamePk
+  // Catcher Framing — cuánto valor genera el catcher robando strikes en zonas borde
+  app.get("/api/mlb/catcher-framing/:gamePk", async (req, res) => {
+    try {
+      const { analyzeCatcherFramingMatchup } = await import("./mlb-catcher-framing");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await analyzeCatcherFramingMatchup(game.teams?.home?.team?.id, game.teams?.away?.team?.id, gamePk);
+      res.json(result);
+    } catch (e: any) {
+      console.error("catcher-framing error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/pitcher-vs-team/:gamePk
+  // Últimos 5 starts del pitcher vs ESTE equipo — detecta dominance/struggles
+  app.get("/api/mlb/pitcher-vs-team/:gamePk", async (req, res) => {
+    try {
+      const { analyzePitcherVsTeamMatchup } = await import("./mlb-pitcher-vs-team");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzePitcherVsTeamMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+        away.team.id, away.team.name,
+        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("pitcher-vs-team error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/wind-park/:gamePk
+  // Wind + Park combinado: ajuste de runs y HR factor por viento + estadio específico
+  app.get("/api/mlb/wind-park/:gamePk", async (req, res) => {
+    try {
+      const { analyzeWindPark } = await import("./mlb-wind-park");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=weather,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const venueName = game.venue?.name ?? "Unknown";
+      const weather = game.weather;
+      const result = analyzeWindPark(venueName, weather);
+      res.json(result ?? { venueName, runsAdjustment: 0, signal: "Sin datos de clima" });
+    } catch (e: any) {
+      console.error("wind-park error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/park-pitcher/:gamePk
+  // Park-Pitcher Splits — cómo le va a este pitcher en este estadio específico (últimos 3 años)
+  app.get("/api/mlb/park-pitcher/:gamePk", async (req, res) => {
+    try {
+      const { analyzeParkPitcherMatchup } = await import("./mlb-park-pitcher");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzeParkPitcherMatchup(
+--- ./server/routes.ts:1804 ---
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await getTeamFatigueCombined(
+        game.teams?.home?.team?.id, game.teams?.home?.team?.name,
+        game.teams?.away?.team?.id, game.teams?.away?.team?.name,
+        game.gameDate, game?.venue?.name ?? "",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("team-fatigue error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/catcher-framing/:gamePk
+  // Catcher Framing — cuánto valor genera el catcher robando strikes en zonas borde
+  app.get("/api/mlb/catcher-framing/:gamePk", async (req, res) => {
+    try {
+      const { analyzeCatcherFramingMatchup } = await import("./mlb-catcher-framing");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await analyzeCatcherFramingMatchup(game.teams?.home?.team?.id, game.teams?.away?.team?.id, gamePk);
+      res.json(result);
+    } catch (e: any) {
+      console.error("catcher-framing error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/pitcher-vs-team/:gamePk
+  // Últimos 5 starts del pitcher vs ESTE equipo — detecta dominance/struggles
+  app.get("/api/mlb/pitcher-vs-team/:gamePk", async (req, res) => {
+    try {
+      const { analyzePitcherVsTeamMatchup } = await import("./mlb-pitcher-vs-team");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzePitcherVsTeamMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+        away.team.id, away.team.name,
+        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("pitcher-vs-team error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/wind-park/:gamePk
+  // Wind + Park combinado: ajuste de runs y HR factor por viento + estadio específico
+  app.get("/api/mlb/wind-park/:gamePk", async (req, res) => {
+    try {
+      const { analyzeWindPark } = await import("./mlb-wind-park");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=weather,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const venueName = game.venue?.name ?? "Unknown";
+      const weather = game.weather;
+      const result = analyzeWindPark(venueName, weather);
+      res.json(result ?? { venueName, runsAdjustment: 0, signal: "Sin datos de clima" });
+    } catch (e: any) {
+      console.error("wind-park error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/park-pitcher/:gamePk
+  // Park-Pitcher Splits — cómo le va a este pitcher en este estadio específico (últimos 3 años)
+  app.get("/api/mlb/park-pitcher/:gamePk", async (req, res) => {
+    try {
+      const { analyzeParkPitcherMatchup } = await import("./mlb-park-pitcher");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzeParkPitcherMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+--- ./server/routes.ts:1820 ---
+    try {
+      const { analyzeCatcherFramingMatchup } = await import("./mlb-catcher-framing");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const result = await analyzeCatcherFramingMatchup(game.teams?.home?.team?.id, game.teams?.away?.team?.id, gamePk);
+      res.json(result);
+    } catch (e: any) {
+      console.error("catcher-framing error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/pitcher-vs-team/:gamePk
+  // Últimos 5 starts del pitcher vs ESTE equipo — detecta dominance/struggles
+  app.get("/api/mlb/pitcher-vs-team/:gamePk", async (req, res) => {
+    try {
+      const { analyzePitcherVsTeamMatchup } = await import("./mlb-pitcher-vs-team");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzePitcherVsTeamMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+        away.team.id, away.team.name,
+        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("pitcher-vs-team error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/wind-park/:gamePk
+  // Wind + Park combinado: ajuste de runs y HR factor por viento + estadio específico
+  app.get("/api/mlb/wind-park/:gamePk", async (req, res) => {
+    try {
+      const { analyzeWindPark } = await import("./mlb-wind-park");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=weather,venue`)).json();
+      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const venueName = game.venue?.name ?? "Unknown";
+      const weather = game.weather;
+      const result = analyzeWindPark(venueName, weather);
+      res.json(result ?? { venueName, runsAdjustment: 0, signal: "Sin datos de clima" });
+    } catch (e: any) {
+      console.error("wind-park error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/park-pitcher/:gamePk
+  // Park-Pitcher Splits — cómo le va a este pitcher en este estadio específico (últimos 3 años)
+  app.get("/api/mlb/park-pitcher/:gamePk", async (req, res) => {
+    try {
+      const { analyzeParkPitcherMatchup } = await import("./mlb-park-pitcher");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+      const game: any = await getGameMeta(gamePk);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const home = game.teams?.home;
+      const away = game.teams?.away;
+      const result = await analyzeParkPitcherMatchup(
+        home.team.id, home.team.name,
+        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+      );
+      res.json(result);
+    } catch (e: any) {
+      console.error("park-pitcher error:", e);
+      res.status(500).json({ error: e.message || "Failed" });
+    }
+  });
+
+  // GET /api/mlb/discipline-speed/:gamePk — Tier B: strikePct (proxy CSW) + Sprint Speed
+  app.get("/api/mlb/discipline-speed/:gamePk", async (req, res) => {
+    try {
+      const { getDisciplineSpeedForGame } = await import("./mlb-discipline-speed");
+      const gamePk = parseInt(req.params.gamePk);
+      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+--- ./server/mlb-pitcher-vs-team.ts:1 ---
+// Pitcher vs Team Recent History (MLB)
+// Mira los últimos 5 starts del pitcher vs ESTE equipo específico
+// Detecta patrones: el equipo le está leyendo, o el pitcher lo domina
+
+const MLB_BASE = "https://statsapi.mlb.com/api/v1";
+
+export interface PitcherVsTeamHistory {
+  pitcherId: number;
+  pitcherName: string;
+  opponentTeamId: number;
+  opponentTeamName: string;
+  starts: { date: string; ip: number; er: number; k: number; bb: number; hr: number; gamePk: number }[];
+  totalStarts: number;
+  totalIP: number;
+  totalER: number;
+  era: number;
+  whip: number;
+  k9: number;
+  hr9: number;
+  // Comparación con season ERA general
+  seasonEra: number;
+  eraDelta: number;
+  // Significant si tiene 3+ starts contra este equipo
+  significantSample: boolean;
+  // Patrón: streak de buenos/malos starts
+  recentTrend: "DOMINANCE" | "STRUGGLES" | "NEUTRAL";
+  signal: string;
+}
+
+const cache: Record<string, { ts: number; data: PitcherVsTeamHistory | null }> = {};
+
+function parseIP(ip: string | undefined): number {
+  if (!ip) return 0;
+  const parts = String(ip).split(".");
+  return parseInt(parts[0]) + (parseInt(parts[1] || "0") / 3);
+}
+
+async function getPitcherGameLogs(pitcherId: number): Promise<any[]> {
+  const all: any[] = [];
+  for (const season of ["2024", "2025", "2026"]) {
+    try {
+      const j: any = await (await fetch(`${MLB_BASE}/people/${pitcherId}/stats?stats=gameLog&group=pitching&season=${season}`)).json();
+      const splits = j.stats?.[0]?.splits ?? [];
+      all.push(...splits);
+    } catch {}
+  }
+  return all;
+}
+
+async function getSeasonERA(pitcherId: number): Promise<number> {
+  try {
+    const j2026: any = await (await fetch(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=2026`)).json();
+    let stats = j2026.stats?.[0]?.splits?.[0]?.stat;
+    if (!stats?.era) {
+      const j2025: any = await (await fetch(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=2025`)).json();
+      stats = j2025.stats?.[0]?.splits?.[0]?.stat ?? stats;
+--- ./server/mlb-pitcher-vs-team.ts:135 ---
+    totalHR += parseInt(st.homeRuns ?? "0") || 0;
+    totalH += parseInt(st.hits ?? "0") || 0;
+    return {
+      date: s.date ?? "?",
+      ip,
+      er,
+      k: parseInt(st.strikeOuts ?? "0") || 0,
+      bb: parseInt(st.baseOnBalls ?? "0") || 0,
+      hr: parseInt(st.homeRuns ?? "0") || 0,
+      gamePk: s.game?.gamePk ?? 0,
+    };
+  });
+
+  const era = totalIP > 0 ? (totalER * 9) / totalIP : 0;
+  const whip = totalIP > 0 ? (totalBB + totalH) / totalIP : 0;
+  const k9 = totalIP > 0 ? (totalK * 9) / totalIP : 0;
+  const hr9 = totalIP > 0 ? (totalHR * 9) / totalIP : 0;
+  const eraDelta = era - seasonEra;
+  const significantSample = filtered.length >= 3;
+
+  // Detectar trend: si los últimos 3 starts son todos buenos o todos malos
+  const lastThree = starts.slice(0, 3);
+  const goodStarts = lastThree.filter(s => s.er <= 2 && s.ip >= 5).length;
+  const badStarts = lastThree.filter(s => s.er >= 4 || s.ip < 4).length;
+  let recentTrend: "DOMINANCE" | "STRUGGLES" | "NEUTRAL" = "NEUTRAL";
+  if (goodStarts >= 2 && lastThree.length >= 2) recentTrend = "DOMINANCE";
+  if (badStarts >= 2 && lastThree.length >= 2) recentTrend = "STRUGGLES";
+
+  let signal = "";
+  const NOTE_STATCAST = " — señal HISTÓRICA; el lineup/arsenal de hoy lo manda Statcast Pitch-by-Pitch";
+  if (filtered.length < 2) {
+    signal = `${pitcherName} solo tiene ${filtered.length} start vs ${opponentTeamName} — muestra insuficiente`;
+  } else if (recentTrend === "STRUGGLES" && significantSample) {
+    signal = `🚨 Histórico desfavorable de ${pitcherName} vs ${opponentTeamName}: ${badStarts} de últimos 3 con 4+ ER. ERA ${era.toFixed(2)} en ${filtered.length} starts (vs season ${seasonEra.toFixed(2)})${NOTE_STATCAST}`;
+  } else if (recentTrend === "DOMINANCE" && significantSample) {
+    signal = `⭐ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ${goodStarts} de últimos 3 con 2- ER. ERA ${era.toFixed(2)} en ${filtered.length} starts (vs season ${seasonEra.toFixed(2)})${NOTE_STATCAST}`;
+  } else if (significantSample && Math.abs(eraDelta) >= 1.0) {
+    if (eraDelta > 0) {
+      signal = `⚠️ Histórico desfavorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (+${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
+    } else {
+      signal = `✓ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
+    }
+  } else {
+    signal = `${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (similar a season ${seasonEra.toFixed(2)})`;
+  }
+
+  const result: PitcherVsTeamHistory = {
+    pitcherId, pitcherName, opponentTeamId, opponentTeamName,
+    starts,
+    totalStarts: filtered.length,
+    totalIP, totalER,
+    era: Math.round(era * 100) / 100,
+    whip: Math.round(whip * 100) / 100,
+    k9: Math.round(k9 * 100) / 100,
+    hr9: Math.round(hr9 * 100) / 100,
+    seasonEra,
+    eraDelta: Math.round(eraDelta * 100) / 100,
+    significantSample,
+    recentTrend,
+    signal,
+  };
+
+  cache[cacheKey] = { ts: Date.now(), data: result };
+  return result;
+}
+
+// Helper: para un partido, obtener historiales de ambos pitchers vs sus rivales
+export async function analyzePitcherVsTeamMatchup(
+  homeTeamId: number,
+  homeTeamName: string,
+  homePitcherId: number | undefined,
+  homePitcherName: string,
+  awayTeamId: number,
+  awayTeamName: string,
+  awayPitcherId: number | undefined,
+  awayPitcherName: string,
+): Promise<{ homeVsAway: PitcherVsTeamHistory | null; awayVsHome: PitcherVsTeamHistory | null }> {
+  const [homeVsAway, awayVsHome] = await Promise.all([
+    homePitcherId ? getPitcherVsTeam(homePitcherId, homePitcherName, awayTeamId, awayTeamName) : Promise.resolve(null),
+    awayPitcherId ? getPitcherVsTeam(awayPitcherId, awayPitcherName, homeTeamId, homeTeamName) : Promise.resolve(null),
+  ]);
+  return { homeVsAway, awayVsHome };
+}
+--- ./server/mlb-pitcher-vs-team.ts:140 ---
+      er,
+      k: parseInt(st.strikeOuts ?? "0") || 0,
+      bb: parseInt(st.baseOnBalls ?? "0") || 0,
+      hr: parseInt(st.homeRuns ?? "0") || 0,
+      gamePk: s.game?.gamePk ?? 0,
+    };
+  });
+
+  const era = totalIP > 0 ? (totalER * 9) / totalIP : 0;
+  const whip = totalIP > 0 ? (totalBB + totalH) / totalIP : 0;
+  const k9 = totalIP > 0 ? (totalK * 9) / totalIP : 0;
+  const hr9 = totalIP > 0 ? (totalHR * 9) / totalIP : 0;
+  const eraDelta = era - seasonEra;
+  const significantSample = filtered.length >= 3;
+
+  // Detectar trend: si los últimos 3 starts son todos buenos o todos malos
+  const lastThree = starts.slice(0, 3);
+  const goodStarts = lastThree.filter(s => s.er <= 2 && s.ip >= 5).length;
+  const badStarts = lastThree.filter(s => s.er >= 4 || s.ip < 4).length;
+  let recentTrend: "DOMINANCE" | "STRUGGLES" | "NEUTRAL" = "NEUTRAL";
+  if (goodStarts >= 2 && lastThree.length >= 2) recentTrend = "DOMINANCE";
+  if (badStarts >= 2 && lastThree.length >= 2) recentTrend = "STRUGGLES";
+
+  let signal = "";
+  const NOTE_STATCAST = " — señal HISTÓRICA; el lineup/arsenal de hoy lo manda Statcast Pitch-by-Pitch";
+  if (filtered.length < 2) {
+    signal = `${pitcherName} solo tiene ${filtered.length} start vs ${opponentTeamName} — muestra insuficiente`;
+  } else if (recentTrend === "STRUGGLES" && significantSample) {
+    signal = `🚨 Histórico desfavorable de ${pitcherName} vs ${opponentTeamName}: ${badStarts} de últimos 3 con 4+ ER. ERA ${era.toFixed(2)} en ${filtered.length} starts (vs season ${seasonEra.toFixed(2)})${NOTE_STATCAST}`;
+  } else if (recentTrend === "DOMINANCE" && significantSample) {
+    signal = `⭐ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ${goodStarts} de últimos 3 con 2- ER. ERA ${era.toFixed(2)} en ${filtered.length} starts (vs season ${seasonEra.toFixed(2)})${NOTE_STATCAST}`;
+  } else if (significantSample && Math.abs(eraDelta) >= 1.0) {
+    if (eraDelta > 0) {
+      signal = `⚠️ Histórico desfavorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (+${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
+    } else {
+      signal = `✓ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
+    }
+  } else {
+    signal = `${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (similar a season ${seasonEra.toFixed(2)})`;
+  }
+
+  const result: PitcherVsTeamHistory = {
+    pitcherId, pitcherName, opponentTeamId, opponentTeamName,
+    starts,
+    totalStarts: filtered.length,
+    totalIP, totalER,
+    era: Math.round(era * 100) / 100,
+    whip: Math.round(whip * 100) / 100,
+    k9: Math.round(k9 * 100) / 100,
+    hr9: Math.round(hr9 * 100) / 100,
+    seasonEra,
+    eraDelta: Math.round(eraDelta * 100) / 100,
+    significantSample,
+    recentTrend,
+    signal,
+  };
+
+  cache[cacheKey] = { ts: Date.now(), data: result };
+  return result;
+}
+
+// Helper: para un partido, obtener historiales de ambos pitchers vs sus rivales
+export async function analyzePitcherVsTeamMatchup(
+  homeTeamId: number,
+  homeTeamName: string,
+  homePitcherId: number | undefined,
+  homePitcherName: string,
+  awayTeamId: number,
+  awayTeamName: string,
+  awayPitcherId: number | undefined,
+  awayPitcherName: string,
+): Promise<{ homeVsAway: PitcherVsTeamHistory | null; awayVsHome: PitcherVsTeamHistory | null }> {
+  const [homeVsAway, awayVsHome] = await Promise.all([
+    homePitcherId ? getPitcherVsTeam(homePitcherId, homePitcherName, awayTeamId, awayTeamName) : Promise.resolve(null),
+    awayPitcherId ? getPitcherVsTeam(awayPitcherId, awayPitcherName, homeTeamId, homeTeamName) : Promise.resolve(null),
+  ]);
+  return { homeVsAway, awayVsHome };
+}
+--- ./README.md:61 ---
+- Selecciona el repositorio del backend
+- Railway detecta Node y el script `build:backend`
+
+### 4. Configurar variables de entorno
+En Railway → **Variables**, crea las variables sin pegar sus valores en GitHub:
+
+```text
+NODE_ENV=production
+PORT=5000
+BDL_API_KEY=<guardar únicamente en Railway>
+ODDS_API_KEY=<guardar únicamente en Railway>
+COURTEDGE_ALLOWED_ORIGINS=https://<dominio-del-frontend>
+COURTEDGE_WRITE_TOKEN=<secreto-aleatorio-largo>
+ALLOW_LEGACY_PICKS_SYNC=false
+```
+
+Las credenciales reales nunca deben aparecer en archivos, commits, capturas, issues ni documentación. Consulta `docs/P0_SECURITY_RUNBOOK.md` antes de desplegar cambios de seguridad.
+
+### 5. Generar el dominio público
+- Railway → **Settings** → **Networking** → **Generate Domain**
+- Copia la URL, por ejemplo: `courtedge-backend.up.railway.app`
+
+### 6. Configurar el frontend
+El frontend independiente utiliza `VITE_API_BASE_URL`. Define esa variable con la URL HTTPS del backend y genera un build nuevo. No incrustes la URL directamente en componentes o utilidades.
+
+## Endpoints disponibles
+
+### MLB
+- `/api/mlb/all` — schedule + team stats
+- `/api/mlb/park-pitcher/:gamePk`
+- `/api/mlb/quality/:gamePk`
+- `/api/mlb/sos/:gamePk`
+- `/api/mlb/discipline-speed/:gamePk`
+- `/api/mlb/bullpen-status/:gamePk`
+- `/api/mlb/lineup-matchup/:gamePk`
+- `/api/mlb/pitcher-vs-team/:gamePk`
+- `/api/mlb/pitcher-form/:gamePk`
+- `/api/mlb/team-fatigue/:gamePk`
+- `/api/mlb/weather/:gamePk`
+- `/api/mlb/park-factors/:gamePk`
+- `/api/mlb/umpire/:gamePk`
+- `/api/mlb/pitcher-recent/:gamePk`
+- `/api/mlb/rookie-pitcher/:gamePk`
+- `/api/mlb/catcher-framing/:gamePk`
+- `/api/mlb/archetype-matchup/:gamePk`
+- `/api/mlb/statcast-matchup/:gamePk`
+
+### WNBA
+- `/api/wnba/all`
+- `/api/wnba/games`
+- `/api/wnba/sos`
+- `/api/wnba/fatigue`
+- `/api/wnba/players`
+- `/api/wnba/injuries`
+- `/api/wnba/shot-profile/:espnTeamId`
+- `/api/wnba/h2h?home=X&away=Y`
+
+### NHL y NBA
+- `/api/nhl/all`, `/api/nba/all`, entre otros.
+
+## Comandos locales
+
+```bash
+npm ci
+npm run build:backend
+npm start
+```
+
+El servidor escucha en `process.env.PORT` (default 5000).
+
+## Health check
+
+`GET /` → `{ status: "ok" }`
+
+`GET /health` → `{ status: "healthy" }`
