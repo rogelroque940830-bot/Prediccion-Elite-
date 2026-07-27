@@ -1,4 +1,11 @@
 === MATCHES ===
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:6:      - test/diagnose-pitcher-vs-team-name-2026-07-27
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:17:          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:27:          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:35:              pitcherVsTeam: {
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:54:            }' > .diagnostics/pitcher-vs-team-live.json
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:57:          git add .diagnostics/pitcher-vs-team-live.json
+./.github/workflows/diagnose-pitcher-vs-team-live.yml:63:          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
 ./.github/workflows/diagnose-pitcher-vs-team-name.yml:6:      - test/diagnose-pitcher-vs-team-name-2026-07-27
 ./.github/workflows/diagnose-pitcher-vs-team-name.yml:17:          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
 ./.github/workflows/diagnose-pitcher-vs-team-name.yml:26:            grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
@@ -41,6 +48,386 @@
 ./server/mlb-pitcher-vs-team.ts:140:      signal = `✓ Histórico favorable de ${pitcherName} vs ${opponentTeamName}: ERA ${era.toFixed(2)} en ${filtered.length} starts (${eraDelta.toFixed(2)} vs season)${NOTE_STATCAST}`;
 ./README.md:61:- `/api/mlb/pitcher-vs-team/:gamePk`
 === MATCH CONTEXT ===
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:6 ---
+name: Diagnose live pitcher name sources
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Compare backend and MLB feed pitcher names
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:17 ---
+name: Diagnose live pitcher name sources
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Compare backend and MLB feed pitcher names
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:27 ---
+name: Diagnose live pitcher name sources
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Compare backend and MLB feed pitcher names
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:35 ---
+name: Diagnose live pitcher name sources
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/diagnose-pitcher-vs-team-name-2026-07-27
+          show-progress: false
+      - name: Compare backend and MLB feed pitcher names
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:54 ---
+      - name: Compare backend and MLB feed pitcher names
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:57 ---
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          GAME_PK: '822868'
+        run: |
+          set -euo pipefail
+          mkdir -p .diagnostics
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/pitcher-vs-team/$GAME_PK" > /tmp/pvt.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
+--- ./.github/workflows/diagnose-pitcher-vs-team-live.yml:63 ---
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/all.json
+          curl --fail --silent --show-error "https://statsapi.mlb.com/api/v1.1/game/$GAME_PK/feed/live" > /tmp/feed.json
+          jq -n \
+            --argjson pvt "$(cat /tmp/pvt.json)" \
+            --argjson all "$(jq '.games[] | select(.gamePk == 822868)' /tmp/all.json)" \
+            --argjson feed "$(cat /tmp/feed.json)" \
+            '{
+              pitcherVsTeam: {
+                homeName: $pvt.homeVsAway.pitcherName,
+                awayName: $pvt.awayVsHome.pitcherName,
+                homeOpponent: $pvt.homeVsAway.opponentTeamName,
+                awayOpponent: $pvt.awayVsHome.opponentTeamName
+              },
+              mlbAll: {
+                homePitcher: ($all.homePitcher | {id,name}),
+                awayPitcher: ($all.awayPitcher | {id,name})
+              },
+              officialFeed: {
+                probablePitchers: $feed.gameData.probablePitchers,
+                homeBattingOrder: $feed.liveData.boxscore.teams.home.battingOrder,
+                awayBattingOrder: $feed.liveData.boxscore.teams.away.battingOrder,
+                homePitcherIds: $feed.liveData.boxscore.teams.home.pitchers,
+                awayPitcherIds: $feed.liveData.boxscore.teams.away.pitchers,
+                homeFirstPitcher: (($feed.liveData.boxscore.teams.home.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName}),
+                awayFirstPitcher: (($feed.liveData.boxscore.teams.away.pitchers[0] // 0) as $id | $feed.gameData.players["ID\($id)"] | {id,fullName})
+              }
+            }' > .diagnostics/pitcher-vs-team-live.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .diagnostics/pitcher-vs-team-live.json
+          if git diff --cached --quiet; then
+            echo 'Live diagnostics unchanged'
+            exit 0
+          fi
+          git commit -m 'test: save live pitcher name sources [skip ci]'
+          git push origin HEAD:test/diagnose-pitcher-vs-team-name-2026-07-27
 --- ./.github/workflows/diagnose-pitcher-vs-team-name.yml:6 ---
 name: Diagnose pitcher vs team name
 
