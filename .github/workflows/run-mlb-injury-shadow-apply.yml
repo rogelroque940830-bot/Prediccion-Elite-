@@ -21,7 +21,22 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Apply integration patch
-        run: python scripts/apply-mlb-injury-shadow.py
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .diagnostics
+          python scripts/apply-mlb-injury-shadow.py > .diagnostics/mlb-injury-shadow-apply.txt 2>&1
+          code=$?
+          cat .diagnostics/mlb-injury-shadow-apply.txt
+          if [ "$code" -ne 0 ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .diagnostics/mlb-injury-shadow-apply.txt
+            git commit -m 'test: save MLB injury shadow patch diagnostic [skip ci]'
+            git push origin HEAD:feature/mlb-injury-shadow-automation
+            exit "$code"
+          fi
+          rm -f .diagnostics/mlb-injury-shadow-apply.txt
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression tests
@@ -46,6 +61,7 @@ jobs:
           rm -f scripts/apply-mlb-injury-shadow.py
           rm -f .github/workflows/run-mlb-injury-shadow-apply.yml
           rm -f .github/workflows/diagnose-mlb-injury-shadow-sources.yml
+          rm -rf .diagnostics
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
