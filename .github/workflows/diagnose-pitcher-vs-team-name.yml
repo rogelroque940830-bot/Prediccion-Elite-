@@ -1,0 +1,28 @@
+name: Diagnose pitcher vs team name
+
+on:
+  push:
+    branches:
+      - test/diagnose-pitcher-vs-team-name-2026-07-27
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate UI and backend name flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== MATCHES ==='
+          grep -RInE 'Pitcher vs Team|vs Team|Histórico favorable|historico favorable|pitcherVsTeam|pitcher-vs-team|vs-team' . \
+            --exclude-dir=node_modules --exclude-dir=.git --exclude='package-lock.json' || true
+          echo '=== FRONTEND FILES ==='
+          find . -maxdepth 5 -type f \( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' \) \
+            | sort | sed -n '1,240p'
