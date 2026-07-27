@@ -21,7 +21,9 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Apply hardening patch
-        run: python scripts/harden-mlb-injury-shadow.py
+        run: |
+          python scripts/harden-mlb-injury-shadow.py
+          python scripts/fix-shadow-summary-test.py
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression tests
@@ -44,6 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/harden-mlb-injury-shadow.py
+          rm -f scripts/fix-shadow-summary-test.py
           rm -f .github/workflows/harden-mlb-injury-shadow.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
