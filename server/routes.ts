@@ -30,6 +30,7 @@ import { registerNbaManualRoutes } from "./nba-manual-routes";
 import { registerIndependentNbaRoutes } from "./nba-independent-routes";
 import { registerNhlManualRoutes } from "./nhl-manual-routes";
 import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";
+import { buildMlbPeopleSearchUrl } from "./mlb-injury-identity";
 
 function requireSecret(name: string): string {
   const value = (process.env[name] || "").trim();
@@ -2589,7 +2590,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             const shortComment = inj.short_comment || null;
             // Buscar player en MLB Stats API por nombre
             try {
-              const lookupUrl = `${MLB_BASE}/people/search?names=${encodeURIComponent(name)}&season=${MLB_SEASON_CURRENT}`;
+              const lookupUrl = buildMlbPeopleSearchUrl(MLB_BASE, name, MLB_SEASON_CURRENT);
               const lookupJson = await (await fetch(lookupUrl)).json();
               const people = lookupJson.people ?? [];
               // Verificación estricta: mismo nombre normalizado Y equipo MLB actual.
