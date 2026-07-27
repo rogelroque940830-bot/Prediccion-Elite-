@@ -1,0 +1,14 @@
+name: Inspect settlement
+on:
+  pull_request:
+    branches: [integration/p0-staging-secure]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch ledger
+        run: |
+          curl -fsS 'https://web-p0-integration.up.railway.app/api/mlb/ledger/v1/predictions' -o records.json
+          jq '.data' records.json
