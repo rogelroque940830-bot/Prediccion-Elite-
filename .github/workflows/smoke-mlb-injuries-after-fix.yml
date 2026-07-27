@@ -18,65 +18,29 @@ jobs:
       BACKEND_URL: https://web-p0-integration.up.railway.app
       EXPECTED_COMMIT: 8354c906620c673ed2e4627cbc7819cb7cf873f0
     steps:
-      - name: Wait for Railway to serve merged commit
+      - name: Verify deployed commit and compact injury evidence
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 36); do
-            curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json
-            served=$(jq -r '.commit // ""' /tmp/health.json)
-            echo "Attempt $attempt: served commit $served"
-            if [ "$served" = "$EXPECTED_COMMIT" ]; then
-              jq '.' /tmp/health.json
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Railway did not serve expected commit in time"
-          cat /tmp/health.json
-          exit 1
+          curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json
+          jq -e --arg commit "$EXPECTED_COMMIT" '.status == "healthy" and .commit == $commit and .environment == "p0-integration"' /tmp/health.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/mlb.json
+          jq -e '.success == true and any(.games[]; .gamePk == 822868)' /tmp/mlb.json >/dev/null
 
-      - name: Verify SEA TEX injury records survive identity validation
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error \
-            "$BACKEND_URL/api/mlb/all?date=2026-07-27" > /tmp/mlb.json
+          jq -r '.games[] | select(.gamePk == 822868) |
+            "DEPLOYED_COMMIT=" + $commit +
+            "\nHOME=" + .homeTeam.name +
+            " VERIFIED=" + ((.homeInjuryData.count // 0)|tostring) +
+            " REJECTED=" + ((.homeInjuryData.rejectedCount // 0)|tostring) +
+            " NAMES=" + ([.homeInjuries[].name] | join(" | ")) +
+            "\nAWAY=" + .awayTeam.name +
+            " VERIFIED=" + ((.awayInjuryData.count // 0)|tostring) +
+            " REJECTED=" + ((.awayInjuryData.rejectedCount // 0)|tostring) +
+            " NAMES=" + ([.awayInjuries[].name] | join(" | "))' \
+            --arg commit "$EXPECTED_COMMIT" /tmp/mlb.json
 
-          jq -e '.success == true and (.games | type == "array")' /tmp/mlb.json >/dev/null
-          jq -e '.games[] | select(.gamePk == 822868)' /tmp/mlb.json >/dev/null
-
-          jq '.games[] | select(.gamePk == 822868) | {
-            gamePk,
-            homeTeam,
-            awayTeam,
-            homeInjuryData,
-            awayInjuryData,
-            homeInjuries: [.homeInjuries[] | {name, position, status, source}],
-            awayInjuries: [.awayInjuries[] | {name, position, status, source}]
-          }' /tmp/mlb.json
-
-          home_count=$(jq -r '.games[] | select(.gamePk == 822868) | (.homeInjuryData.count // 0)' /tmp/mlb.json)
-          away_count=$(jq -r '.games[] | select(.gamePk == 822868) | (.awayInjuryData.count // 0)' /tmp/mlb.json)
-          home_rejected=$(jq -r '.games[] | select(.gamePk == 822868) | (.homeInjuryData.rejectedCount // 0)' /tmp/mlb.json)
-          away_rejected=$(jq -r '.games[] | select(.gamePk == 822868) | (.awayInjuryData.rejectedCount // 0)' /tmp/mlb.json)
-          combined_verified=$((home_count + away_count))
-          combined_total=$((home_count + away_count + home_rejected + away_rejected))
-
-          echo "Verified injuries: home=$home_count away=$away_count combined=$combined_verified"
-          echo "Rejected injuries: home=$home_rejected away=$away_rejected"
-          echo "Total source records considered: $combined_total"
-
-          if [ "$combined_total" -le 0 ]; then
-            echo "Expected source injury records for SEA/TEX but found none"
-            exit 1
-          fi
-          if [ "$combined_verified" -le 0 ]; then
-            echo "All source injury records are still being rejected"
-            exit 1
-          fi
-          if [ "$combined_verified" -ge "$combined_total" ]; then
-            echo "All source records verified; hydration fix fully resolved identity matching"
-          else
-            echo "Some records remain rejected, but the systematic all-zero rejection is fixed"
-          fi
+          combined_verified=$(jq -r '[.games[] | select(.gamePk == 822868) | (.homeInjuryData.count // 0), (.awayInjuryData.count // 0)] | add' /tmp/mlb.json)
+          combined_total=$(jq -r '[.games[] | select(.gamePk == 822868) | (.homeInjuryData.count // 0), (.awayInjuryData.count // 0), (.homeInjuryData.rejectedCount // 0), (.awayInjuryData.rejectedCount // 0)] | add' /tmp/mlb.json)
+          test "$combined_total" -gt 0
+          test "$combined_verified" -gt 0
+          echo "COMBINED_VERIFIED=$combined_verified COMBINED_TOTAL=$combined_total"
