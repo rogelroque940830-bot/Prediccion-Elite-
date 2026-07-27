@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - test/check-sea-tex-settlement-2026-07-27-1316
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
 
 permissions:
   contents: read
