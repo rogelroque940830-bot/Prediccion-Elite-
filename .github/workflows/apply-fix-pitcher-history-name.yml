@@ -1,0 +1,200 @@
+name: Apply pitcher history name fix
+
+on:
+  push:
+    branches:
+      - fix/mlb-pitcher-history-display-name
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mlb-pitcher-history-display-name
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply deterministic patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          backend = Path('server/mlb-pitcher-vs-team.ts')
+          text = backend.read_text()
+          anchor = 'const cache: Record<string, { ts: number; data: PitcherVsTeamHistory | null }> = {};\n'
+          addition = '''const cache: Record<string, { ts: number; data: PitcherVsTeamHistory | null }> = {};
+
+export function isMeaningfulPitcherName(value: unknown): value is string {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name || name === "?" || name === "—") return false;
+  return !/^pitcher(?: local| visitante)? por confirmar$/i.test(name);
+}
+
+function normalizeCacheIdentity(value: string): string {
+  return value.trim().replace(/\\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+export function buildPitcherVsTeamCacheKey(
+  pitcherId: number,
+  pitcherName: string,
+  opponentTeamId: number,
+  opponentTeamName: string,
+): string {
+  return [
+    pitcherId,
+    opponentTeamId,
+    normalizeCacheIdentity(pitcherName),
+    normalizeCacheIdentity(opponentTeamName),
+  ].join("::");
+}
+
+async function resolvePitcherDisplayName(pitcherId: number, candidateName: string): Promise<string> {
+  if (isMeaningfulPitcherName(candidateName)) return candidateName.trim();
+  try {
+    const response = await fetch(`${MLB_BASE}/people/${pitcherId}`);
+    if (response.ok) {
+      const payload: any = await response.json();
+      const officialName = payload?.people?.[0]?.fullName;
+      if (isMeaningfulPitcherName(officialName)) return officialName.trim();
+    }
+  } catch {
+    // Keep a readable non-symbol fallback; a later request with the real name gets a different cache key.
+  }
+  return "Pitcher por confirmar";
+}
+'''
+          if anchor not in text:
+              raise SystemExit('backend cache anchor not found')
+          text = text.replace(anchor, addition, 1)
+          old = '''  const cacheKey = `${pitcherId}::${opponentTeamId}`;
+  const cached = cache[cacheKey];
+'''
+          new = '''  pitcherName = await resolvePitcherDisplayName(pitcherId, pitcherName);
+  opponentTeamName = opponentTeamName.trim() || "Equipo rival";
+  const cacheKey = buildPitcherVsTeamCacheKey(
+    pitcherId,
+    pitcherName,
+    opponentTeamId,
+    opponentTeamName,
+  );
+  const cached = cache[cacheKey];
+'''
+          if old not in text:
+              raise SystemExit('backend cache-key block not found')
+          text = text.replace(old, new, 1)
+          backend.write_text(text)
+
+          frontend = Path('frontend/client/src/pages/mlb-predictor.tsx')
+          ui = frontend.read_text()
+          old_ui = '''                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+'''
+          new_ui = '''                  const rawPitcherName = typeof sp.pitcherName === "string" ? sp.pitcherName.trim() : "";
+                  const rawOpponentName = typeof sp.opponentTeamName === "string" ? sp.opponentTeamName.trim() : "";
+                  const invalidPitcherName = !rawPitcherName || rawPitcherName === "?" || rawPitcherName === "—" || /^pitcher(?: local| visitante)? por confirmar$/i.test(rawPitcherName);
+                  const invalidOpponentName = !rawOpponentName || rawOpponentName === "?" || rawOpponentName === "—";
+                  const pitcherDisplayName = invalidPitcherName ? (s.fallbackName || "Pitcher por confirmar") : rawPitcherName;
+                  const opponentDisplayName = invalidOpponentName ? s.fallbackOpp : rawOpponentName;
+                  const signalDisplay = typeof sp.signal === "string"
+                    ? sp.signal.replace(/\\?/g, pitcherDisplayName)
+                    : "";
+                  const dominating = sp.recentTrend === "DOMINANCE";
+                  const struggling = sp.recentTrend === "STRUGGLES";
+                  return (
+'''
+          if old_ui not in ui:
+              raise SystemExit('frontend map block not found')
+          ui = ui.replace(old_ui, new_ui, 1)
+          old_name = '''                            {sp.pitcherName} <span className="text-violet-300">vs {sp.opponentTeamName}</span>
+'''
+          new_name = '''                            {pitcherDisplayName} <span className="text-violet-300">vs {opponentDisplayName}</span>
+'''
+          if old_name not in ui:
+              raise SystemExit('frontend display-name line not found')
+          ui = ui.replace(old_name, new_name, 1)
+          old_signal = '''                      <p className="text-[10px] text-amber-200/90 mt-1.5">{sp.signal}</p>
+'''
+          new_signal = '''                      <p className="text-[10px] text-amber-200/90 mt-1.5">{signalDisplay}</p>
+'''
+          if old_signal not in ui:
+              raise SystemExit('frontend signal line not found')
+          ui = ui.replace(old_signal, new_signal, 1)
+          frontend.write_text(ui)
+
+          test_file = Path('server/mlb-pitcher-vs-team.test.ts')
+          test_file.write_text('''import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buildPitcherVsTeamCacheKey,
+  isMeaningfulPitcherName,
+} from "./mlb-pitcher-vs-team";
+
+test("pitcher display names reject symbolic and provisional placeholders", () => {
+  assert.equal(isMeaningfulPitcherName("?"), false);
+  assert.equal(isMeaningfulPitcherName(" — "), false);
+  assert.equal(isMeaningfulPitcherName("Pitcher por confirmar"), false);
+  assert.equal(isMeaningfulPitcherName("Pitcher local por confirmar"), false);
+  assert.equal(isMeaningfulPitcherName("George Kirby"), true);
+  assert.equal(isMeaningfulPitcherName("Kumar Rocker"), true);
+});
+
+test("pitcher-vs-team cache identity changes when a real pitcher name replaces a placeholder", () => {
+  const provisional = buildPitcherVsTeamCacheKey(669923, "?", 140, "Texas Rangers");
+  const finalName = buildPitcherVsTeamCacheKey(669923, "George Kirby", 140, "Texas Rangers");
+  assert.notEqual(provisional, finalName);
+});
+
+test("pitcher-vs-team cache identity is stable for harmless case and spacing differences", () => {
+  const a = buildPitcherVsTeamCacheKey(677958, "Kumar Rocker", 136, "Seattle Mariners");
+  const b = buildPitcherVsTeamCacheKey(677958, "  kumar   rocker ", 136, " seattle mariners ");
+  assert.equal(a, b);
+});
+''')
+
+          package = Path('package.json')
+          data = json.loads(package.read_text())
+          command = data['scripts']['test:mlb-ledger']
+          test_path = 'server/mlb-pitcher-vs-team.test.ts'
+          if test_path not in command:
+              data['scripts']['test:mlb-ledger'] = command + ' ' + test_path
+          data['scripts']['test:mlb-pitcher-history'] = f'tsx --test {test_path}'
+          package.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+          PY
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run backend regression tests
+        run: npm run test:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json server/mlb-pitcher-vs-team.ts server/mlb-pitcher-vs-team.test.ts frontend/client/src/pages/mlb-predictor.tsx
+          if git diff --cached --quiet; then
+            echo 'Fix already applied'
+            exit 0
+          fi
+          git commit -m 'Fix MLB pitcher history display names'
+          git push origin HEAD:fix/mlb-pitcher-history-display-name
