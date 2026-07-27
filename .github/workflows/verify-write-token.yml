@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - test/verify-write-token-2026-07-26
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
 
 permissions:
   contents: read
