@@ -18,15 +18,22 @@ jobs:
       BACKEND_URL: https://web-p0-integration.up.railway.app
       COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
     steps:
-      - name: Confirm GitHub secret exists
+      - name: Confirm GitHub secret exists and has valid format
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${COURTEDGE_WRITE_TOKEN:-}" ]; then
-            echo "COURTEDGE_WRITE_TOKEN is missing from GitHub Actions secrets"
-            exit 1
-          fi
-          echo "GitHub Actions secret is configured"
+          python - <<'PY'
+          import os, re, sys
+          token = os.environ.get('COURTEDGE_WRITE_TOKEN', '')
+          print(f'Configured: {bool(token)}')
+          print(f'Length: {len(token)}')
+          print(f'Whitespace characters: {sum(ch.isspace() for ch in token)}')
+          print(f'Line breaks: {token.count(chr(10)) + token.count(chr(13))}')
+          valid = bool(re.fullmatch(r'[A-Za-z0-9+/]{64}', token))
+          print(f'Expected 64-character Base64 format: {valid}')
+          if not valid:
+              sys.exit(1)
+          PY
 
       - name: Capture ledger status before handshake
         shell: bash
@@ -44,7 +51,7 @@ jobs:
             --output /tmp/handshake-body.json \
             --write-out '%{http_code}' \
             --request POST \
-            --header "Authorization: Bearer $COURTEDGE_WRITE_TOKEN" \
+            --header "X-CourtEdge-Write-Key: $COURTEDGE_WRITE_TOKEN" \
             --header 'Content-Type: application/json' \
             --data '{}' \
             "$BACKEND_URL/api/mlb/ledger/v1/predictions")
