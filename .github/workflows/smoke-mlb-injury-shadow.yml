@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - test/smoke-mlb-injury-shadow-2026-07-27
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
 
 permissions:
   contents: read
