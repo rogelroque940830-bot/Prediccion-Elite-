@@ -21,6 +21,7 @@ import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
+import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
 
 // ── MLB INJURY TYPES & CALC ──────────────────────────────────────────────────
 type MLBInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE" | "ANOMALOUS";
@@ -35,6 +36,20 @@ interface MLBInjuryShadowSummary {
   officialOnly: number;
   mode: "SHADOW";
 }
+interface MLBInjuryPhaseBPlan {
+  enabled: true;
+  mode: "AUTO_CONSERVATIVE";
+  autoApplyAllowed: boolean;
+  coverage: "FULL" | "PARTIAL" | "BLOCKED";
+  eligiblePlayerIds: number[];
+  eligiblePlayerNames: string[];
+  withheldCandidateNames: string[];
+  candidateCount: number;
+  scale: number;
+  maxAbsRuns: number;
+  requiresBullpenReconciliation: true;
+  reason: string;
+}
 interface MLBInjuryFeedMeta {
   source: string;
   validationSource?: string;
@@ -48,6 +63,7 @@ interface MLBInjuryFeedMeta {
   autoApplyAllowed: boolean;
   shadowMode?: boolean;
   shadowSummary?: MLBInjuryShadowSummary;
+  phaseB?: MLBInjuryPhaseBPlan;
   note?: string;
 }
 const EMPTY_MLB_INJURY_FEED: MLBInjuryFeedMeta = {
@@ -1000,6 +1016,10 @@ export default function MLBPredictor() {
   const [awayInjuryFeed, setAwayInjuryFeed] = useState<MLBInjuryFeedMeta>(EMPTY_MLB_INJURY_FEED);
   const [homeInjuryMissing, setHomeInjuryMissing] = useState<Set<string>>(new Set());
   const [awayInjuryMissing, setAwayInjuryMissing] = useState<Set<string>>(new Set());
+  const [homePhaseBAutoApplied, setHomePhaseBAutoApplied] = useState<Set<string>>(new Set());
+  const [awayPhaseBAutoApplied, setAwayPhaseBAutoApplied] = useState<Set<string>>(new Set());
+  const [homePhaseBStatus, setHomePhaseBStatus] = useState("");
+  const [awayPhaseBStatus, setAwayPhaseBStatus] = useState("");
   // Override de juegos perdidos por jugador (si el usuario lo ajusta manualmente)
   const [homeInjuryGamesOut, setHomeInjuryGamesOut] = useState<Record<string, number>>({});
   const [awayInjuryGamesOut, setAwayInjuryGamesOut] = useState<Record<string, number>>({});
@@ -1308,7 +1328,7 @@ export default function MLBPredictor() {
     if (hp?.homeRuns !== undefined) setHomeIP(String(hp.inningsPitched ?? ""));
     if (ap?.homeRuns !== undefined) setAwayIP(String(ap.inningsPitched ?? ""));
 
-    // Lesiones — solo auto-aplicar cuando la fuente y el tamaño de lista son verificables.
+    // Lesiones — la Fase B espera la reconciliación con Bullpen Status antes de tocar la proyección.
     const homeInj: MLBInjury[] = (game as any).homeInjuries ?? [];
     const awayInj: MLBInjury[] = (game as any).awayInjuries ?? [];
     const homeFeed: MLBInjuryFeedMeta = (game as any).homeInjuryData ?? EMPTY_MLB_INJURY_FEED;
@@ -1317,13 +1337,12 @@ export default function MLBPredictor() {
     setAwayInjuryRoster(awayInj);
     setHomeInjuryFeed(homeFeed);
     setAwayInjuryFeed(awayFeed);
-
-    const homeAutoApply = homeFeed.status === "VERIFIED" && homeFeed.autoApplyAllowed && homeInj.length <= 18;
-    const awayAutoApply = awayFeed.status === "VERIFIED" && awayFeed.autoApplyAllowed && awayInj.length <= 18;
-    const homeMissingSet = homeAutoApply ? new Set(homeInj.map(p => p.name)) : new Set<string>();
-    const awayMissingSet = awayAutoApply ? new Set(awayInj.map(p => p.name)) : new Set<string>();
-    setHomeInjuryMissing(homeMissingSet);
-    setAwayInjuryMissing(awayMissingSet);
+    setHomeInjuryMissing(new Set());
+    setAwayInjuryMissing(new Set());
+    setHomePhaseBAutoApplied(new Set());
+    setAwayPhaseBAutoApplied(new Set());
+    setHomePhaseBStatus("Esperando reconciliación con Bullpen Status");
+    setAwayPhaseBStatus("Esperando reconciliación con Bullpen Status");
 
     // Inicializar gamesOut con los valores que vienen del API.
     const homeGO: Record<string, number> = {};
@@ -1332,21 +1351,10 @@ export default function MLBPredictor() {
     for (const p of awayInj) awayGO[p.name] = p.gamesMissed ?? 0;
     setHomeInjuryGamesOut(homeGO);
     setAwayInjuryGamesOut(awayGO);
-
-    const homeImpact = calcMLBInjuryImpact(homeInj, homeMissingSet, homeGO);
-    const awayImpact = calcMLBInjuryImpact(awayInj, awayMissingSet, awayGO);
-    setHomeInjury(homeAutoApply && homeImpact.runs !== 0 ? homeImpact.runs.toFixed(1) : "0");
-    setAwayInjury(awayAutoApply && awayImpact.runs !== 0 ? awayImpact.runs.toFixed(1) : "0");
-    setHomeInjuryFactors({
-      off: homeAutoApply ? homeImpact.offFactor : 1.0,
-      def: homeAutoApply ? homeImpact.defFactor : 0.5,
-      type: homeAutoApply && homeImpact.runs !== 0 ? "Auto verificado" : "Sin ajuste automático",
-    });
-    setAwayInjuryFactors({
-      off: awayAutoApply ? awayImpact.offFactor : 1.0,
-      def: awayAutoApply ? awayImpact.defFactor : 0.5,
-      type: awayAutoApply && awayImpact.runs !== 0 ? "Auto verificado" : "Sin ajuste automático",
-    });
+    setHomeInjury("0");
+    setAwayInjury("0");
+    setHomeInjuryFactors({ off: 1.0, def: 0.5, type: "Fase B pendiente" });
+    setAwayInjuryFactors({ off: 1.0, def: 0.5, type: "Fase B pendiente" });
 
     // Lineup matchup hombre-por-hombre (lineup vs pitcher rival)
     try {
@@ -1374,18 +1382,70 @@ export default function MLBPredictor() {
       setArchetypeMatchup(null);
     }
 
-    // Bullpen status — closer cansado? bullpen comprometido?
+    // Bullpen status — reconciliación obligatoria antes de activar lesiones de relevistas.
+    let phaseBBullpen: any | null = null;
     try {
       const bpRes = await fetch(`${API_BASE}/api/mlb/bullpen-status/${gameId}`);
       if (bpRes.ok) {
-        const bp = await bpRes.json();
-        setBullpenStatus(bp);
+        phaseBBullpen = await bpRes.json();
+        setBullpenStatus(phaseBBullpen);
       } else {
         setBullpenStatus(null);
       }
     } catch {
       setBullpenStatus(null);
     }
+
+    const homePhaseB = resolveMlbPhaseBSelection(homeInj, homeFeed, phaseBBullpen?.home);
+    const awayPhaseB = resolveMlbPhaseBSelection(awayInj, awayFeed, phaseBBullpen?.away);
+    const homePhaseBSet = new Set(homePhaseB.appliedNames);
+    const awayPhaseBSet = new Set(awayPhaseB.appliedNames);
+    const homeRawImpact = calcMLBInjuryImpact(homeInj, homePhaseBSet, homeGO);
+    const awayRawImpact = calcMLBInjuryImpact(awayInj, awayPhaseBSet, awayGO);
+    const homeAutoRuns = scaleMlbPhaseBRuns(
+      homeRawImpact.runs,
+      homeFeed.phaseB?.scale ?? 0,
+      homeFeed.phaseB?.maxAbsRuns ?? 0,
+    );
+    const awayAutoRuns = scaleMlbPhaseBRuns(
+      awayRawImpact.runs,
+      awayFeed.phaseB?.scale ?? 0,
+      awayFeed.phaseB?.maxAbsRuns ?? 0,
+    );
+    setHomeInjuryMissing(homePhaseBSet);
+    setAwayInjuryMissing(awayPhaseBSet);
+    setHomePhaseBAutoApplied(homePhaseBSet);
+    setAwayPhaseBAutoApplied(awayPhaseBSet);
+    setHomeInjury(homeAutoRuns !== 0 ? homeAutoRuns.toFixed(1) : "0");
+    setAwayInjury(awayAutoRuns !== 0 ? awayAutoRuns.toFixed(1) : "0");
+    setHomeInjuryFactors({
+      off: homePhaseBSet.size > 0 ? homeRawImpact.offFactor : 1.0,
+      def: homePhaseBSet.size > 0 ? homeRawImpact.defFactor : 0.5,
+      type: homePhaseBSet.size > 0 ? "Fase B automática" : "Sin ajuste automático",
+    });
+    setAwayInjuryFactors({
+      off: awayPhaseBSet.size > 0 ? awayRawImpact.offFactor : 1.0,
+      def: awayPhaseBSet.size > 0 ? awayRawImpact.defFactor : 0.5,
+      type: awayPhaseBSet.size > 0 ? "Fase B automática" : "Sin ajuste automático",
+    });
+    setHomePhaseBStatus(
+      homePhaseBSet.size > 0
+        ? `${homePhaseBSet.size} relevista(s) autoaplicado(s) · ajuste conservador ${homeAutoRuns.toFixed(1)} runs`
+        : homePhaseB.blockedReason === "BULLPEN_EFFECT_ALREADY_APPLIED"
+          ? "Abstención: Bullpen Status ya aplica un deterioro; se evita doble conteo"
+          : homePhaseB.blockedReason === "BULLPEN_STATUS_UNAVAILABLE"
+            ? "Abstención: Bullpen Status no disponible"
+            : "Sin relevistas elegibles para ajuste automático",
+    );
+    setAwayPhaseBStatus(
+      awayPhaseBSet.size > 0
+        ? `${awayPhaseBSet.size} relevista(s) autoaplicado(s) · ajuste conservador ${awayAutoRuns.toFixed(1)} runs`
+        : awayPhaseB.blockedReason === "BULLPEN_EFFECT_ALREADY_APPLIED"
+          ? "Abstención: Bullpen Status ya aplica un deterioro; se evita doble conteo"
+          : awayPhaseB.blockedReason === "BULLPEN_STATUS_UNAVAILABLE"
+            ? "Abstención: Bullpen Status no disponible"
+            : "Sin relevistas elegibles para ajuste automático",
+    );
 
     // Park-pitcher splits — cómo le va a este pitcher en este estadio específico
     try {
@@ -2650,6 +2710,10 @@ export default function MLBPredictor() {
     const injuryFeed = isHome ? homeInjuryFeed : awayInjuryFeed;
     const injuryMissing = isHome ? homeInjuryMissing : awayInjuryMissing;
     const setInjuryMissing = isHome ? setHomeInjuryMissing : setAwayInjuryMissing;
+    const phaseBAutoApplied = isHome ? homePhaseBAutoApplied : awayPhaseBAutoApplied;
+    const setPhaseBAutoApplied = isHome ? setHomePhaseBAutoApplied : setAwayPhaseBAutoApplied;
+    const phaseBStatus = isHome ? homePhaseBStatus : awayPhaseBStatus;
+    const setPhaseBStatus = isHome ? setHomePhaseBStatus : setAwayPhaseBStatus;
     const injuryGamesOut = isHome ? homeInjuryGamesOut : awayInjuryGamesOut;
     const setInjuryGamesOut = isHome ? setHomeInjuryGamesOut : setAwayInjuryGamesOut;
     const winRate = isHome ? homeWinRate : awayWinRate;
@@ -2776,6 +2840,8 @@ export default function MLBPredictor() {
                   value={injury}
                   onChange={(e) => {
                     setInjury(e.target.value);
+                    setPhaseBAutoApplied(new Set());
+                    setPhaseBStatus("Override manual del ajuste agregado");
                     // manual edit → default seguro
                     setInjuryFactors({ off: 1.0, def: 0.5, type: "Manual" });
                   }}
@@ -2810,24 +2876,30 @@ export default function MLBPredictor() {
                   {injuryFeed.note && <p className="mt-0.5 opacity-80">{injuryFeed.note}</p>}
                 </div>
 
-                {injuryFeed.shadowMode && injuryFeed.shadowSummary && (
-                  <div className="mt-2 p-2 rounded border border-cyan-500/30 bg-cyan-500/10 text-[10px] text-cyan-200 space-y-1">
+                {injuryFeed.phaseB?.enabled && injuryFeed.shadowSummary ? (
+                  <div className="mt-2 p-2 rounded border border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-200 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold uppercase tracking-wider">Automatización · modo sombra</p>
-                      <span className="text-cyan-300/80">BDL detecta · MLB valida</span>
+                      <p className="font-semibold uppercase tracking-wider">Automatización · Fase B activa</p>
+                      <span className="text-emerald-300/80">BDL detecta · MLB valida · bullpen reconcilia</span>
                     </div>
-                    <p className="text-cyan-100/80">Clasifica automáticamente, pero todavía no modifica la proyección ni el ledger.</p>
+                    <p className="text-emerald-100/80">Solo relevistas recientes de alta confianza pueden modificar la proyección. Los demás casos se retienen automáticamente.</p>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                      <span>Candidatos: <b>{injuryFeed.shadowSummary.applyCandidates}</b></span>
-                      <span>Ya reflejados: <b>{injuryFeed.shadowSummary.alreadyReflected}</b></span>
-                      <span>Ignorados: <b>{injuryFeed.shadowSummary.ignored}</b></span>
-                      <span>Conflictos: <b>{injuryFeed.shadowSummary.conflicts}</b></span>
-                      <span>Pendientes: <b>{injuryFeed.shadowSummary.pending}</b></span>
-                      <span>Confianza alta: <b>{injuryFeed.shadowSummary.highConfidence}</b></span>
+                      <span>Candidatos detectados: <b>{injuryFeed.phaseB.candidateCount}</b></span>
+                      <span>Elegibles backend: <b>{injuryFeed.phaseB.eligiblePlayerNames.length}</b></span>
+                      <span>Autoaplicados: <b>{phaseBAutoApplied.size}</b></span>
+                      <span>Retenidos: <b>{injuryFeed.phaseB.withheldCandidateNames.length}</b></span>
+                      <span>Cobertura: <b>{injuryFeed.phaseB.coverage}</b></span>
+                      <span>Escala: <b>{Math.round(injuryFeed.phaseB.scale * 100)}%</b></span>
+                      <span>Tope: <b>±{injuryFeed.phaseB.maxAbsRuns.toFixed(2)} runs</b></span>
                       <span>Solo en MLB: <b>{injuryFeed.shadowSummary.officialOnly}</b></span>
                     </div>
+                    {phaseBStatus && <p className="pt-1 border-t border-emerald-500/20 text-emerald-100">{phaseBStatus}</p>}
                   </div>
-                )}
+                ) : injuryFeed.shadowMode && injuryFeed.shadowSummary ? (
+                  <div className="mt-2 p-2 rounded border border-cyan-500/30 bg-cyan-500/10 text-[10px] text-cyan-200">
+                    Clasificación en modo sombra; no se aplica ningún ajuste.
+                  </div>
+                ) : null}
 
                 {/* Auto-rellenado de lesionados desde BALLDONTLIE (solo listas confiables) */}
                 {injuryRoster.length > 0 && (
@@ -2841,6 +2913,8 @@ export default function MLBPredictor() {
                     <div className="flex flex-wrap gap-1">
                       {injuryRoster.map((pl) => {
                         const isOut = injuryMissing.has(pl.name);
+                        const isPhaseBAuto = phaseBAutoApplied.has(pl.name);
+                        const isPhaseBWithheld = injuryFeed.phaseB?.withheldCandidateNames.includes(pl.name) === true;
                         const t = detectMLBPlayerType(pl);
                         const statSnip = pl.isPitcher
                           ? `ERA ${(pl.era ?? 0).toFixed(2)}`
@@ -2853,18 +2927,24 @@ export default function MLBPredictor() {
                               const next = new Set(injuryMissing);
                               if (isOut) next.delete(pl.name); else next.add(pl.name);
                               setInjuryMissing(next);
+                              const nextAuto = new Set(phaseBAutoApplied);
+                              nextAuto.delete(pl.name);
+                              setPhaseBAutoApplied(nextAuto);
+                              setPhaseBStatus("Override manual aplicado; el cálculo deja de usar el tope automático para esa selección");
                               const impact = calcMLBInjuryImpact(injuryRoster, next, injuryGamesOut);
                               setInjury(impact.runs !== 0 ? impact.runs.toFixed(1) : "0");
                               setInjuryFactors({
                                 off: impact.offFactor,
                                 def: impact.defFactor,
-                                type: impact.runs !== 0 ? "Auto" : "Mixto",
+                                type: impact.runs !== 0 ? "Override manual" : "Mixto",
                               });
                             }}
                             className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
-                              isOut
-                                ? "bg-red-500/30 border-red-400 text-red-200 font-bold"
-                                : "bg-slate-700/40 border-slate-600 text-slate-400"
+                              isPhaseBAuto
+                                ? "bg-emerald-500/25 border-emerald-400 text-emerald-100 font-bold"
+                                : isOut
+                                  ? "bg-red-500/30 border-red-400 text-red-200 font-bold"
+                                  : "bg-slate-700/40 border-slate-600 text-slate-400"
                             }`}
                             title={`${t.type} · ${pl.status}${pl.officialStatus ? `\nMLB: ${pl.officialStatus}` : ""}${pl.shadow?.reason ? `\nAutomático: ${pl.shadow.reason}` : ""}${pl.returnDate ? `\nRegreso: ${new Date(pl.returnDate).toLocaleDateString("es-ES")}` : ""}${pl.shortComment ? `\n\n${pl.shortComment}` : ""}`}
                           >
@@ -2872,12 +2952,15 @@ export default function MLBPredictor() {
                             <span className="text-[9px] text-muted-foreground ml-1">({pl.position} · {statSnip})</span>
                             {pl.shadow && (
                               <span className={`text-[9px] ml-1 ${
-                                pl.shadow.decision === "APPLY_CANDIDATE" ? "text-emerald-300" :
+                                isPhaseBAuto ? "text-emerald-200" :
+                                isPhaseBWithheld ? "text-amber-300" :
                                 pl.shadow.decision === "ALREADY_REFLECTED" ? "text-blue-300" :
                                 pl.shadow.decision === "IGNORE" ? "text-slate-400" :
                                 pl.shadow.decision === "CONFLICT" ? "text-red-300" : "text-amber-300"
                               }`}>
-                                · {pl.shadow.decision === "APPLY_CANDIDATE" ? "aplicaría" :
+                                · {isPhaseBAuto ? "auto aplicado" :
+                                  isPhaseBWithheld ? "retenido" :
+                                  pl.shadow.decision === "APPLY_CANDIDATE" ? "candidato" :
                                   pl.shadow.decision === "ALREADY_REFLECTED" ? "ya reflejado" :
                                   pl.shadow.decision === "IGNORE" ? "ignorado" :
                                   pl.shadow.decision === "CONFLICT" ? "conflicto" : "pendiente"}
@@ -2903,12 +2986,16 @@ export default function MLBPredictor() {
                                   const val = parseInt(e.target.value) || 0;
                                   const nextGO = { ...injuryGamesOut, [nm]: val };
                                   setInjuryGamesOut(nextGO);
+                                  const nextAuto = new Set(phaseBAutoApplied);
+                                  nextAuto.delete(nm);
+                                  setPhaseBAutoApplied(nextAuto);
+                                  setPhaseBStatus("Override manual de juegos fuera aplicado");
                                   const impact = calcMLBInjuryImpact(injuryRoster, injuryMissing, nextGO);
                                   setInjury(impact.runs !== 0 ? impact.runs.toFixed(1) : "0");
                                   setInjuryFactors({
                                     off: impact.offFactor,
                                     def: impact.defFactor,
-                                    type: impact.runs !== 0 ? "Auto" : "Mixto",
+                                    type: impact.runs !== 0 ? "Override manual" : "Mixto",
                                   });
                                 }}
                                 className="w-10 text-center text-[10px] bg-slate-800 border border-red-500/30 rounded px-1 py-0.5 text-white"
