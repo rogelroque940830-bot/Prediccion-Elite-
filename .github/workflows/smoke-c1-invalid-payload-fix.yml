@@ -1,0 +1,52 @@
+name: Smoke deployed C1 invalid-payload fix
+
+on:
+  push:
+    branches:
+      - test/smoke-c1-invalid-payload-fix-2026-07-28
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed backend commit and immutable ledger
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: 09966e2634246b807208e63fc3d8e5a27f8bd175
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/before.json
+          echo 'LEDGER BEFORE'
+          jq '.data | {predictions,settlementEvents,immutable,journalMode}' /tmp/before.json
+
+          served=''
+          for attempt in $(seq 1 48); do
+            if curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json; then
+              served=$(jq -r '.commit // ""' /tmp/health.json)
+              echo "Attempt $attempt: served commit $served"
+              if [ "$served" = "$EXPECTED_COMMIT" ]; then
+                break
+              fi
+            else
+              echo "Attempt $attempt: Railway temporarily unavailable"
+            fi
+            sleep 10
+          done
+          jq -e --arg commit "$EXPECTED_COMMIT" '.status == "healthy" and .commit == $commit and .environment == "p0-integration"' /tmp/health.json >/dev/null
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
+          echo 'LEDGER AFTER'
+          jq '.data | {predictions,settlementEvents,immutable,journalMode}' /tmp/after.json
+          jq -e --slurpfile before /tmp/before.json '
+            .success == true
+            and .data.immutable == true
+            and .data.predictions == $before[0].data.predictions
+            and .data.settlementEvents == $before[0].data.settlementEvents
+          ' /tmp/after.json >/dev/null
