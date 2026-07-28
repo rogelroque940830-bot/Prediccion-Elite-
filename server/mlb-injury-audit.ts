@@ -18,6 +18,9 @@ const shadowEvidenceSchema = z.object({
   reasonCode: z.string().trim().min(1).max(160),
   reason: z.string().trim().min(1).max(2000),
   daysSinceOfficialTransaction: z.number().int().min(0).max(5000).nullable().optional(),
+  // Backward-compatible with the first deployed C1 frontend bundle.
+  // New builders strip this internal marker before persistence.
+  shadowOnly: z.literal(true).optional(),
 }).strict();
 
 const playerEvidenceSchema = z.object({
