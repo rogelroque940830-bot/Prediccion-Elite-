@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import {
   MLB_LEDGER_SCHEMA_VERSION,
+  canonicalJson,
   mlbPredictionInputSchema,
   type LedgerRecord,
   type MlbPredictionInput,
@@ -191,9 +192,8 @@ function fullSnapshotPrediction(pick: SavedMlbPickLike): MlbPredictionInput {
   const snapshot = sanitizeSnapshot(mlbScientificSnapshotSchema.parse(pick.scientificSnapshot));
   assertSnapshotMatchesPick(pick, snapshot);
 
-  return mlbPredictionInputSchema.parse({
+  const basePrediction = mlbPredictionInputSchema.parse({
     schemaVersion: MLB_LEDGER_SCHEMA_VERSION,
-    clientRequestId: `picks-v2:${pick.id}`,
     source: "app",
     model: {
       ...snapshot.model,
@@ -211,6 +211,22 @@ function fullSnapshotPrediction(pick: SavedMlbPickLike): MlbPredictionInput {
     probabilities: snapshot.probabilities,
     decision: snapshot.decision,
     analysis: snapshot.analysis,
+  });
+
+  // Numeric UI ids can be reused after a failed/removed history entry. They are
+  // therefore unsafe as immutable-ledger idempotency keys by themselves. Bind the
+  // request id to the final canonical payload so exact retries remain idempotent,
+  // while a different snapshot using the same legacy UI id receives a new key.
+  const safePickId = pick.id.replace(/[^A-Za-z0-9._:-]/g, "_").slice(0, 90) || "pick";
+  const payloadDigest = crypto
+    .createHash("sha256")
+    .update(canonicalJson(basePrediction))
+    .digest("hex")
+    .slice(0, 32);
+
+  return mlbPredictionInputSchema.parse({
+    ...basePrediction,
+    clientRequestId: `picks-v2:${safePickId}:${payloadDigest}`,
   });
 }
 
@@ -303,7 +319,8 @@ export function findMlbSupersedesId(
       && next.market.type === prediction.market.type
       && normalize(next.market.selection) === normalize(prediction.market.selection)
       && sameOptionalNumber(next.market.line, prediction.market.line)
-      && prediction.source === "app";
+      && prediction.source === "app"
+      && prediction.clientRequestId !== next.clientRequestId;
   });
   if (!candidates.length) return undefined;
   candidates.sort((left, right) =>

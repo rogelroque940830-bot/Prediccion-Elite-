@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildMlbInjuryAuditSnapshot } from "../frontend/client/src/lib/mlb-injury-audit";
 import { mlbInjuryAuditSchema } from "./mlb-injury-audit";
+import { savedPickSchema } from "./picks-v2";
 
 function teamInput(side: "HOME" | "AWAY") {
   return {
@@ -187,4 +188,88 @@ test("backend accepts the first deployed C1 bundle shadowOnly marker", () => {
   audit.home.players[0].shadow.shadowOnly = true;
   const parsed = mlbInjuryAuditSchema.parse(audit);
   assert.equal(parsed.home.players[0].shadow?.shadowOnly, true);
+});
+
+
+test("Picks V2 accepts and normalizes a realistic C1 scientific snapshot", () => {
+  const audit: any = buildMlbInjuryAuditSnapshot({
+    capturedAt: "2026-07-28T03:15:00.000Z",
+    home: teamInput("HOME"),
+    away: teamInput("AWAY"),
+  });
+
+  audit.home.source.detectorFetchedAt = "legacy-non-iso-date";
+  audit.home.players[0].reportedStatus = "R".repeat(900);
+  audit.home.players[0].shadow.shadowOnly = true;
+  audit.home.players[0].shadow.vendorInternalDebug = "must be stripped";
+  audit.home.players[0].vendorPayload = { extra: true };
+
+  const parsed = savedPickSchema.parse({
+    id: "ui-mlb-99",
+    ts: Date.parse("2026-07-28T03:15:00.000Z"),
+    sport: "mlb",
+    homeTeam: "Home Club",
+    awayTeam: "Away Club",
+    pickType: "ML",
+    pickSide: "Home Club ML",
+    confidence: 62,
+    edge: 7.5,
+    odds: -120,
+    source: "app",
+    clientId: 99,
+    date: "2026-07-29",
+    team: "Home Club",
+    opponent: "Away Club",
+    market: "ML",
+    pick: "Home Club ML",
+    modelProb: 62,
+    impliedProb: 54.55,
+    stake: 1,
+    result: "",
+    profit: 0,
+    scientificSnapshot: {
+      schemaVersion: "mlb-scientific-snapshot.v1",
+      model: {
+        name: "CourtEdge MLB",
+        version: "predictor-full-snapshot-v2",
+        environment: "p0-integration",
+      },
+      game: {
+        gamePk: 999999,
+        gameDate: "2026-07-29",
+        commenceTime: "2026-07-29T23:10:00.000Z",
+        homeTeam: "Home Club",
+        awayTeam: "Away Club",
+      },
+      market: {
+        type: "ML",
+        selection: "Home Club ML",
+        oddsAmerican: -120,
+        book: "Hard Rock",
+        capturedAt: "2026-07-28T03:15:00.000Z",
+      },
+      probabilities: {
+        model: 0.62,
+        marketImplied: 0.5455,
+        edgePp: 7.45,
+      },
+      decision: {
+        signal: "LEAN",
+        confidenceLabel: "B",
+        confidencePct: 62,
+        stakeUnits: 1,
+      },
+      analysis: {
+        stage: "PROVISIONAL",
+        injuryAudit: audit,
+      },
+    },
+  });
+
+  const normalizedAudit = parsed.scientificSnapshot?.analysis.injuryAudit;
+  assert.ok(normalizedAudit);
+  assert.equal(normalizedAudit.home.source.detectorFetchedAt, undefined);
+  assert.equal(normalizedAudit.home.players[0].reportedStatus?.length, 500);
+  assert.equal("vendorPayload" in (normalizedAudit.home.players[0] as any), false);
+  assert.equal("vendorInternalDebug" in (normalizedAudit.home.players[0].shadow as any), false);
 });

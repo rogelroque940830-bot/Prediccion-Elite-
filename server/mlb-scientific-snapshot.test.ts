@@ -100,13 +100,27 @@ test("full snapshot becomes the single final ledger payload", () => {
     scientificSnapshot: fullSnapshot(),
   });
 
-  assert.equal(prediction.clientRequestId, "picks-v2:ui-mlb-42");
+  assert.match(prediction.clientRequestId || "", /^picks-v2:ui-mlb-42:[a-f0-9]{32}$/);
   assert.equal(prediction.analysis.stage, "FINAL");
   assert.equal(prediction.decision.signal, "BET");
   assert.equal(prediction.game.gamePk, 822950);
   assert.equal(prediction.market.selection, "Tampa Bay Rays ML");
   assert.equal((prediction.analysis.rawInputs as any).apiKey, "[REDACTED]");
   assert.equal((prediction.analysis.rawInputs as any).Authorization, "[REDACTED]");
+});
+
+test("full snapshot request ids are stable for exact retries and unique for changed payloads", () => {
+  const firstSnapshot = fullSnapshot();
+  const exactRetry = structuredClone(firstSnapshot);
+  const changedSnapshot = structuredClone(firstSnapshot);
+  (changedSnapshot.analysis.rawOutput as any).selectedMarket = "ML_RECALCULATED";
+
+  const first = buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: firstSnapshot });
+  const retry = buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: exactRetry });
+  const changed = buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: changedSnapshot });
+
+  assert.equal(first.clientRequestId, retry.clientRequestId);
+  assert.notEqual(first.clientRequestId, changed.clientRequestId);
 });
 
 test("orientation mismatch is rejected before the immutable append", () => {
@@ -165,10 +179,10 @@ test("FINAL snapshot requires the official game identity", () => {
 
 test("latest matching immutable prediction is selected as supersedesId", () => {
   const next = buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: fullSnapshot() });
-  const record = (id: string, recordedAtMs: number, model: number) => ({
+  const record = (id: string, recordedAtMs: number, model: number, clientRequestId = `picks-v2:${id}`) => ({
     prediction: {
       id,
-      clientRequestId: `picks-v2:${id}`,
+      clientRequestId,
       recordedAt: new Date(recordedAtMs).toISOString(),
       recordedAtMs,
       game: { gamePk: 822950, gameDate: "2026-07-26", commenceTime: "2026-07-26T17:35:00.000Z", homeTeam: "Tampa Bay Rays", awayTeam: "Cleveland Guardians" },
@@ -184,7 +198,11 @@ test("latest matching immutable prediction is selected as supersedesId", () => {
     },
     settlement: null,
   });
-  const records = [record("mlb-pred-old", 1_000, 0.58), record("mlb-pred-newer", 2_000, 0.60)];
+  const records = [
+    record("mlb-pred-old", 1_000, 0.58),
+    record("mlb-pred-newer", 2_000, 0.60),
+    record("mlb-pred-retry", 3_000, 0.612, next.clientRequestId),
+  ];
   assert.equal(findMlbSupersedesId(records as any, next), "mlb-pred-newer");
 });
 
