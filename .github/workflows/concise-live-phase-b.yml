@@ -1,0 +1,65 @@
+name: Concise live MLB injury Phase B decisions
+
+on:
+  pull_request:
+    branches:
+      - feature/mlb-injury-phase-b-auto
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print concise Phase B decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/phaseb/frontend/client/src/lib /tmp/phaseb/server
+          curl --fail --silent --show-error 'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/cf7bc00b0981bc907fdb47a4ccae7518eb8da236/server/mlb-injury-phase-b.ts' -o /tmp/phaseb/server/mlb-injury-phase-b.ts
+          curl --fail --silent --show-error 'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/cf7bc00b0981bc907fdb47a4ccae7518eb8da236/frontend/client/src/lib/mlb-injury-phase-b.ts' -o /tmp/phaseb/frontend/client/src/lib/mlb-injury-phase-b.ts
+          cat > /tmp/phaseb/simulate.mts <<'TS'
+          import { buildMlbInjuryPhaseBPlan } from "./server/mlb-injury-phase-b.ts";
+          import { resolveMlbPhaseBSelection } from "./frontend/client/src/lib/mlb-injury-phase-b.ts";
+
+          const backend = "https://web-p0-integration.up.railway.app";
+          const gamePk = 822868;
+          const slate = await (await fetch(`${backend}/api/mlb/all?date=2026-07-27`)).json();
+          const game = slate.games?.find((item) => Number(item.gamePk ?? item.gameId) === gamePk);
+          if (!game) throw new Error("SEA-TEX game not found");
+          const bullpen = await (await fetch(`${backend}/api/mlb/bullpen-status/${gamePk}`)).json();
+
+          for (const side of ["home", "away"]) {
+            const injuries = game[`${side}Injuries`] ?? [];
+            const meta = game[`${side}InjuryData`] ?? {};
+            const plan = buildMlbInjuryPhaseBPlan({
+              sourceStatus: meta.source === "BALLDONTLIE" ? (meta.stale ? "PARTIAL" : "VERIFIED") : meta.status,
+              officialValidationStatus: meta.officialValidationStatus ?? "PARTIAL",
+              stale: meta.stale,
+              anomalous: meta.status === "ANOMALOUS",
+              rejectedCount: meta.rejectedCount ?? 0,
+              officialOnly: meta.shadowSummary?.officialOnly ?? 0,
+              players: injuries.map((player) => ({
+                playerId: Number(player.playerId),
+                name: String(player.name),
+                isPitcher: Boolean(player.isPitcher),
+                shadow: player.shadow,
+              })),
+            });
+            const selection = resolveMlbPhaseBSelection(injuries, {
+              autoApplyAllowed: plan.autoApplyAllowed,
+              phaseB: plan,
+            }, bullpen?.[side]);
+            console.log(`TEAM=${game[`${side}Team`]?.name}`);
+            console.log(`COVERAGE=${plan.coverage} SCALE=${plan.scale} CAP=${plan.maxAbsRuns}`);
+            console.log(`CANDIDATES=${plan.candidateCount}`);
+            console.log(`ELIGIBLE=${plan.eligiblePlayerNames.join(",") || "none"}`);
+            console.log(`WITHHELD=${plan.withheldCandidateNames.join(",") || "none"}`);
+            console.log(`BULLPEN_RUNS=${bullpen?.[side]?.runsAdjustment ?? "missing"}`);
+            console.log(`AUTO_AFTER_RECONCILIATION=${selection.appliedNames.join(",") || "none"}`);
+            console.log(`BLOCK=${selection.blockedReason ?? "none"}`);
+          }
+          TS
+          cd /tmp/phaseb
+          node --experimental-strip-types simulate.mts
