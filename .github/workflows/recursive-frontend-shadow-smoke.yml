@@ -1,0 +1,82 @@
+name: Recursive frontend shadow smoke
+
+on:
+  push:
+    branches:
+      - test/frontend-shadow-recursive-smoke-2026-07-27
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crawl deployed JavaScript chunks
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          cat > /tmp/crawl.py <<'PY'
+          import re
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          base = sys.argv[1].rstrip('/') + '/'
+          start = urllib.parse.urljoin(base, 'mlb')
+          queue = [start]
+          seen = set()
+          texts = []
+          assets = []
+
+          def get(url):
+              req = urllib.request.Request(url, headers={'User-Agent': 'CourtEdge-Smoke/1.0'})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return resp.read().decode('utf-8', errors='ignore')
+
+          while queue and len(seen) < 400:
+              url = queue.pop(0)
+              if url in seen:
+                  continue
+              seen.add(url)
+              try:
+                  text = get(url)
+              except Exception as exc:
+                  print(f'WARN {url}: {exc}')
+                  continue
+              texts.append(text)
+              if '.js' in urllib.parse.urlparse(url).path:
+                  assets.append(url)
+              candidates = set()
+              for pattern in [
+                  r'(?P<u>/assets/[A-Za-z0-9._-]+\.js)',
+                  r'(?P<u>assets/[A-Za-z0-9._-]+\.js)',
+                  r'(?P<u>\./[A-Za-z0-9._-]+\.js)',
+              ]:
+                  for match in re.finditer(pattern, text):
+                      candidates.add(urllib.parse.urljoin(url, match.group('u')))
+              for candidate in sorted(candidates):
+                  if candidate not in seen:
+                      queue.append(candidate)
+
+          combined = '\n'.join(texts)
+          targets = [
+              'Automatización · modo sombra',
+              'BDL detecta · MLB valida',
+              'Solo en MLB:',
+          ]
+          print(f'CRAWLED total={len(seen)} js={len(assets)}')
+          for asset in assets[:80]:
+              print(f'ASSET {asset}')
+          missing = [target for target in targets if target not in combined]
+          if missing:
+              print('MISSING ' + ' | '.join(missing))
+              raise SystemExit(1)
+          print('PASS all shadow-mode labels found in deployed chunks')
+          PY
+          python /tmp/crawl.py "$FRONTEND_URL"
