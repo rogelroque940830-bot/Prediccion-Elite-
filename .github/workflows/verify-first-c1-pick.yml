@@ -1,0 +1,59 @@
+name: Verify first C1 MLB pick audit
+
+on:
+  push:
+    branches:
+      - test/verify-first-c1-pick-2026-07-28
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect latest immutable MLB prediction
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/predictions?limit=1" > /tmp/latest.json
+          echo 'LEDGER STATUS'
+          jq '.data | {predictions,settlementEvents,latestPredictionAt,immutable,journalMode}' /tmp/status.json
+          echo 'LATEST C1 PICK'
+          jq '.data[0] | {
+            id,
+            clientRequestId,
+            recordedAt,
+            game,
+            market,
+            modelVersion:.model.version,
+            analysisStage,
+            injuryAuditSchema:.payload.analysis.injuryAudit.schemaVersion,
+            injuryAuditCapturedAt:.payload.analysis.injuryAudit.capturedAt,
+            homeAudit:.payload.analysis.injuryAudit.home | {
+              teamName, coverage, detectedCount, officialOnlyCount,
+              candidateCount, eligibleCount, autoAppliedCount, retainedCount,
+              rawAutomaticRuns, scaledAutomaticRuns, finalRuns, manualOverride
+            },
+            awayAudit:.payload.analysis.injuryAudit.away | {
+              teamName, coverage, detectedCount, officialOnlyCount,
+              candidateCount, eligibleCount, autoAppliedCount, retainedCount,
+              rawAutomaticRuns, scaledAutomaticRuns, finalRuns, manualOverride
+            },
+            payloadSha256
+          }' /tmp/latest.json
+          jq -e '
+            .success == true
+            and (.data | length) == 1
+            and .data[0].model.version == "predictor-full-snapshot-v2"
+            and .data[0].payload.analysis.injuryAudit.schemaVersion == "mlb-injury-audit.v1"
+            and (.data[0].payload.analysis.injuryAudit.capturedAt | type == "string")
+            and (.data[0].payload.analysis.injuryAudit.home.teamName | type == "string")
+            and (.data[0].payload.analysis.injuryAudit.away.teamName | type == "string")
+          ' /tmp/latest.json >/dev/null
