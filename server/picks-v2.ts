@@ -13,7 +13,7 @@ const PICKS_FILE = path.join(DATA_DIR, "picks.json");
 const idPattern = /^[A-Za-z0-9._:-]{1,120}$/;
 const sportSchema = z.enum(["mlb", "nba", "nhl", "wnba"]);
 
-const savedPickSchema = z.object({
+export const savedPickSchema = z.object({
   id: z.string().regex(idPattern).optional(),
   ts: z.number().int().positive().optional(),
   sport: sportSchema,
@@ -246,7 +246,14 @@ export function registerPicksV2Routes(app: Express): void {
   app.post("/api/picks/v2", (req, res) => {
     const parsed = savedPickSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ success: false, error: "Invalid pick payload", details: parsed.error.flatten() });
+      const firstIssue = parsed.error.issues[0];
+      const issuePath = firstIssue?.path?.length ? firstIssue.path.join(".") : "payload";
+      const issueMessage = firstIssue?.message || "validation failed";
+      res.status(400).json({
+        success: false,
+        error: `Invalid pick payload: ${issuePath} — ${issueMessage}`,
+        details: parsed.error.flatten(),
+      });
       return;
     }
 
