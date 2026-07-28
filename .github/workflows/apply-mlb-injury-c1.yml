@@ -1,0 +1,56 @@
+name: Apply MLB injury C1 ledger audit
+
+on:
+  push:
+    branches:
+      - feature/mlb-injury-phase-c1-ledger-audit
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-injury-phase-c1-ledger-audit
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Apply deterministic C1 integration
+        run: python scripts/apply-mlb-injury-c1.py
+
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check MLB backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Remove temporary scaffolding and commit validated C1 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply-mlb-injury-c1.py
+          rm -f .github/workflows/apply-mlb-injury-c1.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement MLB injury Phase C1 ledger audit'
+          git push origin HEAD:feature/mlb-injury-phase-c1-ledger-audit
