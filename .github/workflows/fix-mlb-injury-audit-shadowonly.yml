@@ -1,0 +1,55 @@
+name: Fix MLB injury audit shadow-only payload
+
+on:
+  push:
+    branches:
+      - fix/mlb-injury-audit-shadowonly
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mlb-injury-audit-shadowonly
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply compatibility patch
+        run: python scripts/fix-mlb-injury-audit-shadowonly.py
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/fix-mlb-injury-audit-shadowonly.py
+          rm -f .github/workflows/fix-mlb-injury-audit-shadowonly.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix C1 injury audit shadow-only payload compatibility'
+          git push origin HEAD:fix/mlb-injury-audit-shadowonly
