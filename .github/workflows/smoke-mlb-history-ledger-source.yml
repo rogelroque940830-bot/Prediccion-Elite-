@@ -1,0 +1,58 @@
+name: Smoke deployed MLB ledger history
+
+on:
+  push:
+    branches:
+      - test/smoke-mlb-history-ledger-source
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed immutable history and ledger counts
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: a776aaffb8e8f35a7e8ed9b4ff0af398ed9cb7ee
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/before.json
+          for attempt in $(seq 1 48); do
+            if curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json; then
+              served=$(jq -r '.commit // ""' /tmp/health.json)
+              echo "Attempt $attempt: served commit $served"
+              if [ "$served" = "$EXPECTED_COMMIT" ]; then break; fi
+            fi
+            sleep 10
+          done
+          jq -e --arg commit "$EXPECTED_COMMIT" '.status == "healthy" and .commit == $commit and .environment == "p0-integration"' /tmp/health.json >/dev/null
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/history?limit=10000" > /tmp/history.json
+          echo 'IMMUTABLE HISTORY'
+          jq '.data | {schemaVersion,source,summary,marketStats,picks:[.picks[] | {gameDate,awayTeam,homeTeam,marketLabel,selection,result,profitUnits,stakeUnits,hasInjuryAudit}]}' /tmp/history.json
+          jq -e '
+            .success == true
+            and .data.schemaVersion == "mlb-ledger-history-view.v1"
+            and .data.source == "immutable-ledger"
+            and .data.summary.total >= 4
+            and .data.summary.settled >= 1
+            and .data.summary.pending >= 3
+            and (.data.picks | length) == .data.summary.total
+            and (.data.picks | all(.immutable == true))
+          ' /tmp/history.json >/dev/null
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
+          echo 'LEDGER BEFORE/AFTER'
+          jq -n --slurpfile before /tmp/before.json --slurpfile after /tmp/after.json '{before:$before[0].data,after:$after[0].data}'
+          jq -e --slurpfile before /tmp/before.json '
+            .success == true
+            and .data.immutable == true
+            and .data.predictions == $before[0].data.predictions
+            and .data.settlementEvents == $before[0].data.settlementEvents
+          ' /tmp/after.json >/dev/null
