@@ -56,6 +56,7 @@ function teamInput(side: "HOME" | "AWAY") {
           reasonCode: "OFFICIAL_IL_HIGH_LEVERAGE_RELIEVER",
           reason: "Official recent high-leverage reliever injury.",
           daysSinceOfficialTransaction: 1,
+          shadowOnly: true as const,
         },
       },
       {
@@ -133,7 +134,9 @@ test("injury audit records sources, decisions, reconciliation and final adjustme
   const parsed = mlbInjuryAuditSchema.parse(audit);
   assert.equal(parsed.schemaVersion, "mlb-injury-audit.v1");
   assert.equal(parsed.home.adjustment.scaledAutomaticRuns, -0.28);
-  assert.equal(parsed.home.players.find((player) => player.name === "Closer One")?.disposition, "AUTO_APPLIED");
+  const parsedCloser = parsed.home.players.find((player) => player.name === "Closer One");
+  assert.equal(parsedCloser?.disposition, "AUTO_APPLIED");
+  assert.equal(parsedCloser?.shadow && "shadowOnly" in parsedCloser.shadow, false);
   assert.equal(parsed.home.players.find((player) => player.name === "Hitter One")?.disposition, "WITHHELD_POLICY");
   assert.equal(parsed.home.players.find((player) => player.name === "Old Injury")?.disposition, "IGNORED");
   assert.equal(parsed.away.players.find((player) => player.name === "Closer One")?.disposition, "WITHHELD_BULLPEN");
@@ -172,4 +175,16 @@ test("injury audit schema rejects malformed automatic evidence", () => {
   });
   audit.home.adjustment.finalRuns = "not-a-number";
   assert.throws(() => mlbInjuryAuditSchema.parse(audit));
+});
+
+
+test("backend accepts the first deployed C1 bundle shadowOnly marker", () => {
+  const audit: any = buildMlbInjuryAuditSnapshot({
+    capturedAt: "2026-07-28T01:05:00.000Z",
+    home: teamInput("HOME"),
+    away: teamInput("AWAY"),
+  });
+  audit.home.players[0].shadow.shadowOnly = true;
+  const parsed = mlbInjuryAuditSchema.parse(audit);
+  assert.equal(parsed.home.players[0].shadow?.shadowOnly, true);
 });
