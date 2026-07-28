@@ -1,0 +1,40 @@
+name: Validate clean MLB injury Phase B
+
+on:
+  pull_request:
+    branches:
+      - feature/mlb-injury-phase-b-auto
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cf7bc00b0981bc907fdb47a4ccae7518eb8da236
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check MLB backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
