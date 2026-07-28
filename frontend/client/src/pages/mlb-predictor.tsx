@@ -346,6 +346,10 @@ interface MLBResult {
     finalProb: number;
     baseTotal: number;
     finalTotal: number;
+    injuryHomeProbabilityDeltaPp?: number;
+    injuryTotalRunsDelta?: number;
+    injuryDataQuality?: "VERIFIED" | "DEGRADED";
+    injuryHasAppliedAdjustment?: boolean;
     notes: string[];
     // Calibración vs mercado (3 números transparentes)
     modelHomeProb?: number;       // pura del modelo (post factores)
@@ -948,6 +952,15 @@ export default function MLBPredictor() {
         ],
         layers: {
           factorBreakdown: result.factorBreakdown,
+          injuryEffect: {
+            schemaVersion: "mlb-injury-effect.v1",
+            source: "COUNTERFACTUAL_RECALCULATION_V1",
+            scope: "HOME_ML_AND_GAME_TOTAL_COUNTERFACTUAL",
+            homeProbabilityDeltaPp: result.factorBreakdown?.injuryHomeProbabilityDeltaPp ?? 0,
+            totalRunsDelta: result.factorBreakdown?.injuryTotalRunsDelta ?? 0,
+            dataQuality: result.factorBreakdown?.injuryDataQuality ?? "DEGRADED",
+            hasAppliedAdjustment: result.factorBreakdown?.injuryHasAppliedAdjustment ?? false,
+          },
           pickQualities: result.pickQualities,
           bestPlay: result.bestPlay,
           safePlay: result.safePlay,
@@ -2660,6 +2673,10 @@ export default function MLBPredictor() {
         finalProb: homeProb * 100,
         baseTotal,
         finalTotal: estimatedTotal,
+        injuryHomeProbabilityDeltaPp: injuryProbDelta,
+        injuryTotalRunsDelta: injuryTotalDelta,
+        injuryDataQuality,
+        injuryHasAppliedAdjustment: hasInjuries,
         notes: factorNotes,
         modelHomeProb: modelHomeProb * 100,
         marketHomeProb: marketHomeProbCal !== undefined ? marketHomeProbCal * 100 : undefined,
