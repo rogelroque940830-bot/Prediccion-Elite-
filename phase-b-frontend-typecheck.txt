@@ -1,5 +1,0 @@
-
-> courtedge-web@1.0.0-phase3-sprint2 check
-> tsc --noEmit
-
-client/src/lib/mlb-injury-phase-b.ts(38,51): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
