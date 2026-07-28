@@ -1,0 +1,63 @@
+name: Apply MLB injury Phase B
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-injury-phase-b-auto
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Apply deterministic Phase B integration
+        run: python scripts/apply-mlb-injury-phase-b.py
+
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check MLB backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Remove temporary scaffolding and commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-mlb-injury-phase-b.yml
+          rm -f .github/workflows/diagnose-phase-b-integration.yml
+          rm -f .github/workflows/capture-phase-b-diagnostic.yml
+          rm -f scripts/apply-mlb-injury-phase-b.py
+          rm -rf diagnostics
+          rm -f docs/phase-b-plan.md
+          rm -f docs/phase-b-implementation-notes.md
+          rm -f docs/phase-b-test-scope.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement conservative MLB injury Phase B automation'
+          git push origin HEAD:feature/mlb-injury-phase-b-auto
