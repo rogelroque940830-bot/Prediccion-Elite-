@@ -7,6 +7,7 @@ import {
   recordsToCsv,
 } from "./mlb-ledger-store";
 import { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report";
+import { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 import { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
 import { runMlbAutoSettlement } from "./mlb-settlement-worker";
 
@@ -137,6 +138,19 @@ export function registerMlbLedgerRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/mlb/ledger/v1/injury-outcomes", (req, res) => {
+    try {
+      const filters = queryFilters(req.query as Record<string, unknown>);
+      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      res.json({ success: true, data: buildMlbInjuryOutcomesReport(records) });
+    } catch (error: any) {
+      res.status(error?.status || 500).json({
+        success: false,
+        error: error?.message || "Unable to build MLB injury outcomes report",
+      });
+    }
+  });
+
   app.get("/api/mlb/ledger/v1/report", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
@@ -171,4 +185,5 @@ export function registerMlbLedgerRoutes(app: Express): void {
 
 export { MlbLedgerStore, buildMlbBacktestReport } from "./mlb-ledger-store";
 export { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report";
+export { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 export { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
