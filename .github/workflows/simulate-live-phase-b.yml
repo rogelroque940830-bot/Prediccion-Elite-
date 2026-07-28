@@ -1,0 +1,85 @@
+name: Simulate live MLB injury Phase B
+
+on:
+  pull_request:
+    branches:
+      - feature/mlb-injury-phase-b-auto
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cf7bc00b0981bc907fdb47a4ccae7518eb8da236
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Simulate SEA-TEX eligibility and bullpen reconciliation
+        shell: bash
+        run: |
+          cat > server/simulate-phase-b-live.tmp.ts <<'TS'
+          import { buildMlbInjuryPhaseBPlan } from "./mlb-injury-phase-b";
+          import { resolveMlbPhaseBSelection } from "../frontend/client/src/lib/mlb-injury-phase-b";
+
+          const backend = "https://web-p0-integration.up.railway.app";
+          const gamePk = 822868;
+          const slate: any = await (await fetch(`${backend}/api/mlb/all?date=2026-07-27`)).json();
+          const game = slate.games?.find((item: any) => Number(item.gamePk ?? item.gameId) === gamePk);
+          if (!game) throw new Error("SEA-TEX game not found");
+          const bullpen: any = await (await fetch(`${backend}/api/mlb/bullpen-status/${gamePk}`)).json();
+
+          function inspect(side: "home" | "away") {
+            const injuries: any[] = game[`${side}Injuries`] ?? [];
+            const meta: any = game[`${side}InjuryData`] ?? {};
+            const plan = buildMlbInjuryPhaseBPlan({
+              sourceStatus: meta.source === "BALLDONTLIE" ? (meta.stale ? "PARTIAL" : "VERIFIED") : meta.status,
+              officialValidationStatus: meta.officialValidationStatus ?? "PARTIAL",
+              stale: meta.stale,
+              anomalous: meta.status === "ANOMALOUS",
+              rejectedCount: meta.rejectedCount ?? 0,
+              officialOnly: meta.shadowSummary?.officialOnly ?? 0,
+              players: injuries.map((player: any) => ({
+                playerId: Number(player.playerId),
+                name: String(player.name),
+                isPitcher: Boolean(player.isPitcher),
+                shadow: player.shadow,
+              })),
+            });
+            const selection = resolveMlbPhaseBSelection(injuries, {
+              autoApplyAllowed: plan.autoApplyAllowed,
+              phaseB: plan,
+            }, bullpen?.[side]);
+            return {
+              team: game[`${side}Team`]?.name,
+              detected: injuries.length,
+              candidates: plan.candidateCount,
+              eligible: plan.eligiblePlayerNames,
+              withheld: plan.withheldCandidateNames,
+              coverage: plan.coverage,
+              scale: plan.scale,
+              cap: plan.maxAbsRuns,
+              bullpenRunsAdjustment: bullpen?.[side]?.runsAdjustment ?? null,
+              appliedAfterBullpen: selection.appliedNames,
+              blockedReason: selection.blockedReason,
+            };
+          }
+
+          const result = { home: inspect("home"), away: inspect("away") };
+          console.log(JSON.stringify(result, null, 2));
+          for (const side of [result.home, result.away]) {
+            if (side.appliedAfterBullpen.some((name: string) => !side.eligible.includes(name))) {
+              throw new Error(`Unauthorized auto selection for ${side.team}`);
+            }
+            if (side.bullpenRunsAdjustment > 0 && side.appliedAfterBullpen.length > 0) {
+              throw new Error(`Bullpen double count for ${side.team}`);
+            }
+          }
+          TS
+          npx tsx server/simulate-phase-b-live.tmp.ts
+          rm -f server/simulate-phase-b-live.tmp.ts
