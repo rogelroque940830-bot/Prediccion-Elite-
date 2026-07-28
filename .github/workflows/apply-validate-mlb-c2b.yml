@@ -24,6 +24,7 @@ jobs:
         run: |
           python scripts/apply-mlb-c2b-ui.py
           python scripts/fix-mlb-c2b-ui.py
+          python scripts/fix-mlb-c2b-result-type.py
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression suite
@@ -56,6 +57,7 @@ jobs:
           set -euo pipefail
           rm -f scripts/apply-mlb-c2b-ui.py
           rm -f scripts/fix-mlb-c2b-ui.py
+          rm -f scripts/fix-mlb-c2b-result-type.py
           rm -f .github/workflows/apply-validate-mlb-c2b.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
