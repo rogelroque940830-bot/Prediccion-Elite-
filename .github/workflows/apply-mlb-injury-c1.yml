@@ -25,7 +25,9 @@ jobs:
           cache: npm
 
       - name: Apply deterministic C1 integration
-        run: python scripts/apply-mlb-injury-c1.py
+        run: |
+          python scripts/fix-mlb-injury-c1-patch.py
+          python scripts/apply-mlb-injury-c1.py
 
       - name: Install backend dependencies
         run: npm ci
@@ -51,6 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/apply-mlb-injury-c1.py
+          rm -f scripts/fix-mlb-injury-c1-patch.py
           rm -f .github/workflows/apply-mlb-injury-c1.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
