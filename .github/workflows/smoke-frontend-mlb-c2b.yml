@@ -1,0 +1,41 @@
+name: Smoke deployed MLB C2B frontend
+
+on:
+  push:
+    branches:
+      - test/smoke-frontend-mlb-c2b
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for C2B frontend assets
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          found=0
+          for attempt in $(seq 1 48); do
+            curl --fail --silent --show-error "$FRONTEND_URL/mlb-history" > /tmp/index.html || true
+            : > /tmp/assets.js
+            while read -r src; do
+              curl --fail --silent --show-error "$FRONTEND_URL$src" >> /tmp/assets.js || true
+            done < <(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | sed -E 's/^src="|"$//g')
+            if grep -Fq 'Resultado vs decisiones de lesiones · Fase C2B' /tmp/assets.js \
+              && grep -Fq '/api/mlb/ledger/v1/injury-outcomes?limit=10000' /tmp/assets.js \
+              && grep -Fq 'mlb-injury-effect.v1' /tmp/assets.js; then
+              echo "C2B frontend detected on attempt $attempt"
+              found=1
+              break
+            fi
+            echo "Attempt $attempt: waiting for C2B frontend assets"
+            sleep 10
+          done
+          test "$found" -eq 1
