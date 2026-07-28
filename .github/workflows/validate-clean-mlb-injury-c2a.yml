@@ -1,0 +1,32 @@
+name: Validate clean MLB injury C2A head
+
+on:
+  push:
+    branches:
+      - test/validate-clean-mlb-injury-c2a
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/validate-clean-mlb-injury-c2a
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npm run check
+      - working-directory: frontend
+        run: npm run build
