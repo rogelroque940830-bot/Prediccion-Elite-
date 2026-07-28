@@ -21,7 +21,9 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Apply C2C integration patch
-        run: python scripts/apply-mlb-c2c.py
+        run: |
+          python scripts/apply-mlb-c2c.py
+          python scripts/fix-mlb-c2c-package.py
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression suite
@@ -52,6 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/apply-mlb-c2c.py
+          rm -f scripts/fix-mlb-c2c-package.py
           rm -f .github/workflows/apply-validate-mlb-c2c.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
