@@ -1,0 +1,43 @@
+name: Smoke deployed frontend MLB injury C2A panel
+
+on:
+  push:
+    branches:
+      - test/smoke-frontend-mlb-injury-c2a
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for C2A panel in deployed frontend assets
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          found=0
+          for attempt in $(seq 1 48); do
+            if curl --fail --silent --show-error "$FRONTEND_URL/mlb-history" > /tmp/index.html; then
+              : > /tmp/assets.js
+              while read -r src; do
+                curl --fail --silent --show-error "$FRONTEND_URL$src" >> /tmp/assets.js || true
+              done < <(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | sed -E 's/^src="|"$//g')
+              if grep -Fq 'Calibración automática de lesiones · Fase C2A' /tmp/assets.js \
+                && grep -Fq 'Muestra liquidada para ampliar automatización' /tmp/assets.js \
+                && grep -Fq 'Picks auditados' /tmp/assets.js \
+                && grep -Fq 'Contextos únicos' /tmp/assets.js; then
+                echo "C2A frontend panel detected on attempt $attempt"
+                found=1
+                break
+              fi
+            fi
+            echo "Attempt $attempt: waiting for updated frontend assets"
+            sleep 10
+          done
+          test "$found" -eq 1
