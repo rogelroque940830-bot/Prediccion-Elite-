@@ -1,0 +1,446 @@
+=== BULLPEN ROUTE ===
+1940-      const collectLineup = (side: any): number[] => {
+1941-        const arr: number[] = [];
+1942-        const lu = game.lineups?.[side === "home" ? "homePlayers" : "awayPlayers"];
+1943-        if (Array.isArray(lu)) for (const p of lu) if (p?.id) arr.push(p.id);
+1944-        return arr;
+1945-      };
+1946-      const homeIds = collectLineup("home");
+1947-      const awayIds = collectLineup("away");
+1948-      const homeBatters = homeIds.map(id => evaluateBatter(bMap[id])).filter(Boolean);
+1949-      const awayBatters = awayIds.map(id => evaluateBatter(bMap[id])).filter(Boolean);
+1950-
+1951-      res.json({ success: true, homeSP, awaySP, homeBatters, awayBatters });
+1952-    } catch (e: any) {
+1953-      console.error("quality error:", e);
+1954-      res.status(500).json({ error: e.message || "Failed" });
+1955-    }
+1956-  });
+1957-
+1958-  // GET /api/mlb/bullpen-status/:gamePk
+1959-  // Bullpen Availability — cálculo de cansancio + predicción de quien cerrará hoy
+1960:  app.get("/api/mlb/bullpen-status/:gamePk", async (req, res) => {
+1961-    try {
+1962-      const { getBullpenStatus } = await import("./mlb-bullpen");
+1963-      const gamePk = parseInt(req.params.gamePk);
+1964-      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+1965-      const sJson: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&gamePk=${gamePk}&hydrate=team`)).json();
+1966-      const game = sJson.dates?.[0]?.games?.find((g: any) => g.gamePk === gamePk) ?? sJson.dates?.[0]?.games?.[0];
+1967-      if (!game) return res.status(404).json({ error: "Game not found" });
+1968-      const home = game.teams?.home;
+1969-      const away = game.teams?.away;
+1970-      const [homeBullpen, awayBullpen] = await Promise.all([
+1971-        getBullpenStatus(home.team.id, home.team.name),
+1972-        getBullpenStatus(away.team.id, away.team.name),
+1973-      ]);
+1974-      res.json({ home: homeBullpen, away: awayBullpen });
+1975-    } catch (e: any) {
+1976-      console.error("bullpen-status error:", e);
+1977-      res.status(500).json({ error: e.message || "Failed" });
+1978-    }
+1979-  });
+1980-
+1981-  // GET /api/mlb/archetype-matchup/:gamePk
+1982-  // Devuelve el matchup por arquetipo de pitcher — lo que las casas no procesan bien
+1983-  app.get("/api/mlb/archetype-matchup/:gamePk", async (req, res) => {
+1984-    try {
+1985-      const { analyzeMatchup } = await import("./mlb-archetypes");
+1986-      const gamePk = parseInt(req.params.gamePk);
+1987-      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+1988-      // FIX doubleheader: usar feed/live (v1.1) en vez de schedule?gamePk (que tiene bug en MLB API)
+1989-      const game: any = await getGameMeta(gamePk);
+1990-      if (!game) return res.status(404).json({ error: "Game not found" });
+1991-      const home = game.teams?.home;
+1992-      const away = game.teams?.away;
+1993-      const result = await analyzeMatchup(
+1994-        home.team.id, home.team.name,
+1995-        away.team.id, away.team.name,
+1996-        home.probablePitcher?.id, home.probablePitcher?.fullName ?? "?",
+1997-        away.probablePitcher?.id, away.probablePitcher?.fullName ?? "?",
+1998-      );
+1999-      res.json(result);
+2000-    } catch (e: any) {
+2001-      console.error("archetype-matchup error:", e);
+2002-      res.status(500).json({ error: e.message || "Failed" });
+2003-    }
+2004-  });
+2005-
+2006-  app.get("/api/mlb/lineup-matchup/:gamePk", async (req, res) => {
+2007-    try {
+2008-      const gamePk = parseInt(req.params.gamePk);
+2009-      if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+2010-
+2011-      // FIX doubleheader: usar feed/live en vez de schedule?gamePk (bug MLB API mezcla pitchers)
+2012-      const game: any = await getGameMeta(gamePk);
+2013-      if (!game) return res.status(404).json({ error: "Game not found" });
+2014-
+2015-      const homePitcher = game.teams?.home?.probablePitcher;
+2016-      const awayPitcher = game.teams?.away?.probablePitcher;
+2017-      const homeTeamId = game.teams?.home?.team?.id;
+2018-      const awayTeamId = game.teams?.away?.team?.id;
+2019-      const lineups = game.lineups ?? {};
+2020-
+2021-      async function getPitcherHand(pid: number | undefined): Promise<"L" | "R" | undefined> {
+2022-        if (!pid) return undefined;
+2023-        try {
+2024-          const j: any = await (await fetch(`${MLB_BASE}/people/${pid}`)).json();
+2025-          return j.people?.[0]?.pitchHand?.code as "L" | "R" | undefined;
+2026-        } catch { return undefined; }
+2027-      }
+2028-      const [homePitcherHand, awayPitcherHand] = await Promise.all([
+2029-        getPitcherHand(homePitcher?.id),
+2030-        getPitcherHand(awayPitcher?.id),
+2031-      ]);
+2032-
+2033-      async function projectLineup(teamId: number): Promise<any[]> {
+2034-        try {
+2035-          const r: any = await (await fetch(`${MLB_BASE}/teams/${teamId}/roster?rosterType=Active`)).json();
+2036-          const players = (r.roster ?? []).filter((p: any) => p.position?.code && p.position.code !== "1");
+2037-          const withOps = await Promise.all(players.slice(0, 18).map(async (p: any) => {
+2038-            try {
+2039-              const sJ: any = await (await fetch(`${MLB_BASE}/people/${p.person.id}/stats?stats=season&group=hitting&season=${MLB_SEASON_CURRENT}`)).json();
+2040-              let st = sJ.stats?.[0]?.splits?.[0]?.stat;
+2041-              if (!st?.ops) {
+2042-                const fb: any = await (await fetch(`${MLB_BASE}/people/${p.person.id}/stats?stats=season&group=hitting&season=${MLB_SEASON_PREVIOUS}`)).json();
+2043-                st = fb.stats?.[0]?.splits?.[0]?.stat;
+2044-              }
+2045-              return { ...p.person, primaryPosition: p.position, ops: parseFloat(st?.ops ?? "0") || 0, ab: parseInt(st?.atBats ?? "0") || 0 };
+2046-            } catch { return null; }
+2047-          }));
+2048-          // Threshold más bajo en abril/mayo cuando hay poca muestra 2026
+2049-          const month = new Date().getMonth() + 1;
+2050-          const minAb = month >= 3 && month <= 5 ? 20 : 50;
+2051-          return withOps.filter(Boolean).filter((p: any) => p.ab >= minAb).sort((a: any, b: any) => b.ops - a.ops).slice(0, 9);
+2052-        } catch { return []; }
+2053-      }
+2054-
+2055-      let homeLineup = lineups.homePlayers ?? [];
+2056-      let awayLineup = lineups.awayPlayers ?? [];
+2057-      const homeIsConfirmed = homeLineup.length >= 8;
+2058-      const awayIsConfirmed = awayLineup.length >= 8;
+2059-      if (!homeIsConfirmed) homeLineup = await projectLineup(homeTeamId);
+2060-      if (!awayIsConfirmed) awayLineup = await projectLineup(awayTeamId);
+2061-
+2062-      // ── wOBA real desde componentes (FanGraphs formula, weights 2024) ──
+2063-      // Estrictamente más predictivo que OPS porque pondera correctamente cada tipo de hit
+2064-      // y excluye intentional walks. Liga 2024 avg ≈ .310.
+2065-      function computeWOBA(s: any): number {
+2066-        if (!s) return 0;
+2067-        const ab = parseInt(s.atBats ?? "0") || 0;
+2068-        const bb = parseInt(s.baseOnBalls ?? "0") || 0;
+2069-        const ibb = parseInt(s.intentionalWalks ?? "0") || 0;
+2070-        const hbp = parseInt(s.hitByPitch ?? "0") || 0;
+2071-        const sf = parseInt(s.sacFlies ?? "0") || 0;
+2072-        const hits = parseInt(s.hits ?? "0") || 0;
+2073-        const doubles = parseInt(s.doubles ?? "0") || 0;
+2074-        const triples = parseInt(s.triples ?? "0") || 0;
+2075-        const hr = parseInt(s.homeRuns ?? "0") || 0;
+2076-        const singles = hits - doubles - triples - hr;
+2077-        const denom = ab + bb - ibb + sf + hbp;
+2078-        if (denom <= 0) return 0;
+2079-        const ubb = bb - ibb; // unintentional walks
+2080-        return (0.69 * ubb + 0.72 * hbp + 0.89 * singles + 1.27 * doubles + 1.62 * triples + 2.10 * hr) / denom;
+2081-      }
+2082-
+2083-      // ── Slot weight: PA proyectadas por turno en la alineación ──
+2084-      // Slot 3-4 (cleanup) ~ 4.8 PA/juego vs Slot 8-9 ~ 3.6 PA/juego → cleanup pesa 33% más
+2085-      function slotWeight(slot: number): number {
+2086-        if (slot === 3 || slot === 4) return 1.25;
+2087-        if (slot === 1 || slot === 2) return 1.10;
+2088-        if (slot === 5) return 1.05;
+2089-        if (slot === 6 || slot === 7) return 0.95;
+2090-        return 0.75; // 8-9
+2091-      }
+2092-
+2093-      // ── BABIP regression: si BABIP >.330 o <.270, regresar OPS hacia la media ──
+2094-      // Bateadores con suerte alta/baja en bolas en juego ven OPS distorsionado
+2095-      function babipAdjust(woba: number, babip: number, pa: number): number {
+2096-        if (pa < 80 || babip <= 0) return woba; // muestra insuficiente o sin dato
+2097-        const leagueBABIP = 0.295;
+2098-        const deviation = babip - leagueBABIP;
+2099-        if (Math.abs(deviation) < 0.040) return woba; // dentro de rango normal
+2100-        // Regresar 30% hacia la media si está muy fuera
+2101-        const regressFactor = Math.min(0.30, Math.abs(deviation) * 2);
+2102-        const regressedBABIP = babip - (deviation * regressFactor);
+2103-        // wOBA scaling: BABIP cambio de 0.030 ≈ ~0.020 wOBA cambio
+2104-        const wobaDelta = (regressedBABIP - babip) * 0.67;
+2105-        return woba + wobaDelta;
+2106-      }
+2107-
+2108-      async function buildMatchup(lineup: any[], opposingHand: "L" | "R" | undefined) {
+2109-        if (!opposingHand || lineup.length === 0) return { players: [], avgOps: null, avgWoba: null, avgWeightedWoba: null, seasonUsed: "none" as const };
+2110-        const players = await Promise.all(lineup.slice(0, 9).map(async (b: any, idx: number) => {
+2111-          const pid = b.id ?? b.person?.id;
+2112-          if (!pid) return null;
+2113-          const splits = await getBatterSplits(pid);
+2114-          const split = opposingHand === "L" ? splits.vsL : splits.vsR;
+2115-          if (!split) return null;
+2116-
+2117-          // Componentes básicos del split
+2118-          const ops = parseFloat(split.ops ?? "0") || 0;
+2119-          const avg = parseFloat(split.avg ?? "0") || 0;
+2120-          const obp = parseFloat(split.obp ?? "0") || 0;
+2121-          const slg = parseFloat(split.slg ?? "0") || 0;
+2122-          const pa = parseInt(split.plateAppearances ?? "0") || 0;
+2123-          const ab = parseInt(split.atBats ?? "0") || 0;
+2124-          const k = parseInt(split.strikeOuts ?? "0") || 0;
+2125-          const bb = parseInt(split.baseOnBalls ?? "0") || 0;
+2126-          const babip = parseFloat(split.babip ?? "0") || 0;
+2127-
+2128-          // Métricas avanzadas
+2129-          const woba = computeWOBA(split);
+2130-          const iso = slg - avg;
+2131-          const kPct = pa > 0 ? k / pa : 0.22;
+2132-          const bbPct = pa > 0 ? bb / pa : 0.085;
+2133-
+2134-          // Regresión por BABIP (atenaú OPS suerte/mala suerte)
+2135-          const wobaAdjusted = babipAdjust(woba, babip, pa);
+2136-
+2137-          // Slot de bateo (idx 0-8 = slot 1-9)
+2138-          const slot = idx + 1;
+2139-          const slotWt = slotWeight(slot);
+2140-
+=== BULLPEN FRONTEND ===
+1359-      }
+1360-    } catch {
+1361-      setLineupMatchup(null);
+1362-    }
+1363-
+1364-    // Archetype matchup — cómo le va al equipo vs ese tipo de pitcher en últimos 200 juegos
+1365-    try {
+1366-      const amRes = await fetch(`${API_BASE}/api/mlb/archetype-matchup/${gameId}`);
+1367-      if (amRes.ok) {
+1368-        const am = await amRes.json();
+1369-        setArchetypeMatchup(am);
+1370-      } else {
+1371-        setArchetypeMatchup(null);
+1372-      }
+1373-    } catch {
+1374-      setArchetypeMatchup(null);
+1375-    }
+1376-
+1377-    // Bullpen status — closer cansado? bullpen comprometido?
+1378-    try {
+1379:      const bpRes = await fetch(`${API_BASE}/api/mlb/bullpen-status/${gameId}`);
+1380-      if (bpRes.ok) {
+1381-        const bp = await bpRes.json();
+1382-        setBullpenStatus(bp);
+1383-      } else {
+1384-        setBullpenStatus(null);
+1385-      }
+1386-    } catch {
+1387-      setBullpenStatus(null);
+1388-    }
+1389-
+1390-    // Park-pitcher splits — cómo le va a este pitcher en este estadio específico
+1391-    try {
+1392-      const ppRes = await fetch(`${API_BASE}/api/mlb/park-pitcher/${gameId}`);
+1393-      if (ppRes.ok) {
+1394-        const pp = await ppRes.json();
+1395-        setParkPitcher(pp);
+1396-      } else {
+1397-        setParkPitcher(null);
+1398-      }
+1399-    } catch {
+1400-      setParkPitcher(null);
+1401-    }
+1402-
+1403-    // Statcast Quality (Tier A): xwOBA-allowed + HardHit% + luck-delta
+1404-    try {
+1405-      const qRes = await fetch(`${API_BASE}/api/mlb/quality/${gameId}`);
+1406-      if (qRes.ok) {
+1407-        const q = await qRes.json();
+1408-        setStatcastQuality(q);
+1409-      } else {
+1410-        setStatcastQuality(null);
+1411-      }
+1412-    } catch {
+1413-      setStatcastQuality(null);
+1414-    }
+1415-
+1416-    // SOS — Strength of Schedule del bateo reciente (anti-rachas-infladas)
+1417-    try {
+1418-      const sosRes = await fetch(`${API_BASE}/api/mlb/sos/${gameId}`);
+1419-      if (sosRes.ok) {
+1420-        const sosData = await sosRes.json();
+1421-        setSos(sosData);
+1422-      } else {
+1423-        setSos(null);
+1424-      }
+1425-    } catch {
+1426-      setSos(null);
+1427-    }
+1428-
+1429-    // Tier B — strikePct (proxy CSW) + Sprint Speed para BABIP correction
+1430-    try {
+1431-      const dsRes = await fetch(`${API_BASE}/api/mlb/discipline-speed/${gameId}`);
+1432-      if (dsRes.ok) {
+1433-        const ds = await dsRes.json();
+1434-        setDiscSpeed(ds);
+1435-      } else {
+1436-        setDiscSpeed(null);
+1437-      }
+1438-    } catch {
+1439-      setDiscSpeed(null);
+1440-    }
+1441-
+1442-    // Pitcher vs Team — últimos 5 starts contra el rival
+1443-    try {
+1444-      const pvtRes = await fetch(`${API_BASE}/api/mlb/pitcher-vs-team/${gameId}`);
+1445-      if (pvtRes.ok) {
+1446-        const pvt = await pvtRes.json();
+1447-        setPitcherVsTeam(pvt);
+1448-      } else {
+1449-        setPitcherVsTeam(null);
+1450-      }
+1451-    } catch {
+1452-      setPitcherVsTeam(null);
+1453-    }
+1454-
+1455-    // Wind-Park — viento + estadio + temperatura
+1456-    try {
+1457-      const wpRes = await fetch(`${API_BASE}/api/mlb/wind-park/${gameId}`);
+1458-      if (wpRes.ok) {
+1459-        const wp = await wpRes.json();
+1460-        setWindPark(wp);
+1461-      } else {
+1462-        setWindPark(null);
+1463-      }
+1464-    } catch {
+1465-      setWindPark(null);
+1466-    }
+1467-
+1468-    // Catcher Framing — cuánto strikes roba el catcher
+1469-    try {
+1470-      const cfRes = await fetch(`${API_BASE}/api/mlb/catcher-framing/${gameId}`);
+1471-      if (cfRes.ok) {
+1472-        const cf = await cfRes.json();
+1473-        setCatcherFraming(cf);
+1474-      } else {
+1475-        setCatcherFraming(null);
+1476-      }
+1477-    } catch {
+1478-      setCatcherFraming(null);
+1479-    }
+1480-
+1481-    // Rookie Pitcher Penalty — detecta pitchers inexpertos / bullpen games
+1482-    try {
+1483-      const rpRes = await fetch(`${API_BASE}/api/mlb/rookie-pitcher/${gameId}`);
+1484-      if (rpRes.ok) {
+1485-        const rp = await rpRes.json();
+1486-        setRookiePitcher(rp);
+1487-      } else {
+1488-        setRookiePitcher(null);
+1489-      }
+1490-    } catch {
+1491-      setRookiePitcher(null);
+1492-    }
+1493-
+1494-    // Hueco #1+#2: Pitcher Form (descanso + splits H/R)
+1495-    try {
+1496-      const pfRes = await fetch(`${API_BASE}/api/mlb/pitcher-form/${gameId}`);
+1497-      if (pfRes.ok) setPitcherForm(await pfRes.json()); else setPitcherForm(null);
+1498-    } catch { setPitcherForm(null); }
+1499-
+=== BULLPEN MODEL USE ===
+1746-        return delta * ppMultiplier;
+1747-      }
+1748-      if (split.dataSource === "BUCKET_PROXY") {
+1749-        const n = split.bucketStarts ?? 0;
+1750-        if (n >= 5) return delta * ppMultiplier * 0.50;
+1751-        if (n >= 3) return delta * ppMultiplier * 0.35;
+1752-      }
+1753-      return 0;
+1754-    };
+1755-    ppHomeEraDelta = evalSplit(parkPitcher?.homeSplit);
+1756-    ppAwayEraDelta = evalSplit(parkPitcher?.awaySplit);
+1757-    // Si el SP local sufre en este parque (delta positivo) → visitante anotará más runs
+1758-    // Convertir delta ERA a delta runs/juego: cada 1 ERA ≈ 0.6 runs/juego
+1759-    const ppAwayRunsDelta = ppHomeEraDelta * 0.6; // SP local malo → away anota más
+1760-    const ppHomeRunsFromAwaySP = ppAwayEraDelta * 0.6; // SP visitante malo → home anota más
+1761-
+1762-    // «Bullpen Status» — si el bullpen rival está comprometido, este equipo anotará más en 7-9
+1763-    // El ajuste se aplica al equipo que se BENEFICIA del bullpen rival débil
+1764-    let bpHomeRunsDelta = 0;
+1765-    let bpAwayRunsDelta = 0;
+1766:    if (bullpenStatus?.away?.runsAdjustment) {
+1767-      // Bullpen visitante débil → LOCAL anota más
+1768-      bpHomeRunsDelta = bullpenStatus.away.runsAdjustment;
+1769-    }
+1770-    if (bullpenStatus?.home?.runsAdjustment) {
+1771-      // Bullpen local débil → VISITANTE anota más
+1772-      bpAwayRunsDelta = bullpenStatus.home.runsAdjustment;
+1773-    }
+1774-
+1775-    // «Archetype Matchup» — cómo le va a este equipo VS este tipo de pitcher en últimos 200 juegos
+1776-    // Usa runsScored vs liga promedio (4.5) como ajuste
+1777-    //
+1778-    // SEMANTICS (post-auditoría):
+1779-    //   - archetypeMatchup.home  = perfil del equipo LOCAL contra el arquetipo del SP visitante
+1780-    //   - archetypeMatchup.away  = perfil del equipo VISITANTE contra el arquetipo del SP local
+1781-    //   - .homeRecord            = cómo le pega el equipo cuando está EN CASA
+1782-    //   - .awayRecord            = cómo le pega el equipo cuando está DE VISITA
+1783-    //
+1784-    // Como el local siempre juega en casa hoy, usamos .homeRecord para el local.
+1785-    // El visitante siempre está de visita hoy, usamos .awayRecord para el visitante.
+1786-    // Esta correspondencia está documentada y blindada con assert.
+1787-    let archHomeRunsDelta = 0;
+1788-    let archAwayRunsDelta = 0;
+1789-    // ANTI-DOBLE-CONTEO: Statcast Pitch-by-Pitch (factor #13) ya mide lineup ACTUAL
+1790-    // vs CADA pitch del SP rival — más preciso que arquetipo histórico.
+1791-    // Cuando Statcast PvP tiene FULL/PARTIAL, archetypeMatchup queda al 30%.
+1792-    // Cuando Statcast PvP es LOW/sin datos (rookies, primeras 3 aperturas), peso 50%.
+1793-    const archSmHomeOk = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence === "FULL" || statcastMatchup?.homeLineupVsAwaySP?.dataConfidence === "PARTIAL";
+1794-    const archSmAwayOk = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence === "FULL" || statcastMatchup?.awayLineupVsHomeSP?.dataConfidence === "PARTIAL";
+1795-    const archHomeWeight = archSmHomeOk ? 0.30 : 0.50;
+1796-    const archAwayWeight = archSmAwayOk ? 0.30 : 0.50;
+1797-    if (archetypeMatchup?.home?.homeRecord?.significantSample) {
+1798-      archHomeRunsDelta = (archetypeMatchup.home.homeRecord.avgRunsScored - 4.5) * archHomeWeight;
+1799-    }
+1800-    if (archetypeMatchup?.away?.awayRecord?.significantSample) {
+1801-      archAwayRunsDelta = (archetypeMatchup.away.awayRecord.avgRunsScored - 4.5) * archAwayWeight;
+1802-    }
+1803-    // Sanity guard: si el delta sale extremo (>3 runs), capear — muestra ruidosa o bug semantic
+1804-    archHomeRunsDelta = Math.max(-2.5, Math.min(2.5, archHomeRunsDelta));
+1805-    archAwayRunsDelta = Math.max(-2.5, Math.min(2.5, archAwayRunsDelta));
+1806-
+1807-    // Hueco #1 + #2: Pitcher Form (descanso + splits H/R)
+1808-    // home pitcher peor → visitante anota más, y vice versa
+1809-    // ANTI-DOBLE-CONTEO: si pitcherRecent tiene ≥3 starts, los splits H/R recientes
+1810-    // ya capturan parte de la señal. Dampear pitcherForm al 50% en ese caso.
+1811-    // El descanso (restEraDelta) no solapa con recent; queda 100%.
+1812-    const pfHasRecentHome = (pitcherRecent?.home?.startsAnalyzed ?? 0) >= 3;
+1813-    const pfHasRecentAway = (pitcherRecent?.away?.startsAnalyzed ?? 0) >= 3;
+1814-    const pfHomeBase = pitcherForm?.homeRivalRunsDelta ?? 0;
+1815-    const pfAwayBase = pitcherForm?.awayRivalRunsDelta ?? 0;
+1816-    // Separar el componente "splits" (que solapa) del "descanso" (que no solapa)
+1817-    // Approximación: si tenemos splitsEraDelta, ese componente queda al 50%; restEraDelta al 100%.
+1818-    const pfHomeRest = (pitcherForm?.home?.restEraDelta ?? 0) * 0.6; // ERA→runs scaling
+1819-    const pfAwayRest = (pitcherForm?.away?.restEraDelta ?? 0) * 0.6;
+1820-    const pfHomeSplits = pfHomeBase - pfHomeRest;
+1821-    const pfAwaySplits = pfAwayBase - pfAwayRest;
+1822-    const pfHomeRivalRunsDelta = pfHomeRest + (pfHasRecentHome ? pfHomeSplits * 0.50 : pfHomeSplits); // afecta RPG visitante
+1823-    const pfAwayRivalRunsDelta = pfAwayRest + (pfHasRecentAway ? pfAwaySplits * 0.50 : pfAwaySplits); // afecta RPG local
+1824-
+1825-    // Hueco #3: Team Fatigue — cada equipo recibe su propio delta ofensivo
+1826-    const tfHomeOwnRunsDelta = teamFatigue?.homeRunsDelta ?? 0;
+1827-    const tfAwayOwnRunsDelta = teamFatigue?.awayRunsDelta ?? 0;
+1828-
+1829-    // Post-mortem fix: Pitcher Recent (forma reciente + splits H/R recientes + early-exit)
+1830-    const prHomeRivalRunsDelta = pitcherRecent?.homeRivalRunsDelta ?? 0; // afecta runs visitante
+1831-    const prAwayRivalRunsDelta = pitcherRecent?.awayRivalRunsDelta ?? 0; // afecta runs local
+1832-
+1833-    // ⚡ STATCAST: pitch-by-pitch + batter vs team
+1834-    // Es el motor real — cada equipo recibe su propio delta basado en cómo su lineup
+1835-    // confirmado le pega al repertorio del SP rival.
+1836-    // ── Auto-moderación por dataConfidence ──
+1837-    // Si el lineup analizado tiene LOW confidence (poca muestra Statcast), reducir el peso
+1838-    // del delta a 40% en lugar de 100%. Así la señal débil no domina la predicción.
+1839-    const smHomeConf = statcastMatchup?.homeLineupVsAwaySP?.dataConfidence as "FULL" | "PARTIAL" | "LOW" | undefined;
+1840-    const smAwayConf = statcastMatchup?.awayLineupVsHomeSP?.dataConfidence as "FULL" | "PARTIAL" | "LOW" | undefined;
+1841-    const smHomeWeight = smHomeConf === "LOW" ? 0.40 : smHomeConf === "PARTIAL" ? 0.75 : 1.0;
+1842-    const smAwayWeight = smAwayConf === "LOW" ? 0.40 : smAwayConf === "PARTIAL" ? 0.75 : 1.0;
+1843-    const smHomeOwnRunsDelta = (statcastMatchup?.homeRunsDelta ?? 0) * smHomeWeight;
+1844-    const smAwayOwnRunsDelta = (statcastMatchup?.awayRunsDelta ?? 0) * smAwayWeight;
+1845-    const prHomeConfPenalty = pitcherRecent?.homeConfPenalty ?? 0;
+1846-    const prAwayConfPenalty = pitcherRecent?.awayConfPenalty ?? 0;
