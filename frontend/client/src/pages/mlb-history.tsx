@@ -4,8 +4,7 @@ import { fetchJson } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, RefreshCw, ShieldCheck, Trash2, Trophy } from "lucide-react";
+import { Activity, Database, LockKeyhole, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
 
 interface InjuryCalibrationReport {
   schemaVersion: "mlb-injury-calibration-report.v1";
@@ -67,10 +66,81 @@ interface InjuryCalibrationReport {
   };
 }
 
-function signalColor(result: string) {
-  if (result === "W") return "bg-green-500/20 text-green-400 border-green-500/30";
-  if (result === "L") return "bg-red-500/20 text-red-400 border-red-500/30";
+interface LedgerHistoryPick {
+  id: string;
+  clientRequestId: string | null;
+  recordedAt: string;
+  gameDate: string;
+  commenceTime: string | null;
+  gamePk: number | null;
+  homeTeam: string;
+  awayTeam: string;
+  marketType: string;
+  marketLabel: string;
+  selection: string;
+  line: number | null;
+  oddsAmerican: number;
+  book: string | null;
+  modelProbabilityPct: number;
+  marketImpliedProbabilityPct: number;
+  edgePp: number;
+  signal: string;
+  confidenceLabel: string | null;
+  stakeUnits: number;
+  analysisStage: string;
+  modelVersion: string;
+  result: string;
+  settlementResult: string | null;
+  settledAt: string | null;
+  profitUnits: number;
+  closingOddsAmerican: number | null;
+  clvPp: number | null;
+  finalScore: { home: number; away: number } | null;
+  immutable: true;
+  hasInjuryAudit: boolean;
+}
+
+interface LedgerHistoryView {
+  schemaVersion: "mlb-ledger-history-view.v1";
+  generatedAt: string;
+  source: "immutable-ledger";
+  summary: {
+    total: number;
+    pending: number;
+    settled: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    voids: number;
+    winRatePct: number;
+    totalProfitUnits: number;
+    totalStakedUnits: number;
+    roiPct: number;
+  };
+  marketStats: Array<{
+    marketType: string;
+    marketLabel: string;
+    total: number;
+    pending: number;
+    wins: number;
+    losses: number;
+    settled: number;
+    profitUnits: number;
+    winRatePct: number;
+  }>;
+  picks: LedgerHistoryPick[];
+}
+
+function resultColor(result: string) {
+  if (result === "W" || result === "½W") return "bg-green-500/20 text-green-400 border-green-500/30";
+  if (result === "L" || result === "½L") return "bg-red-500/20 text-red-400 border-red-500/30";
+  if (result === "PUSH" || result === "VOID") return "bg-slate-500/20 text-slate-300 border-slate-500/30";
   return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+}
+
+function resultLabel(result: string) {
+  if (result === "PENDING") return "Pendiente";
+  return result;
 }
 
 function signedRuns(value: number) {
@@ -78,9 +148,27 @@ function signedRuns(value: number) {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 
+function signedUnits(value: number) {
+  if (Math.abs(value) < 0.0001) return "0.00 u";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)} u`;
+}
+
 export default function MLBHistory() {
-  const { state, dispatch } = useAppContext();
-  const picks = state.mlbPicks;
+  const { state } = useAppContext();
+  const localPicks = state.mlbPicks;
+
+  const historyQuery = useQuery({
+    queryKey: ["mlb-ledger-history"],
+    queryFn: async () => {
+      const response = await fetchJson<{ success: boolean; data: LedgerHistoryView }>(
+        "/api/mlb/ledger/v1/history?limit=10000",
+      );
+      return response.data;
+    },
+    staleTime: 15_000,
+    refetchOnMount: "always",
+  });
+
   const injuryReportQuery = useQuery({
     queryKey: ["mlb-injury-calibration-report"],
     queryFn: async () => {
@@ -92,67 +180,143 @@ export default function MLBHistory() {
     staleTime: 30_000,
     refetchOnMount: "always",
   });
+
+  const ledgerHistory = historyQuery.data;
   const injuryReport = injuryReportQuery.data;
+  const usingLedger = Boolean(ledgerHistory);
 
-  const resolved = picks.filter((p) => p.result !== "P");
-  const wins = resolved.filter((p) => p.result === "W").length;
-  const losses = resolved.filter((p) => p.result === "L").length;
-  const winRate = resolved.length > 0 ? (wins / resolved.length) * 100 : 0;
-  const totalProfit = picks.reduce((s, p) => s + p.profit, 0);
-  const totalStaked = resolved.reduce((s, p) => s + p.stake, 0);
-  const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+  const fallbackResolved = localPicks.filter((pick) => pick.result !== "P");
+  const fallbackWins = fallbackResolved.filter((pick) => pick.result === "W").length;
+  const fallbackLosses = fallbackResolved.filter((pick) => pick.result === "L").length;
+  const fallbackProfit = localPicks.reduce((sum, pick) => sum + pick.profit, 0);
+  const fallbackStaked = fallbackResolved.reduce((sum, pick) => sum + pick.stake, 0);
 
-  const markets = ["ML", "F5", "Run Line", "O/U", "F5 O/U"];
-  const marketStats = markets.map((m) => {
-    const mp = picks.filter((p) => p.market === m);
-    const mr = mp.filter((p) => p.result !== "P");
-    const mw = mr.filter((p) => p.result === "W").length;
-    const mProfit = mp.reduce((s, p) => s + p.profit, 0);
-    return { market: m, total: mp.length, wins: mw, resolved: mr.length, winRate: mr.length > 0 ? (mw / mr.length) * 100 : 0, profit: mProfit };
-  }).filter((m) => m.total > 0);
+  const summary = ledgerHistory?.summary || {
+    total: localPicks.length,
+    pending: localPicks.filter((pick) => pick.result === "P").length,
+    settled: fallbackResolved.length,
+    wins: fallbackWins,
+    losses: fallbackLosses,
+    pushes: 0,
+    voids: 0,
+    winRatePct: fallbackWins + fallbackLosses > 0 ? (fallbackWins / (fallbackWins + fallbackLosses)) * 100 : 0,
+    totalProfitUnits: fallbackProfit,
+    totalStakedUnits: fallbackStaked,
+    roiPct: fallbackStaked > 0 ? (fallbackProfit / fallbackStaked) * 100 : 0,
+  };
+
+  const fallbackMarketStats = ["ML", "F5", "Run Line", "O/U", "F5 O/U"]
+    .map((marketLabel) => {
+      const items = localPicks.filter((pick) => pick.market === marketLabel);
+      const settled = items.filter((pick) => pick.result !== "P");
+      const wins = settled.filter((pick) => pick.result === "W").length;
+      return {
+        marketType: marketLabel,
+        marketLabel,
+        total: items.length,
+        pending: items.length - settled.length,
+        wins,
+        losses: settled.filter((pick) => pick.result === "L").length,
+        settled: settled.length,
+        profitUnits: items.reduce((sum, pick) => sum + pick.profit, 0),
+        winRatePct: settled.length > 0 ? (wins / settled.length) * 100 : 0,
+      };
+    })
+    .filter((market) => market.total > 0);
+
+  const marketStats = ledgerHistory?.marketStats || fallbackMarketStats;
+  const displayPicks: LedgerHistoryPick[] = ledgerHistory?.picks || [...localPicks].reverse().map((pick) => ({
+    id: String(pick.id),
+    clientRequestId: pick.serverId || null,
+    recordedAt: pick.date,
+    gameDate: pick.date,
+    commenceTime: null,
+    gamePk: null,
+    homeTeam: pick.team,
+    awayTeam: pick.opponent,
+    marketType: pick.market,
+    marketLabel: pick.market,
+    selection: pick.pick,
+    line: null,
+    oddsAmerican: pick.odds,
+    book: null,
+    modelProbabilityPct: pick.modelProb,
+    marketImpliedProbabilityPct: pick.impliedProb,
+    edgePp: pick.edge,
+    signal: "LOCAL",
+    confidenceLabel: null,
+    stakeUnits: pick.stake,
+    analysisStage: "LOCAL",
+    modelVersion: "legacy-local",
+    result: pick.result === "P" ? "PENDING" : pick.result,
+    settlementResult: pick.result === "P" ? null : pick.result,
+    settledAt: null,
+    profitUnits: pick.profit,
+    closingOddsAmerican: pick.closingOdds ?? null,
+    clvPp: pick.clvPercent ?? null,
+    finalScore: null,
+    immutable: true,
+    hasInjuryAudit: Boolean(pick.scientificSnapshot?.analysis?.injuryAudit),
+  }));
 
   const progressPct = injuryReport
     ? Math.min(100, (injuryReport.readiness.settledAuditedPicks / injuryReport.readiness.targetSettledAuditedPicks) * 100)
     : 0;
+
+  const refreshAll = () => {
+    void Promise.all([historyQuery.refetch(), injuryReportQuery.refetch()]);
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1200px] mx-auto">
       <div className="flex items-center gap-3">
         <Trophy className="h-5 w-5 text-amber-400" />
         <h1 className="text-xl font-display font-bold">Historial MLB</h1>
-        <Badge variant="outline" className="ml-auto">{picks.length} picks</Badge>
+        <Badge variant="outline" className="ml-auto flex items-center gap-1.5">
+          {usingLedger ? <Database className="h-3 w-3" /> : null}
+          {summary.total} picks{usingLedger ? " · Ledger" : " · Respaldo local"}
+        </Badge>
       </div>
+
+      {historyQuery.isError && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="p-3 text-sm text-amber-200">
+            No se pudo consultar el ledger. Se muestra temporalmente el historial local de este navegador.
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="bg-blue-500/10 border-blue-500/20">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Total Picks</p>
-            <p className="text-2xl font-bold text-blue-400">{picks.length}</p>
+            <p className="text-2xl font-bold text-blue-400">{summary.total}</p>
+            <p className="text-[10px] text-muted-foreground">{summary.pending} pendientes</p>
           </CardContent>
         </Card>
         <Card className="bg-green-500/10 border-green-500/20">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Ganados</p>
-            <p className="text-2xl font-bold text-green-400">{wins}</p>
+            <p className="text-2xl font-bold text-green-400">{summary.wins}</p>
           </CardContent>
         </Card>
         <Card className="bg-red-500/10 border-red-500/20">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Perdidos</p>
-            <p className="text-2xl font-bold text-red-400">{losses}</p>
+            <p className="text-2xl font-bold text-red-400">{summary.losses}</p>
           </CardContent>
         </Card>
-        <Card className={`${winRate >= 55 ? "bg-green-500/10 border-green-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
+        <Card className={`${summary.winRatePct >= 55 ? "bg-green-500/10 border-green-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Win Rate</p>
-            <p className={`text-2xl font-bold ${winRate >= 55 ? "text-green-400" : "text-amber-400"}`}>{winRate.toFixed(1)}%</p>
+            <p className={`text-2xl font-bold ${summary.winRatePct >= 55 ? "text-green-400" : "text-amber-400"}`}>{summary.winRatePct.toFixed(1)}%</p>
           </CardContent>
         </Card>
-        <Card className={`${totalProfit >= 0 ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20"}`}>
+        <Card className={`${summary.totalProfitUnits >= 0 ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20"}`}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">G/P Total</p>
-            <p className={`text-2xl font-bold ${totalProfit >= 0 ? "text-green-400" : "text-red-400"}`}>${totalProfit.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">ROI: {roi.toFixed(1)}%</p>
+            <p className={`text-2xl font-bold ${summary.totalProfitUnits >= 0 ? "text-green-400" : "text-red-400"}`}>{signedUnits(summary.totalProfitUnits)}</p>
+            <p className="text-xs text-muted-foreground">ROI: {summary.roiPct.toFixed(1)}%</p>
           </CardContent>
         </Card>
       </div>
@@ -169,10 +333,10 @@ export default function MLBHistory() {
               variant="ghost"
               size="sm"
               className="ml-auto h-8 gap-1 text-xs"
-              onClick={() => injuryReportQuery.refetch()}
-              disabled={injuryReportQuery.isFetching}
+              onClick={refreshAll}
+              disabled={injuryReportQuery.isFetching || historyQuery.isFetching}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${injuryReportQuery.isFetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${injuryReportQuery.isFetching || historyQuery.isFetching ? "animate-spin" : ""}`} />
               Actualizar
             </Button>
           </div>
@@ -182,7 +346,7 @@ export default function MLBHistory() {
             <p className="text-sm text-muted-foreground">Cargando reporte del ledger…</p>
           )}
           {injuryReportQuery.isError && (
-            <p className="text-sm text-red-300">No se pudo cargar el reporte de lesiones. Los picks locales permanecen disponibles.</p>
+            <p className="text-sm text-red-300">No se pudo cargar el reporte de lesiones. El historial del ledger permanece disponible.</p>
           )}
           {injuryReport && (
             <>
@@ -266,13 +430,14 @@ export default function MLBHistory() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              {marketStats.map((m) => (
-                <div key={m.market} className="bg-slate-800/50 rounded-lg p-2 text-center">
-                  <p className="text-xs text-muted-foreground">{m.market}</p>
-                  <p className="text-sm font-bold">{m.wins}/{m.resolved}</p>
-                  <p className={`text-xs ${m.winRate >= 55 ? "text-green-400" : m.winRate >= 45 ? "text-amber-400" : "text-red-400"}`}>
-                    {m.winRate.toFixed(0)}% · ${m.profit.toFixed(0)}
+              {marketStats.map((market) => (
+                <div key={market.marketType} className="bg-slate-800/50 rounded-lg p-2 text-center">
+                  <p className="text-xs text-muted-foreground">{market.marketLabel}</p>
+                  <p className="text-sm font-bold">{market.wins}/{market.settled}</p>
+                  <p className={`text-xs ${market.winRatePct >= 55 ? "text-green-400" : market.winRatePct >= 45 ? "text-amber-400" : "text-red-400"}`}>
+                    {market.winRatePct.toFixed(0)}% · {signedUnits(market.profitUnits)}
                   </p>
+                  {market.pending > 0 && <p className="text-[10px] text-amber-300">{market.pending} pendiente(s)</p>}
                 </div>
               ))}
             </div>
@@ -280,49 +445,48 @@ export default function MLBHistory() {
         </Card>
       )}
 
-      {picks.length === 0 ? (
+      {historyQuery.isLoading && displayPicks.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">No hay picks MLB guardados. Ve al Predictor MLB y guarda tus jugadas.</p>
+            <p className="text-muted-foreground">Cargando historial inmutable del ledger…</p>
+          </CardContent>
+        </Card>
+      ) : displayPicks.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-muted-foreground">No hay picks MLB guardados en el ledger.</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {[...picks].reverse().map((pick) => (
-            <Card key={pick.id} className={`border-l-4 ${pick.result === "W" ? "border-l-green-500" : pick.result === "L" ? "border-l-red-500" : "border-l-amber-500"}`}>
+          {displayPicks.map((pick) => (
+            <Card key={pick.id} className={`border-l-4 ${pick.result === "W" || pick.result === "½W" ? "border-l-green-500" : pick.result === "L" || pick.result === "½L" ? "border-l-red-500" : pick.result === "PENDING" ? "border-l-amber-500" : "border-l-slate-500"}`}>
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={`${signalColor(pick.result)} text-xs`}>{pick.result}</Badge>
-                  <span className="text-xs text-muted-foreground">{pick.date}</span>
-                  <span className="text-sm font-medium">{pick.team} vs {pick.opponent}</span>
-                  <Badge variant="outline" className="text-xs">{pick.market}</Badge>
-                  <span className="text-xs text-muted-foreground ml-auto">{pick.pick}</span>
+                  <Badge className={`${resultColor(pick.result)} text-xs`}>{resultLabel(pick.result)}</Badge>
+                  <span className="text-xs text-muted-foreground">{pick.gameDate}</span>
+                  <span className="text-sm font-medium">{pick.awayTeam} @ {pick.homeTeam}</span>
+                  <Badge variant="outline" className="text-xs">{pick.marketLabel}</Badge>
+                  {pick.hasInjuryAudit && <Badge variant="outline" className="text-[10px] border-cyan-500/30 text-cyan-300">C1</Badge>}
+                  <span className="text-xs text-muted-foreground ml-auto">{pick.selection}</span>
                 </div>
-                <div className="flex items-center gap-4 mt-2 text-xs">
-                  <span>Cuota: {pick.odds > 0 ? "+" : ""}{pick.odds}</span>
-                  <span>Modelo: {pick.modelProb.toFixed(1)}%</span>
-                  <span>Edge: {pick.edge > 0 ? "+" : ""}{pick.edge.toFixed(1)}%</span>
-                  <span>Stake: ${pick.stake.toFixed(2)}</span>
-                  <span className={pick.profit >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
-                    {pick.profit >= 0 ? "+" : ""}${pick.profit.toFixed(2)}
-                  </span>
-
-                  {pick.result === "P" && (
-                    <Select onValueChange={(val) => dispatch({ type: "UPDATE_MLB_PICK", payload: { id: pick.id, result: val } })}>
-                      <SelectTrigger className="w-20 h-6 text-xs">
-                        <SelectValue placeholder="Resultado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="W">W</SelectItem>
-                        <SelectItem value="L">L</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <div className="flex items-center gap-x-4 gap-y-1 mt-2 text-xs flex-wrap">
+                  <span>Cuota: {pick.oddsAmerican > 0 ? "+" : ""}{pick.oddsAmerican}</span>
+                  <span>Modelo: {pick.modelProbabilityPct.toFixed(1)}%</span>
+                  <span>Edge: {pick.edgePp > 0 ? "+" : ""}{pick.edgePp.toFixed(1)} pp</span>
+                  <span>Stake: {pick.stakeUnits.toFixed(2)} u</span>
+                  {pick.book && <span>Casa: {pick.book}</span>}
+                  {pick.finalScore && <span>Final: {pick.finalScore.away}-{pick.finalScore.home}</span>}
+                  {pick.result === "PENDING" ? (
+                    <span className="text-amber-300 font-semibold">Esperando liquidación</span>
+                  ) : (
+                    <span className={pick.profitUnits >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                      {signedUnits(pick.profitUnits)}
+                    </span>
                   )}
-
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400 ml-auto"
-                    onClick={() => dispatch({ type: "DELETE_MLB_PICK", payload: pick.id })}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground" title="Registro protegido por el ledger inmutable">
+                    <LockKeyhole className="h-3 w-3" /> Inmutable
+                  </span>
                 </div>
               </CardContent>
             </Card>

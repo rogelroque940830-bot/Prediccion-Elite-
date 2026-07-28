@@ -7,6 +7,7 @@ import {
   recordsToCsv,
 } from "./mlb-ledger-store";
 import { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report";
+import { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
 import { runMlbAutoSettlement } from "./mlb-settlement-worker";
 
 let singletonStore: MlbLedgerStore | null = null;
@@ -109,6 +110,19 @@ export function registerMlbLedgerRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/mlb/ledger/v1/history", (req, res) => {
+    try {
+      const filters = queryFilters(req.query as Record<string, unknown>);
+      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      res.json({ success: true, data: buildMlbLedgerHistoryView(records) });
+    } catch (error: any) {
+      res.status(error?.status || 500).json({
+        success: false,
+        error: error?.message || "Unable to build immutable MLB history",
+      });
+    }
+  });
+
   app.get("/api/mlb/ledger/v1/injury-report", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
@@ -157,3 +171,4 @@ export function registerMlbLedgerRoutes(app: Express): void {
 
 export { MlbLedgerStore, buildMlbBacktestReport } from "./mlb-ledger-store";
 export { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report";
+export { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
