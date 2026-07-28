@@ -9,7 +9,7 @@ on:
       - feature/mlb-injury-calibration-report-c2a
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -24,7 +24,22 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Install backend dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          set +e
+          npm ci > /tmp/npm-ci-c2a.txt 2>&1
+          code=$?
+          cat /tmp/npm-ci-c2a.txt
+          if [ "$code" -ne 0 ]; then
+            mkdir -p .diagnostics
+            cp /tmp/npm-ci-c2a.txt .diagnostics/npm-ci-c2a.txt
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .diagnostics/npm-ci-c2a.txt
+            git commit -m 'test: save C2A npm install diagnostic [skip ci]'
+            git push origin HEAD:test/validate-final-mlb-injury-c2a
+            exit "$code"
+          fi
       - name: Run MLB regression suite
         run: npm run test:mlb-ledger
       - name: Type-check backend
