@@ -1,0 +1,60 @@
+name: Apply and validate MLB C2B
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-injury-outcomes-c2b
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply C2B UI and snapshot patch
+        run: python scripts/apply-mlb-c2b-ui.py
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Verify C2B markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'mlb-injury-effect.v1' frontend/client/src/pages/mlb-predictor.tsx
+          grep -Fq '/api/mlb/ledger/v1/injury-outcomes?limit=10000' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'Resultado vs decisiones de lesiones · Fase C2B' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'formulasChanged: false' server/mlb-injury-outcomes-report.ts
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply-mlb-c2b-ui.py
+          rm -f .github/workflows/apply-validate-mlb-c2b.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement MLB injury outcome calibration C2B'
+          git push origin HEAD:feature/mlb-injury-outcomes-c2b
