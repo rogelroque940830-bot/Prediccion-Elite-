@@ -35,7 +35,7 @@ export function resolveMlbPhaseBSelection(
     .map((player) => player.name);
 
   if (!plan?.enabled || !feed.autoApplyAllowed || knownEligiblePitchers.length === 0) {
-    return { appliedNames: [], withheldNames: [...eligible], blockedReason: null };
+    return { appliedNames: [], withheldNames: Array.from(eligible), blockedReason: null };
   }
 
   if (!bullpenSide) {
