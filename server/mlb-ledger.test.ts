@@ -5,6 +5,93 @@ import path from "node:path";
 import test from "node:test";
 import { buildMlbBacktestReport, MlbLedgerStore } from "./mlb-ledger";
 
+function injuryAuditPayload() {
+  const team = (side: "HOME" | "AWAY", teamName: string) => ({
+    side,
+    teamName,
+    source: {
+      detector: "BALLDONTLIE",
+      detectorStatus: "VERIFIED",
+      detectorFetchedAt: "2026-07-26T19:58:00.000Z",
+      detectorStale: false,
+      validator: "MLB_STATS",
+      validatorStatus: "VERIFIED",
+      validatorFetchedAt: "2026-07-26T19:58:05.000Z",
+      rejectedCount: 0,
+      officialOnly: 0,
+    },
+    phaseB: {
+      enabled: true,
+      mode: "AUTO_CONSERVATIVE" as const,
+      coverage: "FULL" as const,
+      candidateCount: 1,
+      eligiblePlayerNames: ["Test Closer"],
+      withheldCandidateNames: [],
+      scale: 0.5,
+      maxAbsRuns: 0.5,
+      autoApplyAllowed: true,
+      requiresBullpenReconciliation: true,
+      reason: "Test Phase B plan",
+    },
+    reconciliation: {
+      bullpenStatusAvailable: true,
+      bullpenRunsAdjustment: 0,
+      blockedReason: null,
+      closerAvailable: true,
+      bullpenCompromised: false,
+      statusText: "One reliever auto-applied",
+    },
+    adjustment: {
+      rawAutomaticRuns: -0.8,
+      scaledAutomaticRuns: -0.4,
+      finalRuns: -0.4,
+      manualOverride: false,
+      factorType: "Fase B automática",
+      offenseFactor: 1,
+      defenseFactor: 0.8,
+      selectedPlayerNames: ["Test Closer"],
+      autoAppliedPlayerNames: ["Test Closer"],
+    },
+    counts: {
+      detected: 1,
+      candidates: 1,
+      backendEligible: 1,
+      autoApplied: 1,
+      selected: 1,
+      retained: 0,
+      rejected: 0,
+      officialOnly: 0,
+    },
+    players: [{
+      playerId: side === "HOME" ? 101 : 201,
+      name: "Test Closer",
+      position: "P",
+      isPitcher: true,
+      detectorSource: "BALLDONTLIE",
+      reportedStatus: "Out",
+      officialStatusCode: "D15",
+      officialStatus: "Injured 15-Day",
+      officialTransaction: null,
+      shadow: {
+        decision: "APPLY_CANDIDATE" as const,
+        confidence: "HIGH" as const,
+        impact: "HIGH" as const,
+        reasonCode: "OFFICIAL_IL_HIGH_LEVERAGE_RELIEVER",
+        reason: "Official recent high-leverage reliever injury.",
+        daysSinceOfficialTransaction: 1,
+      },
+      disposition: "AUTO_APPLIED" as const,
+    }],
+  });
+  return {
+    schemaVersion: "mlb-injury-audit.v1" as const,
+    capturedAt: "2026-07-26T20:00:00.000Z",
+    mode: "PHASE_B_AUTO_CONSERVATIVE" as const,
+    home: team("HOME", "Home Club"),
+    away: team("AWAY", "Away Club"),
+  };
+}
+
 function predictionPayload(overrides: Record<string, unknown> = {}) {
   return {
     schemaVersion: "mlb-ledger.v1",
@@ -52,6 +139,7 @@ function predictionPayload(overrides: Record<string, unknown> = {}) {
         { name: "MLB Stats API", status: "VERIFIED", fetchedAt: "2026-07-26T19:59:00.000Z", sample: 30 },
       ],
       layers: { pureModel: 0.61 },
+      injuryAudit: injuryAuditPayload(),
       rawInputs: { test: true },
       rawOutput: { recommendation: "BET" },
     },
@@ -77,6 +165,8 @@ test("prediction writes are idempotent and immutable", () => {
     assert.equal(first.idempotent, false);
     assert.equal(first.data.probabilities.model, 0.61);
     assert.ok(Math.abs(first.data.probabilities.edgePp - 6.5) < 1e-9);
+    assert.equal(first.data.payload.analysis.injuryAudit.schemaVersion, "mlb-injury-audit.v1");
+    assert.equal(first.data.payload.analysis.injuryAudit.home.adjustment.finalRuns, -0.4);
 
     const retry = store.appendPrediction(predictionPayload());
     assert.equal(retry.idempotent, true);
@@ -86,6 +176,23 @@ test("prediction writes are idempotent and immutable", () => {
       () => (store as any).db.prepare("UPDATE mlb_prediction_ledger_v1 SET signal = 'PASS' WHERE id = ?").run(first.data.id),
       /immutable/,
     );
+  });
+});
+
+
+test("injury audit is hashed into the immutable payload and malformed evidence is rejected", () => {
+  withStore((store) => {
+    const firstPayload: any = predictionPayload({ clientRequestId: "req-audit-hash-001" });
+    const first = store.appendPrediction(firstPayload).data;
+
+    const changedPayload: any = predictionPayload({ clientRequestId: "req-audit-hash-002" });
+    changedPayload.analysis.injuryAudit.home.adjustment.finalRuns = -0.2;
+    const changed = store.appendPrediction(changedPayload).data;
+    assert.notEqual(first.payloadSha256, changed.payloadSha256);
+
+    const malformed: any = predictionPayload({ clientRequestId: "req-audit-invalid-001" });
+    malformed.analysis.injuryAudit.schemaVersion = "mlb-injury-audit.invalid";
+    assert.throws(() => store.appendPrediction(malformed));
   });
 });
 

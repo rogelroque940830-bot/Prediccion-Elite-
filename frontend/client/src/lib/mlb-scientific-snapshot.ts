@@ -1,3 +1,5 @@
+import type { MlbInjuryAuditSnapshot } from "./mlb-injury-audit";
+
 export type MlbLedgerMarketType =
   | "ML"
   | "F5_ML"
@@ -81,6 +83,7 @@ export interface MlbScientificSnapshot {
       metadata?: Record<string, unknown>;
     }>;
     layers?: Record<string, unknown>;
+    injuryAudit?: MlbInjuryAuditSnapshot;
     rawInputs?: unknown;
     rawOutput?: unknown;
   };

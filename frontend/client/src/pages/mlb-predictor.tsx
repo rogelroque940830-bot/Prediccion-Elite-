@@ -22,6 +22,7 @@ import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
+import { buildMlbInjuryAuditSnapshot } from "@/lib/mlb-injury-audit";
 
 // ── MLB INJURY TYPES & CALC ──────────────────────────────────────────────────
 type MLBInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE" | "ANOMALOUS";
@@ -59,6 +60,7 @@ interface MLBInjuryFeedMeta {
   sourceErrors?: string[];
   officialValidationStatus?: "VERIFIED" | "PARTIAL";
   officialFetchedAt?: string;
+  rejectedCount?: number;
   count: number;
   autoApplyAllowed: boolean;
   shadowMode?: boolean;
@@ -795,10 +797,76 @@ export default function MLBPredictor() {
       ...(stage === "PROVISIONAL" ? ["Snapshot provisional: faltan identificador oficial del juego o verificación completa de lesiones."] : []),
     ];
 
+    const homeAuditResolution = resolveMlbPhaseBSelection(homeInjuryRoster, homeInjuryFeed, bullpenStatus?.home);
+    const awayAuditResolution = resolveMlbPhaseBSelection(awayInjuryRoster, awayInjuryFeed, bullpenStatus?.away);
+    const homeAuditRawImpact = calcMLBInjuryImpact(homeInjuryRoster, homePhaseBAutoApplied, homeInjuryGamesOut);
+    const awayAuditRawImpact = calcMLBInjuryImpact(awayInjuryRoster, awayPhaseBAutoApplied, awayInjuryGamesOut);
+    const homeAuditScaledRuns = scaleMlbPhaseBRuns(
+      homeAuditRawImpact.runs,
+      homeInjuryFeed.phaseB?.scale ?? 0,
+      homeInjuryFeed.phaseB?.maxAbsRuns ?? 0,
+    );
+    const awayAuditScaledRuns = scaleMlbPhaseBRuns(
+      awayAuditRawImpact.runs,
+      awayInjuryFeed.phaseB?.scale ?? 0,
+      awayInjuryFeed.phaseB?.maxAbsRuns ?? 0,
+    );
+    const homeSelectedNames = Array.from(homeInjuryMissing);
+    const awaySelectedNames = Array.from(awayInjuryMissing);
+    const homeAutoNames = Array.from(homePhaseBAutoApplied);
+    const awayAutoNames = Array.from(awayPhaseBAutoApplied);
+    const setMismatch = (left: string[], right: string[]) => {
+      const rightSet = new Set(right);
+      return left.length !== right.length || left.some((name) => !rightSet.has(name));
+    };
+    const homeManualOverride = homeInjuryFactors.type === "Manual"
+      || homePhaseBStatus.includes("Override manual")
+      || setMismatch(homeSelectedNames, homeAutoNames);
+    const awayManualOverride = awayInjuryFactors.type === "Manual"
+      || awayPhaseBStatus.includes("Override manual")
+      || setMismatch(awaySelectedNames, awayAutoNames);
+    const injuryAudit = buildMlbInjuryAuditSnapshot({
+      capturedAt,
+      home: {
+        side: "HOME",
+        teamName: homeTeam || "Local",
+        teamId: homeTeamMlbId,
+        feed: homeInjuryFeed,
+        roster: homeInjuryRoster,
+        selectedPlayerNames: homeInjuryMissing,
+        autoAppliedPlayerNames: homePhaseBAutoApplied,
+        rawAutomaticRuns: homeAuditRawImpact.runs,
+        scaledAutomaticRuns: homeAuditScaledRuns,
+        finalRuns: parseFloat(homeInjury) || 0,
+        manualOverride: homeManualOverride,
+        factors: homeInjuryFactors,
+        bullpenSide: bullpenStatus?.home,
+        blockedReason: homeAuditResolution.blockedReason,
+        statusText: homePhaseBStatus,
+      },
+      away: {
+        side: "AWAY",
+        teamName: awayTeam || "Visitante",
+        teamId: awayTeamMlbId,
+        feed: awayInjuryFeed,
+        roster: awayInjuryRoster,
+        selectedPlayerNames: awayInjuryMissing,
+        autoAppliedPlayerNames: awayPhaseBAutoApplied,
+        rawAutomaticRuns: awayAuditRawImpact.runs,
+        scaledAutomaticRuns: awayAuditScaledRuns,
+        finalRuns: parseFloat(awayInjury) || 0,
+        manualOverride: awayManualOverride,
+        factors: awayInjuryFactors,
+        bullpenSide: bullpenStatus?.away,
+        blockedReason: awayAuditResolution.blockedReason,
+        statusText: awayPhaseBStatus,
+      },
+    });
+
     const scientificSnapshot = createMlbScientificSnapshot({
       model: {
         name: "CourtEdge MLB",
-        version: "predictor-full-snapshot-v1",
+        version: "predictor-full-snapshot-v2",
       },
       game: {
         ...(gamePkForTesi ? { gamePk: gamePkForTesi } : {}),
@@ -836,6 +904,7 @@ export default function MLBPredictor() {
       analysis: {
         stage,
         warnings,
+        injuryAudit,
         factors: (result.factorBreakdown?.notes || []).slice(0, 100).map((note) => ({
           name: note.slice(0, 120),
           direction: "NEUTRAL" as const,

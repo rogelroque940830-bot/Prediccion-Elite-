@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import { z } from "zod";
+import { mlbInjuryAuditSchema } from "./mlb-injury-audit";
 
 export const MLB_LEDGER_SCHEMA_VERSION = "mlb-ledger.v1" as const;
 const DEFAULT_DB_PATH = path.join(process.cwd(), "data", "mlb-ledger-v1.sqlite");
@@ -74,6 +75,7 @@ export const mlbPredictionInputSchema = z.object({
     factors: z.array(factorSchema).max(200).optional(),
     sources: z.array(sourceSnapshotSchema).max(200).optional(),
     layers: z.record(z.unknown()).optional(),
+    injuryAudit: mlbInjuryAuditSchema.optional(),
     rawInputs: z.unknown().optional(),
     rawOutput: z.unknown().optional(),
   }).strict(),
