@@ -1,1 +1,0 @@
-Phase B must not touch main or production. The p0-integration implementation remains conservative, auditable, and reversible. Only candidates satisfying all high-confidence gates may be auto-applied; manual override remains separate.

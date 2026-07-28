@@ -36,6 +36,7 @@ import {
   fetchOfficialMlbInjurySnapshot,
   summarizeMlbInjuryShadow,
 } from "./mlb-injury-shadow";
+import { buildMlbInjuryPhaseBPlan } from "./mlb-injury-phase-b";
 
 function requireSecret(name: string): string {
   const value = (process.env[name] || "").trim();
@@ -2596,10 +2597,21 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             const sourcesVerified = !anomalous
               && injuryFeed.status === "VERIFIED"
               && officialSnapshot?.status === "VERIFIED";
+            const phaseB = buildMlbInjuryPhaseBPlan({
+              sourceStatus: injuryFeed.status,
+              officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+              stale: injuryFeed.stale,
+              anomalous,
+              rejectedCount: 0,
+              officialOnly,
+              players: [],
+            });
             injuryMap[tid] = [];
             injuryMetaMap[tid] = {
               ...injuryMetaMap[tid],
               status: anomalous ? "ANOMALOUS" : sourcesVerified && officialOnly === 0 ? "VERIFIED" : "PARTIAL",
+              autoApplyAllowed: phaseB.autoApplyAllowed,
+              phaseB,
               shadowSummary: {
                 total: 0, applyCandidates: 0, alreadyReflected: 0,
                 ignored: 0, conflicts: 0, pending: 0,
@@ -2765,9 +2777,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             ...summarizeMlbInjuryShadow(shadowList.map((player: any) => player.shadow)),
             officialOnly,
           };
+          const phaseB = buildMlbInjuryPhaseBPlan({
+            sourceStatus: injuryFeed.status,
+            officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+            stale: injuryFeed.stale,
+            anomalous,
+            rejectedCount,
+            officialOnly,
+            players: shadowList.map((player: any) => ({
+              playerId: Number(player.playerId),
+              name: String(player.name),
+              isPitcher: Boolean(player.isPitcher),
+              shadow: player.shadow,
+            })),
+          });
           injuryMap[tid] = shadowList;
 
-          // Fase A: decide jugador por jugador, pero no altera proyección ni ledger.
+          // Fase B: candidatos de alta confianza pasan a una segunda reconciliación con Bullpen Status.
           const identityComplete = injuryFeed.status === "VERIFIED"
             && officialSnapshot?.status === "VERIFIED"
             && rejectedCount === 0
@@ -2784,14 +2810,17 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             officialFetchedAt: officialSnapshot?.fetchedAt,
             count: shadowList.length,
             rejectedCount,
-            autoApplyAllowed: false,
+            autoApplyAllowed: phaseB.autoApplyAllowed,
             shadowMode: true,
             shadowSummary,
-            note: rejectedCount > 0
-              ? `${rejectedCount} registro(s) descartado(s); el resto fue clasificado automáticamente en modo sombra`
-              : shadowList.length > 0
-                ? "BALLDONTLIE detecta; MLB valida roster y transacciones. El modo sombra no modifica todavía la proyección"
-                : "Fuentes verificadas: no hay ausencias activas confirmadas para este equipo",
+            phaseB,
+            note: phaseB.autoApplyAllowed
+              ? `${phaseB.eligiblePlayerNames.length} relevista(s) superaron la Fase B; falta reconciliación final con Bullpen Status`
+              : rejectedCount > 0
+                ? `${rejectedCount} registro(s) descartado(s); los candidatos restantes no superaron todas las barreras de activación`
+                : shadowList.length > 0
+                  ? "BALLDONTLIE detecta y MLB valida; la Fase B se abstiene cuando falta certeza o existe riesgo de doble conteo"
+                  : "Fuentes verificadas: no hay ausencias activas confirmadas para este equipo",
           };
         });
         await Promise.all(injuryPromises);
