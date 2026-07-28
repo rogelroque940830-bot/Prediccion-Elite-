@@ -22,6 +22,14 @@ jobs:
           cache: npm
       - name: Apply C2C integration patch
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-mlb-c2c.py')
+          text = path.read_text(encoding='utf-8')
+          start = text.index('package = Path("package.json")')
+          end = text.index('history = Path("frontend/client/src/pages/mlb-history.tsx")')
+          path.write_text(text[:start] + text[end:], encoding='utf-8')
+          PY
           python scripts/apply-mlb-c2c.py
           python scripts/fix-mlb-c2c-package.py
       - name: Install backend dependencies
