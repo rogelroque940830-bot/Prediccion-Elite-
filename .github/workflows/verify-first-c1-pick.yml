@@ -22,11 +22,11 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status.json
-          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/predictions?limit=1" > /tmp/latest.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/predictions?limit=100" > /tmp/records.json
           echo 'LEDGER STATUS'
           jq '.data | {predictions,settlementEvents,latestPredictionAt,immutable,journalMode}' /tmp/status.json
           echo 'LATEST C1 PICK'
-          jq '.data[0] | {
+          jq '.data[-1].prediction | {
             id,
             clientRequestId,
             recordedAt,
@@ -47,13 +47,13 @@ jobs:
               rawAutomaticRuns, scaledAutomaticRuns, finalRuns, manualOverride
             },
             payloadSha256
-          }' /tmp/latest.json
+          }' /tmp/records.json
           jq -e '
             .success == true
-            and (.data | length) == 1
-            and .data[0].model.version == "predictor-full-snapshot-v2"
-            and .data[0].payload.analysis.injuryAudit.schemaVersion == "mlb-injury-audit.v1"
-            and (.data[0].payload.analysis.injuryAudit.capturedAt | type == "string")
-            and (.data[0].payload.analysis.injuryAudit.home.teamName | type == "string")
-            and (.data[0].payload.analysis.injuryAudit.away.teamName | type == "string")
-          ' /tmp/latest.json >/dev/null
+            and (.data | length) >= 2
+            and .data[-1].prediction.model.version == "predictor-full-snapshot-v2"
+            and .data[-1].prediction.payload.analysis.injuryAudit.schemaVersion == "mlb-injury-audit.v1"
+            and (.data[-1].prediction.payload.analysis.injuryAudit.capturedAt | type == "string")
+            and (.data[-1].prediction.payload.analysis.injuryAudit.home.teamName | type == "string")
+            and (.data[-1].prediction.payload.analysis.injuryAudit.away.teamName | type == "string")
+          ' /tmp/records.json >/dev/null
