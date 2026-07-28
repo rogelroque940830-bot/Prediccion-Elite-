@@ -34,6 +34,7 @@ export interface MlbInjuryAuditPlayerSnapshot {
     reasonCode: string;
     reason: string;
     daysSinceOfficialTransaction?: number | null;
+    shadowOnly?: true;
   };
   disposition: MlbInjuryAuditDisposition;
 }
@@ -225,7 +226,18 @@ export function buildMlbInjuryTeamAudit(input: BuildMlbInjuryTeamAuditInput): Ml
       officialStatusCode: player.officialStatusCode ?? null,
       officialStatus: player.officialStatus ?? null,
       officialTransaction: player.officialTransaction ?? null,
-      ...(player.shadow ? { shadow: player.shadow } : {}),
+      ...(player.shadow ? {
+        shadow: {
+          decision: player.shadow.decision,
+          confidence: player.shadow.confidence,
+          impact: player.shadow.impact,
+          reasonCode: player.shadow.reasonCode,
+          reason: player.shadow.reason,
+          ...(player.shadow.daysSinceOfficialTransaction !== undefined
+            ? { daysSinceOfficialTransaction: player.shadow.daysSinceOfficialTransaction }
+            : {}),
+        },
+      } : {}),
       disposition: playerDisposition(
         player,
         selected,
