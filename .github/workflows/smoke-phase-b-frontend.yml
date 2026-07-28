@@ -1,0 +1,73 @@
+name: Smoke deployed MLB injury Phase B frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Phase B labels in deployed frontend assets
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          cat > /tmp/crawl.py <<'PY'
+          import re
+          import sys
+          import time
+          import urllib.parse
+          import urllib.request
+
+          base = sys.argv[1].rstrip('/') + '/'
+          targets = [
+              'Automatización · Fase B activa',
+              'BDL detecta · MLB valida · bullpen reconcilia',
+              'Autoaplicados:',
+              'Solo relevistas recientes de alta confianza',
+          ]
+
+          def get(url):
+              request = urllib.request.Request(url, headers={'User-Agent': 'CourtEdge-Smoke/1.0'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return response.read().decode('utf-8', errors='ignore')
+
+          for attempt in range(1, 49):
+              queue = [urllib.parse.urljoin(base, 'mlb')]
+              seen = set()
+              texts = []
+              while queue and len(seen) < 400:
+                  url = queue.pop(0)
+                  if url in seen:
+                      continue
+                  seen.add(url)
+                  try:
+                      text = get(url)
+                  except Exception:
+                      continue
+                  texts.append(text)
+                  for pattern in [
+                      r'(?P<u>/assets/[A-Za-z0-9._-]+\.js)',
+                      r'(?P<u>assets/[A-Za-z0-9._-]+\.js)',
+                      r'(?P<u>\./[A-Za-z0-9._-]+\.js)',
+                  ]:
+                      for match in re.finditer(pattern, text):
+                          candidate = urllib.parse.urljoin(url, match.group('u'))
+                          if candidate not in seen:
+                              queue.append(candidate)
+              combined = '\n'.join(texts)
+              missing = [target for target in targets if target not in combined]
+              if not missing:
+                  print(f'PASS attempt={attempt} resources={len(seen)} all Phase B labels found')
+                  raise SystemExit(0)
+              print(f'WAIT attempt={attempt} missing={" | ".join(missing)}')
+              time.sleep(10)
+          raise SystemExit(1)
+          PY
+          python /tmp/crawl.py "$FRONTEND_URL"
