@@ -26,7 +26,7 @@ type InjuryEffect = {
   dataQuality: "VERIFIED" | "DEGRADED" | "UNKNOWN";
 };
 
-type OutcomeRow = {
+export type MlbInjuryOutcomeRow = {
   predictionId: string;
   recordedAt: string;
   gameDate: string;
@@ -141,7 +141,7 @@ function effectFrom(record: LedgerRecord, audit: MlbInjuryAudit): InjuryEffect {
   };
 }
 
-function rowFrom(record: LedgerRecord): OutcomeRow | null {
+function rowFrom(record: LedgerRecord): MlbInjuryOutcomeRow | null {
   const audit = auditFrom(record);
   if (!audit) return null;
   const teams = [audit.home, audit.away];
@@ -184,7 +184,7 @@ function rowFrom(record: LedgerRecord): OutcomeRow | null {
   };
 }
 
-function cohortKeys(row: OutcomeRow): CohortKey[] {
+function cohortKeys(row: MlbInjuryOutcomeRow): CohortKey[] {
   const keys: CohortKey[] = ["ALL_AUDITED"];
   if (row.autoApplied) keys.push("AUTO_APPLIED");
   else keys.push("NO_AUTO_ADJUSTMENT");
@@ -195,7 +195,7 @@ function cohortKeys(row: OutcomeRow): CohortKey[] {
   return keys;
 }
 
-function summarizeRows(rows: OutcomeRow[]) {
+function summarizeRows(rows: MlbInjuryOutcomeRow[]) {
   const settled = rows.filter((row) => row.result != null);
   const scored = settled.filter((row) => row.outcomeValue != null);
   const effectRows = rows.filter((row) => row.effect.available);
@@ -228,8 +228,12 @@ function summarizeRows(rows: OutcomeRow[]) {
   };
 }
 
+export function buildMlbInjuryOutcomeRows(records: LedgerRecord[]): MlbInjuryOutcomeRow[] {
+  return records.map(rowFrom).filter((row): row is MlbInjuryOutcomeRow => Boolean(row));
+}
+
 export function buildMlbInjuryOutcomesReport(records: LedgerRecord[]) {
-  const rows = records.map(rowFrom).filter((row): row is OutcomeRow => Boolean(row));
+  const rows = buildMlbInjuryOutcomeRows(records);
   const cohorts = Object.fromEntries(COHORTS.map((key) => [
     key,
     { key, ...summarizeRows(rows.filter((row) => cohortKeys(row).includes(key))) },
