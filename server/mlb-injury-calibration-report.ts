@@ -54,7 +54,12 @@ function auditContextKey(record: LedgerRecord, audit: MlbInjuryAudit): string {
   const gameIdentity = game.gamePk
     ? `gamePk:${game.gamePk}`
     : `${game.gameDate}:${game.awayTeam}@${game.homeTeam}`;
-  const digest = crypto.createHash("sha256").update(canonicalJson(audit)).digest("hex");
+
+  // Each selected market receives its own capture timestamp even when the injury
+  // evidence and Phase B decision are identical. Exclude only capturedAt so ML,
+  // F5 and totals from the same analysis share one calibration context.
+  const { capturedAt: _capturedAt, ...decisionAudit } = audit;
+  const digest = crypto.createHash("sha256").update(canonicalJson(decisionAudit)).digest("hex");
   return `${gameIdentity}:${digest}`;
 }
 
