@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - test/validate-clean-mlb-injury-c2a
+  pull_request:
+    branches:
+      - feature/mlb-injury-calibration-report-c2a
 
 permissions:
   contents: read
