@@ -1,7 +1,21 @@
 import { z } from "zod";
 
-const optionalIso = z.string().datetime().optional();
-const optionalNullableText = z.string().max(1000).nullable().optional();
+function trimmedText(max: number, min = 0) {
+  let schema = z.string().trim();
+  if (min > 0) schema = schema.min(min);
+  return schema.transform((value) => value.slice(0, max));
+}
+
+const optionalIso = z.preprocess((raw) => {
+  if (typeof raw !== "string" || raw.trim() === "") return undefined;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}, z.string().datetime().optional());
+
+const optionalNullableText = z.union([
+  z.null(),
+  z.string().transform((value) => value.slice(0, 1000)),
+]).optional();
 
 const officialTransactionSchema = z.object({
   date: optionalNullableText,
@@ -9,29 +23,27 @@ const officialTransactionSchema = z.object({
   typeCode: optionalNullableText,
   typeDesc: optionalNullableText,
   description: optionalNullableText,
-}).strict().nullable().optional();
+}).strip().nullable().optional();
 
 const shadowEvidenceSchema = z.object({
   decision: z.enum(["APPLY_CANDIDATE", "ALREADY_REFLECTED", "IGNORE", "CONFLICT", "PENDING"]),
   confidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
   impact: z.enum(["HIGH", "MEDIUM", "LOW", "NONE"]),
-  reasonCode: z.string().trim().min(1).max(160),
-  reason: z.string().trim().min(1).max(2000),
+  reasonCode: trimmedText(160, 1),
+  reason: trimmedText(2000, 1),
   daysSinceOfficialTransaction: z.number().int().min(0).max(5000).nullable().optional(),
-  // Backward-compatible with the first deployed C1 frontend bundle.
-  // New builders strip this internal marker before persistence.
   shadowOnly: z.literal(true).optional(),
-}).strict();
+}).strip();
 
 const playerEvidenceSchema = z.object({
   playerId: z.number().int().positive().optional(),
-  name: z.string().trim().min(1).max(160),
-  position: z.string().max(40).optional(),
+  name: trimmedText(160, 1),
+  position: z.string().transform((value) => value.slice(0, 40)).optional(),
   isPitcher: z.boolean(),
-  detectorSource: z.string().max(120).optional(),
-  reportedStatus: z.string().max(500).optional(),
-  officialStatusCode: z.string().max(40).nullable().optional(),
-  officialStatus: z.string().max(160).nullable().optional(),
+  detectorSource: z.string().transform((value) => value.slice(0, 120)).optional(),
+  reportedStatus: z.string().transform((value) => value.slice(0, 500)).optional(),
+  officialStatusCode: z.union([z.null(), z.string().transform((value) => value.slice(0, 40))]).optional(),
+  officialStatus: z.union([z.null(), z.string().transform((value) => value.slice(0, 160))]).optional(),
   officialTransaction: officialTransactionSchema,
   shadow: shadowEvidenceSchema.optional(),
   disposition: z.enum([
@@ -47,54 +59,54 @@ const playerEvidenceSchema = z.object({
     "PENDING",
     "DETECTED",
   ]),
-}).strict();
+}).strip();
 
 const sourceEvidenceSchema = z.object({
-  detector: z.string().trim().min(1).max(120),
-  detectorStatus: z.string().trim().min(1).max(80),
+  detector: trimmedText(120, 1),
+  detectorStatus: trimmedText(80, 1),
   detectorFetchedAt: optionalIso,
   detectorStale: z.boolean(),
-  validator: z.string().trim().min(1).max(120),
-  validatorStatus: z.string().trim().min(1).max(80),
+  validator: trimmedText(120, 1),
+  validatorStatus: trimmedText(80, 1),
   validatorFetchedAt: optionalIso,
   rejectedCount: z.number().int().nonnegative().max(500),
   officialOnly: z.number().int().nonnegative().max(500),
-}).strict();
+}).strip();
 
 const phaseBPlanSchema = z.object({
   enabled: z.boolean(),
   mode: z.literal("AUTO_CONSERVATIVE"),
   coverage: z.enum(["FULL", "PARTIAL", "BLOCKED"]),
   candidateCount: z.number().int().nonnegative().max(500),
-  eligiblePlayerNames: z.array(z.string().trim().min(1).max(160)).max(100),
-  withheldCandidateNames: z.array(z.string().trim().min(1).max(160)).max(100),
+  eligiblePlayerNames: z.array(trimmedText(160, 1)).max(100),
+  withheldCandidateNames: z.array(trimmedText(160, 1)).max(100),
   scale: z.number().finite().min(0).max(1),
   maxAbsRuns: z.number().finite().min(0).max(10),
   autoApplyAllowed: z.boolean(),
   requiresBullpenReconciliation: z.boolean(),
-  reason: z.string().trim().min(1).max(2000),
-}).strict();
+  reason: trimmedText(2000, 1),
+}).strip();
 
 const reconciliationSchema = z.object({
   bullpenStatusAvailable: z.boolean(),
   bullpenRunsAdjustment: z.number().finite().min(-10).max(10).optional(),
-  blockedReason: z.string().max(160).nullable().optional(),
+  blockedReason: z.union([z.null(), z.string().transform((value) => value.slice(0, 160))]).optional(),
   closerAvailable: z.boolean().optional(),
   bullpenCompromised: z.boolean().optional(),
-  statusText: z.string().max(1000).optional(),
-}).strict();
+  statusText: z.string().transform((value) => value.slice(0, 1000)).optional(),
+}).strip();
 
 const adjustmentSchema = z.object({
   rawAutomaticRuns: z.number().finite().min(-20).max(20),
   scaledAutomaticRuns: z.number().finite().min(-20).max(20),
   finalRuns: z.number().finite().min(-20).max(20),
   manualOverride: z.boolean(),
-  factorType: z.string().max(120),
+  factorType: z.string().transform((value) => value.slice(0, 120)),
   offenseFactor: z.number().finite().min(-10).max(10),
   defenseFactor: z.number().finite().min(-10).max(10),
-  selectedPlayerNames: z.array(z.string().trim().min(1).max(160)).max(100),
-  autoAppliedPlayerNames: z.array(z.string().trim().min(1).max(160)).max(100),
-}).strict();
+  selectedPlayerNames: z.array(trimmedText(160, 1)).max(100),
+  autoAppliedPlayerNames: z.array(trimmedText(160, 1)).max(100),
+}).strip();
 
 const countsSchema = z.object({
   detected: z.number().int().nonnegative().max(500),
@@ -105,11 +117,11 @@ const countsSchema = z.object({
   retained: z.number().int().nonnegative().max(500),
   rejected: z.number().int().nonnegative().max(500),
   officialOnly: z.number().int().nonnegative().max(500),
-}).strict();
+}).strip();
 
 const teamAuditSchema = z.object({
   side: z.enum(["HOME", "AWAY"]),
-  teamName: z.string().trim().min(1).max(160),
+  teamName: trimmedText(160, 1),
   teamId: z.number().int().positive().optional(),
   source: sourceEvidenceSchema,
   phaseB: phaseBPlanSchema,
@@ -117,7 +129,7 @@ const teamAuditSchema = z.object({
   adjustment: adjustmentSchema,
   counts: countsSchema,
   players: z.array(playerEvidenceSchema).max(100),
-}).strict();
+}).strip();
 
 export const mlbInjuryAuditSchema = z.object({
   schemaVersion: z.literal("mlb-injury-audit.v1"),
@@ -125,6 +137,6 @@ export const mlbInjuryAuditSchema = z.object({
   mode: z.literal("PHASE_B_AUTO_CONSERVATIVE"),
   home: teamAuditSchema,
   away: teamAuditSchema,
-}).strict();
+}).strip();
 
 export type MlbInjuryAudit = z.infer<typeof mlbInjuryAuditSchema>;
