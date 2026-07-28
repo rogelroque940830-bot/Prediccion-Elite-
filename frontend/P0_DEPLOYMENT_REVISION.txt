@@ -1,4 +1,5 @@
 CourtEdge p0 frontend deployment revision
-Source integration commit: e6700f0b0895c0ecc8cc4771fdab1c73fc8826d6
-Purpose: force a clean Railway frontend rebuild after fast-forward synchronization.
-No runtime logic, model calculation, or ledger behavior is changed by this file.
+Source integration commit: 10db8f2bdb4a49dd3f99d0699a20fa59eed796e2
+Frontend sync commit: b31b8f5adad74d1308646a8b00ad1601f324e021
+Purpose: force a clean Railway frontend rebuild for the Historial MLB injury calibration panel C2A.
+No runtime logic, model calculation, prediction, settlement, or ledger behavior is changed by this file.
