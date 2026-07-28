@@ -21,7 +21,9 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Apply C2B UI and snapshot patch
-        run: python scripts/apply-mlb-c2b-ui.py
+        run: |
+          python scripts/apply-mlb-c2b-ui.py
+          python scripts/fix-mlb-c2b-ui.py
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression suite
@@ -44,6 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'mlb-injury-effect.v1' frontend/client/src/pages/mlb-predictor.tsx
+          grep -Fq 'injuryHomeProbabilityDeltaPp' frontend/client/src/pages/mlb-predictor.tsx
           grep -Fq '/api/mlb/ledger/v1/injury-outcomes?limit=10000' frontend/client/src/pages/mlb-history.tsx
           grep -Fq 'Resultado vs decisiones de lesiones · Fase C2B' frontend/client/src/pages/mlb-history.tsx
           grep -Fq 'formulasChanged: false' server/mlb-injury-outcomes-report.ts
@@ -52,6 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/apply-mlb-c2b-ui.py
+          rm -f scripts/fix-mlb-c2b-ui.py
           rm -f .github/workflows/apply-validate-mlb-c2b.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
