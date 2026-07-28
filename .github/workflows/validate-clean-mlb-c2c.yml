@@ -1,0 +1,40 @@
+name: Validate clean MLB C2C
+
+on:
+  push:
+    branches:
+      - test/validate-clean-mlb-c2c
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/validate-clean-mlb-c2c
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npm run check
+      - working-directory: frontend
+        run: npm run build
+      - name: Verify safety markers
+        run: |
+          grep -Fq 'automaticRuleChanges: false' server/mlb-injury-decision-report.ts
+          grep -Fq 'formulasChanged: false' server/mlb-injury-decision-report.ts
+          grep -Fq 'Veredictos de calibración · Fase C2C' frontend/client/src/pages/mlb-history.tsx
