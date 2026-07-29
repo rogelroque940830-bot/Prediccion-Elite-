@@ -14,13 +14,18 @@ import {
   initializeAuthPersistence,
   registerAuthRoutes,
 } from "./auth";
-import { registerPicksV2Routes } from "./picks-v2";
-import { getMlbClosingLineStore, getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
+import {
+  getUserPickFileStore,
+  registerPicksV2MultiuserRoutes,
+} from "./picks-v2-multiuser";
+import { getMlbClosingLineStore, getMlbLedgerStore } from "./mlb-ledger";
+import { registerMlbLedgerMultiuserRoutes } from "./mlb-ledger-multiuser";
+import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
+import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
 import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
 
 export const app = express();
-// Railway terminates TLS and forwards one trusted proxy hop.
 app.set("trust proxy", 1);
 const httpServer = createServer(app);
 const deploymentCommit =
@@ -38,6 +43,27 @@ if (missingApiVariables.length > 0) {
 }
 
 const authDatabase = initializeAuthPersistence();
+const systemOwnerUserId = resolveSystemOwnerUserId(authDatabase);
+const mlbLedgerStore = getMlbLedgerStore();
+const mlbClosingLineStore = getMlbClosingLineStore();
+const mlbOwnershipStore = getMlbLedgerOwnershipStore();
+const ledgerOwnershipMigration = mlbOwnershipStore.ensureExistingOwnership(
+  mlbLedgerStore,
+  systemOwnerUserId,
+);
+const userPickStore = getUserPickFileStore();
+const pickOwnershipMigration = userPickStore.migrationStatus(systemOwnerUserId);
+
+if (ledgerOwnershipMigration.remainingUnowned > 0) {
+  console.error(
+    `[s2] ${ledgerOwnershipMigration.remainingUnowned} MLB predictions remain without an owner`,
+  );
+}
+
+console.log(
+  `[s2] ownership ready: ledger migrated=${ledgerOwnershipMigration.migrated} ` +
+    `repaired=${ledgerOwnershipMigration.repaired} picks=${pickOwnershipMigration.records}`,
+);
 
 declare module "http" {
   interface IncomingMessage {
@@ -45,7 +71,6 @@ declare module "http" {
   }
 }
 
-// Security boundary for the independent frontend.
 app.use(securityHeaders);
 app.use(restrictedCors);
 app.use(apiRateLimit);
@@ -67,8 +92,6 @@ app.use(
   }),
 );
 
-// Staging-only visibility. This observer never authorizes a request;
-// the real enforcement remains in the read/write guards below.
 registerStagingAdminAuthObservation(app);
 app.use(requirePrivateReadAuth);
 app.use(requireWriteAuth);
@@ -80,22 +103,18 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
-
+  const requestPath = req.path;
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      const logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      log(logLine);
+    if (requestPath.startsWith("/api")) {
+      log(`${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`);
     }
   });
-
   next();
 });
 
@@ -114,18 +133,17 @@ app.get("/health", (_req, res) => {
     authSessionStore: "sqlite",
     authRoles: ["admin", "analyst", "viewer"],
     privateReadProtection: true,
+    multiUserOwnership: true,
+    ownershipStore: "sqlite-append-only",
+    ledgerOwnership: mlbOwnershipStore.status(),
+    pickOwnership: pickOwnershipMigration,
   });
 });
 
 (async () => {
   registerAuthRoutes(app, authDatabase);
-  // Canonical v2 routes must precede historical handlers.
-  registerPicksV2Routes(app);
-  // Scientific MLB ledger: append-only predictions, settlements and reports.
-  registerMlbLedgerRoutes(app);
-  const mlbLedgerStore = getMlbLedgerStore();
-  const mlbClosingLineStore = getMlbClosingLineStore();
-  // Pregame closing prices and official results are append-only workers.
+  registerPicksV2MultiuserRoutes(app, systemOwnerUserId, userPickStore);
+  registerMlbLedgerMultiuserRoutes(app);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   await registerRoutes(httpServer, app);
@@ -134,24 +152,14 @@ app.get("/health", (_req, res) => {
     const status = err.status || err.statusCode || 500;
     const message =
       status >= 500 ? "Internal Server Error" : err.message || "Request failed";
-
     console.error("Request error:", err);
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
+    if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
 
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-    },
-    () => {
-      log(`CourtEdge Backend serving on port ${port} commit ${deploymentCommit}`);
-    },
+    { port, host: "0.0.0.0" },
+    () => log(`CourtEdge Backend serving on port ${port} commit ${deploymentCommit}`),
   );
 })();
