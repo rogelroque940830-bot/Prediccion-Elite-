@@ -1,0 +1,32 @@
+name: Validate clean C2B proper-score fix
+
+on:
+  push:
+    branches:
+      - test/validate-c2b-proper-score-fix
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - name: Verify regression markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'settlement.outcomeValue is the graded market measurement' server/mlb-injury-outcomes-report.ts
+          grep -Fq 'C2B derives proper-score targets from settlement result' server/mlb-injury-outcomes-report.test.ts
