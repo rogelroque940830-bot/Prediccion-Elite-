@@ -1,12 +1,18 @@
 import crypto from "crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import {
+  AuthDatabase,
+  getAuthDatabase,
+  SqliteSessionStore,
+  toPublicAuthUser,
+  verifyPassword,
+  type CourtEdgeRole,
+} from "./auth-persistence";
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
-const MemoryStore = createMemoryStore(session);
 
 type AttemptBucket = { count: number; resetAt: number };
 const loginAttempts = new Map<string, AttemptBucket>();
@@ -14,7 +20,9 @@ const loginAttempts = new Map<string, AttemptBucket>();
 declare module "express-session" {
   interface SessionData {
     courtEdgeAuthenticated?: boolean;
+    courtEdgeUserId?: number;
     courtEdgeUser?: string;
+    courtEdgeRole?: CourtEdgeRole;
     csrfToken?: string;
   }
 }
@@ -30,20 +38,15 @@ function clientIp(req: Request): string {
   return (req.ip || req.socket.remoteAddress || "unknown").trim();
 }
 
-function timingSafeEqualBuffer(actual: Buffer, expected: Buffer): boolean {
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+function headerText(req: Request, name: string): string {
+  const value = req.headers[name.toLowerCase()];
+  return (Array.isArray(value) ? value[0] : value || "").trim();
 }
 
-function verifyPassword(password: string, encoded: string): boolean {
-  const parts = encoded.split("$");
-  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
-
-  const salt = Buffer.from(parts[1], "hex");
-  const expected = Buffer.from(parts[2], "hex");
-  if (salt.length < 16 || expected.length < 32) return false;
-
-  const actual = crypto.scryptSync(password, salt, expected.length);
-  return timingSafeEqualBuffer(actual, expected);
+function timingSafeEqualText(actual: string, expected: string): boolean {
+  const a = Buffer.from(actual);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 function loginRateLimit(req: Request, res: Response, next: NextFunction): void {
@@ -75,7 +78,59 @@ function clearLoginAttempts(req: Request): void {
   loginAttempts.delete(clientIp(req));
 }
 
-export function createSessionMiddleware() {
+function isAuthenticated(req: Request): boolean {
+  return Boolean(
+    req.session.courtEdgeAuthenticated &&
+    Number.isInteger(req.session.courtEdgeUserId) &&
+    req.session.courtEdgeUser &&
+    req.session.courtEdgeRole,
+  );
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!isAuthenticated(req)) {
+    res.status(401).json({ success: false, error: "Authentication required" });
+    return;
+  }
+  if (req.session.courtEdgeRole !== "admin") {
+    res.status(403).json({ success: false, error: "Administrator role required" });
+    return;
+  }
+  next();
+}
+
+function requireSessionCsrf(req: Request, res: Response, next: NextFunction): void {
+  const expected = req.session.csrfToken || "";
+  const actual = headerText(req, "x-courtedge-csrf");
+  if (!expected || !actual || !timingSafeEqualText(actual, expected)) {
+    res.status(403).json({ success: false, error: "Invalid CSRF token" });
+    return;
+  }
+  next();
+}
+
+function cookieOptions(production: boolean): session.CookieOptions {
+  return {
+    httpOnly: true,
+    secure: production,
+    sameSite: production ? "none" : "lax",
+    maxAge: SESSION_TTL_MS,
+    path: "/",
+    ...(production ? { partitioned: true } : {}),
+  } as session.CookieOptions;
+}
+
+export function initializeAuthPersistence(database = getAuthDatabase()): AuthDatabase {
+  const username = requiredEnv("COURTEDGE_ADMIN_USERNAME", "admin");
+  const passwordHash = requiredEnv(
+    "COURTEDGE_ADMIN_PASSWORD_SCRYPT",
+    "scrypt$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000",
+  );
+  database.ensureBootstrapAdmin(username, passwordHash);
+  return database;
+}
+
+export function createSessionMiddleware(database = getAuthDatabase()) {
   const production = process.env.NODE_ENV === "production";
   const secret = requiredEnv(
     "COURTEDGE_SESSION_SECRET",
@@ -85,45 +140,47 @@ export function createSessionMiddleware() {
   return session({
     name: "courtedge.sid",
     secret,
-    store: new MemoryStore({ checkPeriod: SESSION_TTL_MS }),
+    store: new SqliteSessionStore(database, SESSION_TTL_MS),
     resave: false,
     saveUninitialized: false,
     rolling: true,
     proxy: production,
-    cookie: {
-      httpOnly: true,
-      secure: production,
-      sameSite: production ? "none" : "lax",
-      maxAge: SESSION_TTL_MS,
-      path: "/",
-      ...(production ? { partitioned: true } : {}),
-    } as session.CookieOptions,
+    cookie: cookieOptions(production),
   });
 }
 
-export function registerAuthRoutes(app: Express): void {
+export function registerAuthRoutes(app: Express, database = getAuthDatabase()): void {
   app.get("/api/auth/session", (req, res) => {
+    const authenticated = isAuthenticated(req);
     res.json({
       success: true,
-      authenticated: Boolean(req.session.courtEdgeAuthenticated),
-      user: req.session.courtEdgeUser || null,
-      csrfToken: req.session.courtEdgeAuthenticated ? req.session.csrfToken || null : null,
+      authenticated,
+      user: authenticated ? req.session.courtEdgeUser : null,
+      userId: authenticated ? req.session.courtEdgeUserId : null,
+      role: authenticated ? req.session.courtEdgeRole : null,
+      identity: authenticated
+        ? {
+            id: req.session.courtEdgeUserId,
+            username: req.session.courtEdgeUser,
+            role: req.session.courtEdgeRole,
+          }
+        : null,
+      csrfToken: authenticated ? req.session.csrfToken || null : null,
     });
   });
 
   app.post("/api/auth/login", loginRateLimit, (req, res) => {
     const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
     const password = typeof req.body?.password === "string" ? req.body.password : "";
-    const expectedUser = requiredEnv("COURTEDGE_ADMIN_USERNAME", "admin");
-    const expectedHash = requiredEnv(
-      "COURTEDGE_ADMIN_PASSWORD_SCRYPT",
-      "scrypt$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000",
+    const user = username ? database.findUserByUsername(username) : undefined;
+    const valid = Boolean(
+      user &&
+      user.status === "active" &&
+      password.length >= 8 &&
+      verifyPassword(password, user.passwordHash),
     );
 
-    const validUser = username.length > 0 && username === expectedUser;
-    const validPassword = password.length >= 8 && verifyPassword(password, expectedHash);
-
-    if (!validUser || !validPassword) {
+    if (!valid || !user) {
       recordFailedLogin(req, res);
       res.status(401).json({ success: false, error: "Invalid credentials" });
       return;
@@ -136,7 +193,9 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       req.session.courtEdgeAuthenticated = true;
-      req.session.courtEdgeUser = expectedUser;
+      req.session.courtEdgeUserId = user.id;
+      req.session.courtEdgeUser = user.username;
+      req.session.courtEdgeRole = user.role;
       req.session.csrfToken = crypto.randomBytes(32).toString("hex");
 
       req.session.save((saveError) => {
@@ -145,11 +204,15 @@ export function registerAuthRoutes(app: Express): void {
           return;
         }
 
+        database.recordSuccessfulLogin(user.id);
         clearLoginAttempts(req);
         res.json({
           success: true,
           authenticated: true,
-          user: expectedUser,
+          user: user.username,
+          userId: user.id,
+          role: user.role,
+          identity: { id: user.id, username: user.username, role: user.role },
           csrfToken: req.session.csrfToken,
         });
       });
@@ -162,9 +225,51 @@ export function registerAuthRoutes(app: Express): void {
         res.status(500).json({ success: false, error: "Unable to end session" });
         return;
       }
-      res.clearCookie("courtedge.sid", { path: "/" });
+      const production = process.env.NODE_ENV === "production";
+      res.clearCookie("courtedge.sid", {
+        path: "/",
+        secure: production,
+        sameSite: production ? "none" : "lax",
+      });
       res.json({ success: true, authenticated: false });
     });
+  });
+
+  app.get("/api/auth/users", requireAdmin, (_req, res) => {
+    res.json({ success: true, data: database.listUsers() });
+  });
+
+  app.post("/api/auth/users", requireAdmin, requireSessionCsrf, (req, res) => {
+    const username = typeof req.body?.username === "string" ? req.body.username : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const role = typeof req.body?.role === "string" ? req.body.role : "viewer";
+
+    try {
+      const user = database.createUser({
+        username,
+        password,
+        role: role as CourtEdgeRole,
+      });
+      res.status(201).json({ success: true, data: user });
+    } catch (error: any) {
+      const message = error?.message || "Unable to create user";
+      const conflict = /UNIQUE constraint failed/i.test(message);
+      res.status(conflict ? 409 : 400).json({ success: false, error: message });
+    }
+  });
+
+  app.get("/api/auth/users/:id", requireAdmin, (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ success: false, error: "Invalid user id" });
+      return;
+    }
+    const user = database.findUserById(id);
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+    res.json({ success: true, data: toPublicAuthUser(user) });
   });
 }
 

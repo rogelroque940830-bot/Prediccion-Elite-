@@ -48,11 +48,35 @@ function headerText(req: Request, name: string): string {
   return (Array.isArray(value) ? value[0] : value || "").trim();
 }
 
+function hasAuthenticatedSession(req: Request): boolean {
+  const sessionData = (req as Request & { session?: Record<string, unknown> }).session;
+  return Boolean(
+    sessionData?.courtEdgeAuthenticated &&
+    Number.isInteger(sessionData.courtEdgeUserId) &&
+    typeof sessionData.courtEdgeUser === "string" &&
+    typeof sessionData.courtEdgeRole === "string",
+  );
+}
+
+function hasValidServiceToken(req: Request): boolean {
+  const expected = (process.env.COURTEDGE_WRITE_TOKEN || "").trim();
+  if (!expected) return false;
+
+  const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  const header = headerText(req, "x-courtedge-write-key");
+  const actual = (bearer || header || "").trim();
+  return Boolean(actual && timingSafeEqualText(actual, expected));
+}
+
 export function securityHeaders(_req: Request, res: Response, next: NextFunction): void {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   next();
 }
 
@@ -118,11 +142,42 @@ export function apiRateLimit(req: Request, res: Response, next: NextFunction): v
   next();
 }
 
+// User-owned data is private. Sharp/market reads remain public because they are
+// shared market observations and several predictor cards consume them before auth.
+const PRIVATE_READ_PATHS = [
+  /^\/api\/picks(?:\/|$)/,
+  /^\/api\/clv(?:\/|$)/,
+  /^\/api\/mlb\/ledger(?:\/|$)/,
+];
+
+function isPublicLedgerRead(req: Request): boolean {
+  return req.method.toUpperCase() === "GET" && req.path === "/api/mlb/ledger/v1/status";
+}
+
+function isPrivateRead(req: Request): boolean {
+  if (!["GET", "HEAD"].includes(req.method.toUpperCase())) return false;
+  if (isPublicLedgerRead(req)) return false;
+  return PRIVATE_READ_PATHS.some((pattern) => pattern.test(req.path));
+}
+
+export function requirePrivateReadAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!isPrivateRead(req) || hasAuthenticatedSession(req) || hasValidServiceToken(req)) {
+    next();
+    return;
+  }
+
+  res.status(401).json({
+    success: false,
+    error: "Authentication required for private data",
+  });
+}
+
 const PROTECTED_WRITE_PATHS = [
   /^\/api\/picks(?:\/|$)/,
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/sharp(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
+  /^\/api\/auth\/users(?:\/|$)/,
 ];
 
 function isProtectedWrite(req: Request): boolean {
@@ -137,16 +192,6 @@ function hasValidSessionWrite(req: Request): "valid" | "invalid-csrf" | "none" {
   const actual = headerText(req, "x-courtedge-csrf");
   if (!expected || !actual || !timingSafeEqualText(actual, expected)) return "invalid-csrf";
   return "valid";
-}
-
-function hasValidServiceToken(req: Request): boolean {
-  const expected = (process.env.COURTEDGE_WRITE_TOKEN || "").trim();
-  if (!expected) return false;
-
-  const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-  const header = headerText(req, "x-courtedge-write-key");
-  const actual = (bearer || header || "").trim();
-  return Boolean(actual && timingSafeEqualText(actual, expected));
 }
 
 export function requireWriteAuth(req: Request, res: Response, next: NextFunction): void {
