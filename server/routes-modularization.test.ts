@@ -62,3 +62,15 @@ test("S3A removes shared runtime and legacy persistence from routes.ts", () => {
   assert.doesNotMatch(source, /const PICKS_FILE\s*=/);
   assert.doesNotMatch(source, /async function resolveMlbAnalysisDate/);
 });
+
+
+test("S3B moves MLB route domains out of routes.ts", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "server", "routes.ts"), "utf-8");
+  assert.match(source, /registerMlbEarlyRoutes\(app\)/);
+  assert.match(source, /registerMlbCoreRoutes\(app\)/);
+  assert.match(source, /registerLegacyPicksV2Routes\(app\)/);
+  assert.doesNotMatch(source, /app\.post\("\/api\/mlb\/early-markets"/);
+  assert.doesNotMatch(source, /app\.get\("\/api\/mlb\/all"/);
+  assert.doesNotMatch(source, /async function getGameMeta/);
+  assert.ok(source.split("\n").length < 2800, "routes.ts should be below 2,800 lines after S3B");
+});
