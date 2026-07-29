@@ -24,7 +24,9 @@ jobs:
           node-version: '20'
           cache: npm
       - name: Apply C2B.1 integration patch
-        run: python scripts/apply-mlb-c2b1-dedup.py
+        run: |
+          python scripts/apply-mlb-c2b1-dedup.py
+          python scripts/fix-mlb-c2b1-frontend-marker.py
       - name: Install backend dependencies
         run: npm ci
       - name: Run MLB regression suite
@@ -69,6 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f scripts/apply-mlb-c2b1-dedup.py
+          rm -f scripts/fix-mlb-c2b1-frontend-marker.py
           rm -f .github/workflows/apply-validate-mlb-c2b1-dedup.yml
           git config user.name 'github-actions[bot]'
           git config user.email '4189826+github-actions[bot]@users.noreply.github.com'
