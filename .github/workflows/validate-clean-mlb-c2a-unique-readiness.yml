@@ -1,0 +1,35 @@
+name: Validate clean MLB C2A unique readiness
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run check
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Verify C2A markers
+        run: |
+          grep -Fq 'UNIQUE_ANALYTICAL_DECISIONS' server/mlb-injury-calibration-report.ts
+          grep -Fq 'settledUniqueAnalyticalDecisions' server/mlb-injury-calibration-report.ts
+          grep -Fq 'C2A readiness excludes exact analytical duplicates' server/mlb-injury-calibration-report.test.ts
+          grep -Fq 'Decisiones únicas liquidadas para ampliar automatización' frontend/client/src/pages/mlb-history.tsx
