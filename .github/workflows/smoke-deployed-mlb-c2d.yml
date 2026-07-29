@@ -1,0 +1,75 @@
+name: Smoke deployed MLB C2D
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed C2D and ledger integrity
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: 890f7c959c7d6b5ac6eed9ed3b25ecf28baa2b3d
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/before.json
+          for attempt in $(seq 1 60); do
+            curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json || true
+            served=$(jq -r '.commit // ""' /tmp/health.json 2>/dev/null || true)
+            echo "Attempt $attempt: served commit $served"
+            if [ "$served" = "$EXPECTED_COMMIT" ]; then break; fi
+            sleep 10
+          done
+          jq -e --arg commit "$EXPECTED_COMMIT" '
+            .status == "healthy"
+            and .commit == $commit
+            and .environment == "p0-integration"
+            and .mlbClosingLineCapture == true
+          ' /tmp/health.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status.json
+          jq -e '
+            .success == true
+            and .data.predictions == 4
+            and .data.settlementEvents == 4
+            and .data.immutable == true
+            and .data.closingLines.schemaVersion == "mlb-closing-line.v1"
+            and .data.closingLines.observations == 0
+            and .data.closingLines.immutable == true
+          ' /tmp/status.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/closing-lines?limit=10000" > /tmp/c2d.json
+          jq '{summary:.data.summary,methodology:.data.methodology}' /tmp/c2d.json
+          jq -e '
+            .success == true
+            and .data.schemaVersion == "mlb-closing-line-report.v1"
+            and .data.summary.ledgerRecords == 4
+            and .data.summary.uniqueAnalyticalDecisions == 3
+            and .data.summary.analyticalDuplicatesExcluded == 1
+            and .data.summary.final == 0
+            and .data.summary.pending == 0
+            and .data.summary.unavailable == 3
+            and .data.summary.exactBookMeasured == 0
+            and .data.summary.averageExactClvPp == null
+            and .data.methodology.historicalBackfill == false
+            and .data.methodology.immutableObservations == true
+          ' /tmp/c2d.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/injury-outcomes?limit=10000" > /tmp/c2b.json
+          jq -e '
+            .success == true
+            and .data.sample.uniqueAnalyticalDecisions == 2
+            and .data.sample.settledUniqueAnalyticalDecisions == 2
+            and .data.closingLine.measured == 0
+          ' /tmp/c2b.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
+          jq -e --slurpfile before /tmp/before.json '
+            .data.predictions == $before[0].data.predictions
+            and .data.settlementEvents == $before[0].data.settlementEvents
+            and .data.predictions == 4
+            and .data.settlementEvents == 4
+          ' /tmp/after.json >/dev/null
