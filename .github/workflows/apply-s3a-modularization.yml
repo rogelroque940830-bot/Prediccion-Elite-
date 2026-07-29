@@ -23,13 +23,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Apply deterministic S3A extraction
-        run: python scripts/s3a_modularize.py
-      - name: Diagnose remaining legacy storage declarations
         run: |
-          echo "PICKS_FILE occurrences after extraction:"
-          grep -n -C 4 "PICKS_FILE" server/routes.ts || true
-          echo "loadPicks occurrences after extraction:"
-          grep -n -C 4 "function loadPicks" server/routes.ts || true
+          python scripts/s3a_modularize.py
+          python scripts/s3a_extract_legacy_routes.py
       - name: Install dependencies
         run: npm ci
       - name: Validate S3 route contract
@@ -48,6 +44,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/routes.ts server/route-runtime.ts server/legacy-picks-store.ts server/mlb-route-runtime.ts server/route-contract.snapshot.json server/routes-modularization.test.ts tsconfig.s3-modularization.json package.json
-          git commit -m "S3A: extract shared route runtime and freeze API contract"
+          git add server/routes.ts server/route-runtime.ts server/legacy-picks-store.ts server/legacy-picks-routes.ts server/mlb-route-runtime.ts server/route-contract.snapshot.json server/routes-modularization.test.ts tsconfig.s3-modularization.json package.json
+          git commit -m "S3A: extract shared route runtime and legacy compatibility routes"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
