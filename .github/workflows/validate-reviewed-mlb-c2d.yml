@@ -1,0 +1,46 @@
+name: Validate reviewed MLB C2D
+
+on:
+  pull_request:
+    branches:
+      - feature/mlb-closing-line-clv-c2d
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npx tsc --noEmit
+      - working-directory: frontend
+        run: npm run build
+      - name: Verify reviewed C2D regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'failedAdditionalEventIds' server/mlb-closing-line-worker.ts
+          grep -q 'bookmakerCandidates' server/mlb-closing-line-worker.ts
+          grep -q 'closingCaptureDateWindow' server/mlb-closing-line-worker.ts
+          grep -q 'validClosingQuoteTiming' server/mlb-closing-line-worker.ts
+          grep -q "CASE WHEN match_mode = 'EXACT_BOOK'" server/mlb-closing-line-store.ts
+          grep -q 'historicalBackfill: false' server/mlb-closing-line-report.ts
+          grep -q 'Cuota de cierre y CLV · Fase C2D' frontend/client/src/components/mlb-closing-line-panel.tsx
+          ! find .github/workflows -maxdepth 1 -type f \( -name '*fix-c2d*' -o -name '*patch-c2d*' -o -name '*implement-mlb-closing*' \) | grep -q .
