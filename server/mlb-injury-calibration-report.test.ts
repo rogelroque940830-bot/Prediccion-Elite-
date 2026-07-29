@@ -125,6 +125,10 @@ test("report deduplicates identical injury contexts across multiple markets", ()
   assert.equal(report.sample.totalPredictions, 3);
   assert.equal(report.sample.auditedPredictions, 2);
   assert.equal(report.sample.legacyPredictionsWithoutAudit, 1);
+  assert.equal(report.sample.uniqueAnalyticalDecisions, 2);
+  assert.equal(report.sample.analyticalDuplicatesExcluded, 0);
+  assert.equal(report.sample.settledUniqueAnalyticalDecisions, 1);
+  assert.equal(report.sample.pendingUniqueAnalyticalDecisions, 1);
   assert.equal(report.sample.uniqueAuditContexts, 1);
   assert.equal(report.sample.duplicateMarketSnapshotsExcluded, 1);
   assert.equal(report.sample.settledAuditedPredictions, 1);
@@ -179,4 +183,27 @@ test("readiness remains conservative until enough audited picks are settled", ()
   assert.equal(report.readiness.settledAuditedPicks, 1);
   assert.equal(report.readiness.remaining, 19);
   assert.equal(report.readiness.readyForExpansion, false);
+});
+
+
+test("C2A readiness excludes exact analytical duplicates without removing ledger records", () => {
+  const original = record("ML", true, true, 1_000);
+  const duplicate = record("ML", true, true, 2_000);
+  duplicate.prediction.id = "pred-ML-duplicate";
+  duplicate.prediction.clientRequestId = "request-ML-duplicate";
+  duplicate.prediction.payloadSha256 = "sha-ML-duplicate";
+  duplicate.settlement.predictionId = duplicate.prediction.id;
+  duplicate.settlement.eventId = "settle-ML-duplicate";
+
+  const report = buildMlbInjuryCalibrationReport([original, duplicate], 20);
+
+  assert.equal(report.readiness.countingBasis, "UNIQUE_ANALYTICAL_DECISIONS");
+  assert.equal(report.readiness.settledAuditedPicks, 1);
+  assert.equal(report.readiness.remaining, 19);
+  assert.equal(report.sample.auditedPredictions, 2);
+  assert.equal(report.sample.settledAuditedPredictions, 2);
+  assert.equal(report.sample.uniqueAnalyticalDecisions, 1);
+  assert.equal(report.sample.settledUniqueAnalyticalDecisions, 1);
+  assert.equal(report.sample.analyticalDuplicatesExcluded, 1);
+  assert.equal(report.sample.settledAnalyticalDuplicatesExcluded, 1);
 });

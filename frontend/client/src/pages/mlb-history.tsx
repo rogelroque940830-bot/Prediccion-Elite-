@@ -10,6 +10,8 @@ interface InjuryCalibrationReport {
   schemaVersion: "mlb-injury-calibration-report.v1";
   generatedAt: string;
   readiness: {
+    countingBasis: "UNIQUE_ANALYTICAL_DECISIONS";
+    fingerprintVersion: string;
     targetSettledAuditedPicks: number;
     settledAuditedPicks: number;
     remaining: number;
@@ -21,6 +23,11 @@ interface InjuryCalibrationReport {
     legacyPredictionsWithoutAudit: number;
     settledAuditedPredictions: number;
     pendingAuditedPredictions: number;
+    uniqueAnalyticalDecisions: number;
+    settledUniqueAnalyticalDecisions: number;
+    pendingUniqueAnalyticalDecisions: number;
+    analyticalDuplicatesExcluded: number;
+    settledAnalyticalDuplicatesExcluded: number;
     uniqueAuditContexts: number;
     duplicateMarketSnapshotsExcluded: number;
   };
@@ -507,7 +514,7 @@ export default function MLBHistory() {
             <>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-muted-foreground">Muestra liquidada para ampliar automatización</span>
+                  <span className="text-muted-foreground">Decisiones únicas liquidadas para ampliar automatización</span>
                   <span className={injuryReport.readiness.readyForExpansion ? "text-green-300 font-semibold" : "text-cyan-200 font-semibold"}>
                     {injuryReport.readiness.settledAuditedPicks}/{injuryReport.readiness.targetSettledAuditedPicks}
                   </span>
@@ -518,14 +525,14 @@ export default function MLBHistory() {
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {injuryReport.readiness.readyForExpansion
                     ? "Muestra mínima alcanzada; todavía requiere revisión técnica antes de ampliar reglas."
-                    : `Faltan ${injuryReport.readiness.remaining} picks C1 liquidados para la primera revisión.`}
+                    : `Faltan ${injuryReport.readiness.remaining} decisiones únicas liquidadas para la primera revisión.`}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {[
-                  ["Picks auditados", injuryReport.sample.auditedPredictions],
-                  ["Contextos únicos", injuryReport.sample.uniqueAuditContexts],
+                  ["Registros C1", injuryReport.sample.auditedPredictions],
+                  ["Decisiones únicas", injuryReport.sample.uniqueAnalyticalDecisions],
                   ["Autoaplicados", injuryReport.decisions.autoApplied],
                   ["Retenidos", injuryReport.decisions.retained],
                   ["Solo en MLB", injuryReport.decisions.officialOnly],
@@ -568,9 +575,15 @@ export default function MLBHistory() {
               </div>
 
               <div className="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/30 p-2.5 text-[11px] text-muted-foreground">
+                <Database className="h-4 w-4 text-cyan-300 shrink-0" />
+                <p>
+                  C2A usa {injuryReport.sample.uniqueAnalyticalDecisions} decisiones únicas de {injuryReport.sample.auditedPredictions} registros C1 para el progreso. Se excluyeron {injuryReport.sample.analyticalDuplicatesExcluded} duplicado(s) analítico(s).
+                </p>
+              </div>
+              <div className="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/30 p-2.5 text-[11px] text-muted-foreground">
                 <Activity className="h-4 w-4 text-cyan-300 shrink-0" />
                 <p>
-                  Se excluyeron {injuryReport.sample.duplicateMarketSnapshotsExcluded} snapshots duplicados de mercado al contar decisiones de lesiones. Así, guardar ML, F5 y total del mismo análisis no infla la calibración.
+                  La evidencia se agrupó en {injuryReport.sample.uniqueAuditContexts} contexto(s) de lesiones; se excluyeron {injuryReport.sample.duplicateMarketSnapshotsExcluded} snapshots de mercado equivalentes al sumar jugadores y ajustes.
                 </p>
               </div>
             </>
