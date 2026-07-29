@@ -1,0 +1,39 @@
+name: Validate complete S3 feature
+
+on:
+  pull_request:
+    branches:
+      - feature/s3-backend-modularization
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Frozen route contract
+        run: npm run test:s3-modularization
+      - name: S3 focused typecheck
+        run: npm run typecheck:s3-modularization
+      - name: S1 authentication regression
+        run: npm run test:s1-auth
+      - name: S2 multiuser regression
+        run: npm run test:s2-multiuser
+      - name: Full MLB regression
+        run: npm run test:mlb-ledger
+      - name: MLB ledger typecheck
+        run: npm run typecheck:mlb-ledger
+      - name: Production backend build
+        run: npm run build:backend
+      - name: Verify composition root size
+        run: |
+          lines=$(wc -l < server/routes.ts)
+          echo "server/routes.ts lines: $lines"
+          test "$lines" -lt 80
