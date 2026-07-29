@@ -90,7 +90,9 @@ function bullpenBlocked(audit: MlbInjuryAudit): boolean {
 
 function scoringOutcome(record: LedgerRecord): number | null {
   if (!record.settlement) return null;
-  if (Number.isFinite(record.settlement.outcomeValue)) return Number(record.settlement.outcomeValue);
+  // settlement.outcomeValue is the graded market measurement (run margin,
+  // total runs, team runs, etc.), not a Bernoulli target. Proper scoring
+  // rules must use the immutable settlement classification instead.
   if (record.settlement.result === "WIN") return 1;
   if (record.settlement.result === "LOSS") return 0;
   if (record.settlement.result === "HALF_WIN") return 0.75;
@@ -248,7 +250,7 @@ export function buildMlbInjuryOutcomesReport(records: LedgerRecord[]) {
     schemaVersion: MLB_INJURY_OUTCOMES_REPORT_VERSION,
     generatedAt: new Date().toISOString(),
     methodology: {
-      scoring: "Brier and logarithmic loss use the saved pregame model probability and immutable settlement outcome.",
+      scoring: "Brier and logarithmic loss use the saved pregame model probability and the immutable WIN/LOSS settlement classification; raw market outcomeValue is not a probability target.",
       cohortsOverlap: true,
       probabilityEffectScope: "HOME_ML_AND_GAME_TOTAL_COUNTERFACTUAL",
       formulasChanged: false,

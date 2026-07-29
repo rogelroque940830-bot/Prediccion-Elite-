@@ -171,3 +171,28 @@ test("C2B marks non-zero legacy adjustments without counterfactual data as unava
   assert.equal(report.summary.effectUnavailable, 1);
   assert.equal(report.recentSettled[0].effect.source, "UNAVAILABLE");
 });
+
+
+test("C2B derives proper-score targets from settlement result, not raw market margin", () => {
+  const winRecord = record({
+    id: "margin-win", probability: 0.6781014109277892, result: "WIN", profit: 0.7143, auditValue: audit(),
+  });
+  const lossRecord = record({
+    id: "margin-loss", probability: 0.62, result: "LOSS", profit: -1, auditValue: audit(),
+  });
+  if (!winRecord.settlement || !lossRecord.settlement) throw new Error("settlements required");
+  winRecord.settlement.outcomeValue = 14;
+  lossRecord.settlement.outcomeValue = -3;
+
+  const report = buildMlbInjuryOutcomesReport([winRecord, lossRecord]);
+  assert.equal(report.summary.scored, 2);
+  assert.ok(report.summary.brierScore != null && report.summary.brierScore >= 0 && report.summary.brierScore <= 1);
+  assert.ok(report.summary.logLoss != null && report.summary.logLoss >= 0);
+
+  const win = report.recentSettled.find((row) => row.predictionId === "margin-win");
+  const loss = report.recentSettled.find((row) => row.predictionId === "margin-loss");
+  assert.equal(win?.outcomeValue, 1);
+  assert.equal(loss?.outcomeValue, 0);
+  assert.ok((win?.brierScore ?? 2) < 1);
+  assert.ok((loss?.brierScore ?? 2) < 1);
+});
