@@ -1,0 +1,64 @@
+name: Apply and validate MLB C2B.1 dedup
+
+on:
+  push:
+    branches:
+      - feature/mlb-c2b1-analytical-dedup
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-c2b1-analytical-dedup
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply C2B.1 integration patch
+        run: python scripts/apply-mlb-c2b1-dedup.py
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Verify C2B.1 safety markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'mlb-analytical-fingerprint.v1' server/mlb-analytical-dedup.ts
+          grep -Fq 'duplicatesExcluded' server/mlb-injury-outcomes-report.ts
+          grep -Fq 'analyticalDuplicate' server/mlb-ledger-history-view.ts
+          grep -Fq 'Duplicado analítico' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'automaticRuleChanges: false' server/mlb-injury-decision-report.ts
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply-mlb-c2b1-dedup.py
+          rm -f .github/workflows/apply-validate-mlb-c2b1-dedup.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '4189826+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement MLB analytical duplicate exclusion C2B.1'
+          git push origin HEAD:feature/mlb-c2b1-analytical-dedup
