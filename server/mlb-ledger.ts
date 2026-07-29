@@ -11,12 +11,21 @@ import { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 import { buildMlbInjuryDecisionReport } from "./mlb-injury-decision-report";
 import { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
 import { runMlbAutoSettlement } from "./mlb-settlement-worker";
+import { MlbClosingLineStore } from "./mlb-closing-line-store";
+import { buildMlbClosingLineReport, enrichRecordsForMlbReports } from "./mlb-closing-line-report";
+import { runMlbClosingLineCapture } from "./mlb-closing-line-worker";
 
 let singletonStore: MlbLedgerStore | null = null;
+let singletonClosingStore: MlbClosingLineStore | null = null;
 
 export function getMlbLedgerStore(): MlbLedgerStore {
   if (!singletonStore) singletonStore = new MlbLedgerStore();
   return singletonStore;
+}
+
+export function getMlbClosingLineStore(): MlbClosingLineStore {
+  if (!singletonClosingStore) singletonClosingStore = new MlbClosingLineStore();
+  return singletonClosingStore;
 }
 
 function optionalText(raw: unknown): string | undefined {
@@ -46,20 +55,40 @@ function queryFilters(query: Record<string, unknown>) {
 
 export function registerMlbLedgerRoutes(app: Express): void {
   const store = getMlbLedgerStore();
+  const closingStore = getMlbClosingLineStore();
 
   app.get("/api/mlb/ledger/v1/status", (_req, res) => {
-    res.json({ success: true, data: store.status() });
+    res.json({ success: true, data: { ...store.status(), closingLines: closingStore.status() } });
   });
 
   app.post("/api/mlb/ledger/v1/settle-pending", async (_req, res) => {
     try {
-      const data = await runMlbAutoSettlement(store);
+      const data = await runMlbAutoSettlement(store, closingStore);
       res.json({ success: true, data });
     } catch (error: any) {
       res.status(500).json({
         success: false,
         error: error?.message || "Unable to settle pending MLB predictions",
       });
+    }
+  });
+
+  app.post("/api/mlb/ledger/v1/capture-closing-lines", async (_req, res) => {
+    try {
+      const data = await runMlbClosingLineCapture(store, closingStore);
+      res.json({ success: true, data });
+    } catch (error: any) {
+      res.status(error?.status || 500).json({ success: false, error: error?.message || "Unable to capture MLB closing lines" });
+    }
+  });
+
+  app.get("/api/mlb/ledger/v1/closing-lines", (req, res) => {
+    try {
+      const filters = queryFilters(req.query as Record<string, unknown>);
+      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      res.json({ success: true, data: buildMlbClosingLineReport(records, closingStore) });
+    } catch (error: any) {
+      res.status(error?.status || 500).json({ success: false, error: error?.message || "Unable to build MLB closing-line report" });
     }
   });
 
@@ -115,7 +144,10 @@ export function registerMlbLedgerRoutes(app: Express): void {
   app.get("/api/mlb/ledger/v1/history", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
-      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      const records = enrichRecordsForMlbReports(
+        store.listRecords({ ...filters, limit: filters.limit ?? 10_000 }),
+        closingStore,
+      );
       res.json({ success: true, data: buildMlbLedgerHistoryView(records) });
     } catch (error: any) {
       res.status(error?.status || 500).json({
@@ -142,7 +174,10 @@ export function registerMlbLedgerRoutes(app: Express): void {
   app.get("/api/mlb/ledger/v1/injury-outcomes", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
-      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      const records = enrichRecordsForMlbReports(
+        store.listRecords({ ...filters, limit: filters.limit ?? 10_000 }),
+        closingStore,
+      );
       res.json({ success: true, data: buildMlbInjuryOutcomesReport(records) });
     } catch (error: any) {
       res.status(error?.status || 500).json({
@@ -155,7 +190,10 @@ export function registerMlbLedgerRoutes(app: Express): void {
   app.get("/api/mlb/ledger/v1/injury-decisions", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
-      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      const records = enrichRecordsForMlbReports(
+        store.listRecords({ ...filters, limit: filters.limit ?? 10_000 }),
+        closingStore,
+      );
       res.json({ success: true, data: buildMlbInjuryDecisionReport(records) });
     } catch (error: any) {
       res.status(error?.status || 500).json({
@@ -168,7 +206,10 @@ export function registerMlbLedgerRoutes(app: Express): void {
   app.get("/api/mlb/ledger/v1/report", (req, res) => {
     try {
       const filters = queryFilters(req.query as Record<string, unknown>);
-      const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+      const records = enrichRecordsForMlbReports(
+        store.listRecords({ ...filters, limit: filters.limit ?? 10_000 }),
+        closingStore,
+      );
       const trainPct = optionalNumber(req.query.trainPct) ?? 70;
       const validationPct = optionalNumber(req.query.validationPct) ?? 15;
       res.json({ success: true, data: buildMlbBacktestReport(records, trainPct, validationPct) });
@@ -182,7 +223,10 @@ export function registerMlbLedgerRoutes(app: Express): void {
 
   app.get("/api/mlb/ledger/v1/export", (req, res) => {
     const filters = queryFilters(req.query as Record<string, unknown>);
-    const records = store.listRecords({ ...filters, limit: filters.limit ?? 10_000 });
+    const records = enrichRecordsForMlbReports(
+      store.listRecords({ ...filters, limit: filters.limit ?? 10_000 }),
+      closingStore,
+    );
     const format = optionalText(req.query.format) || "jsonl";
 
     if (format === "csv") {
@@ -202,3 +246,5 @@ export { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report
 export { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 export { buildMlbInjuryDecisionReport } from "./mlb-injury-decision-report";
 export { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
+export { MlbClosingLineStore } from "./mlb-closing-line-store";
+export { buildMlbClosingLineReport } from "./mlb-closing-line-report";

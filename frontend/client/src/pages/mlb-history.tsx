@@ -4,6 +4,7 @@ import { fetchJson } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MlbClosingLinePanel } from "@/components/mlb-closing-line-panel";
 import { Activity, Database, LockKeyhole, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
 
 interface InjuryCalibrationReport {
@@ -777,6 +778,8 @@ export default function MLBHistory() {
           )}
         </CardContent>
       </Card>
+
+      <MlbClosingLinePanel />
 
       {marketStats.length > 0 && (
         <Card>

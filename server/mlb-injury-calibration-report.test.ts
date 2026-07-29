@@ -207,3 +207,24 @@ test("C2A readiness excludes exact analytical duplicates without removing ledger
   assert.equal(report.sample.analyticalDuplicatesExcluded, 1);
   assert.equal(report.sample.settledAnalyticalDuplicatesExcluded, 1);
 });
+
+test("C2A counts a duplicate group as settled when any member is settled", () => {
+  const original = record("ML", false, true, 1_000);
+  const duplicate = record("ML", true, true, 2_000);
+  duplicate.prediction.id = "pred-ML-settled-duplicate";
+  duplicate.prediction.clientRequestId = "request-ML-settled-duplicate";
+  duplicate.prediction.payloadSha256 = "sha-ML-settled-duplicate";
+  duplicate.settlement.predictionId = duplicate.prediction.id;
+  duplicate.settlement.eventId = "settle-ML-settled-duplicate";
+
+  const report = buildMlbInjuryCalibrationReport([original, duplicate], 20);
+
+  assert.equal(report.sample.auditedPredictions, 2);
+  assert.equal(report.sample.settledAuditedPredictions, 1);
+  assert.equal(report.sample.pendingAuditedPredictions, 1);
+  assert.equal(report.sample.uniqueAnalyticalDecisions, 1);
+  assert.equal(report.sample.settledUniqueAnalyticalDecisions, 1);
+  assert.equal(report.sample.pendingUniqueAnalyticalDecisions, 0);
+  assert.equal(report.readiness.settledAuditedPicks, 1);
+  assert.equal(report.readiness.remaining, 19);
+});

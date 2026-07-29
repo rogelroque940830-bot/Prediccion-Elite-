@@ -1,4 +1,5 @@
 import type { LedgerPrediction, MlbLedgerStore } from "./mlb-ledger-store";
+import type { MlbClosingLineStore } from "./mlb-closing-line-store";
 
 const MLB_API = "https://statsapi.mlb.com/api";
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
@@ -384,6 +385,7 @@ async function resolveGamePk(prediction: LedgerPrediction): Promise<number | nul
 
 export async function runMlbAutoSettlement(
   store: MlbLedgerStore,
+  closingStore?: MlbClosingLineStore,
 ): Promise<SettlementRunResult> {
   scheduleCache.clear();
   const pending = store.listRecords({ settled: false, limit: 10_000 });
@@ -414,13 +416,22 @@ export async function runMlbAutoSettlement(
         continue;
       }
 
+      const closing = closingStore?.latestBeforeCommence(
+        record.prediction.id,
+        record.prediction.game.commenceTime,
+      );
+      const exactComparableClosing = closing?.matchMode === "EXACT_BOOK" && closing.comparable
+        ? closing
+        : null;
       store.appendSettlement(record.prediction.id, {
         clientRequestId: `auto-settle:${record.prediction.id}:official-v1`,
         result: graded.result,
+        closingOddsAmerican: exactComparableClosing?.oddsAmerican,
+        closingLine: exactComparableClosing?.line ?? undefined,
         outcomeValue: graded.outcomeValue,
         finalScore: { home: game.homeScore, away: game.awayScore },
         source: "official",
-        notes: `${graded.notes} · MLB gamePk ${game.gamePk}`,
+        notes: `${graded.notes} · MLB gamePk ${game.gamePk}${exactComparableClosing ? ` · Closing ${exactComparableClosing.bookmakerKey} ${exactComparableClosing.oddsAmerican}` : ""}`,
       });
       result.settled++;
     } catch (error) {
@@ -439,7 +450,10 @@ let workerRunning = false;
 let intervalHandle: NodeJS.Timeout | null = null;
 let startHandle: NodeJS.Timeout | null = null;
 
-export function startMlbSettlementWorker(store: MlbLedgerStore): void {
+export function startMlbSettlementWorker(
+  store: MlbLedgerStore,
+  closingStore?: MlbClosingLineStore,
+): void {
   if (workerStarted || process.env.MLB_LEDGER_AUTO_SETTLE === "false") return;
   workerStarted = true;
   const intervalMsRaw = Number(
@@ -454,7 +468,7 @@ export function startMlbSettlementWorker(store: MlbLedgerStore): void {
     if (workerRunning) return;
     workerRunning = true;
     try {
-      const summary = await runMlbAutoSettlement(store);
+      const summary = await runMlbAutoSettlement(store, closingStore);
       if (summary.checked > 0 || summary.errors.length > 0) {
         console.log(`[mlb-ledger] settlement worker ${JSON.stringify(summary)}`);
       }
