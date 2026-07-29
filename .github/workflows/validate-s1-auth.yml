@@ -1,0 +1,40 @@
+name: Validate S1 persistent auth
+
+on:
+  pull_request:
+    branches:
+      - feature/s1-persistent-auth-sessions
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test S1 auth
+        run: npm run test:s1-auth
+
+      - name: Typecheck S1 auth
+        run: npm run typecheck:s1-auth
+
+      - name: Test MLB regression suite
+        run: npm run test:mlb-ledger
+
+      - name: Typecheck MLB ledger
+        run: npm run typecheck:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
