@@ -20,6 +20,7 @@ import {
 } from "./picks-v2-multiuser";
 import { getMlbClosingLineStore, getMlbLedgerStore } from "./mlb-ledger";
 import { registerMlbLedgerMultiuserRoutes } from "./mlb-ledger-multiuser";
+import { registerMlbOwnedExportRoute } from "./mlb-ledger-owned-export";
 import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
@@ -143,6 +144,7 @@ app.get("/health", (_req, res) => {
 (async () => {
   registerAuthRoutes(app, authDatabase);
   registerPicksV2MultiuserRoutes(app, systemOwnerUserId, userPickStore);
+  registerMlbOwnedExportRoute(app);
   registerMlbLedgerMultiuserRoutes(app);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
