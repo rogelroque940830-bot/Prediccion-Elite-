@@ -1,0 +1,34 @@
+name: Validate reviewed S2 final head
+
+on:
+  pull_request:
+    branches:
+      - feature/s2-multiuser-picks-ledger
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: S1 regression
+        run: npm run test:s1-auth
+      - name: S2 multiuser and migration regressions
+        run: npm run test:s2-multiuser
+      - name: S1 typecheck
+        run: npm run typecheck:s1-auth
+      - name: S2 typecheck
+        run: npm run typecheck:s2-multiuser
+      - name: Full MLB regression
+        run: npm run test:mlb-ledger
+      - name: MLB ledger typecheck
+        run: npm run typecheck:mlb-ledger
+      - name: Production backend build
+        run: npm run build:backend
