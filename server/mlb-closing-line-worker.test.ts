@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { MlbLedgerStore } from "./mlb-ledger-store";
+import { MlbClosingLineStore } from "./mlb-closing-line-store";
 import {
+  closingCaptureDateWindow,
   closingCheckpointFor,
   closingMarketForPrediction,
+  runMlbClosingLineCapture,
   selectClosingQuote,
   validClosingQuoteTiming,
 } from "./mlb-closing-line-worker";
@@ -94,6 +101,13 @@ test("closing quotes must be newer than the saved pick and no later than first p
   assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T23:00:01.000Z", commence), false);
 });
 
+test("capture scans a bounded current date window instead of the oldest ledger rows", () => {
+  assert.deepEqual(
+    closingCaptureDateWindow(Date.parse("2026-07-29T23:30:00.000Z")),
+    { from: "2026-07-28", to: "2026-07-31" },
+  );
+});
+
 test("market mapping never substitutes full-game moneyline for F5", () => {
   assert.deepEqual(closingMarketForPrediction(prediction()), { marketKey: "h2h", featured: true });
   assert.deepEqual(
@@ -114,6 +128,28 @@ test("quote selection prefers the exact ticket book and selected outcome", () =>
   assert.equal(quote.oddsAmerican, -160);
   assert.equal(quote.comparable, true);
   assert.equal(quote.quoteAt, "2026-07-29T22:49:00.000Z");
+});
+
+test("quote selection falls through when the first exact alias lacks the requested market", () => {
+  const f5Event = {
+    ...event,
+    bookmakers: [
+      { key: "hardrockbet_fl", title: "Hard Rock Florida", markets: [] },
+      { key: "hardrockbet", title: "Hard Rock Bet", markets: [{
+        key: "h2h_1st_5_innings", last_update: "2026-07-29T22:49:00.000Z",
+        outcomes: [{ name: "Detroit Tigers", price: -150 }, { name: "Baltimore Orioles", price: 130 }],
+      }] },
+      { key: "fanduel", title: "FanDuel", markets: [{
+        key: "h2h_1st_5_innings", outcomes: [{ name: "Detroit Tigers", price: -145 }],
+      }] },
+    ],
+  };
+  const f5 = prediction({ market: { ...prediction().market, type: "F5_ML" } });
+  const quote = selectClosingQuote(f5Event, f5, "h2h_1st_5_innings");
+  assert.ok(quote);
+  assert.equal(quote.bookmakerKey, "hardrockbet");
+  assert.equal(quote.matchMode, "EXACT_BOOK");
+  assert.equal(quote.oddsAmerican, -150);
 });
 
 test("different totals lines report line CLV instead of fake probability CLV", () => {
@@ -139,4 +175,55 @@ test("consensus tickets use a clearly labeled proxy book", () => {
   assert.ok(quote);
   assert.equal(quote.matchMode, "PROXY_BOOK");
   assert.equal(quote.bookmakerKey, "hardrockbet_fl");
+});
+
+
+test("a transient F5 provider failure remains retryable within the same checkpoint", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mlb-closing-retry-"));
+  const dbPath = path.join(dir, "ledger.sqlite");
+  const ledger = new MlbLedgerStore(dbPath);
+  const closing = new MlbClosingLineStore(dbPath);
+  const commenceMs = Date.now() + 10 * 60 * 1000;
+  const commenceTime = new Date(commenceMs).toISOString();
+  const saved = ledger.appendPrediction({
+    clientRequestId: `retry-pick-${Date.now()}`,
+    source: "app",
+    model: { name: "CourtEdge MLB", version: "test", environment: "test" },
+    game: { gamePk: 555, gameDate: commenceTime.slice(0, 10), commenceTime, homeTeam: "Detroit Tigers", awayTeam: "Baltimore Orioles" },
+    market: { type: "F5_ML", selection: "Detroit Tigers F5", oddsAmerican: -140, book: "Hard Rock", capturedAt: new Date().toISOString() },
+    probabilities: { model: 0.62 },
+    decision: { signal: "BET", stakeUnits: 1 },
+    analysis: { stage: "FINAL" },
+  }).data;
+  const originalFetch = globalThis.fetch;
+  const previousKey = process.env.ODDS_API_KEY;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return new Response(JSON.stringify([{
+        id: "1234567890abcdef1234567890abcdef",
+        commence_time: commenceTime,
+        home_team: "Detroit Tigers",
+        away_team: "Baltimore Orioles",
+      }]), { status: 200, headers: { "content-type": "application/json", "x-requests-remaining": "100" } });
+    }
+    return new Response(JSON.stringify({ message: "temporary provider failure" }), {
+      status: 503,
+      headers: { "content-type": "application/json", "x-requests-remaining": "99" },
+    });
+  };
+  process.env.ODDS_API_KEY = "test-key";
+  try {
+    const summary = await runMlbClosingLineCapture(ledger, closing, commenceMs - 10 * 60 * 1000);
+    assert.equal(summary.errors.length, 1);
+    assert.equal(closing.hasAttempt(saved.id, "T15"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey == null) delete process.env.ODDS_API_KEY;
+    else process.env.ODDS_API_KEY = previousKey;
+    closing.close();
+    ledger.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

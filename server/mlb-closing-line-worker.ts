@@ -165,18 +165,26 @@ function exactBookAliases(book: string | null | undefined): string[] {
   return BOOKMAKERS.filter((key) => value.includes(normalize(key)));
 }
 
-function chooseBookmaker(event: any, prediction: LedgerPrediction) {
+function bookmakerCandidates(event: any, prediction: LedgerPrediction) {
   const books = Array.isArray(event?.bookmakers) ? event.bookmakers : [];
   const exactAliases = exactBookAliases(prediction.market.book);
+  const candidates: Array<{ book: any; matchMode: "EXACT_BOOK" | "PROXY_BOOK" }> = [];
+  const seen = new Set<string>();
   for (const alias of exactAliases) {
     const match = books.find((book: any) => book?.key === alias);
-    if (match) return { book: match, matchMode: "EXACT_BOOK" as const };
+    if (match && !seen.has(alias)) {
+      candidates.push({ book: match, matchMode: "EXACT_BOOK" });
+      seen.add(alias);
+    }
   }
   for (const key of BOOKMAKERS) {
     const match = books.find((book: any) => book?.key === key);
-    if (match) return { book: match, matchMode: "PROXY_BOOK" as const };
+    if (match && !seen.has(key)) {
+      candidates.push({ book: match, matchMode: "PROXY_BOOK" });
+      seen.add(key);
+    }
   }
-  return null;
+  return candidates;
 }
 
 function selectedTeamName(prediction: LedgerPrediction, event: any): string | null {
@@ -220,54 +228,55 @@ export function selectClosingQuote(
   prediction: LedgerPrediction,
   marketKey: SupportedClosingMarket,
 ): SelectedQuote | null {
-  const chosen = chooseBookmaker(event, prediction);
-  if (!chosen) return null;
-  const markets = Array.isArray(chosen.book?.markets) ? chosen.book.markets : [];
-  const market = markets.find((item: any) => item?.key === marketKey);
-  if (!market) return null;
-  const outcomes = Array.isArray(market?.outcomes) ? market.outcomes : [];
+  for (const chosen of bookmakerCandidates(event, prediction)) {
+    const markets = Array.isArray(chosen.book?.markets) ? chosen.book.markets : [];
+    const market = markets.find((item: any) => item?.key === marketKey);
+    if (!market) continue;
+    const outcomes = Array.isArray(market?.outcomes) ? market.outcomes : [];
+    let outcome: any = null;
 
-  let outcome: any = null;
-  if (marketKey === "h2h" || marketKey === "h2h_1st_5_innings") {
-    const teamName = selectedTeamName(prediction, event);
-    if (!teamName) return null;
-    outcome = outcomes.find((item: any) => sameTeam(item?.name, teamName));
-  } else if (marketKey === "spreads") {
-    const teamName = selectedTeamName(prediction, event);
-    if (!teamName) return null;
-    const teamOutcomes = outcomes.filter((item: any) => sameTeam(item?.name, teamName));
-    outcome = teamOutcomes.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? teamOutcomes[0];
-  } else {
-    const direction = totalDirection(prediction.market.selection);
-    if (!direction) return null;
-    const directional = outcomes.filter((item: any) => normalize(item?.name) === normalize(direction));
-    outcome = directional.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? directional[0];
+    if (marketKey === "h2h" || marketKey === "h2h_1st_5_innings") {
+      const teamName = selectedTeamName(prediction, event);
+      if (!teamName) return null;
+      outcome = outcomes.find((item: any) => sameTeam(item?.name, teamName));
+    } else if (marketKey === "spreads") {
+      const teamName = selectedTeamName(prediction, event);
+      if (!teamName) return null;
+      const teamOutcomes = outcomes.filter((item: any) => sameTeam(item?.name, teamName));
+      outcome = teamOutcomes.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? teamOutcomes[0];
+    } else {
+      const direction = totalDirection(prediction.market.selection);
+      if (!direction) return null;
+      const directional = outcomes.filter((item: any) => normalize(item?.name) === normalize(direction));
+      outcome = directional.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? directional[0];
+    }
+
+    const oddsAmerican = Number(outcome?.price);
+    if (!Number.isInteger(oddsAmerican) || oddsAmerican === 0) continue;
+    const point = outcome?.point == null ? null : Number(outcome.point);
+    const line = Number.isFinite(point) ? point : null;
+    const comparable = prediction.market.type === "ML" || prediction.market.type === "F5_ML"
+      ? true
+      : sameLine(prediction.market.line, line);
+    const quoteAtRaw = market?.last_update || chosen.book?.last_update || event?.last_update || new Date().toISOString();
+    const quoteAtMs = Date.parse(String(quoteAtRaw));
+    const quoteAt = Number.isFinite(quoteAtMs) ? new Date(quoteAtMs).toISOString() : new Date().toISOString();
+
+    return {
+      sourceEventId: String(event?.id || ""),
+      bookmakerKey: String(chosen.book?.key || "unknown"),
+      bookmakerTitle: String(chosen.book?.title || chosen.book?.key || "Unknown"),
+      matchMode: chosen.matchMode,
+      marketKey,
+      selection: String(outcome?.name || prediction.market.selection),
+      line,
+      oddsAmerican,
+      quoteAt,
+      comparable,
+      lineClv: lineValueFor(prediction, line),
+    };
   }
-
-  const oddsAmerican = Number(outcome?.price);
-  if (!Number.isInteger(oddsAmerican) || oddsAmerican === 0) return null;
-  const point = outcome?.point == null ? null : Number(outcome.point);
-  const line = Number.isFinite(point) ? point : null;
-  const comparable = prediction.market.type === "ML" || prediction.market.type === "F5_ML"
-    ? true
-    : sameLine(prediction.market.line, line);
-  const quoteAtRaw = market?.last_update || chosen.book?.last_update || event?.last_update || new Date().toISOString();
-  const quoteAtMs = Date.parse(String(quoteAtRaw));
-  const quoteAt = Number.isFinite(quoteAtMs) ? new Date(quoteAtMs).toISOString() : new Date().toISOString();
-
-  return {
-    sourceEventId: String(event?.id || ""),
-    bookmakerKey: String(chosen.book?.key || "unknown"),
-    bookmakerTitle: String(chosen.book?.title || chosen.book?.key || "Unknown"),
-    matchMode: chosen.matchMode,
-    marketKey,
-    selection: String(outcome?.name || prediction.market.selection),
-    line,
-    oddsAmerican,
-    quoteAt,
-    comparable,
-    lineClv: lineValueFor(prediction, line),
-  };
+  return null;
 }
 
 function matchEvent(events: any[], prediction: LedgerPrediction): any | null {
@@ -290,12 +299,21 @@ function quotaMerge(current: number | null, next: number | null): number | null 
   return Math.min(current, next);
 }
 
+export function closingCaptureDateWindow(nowMs: number): { from: string; to: string } {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return {
+    from: new Date(nowMs - dayMs).toISOString().slice(0, 10),
+    to: new Date(nowMs + 2 * dayMs).toISOString().slice(0, 10),
+  };
+}
+
 export async function runMlbClosingLineCapture(
   ledgerStore: MlbLedgerStore,
   closingStore: MlbClosingLineStore,
   nowMs = Date.now(),
 ): Promise<ClosingCaptureResult> {
-  const records = ledgerStore.listRecords({ limit: 10_000 });
+  const dateWindow = closingCaptureDateWindow(nowMs);
+  const records = ledgerStore.listRecords({ ...dateWindow, limit: 100_000 });
   const result: ClosingCaptureResult = {
     checked: records.length,
     due: 0,
@@ -371,6 +389,7 @@ export async function runMlbClosingLineCapture(
   }
 
   const additionalPayloadByKey = new Map<string, { event: any; quota: QuotaSummary }>();
+  const failedAdditionalEventIds = new Set<string>();
   const additionalGroups = new Map<string, DuePrediction[]>();
   for (const item of due.filter((row) => !row.featured && eventByPrediction.has(row.prediction.id))) {
     const eventId = String(eventByPrediction.get(item.prediction.id)?.id || "");
@@ -386,6 +405,7 @@ export async function runMlbClosingLineCapture(
       result.quotaRemaining = quotaMerge(result.quotaRemaining, response.quota.remaining);
       additionalPayloadByKey.set(eventId, { event: response.data, quota: response.quota });
     } catch (error) {
+      failedAdditionalEventIds.add(eventId);
       for (const item of items) {
         result.errors.push({ predictionId: item.prediction.id, error: error instanceof Error ? error.message : String(error) });
       }
@@ -401,6 +421,10 @@ export async function runMlbClosingLineCapture(
         ? featuredPayloadById.get(eventId)
         : additionalPayloadByKey.get(eventId)?.event;
       const quota = item.featured ? featuredQuota : additionalPayloadByKey.get(eventId)?.quota;
+      if (!item.featured && failedAdditionalEventIds.has(eventId)) {
+      // Network/provider failures remain retryable within this checkpoint.
+      continue;
+    }
       if (!payload) {
         closingStore.appendAttempt(item.prediction.id, {
           checkpoint: item.checkpoint,
