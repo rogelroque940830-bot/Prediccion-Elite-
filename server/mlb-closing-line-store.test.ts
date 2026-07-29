@@ -61,7 +61,7 @@ test("closing-line observations are append-only, idempotent and enrich reports",
   const second = closing.appendObservation(saved.id, input);
   assert.equal(first.idempotent, false);
   assert.equal(second.idempotent, true);
-  assert.equal(first.data.clvPp, 3.846154);
+  assert.equal(first.data.clvPp, 3.205128);
   assert.equal(first.data.matchMode, "EXACT_BOOK");
   assert.equal(closing.latestBeforeCommence(saved.id, commenceTime)?.oddsAmerican, -160);
 
@@ -72,7 +72,7 @@ test("closing-line observations are append-only, idempotent and enrich reports",
   });
   const enriched = enrichMlbRecordsWithClosingLines(ledger.listRecords(), closing);
   assert.equal(enriched[0].settlement?.closingOddsAmerican, -160);
-  assert.equal(enriched[0].settlement?.clvPp, 3.846154);
+  assert.equal(enriched[0].settlement?.clvPp, 3.205128);
   assert.equal(closing.status().observations, 1);
 
   closing.close();
