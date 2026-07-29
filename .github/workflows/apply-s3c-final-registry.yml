@@ -22,7 +22,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Extract remaining route domains
-        run: python scripts/s3c_extract_remaining_routes.py
+        run: |
+          python scripts/s3c_extract_remaining_routes.py
+          python scripts/s3c_update_modularization_tests.py
       - run: npm ci
       - name: S3 route contract
         run: npm run test:s3-modularization
