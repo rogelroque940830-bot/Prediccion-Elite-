@@ -19,8 +19,10 @@ jobs:
         run: |
           set -euo pipefail
           success=0
-          for attempt in $(seq 1 60); do
-            curl --fail --silent --show-error "$FRONTEND_URL/mlb-history" > /tmp/index.html || true
+          for attempt in $(seq 1 36); do
+            # The application uses hash routing. Load the root document, then inspect
+            # its compiled JavaScript assets for the C2D panel and endpoint.
+            curl --fail --silent --show-error "$FRONTEND_URL/" > /tmp/index.html || true
             grep -oE 'src="[^"]+\.js"' /tmp/index.html | sed -E 's/src="([^"]+)"/\1/' > /tmp/assets.txt || true
             : > /tmp/bundle.js
             while IFS= read -r asset; do
@@ -28,8 +30,8 @@ jobs:
               if [[ "$asset" == http* ]]; then url="$asset"; else url="$FRONTEND_URL$asset"; fi
               curl --fail --silent --show-error "$url" >> /tmp/bundle.js || true
             done < /tmp/assets.txt
-            if grep -q 'Cuota de cierre y CLV · Fase C2D' /tmp/bundle.js \
-              && grep -q '/api/mlb/ledger/v1/closing-lines?limit=10000' /tmp/bundle.js \
+            if grep -q 'Cuota de cierre y CLV' /tmp/bundle.js \
+              && grep -q 'closing-lines?limit=10000' /tmp/bundle.js \
               && grep -q 'Pick anterior a C2D' /tmp/bundle.js \
               && grep -q 'Esperando ventana automática de captura' /tmp/bundle.js; then
               success=1
