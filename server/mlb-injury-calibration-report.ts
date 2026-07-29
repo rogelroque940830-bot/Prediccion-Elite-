@@ -81,16 +81,27 @@ export function buildMlbInjuryCalibrationReport(records: LedgerRecord[], targetS
   const auditedRecords = records.filter((record) => injuryAuditFrom(record));
   const contexts = buildContexts(records);
   const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
-  const uniqueAuditedRecords = auditedRecords.filter(
-    (record) => !analyticalStatuses.get(record.prediction.id)?.analyticalDuplicate,
-  );
   const analyticalDuplicateRecords = auditedRecords.filter(
     (record) => analyticalStatuses.get(record.prediction.id)?.analyticalDuplicate,
   );
+  const analyticalGroups = new Map<string, LedgerRecord[]>();
+  for (const record of auditedRecords) {
+    const status = analyticalStatuses.get(record.prediction.id);
+    const groupKey = status?.fingerprint ?? `prediction:${record.prediction.id}`;
+    const group = analyticalGroups.get(groupKey);
+    if (group) group.push(record);
+    else analyticalGroups.set(groupKey, [record]);
+  }
+  const uniqueAnalyticalDecisionCount = analyticalGroups.size;
   const settledAuditedPredictions = auditedRecords.filter((record) => Boolean(record.settlement)).length;
   const pendingAuditedPredictions = auditedRecords.length - settledAuditedPredictions;
-  const settledUniqueAnalyticalDecisions = uniqueAuditedRecords.filter((record) => Boolean(record.settlement)).length;
-  const pendingUniqueAnalyticalDecisions = uniqueAuditedRecords.length - settledUniqueAnalyticalDecisions;
+  // Settlement belongs to a prediction row, but calibration readiness belongs to
+  // the analytical decision. Count a duplicate group as settled when any member
+  // has a settlement so a pending canonical row cannot hide a settled duplicate.
+  const settledUniqueAnalyticalDecisions = [...analyticalGroups.values()].filter(
+    (group) => group.some((record) => Boolean(record.settlement)),
+  ).length;
+  const pendingUniqueAnalyticalDecisions = uniqueAnalyticalDecisionCount - settledUniqueAnalyticalDecisions;
 
   const coverageCounts: Record<Coverage, number> = { FULL: 0, PARTIAL: 0, BLOCKED: 0 };
   const dispositionCounts = Object.fromEntries(DISPOSITIONS.map((key) => [key, 0])) as Record<Disposition, number>;
@@ -246,7 +257,7 @@ export function buildMlbInjuryCalibrationReport(records: LedgerRecord[], targetS
       legacyPredictionsWithoutAudit: records.length - auditedRecords.length,
       settledAuditedPredictions,
       pendingAuditedPredictions,
-      uniqueAnalyticalDecisions: uniqueAuditedRecords.length,
+      uniqueAnalyticalDecisions: uniqueAnalyticalDecisionCount,
       settledUniqueAnalyticalDecisions,
       pendingUniqueAnalyticalDecisions,
       analyticalDuplicatesExcluded: analyticalDuplicateRecords.length,
