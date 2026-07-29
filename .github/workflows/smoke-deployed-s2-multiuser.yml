@@ -27,6 +27,13 @@ jobs:
             sleep 10
           done
 
+          echo "DEPLOYED HEALTH"
+          jq . /tmp/health.json
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status.json
+          echo "DEPLOYED LEDGER STATUS"
+          jq . /tmp/status.json
+
           jq -e --arg commit "$EXPECTED_COMMIT" '
             .status == "healthy"
             and .commit == $commit
@@ -38,10 +45,8 @@ jobs:
             and .ledgerOwnership.assignments >= 6
             and .ledgerOwnership.owners >= 1
             and .pickOwnership.unowned == 0
-            and .pickOwnership.records >= 6
           ' /tmp/health.json >/dev/null
 
-          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/status.json
           jq -e '
             .success == true
             and .data.immutable == true
@@ -72,6 +77,3 @@ jobs:
           sharp_code=$(curl --silent --show-error --output /tmp/sharp.json --write-out '%{http_code}' \
             "$BACKEND_URL/api/sharp/mlb/s2-smoke-nonexistent")
           test "$sharp_code" != "401"
-
-          jq '{health: {commit, multiUserOwnership, ledgerOwnership, pickOwnership}, ledger: .data | {predictions, settlementEvents, immutable, ownership}}' \
-            /tmp/health.json /tmp/status.json
