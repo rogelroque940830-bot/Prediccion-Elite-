@@ -15,7 +15,9 @@
     "test:mlb-ledger": "tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts server/mlb-scientific-snapshot.test.ts server/mlb-injury-identity.test.ts server/mlb-pitcher-vs-team.test.ts server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-ledger-history-view.test.ts server/mlb-injury-outcomes-report.test.ts server/mlb-injury-decision-report.test.ts server/mlb-closing-line-store.test.ts server/mlb-closing-line-worker.test.ts server/mlb-closing-line-report.test.ts",
     "test:mlb-injuries": "tsx --test server/mlb-injury-identity.test.ts server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-injury-outcomes-report.test.ts",
     "test:mlb-pitcher-history": "tsx --test server/mlb-pitcher-vs-team.test.ts",
-    "test:mlb-injury-shadow": "tsx --test server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-injury-outcomes-report.test.ts"
+    "test:mlb-injury-shadow": "tsx --test server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-injury-outcomes-report.test.ts",
+    "test:s3-modularization": "tsx --test server/routes-modularization.test.ts",
+    "typecheck:s3-modularization": "tsc -p tsconfig.s3-modularization.json"
   },
   "engines": {
     "node": ">=20"
