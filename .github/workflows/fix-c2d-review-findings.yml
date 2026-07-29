@@ -1,0 +1,296 @@
+name: Fix C2D review findings
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply review fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          worker_path = Path("server/mlb-closing-line-worker.ts")
+          text = worker_path.read_text()
+
+          start = text.index("function chooseBookmaker(")
+          end = text.index("\nfunction selectedTeamName", start)
+          text = text[:start] + '''function bookmakerCandidates(event: any, prediction: LedgerPrediction) {
+            const books = Array.isArray(event?.bookmakers) ? event.bookmakers : [];
+            const exactAliases = exactBookAliases(prediction.market.book);
+            const candidates: Array<{ book: any; matchMode: "EXACT_BOOK" | "PROXY_BOOK" }> = [];
+            const seen = new Set<string>();
+            for (const alias of exactAliases) {
+              const match = books.find((book: any) => book?.key === alias);
+              if (match && !seen.has(alias)) {
+                candidates.push({ book: match, matchMode: "EXACT_BOOK" });
+                seen.add(alias);
+              }
+            }
+            for (const key of BOOKMAKERS) {
+              const match = books.find((book: any) => book?.key === key);
+              if (match && !seen.has(key)) {
+                candidates.push({ book: match, matchMode: "PROXY_BOOK" });
+                seen.add(key);
+              }
+            }
+            return candidates;
+          }
+          ''' + text[end:]
+
+          start = text.index("export function selectClosingQuote(")
+          end = text.index("\nfunction matchEvent", start)
+          text = text[:start] + '''export function selectClosingQuote(
+            event: any,
+            prediction: LedgerPrediction,
+            marketKey: SupportedClosingMarket,
+          ): SelectedQuote | null {
+            const candidates = bookmakerCandidates(event, prediction);
+            for (const chosen of candidates) {
+              const markets = Array.isArray(chosen.book?.markets) ? chosen.book.markets : [];
+              const market = markets.find((item: any) => item?.key === marketKey);
+              if (!market) continue;
+              const outcomes = Array.isArray(market?.outcomes) ? market.outcomes : [];
+
+              let outcome: any = null;
+              if (marketKey === "h2h" || marketKey === "h2h_1st_5_innings") {
+                const teamName = selectedTeamName(prediction, event);
+                if (!teamName) return null;
+                outcome = outcomes.find((item: any) => sameTeam(item?.name, teamName));
+              } else if (marketKey === "spreads") {
+                const teamName = selectedTeamName(prediction, event);
+                if (!teamName) return null;
+                const teamOutcomes = outcomes.filter((item: any) => sameTeam(item?.name, teamName));
+                outcome = teamOutcomes.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? teamOutcomes[0];
+              } else {
+                const direction = totalDirection(prediction.market.selection);
+                if (!direction) return null;
+                const directional = outcomes.filter((item: any) => normalize(item?.name) === normalize(direction));
+                outcome = directional.find((item: any) => sameLine(Number(item?.point), prediction.market.line)) ?? directional[0];
+              }
+
+              const oddsAmerican = Number(outcome?.price);
+              if (!Number.isInteger(oddsAmerican) || oddsAmerican === 0) continue;
+              const point = outcome?.point == null ? null : Number(outcome.point);
+              const line = Number.isFinite(point) ? point : null;
+              const comparable = prediction.market.type === "ML" || prediction.market.type === "F5_ML"
+                ? true
+                : sameLine(prediction.market.line, line);
+              const quoteAtRaw = market?.last_update || chosen.book?.last_update || event?.last_update || new Date().toISOString();
+              const quoteAtMs = Date.parse(String(quoteAtRaw));
+              const quoteAt = Number.isFinite(quoteAtMs) ? new Date(quoteAtMs).toISOString() : new Date().toISOString();
+
+              return {
+                sourceEventId: String(event?.id || ""),
+                bookmakerKey: String(chosen.book?.key || "unknown"),
+                bookmakerTitle: String(chosen.book?.title || chosen.book?.key || "Unknown"),
+                matchMode: chosen.matchMode,
+                marketKey,
+                selection: String(outcome?.name || prediction.market.selection),
+                line,
+                oddsAmerican,
+                quoteAt,
+                comparable,
+                lineClv: lineValueFor(prediction, line),
+              };
+            }
+            return null;
+          }
+          ''' + text[end:]
+
+          anchor = '''function quotaMerge(current: number | null, next: number | null): number | null {
+            if (next == null) return current;
+            if (current == null) return next;
+            return Math.min(current, next);
+          }
+          '''
+          replacement = anchor + '''
+          export function closingCaptureDateWindow(nowMs: number): { from: string; to: string } {
+            const dayMs = 24 * 60 * 60 * 1000;
+            return {
+              from: new Date(nowMs - dayMs).toISOString().slice(0, 10),
+              to: new Date(nowMs + 2 * dayMs).toISOString().slice(0, 10),
+            };
+          }
+          '''
+          if text.count(anchor) != 1:
+              raise SystemExit("quotaMerge anchor mismatch")
+          text = text.replace(anchor, replacement, 1)
+
+          old = '  const records = ledgerStore.listRecords({ limit: 10_000 });\n'
+          new = '  const dateWindow = closingCaptureDateWindow(nowMs);\n  const records = ledgerStore.listRecords({ ...dateWindow, limit: 100_000 });\n'
+          if text.count(old) != 1:
+              raise SystemExit("records anchor mismatch")
+          text = text.replace(old, new, 1)
+
+          old = '  const additionalPayloadByKey = new Map<string, { event: any; quota: QuotaSummary }>();\n'
+          new = old + '  const failedAdditionalEventIds = new Set<string>();\n'
+          if text.count(old) != 1:
+              raise SystemExit("additional map anchor mismatch")
+          text = text.replace(old, new, 1)
+
+          old = '''    } catch (error) {
+              for (const item of items) {
+                result.errors.push({ predictionId: item.prediction.id, error: error instanceof Error ? error.message : String(error) });
+              }
+            }
+          }
+          '''
+          new = '''    } catch (error) {
+              failedAdditionalEventIds.add(eventId);
+              for (const item of items) {
+                result.errors.push({ predictionId: item.prediction.id, error: error instanceof Error ? error.message : String(error) });
+              }
+            }
+          }
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("additional catch anchor mismatch")
+          text = text.replace(old, new, 1)
+
+          old = '''      const quota = item.featured ? featuredQuota : additionalPayloadByKey.get(eventId)?.quota;
+              if (!payload) {
+          '''
+          new = '''      const quota = item.featured ? featuredQuota : additionalPayloadByKey.get(eventId)?.quota;
+              if (!item.featured && failedAdditionalEventIds.has(eventId)) {
+                // Provider/network failures are retryable. Do not write an immutable
+                // missing-market attempt for a request that never completed.
+                continue;
+              }
+              if (!payload) {
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("payload guard anchor mismatch")
+          text = text.replace(old, new, 1)
+          worker_path.write_text(text)
+
+          test_path = Path("server/mlb-closing-line-worker.test.ts")
+          test = test_path.read_text()
+          test = test.replace('import assert from "node:assert/strict";\n', 'import assert from "node:assert/strict";\nimport fs from "node:fs";\nimport os from "node:os";\nimport path from "node:path";\n', 1)
+          test = test.replace('import test from "node:test";\n', 'import test from "node:test";\nimport { MlbLedgerStore } from "./mlb-ledger-store";\nimport { MlbClosingLineStore } from "./mlb-closing-line-store";\n', 1)
+          test = test.replace('  closingCheckpointFor,\n', '  closingCaptureDateWindow,\n  closingCheckpointFor,\n', 1)
+          test = test.replace('  selectClosingQuote,\n', '  runMlbClosingLineCapture,\n  selectClosingQuote,\n', 1)
+
+          marker = 'test("market mapping never substitutes full-game moneyline for F5", () => {\n'
+          insertion = '''test("capture scans a bounded current date window instead of the oldest ledger rows", () => {
+            const window = closingCaptureDateWindow(Date.parse("2026-07-29T23:30:00.000Z"));
+            assert.deepEqual(window, { from: "2026-07-28", to: "2026-07-31" });
+          });
+
+          test("market mapping never substitutes full-game moneyline for F5", () => {
+          '''
+          if test.count(marker) != 1:
+              raise SystemExit("market test anchor mismatch")
+          test = test.replace(marker, insertion, 1)
+
+          marker = 'test("different totals lines report line CLV instead of fake probability CLV", () => {\n'
+          insertion = '''test("quote selection falls through when the first exact alias lacks the requested market", () => {
+            const f5Event = {
+              ...event,
+              bookmakers: [
+                { key: "hardrockbet_fl", title: "Hard Rock Florida", last_update: "2026-07-29T22:48:00.000Z", markets: [] },
+                { key: "hardrockbet", title: "Hard Rock Bet", last_update: "2026-07-29T22:49:00.000Z", markets: [
+                  { key: "h2h_1st_5_innings", last_update: "2026-07-29T22:49:00.000Z", outcomes: [
+                    { name: "Detroit Tigers", price: -150 }, { name: "Baltimore Orioles", price: 130 },
+                  ] },
+                ] },
+                { key: "fanduel", title: "FanDuel", markets: [
+                  { key: "h2h_1st_5_innings", outcomes: [{ name: "Detroit Tigers", price: -145 }] },
+                ] },
+              ],
+            };
+            const f5 = prediction({ market: { ...prediction().market, type: "F5_ML" } });
+            const quote = selectClosingQuote(f5Event, f5, "h2h_1st_5_innings");
+            assert.ok(quote);
+            assert.equal(quote.bookmakerKey, "hardrockbet");
+            assert.equal(quote.matchMode, "EXACT_BOOK");
+            assert.equal(quote.oddsAmerican, -150);
+          });
+
+          test("different totals lines report line CLV instead of fake probability CLV", () => {
+          '''
+          if test.count(marker) != 1:
+              raise SystemExit("totals test anchor mismatch")
+          test = test.replace(marker, insertion, 1)
+
+          test += '''
+
+          test("a transient F5 provider failure remains retryable within the same checkpoint", async () => {
+            const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mlb-closing-retry-"));
+            const dbPath = path.join(dir, "ledger.sqlite");
+            const ledger = new MlbLedgerStore(dbPath);
+            const closing = new MlbClosingLineStore(dbPath);
+            const commenceMs = Date.now() + 10 * 60 * 1000;
+            const commenceTime = new Date(commenceMs).toISOString();
+            const saved = ledger.appendPrediction({
+              clientRequestId: `retry-pick-${Date.now()}`,
+              source: "app",
+              model: { name: "CourtEdge MLB", version: "test", environment: "test" },
+              game: { gamePk: 555, gameDate: commenceTime.slice(0, 10), commenceTime, homeTeam: "Detroit Tigers", awayTeam: "Baltimore Orioles" },
+              market: { type: "F5_ML", selection: "Detroit Tigers F5", oddsAmerican: -140, book: "Hard Rock", capturedAt: new Date().toISOString() },
+              probabilities: { model: 0.62 },
+              decision: { signal: "BET", stakeUnits: 1 },
+              analysis: { stage: "FINAL" },
+            }).data;
+            const originalFetch = globalThis.fetch;
+            let calls = 0;
+            globalThis.fetch = async () => {
+              calls += 1;
+              if (calls === 1) {
+                return new Response(JSON.stringify([{
+                  id: "1234567890abcdef1234567890abcdef",
+                  commence_time: commenceTime,
+                  home_team: "Detroit Tigers",
+                  away_team: "Baltimore Orioles",
+                }]), { status: 200, headers: { "content-type": "application/json", "x-requests-remaining": "100" } });
+              }
+              return new Response(JSON.stringify({ message: "temporary provider failure" }), {
+                status: 503,
+                headers: { "content-type": "application/json", "x-requests-remaining": "99" },
+              });
+            };
+            const previousKey = process.env.ODDS_API_KEY;
+            process.env.ODDS_API_KEY = "test-key";
+            try {
+              const summary = await runMlbClosingLineCapture(ledger, closing, commenceMs - 10 * 60 * 1000);
+              assert.equal(summary.errors.length, 1);
+              assert.equal(closing.hasAttempt(saved.id, "T15"), false);
+            } finally {
+              globalThis.fetch = originalFetch;
+              if (previousKey == null) delete process.env.ODDS_API_KEY;
+              else process.env.ODDS_API_KEY = previousKey;
+              closing.close(); ledger.close(); fs.rmSync(dir, { recursive: true, force: true });
+            }
+          });
+          '''
+          test_path.write_text(test)
+          PY
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - name: Commit reviewed fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git add server/mlb-closing-line-worker.ts server/mlb-closing-line-worker.test.ts
+          git commit -m "fix(clv): address retry, bookmaker fallback, and ledger-window review findings"
+          git push origin HEAD:${{ github.head_ref }}
