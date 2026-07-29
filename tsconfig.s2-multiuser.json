@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/user-data-context.ts",
+    "server/mlb-ledger-ownership-store.ts",
+    "server/mlb-ledger-multiuser.ts",
+    "server/mlb-ledger-owned-export.ts",
+    "server/picks-v2-multiuser.ts",
+    "server/mlb-ledger-ownership-store.test.ts",
+    "server/picks-v2-multiuser.test.ts",
+    "server/user-data-context.test.ts",
+    "server/index.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
