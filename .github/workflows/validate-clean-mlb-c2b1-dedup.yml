@@ -1,0 +1,45 @@
+name: Validate clean MLB C2B.1 dedup
+
+on:
+  push:
+    branches:
+      - test/validate-clean-mlb-c2b1-dedup
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/validate-clean-mlb-c2b1-dedup
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run check
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Verify clean C2B.1 markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'mlb-analytical-fingerprint.v1' server/mlb-analytical-dedup.ts
+          grep -Fq 'uniqueAnalyticalDecisions' server/mlb-injury-outcomes-report.ts
+          grep -Fq 'deduplication: outcomeReport.deduplication' server/mlb-injury-decision-report.ts
+          grep -Fq 'Duplicado analítico' frontend/client/src/pages/mlb-history.tsx
+          test ! -e scripts/apply-mlb-c2b1-dedup.py
+          test ! -e scripts/fix-mlb-c2b1-frontend-marker.py
