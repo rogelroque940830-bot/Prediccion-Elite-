@@ -62,9 +62,9 @@ jobs:
           curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/injury-outcomes?limit=10000" > /tmp/c2b.json
           jq -e '
             .success == true
-            and .data.sample.uniqueAnalyticalDecisions == 2
-            and .data.sample.settledUniqueAnalyticalDecisions == 2
-            and .data.closingLine.measured == 0
+            and .data.deduplication.uniqueAnalyticalDecisions == 2
+            and .data.summary.settled == 2
+            and .data.summary.averageClvPp == null
           ' /tmp/c2b.json >/dev/null
           curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
           jq -e --slurpfile before /tmp/before.json '
