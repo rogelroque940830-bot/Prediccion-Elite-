@@ -230,8 +230,7 @@ export function registerAuthRoutes(app: Express, database = getAuthDatabase()): 
         path: "/",
         secure: production,
         sameSite: production ? "none" : "lax",
-        ...(production ? { partitioned: true } : {}),
-      } as session.CookieOptions);
+      });
       res.json({ success: true, authenticated: false });
     });
   });
