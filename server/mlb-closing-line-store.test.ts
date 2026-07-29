@@ -80,6 +80,34 @@ test("closing-line observations are append-only, idempotent and enrich reports",
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("a later proxy never replaces the last exact-book close", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mlb-closing-preference-"));
+  const dbPath = path.join(dir, "ledger.sqlite");
+  const ledger = new MlbLedgerStore(dbPath);
+  const commenceTime = "2026-08-02T23:10:00.000Z";
+  const saved = ledger.appendPrediction({ ...prediction(commenceTime), clientRequestId: "closing-store-prediction-preference" }).data;
+  const closing = new MlbClosingLineStore(dbPath);
+  closing.appendObservation(saved.id, {
+    clientRequestId: `close:${saved.id}:T60:hardrockbet_fl`, checkpoint: "T60",
+    quoteAt: "2026-08-02T22:20:00.000Z", commenceTime, source: "THE_ODDS_API",
+    sourceEventId: "event-preference", bookmakerKey: "hardrockbet_fl", bookmakerTitle: "Hard Rock Bet",
+    matchMode: "EXACT_BOOK", marketKey: "h2h", selection: "Detroit Tigers", line: null,
+    oddsAmerican: -150, ticketOddsAmerican: -140, ticketLine: null, comparable: true,
+  });
+  closing.appendObservation(saved.id, {
+    clientRequestId: `close:${saved.id}:T15:fanduel`, checkpoint: "T15",
+    quoteAt: "2026-08-02T23:00:00.000Z", commenceTime, source: "THE_ODDS_API",
+    sourceEventId: "event-preference", bookmakerKey: "fanduel", bookmakerTitle: "FanDuel",
+    matchMode: "PROXY_BOOK", marketKey: "h2h", selection: "Detroit Tigers", line: null,
+    oddsAmerican: -165, ticketOddsAmerican: -140, ticketLine: null, comparable: true,
+  });
+  const preferred = closing.latestBeforeCommence(saved.id, commenceTime);
+  assert.equal(preferred?.matchMode, "EXACT_BOOK");
+  assert.equal(preferred?.bookmakerKey, "hardrockbet_fl");
+  assert.equal(preferred?.oddsAmerican, -150);
+  closing.close(); ledger.close(); fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("proxy observations remain visible but are not injected as exact CLV", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mlb-closing-proxy-"));
   const dbPath = path.join(dir, "ledger.sqlite");

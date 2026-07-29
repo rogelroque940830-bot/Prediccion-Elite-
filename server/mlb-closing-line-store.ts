@@ -313,7 +313,8 @@ export class MlbClosingLineStore {
     const row = this.db.prepare(`
       SELECT * FROM mlb_closing_line_events_v1
       WHERE prediction_id = ? AND quote_at_ms <= ?
-      ORDER BY quote_at_ms DESC, recorded_at_ms DESC, event_id DESC LIMIT 1
+      ORDER BY CASE WHEN match_mode = 'EXACT_BOOK' THEN 0 ELSE 1 END,
+        quote_at_ms DESC, recorded_at_ms DESC, event_id DESC LIMIT 1
     `).get(predictionId, commenceTimeMs) as ObservationRow | undefined;
     return row ? mapObservation(row) : null;
   }
