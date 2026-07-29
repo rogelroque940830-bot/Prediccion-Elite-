@@ -1,0 +1,32 @@
+name: Validate clean S3B head
+
+on:
+  pull_request:
+    branches:
+      - patch/s3b-mlb-route-modules
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: S3 route contract
+        run: npm run test:s3-modularization
+      - name: S3 focused typecheck
+        run: npm run typecheck:s3-modularization
+      - name: S1 regression
+        run: npm run test:s1-auth
+      - name: S2 regression
+        run: npm run test:s2-multiuser
+      - name: MLB regression
+        run: npm run test:mlb-ledger
+      - name: Backend build
+        run: npm run build:backend
