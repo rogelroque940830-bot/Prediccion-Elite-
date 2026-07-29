@@ -10,8 +10,9 @@ import {
 } from "./security";
 import { createSessionMiddleware, registerAuthRoutes } from "./auth";
 import { registerPicksV2Routes } from "./picks-v2";
-import { getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
+import { getMlbClosingLineStore, getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
+import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
 
 export const app = express();
 // Railway terminates TLS and forwards one trusted proxy hop.
@@ -100,6 +101,7 @@ app.get("/health", (_req, res) => {
     commit: deploymentCommit,
     environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
     mlbLedgerAutoSettlement: process.env.MLB_LEDGER_AUTO_SETTLE !== "false",
+    mlbClosingLineCapture: process.env.MLB_CLOSING_LINE_CAPTURE !== "false",
   });
 });
 
@@ -109,8 +111,11 @@ app.get("/health", (_req, res) => {
   registerPicksV2Routes(app);
   // Scientific MLB ledger: append-only predictions, settlements and reports.
   registerMlbLedgerRoutes(app);
-  // Official MLB results are checked after startup and every 15 minutes.
-  startMlbSettlementWorker(getMlbLedgerStore());
+  const mlbLedgerStore = getMlbLedgerStore();
+  const mlbClosingLineStore = getMlbClosingLineStore();
+  // Pregame closing prices and official results are append-only workers.
+  startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
+  startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
