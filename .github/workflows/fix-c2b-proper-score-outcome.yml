@@ -1,0 +1,45 @@
+name: Fix C2B proper-score outcome
+
+on:
+  push:
+    branches:
+      - fix/mlb-c2b-proper-score-outcome
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mlb-c2b-proper-score-outcome
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply fix
+        run: python scripts/fix-c2b-proper-score-outcome.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Run MLB tests
+        run: npm run test:mlb-ledger
+      - name: Type-check backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/fix-c2b-proper-score-outcome.py
+          rm -f .github/workflows/fix-c2b-proper-score-outcome.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix C2B proper-score settlement target'
+          git push origin HEAD:fix/mlb-c2b-proper-score-outcome
