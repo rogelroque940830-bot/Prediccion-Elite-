@@ -1,0 +1,70 @@
+name: Smoke deployed MLB C2A unique readiness frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for C2A frontend assets
+        shell: bash
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          cat > /tmp/crawl.py <<'PY'
+          import re, sys, urllib.parse, urllib.request
+          base = sys.argv[1].rstrip('/') + '/'
+          queue = [urllib.parse.urljoin(base, 'mlb-history')]
+          seen = set()
+          chunks = []
+          def get(url):
+              req = urllib.request.Request(url, headers={'User-Agent': 'CourtEdge-C2A-Smoke/1.0'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return response.read().decode('utf-8', errors='ignore')
+          while queue and len(seen) < 400:
+              url = queue.pop(0)
+              if url in seen:
+                  continue
+              seen.add(url)
+              try:
+                  text = get(url)
+              except Exception:
+                  continue
+              chunks.append(text)
+              for pattern in [r'(/assets/[A-Za-z0-9._-]+\.js)', r'(assets/[A-Za-z0-9._-]+\.js)', r'(\./[A-Za-z0-9._-]+\.js)']:
+                  for match in re.finditer(pattern, text):
+                      candidate = urllib.parse.urljoin(url, match.group(1))
+                      if candidate not in seen:
+                          queue.append(candidate)
+          combined = '\n'.join(chunks)
+          targets = [
+              'Decisiones únicas liquidadas para ampliar automatización',
+              'Registros C1',
+              'Decisiones únicas',
+              'analyticalDuplicatesExcluded',
+              'uniqueAnalyticalDecisions',
+              'UNIQUE_ANALYTICAL_DECISIONS',
+          ]
+          missing = [target for target in targets if target not in combined]
+          print(f'CRAWLED={len(seen)} MISSING={missing}')
+          if missing:
+              raise SystemExit(1)
+          PY
+          found=0
+          for attempt in $(seq 1 48); do
+            if python /tmp/crawl.py "$FRONTEND_URL"; then
+              echo "C2A frontend detected on attempt $attempt"
+              found=1
+              break
+            fi
+            echo "Attempt $attempt: waiting for C2A frontend assets"
+            sleep 10
+          done
+          test "$found" -eq 1
