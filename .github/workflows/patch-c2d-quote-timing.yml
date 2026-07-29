@@ -1,0 +1,96 @@
+name: Patch C2D quote timing guard
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Add quote timing guard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one anchor, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "server/mlb-closing-line-worker.ts",
+              'export function closingCheckpointFor(\n',
+              'export function validClosingQuoteTiming(\n'
+              '  predictionRecordedAtMs: number,\n'
+              '  quoteAt: string,\n'
+              '  commenceTime: string,\n'
+              '): boolean {\n'
+              '  const quoteAtMs = Date.parse(quoteAt);\n'
+              '  const commenceTimeMs = Date.parse(commenceTime);\n'
+              '  return Number.isFinite(predictionRecordedAtMs)\n'
+              '    && Number.isFinite(quoteAtMs)\n'
+              '    && Number.isFinite(commenceTimeMs)\n'
+              '    && quoteAtMs >= predictionRecordedAtMs\n'
+              '    && quoteAtMs <= commenceTimeMs;\n'
+              '}\n\n'
+              'export function closingCheckpointFor(\n',
+          )
+          replace_once(
+              "server/mlb-closing-line-worker.ts",
+              '      const commenceTime = item.prediction.game.commenceTime;\n'
+              '      if (!commenceTime || Date.parse(quote.quoteAt) > Date.parse(commenceTime)) {\n'
+              '        throw new Error("Provider quote timestamp is after commence time");\n'
+              '      }\n',
+              '      const commenceTime = item.prediction.game.commenceTime;\n'
+              '      if (!commenceTime || !validClosingQuoteTiming(item.prediction.recordedAtMs, quote.quoteAt, commenceTime)) {\n'
+              '        throw new Error("Provider quote timestamp must be between pick recording and commence time");\n'
+              '      }\n',
+          )
+          replace_once(
+              "server/mlb-closing-line-worker.test.ts",
+              '  selectClosingQuote,\n',
+              '  selectClosingQuote,\n  validClosingQuoteTiming,\n',
+          )
+          replace_once(
+              "server/mlb-closing-line-worker.test.ts",
+              'test("market mapping never substitutes full-game moneyline for F5", () => {\n',
+              'test("closing quotes must be newer than the saved pick and no later than first pitch", () => {\n'
+              '  const recordedAtMs = Date.parse("2026-07-29T22:00:00.000Z");\n'
+              '  const commence = "2026-07-29T23:00:00.000Z";\n'
+              '  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T21:59:59.000Z", commence), false);\n'
+              '  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T22:49:00.000Z", commence), true);\n'
+              '  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T23:00:01.000Z", commence), false);\n'
+              '});\n\n'
+              'test("market mapping never substitutes full-game moneyline for F5", () => {\n',
+          )
+          PY
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
+      - name: Commit validated guard
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git add server/mlb-closing-line-worker.ts server/mlb-closing-line-worker.test.ts
+          git commit -m "fix(clv): reject closing quotes older than saved picks"
+          git push origin HEAD:${{ github.head_ref }}
