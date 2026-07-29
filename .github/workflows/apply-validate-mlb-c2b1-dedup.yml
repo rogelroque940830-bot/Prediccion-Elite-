@@ -46,11 +46,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'mlb-analytical-fingerprint.v1' server/mlb-analytical-dedup.ts
-          grep -Fq 'duplicatesExcluded' server/mlb-injury-outcomes-report.ts
-          grep -Fq 'analyticalDuplicate' server/mlb-ledger-history-view.ts
-          grep -Fq 'Duplicado analítico' frontend/client/src/pages/mlb-history.tsx
-          grep -Fq 'automaticRuleChanges: false' server/mlb-injury-decision-report.ts
+          python - <<'PY'
+          from pathlib import Path
+          checks = [
+              ("server/mlb-analytical-dedup.ts", "mlb-analytical-fingerprint.v1"),
+              ("server/mlb-injury-outcomes-report.ts", "duplicatesExcluded"),
+              ("server/mlb-ledger-history-view.ts", "analyticalDuplicate"),
+              ("frontend/client/src/pages/mlb-history.tsx", "Duplicado analítico"),
+              ("server/mlb-injury-decision-report.ts", "automaticRuleChanges: false"),
+          ]
+          missing = []
+          for path, marker in checks:
+              ok = marker in Path(path).read_text()
+              print(f"MARKER {'PASS' if ok else 'FAIL'}: {path} :: {marker}")
+              if not ok:
+                  missing.append((path, marker))
+          if missing:
+              raise SystemExit(f"Missing markers: {missing}")
+          PY
       - name: Commit validated implementation
         shell: bash
         run: |
