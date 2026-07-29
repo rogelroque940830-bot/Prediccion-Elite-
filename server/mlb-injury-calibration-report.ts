@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { canonicalJson, type LedgerRecord } from "./mlb-ledger-store";
 import type { MlbInjuryAudit } from "./mlb-injury-audit";
+import { classifyMlbAnalyticalDuplicates, MLB_ANALYTICAL_FINGERPRINT_VERSION } from "./mlb-analytical-dedup";
 
 export const MLB_INJURY_CALIBRATION_REPORT_VERSION = "mlb-injury-calibration-report.v1" as const;
 
@@ -79,8 +80,17 @@ function buildContexts(records: LedgerRecord[]): AuditContext[] {
 export function buildMlbInjuryCalibrationReport(records: LedgerRecord[], targetSettledAuditedPicks = 20) {
   const auditedRecords = records.filter((record) => injuryAuditFrom(record));
   const contexts = buildContexts(records);
+  const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
+  const uniqueAuditedRecords = auditedRecords.filter(
+    (record) => !analyticalStatuses.get(record.prediction.id)?.analyticalDuplicate,
+  );
+  const analyticalDuplicateRecords = auditedRecords.filter(
+    (record) => analyticalStatuses.get(record.prediction.id)?.analyticalDuplicate,
+  );
   const settledAuditedPredictions = auditedRecords.filter((record) => Boolean(record.settlement)).length;
   const pendingAuditedPredictions = auditedRecords.length - settledAuditedPredictions;
+  const settledUniqueAnalyticalDecisions = uniqueAuditedRecords.filter((record) => Boolean(record.settlement)).length;
+  const pendingUniqueAnalyticalDecisions = uniqueAuditedRecords.length - settledUniqueAnalyticalDecisions;
 
   const coverageCounts: Record<Coverage, number> = { FULL: 0, PARTIAL: 0, BLOCKED: 0 };
   const dispositionCounts = Object.fromEntries(DISPOSITIONS.map((key) => [key, 0])) as Record<Disposition, number>;
@@ -223,10 +233,12 @@ export function buildMlbInjuryCalibrationReport(records: LedgerRecord[], targetS
     schemaVersion: MLB_INJURY_CALIBRATION_REPORT_VERSION,
     generatedAt: new Date().toISOString(),
     readiness: {
+      countingBasis: "UNIQUE_ANALYTICAL_DECISIONS" as const,
+      fingerprintVersion: MLB_ANALYTICAL_FINGERPRINT_VERSION,
       targetSettledAuditedPicks: target,
-      settledAuditedPicks: settledAuditedPredictions,
-      remaining: Math.max(0, target - settledAuditedPredictions),
-      readyForExpansion: settledAuditedPredictions >= target,
+      settledAuditedPicks: settledUniqueAnalyticalDecisions,
+      remaining: Math.max(0, target - settledUniqueAnalyticalDecisions),
+      readyForExpansion: settledUniqueAnalyticalDecisions >= target,
     },
     sample: {
       totalPredictions: records.length,
@@ -234,6 +246,11 @@ export function buildMlbInjuryCalibrationReport(records: LedgerRecord[], targetS
       legacyPredictionsWithoutAudit: records.length - auditedRecords.length,
       settledAuditedPredictions,
       pendingAuditedPredictions,
+      uniqueAnalyticalDecisions: uniqueAuditedRecords.length,
+      settledUniqueAnalyticalDecisions,
+      pendingUniqueAnalyticalDecisions,
+      analyticalDuplicatesExcluded: analyticalDuplicateRecords.length,
+      settledAnalyticalDuplicatesExcluded: analyticalDuplicateRecords.filter((record) => Boolean(record.settlement)).length,
       uniqueAuditContexts: contexts.length,
       duplicateMarketSnapshotsExcluded: Math.max(0, auditedRecords.length - contexts.length),
     },
