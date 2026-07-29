@@ -4,11 +4,16 @@ import { registerStagingAdminAuthObservation } from "./staging-admin-auth";
 import { createServer } from "http";
 import {
   apiRateLimit,
+  requirePrivateReadAuth,
   requireWriteAuth,
   restrictedCors,
   securityHeaders,
 } from "./security";
-import { createSessionMiddleware, registerAuthRoutes } from "./auth";
+import {
+  createSessionMiddleware,
+  initializeAuthPersistence,
+  registerAuthRoutes,
+} from "./auth";
 import { registerPicksV2Routes } from "./picks-v2";
 import { getMlbClosingLineStore, getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
@@ -32,6 +37,8 @@ if (missingApiVariables.length > 0) {
   );
 }
 
+const authDatabase = initializeAuthPersistence();
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -42,7 +49,7 @@ declare module "http" {
 app.use(securityHeaders);
 app.use(restrictedCors);
 app.use(apiRateLimit);
-app.use(createSessionMiddleware());
+app.use(createSessionMiddleware(authDatabase));
 
 app.use(
   express.json({
@@ -61,8 +68,9 @@ app.use(
 );
 
 // Staging-only visibility. This observer never authorizes a request;
-// the real enforcement remains requireWriteAuth below.
+// the real enforcement remains in the read/write guards below.
 registerStagingAdminAuthObservation(app);
+app.use(requirePrivateReadAuth);
 app.use(requireWriteAuth);
 
 export function log(message: string, source = "express") {
@@ -102,11 +110,15 @@ app.get("/health", (_req, res) => {
     environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
     mlbLedgerAutoSettlement: process.env.MLB_LEDGER_AUTO_SETTLE !== "false",
     mlbClosingLineCapture: process.env.MLB_CLOSING_LINE_CAPTURE !== "false",
+    authPersistence: true,
+    authSessionStore: "sqlite",
+    authRoles: ["admin", "analyst", "viewer"],
+    privateReadProtection: true,
   });
 });
 
 (async () => {
-  registerAuthRoutes(app);
+  registerAuthRoutes(app, authDatabase);
   // Canonical v2 routes must precede historical handlers.
   registerPicksV2Routes(app);
   // Scientific MLB ledger: append-only predictions, settlements and reports.
