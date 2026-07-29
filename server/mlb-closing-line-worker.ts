@@ -117,6 +117,20 @@ async function fetchJson(url: string): Promise<FetchResult> {
   return { data, quota };
 }
 
+export function validClosingQuoteTiming(
+  predictionRecordedAtMs: number,
+  quoteAt: string,
+  commenceTime: string,
+): boolean {
+  const quoteAtMs = Date.parse(quoteAt);
+  const commenceTimeMs = Date.parse(commenceTime);
+  return Number.isFinite(predictionRecordedAtMs)
+    && Number.isFinite(quoteAtMs)
+    && Number.isFinite(commenceTimeMs)
+    && quoteAtMs >= predictionRecordedAtMs
+    && quoteAtMs <= commenceTimeMs;
+}
+
 export function closingCheckpointFor(
   nowMs: number,
   commenceTime: string | null | undefined,
@@ -414,8 +428,8 @@ export async function runMlbClosingLineCapture(
         continue;
       }
       const commenceTime = item.prediction.game.commenceTime;
-      if (!commenceTime || Date.parse(quote.quoteAt) > Date.parse(commenceTime)) {
-        throw new Error("Provider quote timestamp is after commence time");
+      if (!commenceTime || !validClosingQuoteTiming(item.prediction.recordedAtMs, quote.quoteAt, commenceTime)) {
+        throw new Error("Provider quote timestamp must be between pick recording and commence time");
       }
       closingStore.appendObservation(item.prediction.id, {
         clientRequestId: `auto-close:${item.prediction.id}:${item.checkpoint}:${quote.bookmakerKey}:${item.marketKey}`,

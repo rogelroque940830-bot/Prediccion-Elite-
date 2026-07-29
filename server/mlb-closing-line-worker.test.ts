@@ -4,6 +4,7 @@ import {
   closingCheckpointFor,
   closingMarketForPrediction,
   selectClosingQuote,
+  validClosingQuoteTiming,
 } from "./mlb-closing-line-worker";
 
 function prediction(overrides: any = {}) {
@@ -83,6 +84,14 @@ test("capture checkpoints are conservative and deterministic", () => {
   assert.equal(closingCheckpointFor(Date.parse("2026-07-29T22:10:00.000Z"), commence), "T60");
   assert.equal(closingCheckpointFor(Date.parse("2026-07-29T22:50:00.000Z"), commence), "T15");
   assert.equal(closingCheckpointFor(Date.parse("2026-07-29T23:00:00.000Z"), commence), null);
+});
+
+test("closing quotes must be newer than the saved pick and no later than first pitch", () => {
+  const recordedAtMs = Date.parse("2026-07-29T22:00:00.000Z");
+  const commence = "2026-07-29T23:00:00.000Z";
+  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T21:59:59.000Z", commence), false);
+  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T22:49:00.000Z", commence), true);
+  assert.equal(validClosingQuoteTiming(recordedAtMs, "2026-07-29T23:00:01.000Z", commence), false);
 });
 
 test("market mapping never substitutes full-game moneyline for F5", () => {
