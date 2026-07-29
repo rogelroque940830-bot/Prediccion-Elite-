@@ -52,15 +52,20 @@ test("S3 preserves the backend route contract", () => {
   assert.deepEqual(collectRouteInventory(), expected);
 });
 
-test("S3A removes shared runtime and legacy persistence from routes.ts", () => {
-  const source = fs.readFileSync(path.join(process.cwd(), "server", "routes.ts"), "utf-8");
-  assert.match(source, /from "\.\/route-runtime"/);
-  assert.match(source, /from "\.\/legacy-picks-store"/);
-  assert.match(source, /from "\.\/legacy-picks-routes"/);
-  assert.match(source, /from "\.\/mlb-route-runtime"/);
-  assert.doesNotMatch(source, /const NBA_HEADERS\s*=/);
-  assert.doesNotMatch(source, /const PICKS_FILE\s*=/);
-  assert.doesNotMatch(source, /async function resolveMlbAnalysisDate/);
+test("S3A keeps shared runtime and legacy persistence in dedicated modules", () => {
+  const registry = fs.readFileSync(path.join(process.cwd(), "server", "routes.ts"), "utf-8");
+  const runtime = fs.readFileSync(path.join(process.cwd(), "server", "route-runtime.ts"), "utf-8");
+  const legacyStore = fs.readFileSync(path.join(process.cwd(), "server", "legacy-picks-store.ts"), "utf-8");
+  const legacyRoutes = fs.readFileSync(path.join(process.cwd(), "server", "legacy-picks-routes.ts"), "utf-8");
+  const mlbRuntime = fs.readFileSync(path.join(process.cwd(), "server", "mlb-route-runtime.ts"), "utf-8");
+  assert.match(registry, /from "\.\/legacy-picks-routes"/);
+  assert.match(runtime, /const NBA_HEADERS|export const NBA_HEADERS/);
+  assert.match(legacyStore, /const PICKS_FILE/);
+  assert.match(legacyRoutes, /registerLegacyPicksCompatibilityRoutes/);
+  assert.match(mlbRuntime, /resolveMlbAnalysisDate/);
+  assert.doesNotMatch(registry, /const NBA_HEADERS\s*=/);
+  assert.doesNotMatch(registry, /const PICKS_FILE\s*=/);
+  assert.doesNotMatch(registry, /async function resolveMlbAnalysisDate/);
 });
 
 
@@ -73,4 +78,22 @@ test("S3B moves MLB route domains out of routes.ts", () => {
   assert.doesNotMatch(source, /app\.get\("\/api\/mlb\/all"/);
   assert.doesNotMatch(source, /async function getGameMeta/);
   assert.ok(source.split("\n").length < 2800, "routes.ts should be below 2,800 lines after S3B");
+});
+
+
+test("S3C leaves a minimal route composition root", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "server", "routes.ts"), "utf-8");
+  assert.match(source, /registerNbaDataRoutes\(app\)/);
+  assert.match(source, /registerWnbaNhlDataRoutes\(app\)/);
+  assert.match(source, /registerMarketSupportRoutes\(app\)/);
+  assert.doesNotMatch(source, /app\.(get|post|put|patch|delete)\(/);
+  assert.ok(source.split("\n").length < 80, "routes.ts should remain a small composition root");
+});
+
+test("S3C exposes cache invalidation without route-level cache mutation", () => {
+  const runtime = fs.readFileSync(path.join(process.cwd(), "server", "route-runtime.ts"), "utf-8");
+  const support = fs.readFileSync(path.join(process.cwd(), "server", "market-support-routes.ts"), "utf-8");
+  assert.match(runtime, /export function invalidateCache/);
+  assert.match(support, /invalidateCache\(/);
+  assert.doesNotMatch(support, /cache as any/);
 });
