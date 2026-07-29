@@ -1,0 +1,21 @@
+name: Validate C2A duplicate-group settlement
+
+on:
+  pull_request:
+    branches:
+      - fix/mlb-c2a-duplicate-group-settlement
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mlb-ledger
+      - run: npm run typecheck:mlb-ledger
+      - run: npm run build:backend
