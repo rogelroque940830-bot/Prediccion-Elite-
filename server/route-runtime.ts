@@ -40,6 +40,10 @@ export async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T
   return data;
 }
 
+export function invalidateCache(key: string): void {
+  delete cache[key];
+}
+
 export async function nbaFetch(
   url: string,
   headers: Record<string, string> = NBA_HEADERS,
