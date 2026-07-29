@@ -1,0 +1,27 @@
+name: Inventory S3B route sections
+
+on:
+  pull_request:
+    branches:
+      - feature/s3-backend-modularization
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print route structure
+        run: |
+          echo "ROUTES LINES"
+          wc -l server/routes.ts
+          echo "SECTION HEADERS"
+          grep -n '^  // ──' server/routes.ts || true
+          echo "ROUTE REGISTRATIONS"
+          grep -nE '^[[:space:]]+app\.(get|post|put|patch|delete)\(' server/routes.ts || true
+          echo "LOCAL FUNCTIONS"
+          grep -nE '^[[:space:]]{2}(async )?function [A-Za-z0-9_]+' server/routes.ts || true
+          echo "LOCAL CONST HELPERS"
+          grep -nE '^[[:space:]]{2}const [A-Z][A-Z0-9_]+|^[[:space:]]{2}const [a-zA-Z0-9_]+ = async' server/routes.ts || true
