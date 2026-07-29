@@ -182,6 +182,12 @@ export class MlbLedgerOwnershipStore {
     ).get(predictionId) as OwnershipRow | undefined;
   }
 
+  getOwnershipByClientRequestId(clientRequestId: string): OwnershipRow | undefined {
+    return this.db.prepare(
+      "SELECT * FROM mlb_prediction_owners_v1 WHERE client_request_id = ?",
+    ).get(clientRequestId.trim()) as OwnershipRow | undefined;
+  }
+
   assertOwner(predictionId: string, userId: number): OwnershipRow {
     const owner = this.getOwnership(predictionId);
     if (!owner || Number(owner.user_id) !== positiveUserId(userId)) {
@@ -199,33 +205,41 @@ export class MlbLedgerOwnershipStore {
     return rows.map((row) => String(row.prediction_id));
   }
 
-  ensureExistingOwnership(store: MlbLedgerStore, defaultUserId: number): {
+  ensureExistingOwnership(_store: MlbLedgerStore, defaultUserId: number): {
     scanned: number;
     repaired: number;
     migrated: number;
     remainingUnowned: number;
   } {
     const owner = positiveUserId(defaultUserId);
-    const records = store.listRecords({ limit: 10_000 });
+    const rows = this.db.prepare(`
+      SELECT p.id, p.client_request_id
+      FROM mlb_prediction_ledger_v1 p
+      LEFT JOIN mlb_prediction_owners_v1 o ON o.prediction_id = p.id
+      WHERE o.prediction_id IS NULL
+      ORDER BY p.recorded_at_ms ASC, p.id ASC
+    `).all() as Array<{ id: string; client_request_id: string | null }>;
     let repaired = 0;
     let migrated = 0;
 
-    for (const record of records) {
-      if (this.getOwnership(record.prediction.id)) continue;
-      const clientRequestId = record.prediction.clientRequestId;
-      const claim = clientRequestId
-        ? (this.db.prepare(
-            "SELECT user_id FROM mlb_prediction_owner_claims_v1 WHERE client_request_id = ?",
-          ).get(clientRequestId) as { user_id: number } | undefined)
-        : undefined;
-      if (claim) {
-        this.bind(record.prediction.id, clientRequestId, Number(claim.user_id), "repair");
-        repaired += 1;
-      } else {
-        this.bind(record.prediction.id, clientRequestId, owner, "migration");
-        migrated += 1;
+    const migrateAll = this.db.transaction(() => {
+      for (const row of rows) {
+        const clientRequestId = row.client_request_id;
+        const claim = clientRequestId
+          ? (this.db.prepare(
+              "SELECT user_id FROM mlb_prediction_owner_claims_v1 WHERE client_request_id = ?",
+            ).get(clientRequestId) as { user_id: number } | undefined)
+          : undefined;
+        if (claim) {
+          this.bind(row.id, clientRequestId, Number(claim.user_id), "repair");
+          repaired += 1;
+        } else {
+          this.bind(row.id, clientRequestId, owner, "migration");
+          migrated += 1;
+        }
       }
-    }
+    });
+    migrateAll();
 
     const total = Number(
       (this.db.prepare("SELECT COUNT(*) AS n FROM mlb_prediction_ledger_v1").get() as any)?.n || 0,
@@ -234,7 +248,7 @@ export class MlbLedgerOwnershipStore {
       (this.db.prepare("SELECT COUNT(*) AS n FROM mlb_prediction_owners_v1").get() as any)?.n || 0,
     );
     return {
-      scanned: records.length,
+      scanned: rows.length,
       repaired,
       migrated,
       remainingUnowned: Math.max(0, total - owned),
@@ -350,7 +364,21 @@ export function appendOwnedPrediction(
   source: OwnershipSource = "session",
 ): ReturnType<MlbLedgerStore["appendPrediction"]> {
   const parsed = mlbPredictionInputSchema.parse(raw) as MlbPredictionInput;
-  const clientRequestId = scopedLedgerClientRequestId(userId, parsed.clientRequestId);
+  const rawClientRequestId = parsed.clientRequestId?.trim();
+  const migratedOwnership = rawClientRequestId
+    ? ownershipStore.getOwnershipByClientRequestId(rawClientRequestId)
+    : undefined;
+
+  if (migratedOwnership && Number(migratedOwnership.user_id) === positiveUserId(userId)) {
+    const result = store.appendPrediction({
+      ...parsed,
+      clientRequestId: rawClientRequestId,
+    });
+    ownershipStore.bind(result.data.id, rawClientRequestId!, userId, source);
+    return result;
+  }
+
+  const clientRequestId = scopedLedgerClientRequestId(userId, rawClientRequestId);
   ownershipStore.claim(clientRequestId, userId);
   const result = store.appendPrediction({ ...parsed, clientRequestId });
   ownershipStore.bind(result.data.id, clientRequestId, userId, source);

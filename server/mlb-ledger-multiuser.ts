@@ -177,7 +177,7 @@ export function registerMlbLedgerMultiuserRoutes(app: Express): void {
 
   app.get("/api/mlb/ledger/v1/predictions", (req, res) => {
     const { userId, records } = recordsForRequest(req);
-    res.json({ success: true, userId, data: records.map((record) => ({ ...record.prediction, ownership: record.ownership })) });
+    res.json({ success: true, userId, data: records });
   });
 
   app.get("/api/mlb/ledger/v1/predictions/:id", (req, res) => {
@@ -192,7 +192,7 @@ export function registerMlbLedgerMultiuserRoutes(app: Express): void {
       res.status(404).json({ success: false, error: "Prediction not found" });
       return;
     }
-    res.json({ success: true, data: { ...record.prediction, ownership: record.ownership } });
+    res.json({ success: true, data: record });
   });
 
   app.post(
