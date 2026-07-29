@@ -44,6 +44,10 @@ new_import = import_anchor + 'import { registerLegacyPicksCompatibilityRoutes } 
 if text.count(import_anchor) != 1:
     raise SystemExit("Legacy picks import anchor changed")
 text = text.replace(import_anchor, new_import, 1)
+
+# Import insertion changes offsets. Recompute the exact block limits before slicing.
+start = text.index(start_marker)
+end = text.index(end_marker, start)
 text = text[:start] + "  registerLegacyPicksCompatibilityRoutes(app);\n\n" + text[end:]
 ROUTES.write_text(text, encoding="utf-8")
 
