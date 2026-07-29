@@ -196,3 +196,26 @@ test("C2B derives proper-score targets from settlement result, not raw market ma
   assert.ok((win?.brierScore ?? 2) < 1);
   assert.ok((loss?.brierScore ?? 2) < 1);
 });
+
+
+test("C2B.1 excludes equivalent C1 duplicates from analytical metrics", () => {
+  const first = record({ id: "detroit-ml-first", probability: 0.6781014109277892, result: "WIN", profit: 0.7143, auditValue: audit() });
+  const duplicate = record({ id: "detroit-ml-duplicate", probability: 0.6781014109277892, result: "WIN", profit: 0.7143, auditValue: audit({ capturedAt: "2026-07-28T12:00:05.000Z" }) });
+  duplicate.prediction.recordedAt = "2026-07-28T12:00:05.000Z";
+  duplicate.prediction.recordedAtMs = Date.parse(duplicate.prediction.recordedAt);
+  const f5 = record({ id: "detroit-f5", probability: 0.6560877429477524, result: "WIN", profit: 0.6667, auditValue: audit() });
+  f5.prediction.market.type = "F5_ML";
+  f5.prediction.market.selection = "Home F5";
+  f5.prediction.market.oddsAmerican = -150;
+
+  const report = buildMlbInjuryOutcomesReport([first, duplicate, f5]);
+  assert.equal(report.deduplication.ledgerAuditedPicks, 3);
+  assert.equal(report.deduplication.uniqueAnalyticalDecisions, 2);
+  assert.equal(report.deduplication.duplicatesExcluded, 1);
+  assert.equal(report.deduplication.settledDuplicatesExcluded, 1);
+  assert.equal(report.summary.total, 2);
+  assert.equal(report.summary.settled, 2);
+  assert.equal(report.summary.wins, 2);
+  assert.equal(report.summary.profitUnits, 1.381);
+  assert.equal(report.recentSettled.some((row) => row.predictionId === "detroit-ml-duplicate"), false);
+});

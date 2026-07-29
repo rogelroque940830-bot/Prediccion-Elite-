@@ -125,3 +125,17 @@ test("excludes pushes and voids from ROI denominator", () => {
   assert.equal(view.summary.totalStakedUnits, 0);
   assert.equal(view.summary.roiPct, 0);
 });
+
+
+test("marks equivalent C1 ledger records as analytical duplicates without removing them", () => {
+  const first = record({ id: "first", recordedAtMs: 1000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
+  const duplicate = record({ id: "duplicate", recordedAtMs: 2000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
+  const view = buildMlbLedgerHistoryView([first, duplicate]);
+  assert.equal(view.summary.total, 2);
+  assert.equal(view.analyticalCalibration.auditedLedgerRecords, 2);
+  assert.equal(view.analyticalCalibration.uniqueDecisions, 1);
+  assert.equal(view.analyticalCalibration.duplicatesExcluded, 1);
+  const duplicatePick = view.picks.find((pick) => pick.id === "duplicate");
+  assert.equal(duplicatePick?.analyticalDuplicate, true);
+  assert.equal(duplicatePick?.analyticalDuplicateOfPredictionId, "first");
+});

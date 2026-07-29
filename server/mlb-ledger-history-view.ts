@@ -1,4 +1,5 @@
 import type { LedgerRecord } from "./mlb-ledger-store";
+import { classifyMlbAnalyticalDuplicates, MLB_ANALYTICAL_FINGERPRINT_VERSION } from "./mlb-analytical-dedup";
 
 export const MLB_LEDGER_HISTORY_VIEW_VERSION = "mlb-ledger-history-view.v1" as const;
 
@@ -45,6 +46,7 @@ function countsTowardRoi(result?: string | null): boolean {
 
 export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
   const ordered = [...records].sort((a, b) => b.prediction.recordedAtMs - a.prediction.recordedAtMs);
+  const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
   const wins = ordered.filter((record) => isWin(record.settlement?.result)).length;
   const losses = ordered.filter((record) => isLoss(record.settlement?.result)).length;
   const pushes = ordered.filter((record) => record.settlement?.result === "PUSH").length;
@@ -107,6 +109,7 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
   const picks = ordered.map((record) => {
     const prediction = record.prediction;
     const settlement = record.settlement;
+    const analyticalStatus = analyticalStatuses.get(prediction.id);
     return {
       id: prediction.id,
       clientRequestId: prediction.clientRequestId,
@@ -139,6 +142,9 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
       finalScore: settlement?.finalScore || null,
       immutable: true,
       hasInjuryAudit: prediction.payload?.analysis?.injuryAudit?.schemaVersion === "mlb-injury-audit.v1",
+      analyticalFingerprint: analyticalStatus?.fingerprint ?? null,
+      analyticalDuplicate: analyticalStatus?.analyticalDuplicate ?? false,
+      analyticalDuplicateOfPredictionId: analyticalStatus?.analyticalDuplicateOfPredictionId ?? null,
     };
   });
 
@@ -146,6 +152,13 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
     schemaVersion: MLB_LEDGER_HISTORY_VIEW_VERSION,
     generatedAt: new Date().toISOString(),
     source: "immutable-ledger" as const,
+    analyticalCalibration: {
+      fingerprintVersion: MLB_ANALYTICAL_FINGERPRINT_VERSION,
+      auditedLedgerRecords: picks.filter((pick) => pick.hasInjuryAudit).length,
+      uniqueDecisions: picks.filter((pick) => pick.hasInjuryAudit && !pick.analyticalDuplicate).length,
+      duplicatesExcluded: picks.filter((pick) => pick.analyticalDuplicate).length,
+      settledUniqueDecisions: picks.filter((pick) => pick.hasInjuryAudit && !pick.analyticalDuplicate && pick.settlementResult != null).length,
+    },
     summary: {
       total: ordered.length,
       pending,

@@ -131,3 +131,23 @@ test("C2C expands cautiously only with mature sample and multiple positive signa
   assert.equal(report.global.confidence, "HIGH");
   assert.ok(report.markets.length >= 2);
 });
+
+
+test("C2C sample thresholds use unique analytical decisions", () => {
+  const original = record(40, { probability: 0.67, result: "WIN", profit: 0.7, market: "ML" });
+  const duplicate = record(41, { probability: 0.67, result: "WIN", profit: 0.7, market: "ML" });
+  duplicate.prediction.game = { ...original.prediction.game };
+  duplicate.prediction.market = { ...original.prediction.market };
+  duplicate.prediction.model = { ...original.prediction.model };
+  duplicate.prediction.payload = JSON.parse(JSON.stringify(original.prediction.payload));
+  duplicate.prediction.payload.analysis.injuryAudit.capturedAt = "2026-07-28T12:00:10.000Z";
+  duplicate.prediction.recordedAt = "2026-07-28T12:00:10.000Z";
+  duplicate.prediction.recordedAtMs = Date.parse(duplicate.prediction.recordedAt);
+
+  const report = buildMlbInjuryDecisionReport([original, duplicate]);
+  assert.equal(report.deduplication.ledgerAuditedPicks, 2);
+  assert.equal(report.deduplication.uniqueAnalyticalDecisions, 1);
+  assert.equal(report.deduplication.duplicatesExcluded, 1);
+  assert.equal(report.global.metrics.total, 1);
+  assert.equal(report.global.metrics.settled, 1);
+});
