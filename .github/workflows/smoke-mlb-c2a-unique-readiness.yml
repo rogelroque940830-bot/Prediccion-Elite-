@@ -1,0 +1,56 @@
+name: Smoke deployed MLB C2A unique readiness
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed C2A readiness and ledger integrity
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: 4708919c1268ae4bea7556662f2902650e70a8d0
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/before.json
+          for attempt in $(seq 1 48); do
+            curl --fail --silent --show-error "$BACKEND_URL/health" > /tmp/health.json || true
+            served=$(jq -r '.commit // ""' /tmp/health.json 2>/dev/null || true)
+            echo "Attempt $attempt: served commit $served"
+            if [ "$served" = "$EXPECTED_COMMIT" ]; then break; fi
+            sleep 10
+          done
+          jq -e --arg commit "$EXPECTED_COMMIT" '.status == "healthy" and .commit == $commit and .environment == "p0-integration"' /tmp/health.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/injury-report?targetSettled=20" > /tmp/report.json
+          jq '{readiness:.data.readiness,sample:.data.sample}' /tmp/report.json
+          jq -e '
+            .success == true
+            and .data.readiness.countingBasis == "UNIQUE_ANALYTICAL_DECISIONS"
+            and .data.readiness.targetSettledAuditedPicks == 20
+            and .data.readiness.settledAuditedPicks == 2
+            and .data.readiness.remaining == 18
+            and .data.readiness.readyForExpansion == false
+            and .data.sample.auditedPredictions == 3
+            and .data.sample.settledAuditedPredictions == 3
+            and .data.sample.uniqueAnalyticalDecisions == 2
+            and .data.sample.settledUniqueAnalyticalDecisions == 2
+            and .data.sample.analyticalDuplicatesExcluded == 1
+            and .data.sample.settledAnalyticalDuplicatesExcluded == 1
+            and .data.sample.uniqueAuditContexts == 1
+            and .data.sample.duplicateMarketSnapshotsExcluded == 2
+          ' /tmp/report.json >/dev/null
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
+          jq -e --slurpfile before /tmp/before.json '
+            .data.predictions == $before[0].data.predictions
+            and .data.settlementEvents == $before[0].data.settlementEvents
+            and .data.predictions == 4
+            and .data.settlementEvents == 4
+            and .data.immutable == true
+          ' /tmp/after.json >/dev/null
