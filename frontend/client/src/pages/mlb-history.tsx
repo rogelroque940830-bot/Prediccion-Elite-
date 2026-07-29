@@ -97,6 +97,14 @@ interface InjuryOutcomesReport {
     probabilityEffectScope: string;
     formulasChanged: false;
   };
+  deduplication: {
+    fingerprintVersion: string;
+    ledgerAuditedPicks: number;
+    uniqueAnalyticalDecisions: number;
+    duplicatesExcluded: number;
+    settledDuplicatesExcluded: number;
+    pendingDuplicatesExcluded: number;
+  };
   summary: InjuryOutcomeMetricSummary;
   cohorts: Record<string, InjuryOutcomeMetricSummary & { key: string }>;
   recentSettled: Array<{
@@ -145,6 +153,7 @@ interface InjuryDecisionReport {
     formulasChanged: false;
     automaticRuleChanges: false;
   };
+  deduplication: InjuryOutcomesReport["deduplication"];
   global: InjuryDecisionItem;
   cohorts: InjuryDecisionItem[];
   markets: InjuryDecisionItem[];
@@ -184,12 +193,22 @@ interface LedgerHistoryPick {
   finalScore: { home: number; away: number } | null;
   immutable: true;
   hasInjuryAudit: boolean;
+  analyticalFingerprint: string | null;
+  analyticalDuplicate: boolean;
+  analyticalDuplicateOfPredictionId: string | null;
 }
 
 interface LedgerHistoryView {
   schemaVersion: "mlb-ledger-history-view.v1";
   generatedAt: string;
   source: "immutable-ledger";
+  analyticalCalibration: {
+    fingerprintVersion: string;
+    auditedLedgerRecords: number;
+    uniqueDecisions: number;
+    duplicatesExcluded: number;
+    settledUniqueDecisions: number;
+  };
   summary: {
     total: number;
     pending: number;
@@ -388,6 +407,9 @@ export default function MLBHistory() {
     finalScore: null,
     immutable: true,
     hasInjuryAudit: Boolean(pick.scientificSnapshot?.analysis?.injuryAudit),
+    analyticalFingerprint: null,
+    analyticalDuplicate: false,
+    analyticalDuplicateOfPredictionId: null,
   }));
 
   const progressPct = injuryReport
@@ -591,6 +613,13 @@ export default function MLBHistory() {
                 ))}
               </div>
 
+              <div className="flex items-start gap-2 rounded-lg border border-violet-500/25 bg-slate-950/30 p-2.5 text-[11px] text-muted-foreground">
+                <Database className="h-4 w-4 text-violet-300 shrink-0" />
+                <p>
+                  C2B usa {injuryOutcomes.deduplication.uniqueAnalyticalDecisions} decisiones únicas de {injuryOutcomes.deduplication.ledgerAuditedPicks} registros C1. Se excluyeron {injuryOutcomes.deduplication.duplicatesExcluded} duplicado(s) analítico(s) de Brier, log loss, ROI y tamaño de muestra.
+                </p>
+              </div>
+
               {injuryOutcomes.summary.settled === 0 ? (
                 <div className="rounded-lg border border-violet-500/20 bg-slate-950/30 p-3 text-sm text-muted-foreground">
                   Aún no hay picks C1 liquidados. C2B ya está listo y comenzará a calcular Brier, log loss, ROI y cohortes cuando terminen los juegos pendientes.
@@ -781,6 +810,11 @@ export default function MLBHistory() {
                   <span className="text-sm font-medium">{pick.awayTeam} @ {pick.homeTeam}</span>
                   <Badge variant="outline" className="text-xs">{pick.marketLabel}</Badge>
                   {pick.hasInjuryAudit && <Badge variant="outline" className="text-[10px] border-cyan-500/30 text-cyan-300">C1</Badge>}
+                  {pick.analyticalDuplicate && (
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 bg-amber-500/10 text-amber-300" title="Visible en el ledger, pero excluido de C2B y C2C por equivaler a una decisión anterior">
+                      Duplicado analítico
+                    </Badge>
+                  )}
                   <span className="text-xs text-muted-foreground ml-auto">{pick.selection}</span>
                 </div>
                 <div className="flex items-center gap-x-4 gap-y-1 mt-2 text-xs flex-wrap">

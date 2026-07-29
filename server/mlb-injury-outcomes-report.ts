@@ -1,5 +1,6 @@
 import type { LedgerRecord } from "./mlb-ledger-store";
 import type { MlbInjuryAudit } from "./mlb-injury-audit";
+import { classifyMlbAnalyticalDuplicates, MLB_ANALYTICAL_FINGERPRINT_VERSION, type MlbAnalyticalDuplicateStatus } from "./mlb-analytical-dedup";
 
 export const MLB_INJURY_OUTCOMES_REPORT_VERSION = "mlb-injury-outcomes-report.v1" as const;
 
@@ -56,6 +57,9 @@ export type MlbInjuryOutcomeRow = {
   finalRunsHome: number;
   finalRunsAway: number;
   effect: InjuryEffect;
+  analyticalFingerprint: string | null;
+  analyticalDuplicate: boolean;
+  analyticalDuplicateOfPredictionId: string | null;
 };
 
 function round(value: number, digits = 4): number {
@@ -90,7 +94,9 @@ function bullpenBlocked(audit: MlbInjuryAudit): boolean {
 
 function scoringOutcome(record: LedgerRecord): number | null {
   if (!record.settlement) return null;
-  if (Number.isFinite(record.settlement.outcomeValue)) return Number(record.settlement.outcomeValue);
+  // settlement.outcomeValue is the graded market measurement (run margin,
+  // total runs, team runs, etc.), not a Bernoulli target. Proper scoring
+  // rules must use the immutable settlement classification instead.
   if (record.settlement.result === "WIN") return 1;
   if (record.settlement.result === "LOSS") return 0;
   if (record.settlement.result === "HALF_WIN") return 0.75;
@@ -141,7 +147,7 @@ function effectFrom(record: LedgerRecord, audit: MlbInjuryAudit): InjuryEffect {
   };
 }
 
-function rowFrom(record: LedgerRecord): MlbInjuryOutcomeRow | null {
+function rowFrom(record: LedgerRecord, duplicateStatus: MlbAnalyticalDuplicateStatus): MlbInjuryOutcomeRow | null {
   const audit = auditFrom(record);
   if (!audit) return null;
   const teams = [audit.home, audit.away];
@@ -181,6 +187,9 @@ function rowFrom(record: LedgerRecord): MlbInjuryOutcomeRow | null {
     finalRunsHome: finite(audit.home.adjustment.finalRuns),
     finalRunsAway: finite(audit.away.adjustment.finalRuns),
     effect: effectFrom(record, audit),
+    analyticalFingerprint: duplicateStatus.fingerprint,
+    analyticalDuplicate: duplicateStatus.analyticalDuplicate,
+    analyticalDuplicateOfPredictionId: duplicateStatus.analyticalDuplicateOfPredictionId,
   };
 }
 
@@ -228,12 +237,25 @@ function summarizeRows(rows: MlbInjuryOutcomeRow[]) {
   };
 }
 
+function buildAllMlbInjuryOutcomeRows(records: LedgerRecord[]): MlbInjuryOutcomeRow[] {
+  const duplicateStatus = classifyMlbAnalyticalDuplicates(records);
+  return records
+    .map((record) => rowFrom(record, duplicateStatus.get(record.prediction.id) ?? {
+      fingerprint: null,
+      analyticalDuplicate: false,
+      analyticalDuplicateOfPredictionId: null,
+    }))
+    .filter((row): row is MlbInjuryOutcomeRow => Boolean(row));
+}
+
 export function buildMlbInjuryOutcomeRows(records: LedgerRecord[]): MlbInjuryOutcomeRow[] {
-  return records.map(rowFrom).filter((row): row is MlbInjuryOutcomeRow => Boolean(row));
+  return buildAllMlbInjuryOutcomeRows(records).filter((row) => !row.analyticalDuplicate);
 }
 
 export function buildMlbInjuryOutcomesReport(records: LedgerRecord[]) {
-  const rows = buildMlbInjuryOutcomeRows(records);
+  const allRows = buildAllMlbInjuryOutcomeRows(records);
+  const rows = allRows.filter((row) => !row.analyticalDuplicate);
+  const duplicateRows = allRows.filter((row) => row.analyticalDuplicate);
   const cohorts = Object.fromEntries(COHORTS.map((key) => [
     key,
     { key, ...summarizeRows(rows.filter((row) => cohortKeys(row).includes(key))) },
@@ -248,10 +270,19 @@ export function buildMlbInjuryOutcomesReport(records: LedgerRecord[]) {
     schemaVersion: MLB_INJURY_OUTCOMES_REPORT_VERSION,
     generatedAt: new Date().toISOString(),
     methodology: {
-      scoring: "Brier and logarithmic loss use the saved pregame model probability and immutable settlement outcome.",
+      scoring: "Brier and logarithmic loss use the saved pregame model probability and the immutable WIN/LOSS settlement classification; raw market outcomeValue is not a probability target.",
       cohortsOverlap: true,
       probabilityEffectScope: "HOME_ML_AND_GAME_TOTAL_COUNTERFACTUAL",
       formulasChanged: false,
+      analyticalDeduplication: "Equivalent C1 picks are fingerprinted by game, market, selection, line, odds, book, model version, probability and injury decision evidence; technical fetch timestamps are ignored.",
+    },
+    deduplication: {
+      fingerprintVersion: MLB_ANALYTICAL_FINGERPRINT_VERSION,
+      ledgerAuditedPicks: allRows.length,
+      uniqueAnalyticalDecisions: rows.length,
+      duplicatesExcluded: duplicateRows.length,
+      settledDuplicatesExcluded: duplicateRows.filter((row) => row.result != null).length,
+      pendingDuplicatesExcluded: duplicateRows.filter((row) => row.result == null).length,
     },
     summary: summarizeRows(rows),
     cohorts,

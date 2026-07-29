@@ -1,6 +1,7 @@
 import type { LedgerRecord } from "./mlb-ledger-store";
 import {
   buildMlbInjuryOutcomeRows,
+  buildMlbInjuryOutcomesReport,
   type MlbInjuryOutcomeRow,
 } from "./mlb-injury-outcomes-report";
 
@@ -186,6 +187,7 @@ function marketLabel(key: string): string {
 }
 
 export function buildMlbInjuryDecisionReport(records: LedgerRecord[]) {
+  const outcomeReport = buildMlbInjuryOutcomesReport(records);
   const rows = buildMlbInjuryOutcomeRows(records);
   const baseline = metrics(rows);
 
@@ -214,6 +216,7 @@ export function buildMlbInjuryDecisionReport(records: LedgerRecord[]) {
     schemaVersion: MLB_INJURY_DECISION_REPORT_VERSION,
     generatedAt: new Date().toISOString(),
     policy: { ...POLICY, formulasChanged: false, automaticRuleChanges: false },
+    deduplication: outcomeReport.deduplication,
     global,
     cohorts,
     markets,
