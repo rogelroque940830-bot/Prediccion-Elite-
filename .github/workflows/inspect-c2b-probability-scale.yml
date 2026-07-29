@@ -1,0 +1,52 @@
+name: Inspect deployed C2B probability scale
+
+on:
+  push:
+    branches:
+      - test/inspect-c2b-probability-scale-2026-07-29
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect ledger records and C2B output without mutation
+        shell: bash
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/before.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/predictions?limit=100" > /tmp/records.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/injury-outcomes?limit=10000" > /tmp/outcomes.json
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/injury-decisions?limit=10000" > /tmp/decisions.json
+
+          echo 'SETTLED C1 RECORDS'
+          jq '[.data[] | select(.prediction.payload.analysis.injuryAudit.schemaVersion == "mlb-injury-audit.v1" and .settlement != null) | {
+            id:.prediction.id,
+            market:.prediction.market.type,
+            selection:.prediction.market.selection,
+            storedModelProbability:.prediction.probabilities.model,
+            confidencePct:.prediction.decision.confidencePct,
+            result:.settlement.result,
+            outcomeValue:.settlement.outcomeValue,
+            profitUnits:.settlement.profitUnits
+          }]' /tmp/records.json
+
+          echo 'C2B SUMMARY AND RECENT'
+          jq '{summary:.data.summary,recentSettled:.data.recentSettled}' /tmp/outcomes.json
+
+          echo 'C2C GLOBAL'
+          jq '{global:.data.global,markets:.data.markets}' /tmp/decisions.json
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/after.json
+          jq -e --slurpfile before /tmp/before.json '
+            .data.predictions == $before[0].data.predictions
+            and .data.settlementEvents == $before[0].data.settlementEvents
+            and .data.immutable == true
+          ' /tmp/after.json >/dev/null
