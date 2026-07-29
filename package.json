@@ -9,7 +9,7 @@
     "dev": "tsx server/staging-entry.ts",
     "typecheck:mlb-ledger": "tsc -p tsconfig.mlb-ledger.json",
     "typecheck:s1-auth": "tsc -p tsconfig.s1-auth.json",
-    "test:s1-auth": "tsx --test server/auth-persistence.test.ts server/auth-routes.test.ts",
+    "test:s1-auth": "tsx --test server/auth-persistence.test.ts server/auth-routes.test.ts server/security-private-read.test.ts",
     "test:mlb-ledger": "tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts server/mlb-scientific-snapshot.test.ts server/mlb-injury-identity.test.ts server/mlb-pitcher-vs-team.test.ts server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-ledger-history-view.test.ts server/mlb-injury-outcomes-report.test.ts server/mlb-injury-decision-report.test.ts server/mlb-closing-line-store.test.ts server/mlb-closing-line-worker.test.ts server/mlb-closing-line-report.test.ts",
     "test:mlb-injuries": "tsx --test server/mlb-injury-identity.test.ts server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-injury-outcomes-report.test.ts",
     "test:mlb-pitcher-history": "tsx --test server/mlb-pitcher-vs-team.test.ts",
