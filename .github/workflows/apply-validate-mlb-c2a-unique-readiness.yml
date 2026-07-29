@@ -1,0 +1,62 @@
+name: Apply and validate MLB C2A unique readiness
+
+on:
+  push:
+    branches:
+      - feature/mlb-c2a-unique-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mlb-c2a-unique-readiness
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply C2A unique readiness patch
+        run: python scripts/apply-mlb-c2a-unique-readiness.py
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run MLB regression suite
+        run: npm run test:mlb-ledger
+      - name: Type-check backend
+        run: npm run typecheck:mlb-ledger
+      - name: Build backend
+        run: npm run build:backend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Verify C2A unique readiness markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'UNIQUE_ANALYTICAL_DECISIONS' server/mlb-injury-calibration-report.ts
+          grep -Fq 'settledUniqueAnalyticalDecisions' server/mlb-injury-calibration-report.ts
+          grep -Fq 'decisiones únicas liquidadas' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'Registros C1' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'Decisiones únicas' frontend/client/src/pages/mlb-history.tsx
+          grep -Fq 'C2A readiness excludes exact analytical duplicates' server/mlb-injury-calibration-report.test.ts
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply-mlb-c2a-unique-readiness.py
+          rm -f .github/workflows/apply-validate-mlb-c2a-unique-readiness.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '4189826+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Align MLB C2A readiness with unique analytical decisions'
+          git push origin HEAD:feature/mlb-c2a-unique-readiness
