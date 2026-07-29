@@ -396,7 +396,7 @@ export function registerPicksV2MultiuserRoutes(
 
   app.patch("/api/picks/v2/:id", requireOwnDataWriteRole, (req, res) => {
     const userId = resolveRequestUserId(req);
-    const id = decodeURIComponent(req.params.id || "");
+    const id = decodeURIComponent(Array.isArray(req.params.id) ? req.params.id[0] || "" : req.params.id || "");
     if (!idPattern.test(id)) {
       res.status(400).json({ success: false, error: "Invalid pick id" });
       return;
@@ -420,7 +420,7 @@ export function registerPicksV2MultiuserRoutes(
 
   app.delete("/api/picks/v2/:id", requireOwnDataWriteRole, (req, res) => {
     const userId = resolveRequestUserId(req);
-    const id = decodeURIComponent(req.params.id || "");
+    const id = decodeURIComponent(Array.isArray(req.params.id) ? req.params.id[0] || "" : req.params.id || "");
     if (!idPattern.test(id)) {
       res.status(400).json({ success: false, error: "Invalid pick id" });
       return;

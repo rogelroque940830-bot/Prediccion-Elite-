@@ -8,8 +8,7 @@
     "server/picks-v2-multiuser.ts",
     "server/mlb-ledger-ownership-store.test.ts",
     "server/picks-v2-multiuser.test.ts",
-    "server/user-data-context.test.ts",
-    "server/index.ts"
+    "server/user-data-context.test.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {

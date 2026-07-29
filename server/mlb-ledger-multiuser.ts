@@ -186,7 +186,7 @@ export function registerMlbLedgerMultiuserRoutes(app: Express): void {
       store,
       ownershipStore,
       userId,
-      decodeURIComponent(req.params.id || ""),
+      decodeURIComponent(Array.isArray(req.params.id) ? req.params.id[0] || "" : req.params.id || ""),
     );
     if (!record) {
       res.status(404).json({ success: false, error: "Prediction not found" });
@@ -204,7 +204,7 @@ export function registerMlbLedgerMultiuserRoutes(app: Express): void {
         const result = appendOwnedSettlement(
           store,
           ownershipStore,
-          decodeURIComponent(req.params.id || ""),
+          decodeURIComponent(Array.isArray(req.params.id) ? req.params.id[0] || "" : req.params.id || ""),
           req.body,
           userId,
         );
