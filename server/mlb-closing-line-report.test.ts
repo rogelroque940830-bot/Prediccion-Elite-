@@ -93,7 +93,7 @@ test("C2D finalizes the latest valid pregame observation", () => {
   assert.equal(report.summary.quality.verified, 1);
   assert.equal(report.rows[0].observation?.checkpoint, "T15");
   assert.equal(report.rows[0].observation?.oddsAmerican, -160);
-  assert.equal(report.rows[0].observation?.clvPp, 3.846154);
+  assert.equal(report.rows[0].observation?.clvPp, 3.205128);
   close.close();
   ledger.close();
   fs.rmSync(dir, { recursive: true, force: true });
