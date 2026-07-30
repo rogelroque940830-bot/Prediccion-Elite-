@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 10
     env:
       API_BASE: https://web-p0-integration.up.railway.app
-      EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.sha }}
+      EXPECTED_COMMIT: 93e17cfbf30ba9971e2fea468c07ca399d7a8641
     steps:
       - name: Wait for p0 deployment and verify ledger endpoints
         shell: bash
@@ -90,4 +90,4 @@ jobs:
           echo '--- report'; cat ledger-report.json 2>/dev/null || true
           exit 1
 
-# Temporary PR trigger for S5A exact-SHA staging verification.
+# Temporary exact-runtime verification for merged S5A commit 93e17cfb.
