@@ -1,6 +1,7 @@
 import express from "express";
 import { app } from "./index";
 
+// S5B deployment marker: no runtime behavior change; forces a controlled staging rebuild.
 type Confidence = "FULL" | "PARTIAL" | "LOW" | "UNKNOWN";
 type AnalysisStage = "PROVISIONAL" | "FINAL";
 
