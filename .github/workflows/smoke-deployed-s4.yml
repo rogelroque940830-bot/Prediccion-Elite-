@@ -1,0 +1,103 @@
+name: Smoke deployed S4 resilience
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 00f014cf86046a77857d298a4a206e8271e35b7a
+      WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+    steps:
+      - name: Verify deployed S4 and persisted state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 60); do
+            curl --silent --show-error "$BACKEND_URL/health" > /tmp/health.json || true
+            served=$(jq -r '.commit // ""' /tmp/health.json 2>/dev/null || true)
+            verified=$(jq -r '.operationalBackup.latestVerified // false' /tmp/health.json 2>/dev/null || true)
+            backups=$(jq -r '.operationalBackup.backups // 0' /tmp/health.json 2>/dev/null || true)
+            echo "Attempt $attempt: commit=$served backups=$backups verified=$verified"
+            if [ "$served" = "$EXPECTED_COMMIT" ] && [ "$verified" = "true" ] && [ "$backups" -ge 1 ]; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" = "true"
+
+          jq -e --arg commit "$EXPECTED_COMMIT" '
+            .status == "healthy"
+            and .commit == $commit
+            and .authPersistence == true
+            and .multiUserOwnership == true
+            and .ledgerOwnership.immutable == true
+            and .ledgerOwnership.unownedPredictions == 0
+            and .pickOwnership.unowned == 0
+            and .operationalBackup.enabled == true
+            and .operationalBackup.latestVerified == true
+            and .operationalBackup.backups >= 1
+            and (.operationalDiagnostics.status == "HEALTHY" or .operationalDiagnostics.status == "WARN")
+          ' /tmp/health.json >/dev/null
+
+          curl --fail --silent --show-error "$BACKEND_URL/api/mlb/ledger/v1/status" > /tmp/ledger.json
+          jq -e '
+            .success == true
+            and .data.immutable == true
+            and .data.predictions >= 6
+            and .data.settlementEvents >= 4
+            and .data.ownership.immutable == true
+            and .data.ownership.unownedPredictions == 0
+            and .data.ownership.assignments == .data.predictions
+          ' /tmp/ledger.json >/dev/null
+
+          for path in \
+            /api/ops/v1/status \
+            /api/ops/v1/backups \
+            /api/ops/v1/metrics \
+            /api/ops/v1/diagnostics \
+            /api/ops/v1/alerts; do
+            code=$(curl --silent --show-error --output /tmp/private.json --write-out '%{http_code}' "$BACKEND_URL$path")
+            test "$code" = "401"
+            jq -e '.success == false and .error == "Authentication required for private data"' /tmp/private.json >/dev/null
+          done
+
+          api_health_code=$(curl --silent --show-error --output /tmp/api-health.json --write-out '%{http_code}' "$BACKEND_URL/api/health")
+          test "$api_health_code" = "200"
+          jq -e '.ok == true' /tmp/api-health.json >/dev/null
+
+          mlb_code=$(curl --silent --show-error --output /tmp/mlb.json --write-out '%{http_code}' "$BACKEND_URL/api/mlb/ere/not-a-number")
+          test "$mlb_code" = "400"
+          nba_code=$(curl --silent --show-error --output /tmp/nba.json --write-out '%{http_code}' "$BACKEND_URL/api/nba/context")
+          test "$nba_code" = "200"
+          wnba_code=$(curl --silent --show-error --output /tmp/wnba.json --write-out '%{http_code}' "$BACKEND_URL/api/wnba/shot-profile/not-a-number")
+          test "$wnba_code" = "400"
+
+          if [ -n "${WRITE_TOKEN:-}" ]; then
+            auth=(-H "X-CourtEdge-Write-Key: $WRITE_TOKEN")
+            curl --fail --silent --show-error -X POST "${auth[@]}" "$BACKEND_URL/api/ops/v1/backups" > /tmp/backup.json
+            backup_id=$(jq -r '.data.backupId' /tmp/backup.json)
+            test -n "$backup_id"
+            curl --fail --silent --show-error -X POST "${auth[@]}" "$BACKEND_URL/api/ops/v1/backups/$backup_id/verify" > /tmp/verify.json
+            jq -e '.success == true and .data.valid == true' /tmp/verify.json >/dev/null
+            curl --fail --silent --show-error -X POST "${auth[@]}" "$BACKEND_URL/api/ops/v1/backups/$backup_id/restore-drill" > /tmp/drill.json
+            jq -e '.success == true and .data.valid == true and .data.sourceUntouched == true' /tmp/drill.json >/dev/null
+            curl --silent --show-error "${auth[@]}" "$BACKEND_URL/api/ops/v1/diagnostics" > /tmp/diagnostics.json
+            jq -e '.data.status == "HEALTHY" or .data.status == "WARN"' /tmp/diagnostics.json >/dev/null
+            curl --fail --silent --show-error -X POST "${auth[@]}" "$BACKEND_URL/api/ops/v1/alerts/evaluate" > /tmp/alert-eval.json
+            jq -e '.success == true' /tmp/alert-eval.json >/dev/null
+          else
+            echo "COURTEDGE_WRITE_TOKEN secret not available; write-path behavior remains covered by S4 tests."
+          fi
+
+          jq '{commit, operationalBackup, operationalRestoreDrill, operationalDiagnostics, ledgerOwnership, pickOwnership}' /tmp/health.json
+          jq '.data | {predictions, settlementEvents, immutable, ownership}' /tmp/ledger.json
