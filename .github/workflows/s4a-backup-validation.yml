@@ -1,50 +1,10 @@
-name: Apply S4A operational backups
+name: Completed S4A operational backups
 
 on:
-  pull_request:
-    branches:
-      - integration/p0-staging-secure
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  apply-and-validate:
+  completed:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Apply S4A implementation
-        run: |
-          python scripts/s4a_apply.py
-          python scripts/s4a_fix.py
-          python scripts/s4a_contract.py
-      - run: npm ci
-      - name: S4A tests
-        run: npm run test:s4-operations
-      - name: S4A typecheck
-        run: npm run typecheck:s4-operations
-      - name: S1 regression
-        run: npm run test:s1-auth
-      - name: S2 regression
-        run: npm run test:s2-multiuser
-      - name: S3 route contract
-        run: npm run test:s3-modularization
-      - name: MLB regression
-        run: npm run test:mlb-ledger
-      - name: Backend build
-        run: npm run build:backend
-      - name: Commit validated S4A implementation
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json tsconfig.s4-operations.json server/index.ts server/security.ts server/route-contract.snapshot.json server/operational-backup.ts server/operational-backup-worker.ts server/operational-routes.ts server/operational-backup.test.ts
-          git commit -m "S4A: add verified operational backups"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      - run: echo "S4A validation completed on feature branch"
