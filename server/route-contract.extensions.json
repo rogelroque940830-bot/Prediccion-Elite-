@@ -58,5 +58,20 @@
     "method": "GET",
     "path": "/api/mlb/ledger/v1/s5f-certification/status",
     "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/multisport/readiness/v1/latest",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/multisport/readiness/v1/sports/:sport",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/multisport/readiness/v1/status",
+    "registrations": 1
   }
 ]

@@ -18,7 +18,10 @@
     "server/mlb-s5e-coverage-service.aliases.d.ts",
     "server/mlb-s5e-coverage-service.test.ts",
     "server/mlb-s5f-certification-service.ts",
-    "server/mlb-s5f-certification-service.test.ts"
+    "server/mlb-s5f-certification-service.test.ts",
+    "server/multisport-readiness-service.ts",
+    "server/multisport-readiness-service.test.ts",
+    "server/multisport-readiness-routes.ts"
   ],
   "exclude": [
     "node_modules",
