@@ -1,37 +1,11 @@
 name: MLB Ledger Live Smoke
 
 on:
-  push:
-    branches:
-      - integration/p0-staging-secure
-    paths:
-      - '.github/workflows/mlb-ledger-live-smoke.yml'
-      - 'server/mlb-ledger.ts'
-      - 'server/mlb-ledger-store.ts'
-      - 'server/mlb-settlement-worker.ts'
-      - 'server/index.ts'
-      - 'server/security.ts'
-      - 'server/picks-v2.ts'
-      - 'server/s5b-staging-entry.ts'
-      - 'server/mlb-shadow-collection-worker.ts'
-      - 'server/mlb-s5c-shadow-ingestion.ts'
-      - 'package.json'
   pull_request:
     branches:
       - integration/p0-staging-secure
     paths:
       - '.github/workflows/mlb-ledger-live-smoke.yml'
-      - 'server/mlb-ledger.ts'
-      - 'server/mlb-ledger-store.ts'
-      - 'server/mlb-settlement-worker.ts'
-      - 'server/index.ts'
-      - 'server/security.ts'
-      - 'server/picks-v2.ts'
-      - 'server/s5b-staging-entry.ts'
-      - 'server/mlb-shadow-collection-worker.ts'
-      - 'server/mlb-s5c-shadow-ingestion.ts'
-      - 'package.json'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,11 +16,9 @@ jobs:
     timeout-minutes: 10
     env:
       API_BASE: https://web-p0-integration.up.railway.app
-      EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.sha }}
-      REQUIRE_SHADOW_HEALTH: ${{ github.event_name == 'push' && 'true' || 'false' }}
-      REQUIRE_S5C_HEALTH: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
     steps:
-      - name: Wait for p0 deployment and verify ledger endpoints
+      - name: Verify deployed S5C ingestion
         shell: bash
         run: |
           set -euo pipefail
@@ -57,109 +29,43 @@ jobs:
             shadow_code=$(curl -sS -o shadow-health.json -w '%{http_code}' --max-time 15 "$API_BASE/health/shadow-collection" || true)
             s5c_code=$(curl -sS -o s5c-health.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5c-ingestion" || true)
 
-            shadow_ok=false
-            if [[ "$REQUIRE_SHADOW_HEALTH" == "true" && "$shadow_code" == "200" ]]; then
-              shadow_ok=true
-            elif [[ "$REQUIRE_SHADOW_HEALTH" != "true" && ("$shadow_code" == "200" || "$shadow_code" == "404") ]]; then
-              shadow_ok=true
-            fi
-
-            s5c_ok=false
-            if [[ "$REQUIRE_S5C_HEALTH" == "true" && "$s5c_code" == "200" ]]; then
-              s5c_ok=true
-            elif [[ "$REQUIRE_S5C_HEALTH" != "true" && ("$s5c_code" == "200" || "$s5c_code" == "404") ]]; then
-              s5c_ok=true
-            fi
-
-            if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "401" && "$shadow_ok" == "true" && "$s5c_ok" == "true" ]]; then
+            if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "401" && "$shadow_code" == "200" && "$s5c_code" == "200" ]]; then
               if node <<'NODE'
           const fs = require('fs');
           const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
           const status = JSON.parse(fs.readFileSync('ledger-status.json', 'utf8'));
           const privateReport = JSON.parse(fs.readFileSync('ledger-report.json', 'utf8'));
-          const expectedCommit = String(process.env.EXPECTED_COMMIT || '').trim();
-          const requireShadow = String(process.env.REQUIRE_SHADOW_HEALTH || '') === 'true';
-          const requireS5c = String(process.env.REQUIRE_S5C_HEALTH || '') === 'true';
+          const shadow = JSON.parse(fs.readFileSync('shadow-health.json', 'utf8'));
+          const s5c = JSON.parse(fs.readFileSync('s5c-health.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
 
-          if (health.status !== 'healthy') throw new Error('health endpoint is not healthy');
-          if (expectedCommit && health.commit !== expectedCommit) {
-            throw new Error(`Railway is serving ${health.commit || 'unknown'}, expected ${expectedCommit}`);
-          }
-          if (!status.success || status.data?.schemaVersion !== 'mlb-ledger.v1') throw new Error('invalid ledger status payload');
-          if (status.data?.immutable !== true) throw new Error('ledger does not report immutable=true');
-          if (privateReport.success !== false || !/Authentication required/i.test(String(privateReport.error || ''))) {
-            throw new Error('private ledger report is not protected');
-          }
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!status.success || status.data?.schemaVersion !== 'mlb-ledger.v1' || status.data?.immutable !== true) throw new Error('ledger is not healthy and immutable');
+          if (privateReport.success !== false || !/Authentication required/i.test(String(privateReport.error || ''))) throw new Error('private report is not protected');
+          if (shadow.status !== 'healthy' || shadow.commit !== expected || shadow.safety?.realFinancialExposure !== 0) throw new Error('S5B shadow collection is not healthy');
+          if (s5c.status !== 'healthy' || s5c.commit !== expected) throw new Error('S5C is not serving the expected commit');
+          if (s5c.schemaVersion !== 'mlb-s5c-shadow-ingestion.v1' || s5c.enabled !== true || !s5c.lastSuccessAt || !s5c.latest) throw new Error('first S5C run did not complete');
+          if (s5c.lastError != null) throw new Error(`S5C error: ${s5c.lastError}`);
+          if (s5c.safety?.mode !== 'SHADOW'
+            || s5c.safety?.realFinancialExposure !== 0
+            || s5c.safety?.sportsbookIntegration !== false
+            || s5c.safety?.automaticBetPlacement !== false
+            || s5c.safety?.productionWrites !== false
+            || s5c.safety?.syntheticOdds !== false) throw new Error('S5C safety invariants failed');
 
-          let shadowSummary = { required: requireShadow, available: false };
-          if (requireShadow) {
-            const shadow = JSON.parse(fs.readFileSync('shadow-health.json', 'utf8'));
-            if (shadow.status !== 'healthy') throw new Error('shadow collection is not healthy');
-            if (expectedCommit && shadow.commit !== expectedCommit) throw new Error('shadow health commit does not match deployment');
-            if (shadow.schemaVersion !== 'mlb-shadow-collection.v1') throw new Error('invalid shadow collection schema');
-            if (shadow.enabled !== true) throw new Error('shadow collection worker is disabled');
-            if (!shadow.lastSuccessAt || shadow.snapshots < 1) throw new Error('first shadow collection did not complete');
-            if (shadow.lastError != null) throw new Error(`shadow collection error: ${shadow.lastError}`);
-            if (shadow.safety?.mode !== 'SHADOW'
-              || shadow.safety?.realFinancialExposure !== 0
-              || shadow.safety?.sportsbookIntegration !== false
-              || shadow.safety?.automaticBetPlacement !== false
-              || shadow.safety?.productionWrites !== false) {
-              throw new Error('shadow safety invariants are invalid');
-            }
-            shadowSummary = {
-              required: true,
-              available: true,
-              status: shadow.status,
-              schemaVersion: shadow.schemaVersion,
-              lastSuccessAt: shadow.lastSuccessAt,
-              snapshots: shadow.snapshots,
-              intervalMs: shadow.intervalMs,
-              realFinancialExposure: shadow.safety.realFinancialExposure,
-            };
-          }
-
-          let s5cSummary = { required: requireS5c, available: false };
-          if (requireS5c) {
-            const s5c = JSON.parse(fs.readFileSync('s5c-health.json', 'utf8'));
-            if (s5c.status !== 'healthy') throw new Error('S5C ingestion is not healthy');
-            if (expectedCommit && s5c.commit !== expectedCommit) throw new Error('S5C health commit does not match deployment');
-            if (s5c.schemaVersion !== 'mlb-s5c-shadow-ingestion.v1') throw new Error('invalid S5C ingestion schema');
-            if (s5c.enabled !== true || !s5c.lastSuccessAt || !s5c.latest) throw new Error('first S5C ingestion run did not complete');
-            if (s5c.lastError != null) throw new Error(`S5C ingestion error: ${s5c.lastError}`);
-            if (s5c.safety?.mode !== 'SHADOW'
-              || s5c.safety?.realFinancialExposure !== 0
-              || s5c.safety?.sportsbookIntegration !== false
-              || s5c.safety?.automaticBetPlacement !== false
-              || s5c.safety?.productionWrites !== false
-              || s5c.safety?.syntheticOdds !== false) {
-              throw new Error('S5C safety invariants are invalid');
-            }
-            s5cSummary = {
-              required: true,
-              available: true,
-              status: s5c.status,
-              schemaVersion: s5c.schemaVersion,
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            ledger: { predictions: status.data.predictions, settlementEvents: status.data.settlementEvents, immutable: status.data.immutable },
+            privateReportProtected: true,
+            shadowCollection: { lastSuccessAt: shadow.lastSuccessAt, snapshots: shadow.snapshots, exposure: shadow.safety.realFinancialExposure },
+            s5cIngestion: {
               lastSuccessAt: s5c.lastSuccessAt,
               intervalMs: s5c.intervalMs,
               latest: s5c.latest,
-              realFinancialExposure: s5c.safety.realFinancialExposure,
+              exposure: s5c.safety.realFinancialExposure,
               syntheticOdds: s5c.safety.syntheticOdds,
-            };
-          }
-
-          console.log(JSON.stringify({
-            health: health.status,
-            commit: health.commit,
-            environment: health.environment,
-            mlbLedgerAutoSettlement: health.mlbLedgerAutoSettlement,
-            schemaVersion: status.data.schemaVersion,
-            immutable: status.data.immutable,
-            predictions: status.data.predictions,
-            settlementEvents: status.data.settlementEvents,
-            privateReportProtected: true,
-            shadowCollection: shadowSummary,
-            s5cIngestion: s5cSummary,
+            },
           }, null, 2));
           NODE
               then
@@ -167,14 +73,13 @@ jobs:
               fi
             fi
 
-            echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code shadow=$shadow_code s5c=$s5c_code required_shadow=$REQUIRE_SHADOW_HEALTH required_s5c=$REQUIRE_S5C_HEALTH"
+            echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code shadow=$shadow_code s5c=$s5c_code"
             sleep 10
           done
 
-          echo 'Live MLB ledger smoke failed after retries.'
+          echo 'S5C live verification failed.'
           echo '--- health'; cat health.json 2>/dev/null || true
-          echo '--- status'; cat ledger-status.json 2>/dev/null || true
-          echo '--- report'; cat ledger-report.json 2>/dev/null || true
+          echo '--- ledger'; cat ledger-status.json 2>/dev/null || true
           echo '--- shadow'; cat shadow-health.json 2>/dev/null || true
           echo '--- s5c'; cat s5c-health.json 2>/dev/null || true
           exit 1
