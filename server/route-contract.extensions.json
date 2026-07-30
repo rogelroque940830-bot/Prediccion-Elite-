@@ -8,5 +8,20 @@
     "method": "GET",
     "path": "/api/mlb/ledger/v1/s5c-ingestion/status",
     "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5d-gate/latest",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5d-gate/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5d-gate/transitions",
+    "registrations": 1
   }
 ]
