@@ -1,0 +1,138 @@
+name: VERIFY S6B Live WNBA
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6b-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 9b669aff18373f4c306d61aabfc171f341ab291f
+      MIN_AUDIT_AT: 2026-07-30T23:24:00Z
+    steps:
+      - name: Verify deployed S6B WNBA resilience
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            report_code=$(curl -sS -o report.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/report" || true)
+            s5b_code=$(curl -sS -o s5b.json -w '%{http_code}' --max-time 20 "$API_BASE/health/shadow-collection" || true)
+            s5c_code=$(curl -sS -o s5c.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s5c-ingestion" || true)
+            s5d_code=$(curl -sS -o s5d.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s5d-gate" || true)
+            s5e_code=$(curl -sS -o s5e.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s5e-coverage" || true)
+            s5f_code=$(curl -sS -o s5f.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s5f-certification" || true)
+            s6a_code=$(curl -sS -o s6a.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6a-readiness" || true)
+            detail_code=$(curl -sS -o detail.json -w '%{http_code}' --max-time 20 "$API_BASE/api/multisport/readiness/v1/latest" || true)
+            games_code=$(curl -sS -o games.json -w '%{http_code}' --max-time 25 "$API_BASE/api/wnba/games?date=2026-07-30" || true)
+            games_default_code=$(curl -sS -o games-default.json -w '%{http_code}' --max-time 25 "$API_BASE/api/wnba/games" || true)
+            sos_code=$(curl -sS -o sos.json -w '%{http_code}' --max-time 25 "$API_BASE/api/wnba/sos" || true)
+            players_code=$(curl -sS -o players.json -w '%{http_code}' --max-time 25 "$API_BASE/api/wnba/players" || true)
+            odds_code=$(curl -sS -o odds.json -w '%{http_code}' --max-time 25 "$API_BASE/api/odds/wnba?date=2026-07-30" || true)
+
+            echo "Attempt $attempt/90: health=$health_code ledger=$ledger_code report=$report_code s5b=$s5b_code s5c=$s5c_code s5d=$s5d_code s5e=$s5e_code s5f=$s5f_code s6a=$s6a_code detail=$detail_code games=$games_code default=$games_default_code sos=$sos_code players=$players_code odds=$odds_code"
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$report_code" == "401" && "$s5b_code" == "200" && "$s5c_code" == "200" && "$s5d_code" == "200" && "$s5e_code" == "200" && "$s5f_code" == "200" && "$s6a_code" == "200" && "$detail_code" == "401" && "$games_code" == "200" && "$games_default_code" == "200" && "$sos_code" == "200" && "$players_code" == "200" && "$odds_code" == "200" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('health.json');
+          const ledger = read('ledger.json');
+          const report = read('report.json');
+          const s5b = read('s5b.json');
+          const s5c = read('s5c.json');
+          const s5d = read('s5d.json');
+          const s5e = read('s5e.json');
+          const s5f = read('s5f.json');
+          const s6a = read('s6a.json');
+          const detail = read('detail.json');
+          const games = read('games.json');
+          const gamesDefault = read('games-default.json');
+          const sos = read('sos.json');
+          const players = read('players.json');
+          const odds = read('odds.json');
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const minimumAudit = Date.parse(String(process.env.MIN_AUDIT_AT || ''));
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('ledger is not healthy and immutable');
+          if (report.success !== false || !/Authentication required/i.test(String(report.error || ''))) throw new Error('private ledger report is not protected');
+          if (detail.success !== false || !/Authentication required/i.test(String(detail.error || ''))) throw new Error('private S6A detail is not protected');
+          for (const [name, payload] of Object.entries({ s5b, s5c, s5d, s5e, s5f })) {
+            if (payload.status !== 'healthy' || payload.commit !== expected) throw new Error(`${name} is not healthy on expected commit`);
+          }
+          if (!['healthy', 'degraded'].includes(s6a.status) || s6a.commit !== expected) throw new Error('S6A is not serving expected commit');
+          if (!s6a.lastRunAt || !s6a.lastSuccessAt || Date.parse(s6a.lastRunAt) < minimumAudit || Date.parse(s6a.lastSuccessAt) < minimumAudit) throw new Error('S6A has not completed a post-deploy audit');
+          if (s6a.lastError != null || !s6a.latest) throw new Error('S6A audit is incomplete');
+
+          for (const [name, payload] of Object.entries({ games, gamesDefault, sos, players, odds })) {
+            if (payload.success !== true) throw new Error(`${name} endpoint is not successful`);
+          }
+          if (!Array.isArray(games.data) || games.data.length < 1) throw new Error('dated WNBA schedule is empty');
+          if (!Array.isArray(gamesDefault.data)) throw new Error('default-date WNBA schedule contract is invalid');
+          if (!String(games.source || '').trim()) throw new Error('WNBA schedule source attribution is missing');
+          if (!Array.isArray(sos.data) || sos.data.length < 1 || !String(sos.source || '').trim()) throw new Error('WNBA SOS contract or source is invalid');
+          if (!players.data || typeof players.data !== 'object' || Array.isArray(players.data) || Object.keys(players.data).length < 1 || !String(players.source || '').trim()) throw new Error('WNBA players contract or source is invalid');
+          if (!Array.isArray(odds.games) || odds.games.length < 1) throw new Error('priced WNBA slate is unavailable');
+
+          const wnba = s6a.latest?.sports?.WNBA;
+          if (!wnba || !['READY', 'DEGRADED'].includes(wnba.state)) throw new Error(`WNBA remains ${wnba?.state || 'missing'} despite priced slate`);
+          if (Number(wnba.gamesScheduled || 0) < 1) throw new Error('S6A did not recognize the WNBA slate');
+          if (s6a.safety?.predictionsCreated !== 0 || s6a.safety?.realFinancialExposure !== 0 || s6a.safety?.sportsbookIntegration !== false || s6a.safety?.automaticBetPlacement !== false || s6a.safety?.automaticPromotion !== false) throw new Error('S6A/S6B safety invariants failed');
+
+          const publicPayload = JSON.stringify(s6a);
+          for (const forbidden of ['"homeTeam"', '"awayTeam"', '"selection"', '"rows"', '"modelProbability"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public readiness leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: expected,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            privateReportProtected: true,
+            privateReadinessProtected: true,
+            wnbaEndpoints: {
+              scheduleGames: games.data.length,
+              scheduleSource: games.source,
+              defaultScheduleGames: gamesDefault.data.length,
+              defaultScheduleSource: gamesDefault.source,
+              sosTeams: sos.data.length,
+              sosSource: sos.source,
+              playerTeams: Object.keys(players.data).length,
+              playersSource: players.source,
+              pricedGames: odds.games.length,
+              oddsSource: odds.source,
+            },
+            s6aWnba: wnba,
+            s6aSummary: s6a.latest.summary,
+            s5dGate: s5d.latest,
+            s5eCoverage: s5e.latest,
+            s5fCertification: s5f.latest,
+            safety: s6a.safety,
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+
+          echo 'S6B live verification failed.'
+          for file in health ledger s6a games games-default sos players odds detail; do
+            echo "--- $file"
+            cat "$file.json" 2>/dev/null || true
+          done
+          exit 1
