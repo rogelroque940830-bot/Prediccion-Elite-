@@ -51,6 +51,12 @@ function collectRouteInventory(): RouteContractEntry[] {
   );
 }
 
+function readExtensions(): RouteContractEntry[] {
+  const filePath = path.join(process.cwd(), "server", "route-contract.extensions.json");
+  if (!fs.existsSync(filePath)) return [];
+  return JSON.parse(fs.readFileSync(filePath, "utf-8")) as RouteContractEntry[];
+}
+
 test("S3 preserves the backend route contract", () => {
   const expected = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "server", "route-contract.snapshot.json"), "utf-8"),
@@ -67,7 +73,10 @@ test("S3 preserves the backend route contract", () => {
       registrations: 1,
     },
   ];
-  assert.deepEqual(collectRouteInventory(), sortRoutes([...expected, ...s5bPrivateRoutes]));
+  assert.deepEqual(
+    collectRouteInventory(),
+    sortRoutes([...expected, ...s5bPrivateRoutes, ...readExtensions()]),
+  );
 });
 
 test("S3A keeps shared runtime and legacy persistence in dedicated modules", () => {
