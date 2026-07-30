@@ -15,7 +15,10 @@
     "server/mlb-s5d-gate-monitor.ts",
     "server/mlb-s5d-gate-monitor.test.ts",
     "server/mlb-s5e-coverage-service.ts",
-    "server/mlb-s5e-coverage-service.test.ts"
+    "server/mlb-s5e-coverage-service.aliases.d.ts",
+    "server/mlb-s5e-coverage-service.test.ts",
+    "server/mlb-s5f-certification-service.ts",
+    "server/mlb-s5f-certification-service.test.ts"
   ],
   "exclude": [
     "node_modules",

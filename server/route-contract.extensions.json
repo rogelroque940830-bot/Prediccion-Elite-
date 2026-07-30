@@ -38,5 +38,25 @@
     "method": "GET",
     "path": "/api/mlb/ledger/v1/s5e-coverage/status",
     "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5f-certification/alerts",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5f-certification/dashboard",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5f-certification/review-package",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5f-certification/status",
+    "registrations": 1
   }
 ]
