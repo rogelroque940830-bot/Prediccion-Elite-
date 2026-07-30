@@ -1,0 +1,143 @@
+name: VERIFY S5F Live Certification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - ".github/workflows/verify-s5f-live-certification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s5f-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 5e6fb6366311bdf6481ffb56e545bbf5b8cd216d
+    steps:
+      - name: Verify deployed S5F certification service
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 15 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            report_code=$(curl -sS -o report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
+            shadow_code=$(curl -sS -o shadow.json -w '%{http_code}' --max-time 15 "$API_BASE/health/shadow-collection" || true)
+            s5c_code=$(curl -sS -o s5c.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5c-ingestion" || true)
+            s5d_code=$(curl -sS -o s5d.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5d-gate" || true)
+            s5e_code=$(curl -sS -o s5e.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5e-coverage" || true)
+            s5f_code=$(curl -sS -o s5f.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5f-certification" || true)
+            dashboard_code=$(curl -sS -o dashboard.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/s5f-certification/dashboard" || true)
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$report_code" == "401" && "$shadow_code" == "200" && "$s5c_code" == "200" && "$s5d_code" == "200" && "$s5e_code" == "200" && "$s5f_code" == "200" && "$dashboard_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const ledger = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync('report.json', 'utf8'));
+          const shadow = JSON.parse(fs.readFileSync('shadow.json', 'utf8'));
+          const s5c = JSON.parse(fs.readFileSync('s5c.json', 'utf8'));
+          const s5d = JSON.parse(fs.readFileSync('s5d.json', 'utf8'));
+          const s5e = JSON.parse(fs.readFileSync('s5e.json', 'utf8'));
+          const s5f = JSON.parse(fs.readFileSync('s5f.json', 'utf8'));
+          const dashboard = JSON.parse(fs.readFileSync('dashboard.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('ledger is not healthy and immutable');
+          if (report.success !== false || !/Authentication required/i.test(String(report.error || ''))) throw new Error('private ledger report is not protected');
+          if (dashboard.success !== false || !/Authentication required/i.test(String(dashboard.error || ''))) throw new Error('S5F dashboard is not protected');
+          if (shadow.status !== 'healthy' || shadow.commit !== expected || shadow.safety?.realFinancialExposure !== 0) throw new Error('S5B is not healthy');
+          if (s5c.status !== 'healthy' || s5c.commit !== expected || s5c.safety?.realFinancialExposure !== 0 || s5c.safety?.syntheticOdds !== false) throw new Error('S5C is not healthy');
+          if (s5d.status !== 'healthy' || s5d.commit !== expected || s5d.safety?.automaticPromotion !== false) throw new Error('S5D is not healthy');
+          if (s5e.status !== 'healthy' || s5e.commit !== expected || s5e.safety?.realFinancialExposure !== 0 || s5e.safety?.syntheticOdds !== false || s5e.safety?.automaticPromotion !== false) throw new Error('S5E is not healthy');
+          if (s5f.status !== 'healthy' || s5f.commit !== expected) throw new Error('S5F is not serving expected commit');
+          if (s5f.schemaVersion !== 'mlb-s5f-certification.v1' || s5f.enabled !== true || !s5f.lastSuccessAt || !s5f.latest) throw new Error('first S5F snapshot did not complete');
+          if (s5f.lastError != null || !Number.isInteger(s5f.snapshots) || s5f.snapshots < 1) throw new Error('S5F status is incomplete');
+
+          const counts = s5f.latest.dashboardCounts || {};
+          const total = Number(counts.ready || 0) + Number(counts.pending || 0) + Number(counts.actionRequired || 0);
+          if (total !== Number(s5f.latest.terminalPredictions)) throw new Error(`dashboard count ${total} != terminal predictions ${s5f.latest.terminalPredictions}`);
+          if (s5f.latest.gateStatus !== s5d.latest?.gateStatus) throw new Error('S5F and S5D gate status differ');
+          if (s5d.latest?.gateStatus === 'EXTEND') {
+            if (s5f.latest.partialReviewPackage !== true || s5f.latest.humanReviewRequired !== false) throw new Error('EXTEND package must remain partial and not require human review');
+          }
+          if (s5f.latest.automaticPromotion !== false) throw new Error('S5F automatic promotion must remain disabled');
+
+          const safety = s5f.safety || {};
+          if (safety.mode !== 'SHADOW'
+            || safety.realFinancialExposure !== 0
+            || safety.sportsbookIntegration !== false
+            || safety.automaticBetPlacement !== false
+            || safety.productionWrites !== false
+            || safety.automaticPromotion !== false
+            || safety.formulasChanged !== false
+            || safety.thresholdsChanged !== false
+            || safety.stakePolicyChanged !== false) throw new Error('S5F safety invariants failed');
+
+          const publicPayload = JSON.stringify(s5f);
+          for (const forbidden of ['"homeTeam"', '"awayTeam"', '"selection"', '"rows"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public S5F health leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            privateReportProtected: true,
+            privateDashboardProtected: true,
+            s5dGate: {
+              lastSuccessAt: s5d.lastSuccessAt,
+              latest: s5d.latest,
+              automaticPromotion: s5d.safety.automaticPromotion,
+            },
+            s5eCoverage: {
+              lastSuccessAt: s5e.lastSuccessAt,
+              observationCount: s5e.observationCount,
+              latest: s5e.latest,
+            },
+            s5fCertification: {
+              lastSuccessAt: s5f.lastSuccessAt,
+              intervalMs: s5f.intervalMs,
+              snapshots: s5f.snapshots,
+              terminalPredictions: s5f.latest.terminalPredictions,
+              supersededPredictions: s5f.latest.supersededPredictions,
+              dashboardCounts: s5f.latest.dashboardCounts,
+              alertCounts: s5f.latest.alertCounts,
+              actionableAlerts: s5f.latest.actionableAlerts,
+              gateStatus: s5f.latest.gateStatus,
+              partialReviewPackage: s5f.latest.partialReviewPackage,
+              humanReviewRequired: s5f.latest.humanReviewRequired,
+              automaticPromotion: s5f.latest.automaticPromotion,
+              exposure: s5f.safety.realFinancialExposure,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+
+            echo "Attempt $attempt/60: health=$health_code ledger=$ledger_code report=$report_code shadow=$shadow_code s5c=$s5c_code s5d=$s5d_code s5e=$s5e_code s5f=$s5f_code dashboard=$dashboard_code"
+            sleep 10
+          done
+
+          echo 'S5F live verification failed.'
+          echo '--- health'; cat health.json 2>/dev/null || true
+          echo '--- ledger'; cat ledger.json 2>/dev/null || true
+          echo '--- report'; cat report.json 2>/dev/null || true
+          echo '--- shadow'; cat shadow.json 2>/dev/null || true
+          echo '--- s5c'; cat s5c.json 2>/dev/null || true
+          echo '--- s5d'; cat s5d.json 2>/dev/null || true
+          echo '--- s5e'; cat s5e.json 2>/dev/null || true
+          echo '--- s5f'; cat s5f.json 2>/dev/null || true
+          echo '--- dashboard'; cat dashboard.json 2>/dev/null || true
+          exit 1
