@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/route-runtime.ts",
+    "server/wnba-s6b-data-resilience.ts",
+    "server/wnba-s6b-routes.ts",
+    "server/wnba-s6b-data-resilience.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
