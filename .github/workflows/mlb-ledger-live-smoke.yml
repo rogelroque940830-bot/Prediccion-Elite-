@@ -89,3 +89,5 @@ jobs:
           echo '--- status'; cat ledger-status.json 2>/dev/null || true
           echo '--- report'; cat ledger-report.json 2>/dev/null || true
           exit 1
+
+# Temporary trigger for exact S5B foundation deployment verification.
