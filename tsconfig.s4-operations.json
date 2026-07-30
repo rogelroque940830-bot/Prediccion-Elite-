@@ -5,7 +5,10 @@
     "server/operational-backup-worker.ts",
     "server/operational-routes.ts",
     "server/operational-backup.test.ts",
-    "server/user-data-context.ts"
+    "server/user-data-context.ts",
+    "server/operational-restore-drill.ts",
+    "server/operational-restore-routes.ts",
+    "server/operational-restore-drill.test.ts"
   ],
   "exclude": [
     "node_modules",

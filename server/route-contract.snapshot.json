@@ -436,6 +436,11 @@
   },
   {
     "method": "POST",
+    "path": "/api/ops/v1/backups/:id/restore-drill",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
     "path": "/api/ops/v1/backups/:id/verify",
     "registrations": 1
   },

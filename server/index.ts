@@ -28,6 +28,8 @@ import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
 import { getOperationalBackupService } from "./operational-backup";
 import { startOperationalBackupWorker } from "./operational-backup-worker";
 import { registerOperationalRoutes } from "./operational-routes";
+import { getOperationalRestoreDrillService } from "./operational-restore-drill";
+import { registerOperationalRestoreDrillRoutes } from "./operational-restore-routes";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -58,6 +60,7 @@ const ledgerOwnershipMigration = mlbOwnershipStore.ensureExistingOwnership(
 const userPickStore = getUserPickFileStore();
 const pickOwnershipMigration = userPickStore.migrationStatus(systemOwnerUserId);
 const operationalBackupService = getOperationalBackupService();
+const operationalRestoreDrillService = getOperationalRestoreDrillService(operationalBackupService);
 
 if (ledgerOwnershipMigration.remainingUnowned > 0) {
   console.error(
@@ -143,6 +146,7 @@ app.get("/health", (_req, res) => {
     ledgerOwnership: mlbOwnershipStore.status(),
     pickOwnership: pickOwnershipMigration,
     operationalBackup: operationalBackupService.status(),
+    operationalRestoreDrill: operationalRestoreDrillService.status(),
   });
 });
 
@@ -152,6 +156,7 @@ app.get("/health", (_req, res) => {
   registerMlbOwnedExportRoute(app);
   registerMlbLedgerMultiuserRoutes(app);
   registerOperationalRoutes(app, operationalBackupService);
+  registerOperationalRestoreDrillRoutes(app, operationalRestoreDrillService);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);
