@@ -11,6 +11,7 @@ async function withServer(run: (baseUrl: string) => Promise<void>): Promise<void
   app.get("/api/clv/report", (_req, res) => res.json({ success: true }));
   app.get("/api/mlb/ledger/v1/history", (_req, res) => res.json({ success: true }));
   app.get("/api/mlb/ledger/v1/status", (_req, res) => res.json({ success: true }));
+  app.get("/api/multisport/readiness/v1/latest", (_req, res) => res.json({ success: true }));
   app.get("/api/sharp/mlb/example", (_req, res) => res.json({ success: true }));
 
   const server = http.createServer(app);
@@ -25,12 +26,13 @@ async function withServer(run: (baseUrl: string) => Promise<void>): Promise<void
   }
 }
 
-test("anonymous users cannot read user-owned picks, CLV or ledger history", async () => {
+test("anonymous users cannot read user-owned picks, CLV, ledger history or S6A detail", async () => {
   await withServer(async (baseUrl) => {
     for (const pathname of [
       "/api/picks/v2",
       "/api/clv/report",
       "/api/mlb/ledger/v1/history",
+      "/api/multisport/readiness/v1/latest",
     ]) {
       const response = await fetch(`${baseUrl}${pathname}`);
       assert.equal(response.status, 401, pathname);
@@ -56,10 +58,15 @@ test("service token can read private endpoints without a browser session", async
 
   try {
     await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/mlb/ledger/v1/history`, {
-        headers: { authorization: "Bearer service-token-for-private-read-test" },
-      });
-      assert.equal(response.status, 200);
+      for (const pathname of [
+        "/api/mlb/ledger/v1/history",
+        "/api/multisport/readiness/v1/latest",
+      ]) {
+        const response = await fetch(`${baseUrl}${pathname}`, {
+          headers: { authorization: "Bearer service-token-for-private-read-test" },
+        });
+        assert.equal(response.status, 200, pathname);
+      }
     });
   } finally {
     if (previous == null) delete process.env.COURTEDGE_WRITE_TOKEN;
