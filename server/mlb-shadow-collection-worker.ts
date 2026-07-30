@@ -6,6 +6,7 @@ import {
   buildMlbShadowEvaluation,
   type MlbShadowEvaluation,
 } from "./mlb-shadow-evaluation";
+import { terminalMlbLedgerRecords } from "./mlb-terminal-ledger-records";
 
 export const MLB_SHADOW_COLLECTION_VERSION = "mlb-shadow-collection.v1" as const;
 
@@ -21,6 +22,8 @@ export type MlbShadowCollectionEnvelope = {
   source: {
     ledgerSchemaVersion: string;
     predictions: number;
+    terminalPredictions: number;
+    supersededPredictions: number;
     settlementEvents: number;
     immutable: boolean;
   };
@@ -169,7 +172,8 @@ export class MlbShadowCollectionService {
     const collectedAt = this.now().toISOString();
     this.lastRunAt = collectedAt;
     try {
-      const records = this.store.listRecords({ limit: 10_000 });
+      const ledgerRecords = this.store.listRecords({ limit: 10_000 });
+      const records = terminalMlbLedgerRecords(ledgerRecords);
       const evaluation = buildMlbShadowEvaluation(records);
       if (evaluation.execution.realFinancialExposure !== 0
         || evaluation.execution.sportsbookIntegration
@@ -194,6 +198,8 @@ export class MlbShadowCollectionService {
         source: {
           ledgerSchemaVersion: status.schemaVersion,
           predictions: status.predictions,
+          terminalPredictions: records.length,
+          supersededPredictions: Math.max(0, ledgerRecords.length - records.length),
           settlementEvents: status.settlementEvents,
           immutable: status.immutable,
         },

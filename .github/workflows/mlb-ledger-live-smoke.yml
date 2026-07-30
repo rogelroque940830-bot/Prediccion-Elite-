@@ -14,6 +14,7 @@ on:
       - 'server/picks-v2.ts'
       - 'server/s5b-staging-entry.ts'
       - 'server/mlb-shadow-collection-worker.ts'
+      - 'server/mlb-s5c-shadow-ingestion.ts'
       - 'package.json'
   pull_request:
     branches:
@@ -28,6 +29,7 @@ on:
       - 'server/picks-v2.ts'
       - 'server/s5b-staging-entry.ts'
       - 'server/mlb-shadow-collection-worker.ts'
+      - 'server/mlb-s5c-shadow-ingestion.ts'
       - 'package.json'
   workflow_dispatch:
 
@@ -42,6 +44,7 @@ jobs:
       API_BASE: https://web-p0-integration.up.railway.app
       EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.sha }}
       REQUIRE_SHADOW_HEALTH: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      REQUIRE_S5C_HEALTH: ${{ github.event_name == 'push' && 'true' || 'false' }}
     steps:
       - name: Wait for p0 deployment and verify ledger endpoints
         shell: bash
@@ -52,6 +55,7 @@ jobs:
             status_code=$(curl -sS -o ledger-status.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/status" || true)
             report_code=$(curl -sS -o ledger-report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
             shadow_code=$(curl -sS -o shadow-health.json -w '%{http_code}' --max-time 15 "$API_BASE/health/shadow-collection" || true)
+            s5c_code=$(curl -sS -o s5c-health.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5c-ingestion" || true)
 
             shadow_ok=false
             if [[ "$REQUIRE_SHADOW_HEALTH" == "true" && "$shadow_code" == "200" ]]; then
@@ -60,7 +64,14 @@ jobs:
               shadow_ok=true
             fi
 
-            if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "401" && "$shadow_ok" == "true" ]]; then
+            s5c_ok=false
+            if [[ "$REQUIRE_S5C_HEALTH" == "true" && "$s5c_code" == "200" ]]; then
+              s5c_ok=true
+            elif [[ "$REQUIRE_S5C_HEALTH" != "true" && ("$s5c_code" == "200" || "$s5c_code" == "404") ]]; then
+              s5c_ok=true
+            fi
+
+            if [[ "$health_code" == "200" && "$status_code" == "200" && "$report_code" == "401" && "$shadow_ok" == "true" && "$s5c_ok" == "true" ]]; then
               if node <<'NODE'
           const fs = require('fs');
           const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
@@ -68,6 +79,7 @@ jobs:
           const privateReport = JSON.parse(fs.readFileSync('ledger-report.json', 'utf8'));
           const expectedCommit = String(process.env.EXPECTED_COMMIT || '').trim();
           const requireShadow = String(process.env.REQUIRE_SHADOW_HEALTH || '') === 'true';
+          const requireS5c = String(process.env.REQUIRE_S5C_HEALTH || '') === 'true';
 
           if (health.status !== 'healthy') throw new Error('health endpoint is not healthy');
           if (expectedCommit && health.commit !== expectedCommit) {
@@ -107,6 +119,35 @@ jobs:
             };
           }
 
+          let s5cSummary = { required: requireS5c, available: false };
+          if (requireS5c) {
+            const s5c = JSON.parse(fs.readFileSync('s5c-health.json', 'utf8'));
+            if (s5c.status !== 'healthy') throw new Error('S5C ingestion is not healthy');
+            if (expectedCommit && s5c.commit !== expectedCommit) throw new Error('S5C health commit does not match deployment');
+            if (s5c.schemaVersion !== 'mlb-s5c-shadow-ingestion.v1') throw new Error('invalid S5C ingestion schema');
+            if (s5c.enabled !== true || !s5c.lastSuccessAt || !s5c.latest) throw new Error('first S5C ingestion run did not complete');
+            if (s5c.lastError != null) throw new Error(`S5C ingestion error: ${s5c.lastError}`);
+            if (s5c.safety?.mode !== 'SHADOW'
+              || s5c.safety?.realFinancialExposure !== 0
+              || s5c.safety?.sportsbookIntegration !== false
+              || s5c.safety?.automaticBetPlacement !== false
+              || s5c.safety?.productionWrites !== false
+              || s5c.safety?.syntheticOdds !== false) {
+              throw new Error('S5C safety invariants are invalid');
+            }
+            s5cSummary = {
+              required: true,
+              available: true,
+              status: s5c.status,
+              schemaVersion: s5c.schemaVersion,
+              lastSuccessAt: s5c.lastSuccessAt,
+              intervalMs: s5c.intervalMs,
+              latest: s5c.latest,
+              realFinancialExposure: s5c.safety.realFinancialExposure,
+              syntheticOdds: s5c.safety.syntheticOdds,
+            };
+          }
+
           console.log(JSON.stringify({
             health: health.status,
             commit: health.commit,
@@ -118,6 +159,7 @@ jobs:
             settlementEvents: status.data.settlementEvents,
             privateReportProtected: true,
             shadowCollection: shadowSummary,
+            s5cIngestion: s5cSummary,
           }, null, 2));
           NODE
               then
@@ -125,7 +167,7 @@ jobs:
               fi
             fi
 
-            echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code shadow=$shadow_code required=$REQUIRE_SHADOW_HEALTH"
+            echo "Attempt $attempt/36: health=$health_code status=$status_code report=$report_code shadow=$shadow_code s5c=$s5c_code required_shadow=$REQUIRE_SHADOW_HEALTH required_s5c=$REQUIRE_S5C_HEALTH"
             sleep 10
           done
 
@@ -134,4 +176,5 @@ jobs:
           echo '--- status'; cat ledger-status.json 2>/dev/null || true
           echo '--- report'; cat ledger-report.json 2>/dev/null || true
           echo '--- shadow'; cat shadow-health.json 2>/dev/null || true
+          echo '--- s5c'; cat s5c-health.json 2>/dev/null || true
           exit 1
