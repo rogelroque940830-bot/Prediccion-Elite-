@@ -7,6 +7,7 @@ import { startMlbShadowCollectionWorker } from "./mlb-shadow-collection-worker";
 import { startMlbS5cShadowIngestionWorker } from "./mlb-s5c-shadow-ingestion";
 import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
 import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
+import { startMlbS5fCertificationWorker } from "./mlb-s5f-certification-service";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -22,6 +23,13 @@ const s5eCoverage = startMlbS5eCoverageWorker(
   ledgerStore,
   ownershipStore,
   s5cIngestion.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s5fCertification = startMlbS5fCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
+  s5dGateMonitor.service,
   { ownerUserId: systemOwnerUserId },
 );
 
@@ -177,6 +185,51 @@ app.get("/health/s5e-coverage", (_req, res) => {
   });
 });
 
+app.get("/health/s5f-certification", (_req, res) => {
+  const status = s5fCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  const severityCounts = latest?.alerts.reduce((counts, item) => {
+    counts[item.severity] = (counts[item.severity] ?? 0) + 1;
+    return counts;
+  }, { INFO: 0, WARNING: 0, CRITICAL: 0 } as Record<string, number>) ?? null;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    snapshots: status.snapshots,
+    latest: latest ? {
+      terminalPredictions: latest.source.terminalPredictions,
+      supersededPredictions: latest.source.supersededPredictions,
+      dashboardCounts: latest.dashboard.counts,
+      alertCounts: severityCounts,
+      actionableAlerts: latest.alerts.filter((item) => item.actionable).length,
+      gateStatus: latest.reviewPackage.gate.status,
+      partialReviewPackage: latest.reviewPackage.partial,
+      humanReviewRequired: latest.reviewPackage.humanReview.required,
+      automaticPromotion: latest.reviewPackage.humanReview.automaticPromotion,
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
   res.json({ success: true, data: shadowCollection.service.status() });
 });
@@ -244,4 +297,38 @@ app.get("/api/mlb/ledger/v1/s5e-coverage/observations", (req, res) => {
   const limit = Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
   const observations = s5eCoverage.service.readObservations(predictionId);
   res.json({ success: true, data: observations.slice(-limit) });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/status", (_req, res) => {
+  res.json({ success: true, data: s5fCertification.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/dashboard", (_req, res) => {
+  const dashboard = s5fCertification.service.readDashboard();
+  if (!dashboard) {
+    res.status(404).json({ success: false, error: "No S5F certification dashboard has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: dashboard });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/review-package", (_req, res) => {
+  const reviewPackage = s5fCertification.service.readReviewPackage();
+  if (!reviewPackage) {
+    res.status(404).json({ success: false, error: "No S5F scientific review package has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: reviewPackage });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/alerts", (req, res) => {
+  const severity = typeof req.query.severity === "string" ? req.query.severity.toUpperCase() : null;
+  const actionable = req.query.actionable === "true" ? true : req.query.actionable === "false" ? false : null;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(1_000, Math.max(1, Math.floor(parsed))) : 200;
+  const alerts = s5fCertification.service.readAlerts()
+    .filter((item) => !severity || item.severity === severity)
+    .filter((item) => actionable == null || item.actionable === actionable)
+    .slice(0, limit);
+  res.json({ success: true, data: alerts });
 });
