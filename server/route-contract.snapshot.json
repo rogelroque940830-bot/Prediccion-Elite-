@@ -281,6 +281,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/ops/v1/backups",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/picks",
     "registrations": 1
   },
@@ -418,6 +428,16 @@
     "method": "POST",
     "path": "/api/mlb/ledger/v1/settle-pending",
     "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/backups",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/backups/:id/verify",
+    "registrations": 1
   },
   {
     "method": "POST",

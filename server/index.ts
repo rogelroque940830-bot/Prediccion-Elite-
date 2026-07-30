@@ -25,6 +25,9 @@ import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
 import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
+import { getOperationalBackupService } from "./operational-backup";
+import { startOperationalBackupWorker } from "./operational-backup-worker";
+import { registerOperationalRoutes } from "./operational-routes";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -54,6 +57,7 @@ const ledgerOwnershipMigration = mlbOwnershipStore.ensureExistingOwnership(
 );
 const userPickStore = getUserPickFileStore();
 const pickOwnershipMigration = userPickStore.migrationStatus(systemOwnerUserId);
+const operationalBackupService = getOperationalBackupService();
 
 if (ledgerOwnershipMigration.remainingUnowned > 0) {
   console.error(
@@ -138,6 +142,7 @@ app.get("/health", (_req, res) => {
     ownershipStore: "sqlite-append-only",
     ledgerOwnership: mlbOwnershipStore.status(),
     pickOwnership: pickOwnershipMigration,
+    operationalBackup: operationalBackupService.status(),
   });
 });
 
@@ -146,8 +151,10 @@ app.get("/health", (_req, res) => {
   registerPicksV2MultiuserRoutes(app, systemOwnerUserId, userPickStore);
   registerMlbOwnedExportRoute(app);
   registerMlbLedgerMultiuserRoutes(app);
+  registerOperationalRoutes(app, operationalBackupService);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
+  startOperationalBackupWorker(operationalBackupService);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
