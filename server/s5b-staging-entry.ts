@@ -5,6 +5,7 @@ import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbShadowCollectionWorker } from "./mlb-shadow-collection-worker";
 import { startMlbS5cShadowIngestionWorker } from "./mlb-s5c-shadow-ingestion";
+import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -15,6 +16,7 @@ const s5cIngestion = startMlbS5cShadowIngestionWorker(
   ownershipStore,
   { ownerUserId: systemOwnerUserId },
 );
+const s5dGateMonitor = startMlbS5dGateMonitorWorker(ledgerStore);
 
 app.get("/health/shadow-collection", (_req, res) => {
   const status = shadowCollection.service.status();
@@ -83,6 +85,47 @@ app.get("/health/s5c-ingestion", (_req, res) => {
   });
 });
 
+app.get("/health/s5d-gate", (_req, res) => {
+  const status = s5dGateMonitor.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    snapshots: status.snapshots,
+    transitions: status.transitions,
+    reviewPackages: status.reviewPackages,
+    latest: latest ? {
+      gateStatus: latest.gate.status,
+      settled: latest.progress.settled,
+      marketImpliedCoverage: latest.progress.marketImpliedCoverage,
+      closingCoverage: latest.progress.closingCoverage,
+      finalSnapshotCoverage: latest.progress.finalSnapshotCoverage,
+      humanReviewRequired: latest.humanReview.required,
+      automaticPromotion: latest.humanReview.automaticPromotion,
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
   res.json({ success: true, data: shadowCollection.service.status() });
 });
@@ -110,4 +153,23 @@ app.get("/api/mlb/ledger/v1/s5c-ingestion/latest", (_req, res) => {
     return;
   }
   res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/status", (_req, res) => {
+  res.json({ success: true, data: s5dGateMonitor.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/latest", (_req, res) => {
+  const latest = s5dGateMonitor.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S5D gate evaluation has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/transitions", (req, res) => {
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? parsed : 100;
+  res.json({ success: true, data: s5dGateMonitor.service.readTransitions(limit) });
 });
