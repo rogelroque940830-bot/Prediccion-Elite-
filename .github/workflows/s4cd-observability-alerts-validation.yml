@@ -1,0 +1,49 @@
+name: Apply S4C-D observability and alerts
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply S4C-D implementation
+        run: python scripts/s4cd_apply.py
+      - run: npm ci
+      - name: S4 operations tests
+        run: npm run test:s4-operations
+      - name: S4 typecheck
+        run: npm run typecheck:s4-operations
+      - name: S1 regression
+        run: npm run test:s1-auth
+      - name: S2 regression
+        run: npm run test:s2-multiuser
+      - name: S3 route contract
+        run: npm run test:s3-modularization
+      - name: MLB ledger typecheck
+        run: npm run typecheck:mlb-ledger
+      - name: MLB regression
+        run: npm run test:mlb-ledger
+      - name: Backend build
+        run: npm run build:backend
+      - name: Commit validated S4C-D implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json tsconfig.s4-operations.json docs/S4-OPERATIONS-RUNBOOK.md server/index.ts server/route-contract.snapshot.json server/operational-observability.ts server/operational-diagnostics.ts server/operational-alerts.ts server/operational-alert-worker.ts server/operational-observability-routes.ts server/operational-observability.test.ts server/operational-diagnostics.test.ts server/operational-alerts.test.ts
+          git commit -m "S4C-D: add observability diagnostics and alerts"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
