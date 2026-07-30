@@ -1,0 +1,55 @@
+name: Validate clean S4 feature
+
+on:
+  pull_request:
+    branches:
+      - feature/s4-operational-resilience
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: S4 operations tests
+        run: npm run test:s4-operations
+      - name: S4 operations typecheck
+        run: npm run typecheck:s4-operations
+      - name: S1 authentication regression
+        run: npm run test:s1-auth
+      - name: S2 multiuser regression
+        run: npm run test:s2-multiuser
+      - name: S3 route contract
+        run: npm run test:s3-modularization
+      - name: MLB ledger typecheck
+        run: npm run typecheck:mlb-ledger
+      - name: Full MLB regression
+        run: npm run test:mlb-ledger
+      - name: Production backend build
+        run: npm run build:backend
+      - name: Verify clean production diff and non-destructive restore surface
+        run: |
+          test ! -e scripts/s4a_apply.py
+          test ! -e scripts/s4a_fix.py
+          test ! -e scripts/s4a_contract.py
+          test ! -e scripts/s4b_apply.py
+          test ! -e scripts/s4cd_apply.py
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const contract = JSON.parse(fs.readFileSync('server/route-contract.snapshot.json', 'utf8'));
+          const restore = contract.filter((route) => route.path.includes('restore'));
+          if (restore.length !== 1 || restore[0].path !== '/api/ops/v1/backups/:id/restore-drill' || restore[0].method !== 'POST') {
+            throw new Error(`Unexpected restore route surface: ${JSON.stringify(restore)}`);
+          }
+          const runbook = fs.readFileSync('docs/S4-OPERATIONS-RUNBOOK.md', 'utf8');
+          if (!runbook.includes('offline maintenance procedure') || !runbook.includes('does **not** expose a web endpoint')) {
+            throw new Error('Runbook does not document offline-only destructive restoration');
+          }
+          NODE
