@@ -21,7 +21,10 @@
     "server/mlb-s5f-certification-service.test.ts",
     "server/multisport-readiness-service.ts",
     "server/multisport-readiness-service.test.ts",
-    "server/multisport-readiness-routes.ts"
+    "server/multisport-readiness-routes.ts",
+    "server/wnba-s6b-data-resilience.ts",
+    "server/wnba-s6b-routes.ts",
+    "server/wnba-s6b-data-resilience.test.ts"
   ],
   "exclude": [
     "node_modules",
