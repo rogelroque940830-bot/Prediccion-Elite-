@@ -1,0 +1,112 @@
+name: VERIFY S6A Protected Live Readiness
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-s6a-live-2.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6a-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: c7ac80a94f31f438085a5d7745e84fe73bc8ec9c
+      MIN_AUDIT_AT: 2026-07-30T22:36:00.000Z
+    steps:
+      - name: Verify deployed S6A readiness and private detail
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 75); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 15 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            report_code=$(curl -sS -o report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
+            s5b_code=$(curl -sS -o s5b.json -w '%{http_code}' --max-time 15 "$API_BASE/health/shadow-collection" || true)
+            s5c_code=$(curl -sS -o s5c.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5c-ingestion" || true)
+            s5d_code=$(curl -sS -o s5d.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5d-gate" || true)
+            s5e_code=$(curl -sS -o s5e.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5e-coverage" || true)
+            s5f_code=$(curl -sS -o s5f.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5f-certification" || true)
+            s6a_code=$(curl -sS -o s6a.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s6a-readiness" || true)
+            detail_code=$(curl -sS -o detail.json -w '%{http_code}' --max-time 15 "$API_BASE/api/multisport/readiness/v1/latest" || true)
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$report_code" == "401" && "$s5b_code" == "200" && "$s5c_code" == "200" && "$s5d_code" == "200" && "$s5e_code" == "200" && "$s5f_code" == "200" && "$s6a_code" == "200" && "$detail_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const ledger = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync('report.json', 'utf8'));
+          const s5b = JSON.parse(fs.readFileSync('s5b.json', 'utf8'));
+          const s5c = JSON.parse(fs.readFileSync('s5c.json', 'utf8'));
+          const s5d = JSON.parse(fs.readFileSync('s5d.json', 'utf8'));
+          const s5e = JSON.parse(fs.readFileSync('s5e.json', 'utf8'));
+          const s5f = JSON.parse(fs.readFileSync('s5f.json', 'utf8'));
+          const s6a = JSON.parse(fs.readFileSync('s6a.json', 'utf8'));
+          const detail = JSON.parse(fs.readFileSync('detail.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const minimumAudit = Date.parse(String(process.env.MIN_AUDIT_AT || ''));
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('ledger is not healthy and immutable');
+          if (report.success !== false || !/Authentication required/i.test(String(report.error || ''))) throw new Error('private ledger report is not protected');
+          if (detail.success !== false || !/Authentication required/i.test(String(detail.error || ''))) throw new Error('S6A detail endpoint is not protected');
+          for (const [name, payload] of Object.entries({ s5b, s5c, s5d, s5e, s5f })) {
+            if (payload.status !== 'healthy' || payload.commit !== expected) throw new Error(`${name} is not healthy on expected commit`);
+          }
+          if (!['healthy', 'degraded'].includes(s6a.status) || s6a.commit !== expected) throw new Error('S6A is not serving expected commit');
+          if (s6a.schemaVersion !== 'multisport-readiness.v1' || s6a.enabled !== true || !s6a.lastSuccessAt || !s6a.lastRunAt || !s6a.latest) throw new Error('S6A audit is incomplete');
+          if (Date.parse(s6a.lastRunAt) < minimumAudit || Date.parse(s6a.lastSuccessAt) < minimumAudit) throw new Error('S6A has not completed a post-deploy audit');
+          if (s6a.lastError != null || !Number.isInteger(s6a.snapshots) || s6a.snapshots < 1) throw new Error('S6A status is incomplete');
+          const allowed = new Set(['READY', 'NO_GAMES', 'DEGRADED', 'BLOCKED']);
+          for (const sport of ['NBA', 'WNBA', 'NHL']) {
+            const value = s6a.latest?.sports?.[sport];
+            if (!value || !allowed.has(value.state)) throw new Error(`invalid ${sport} readiness state`);
+          }
+          const summary = s6a.latest.summary || {};
+          if (Number(summary.ready || 0) + Number(summary.noGames || 0) + Number(summary.degraded || 0) + Number(summary.blocked || 0) !== 3) throw new Error('S6A summary does not account for all sports');
+          const safety = s6a.safety || {};
+          if (safety.mode !== 'READ_ONLY_AUDIT' || safety.predictionsCreated !== 0 || safety.realFinancialExposure !== 0 || safety.sportsbookIntegration !== false || safety.automaticBetPlacement !== false || safety.productionWrites !== false || safety.automaticPromotion !== false || safety.formulasChanged !== false || safety.filtersChanged !== false || safety.marketsChanged !== false || safety.thresholdsChanged !== false || safety.stakePolicyChanged !== false) throw new Error('S6A safety invariants failed');
+          const publicPayload = JSON.stringify(s6a);
+          for (const forbidden of ['"homeTeam"', '"awayTeam"', '"selection"', '"rows"', '"modelProbability"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public S6A health leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            ledger: { predictions: ledger.data.predictions, settlementEvents: ledger.data.settlementEvents, immutable: ledger.data.immutable },
+            privateReportProtected: true,
+            privateReadinessProtected: true,
+            s5dGate: s5d.latest,
+            s5eCoverage: s5e.latest,
+            s5fCertification: s5f.latest,
+            s6aReadiness: {
+              lastRunAt: s6a.lastRunAt,
+              lastSuccessAt: s6a.lastSuccessAt,
+              intervalMs: s6a.intervalMs,
+              snapshots: s6a.snapshots,
+              auditDate: s6a.latest.auditDate,
+              summary: s6a.latest.summary,
+              sports: s6a.latest.sports,
+              exposure: s6a.safety.realFinancialExposure,
+              predictionsCreated: s6a.safety.predictionsCreated,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            echo "Attempt $attempt/75: health=$health_code ledger=$ledger_code report=$report_code s5b=$s5b_code s5c=$s5c_code s5d=$s5d_code s5e=$s5e_code s5f=$s5f_code s6a=$s6a_code detail=$detail_code"
+            sleep 10
+          done
+
+          echo 'S6A protected live verification failed.'
+          echo '--- health'; cat health.json 2>/dev/null || true
+          echo '--- ledger'; cat ledger.json 2>/dev/null || true
+          echo '--- s6a'; cat s6a.json 2>/dev/null || true
+          echo '--- detail'; cat detail.json 2>/dev/null || true
+          exit 1
