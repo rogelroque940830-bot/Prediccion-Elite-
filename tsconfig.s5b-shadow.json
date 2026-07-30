@@ -3,7 +3,9 @@
   "include": [
     "server/mlb-ledger-store.ts",
     "server/mlb-shadow-evaluation.ts",
-    "server/mlb-shadow-evaluation.test.ts"
+    "server/mlb-shadow-evaluation.test.ts",
+    "server/mlb-shadow-collection-worker.ts",
+    "server/mlb-shadow-collection-worker.test.ts"
   ],
   "exclude": [
     "node_modules",
