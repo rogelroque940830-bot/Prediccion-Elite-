@@ -2,10 +2,14 @@
   "extends": "./tsconfig.json",
   "include": [
     "server/mlb-ledger-store.ts",
+    "server/mlb-ledger-ownership-store.ts",
+    "server/mlb-scientific-snapshot.ts",
     "server/mlb-shadow-evaluation.ts",
     "server/mlb-shadow-evaluation.test.ts",
     "server/mlb-shadow-collection-worker.ts",
-    "server/mlb-shadow-collection-worker.test.ts"
+    "server/mlb-shadow-collection-worker.test.ts",
+    "server/mlb-s5c-shadow-ingestion.ts",
+    "server/mlb-s5c-shadow-ingestion.test.ts"
   ],
   "exclude": [
     "node_modules",
