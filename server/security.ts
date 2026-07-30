@@ -148,6 +148,7 @@ const PRIVATE_READ_PATHS = [
   /^\/api\/picks(?:\/|$)/,
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
+  /^\/api\/ops(?:\/|$)/,
 ];
 
 function isPublicLedgerRead(req: Request): boolean {
@@ -178,6 +179,7 @@ const PROTECTED_WRITE_PATHS = [
   /^\/api\/sharp(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
   /^\/api\/auth\/users(?:\/|$)/,
+  /^\/api\/ops(?:\/|$)/,
 ];
 
 function isProtectedWrite(req: Request): boolean {

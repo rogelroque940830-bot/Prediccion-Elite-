@@ -17,7 +17,9 @@
     "test:mlb-pitcher-history": "tsx --test server/mlb-pitcher-vs-team.test.ts",
     "test:mlb-injury-shadow": "tsx --test server/mlb-injury-shadow.test.ts server/mlb-injury-phase-b.test.ts server/mlb-injury-phase-b-frontend.test.ts server/mlb-injury-audit.test.ts server/mlb-injury-calibration-report.test.ts server/mlb-injury-calibration-captured-at-dedupe.test.ts server/mlb-injury-outcomes-report.test.ts",
     "test:s3-modularization": "tsx --test server/routes-modularization.test.ts",
-    "typecheck:s3-modularization": "tsc -p tsconfig.s3-modularization.json"
+    "typecheck:s3-modularization": "tsc -p tsconfig.s3-modularization.json",
+    "test:s4-operations": "tsx --test server/operational-backup.test.ts server/operational-restore-drill.test.ts server/operational-observability.test.ts server/operational-diagnostics.test.ts server/operational-alerts.test.ts",
+    "typecheck:s4-operations": "tsc -p tsconfig.s4-operations.json"
   },
   "engines": {
     "node": ">=20"
