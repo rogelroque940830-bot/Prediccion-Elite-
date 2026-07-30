@@ -1,0 +1,112 @@
+name: VERIFY S5D Live Gate
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s5d-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s5d-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Verify deployed S5D gate monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 15 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            report_code=$(curl -sS -o report.json -w '%{http_code}' --max-time 15 "$API_BASE/api/mlb/ledger/v1/report" || true)
+            shadow_code=$(curl -sS -o shadow.json -w '%{http_code}' --max-time 15 "$API_BASE/health/shadow-collection" || true)
+            s5c_code=$(curl -sS -o s5c.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5c-ingestion" || true)
+            s5d_code=$(curl -sS -o s5d.json -w '%{http_code}' --max-time 15 "$API_BASE/health/s5d-gate" || true)
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$report_code" == "401" && "$shadow_code" == "200" && "$s5c_code" == "200" && "$s5d_code" == "200" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const ledger = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync('report.json', 'utf8'));
+          const shadow = JSON.parse(fs.readFileSync('shadow.json', 'utf8'));
+          const s5c = JSON.parse(fs.readFileSync('s5c.json', 'utf8'));
+          const s5d = JSON.parse(fs.readFileSync('s5d.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('ledger is not healthy and immutable');
+          if (report.success !== false || !/Authentication required/i.test(String(report.error || ''))) throw new Error('private report is not protected');
+          if (shadow.status !== 'healthy' || shadow.commit !== expected || shadow.safety?.realFinancialExposure !== 0) throw new Error('S5B shadow collection is not healthy');
+          if (s5c.status !== 'healthy' || s5c.commit !== expected || s5c.safety?.realFinancialExposure !== 0 || s5c.safety?.syntheticOdds !== false) throw new Error('S5C is not healthy');
+          if (s5d.status !== 'healthy' || s5d.commit !== expected) throw new Error('S5D is not serving expected commit');
+          if (s5d.schemaVersion !== 'mlb-s5d-gate-monitor.v1' || s5d.enabled !== true || !s5d.lastSuccessAt || !s5d.latest) throw new Error('first S5D evaluation did not complete');
+          if (!['EXTEND', 'GO_REVIEW', 'NO_GO'].includes(String(s5d.latest.gateStatus))) throw new Error(`invalid gate ${s5d.latest.gateStatus}`);
+          if (s5d.lastError != null) throw new Error(`S5D error: ${s5d.lastError}`);
+          if (s5d.latest.automaticPromotion !== false
+            || s5d.safety?.mode !== 'SHADOW'
+            || s5d.safety?.realFinancialExposure !== 0
+            || s5d.safety?.sportsbookIntegration !== false
+            || s5d.safety?.automaticBetPlacement !== false
+            || s5d.safety?.productionWrites !== false
+            || s5d.safety?.automaticPromotion !== false
+            || s5d.safety?.formulasChanged !== false
+            || s5d.safety?.thresholdsChanged !== false
+            || s5d.safety?.stakePolicyChanged !== false) throw new Error('S5D safety invariants failed');
+
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            privateReportProtected: true,
+            shadowCollection: {
+              lastSuccessAt: shadow.lastSuccessAt,
+              snapshots: shadow.snapshots,
+              exposure: shadow.safety.realFinancialExposure,
+            },
+            s5cIngestion: {
+              lastSuccessAt: s5c.lastSuccessAt,
+              latest: s5c.latest,
+              exposure: s5c.safety.realFinancialExposure,
+              syntheticOdds: s5c.safety.syntheticOdds,
+            },
+            s5dGate: {
+              lastSuccessAt: s5d.lastSuccessAt,
+              intervalMs: s5d.intervalMs,
+              snapshots: s5d.snapshots,
+              transitions: s5d.transitions,
+              reviewPackages: s5d.reviewPackages,
+              latest: s5d.latest,
+              exposure: s5d.safety.realFinancialExposure,
+              automaticPromotion: s5d.safety.automaticPromotion,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+
+            echo "Attempt $attempt/36: health=$health_code ledger=$ledger_code report=$report_code shadow=$shadow_code s5c=$s5c_code s5d=$s5d_code"
+            sleep 10
+          done
+
+          echo 'S5D live verification failed.'
+          echo '--- health'; cat health.json 2>/dev/null || true
+          echo '--- ledger'; cat ledger.json 2>/dev/null || true
+          echo '--- report'; cat report.json 2>/dev/null || true
+          echo '--- shadow'; cat shadow.json 2>/dev/null || true
+          echo '--- s5c'; cat s5c.json 2>/dev/null || true
+          echo '--- s5d'; cat s5d.json 2>/dev/null || true
+          exit 1
