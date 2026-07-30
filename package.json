@@ -4,9 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "build:backend": "esbuild server/s5b-staging-entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:better-sqlite3 --external:bufferutil",
+    "build:backend": "esbuild server/s6a-staging-entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:better-sqlite3 --external:bufferutil",
     "start": "node dist/index.cjs",
-    "dev": "tsx server/s5b-staging-entry.ts",
+    "dev": "tsx server/s6a-staging-entry.ts",
     "typecheck:mlb-ledger": "tsc -p tsconfig.mlb-ledger.json",
     "typecheck:s1-auth": "tsc -p tsconfig.s1-auth.json",
     "typecheck:s2-multiuser": "tsc -p tsconfig.s2-multiuser.json",
@@ -22,11 +22,13 @@
     "typecheck:s4-operations": "tsc -p tsconfig.s4-operations.json",
     "test:s5a-e2e": "node scripts/s5a-mlb-real-save-e2e.mjs",
     "typecheck:s5b-shadow": "tsc -p tsconfig.s5b-shadow.json",
-    "test:s5b-shadow": "tsx --test server/mlb-shadow-evaluation.test.ts server/mlb-shadow-collection-worker.test.ts server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts server/mlb-s5d-gate-monitor.test.ts server/mlb-s5e-coverage-service.test.ts server/mlb-s5f-certification-service.test.ts",
+    "test:s5b-shadow": "tsx --test server/mlb-shadow-evaluation.test.ts server/mlb-shadow-collection-worker.test.ts server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts server/mlb-s5d-gate-monitor.test.ts server/mlb-s5e-coverage-service.test.ts server/mlb-s5f-certification-service.test.ts server/multisport-readiness-service.test.ts",
     "test:s5c-ingestion": "tsx --test server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts",
     "test:s5d-gate": "tsx --test server/mlb-s5d-gate-monitor.test.ts",
     "test:s5e-coverage": "tsx --test server/mlb-s5e-coverage-service.test.ts",
     "test:s5f-certification": "tsx --test server/mlb-s5f-certification-service.test.ts",
+    "typecheck:s6a-readiness": "tsc -p tsconfig.s6a-readiness.json",
+    "test:s6a-readiness": "tsx --test server/multisport-readiness-service.test.ts",
     "dry-run:s5b-shadow": "node --import tsx scripts/s5b-shadow-dry-run.mjs"
   },
   "engines": {
@@ -56,6 +58,6 @@
     "@types/ws": "^8.5.13"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.8"
+    "bufferutil": "^8.18.0"
   }
 }
