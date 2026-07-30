@@ -9,6 +9,12 @@ interface RouteContractEntry {
   registrations: number;
 }
 
+function sortRoutes(routes: RouteContractEntry[]): RouteContractEntry[] {
+  return [...routes].sort(
+    (left, right) => left.method.localeCompare(right.method) || left.path.localeCompare(right.path),
+  );
+}
+
 function collectRouteInventory(): RouteContractEntry[] {
   const serverDir = path.join(process.cwd(), "server");
   const counter = new Map<string, number>();
@@ -33,23 +39,35 @@ function collectRouteInventory(): RouteContractEntry[] {
   };
 
   walk(serverDir);
-  return [...counter.entries()]
-    .map(([key, registrations]) => {
+  return sortRoutes(
+    [...counter.entries()].map(([key, registrations]) => {
       const separator = key.indexOf(" ");
       return {
         method: key.slice(0, separator),
         path: key.slice(separator + 1),
         registrations,
       };
-    })
-    .sort((left, right) => left.method.localeCompare(right.method) || left.path.localeCompare(right.path));
+    }),
+  );
 }
 
 test("S3 preserves the backend route contract", () => {
   const expected = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "server", "route-contract.snapshot.json"), "utf-8"),
   ) as RouteContractEntry[];
-  assert.deepEqual(collectRouteInventory(), expected);
+  const s5bPrivateRoutes: RouteContractEntry[] = [
+    {
+      method: "GET",
+      path: "/api/mlb/ledger/v1/shadow-collection/latest",
+      registrations: 1,
+    },
+    {
+      method: "GET",
+      path: "/api/mlb/ledger/v1/shadow-collection/status",
+      registrations: 1,
+    },
+  ];
+  assert.deepEqual(collectRouteInventory(), sortRoutes([...expected, ...s5bPrivateRoutes]));
 });
 
 test("S3A keeps shared runtime and legacy persistence in dedicated modules", () => {
