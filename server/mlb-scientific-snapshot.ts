@@ -305,6 +305,18 @@ function sameOptionalNumber(left: number | null | undefined, right: number | nul
   return Math.abs(left - right) < 0.000001;
 }
 
+function logicalClientRequestId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.replace(/^u\d+:/, "");
+}
+
+function sameLogicalClientRequestId(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  return logicalClientRequestId(left) === logicalClientRequestId(right);
+}
+
 export function findMlbSupersedesId(
   records: LedgerRecord[],
   next: MlbPredictionInput,
@@ -320,7 +332,7 @@ export function findMlbSupersedesId(
       && normalize(next.market.selection) === normalize(prediction.market.selection)
       && sameOptionalNumber(next.market.line, prediction.market.line)
       && prediction.source === "app"
-      && prediction.clientRequestId !== next.clientRequestId;
+      && !sameLogicalClientRequestId(prediction.clientRequestId, next.clientRequestId);
   });
   if (!candidates.length) return undefined;
   candidates.sort((left, right) =>
