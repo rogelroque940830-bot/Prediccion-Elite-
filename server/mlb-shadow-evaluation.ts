@@ -99,6 +99,7 @@ function round(value: number, digits = 4): number {
 }
 
 function finiteOrNull(value: unknown): number | null {
+  if (value == null || (typeof value === "string" && value.trim() === "")) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
