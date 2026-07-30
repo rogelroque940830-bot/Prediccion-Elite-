@@ -13,7 +13,9 @@
     "server/mlb-s5c-shadow-ingestion.ts",
     "server/mlb-s5c-shadow-ingestion.test.ts",
     "server/mlb-s5d-gate-monitor.ts",
-    "server/mlb-s5d-gate-monitor.test.ts"
+    "server/mlb-s5d-gate-monitor.test.ts",
+    "server/mlb-s5e-coverage-service.ts",
+    "server/mlb-s5e-coverage-service.test.ts"
   ],
   "exclude": [
     "node_modules",
