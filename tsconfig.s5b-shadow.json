@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-ledger-store.ts",
+    "server/mlb-shadow-evaluation.ts",
+    "server/mlb-shadow-evaluation.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
