@@ -6,6 +6,7 @@ import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbShadowCollectionWorker } from "./mlb-shadow-collection-worker";
 import { startMlbS5cShadowIngestionWorker } from "./mlb-s5c-shadow-ingestion";
 import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
+import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -17,6 +18,12 @@ const s5cIngestion = startMlbS5cShadowIngestionWorker(
   { ownerUserId: systemOwnerUserId },
 );
 const s5dGateMonitor = startMlbS5dGateMonitorWorker(ledgerStore);
+const s5eCoverage = startMlbS5eCoverageWorker(
+  ledgerStore,
+  ownershipStore,
+  s5cIngestion.service,
+  { ownerUserId: systemOwnerUserId },
+);
 
 app.get("/health/shadow-collection", (_req, res) => {
   const status = shadowCollection.service.status();
@@ -126,6 +133,50 @@ app.get("/health/s5d-gate", (_req, res) => {
   });
 });
 
+app.get("/health/s5e-coverage", (_req, res) => {
+  const status = s5eCoverage.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    observationCount: status.observationCount,
+    latest: latest ? {
+      terminalPredictions: latest.terminalPredictions,
+      finalization: latest.finalization,
+      closing: latest.closing,
+      settlement: latest.settlement,
+      diagnosticCounts: {
+        sourceSetChanged: latest.diagnostics.sourceSetChanged,
+        lineMoved: latest.diagnostics.lineMoved,
+        noPrice: latest.diagnostics.noPrice,
+        noOddsMatch: latest.diagnostics.noOddsMatch,
+        errors: latest.diagnostics.errors.length,
+      },
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      syntheticOdds: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
   res.json({ success: true, data: shadowCollection.service.status() });
 });
@@ -172,4 +223,25 @@ app.get("/api/mlb/ledger/v1/s5d-gate/transitions", (req, res) => {
   const parsed = Number(req.query.limit);
   const limit = Number.isFinite(parsed) ? parsed : 100;
   res.json({ success: true, data: s5dGateMonitor.service.readTransitions(limit) });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/status", (_req, res) => {
+  res.json({ success: true, data: s5eCoverage.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/latest", (_req, res) => {
+  const latest = s5eCoverage.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S5E coverage audit has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/observations", (req, res) => {
+  const predictionId = typeof req.query.predictionId === "string" ? req.query.predictionId : undefined;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  const observations = s5eCoverage.service.readObservations(predictionId);
+  res.json({ success: true, data: observations.slice(-limit) });
 });

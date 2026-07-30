@@ -23,5 +23,20 @@
     "method": "GET",
     "path": "/api/mlb/ledger/v1/s5d-gate/transitions",
     "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5e-coverage/latest",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5e-coverage/observations",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s5e-coverage/status",
+    "registrations": 1
   }
 ]
