@@ -19,12 +19,7 @@ type ProbeSpec = {
   required: boolean;
 };
 
-export type ReadinessProbe = {
-  key: string;
-  sport: ReadinessSport;
-  path: string;
-  kind: ProbeKind;
-  required: boolean;
+export type ReadinessProbe = ProbeSpec & {
   checkedAt: string;
   httpStatus: number | null;
   status: ReadinessProbeStatus;
@@ -154,21 +149,11 @@ function atomicWriteJson(filePath: string, value: unknown): void {
 }
 
 function readJson<T>(filePath: string): T | null {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(fs.readFileSync(filePath, "utf8")) as T; } catch { return null; }
 }
 
-function jsonFiles(directory: string): string[] {
-  try {
-    return fs.readdirSync(directory)
-      .filter((name) => name.endsWith(".json"))
-      .map((name) => path.join(directory, name));
-  } catch {
-    return [];
-  }
+function jsonCount(directory: string): number {
+  try { return fs.readdirSync(directory).filter((name) => name.endsWith(".json")).length; } catch { return 0; }
 }
 
 function floridaDate(date: Date): string {
@@ -181,54 +166,27 @@ function floridaDate(date: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-function addDate(pathname: string, date: string): string {
-  const separator = pathname.includes("?") ? "&" : "?";
-  return `${pathname}${separator}date=${encodeURIComponent(date)}`;
+function dated(pathname: string, date: string): string {
+  return `${pathname}${pathname.includes("?") ? "&" : "?"}date=${encodeURIComponent(date)}`;
 }
 
-function arrayCount(value: unknown): number | null {
-  return Array.isArray(value) ? value.length : null;
-}
-
-function firstArrayCount(values: unknown[]): number | null {
-  for (const value of values) {
-    const count = arrayCount(value);
-    if (count != null) return count;
-  }
+function firstArray(values: unknown[]): unknown[] | null {
+  for (const value of values) if (Array.isArray(value)) return value;
   return null;
 }
 
-function payloadCounts(payload: any, kind: ProbeKind): { itemCount: number | null; gameCount: number | null } {
-  const gameCount = firstArrayCount([
-    payload?.games,
-    payload?.data?.games,
-    payload?.data?.schedule,
-    payload?.data?.scoreboard?.games,
-  ]);
-  const itemCount = firstArrayCount([
-    payload?.data,
-    payload?.games,
-    payload?.data?.teams,
-    payload?.data?.players,
-    payload?.data?.injuries,
-    payload?.data?.items,
-  ]);
+function countsFor(payload: any, kind: ProbeKind): { itemCount: number | null; gameCount: number | null } {
+  const games = firstArray([payload?.games, payload?.data?.games, payload?.data?.schedule, payload?.data?.scoreboard?.games]);
+  const items = firstArray([payload?.data, payload?.data?.teams, payload?.data?.players, payload?.data?.injuries, payload?.data?.items]);
   if (kind === "SCHEDULE" || kind === "ODDS") {
-    const count = gameCount ?? itemCount ?? 0;
+    const count = games?.length ?? items?.length ?? 0;
     return { itemCount: count, gameCount: count };
   }
-  if (kind === "COMBINED") {
-    return { itemCount, gameCount: gameCount ?? 0 };
-  }
-  return { itemCount, gameCount };
+  if (kind === "COMBINED") return { itemCount: items?.length ?? null, gameCount: games?.length ?? 0 };
+  return { itemCount: items?.length ?? null, gameCount: games?.length ?? null };
 }
 
-function fallbackSource(payload: any): boolean {
-  const source = String(payload?.source ?? payload?.data?.source ?? "").toLowerCase();
-  return source.includes("fallback");
-}
-
-function materialAudit(audit: MultisportReadinessAudit): unknown {
+function material(audit: MultisportReadinessAudit): unknown {
   return {
     schemaVersion: audit.schemaVersion,
     auditDate: audit.auditDate,
@@ -275,20 +233,12 @@ export class MultisportReadinessService {
 
   constructor(options: ServiceOptions = {}) {
     this.enabled = options.enabled ?? defaultEnabled();
-    this.intervalMs = options.intervalMs
-      ?? positiveInteger(process.env.MULTISPORT_READINESS_INTERVAL_MS, 6 * 60 * 60 * 1000, 15 * 60 * 1000);
-    this.initialDelayMs = options.initialDelayMs
-      ?? positiveInteger(process.env.MULTISPORT_READINESS_INITIAL_DELAY_MS, 180_000, 10_000);
+    this.intervalMs = options.intervalMs ?? positiveInteger(process.env.MULTISPORT_READINESS_INTERVAL_MS, 21_600_000, 900_000);
+    this.initialDelayMs = options.initialDelayMs ?? positiveInteger(process.env.MULTISPORT_READINESS_INITIAL_DELAY_MS, 180_000, 10_000);
     this.root = options.root ?? defaultRoot();
     this.selfBaseUrl = (options.selfBaseUrl ?? `http://127.0.0.1:${process.env.PORT || 5000}`).replace(/\/$/, "");
-    this.deploymentCommit = options.deploymentCommit
-      ?? process.env.RAILWAY_GIT_COMMIT_SHA
-      ?? process.env.GIT_COMMIT_SHA
-      ?? "unknown";
-    this.environment = options.environment
-      ?? process.env.RAILWAY_ENVIRONMENT_NAME
-      ?? process.env.NODE_ENV
-      ?? "unknown";
+    this.deploymentCommit = options.deploymentCommit ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown";
+    this.environment = options.environment ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown";
     this.now = options.now ?? (() => new Date());
     this.fetcher = options.fetcher ?? fetch;
     this.lastSuccessAt = this.readLatest()?.ranAt ?? null;
@@ -297,9 +247,7 @@ export class MultisportReadinessService {
   isEnabled(): boolean { return this.enabled; }
   getIntervalMs(): number { return this.intervalMs; }
   getInitialDelayMs(): number { return this.initialDelayMs; }
-  readLatest(): MultisportReadinessAudit | null {
-    return readJson<MultisportReadinessAudit>(path.join(this.root, "latest.json"));
-  }
+  readLatest(): MultisportReadinessAudit | null { return readJson(path.join(this.root, "latest.json")); }
 
   status(): MultisportReadinessStatus {
     return {
@@ -311,108 +259,72 @@ export class MultisportReadinessService {
       lastRunAt: this.lastRunAt,
       lastSuccessAt: this.lastSuccessAt,
       lastError: this.lastError,
-      snapshots: jsonFiles(path.join(this.root, "snapshots")).length,
+      snapshots: jsonCount(path.join(this.root, "snapshots")),
       latest: this.readLatest(),
     };
   }
 
-  private async runProbe(spec: ProbeSpec, auditDate: string, checkedAt: string): Promise<ReadinessProbe> {
+  private async probe(spec: ProbeSpec, auditDate: string, checkedAt: string): Promise<ReadinessProbe> {
     const started = Date.now();
     let httpStatus: number | null = null;
     try {
-      const needsDate = spec.kind === "SCHEDULE" || spec.kind === "ODDS" || spec.kind === "COMBINED";
-      const pathname = needsDate ? addDate(spec.path, auditDate) : spec.path;
-      const response = await this.fetcher(`${this.selfBaseUrl}${pathname}`, {
+      const withDate = spec.kind === "SCHEDULE" || spec.kind === "ODDS" || spec.kind === "COMBINED";
+      const response = await this.fetcher(`${this.selfBaseUrl}${withDate ? dated(spec.path, auditDate) : spec.path}`, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(60_000),
       });
       httpStatus = response.status;
       const text = await response.text();
       let payload: any;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        throw new Error("non-JSON response");
-      }
-      const counts = payloadCounts(payload, spec.kind);
+      try { payload = JSON.parse(text); } catch { throw new Error("non-JSON response"); }
+      const counts = countsFor(payload, spec.kind);
       const source = String(payload?.source ?? payload?.data?.source ?? "").trim() || null;
       const code = String(payload?.code ?? payload?.error_code ?? "").trim() || null;
-      const explicitFailure = payload?.success === false;
-      if (!response.ok || explicitFailure) {
-        return {
-          ...spec,
-          checkedAt,
-          httpStatus,
-          status: "FAILED",
-          itemCount: counts.itemCount,
-          gameCount: counts.gameCount,
-          source,
-          code,
-          error: String(payload?.error ?? payload?.message ?? `HTTP ${response.status}`),
-          latencyMs: Date.now() - started,
-        };
+      if (!response.ok || payload?.success === false) {
+        return { ...spec, checkedAt, httpStatus, status: "FAILED", ...counts, source, code,
+          error: String(payload?.error ?? payload?.message ?? `HTTP ${response.status}`), latencyMs: Date.now() - started };
       }
       let status: ReadinessProbeStatus = "HEALTHY";
-      if (fallbackSource(payload)) status = "DEGRADED";
+      if (String(source ?? "").toLowerCase().includes("fallback")) status = "DEGRADED";
       if ((spec.kind === "SCHEDULE" || spec.kind === "ODDS") && (counts.gameCount ?? 0) === 0) status = "EMPTY";
-      if (spec.kind === "COMBINED" && (counts.gameCount ?? 0) === 0 && counts.itemCount == null) status = "EMPTY";
-      if (spec.required && spec.kind !== "SCHEDULE" && spec.kind !== "ODDS" && spec.kind !== "COMBINED" && counts.itemCount === 0) {
-        status = "DEGRADED";
-      }
-      return {
-        ...spec,
-        checkedAt,
-        httpStatus,
-        status,
-        itemCount: counts.itemCount,
-        gameCount: counts.gameCount,
-        source,
-        code,
-        error: null,
-        latencyMs: Date.now() - started,
-      };
+      if (spec.kind === "COMBINED" && (counts.gameCount ?? 0) === 0) status = "EMPTY";
+      return { ...spec, checkedAt, httpStatus, status, ...counts, source, code, error: null, latencyMs: Date.now() - started };
     } catch (error) {
-      return {
-        ...spec,
-        checkedAt,
-        httpStatus,
-        status: "FAILED",
-        itemCount: null,
-        gameCount: null,
-        source: null,
-        code: null,
-        error: error instanceof Error ? error.message : String(error),
-        latencyMs: Date.now() - started,
-      };
+      return { ...spec, checkedAt, httpStatus, status: "FAILED", itemCount: null, gameCount: null,
+        source: null, code: null, error: error instanceof Error ? error.message : String(error), latencyMs: Date.now() - started };
     }
   }
 
-  private classifySport(sport: ReadinessSport, probes: ReadinessProbe[]): SportReadiness {
+  private classify(sport: ReadinessSport, probes: ReadinessProbe[]): SportReadiness {
     const required = probes.filter((probe) => probe.required);
-    const failedRequired = required.filter((probe) => probe.status === "FAILED");
-    const degraded = probes.filter((probe) => probe.status === "DEGRADED");
     const failed = probes.filter((probe) => probe.status === "FAILED");
-    const scheduleProbe = probes.find((probe) => probe.kind === "SCHEDULE");
-    const combinedProbe = probes.find((probe) => probe.kind === "COMBINED");
-    const gamesScheduled = scheduleProbe?.gameCount ?? combinedProbe?.gameCount ?? 0;
-    const oddsProbe = probes.find((probe) => probe.kind === "ODDS");
+    const degraded = probes.filter((probe) => probe.status === "DEGRADED");
+    const schedule = probes.find((probe) => probe.kind === "SCHEDULE");
+    const combined = probes.find((probe) => probe.kind === "COMBINED");
+    const odds = probes.find((probe) => probe.kind === "ODDS");
+    const gamesScheduled = schedule?.gameCount ?? combined?.gameCount ?? 0;
+    const coreFailures = required.filter((probe) => probe.status === "FAILED" && probe.kind !== "ODDS");
+    const optionalFailures = failed.filter((probe) => !probe.required);
     const reasons: string[] = [];
     let state: ReadinessState;
 
-    if (failedRequired.length > 0) {
+    if (coreFailures.length) {
       state = "BLOCKED";
-      for (const probe of failedRequired) reasons.push(`${probe.key}: ${probe.error ?? probe.code ?? "required source failed"}`);
+      coreFailures.forEach((probe) => reasons.push(`${probe.key}: ${probe.error ?? probe.code ?? "required source failed"}`));
     } else if (gamesScheduled === 0) {
-      state = degraded.length > 0 ? "DEGRADED" : "NO_GAMES";
+      state = degraded.length ? "DEGRADED" : "NO_GAMES";
       reasons.push("No games scheduled for the audit date");
-      for (const probe of degraded) reasons.push(`${probe.key}: fallback or degraded source`);
-    } else if (!oddsProbe || oddsProbe.status === "EMPTY") {
+      degraded.forEach((probe) => reasons.push(`${probe.key}: fallback or degraded source`));
+    } else if (!odds || odds.status === "FAILED") {
+      state = "BLOCKED";
+      reasons.push(`${odds?.key ?? `${sport.toLowerCase()}-odds`}: ${odds?.error ?? odds?.code ?? "required market source failed"}`);
+    } else if (odds.status === "EMPTY") {
       state = "DEGRADED";
       reasons.push("Games are scheduled but no market prices are currently available");
-    } else if (degraded.length > 0 || failed.some((probe) => !probe.required)) {
+    } else if (degraded.length || optionalFailures.length) {
       state = "DEGRADED";
-      for (const probe of degraded) reasons.push(`${probe.key}: fallback or degraded source`);
-      for (const probe of failed.filter((probe) => !probe.required)) reasons.push(`${probe.key}: optional source failed`);
+      degraded.forEach((probe) => reasons.push(`${probe.key}: fallback or degraded source`));
+      optionalFailures.forEach((probe) => reasons.push(`${probe.key}: optional source failed`));
     } else {
       state = "READY";
       reasons.push("Required context and market sources are available for the scheduled slate");
@@ -437,14 +349,14 @@ export class MultisportReadinessService {
     const auditDate = floridaDate(now);
     this.lastRunAt = ranAt;
     try {
-      const probes = await Promise.all(PROBES.map((spec) => this.runProbe(spec, auditDate, ranAt)));
+      const probeResults = await Promise.all(PROBES.map((spec) => this.probe(spec, auditDate, ranAt)));
       const sports = {
-        NBA: this.classifySport("NBA", probes.filter((probe) => probe.sport === "NBA")),
-        WNBA: this.classifySport("WNBA", probes.filter((probe) => probe.sport === "WNBA")),
-        NHL: this.classifySport("NHL", probes.filter((probe) => probe.sport === "NHL")),
+        NBA: this.classify("NBA", probeResults.filter((probe) => probe.sport === "NBA")),
+        WNBA: this.classify("WNBA", probeResults.filter((probe) => probe.sport === "WNBA")),
+        NHL: this.classify("NHL", probeResults.filter((probe) => probe.sport === "NHL")),
       } satisfies Record<ReadinessSport, SportReadiness>;
-      const allProbes = Object.values(sports).flatMap((entry) => entry.probes);
-      const auditBase: Omit<MultisportReadinessAudit, "semanticDigest" | "changed" | "snapshotCreated"> = {
+      const all = Object.values(sports).flatMap((entry) => entry.probes);
+      const base = {
         schemaVersion: MULTISPORT_READINESS_VERSION,
         ranAt,
         trigger,
@@ -457,32 +369,31 @@ export class MultisportReadinessService {
           noGames: Object.values(sports).filter((entry) => entry.state === "NO_GAMES").length,
           degraded: Object.values(sports).filter((entry) => entry.state === "DEGRADED").length,
           blocked: Object.values(sports).filter((entry) => entry.state === "BLOCKED").length,
-          probes: allProbes.length,
-          healthyProbes: allProbes.filter((probe) => probe.status === "HEALTHY").length,
-          degradedProbes: allProbes.filter((probe) => probe.status === "DEGRADED").length,
-          emptyProbes: allProbes.filter((probe) => probe.status === "EMPTY").length,
-          failedProbes: allProbes.filter((probe) => probe.status === "FAILED").length,
+          probes: all.length,
+          healthyProbes: all.filter((probe) => probe.status === "HEALTHY").length,
+          degradedProbes: all.filter((probe) => probe.status === "DEGRADED").length,
+          emptyProbes: all.filter((probe) => probe.status === "EMPTY").length,
+          failedProbes: all.filter((probe) => probe.status === "FAILED").length,
         },
         safety: {
-          mode: "READ_ONLY_AUDIT",
-          predictionsCreated: 0,
-          realFinancialExposure: 0,
-          sportsbookIntegration: false,
-          automaticBetPlacement: false,
-          productionWrites: false,
-          automaticPromotion: false,
-          formulasChanged: false,
-          filtersChanged: false,
-          marketsChanged: false,
-          thresholdsChanged: false,
-          stakePolicyChanged: false,
+          mode: "READ_ONLY_AUDIT" as const,
+          predictionsCreated: 0 as const,
+          realFinancialExposure: 0 as const,
+          sportsbookIntegration: false as const,
+          automaticBetPlacement: false as const,
+          productionWrites: false as const,
+          automaticPromotion: false as const,
+          formulasChanged: false as const,
+          filtersChanged: false as const,
+          marketsChanged: false as const,
+          thresholdsChanged: false as const,
+          stakePolicyChanged: false as const,
         },
       };
-      const candidate = { ...auditBase, semanticDigest: "", changed: false, snapshotCreated: false } as MultisportReadinessAudit;
-      const semanticDigest = digest(materialAudit(candidate));
-      const previous = this.readLatest();
-      const changed = previous?.semanticDigest !== semanticDigest;
-      const audit: MultisportReadinessAudit = { ...auditBase, semanticDigest, changed, snapshotCreated: changed };
+      const provisional = { ...base, semanticDigest: "", changed: false, snapshotCreated: false } as MultisportReadinessAudit;
+      const semanticDigest = digest(material(provisional));
+      const changed = this.readLatest()?.semanticDigest !== semanticDigest;
+      const audit: MultisportReadinessAudit = { ...base, semanticDigest, changed, snapshotCreated: changed };
       atomicWriteJson(path.join(this.root, "latest.json"), audit);
       if (changed) {
         const stamp = ranAt.replace(/[:.]/g, "-");
