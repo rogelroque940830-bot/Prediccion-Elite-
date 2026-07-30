@@ -40,8 +40,8 @@ jobs:
     timeout-minutes: 10
     env:
       API_BASE: https://web-p0-integration.up.railway.app
-      EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.base.sha }}
-      REQUIRE_SHADOW_HEALTH: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
+      REQUIRE_SHADOW_HEALTH: 'true'
     steps:
       - name: Wait for p0 deployment and verify ledger endpoints
         shell: bash
