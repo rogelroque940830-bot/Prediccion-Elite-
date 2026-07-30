@@ -20,7 +20,10 @@
     "typecheck:s3-modularization": "tsc -p tsconfig.s3-modularization.json",
     "test:s4-operations": "tsx --test server/operational-backup.test.ts server/operational-restore-drill.test.ts server/operational-observability.test.ts server/operational-diagnostics.test.ts server/operational-alerts.test.ts",
     "typecheck:s4-operations": "tsc -p tsconfig.s4-operations.json",
-    "test:s5a-e2e": "node scripts/s5a-mlb-real-save-e2e.mjs"
+    "test:s5a-e2e": "node scripts/s5a-mlb-real-save-e2e.mjs",
+    "typecheck:s5b-shadow": "tsc -p tsconfig.s5b-shadow.json",
+    "test:s5b-shadow": "tsx --test server/mlb-shadow-evaluation.test.ts",
+    "dry-run:s5b-shadow": "node --import tsx scripts/s5b-shadow-dry-run.mjs"
   },
   "engines": {
     "node": ">=20"
