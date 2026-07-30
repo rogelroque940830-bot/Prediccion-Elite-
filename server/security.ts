@@ -142,12 +142,13 @@ export function apiRateLimit(req: Request, res: Response, next: NextFunction): v
   next();
 }
 
-// User-owned data is private. Sharp/market reads remain public because they are
-// shared market observations and several predictor cards consume them before auth.
+// User-owned and detailed operational evidence is private. Sharp/market reads remain
+// public because they are shared market observations consumed before authentication.
 const PRIVATE_READ_PATHS = [
   /^\/api\/picks(?:\/|$)/,
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
+  /^\/api\/multisport\/readiness(?:\/|$)/,
   /^\/api\/ops(?:\/|$)/,
 ];
 
