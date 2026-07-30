@@ -30,6 +30,11 @@ import { startOperationalBackupWorker } from "./operational-backup-worker";
 import { registerOperationalRoutes } from "./operational-routes";
 import { getOperationalRestoreDrillService } from "./operational-restore-drill";
 import { registerOperationalRestoreDrillRoutes } from "./operational-restore-routes";
+import { getOperationalObservabilityService } from "./operational-observability";
+import { OperationalDiagnosticsService } from "./operational-diagnostics";
+import { OperationalAlertService } from "./operational-alerts";
+import { startOperationalAlertWorker } from "./operational-alert-worker";
+import { registerOperationalObservabilityRoutes } from "./operational-observability-routes";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -61,6 +66,19 @@ const userPickStore = getUserPickFileStore();
 const pickOwnershipMigration = userPickStore.migrationStatus(systemOwnerUserId);
 const operationalBackupService = getOperationalBackupService();
 const operationalRestoreDrillService = getOperationalRestoreDrillService(operationalBackupService);
+const operationalObservability = getOperationalObservabilityService();
+const operationalDiagnostics = new OperationalDiagnosticsService({
+  backup: () => operationalBackupService.status(),
+  restoreDrill: () => operationalRestoreDrillService.status(),
+  ledger: () => mlbLedgerStore.status(),
+  ownership: () => mlbOwnershipStore.status(),
+  picks: () => userPickStore.migrationStatus(systemOwnerUserId),
+  metrics: () => operationalObservability.snapshot(),
+});
+const operationalAlerts = new OperationalAlertService(
+  operationalDiagnostics,
+  operationalBackupService.getRoot(),
+);
 
 if (ledgerOwnershipMigration.remainingUnowned > 0) {
   console.error(
@@ -83,6 +101,7 @@ app.use(securityHeaders);
 app.use(restrictedCors);
 app.use(apiRateLimit);
 app.use(createSessionMiddleware(authDatabase));
+app.use(operationalObservability.middleware());
 
 app.use(
   express.json({
@@ -147,6 +166,8 @@ app.get("/health", (_req, res) => {
     pickOwnership: pickOwnershipMigration,
     operationalBackup: operationalBackupService.status(),
     operationalRestoreDrill: operationalRestoreDrillService.status(),
+    operationalDiagnostics: (() => { const report = operationalDiagnostics.evaluate(); return { status: report.status, checkedAt: report.checkedAt, counts: report.counts }; })(),
+    operationalAlerts: operationalAlerts.status(),
   });
 });
 
@@ -157,9 +178,11 @@ app.get("/health", (_req, res) => {
   registerMlbLedgerMultiuserRoutes(app);
   registerOperationalRoutes(app, operationalBackupService);
   registerOperationalRestoreDrillRoutes(app, operationalRestoreDrillService);
+  registerOperationalObservabilityRoutes(app, operationalObservability, operationalDiagnostics, operationalAlerts);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);
+  startOperationalAlertWorker(operationalAlerts);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -167,6 +190,7 @@ app.get("/health", (_req, res) => {
     const message =
       status >= 500 ? "Internal Server Error" : err.message || "Request failed";
     console.error("Request error:", err);
+    operationalObservability.recordError(_req.method, _req.path, status, err);
     if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
