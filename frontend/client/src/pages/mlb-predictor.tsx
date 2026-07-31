@@ -23,6 +23,7 @@ import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBad
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
 import { buildMlbInjuryAuditSnapshot } from "@/lib/mlb-injury-audit";
+import { buildMlbReviewQueue, classifyMlbDecisionReview, type MlbGameQueueView } from "@/lib/mlb-review-priority";
 
 // ── MLB INJURY TYPES & CALC ──────────────────────────────────────────────────
 type MLBInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE" | "ANOMALOUS";
@@ -1020,6 +1021,7 @@ export default function MLBPredictor() {
   const [selectedGameId, setSelectedGameId] = useState("");
   const [autoStatus, setAutoStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [selectedDate, setSelectedDate] = useState<string>(todayFL()); // YYYY-MM-DD Florida
+  const [mlbQueueView, setMlbQueueView] = useState<MlbGameQueueView>("priority");
   const [sharpGameKey, setSharpGameKey] = useState<string | null>(null);
   const [umpireData, setUmpireData] = useState<MLBUmpireImpact | null>(null);
   const [advancedData, setAdvancedData] = useState<{ totalAdjustment: number; notes: string[] } | null>(null);
@@ -3110,6 +3112,14 @@ export default function MLBPredictor() {
     );
   };
 
+  const mlbReviewQueue = buildMlbReviewQueue(mlbGames);
+  const visibleMlbGameEntries = mlbQueueView === "priority"
+    ? mlbReviewQueue.priority
+    : mlbQueueView === "pending"
+      ? mlbReviewQueue.pending
+      : mlbReviewQueue.all;
+  const currentDecisionReview = classifyMlbDecisionReview(result?.pickQualities);
+
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white pb-16">
@@ -3133,7 +3143,14 @@ export default function MLBPredictor() {
             <Zap className="h-4 w-4 text-primary" />
             <span className="text-sm font-bold text-primary">Auto-llenar desde MLB Stats</span>
           </div>
-          <DatePickerFL value={selectedDate} onChange={setSelectedDate} />
+          <DatePickerFL
+            value={selectedDate}
+            onChange={(date) => {
+              setSelectedDate(date);
+              setSelectedGameId("");
+              setMlbQueueView("priority");
+            }}
+          />
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="outline" size="sm"
@@ -3146,19 +3163,71 @@ export default function MLBPredictor() {
               {mlbLoading ? "Cargando..." : "Cargar partidos"}
             </Button>
             {mlbGames.length > 0 && (
-              <Select value={selectedGameId} onValueChange={setSelectedGameId}>
-                <SelectTrigger className="flex-1 border-primary/30" data-testid="select-mlb-game">
-                  <SelectValue placeholder="Selecciona un partido" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mlbGames.map((g) => (
-                    <SelectItem key={g.gameId} value={String(g.gameId)}>
-                      {g.awayTeam.name} @ {g.homeTeam.name}
-                      {g.homePitcher ? ` · ${g.awayPitcher?.name ?? "TBD"} vs ${g.homePitcher?.name ?? "TBD"}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <div className="grid grid-cols-3 gap-1" aria-label="Prioridad de partidos MLB">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mlbQueueView === "priority" ? "default" : "outline"}
+                    onClick={() => setMlbQueueView("priority")}
+                    data-testid="button-mlb-priority"
+                  >
+                    Prioridad {mlbReviewQueue.priority.length}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mlbQueueView === "pending" ? "default" : "outline"}
+                    onClick={() => setMlbQueueView("pending")}
+                    data-testid="button-mlb-pending"
+                  >
+                    Pendientes {mlbReviewQueue.pending.length}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mlbQueueView === "all" ? "default" : "outline"}
+                    onClick={() => setMlbQueueView("all")}
+                    data-testid="button-mlb-all"
+                  >
+                    Todos {mlbReviewQueue.all.length}
+                  </Button>
+                </div>
+                {visibleMlbGameEntries.length > 0 ? (
+                  <Select value={selectedGameId} onValueChange={setSelectedGameId}>
+                    <SelectTrigger className="w-full border-primary/30" data-testid="select-mlb-game">
+                      <SelectValue placeholder="Selecciona un partido" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleMlbGameEntries.map(({ game: g, readiness }) => {
+                        const awayPitcher = g.awayPitcher?.name ?? g.awayPitcher?.fullName ?? "TBD";
+                        const homePitcher = g.homePitcher?.name ?? g.homePitcher?.fullName ?? "TBD";
+                        const prefix = readiness === "READY" ? "✓" : readiness === "PENDING" ? "⏳" : "•";
+                        return (
+                          <SelectItem
+                            key={g.gameId}
+                            value={String(g.gameId)}
+                            disabled={readiness === "CLOSED"}
+                          >
+                            {prefix} {g.awayTeam?.name} @ {g.homeTeam?.name} · {awayPitcher} vs {homePitcher}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="rounded-md border border-dashed border-primary/30 px-3 py-2 text-xs text-muted-foreground">
+                    {mlbQueueView === "priority"
+                      ? "Todavía no hay juegos pregame con ambos pitchers identificados. Revisa Pendientes."
+                      : mlbQueueView === "pending"
+                        ? "No hay partidos pendientes de pitcher en esta jornada."
+                        : "No hay partidos disponibles para esta fecha."}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Prioridad = pregame con ambos pitchers identificados. La oportunidad real se clasifica después de generar la predicción.
+                </p>
+              </div>
             )}
             {selectedGameId && (
               <Button size="sm" onClick={() => handleMLBAutoFill(selectedGameId)} disabled={autoStatus === "loading"} data-testid="button-mlb-autofill">
@@ -3244,6 +3313,23 @@ export default function MLBPredictor() {
           </div>
           {mlbError && <p className="text-xs text-red-400">No se pudo conectar con MLB. Llena manual.</p>}
           {autoStatus === "success" && <p className="text-xs text-green-400">✅ Pitchers + Stats + Bullpen cargados — solo agrega líneas</p>}
+          {result && currentDecisionReview.status !== "UNAVAILABLE" && (
+            <div className={`rounded-md border p-3 ${
+              currentDecisionReview.status === "ACTIONABLE"
+                ? "border-emerald-500/40 bg-emerald-500/10"
+                : currentDecisionReview.status === "REVIEW"
+                  ? "border-amber-500/40 bg-amber-500/10"
+                  : "border-slate-500/40 bg-slate-500/10"
+            }`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{currentDecisionReview.label}</span>
+                {currentDecisionReview.market && (
+                  <Badge variant="outline" className="text-[10px]">{currentDecisionReview.market}</Badge>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{currentDecisionReview.detail}</p>
+            </div>
+          )}
           <div className="text-xs text-muted-foreground border-t border-border pt-2">
             <span className="font-medium text-foreground">Se llena solo:</span> Pitcher (ERA, WHIP, FIP, K/9, BB/9, mano, registro, descanso) · Ofensiva (OPS, RPG, OBP, AVG, splits) · Bullpen · Park Factor
             &nbsp;&nbsp;<span className="font-medium text-amber-400">Tú:</span> Líneas Hard Rock
