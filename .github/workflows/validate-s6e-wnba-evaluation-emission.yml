@@ -1,0 +1,73 @@
+name: Validate S6E WNBA Evaluation Emission
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "frontend/client/src/lib/wnba-model.ts"
+      - "frontend/client/src/lib/wnba-shadow-emission.ts"
+      - "server/wnba-s6e-*"
+      - "server/s6e-staging-entry.ts"
+      - "server/s6d-staging-entry.ts"
+      - "server/security.ts"
+      - "tsconfig.s6e-wnba.json"
+      - "package.json"
+      - ".github/workflows/validate-s6e-wnba-evaluation-emission.yml"
+  push:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "frontend/client/src/lib/wnba-model.ts"
+      - "frontend/client/src/lib/wnba-shadow-emission.ts"
+      - "server/wnba-s6e-*"
+      - "server/s6e-staging-entry.ts"
+      - "server/security.ts"
+      - "tsconfig.s6e-wnba.json"
+      - "package.json"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install backend dependencies reproducibly
+        run: npm ci
+      - name: Type-check S6E backend
+        run: npm run typecheck:s6e-wnba
+      - name: Test S6E emission and security
+        run: npm run test:s6e-wnba
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Type-check frontend instrumentation
+        run: npm run check:s6e-frontend
+      - name: Build frontend instrumentation
+        run: npm --prefix frontend run build
+      - name: Verify zero-exposure invariants in source
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const service = fs.readFileSync('server/wnba-s6e-evaluation-emission-service.ts', 'utf8');
+          for (const required of [
+            'predictionsCreated: 0',
+            'recommendedStakeUnits: 0',
+            'realFinancialExposure: 0',
+            'automaticBetPlacement: false',
+            'productionWrites: false',
+            'automaticPromotion: false',
+            'retrospectiveSyntheticEvaluations: false',
+          ]) {
+            if (!service.includes(required)) throw new Error(`missing safety invariant ${required}`);
+          }
+          NODE
