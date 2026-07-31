@@ -44,6 +44,12 @@ function countsTowardRoi(result?: string | null): boolean {
   return Boolean(result) && result !== "PUSH" && result !== "VOID";
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+}
+
 export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
   const ordered = [...records].sort((a, b) => b.prediction.recordedAtMs - a.prediction.recordedAtMs);
   const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
@@ -110,6 +116,10 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
     const prediction = record.prediction;
     const settlement = record.settlement;
     const analyticalStatus = analyticalStatuses.get(prediction.id);
+    const payloadMarket = prediction.payload?.market ?? {};
+    const priceCapture = prediction.payload?.analysis?.rawInputs?.priceCapture ?? {};
+    const priceIntegrity = prediction.payload?.analysis?.layers?.marketPriceIntegrity ?? {};
+    const provenance = prediction.payload?.analysis?.rawInputs?.marketProvenance ?? {};
     return {
       id: prediction.id,
       clientRequestId: prediction.clientRequestId,
@@ -125,6 +135,11 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
       line: prediction.market.line,
       oddsAmerican: prediction.market.oddsAmerican,
       book: prediction.market.book,
+      priceCapturedAt: payloadMarket?.capturedAt ?? priceCapture?.capturedAt ?? null,
+      providerLastUpdate: priceCapture?.providerLastUpdate ?? provenance?.providerLastUpdate ?? null,
+      consensusMethod: priceCapture?.consensusMethod ?? provenance?.consensusMethod ?? null,
+      priceContributingBooks: stringArray(provenance?.contributingBooks),
+      standardAmericanOddsValidated: priceIntegrity?.standardAmericanOddsValidated === true,
       modelProbabilityPct: round(prediction.probabilities.model * 100, 2),
       marketImpliedProbabilityPct: round(prediction.probabilities.marketImplied * 100, 2),
       edgePp: round(prediction.probabilities.edgePp, 2),
