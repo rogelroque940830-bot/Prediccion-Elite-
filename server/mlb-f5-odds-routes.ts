@@ -282,10 +282,11 @@ async function handleMlbF5Odds(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
   const dateParam = String(req.query.date ?? "").trim();
+  const cacheKey = `${MLB_F5_CACHE_KEY}:${dateParam || "all"}`;
   try {
-    const data = await withCache(MLB_F5_CACHE_KEY, async () => {
+    const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
+    const data = await withCache(cacheKey, async () => {
       const eventsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/baseball_mlb/events/?apiKey=${ODDS_API_KEY}`);
       const events = await eventsResponse.json();
       if (!Array.isArray(events)) {
@@ -336,7 +337,7 @@ async function handleMlbF5Odds(req: Request, res: Response, next: NextFunction):
       note: "Hard Rock no publica mercados F5. Consenso por mediana de probabilidad implícita de FanDuel/BetMGM/DraftKings; nunca se promedian cuotas americanas directamente.",
     });
   } catch (error: any) {
-    if (error?.noCache) invalidateCache(MLB_F5_CACHE_KEY);
+    if (error?.noCache) invalidateCache(cacheKey);
     const friendly = error?.code === "OUT_OF_USAGE_CREDITS"
       ? "Cuota mensual de The Odds API agotada — llénalas manualmente desde Hard Rock"
       : String(error?.message || error || "F5 odds request failed");
