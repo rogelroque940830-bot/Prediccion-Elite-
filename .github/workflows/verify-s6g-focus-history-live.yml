@@ -22,11 +22,12 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
+            assets=()
             code=$(curl -sS -L -o index.html -w '%{http_code}' --max-time 20 "$APP_BASE/" || true)
             : > bundle.js
             if [[ "$code" == "200" ]]; then
               mapfile -t assets < <(grep -oE 'src="[^"]+\.js"' index.html | cut -d'"' -f2 | sort -u)
-              for asset in "${assets[@]:-}"; do
+              for asset in "${assets[@]}"; do
                 if [[ "$asset" == http* ]]; then
                   curl -sS -L --max-time 30 "$asset" >> bundle.js || true
                 else
@@ -45,7 +46,7 @@ jobs:
               fi
             fi
 
-            echo "Attempt $attempt/36: root=$code assets=${#assets[@]:-0}"
+            echo "Attempt $attempt/36: root=$code assets=${#assets[@]}"
             sleep 10
           done
 
