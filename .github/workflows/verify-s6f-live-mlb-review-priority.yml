@@ -1,0 +1,132 @@
+name: VERIFY S6F Live MLB Review Priority
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6f-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 2208d41a6081d763888f60503617e4872e8ac27f
+    steps:
+      - name: Verify deployed S6F UI and full-slate shadow tracking
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$API_BASE/health" || true)
+            s5c_code=$(curl -sS -o s5c.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s5c-ingestion" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            html_code=$(curl -sS -L -o app.html -w '%{http_code}' --max-time 20 "$API_BASE/" || true)
+            echo "Attempt $attempt/120: health=$health_code s5c=$s5c_code ledger=$ledger_code html=$html_code"
+
+            if [[ "$health_code" == "200" && "$s5c_code" == "200" && "$ledger_code" == "200" && "$html_code" == "200" ]]; then
+              asset=$(node <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('app.html', 'utf8');
+          const match = html.match(/<script[^>]+src=["']([^"']+\.js)["']/i);
+          if (match) process.stdout.write(match[1]);
+          NODE
+              )
+              if [[ -n "$asset" ]]; then
+                if [[ "$asset" == http* ]]; then asset_url="$asset"; else asset_url="$API_BASE${asset}"; fi
+                bundle_code=$(curl -sS -L -o app.js -w '%{http_code}' --max-time 30 "$asset_url" || true)
+              else
+                bundle_code=000
+              fi
+
+              if [[ "$bundle_code" == "200" ]]; then
+                if node <<'NODE'
+          const fs = require('fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('health.json');
+          const s5c = read('s5c.json');
+          const ledger = read('ledger.json');
+          const bundle = fs.readFileSync('app.js', 'utf8');
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+
+          if (health.status !== 'healthy' || health.commit !== expected) {
+            throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          }
+          if (s5c.status !== 'healthy' || s5c.commit !== expected || s5c.enabled !== true) {
+            throw new Error(`S5C unhealthy or wrong commit: ${JSON.stringify({status:s5c.status,commit:s5c.commit,enabled:s5c.enabled})}`);
+          }
+          if (!s5c.lastSuccessAt || s5c.lastError != null || !s5c.latest) {
+            throw new Error('S5C has no completed healthy cycle');
+          }
+          for (const key of ['gamesDiscovered','gamesEligible','gamesAnalyzed','pricedDecisions','unpricedDecisions','recordsCreated','idempotentSkips','skippedGames','errorCount']) {
+            if (!Number.isFinite(Number(s5c.latest[key])) || Number(s5c.latest[key]) < 0) throw new Error(`invalid S5C counter ${key}`);
+          }
+          if (Number(s5c.latest.gamesDiscovered) < Number(s5c.latest.gamesEligible)) throw new Error('eligible games exceed discovered full slate');
+          if (Number(s5c.latest.gamesEligible) < Number(s5c.latest.gamesAnalyzed)) throw new Error('analyzed games exceed eligible games');
+          const safety = s5c.safety || {};
+          const requiredSafety = {
+            mode: 'SHADOW',
+            realFinancialExposure: 0,
+            sportsbookIntegration: false,
+            automaticBetPlacement: false,
+            productionWrites: false,
+            syntheticOdds: false,
+          };
+          for (const [key, value] of Object.entries(requiredSafety)) {
+            if (safety[key] !== value) throw new Error(`S5C safety ${key}=${safety[key]} expected ${value}`);
+          }
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) {
+            throw new Error('MLB ledger regression');
+          }
+
+          const requiredStrings = [
+            'Prioridad',
+            'Pendientes',
+            'Todos',
+            'Prioridad = pregame con ambos pitchers identificados',
+            'La oportunidad real se clasifica después de generar la predicción',
+            'Prioridad alta para revisión',
+            'Revisión secundaria',
+            'Descartar por ahora',
+          ];
+          for (const value of requiredStrings) {
+            if (!bundle.includes(value)) throw new Error(`deployed UI bundle missing ${value}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: expected,
+            environment: health.environment,
+            uiBundleCertified: true,
+            queueViews: ['Prioridad', 'Pendientes', 'Todos'],
+            s5c: {
+              status: s5c.status,
+              lastSuccessAt: s5c.lastSuccessAt,
+              latest: s5c.latest,
+              safety: s5c.safety,
+            },
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+          }, null, 2));
+          NODE
+                then
+                  exit 0
+                fi
+              fi
+            fi
+            sleep 10
+          done
+
+          echo 'S6F live verification failed.'
+          for file in health s5c ledger; do
+            echo "--- $file"
+            cat "$file.json" 2>/dev/null || true
+          done
+          echo '--- app.html'
+          head -c 2000 app.html 2>/dev/null || true
+          exit 1
