@@ -23,19 +23,32 @@ jobs:
           set -euo pipefail
           success=0
           for attempt in $(seq 1 72); do
-            curl --fail --silent --show-error "$FRONTEND_URL/" > /tmp/index.html || true
+            frontend_code=$(curl -sS -L -o /tmp/index.html -w '%{http_code}' --max-time 20 "$FRONTEND_URL/" || true)
             grep -oE 'src="[^"]+\.js"' /tmp/index.html | sed -E 's/src="([^"]+)"/\1/' > /tmp/assets.txt || true
             : > /tmp/bundle.js
+            asset_codes=""
             while IFS= read -r asset; do
               [ -n "$asset" ] || continue
-              if [[ "$asset" == http* ]]; then url="$asset"; else url="$FRONTEND_URL$asset"; fi
-              curl --fail --silent --show-error "$url" >> /tmp/bundle.js || true
+              if [[ "$asset" == http* ]]; then
+                url="$asset"
+              elif [[ "$asset" == ./* ]]; then
+                url="$FRONTEND_URL/${asset#./}"
+              elif [[ "$asset" == /* ]]; then
+                url="$FRONTEND_URL$asset"
+              else
+                url="$FRONTEND_URL/$asset"
+              fi
+              code=$(curl -sS -L -o /tmp/asset.js -w '%{http_code}' --max-time 30 "$url" || true)
+              asset_codes="${asset_codes}${url}=${code} "
+              if [[ "$code" == "200" ]]; then cat /tmp/asset.js >> /tmp/bundle.js; fi
             done < /tmp/assets.txt
 
             health_code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 20 "$BACKEND_URL/health" || true)
             s5c_code=$(curl -sS -o /tmp/s5c.json -w '%{http_code}' --max-time 20 "$BACKEND_URL/health/s5c-ingestion" || true)
+            echo "Attempt $attempt: frontend=$frontend_code assets=[$asset_codes] backend=$health_code s5c=$s5c_code bundleBytes=$(wc -c < /tmp/bundle.js)"
 
-            if grep -q 'Prioridad = pregame con ambos pitchers identificados' /tmp/bundle.js \
+            if [[ "$frontend_code" == "200" ]] \
+              && grep -q 'Prioridad = pregame con ambos pitchers identificados' /tmp/bundle.js \
               && grep -q 'La oportunidad real se clasifica después de generar la predicción' /tmp/bundle.js \
               && grep -q 'Prioridad alta para revisión' /tmp/bundle.js \
               && grep -q 'Revisión secundaria' /tmp/bundle.js \
@@ -65,7 +78,18 @@ jobs:
                 break
               fi
             fi
-            echo "Attempt $attempt: S6F public bundle or backend health not ready"
             sleep 10
           done
+
+          if [[ "$success" != "1" ]]; then
+            echo '--- index.html'
+            head -c 2000 /tmp/index.html || true
+            echo
+            echo '--- backend health'
+            cat /tmp/health.json || true
+            echo
+            echo '--- S5C health'
+            cat /tmp/s5c.json || true
+            echo
+          fi
           test "$success" = 1
