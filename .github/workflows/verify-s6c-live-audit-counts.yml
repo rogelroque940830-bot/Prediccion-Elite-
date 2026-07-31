@@ -1,0 +1,134 @@
+name: VERIFY S6C Live Audit Counts
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6c-live-audit-counts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 220036d058b760484498196b3457be2f34b9f45e
+      MIN_AUDIT_AT: 2026-07-31T02:31:00Z
+    steps:
+      - name: Verify deployed S6C audit observability
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            s6a_code=$(curl -sS -o s6a.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6a-readiness" || true)
+            s6c_code=$(curl -sS -o s6c.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6c-wnba-shadow" || true)
+            private_status_code=$(curl -sS -o private-status.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/shadow/v1/status" || true)
+            private_report_code=$(curl -sS -o private-report.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/shadow/v1/report" || true)
+            private_records_code=$(curl -sS -o private-records.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/shadow/v1/records" || true)
+
+            echo "Attempt $attempt/100: health=$health_code ledger=$ledger_code s6a=$s6a_code s6c=$s6c_code privateStatus=$private_status_code privateReport=$private_report_code privateRecords=$private_records_code"
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$s6a_code" == "200" && "$s6c_code" == "200" && "$private_status_code" == "401" && "$private_report_code" == "401" && "$private_records_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('health.json');
+          const ledger = read('ledger.json');
+          const s6a = read('s6a.json');
+          const s6c = read('s6c.json');
+          const privateStatus = read('private-status.json');
+          const privateReport = read('private-report.json');
+          const privateRecords = read('private-records.json');
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const minimumAudit = Date.parse(String(process.env.MIN_AUDIT_AT || ''));
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('MLB ledger regression or immutability failure');
+          if (!['healthy', 'degraded'].includes(s6a.status) || s6a.commit !== expected) throw new Error('S6A is not serving the expected commit');
+          if (!['healthy', 'degraded'].includes(s6c.status) || s6c.commit !== expected) throw new Error(`S6C is ${s6c.status} on ${s6c.commit}`);
+          if (s6c.enabled !== true) throw new Error('S6C is not enabled in p0-integration');
+          if (!s6c.lastRunAt || !s6c.lastSuccessAt || Date.parse(s6c.lastRunAt) < minimumAudit || Date.parse(s6c.lastSuccessAt) < minimumAudit) throw new Error('S6C has not completed a post-hotfix cycle');
+          if (s6c.lastError != null || !s6c.latest) throw new Error(`S6C cycle incomplete: ${s6c.lastError}`);
+          if (Number(s6c.latest.errors || 0) !== 0) throw new Error(`S6C source errors: ${s6c.latest.errors}`);
+
+          for (const [name, payload] of Object.entries({ privateStatus, privateReport, privateRecords })) {
+            if (payload.success !== false || !/Authentication required/i.test(String(payload.error || ''))) throw new Error(`${name} is not protected`);
+          }
+
+          const latest = s6c.latest;
+          for (const field of ['discoveredGames', 'pricedGames', 'recordsCreated', 'idempotentRecords', 'skippedStarted', 'unmatchedOdds', 'missingMoneyline']) {
+            if (!Number.isFinite(Number(latest[field]))) throw new Error(`S6C audit count ${field} is missing or invalid`);
+          }
+          const handled = Number(latest.recordsCreated) + Number(latest.idempotentRecords) + Number(latest.skippedStarted) + Number(latest.unmatchedOdds) + Number(latest.missingMoneyline);
+          if (handled !== Number(latest.discoveredGames)) throw new Error(`S6C accounted ${handled}/${latest.discoveredGames} discovered games`);
+
+          const safety = s6c.safety || {};
+          const requiredSafety = {
+            mode: 'SHADOW_MARKET_BASELINE',
+            predictionsCreated: 0,
+            recommendedStakeUnits: 0,
+            realFinancialExposure: 0,
+            sportsbookIntegration: false,
+            automaticBetPlacement: false,
+            productionWrites: false,
+            automaticPromotion: false,
+            predictorFormulasChanged: false,
+            predictorFiltersChanged: false,
+            predictorMarketsChanged: false,
+            predictorThresholdsChanged: false,
+            stakePolicyChanged: false,
+          };
+          for (const [key, value] of Object.entries(requiredSafety)) {
+            if (safety[key] !== value) throw new Error(`S6C safety invariant ${key}=${safety[key]} expected ${value}`);
+          }
+
+          const publicPayload = JSON.stringify(s6c);
+          for (const forbidden of ['"homeTeam"', '"awayTeam"', '"homeOddsAmerican"', '"awayOddsAmerican"', '"homeWinProbability"', '"gameId"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public S6C health leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: expected,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            privateShadowProtected: true,
+            s6c: {
+              status: s6c.status,
+              enabled: s6c.enabled,
+              lastRunAt: s6c.lastRunAt,
+              lastSuccessAt: s6c.lastSuccessAt,
+              records: s6c.records,
+              settlements: s6c.settlements,
+              latest: s6c.latest,
+              report: s6c.report,
+              safety: s6c.safety,
+              accountedGames: handled,
+            },
+            s6a: {
+              status: s6a.status,
+              lastRunAt: s6a.lastRunAt,
+              wnba: s6a.latest?.sports?.WNBA || null,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+
+          echo 'S6C audit-count live verification failed.'
+          for file in health ledger s6a s6c private-status private-report private-records; do
+            echo "--- $file"
+            cat "$file.json" 2>/dev/null || true
+          done
+          exit 1
