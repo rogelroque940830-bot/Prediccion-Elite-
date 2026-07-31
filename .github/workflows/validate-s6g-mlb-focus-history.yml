@@ -1,4 +1,4 @@
-name: Validate S6G MLB Focus History
+name: Validate S6G/S6H MLB Focus History
 
 on:
   pull_request:
@@ -6,6 +6,7 @@ on:
       - integration/p0-frontend-session
     paths:
       - 'frontend/client/src/lib/mlb-history-focus.ts'
+      - 'frontend/client/src/lib/mlb-history-focus.test.ts'
       - 'frontend/client/src/pages/mlb-history-focused.tsx'
       - 'frontend/client/src/App.tsx'
       - 'frontend/client/src/components/app-sidebar.tsx'
@@ -28,6 +29,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies reproducibly
         run: npm --prefix frontend ci
+      - name: Run S6H integrity-gate tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-history-focus.test.ts
       - name: Type-check frontend
         run: npm --prefix frontend run check
       - name: Build frontend
@@ -37,11 +42,19 @@ jobs:
         run: |
           set -euo pipefail
           grep -F 'MLB_HISTORY_FOCUS_PRIORITY_LIMIT = 5' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'MLB_HISTORY_FOCUS_VERIFY_LIMIT = 12' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'isStandardAmericanOdds' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'auditMlbHistoryMarketIntegrity' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F '.filter((entry) => entry.audit.status === "PASS")' frontend/client/src/lib/mlb-history-focus.ts
           grep -F 'if (pick.analyticalDuplicate) continue' frontend/client/src/lib/mlb-history-focus.ts
-          grep -F 'collapseMlbHistoryRevisions' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'selectionAlreadyContainsLine' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'Verificar datos' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'NO UTILIZAR' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'hora original de captura' frontend/client/src/pages/mlb-history-focused.tsx
           grep -F 'path="/mlb-history-audit"' frontend/client/src/App.tsx
-          cat frontend/dist/assets/*.js > /tmp/s6g-bundle.js
-          grep -F 'MLB · En foco' /tmp/s6g-bundle.js
-          grep -F 'Solo muestra lo que merece tu atención' /tmp/s6g-bundle.js
-          grep -F 'Abrir auditoría completa' /tmp/s6g-bundle.js
-          grep -F 'Solo estudio' /tmp/s6g-bundle.js
+          cat frontend/dist/assets/*.js > /tmp/s6h-bundle.js
+          grep -F 'MLB · En foco' /tmp/s6h-bundle.js
+          grep -F 'Verificar datos' /tmp/s6h-bundle.js
+          grep -F 'INTEGRIDAD APROBADA' /tmp/s6h-bundle.js
+          grep -F 'NO UTILIZAR' /tmp/s6h-bundle.js
+          grep -F 'Abrir auditoría completa' /tmp/s6h-bundle.js
