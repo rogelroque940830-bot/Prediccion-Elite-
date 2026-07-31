@@ -24,14 +24,17 @@
     "server/multisport-readiness-routes.ts",
     "server/wnba-s6b-data-resilience.ts",
     "server/wnba-s6b-routes.ts",
-    "server/wnba-s6b-data-resilience.test.ts"
+    "server/wnba-s6b-data-resilience.test.ts",
+    "server/wnba-s6c-shadow-service.ts",
+    "server/wnba-s6c-shadow-routes.ts",
+    "server/wnba-s6c-shadow-service.test.ts"
   ],
   "exclude": [
     "node_modules",
     "dist"
   ],
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "noEmit": true
   }
 }
