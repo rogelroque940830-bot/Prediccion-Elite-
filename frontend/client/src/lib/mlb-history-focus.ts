@@ -150,7 +150,7 @@ export function collapseMlbHistoryRevisions<T extends MlbHistoryFocusPick>(picks
       latest.set(key, pick);
     }
   }
-  return [...latest.values()];
+  return Array.from(latest.values());
 }
 
 export function classifyMlbHistoryFocus(pick: MlbHistoryFocusPick): MlbHistoryFocusTier {
@@ -199,8 +199,8 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
     .filter((pick) => {
       const edge = finite(pick.edgePp);
       const signal = signalStrength(pick.signal);
-      const provisional = clean(pick.analysisStage).toUpperCase() !== "FINAL";
-      return edge > 0 && (signal >= 1 || provisional);
+      const confidence = confidenceStrength(pick.confidenceLabel);
+      return edge > 0 && (signal >= 1 || confidence >= 1);
     })
     .sort((left, right) => {
       const leftStart = startMs(left) ?? Number.MAX_SAFE_INTEGER;
