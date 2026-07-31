@@ -1,0 +1,57 @@
+name: VERIFY S6G Focus History Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/verify-s6g-focus-history-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_BASE: https://prediccion-elite-p0-integration.up.railway.app
+    steps:
+      - name: Verify deployed focused MLB history bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -L -o index.html -w '%{http_code}' --max-time 20 "$APP_BASE/" || true)
+            : > bundle.js
+            if [[ "$code" == "200" ]]; then
+              mapfile -t assets < <(grep -oE 'src="[^"]+\.js"' index.html | cut -d'"' -f2 | sort -u)
+              for asset in "${assets[@]:-}"; do
+                if [[ "$asset" == http* ]]; then
+                  curl -sS -L --max-time 30 "$asset" >> bundle.js || true
+                else
+                  curl -sS -L --max-time 30 "$APP_BASE$asset" >> bundle.js || true
+                fi
+                printf '\n' >> bundle.js
+              done
+
+              if grep -Fq 'MLB · En foco' bundle.js \
+                && grep -Fq 'Solo muestra lo que merece tu atención' bundle.js \
+                && grep -Fq 'Abrir auditoría completa' bundle.js \
+                && grep -Fq 'Solo estudio' bundle.js \
+                && grep -Fq '/mlb-history-audit' bundle.js; then
+                echo "S6G focused MLB history is live on attempt $attempt."
+                exit 0
+              fi
+            fi
+
+            echo "Attempt $attempt/36: root=$code assets=${#assets[@]:-0}"
+            sleep 10
+          done
+
+          echo 'Live S6G verification failed.'
+          echo '--- index.html'
+          cat index.html 2>/dev/null || true
+          echo '--- bundle markers'
+          grep -oE 'MLB[^"<]{0,80}|Solo estudio|mlb-history-audit' bundle.js 2>/dev/null | head -50 || true
+          exit 1
