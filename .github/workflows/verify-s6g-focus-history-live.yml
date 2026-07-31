@@ -29,10 +29,13 @@ jobs:
               mapfile -t assets < <(grep -oE 'src="[^"]+\.js"' index.html | cut -d'"' -f2 | sort -u)
               for asset in "${assets[@]}"; do
                 if [[ "$asset" == http* ]]; then
-                  curl -sS -L --max-time 30 "$asset" >> bundle.js || true
+                  asset_url="$asset"
+                elif [[ "$asset" == ./* ]]; then
+                  asset_url="$APP_BASE/${asset#./}"
                 else
-                  curl -sS -L --max-time 30 "$APP_BASE$asset" >> bundle.js || true
+                  asset_url="$APP_BASE$asset"
                 fi
+                curl -sS -L --max-time 30 "$asset_url" >> bundle.js || true
                 printf '\n' >> bundle.js
               done
 
