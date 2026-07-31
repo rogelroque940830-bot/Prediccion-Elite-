@@ -8,6 +8,7 @@ import { registerMlbEarlyRoutes } from "./mlb-early-routes";
 import { registerLegacyPicksV2Routes } from "./legacy-picks-v2-routes";
 import { registerNbaDataRoutes } from "./nba-data-routes";
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
+import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
 import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
 import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
@@ -26,6 +27,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerLegacyPicksV2Routes(app);
   registerNbaDataRoutes(app);
   registerMlbCoreRoutes(app);
+  registerMlbF5OddsProtectionRoutes(app);
   // S6B registers the resilient versions first; legacy duplicates remain only
   // for source compatibility and are not reached once S6B sends a response.
   registerWnbaS6bRoutes(app);
