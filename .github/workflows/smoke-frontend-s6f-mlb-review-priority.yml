@@ -1,0 +1,71 @@
+name: Smoke frontend S6F MLB Review Priority
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 2208d41a6081d763888f60503617e4872e8ac27f
+    steps:
+      - name: Verify public S6F bundle and full-slate backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          success=0
+          for attempt in $(seq 1 72); do
+            curl --fail --silent --show-error "$FRONTEND_URL/" > /tmp/index.html || true
+            grep -oE 'src="[^"]+\.js"' /tmp/index.html | sed -E 's/src="([^"]+)"/\1/' > /tmp/assets.txt || true
+            : > /tmp/bundle.js
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              if [[ "$asset" == http* ]]; then url="$asset"; else url="$FRONTEND_URL$asset"; fi
+              curl --fail --silent --show-error "$url" >> /tmp/bundle.js || true
+            done < /tmp/assets.txt
+
+            health_code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 20 "$BACKEND_URL/health" || true)
+            s5c_code=$(curl -sS -o /tmp/s5c.json -w '%{http_code}' --max-time 20 "$BACKEND_URL/health/s5c-ingestion" || true)
+
+            if grep -q 'Prioridad = pregame con ambos pitchers identificados' /tmp/bundle.js \
+              && grep -q 'La oportunidad real se clasifica después de generar la predicción' /tmp/bundle.js \
+              && grep -q 'Prioridad alta para revisión' /tmp/bundle.js \
+              && grep -q 'Revisión secundaria' /tmp/bundle.js \
+              && grep -q 'Descartar por ahora' /tmp/bundle.js \
+              && grep -q 'Todavía no hay juegos pregame con ambos pitchers identificados' /tmp/bundle.js \
+              && [[ "$health_code" == "200" && "$s5c_code" == "200" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/health.json', 'utf8'));
+          const s5c = JSON.parse(fs.readFileSync('/tmp/s5c.json', 'utf8'));
+          const expected = process.env.EXPECTED_BACKEND_COMMIT;
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`backend ${health.commit} != ${expected}`);
+          if (s5c.status !== 'healthy' || s5c.commit !== expected || s5c.enabled !== true) throw new Error('S5C not healthy on expected backend commit');
+          if (!s5c.latest || !s5c.lastSuccessAt || s5c.lastError != null) throw new Error('S5C has no healthy completed cycle');
+          if (Number(s5c.latest.gamesDiscovered) < Number(s5c.latest.gamesEligible)) throw new Error('full-slate accounting failure');
+          if (Number(s5c.latest.gamesEligible) < Number(s5c.latest.gamesAnalyzed)) throw new Error('eligibility accounting failure');
+          const safety = s5c.safety || {};
+          if (safety.realFinancialExposure !== 0 || safety.automaticBetPlacement !== false || safety.syntheticOdds !== false) throw new Error('S5C safety regression');
+          console.log(JSON.stringify({
+            frontendBundleCertified: true,
+            backendCommit: health.commit,
+            s5c: { status: s5c.status, lastSuccessAt: s5c.lastSuccessAt, latest: s5c.latest, safety: s5c.safety },
+          }, null, 2));
+          NODE
+              then
+                success=1
+                break
+              fi
+            fi
+            echo "Attempt $attempt: S6F public bundle or backend health not ready"
+            sleep 10
+          done
+          test "$success" = 1
