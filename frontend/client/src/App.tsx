@@ -23,6 +23,8 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
+const FRONTEND_RELEASE = "s6g-focus-history-2026-07-31";
+
 function AppRouter() {
   return (
     <Switch>
@@ -51,7 +53,7 @@ function AppLayout() {
 
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full" data-frontend-release={FRONTEND_RELEASE}>
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-3 h-12 px-3 border-b border-border shrink-0">
