@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/wnba-s6c-shadow-service.ts",
+    "server/wnba-s6d-predictor-shadow-service.ts",
+    "server/wnba-s6d-predictor-shadow-routes.ts",
+    "server/wnba-s6d-predictor-shadow-service.test.ts",
+    "server/wnba-s6d-predictor-shadow-routes.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
