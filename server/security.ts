@@ -149,6 +149,7 @@ const PRIVATE_READ_PATHS = [
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
   /^\/api\/multisport\/readiness(?:\/|$)/,
+  /^\/api\/wnba\/shadow(?:\/|$)/,
   /^\/api\/ops(?:\/|$)/,
 ];
 
