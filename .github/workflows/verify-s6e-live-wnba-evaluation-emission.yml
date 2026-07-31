@@ -1,0 +1,151 @@
+name: VERIFY S6E Live WNBA Evaluation Emission
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6e-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: bde272fc5d16703c2e9cb67913cc1dc695b8e74e
+      MIN_AUDIT_AT: 2026-07-31T15:49:00Z
+    steps:
+      - name: Verify deployed S6E WNBA evaluation emission
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            s6c_code=$(curl -sS -o s6c.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6c-wnba-shadow" || true)
+            s6d_code=$(curl -sS -o s6d.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6d-wnba-predictor-shadow" || true)
+            s6e_code=$(curl -sS -o s6e.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6e-wnba-evaluation-emission" || true)
+            private_status_code=$(curl -sS -o private-status.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/emission/status" || true)
+            private_evaluations_code=$(curl -sS -o private-evaluations.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/emission/evaluations" || true)
+            private_outputs_code=$(curl -sS -o private-outputs.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/emission/outputs" || true)
+            anonymous_write_code=$(curl -sS -o anonymous-write.json -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' --data '{}' "$API_BASE/api/wnba/predictor-shadow/v1/evaluations" || true)
+
+            echo "Attempt $attempt/120: health=$health_code ledger=$ledger_code s6c=$s6c_code s6d=$s6d_code s6e=$s6e_code privateStatus=$private_status_code privateEvaluations=$private_evaluations_code privateOutputs=$private_outputs_code anonymousWrite=$anonymous_write_code"
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$s6c_code" == "200" && "$s6d_code" == "200" && "$s6e_code" == "200" && "$private_status_code" == "401" && "$private_evaluations_code" == "401" && "$private_outputs_code" == "401" && "$anonymous_write_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('health.json');
+          const ledger = read('ledger.json');
+          const s6c = read('s6c.json');
+          const s6d = read('s6d.json');
+          const s6e = read('s6e.json');
+          const privateStatus = read('private-status.json');
+          const privateEvaluations = read('private-evaluations.json');
+          const privateOutputs = read('private-outputs.json');
+          const anonymousWrite = read('anonymous-write.json');
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const minimumAudit = Date.parse(String(process.env.MIN_AUDIT_AT || ''));
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('MLB ledger regression or immutability failure');
+          if (!['healthy', 'degraded'].includes(s6c.status) || s6c.commit !== expected) throw new Error('S6C is not healthy on expected commit');
+          if (!['healthy', 'degraded'].includes(s6d.status) || s6d.commit !== expected) throw new Error('S6D is not healthy on expected commit');
+          if (s6e.status !== 'healthy' || s6e.commit !== expected || s6e.environment !== 'p0-integration') throw new Error('S6E is not healthy in p0-integration on expected commit');
+          if (s6e.enabled !== true) throw new Error('S6E is not enabled');
+          if (!s6e.lastProjectionAt || Date.parse(s6e.lastProjectionAt) < minimumAudit) throw new Error('S6E has no post-deploy projection');
+          if (s6e.lastError != null) throw new Error(`S6E lastError=${s6e.lastError}`);
+          for (const key of ['scientificEvaluations', 'verificationEvaluations', 'projectedOutputs', 'projectionRows']) {
+            if (!Number.isFinite(Number(s6e[key])) || Number(s6e[key]) < 0) throw new Error(`invalid S6E counter ${key}`);
+          }
+          if (Number(s6e.projectedOutputs) !== Number(s6e.scientificEvaluations) * 3) {
+            throw new Error('S6E scientific evaluation/output accounting is inconsistent');
+          }
+
+          if (!s6d.lastRunAt || !s6d.lastSuccessAt || Date.parse(s6d.lastRunAt) < minimumAudit || Date.parse(s6d.lastSuccessAt) < minimumAudit) {
+            throw new Error('S6D has not consumed the post-deploy source projection');
+          }
+          if (s6d.lastError != null || Number(s6d.latest?.errors || 0) !== 0) throw new Error('S6D source projection error');
+
+          for (const [name, payload] of Object.entries({ privateStatus, privateEvaluations, privateOutputs, anonymousWrite })) {
+            if (payload.success !== false || !/Authentication required/i.test(String(payload.error || ''))) throw new Error(`${name} is not protected`);
+          }
+
+          const requiredSafety = {
+            mode: 'AUTOMATIC_EVALUATION_EMISSION',
+            predictionsCreated: 0,
+            recommendedStakeUnits: 0,
+            realFinancialExposure: 0,
+            sportsbookIntegration: false,
+            automaticBetPlacement: false,
+            productionWrites: false,
+            automaticPromotion: false,
+            predictorFormulasChanged: false,
+            predictorFiltersChanged: false,
+            predictorMarketsChanged: false,
+            predictorProbabilitiesChanged: false,
+            predictorThresholdsChanged: false,
+            stakePolicyChanged: false,
+            retrospectiveSyntheticEvaluations: false,
+          };
+          for (const [key, value] of Object.entries(requiredSafety)) {
+            if (s6e.safety?.[key] !== value) throw new Error(`S6E safety invariant ${key}=${s6e.safety?.[key]} expected ${value}`);
+          }
+          if (s6d.safety?.realFinancialExposure !== 0 || s6d.safety?.automaticBetPlacement !== false || s6d.safety?.automaticPromotion !== false) throw new Error('S6D safety regression');
+          if (s6c.safety?.realFinancialExposure !== 0 || s6c.safety?.automaticBetPlacement !== false || s6c.safety?.automaticPromotion !== false) throw new Error('S6C safety regression');
+
+          const publicPayload = JSON.stringify(s6e);
+          for (const forbidden of ['"evaluationId"', '"homeTeam"', '"awayTeam"', '"selection"', '"oddsAmerican"', '"modelProbability"', '"homeInput"', '"awayInput"', '"projectionPath"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public S6E health leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: expected,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            s6e: {
+              status: s6e.status,
+              enabled: s6e.enabled,
+              lastProjectionAt: s6e.lastProjectionAt,
+              scientificEvaluations: s6e.scientificEvaluations,
+              verificationEvaluations: s6e.verificationEvaluations,
+              projectedOutputs: s6e.projectedOutputs,
+              projectionRows: s6e.projectionRows,
+              safety: s6e.safety,
+            },
+            s6d: {
+              status: s6d.status,
+              lastSuccessAt: s6d.lastSuccessAt,
+              records: s6d.records,
+              report: s6d.report,
+            },
+            s6c: {
+              status: s6c.status,
+              lastSuccessAt: s6c.lastSuccessAt,
+              records: s6c.records,
+              settlements: s6c.settlements,
+            },
+            privateReadsProtected: true,
+            anonymousWriteProtected: true,
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+
+          echo 'S6E live verification failed.'
+          for file in health ledger s6c s6d s6e private-status private-evaluations private-outputs anonymous-write; do
+            echo "--- $file"
+            cat "$file.json" 2>/dev/null || true
+          done
+          exit 1
