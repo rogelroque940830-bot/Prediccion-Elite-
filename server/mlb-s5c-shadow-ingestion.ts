@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MlbLedgerStore, MlbPredictionInput } from "./mlb-ledger-store";
 import { americanToProbability } from "./mlb-ledger-store";
+import { normalizeStandardAmericanOdds } from "./american-odds";
 import {
   appendOwnedPrediction,
   ownedRecordsForUser,
@@ -39,6 +40,10 @@ type PricedDecision = {
   confidenceLabel: string;
   reason: string;
   book: string;
+  capturedAt?: string;
+  providerLastUpdate?: string;
+  consensusMethod?: string;
+  provenance?: unknown;
 };
 
 type UnpricedDecision = {
@@ -148,9 +153,25 @@ function finite(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function validAmericanOdds(value: unknown): number | null {
-  const parsed = finite(value);
-  return parsed != null && parsed !== 0 ? Math.round(parsed) : null;
+export function validAmericanOdds(value: unknown): number | null {
+  return normalizeStandardAmericanOdds(value);
+}
+
+function validIso(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  if (!text) return undefined;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
+function priceMetadata(odds: any, market: "F5_ML" | "F5_TOTAL") {
+  const marketSnapshot = market === "F5_ML" ? odds?.f5Ml : odds?.f5Total;
+  return {
+    capturedAt: validIso(marketSnapshot?.capturedAt) ?? validIso(odds?.capturedAt),
+    providerLastUpdate: validIso(odds?.providerLastUpdate) ?? validIso(odds?.provenance?.providerLastUpdate),
+    consensusMethod: String(marketSnapshot?.consensusMethod ?? odds?.consensusMethod ?? odds?.provenance?.consensusMethod ?? "").trim() || undefined,
+    provenance: odds?.provenance ?? null,
+  };
 }
 
 function clampProbability(value: unknown): number | null {
@@ -307,10 +328,12 @@ function buildDecisionLanes(context: ReturnType<typeof gameContext>, odds: any, 
 
   const f5Side = String(markets?.f5RecommendedSide ?? "PASS");
   if (f5Side === "HOME" || f5Side === "AWAY") {
-    const oddsAmerican = validAmericanOdds(f5Side === "HOME" ? odds?.f5Ml?.home : odds?.f5Ml?.away);
+    const rawOdds = f5Side === "HOME" ? odds?.f5Ml?.home : odds?.f5Ml?.away;
+    const oddsAmerican = validAmericanOdds(rawOdds);
     const probability = pickProbability(markets, "F5_ML", f5Side);
     if (oddsAmerican != null && probability != null) {
       const signal = laneSignal(markets, "F5_ML", f5Side);
+      const metadata = priceMetadata(odds, "F5_ML");
       priced.push({
         market: "F5_ML",
         selection: f5Side === "HOME" ? context.home.name : context.away.name,
@@ -320,19 +343,29 @@ function buildDecisionLanes(context: ReturnType<typeof gameContext>, odds: any, 
         confidenceLabel: signal.label,
         reason: signal.reason,
         book,
+        ...metadata,
       });
     } else {
-      unpriced.push({ market: "F5_ML", side: f5Side, reason: "Verified F5 moneyline price unavailable" });
+      const invalid = finite(rawOdds);
+      unpriced.push({
+        market: "F5_ML",
+        side: f5Side,
+        reason: invalid != null && oddsAmerican == null
+          ? `Rejected invalid American odds ${invalid}; standard prices must be <= -100 or >= +100.`
+          : "Verified F5 moneyline price unavailable",
+      });
     }
   }
 
   const totalSide = String(markets?.f5TotalSide ?? "PASS");
   const totalLine = finite(odds?.f5Total?.line);
   if ((totalSide === "OVER" || totalSide === "UNDER") && totalLine != null) {
-    const oddsAmerican = validAmericanOdds(totalSide === "OVER" ? odds?.f5Total?.overOdds : odds?.f5Total?.underOdds);
+    const rawOdds = totalSide === "OVER" ? odds?.f5Total?.overOdds : odds?.f5Total?.underOdds;
+    const oddsAmerican = validAmericanOdds(rawOdds);
     const probability = pickProbability(markets, "F5_TOTAL", totalSide);
     if (oddsAmerican != null && probability != null) {
       const signal = laneSignal(markets, "F5_TOTAL", totalSide);
+      const metadata = priceMetadata(odds, "F5_TOTAL");
       priced.push({
         market: "F5_TOTAL",
         selection: `${totalSide} ${totalLine}`,
@@ -343,9 +376,17 @@ function buildDecisionLanes(context: ReturnType<typeof gameContext>, odds: any, 
         confidenceLabel: signal.label,
         reason: signal.reason,
         book,
+        ...metadata,
       });
     } else {
-      unpriced.push({ market: "F5_TOTAL", side: totalSide, reason: "Verified F5 total price unavailable" });
+      const invalid = finite(rawOdds);
+      unpriced.push({
+        market: "F5_TOTAL",
+        side: totalSide,
+        reason: invalid != null && oddsAmerican == null
+          ? `Rejected invalid American odds ${invalid}; standard prices must be <= -100 or >= +100.`
+          : "Verified F5 total price unavailable",
+      });
     }
   }
 
@@ -560,6 +601,7 @@ export class MlbS5cShadowIngestionService {
               signal: lane.signal,
               confidenceLabel: lane.confidenceLabel,
               reason: lane.reason,
+              consensusMethod: lane.consensusMethod ?? null,
               modelCommit: this.deploymentCommit,
             };
             const fingerprint = semanticHash(semantic);
@@ -572,13 +614,14 @@ export class MlbS5cShadowIngestionService {
               summary.idempotentSkips += 1;
               continue;
             }
+            const priceCapturedAt = lane.capturedAt ?? ranAt;
             const prediction: MlbPredictionInput = {
               schemaVersion: "mlb-ledger.v1",
               clientRequestId: `s5c:${context.gamePk}:${context.stage.toLowerCase()}:${lane.market.toLowerCase()}:${fingerprint.slice(0, 32)}`,
               source: "app",
               model: {
                 name: "CourtEdge MLB Early Markets",
-                version: "s5c-shadow-v1",
+                version: "s5c-shadow-v2-price-integrity",
                 gitCommit: this.deploymentCommit,
                 environment: this.environment,
               },
@@ -596,7 +639,7 @@ export class MlbS5cShadowIngestionService {
                 ...(lane.line != null ? { line: lane.line } : {}),
                 oddsAmerican: lane.oddsAmerican,
                 book: lane.book,
-                capturedAt: ranAt,
+                capturedAt: priceCapturedAt,
               },
               probabilities: {
                 model: lane.modelProbability,
@@ -615,6 +658,7 @@ export class MlbS5cShadowIngestionService {
                 warnings: [
                   ...(Array.isArray(markets?.warnings) ? markets.warnings.map(String) : []),
                   ...(context.stage === "PROVISIONAL" ? ["Lineups are not yet confirmed; this snapshot must be superseded by a FINAL snapshot when both official batting orders are available."] : []),
+                  ...(!lane.capturedAt ? ["The odds response did not expose an original capture timestamp; the ingestion run time was used as a fallback."] : []),
                 ],
                 factors: [
                   { name: "HOME_ERE", direction: "HOME", magnitude: finite(data?.homeEre?.ereScore) ?? undefined, units: "score", confidence: String(data?.homeEre?.dataStatus ?? "UNKNOWN") === "VERIFIED" ? "FULL" : "PARTIAL", source: "CourtEdge ERE" },
@@ -622,12 +666,28 @@ export class MlbS5cShadowIngestionService {
                 ],
                 sources: [
                   { name: "MLB Stats official schedule/feed", status: context.stage === "FINAL" ? "VERIFIED" : "PARTIAL", fetchedAt: ranAt, metadata: { gamePk: context.gamePk, lineupCounts: context.lineupCounts } },
-                  { name: lane.book, status: "VERIFIED", fetchedAt: ranAt, metadata: { market: lane.market, oddsAmerican: lane.oddsAmerican } },
+                  {
+                    name: lane.book,
+                    status: "VERIFIED",
+                    fetchedAt: priceCapturedAt,
+                    asOf: lane.providerLastUpdate,
+                    metadata: {
+                      market: lane.market,
+                      oddsAmerican: lane.oddsAmerican,
+                      consensusMethod: lane.consensusMethod ?? null,
+                    },
+                  },
                   { name: "CourtEdge /api/mlb/early-markets", status: "VERIFIED", fetchedAt: ranAt },
                 ],
                 layers: {
                   f5Unified: data?.f5Unified ?? null,
                   uncertainty: data?.uncertainty ?? null,
+                  marketPriceIntegrity: {
+                    capturedAt: priceCapturedAt,
+                    providerLastUpdate: lane.providerLastUpdate ?? null,
+                    consensusMethod: lane.consensusMethod ?? null,
+                    standardAmericanOddsValidated: true,
+                  },
                   s5c: {
                     schemaVersion: MLB_S5C_INGESTION_VERSION,
                     semanticFingerprint: fingerprint,
@@ -642,6 +702,13 @@ export class MlbS5cShadowIngestionService {
                 rawInputs: {
                   game: context,
                   lines: requestBody.lines,
+                  priceCapture: {
+                    capturedAt: priceCapturedAt,
+                    providerLastUpdate: lane.providerLastUpdate ?? null,
+                    consensusMethod: lane.consensusMethod ?? null,
+                    book: lane.book,
+                  },
+                  marketProvenance: lane.provenance ?? null,
                   pitcherRecentAvailable: Boolean(recentPayload),
                   umpireAvailable: Boolean(umpirePayload),
                 },
