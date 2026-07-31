@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - verify/s6g-live-connectivity-20260731d
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
   workflow_dispatch:
 
 jobs:
