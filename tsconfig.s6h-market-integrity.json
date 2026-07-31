@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/american-odds.ts",
+    "server/mlb-f5-odds-routes.ts",
+    "server/mlb-f5-odds-routes.test.ts",
+    "server/mlb-s5c-shadow-ingestion.ts",
+    "server/mlb-s5c-shadow-ingestion.test.ts",
+    "server/mlb-ledger-history-view.ts",
+    "server/mlb-ledger-history-view.test.ts",
+    "server/routes.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
