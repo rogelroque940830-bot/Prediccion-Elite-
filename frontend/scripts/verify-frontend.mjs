@@ -104,6 +104,9 @@ for (const file of codeFiles) {
   const importRegex = /(?:from\s+|import\s*\()\s*["']([^"']+)["']/g;
   for (const match of text.matchAll(importRegex)) {
     const spec = match[1];
+    if (spec.startsWith("node:")) {
+      continue;
+    }
     if (spec.startsWith("@/")) {
       const target = path.join(srcRoot, spec.slice(2));
       if (!existsImport(target)) errors.push(`${rel(file)} importa local inexistente: ${spec}`);
