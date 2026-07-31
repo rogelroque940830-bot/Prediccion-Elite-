@@ -120,7 +120,7 @@ function testIdNumber(testId: string): number | null {
 
 function selectedGameDate(): string | null {
   if (!browserAvailable()) return null;
-  const candidates = [...document.querySelectorAll<HTMLInputElement>('input[type="date"]')];
+  const candidates = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="date"]'));
   const value = candidates.map((input) => input.value).find((entry) => /^\d{4}-\d{2}-\d{2}$/.test(entry));
   return value || null;
 }
