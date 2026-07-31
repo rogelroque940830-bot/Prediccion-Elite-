@@ -7,48 +7,58 @@ function integerQuery(value: unknown, fallback: number, maximum: number): number
   return Math.min(maximum, Math.floor(parsed));
 }
 
+type WnbaShadowStatusSnapshot = ReturnType<WnbaShadowService["status"]>;
+
+export function buildPublicWnbaShadowHealth(status: WnbaShadowStatusSnapshot): Record<string, unknown> {
+  const latest = status.latest;
+  const healthy = !status.enabled || Boolean(status.lastSuccessAt && !status.lastError);
+  const degraded = Boolean(latest?.errors?.length);
+  return {
+    status: healthy ? (degraded ? "degraded" : "healthy") : "starting",
+    commit: latest?.deploymentCommit ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: latest?.environment ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    finalWindowMinutes: status.finalWindowMinutes,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    records: status.records,
+    settlements: status.settlements,
+    latest: latest ? {
+      gameDate: latest.gameDate,
+      discoveredGames: latest.discoveredGames,
+      pricedGames: latest.pricedGames,
+      recordsCreated: latest.recordsCreated,
+      idempotentRecords: latest.idempotentRecords,
+      provisionalCreated: latest.provisionalCreated,
+      finalCreated: latest.finalCreated,
+      skippedStarted: latest.skippedStarted,
+      unmatchedOdds: latest.unmatchedOdds,
+      missingMoneyline: latest.missingMoneyline,
+      settlementsCreated: latest.settlementsCreated,
+      errors: latest.errors.length,
+    } : null,
+    report: {
+      terminalGames: status.report.terminalGames,
+      finalCoveragePct: status.report.finalCoveragePct,
+      settled: status.report.settled,
+      settlementCoveragePct: status.report.settlementCoveragePct,
+      marketCoveragePct: status.report.marketCoveragePct,
+      averageDataQualityPct: status.report.averageDataQualityPct,
+      degradedSourceTerminalRecords: status.report.degradedSourceTerminalRecords,
+    },
+    safety: status.report.safety,
+  };
+}
+
 export function registerWnbaShadowRoutes(app: Express, service: WnbaShadowService): void {
   app.get("/health/s6c-wnba-shadow", (_req, res) => {
     const status = service.status();
-    const latest = status.latest;
-    const healthy = !status.enabled || Boolean(status.lastSuccessAt && !status.lastError);
-    const degraded = Boolean(latest?.errors?.length);
-    res.status(healthy ? 200 : 503).json({
-      status: healthy ? (degraded ? "degraded" : "healthy") : "starting",
-      commit: latest?.deploymentCommit ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
-      environment: latest?.environment ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
-      schemaVersion: status.schemaVersion,
-      enabled: status.enabled,
-      intervalMs: status.intervalMs,
-      initialDelayMs: status.initialDelayMs,
-      finalWindowMinutes: status.finalWindowMinutes,
-      lastRunAt: status.lastRunAt,
-      lastSuccessAt: status.lastSuccessAt,
-      lastError: status.lastError,
-      records: status.records,
-      settlements: status.settlements,
-      latest: latest ? {
-        gameDate: latest.gameDate,
-        discoveredGames: latest.discoveredGames,
-        pricedGames: latest.pricedGames,
-        recordsCreated: latest.recordsCreated,
-        idempotentRecords: latest.idempotentRecords,
-        provisionalCreated: latest.provisionalCreated,
-        finalCreated: latest.finalCreated,
-        settlementsCreated: latest.settlementsCreated,
-        errors: latest.errors.length,
-      } : null,
-      report: {
-        terminalGames: status.report.terminalGames,
-        finalCoveragePct: status.report.finalCoveragePct,
-        settled: status.report.settled,
-        settlementCoveragePct: status.report.settlementCoveragePct,
-        marketCoveragePct: status.report.marketCoveragePct,
-        averageDataQualityPct: status.report.averageDataQualityPct,
-        degradedSourceTerminalRecords: status.report.degradedSourceTerminalRecords,
-      },
-      safety: status.report.safety,
-    });
+    const payload = buildPublicWnbaShadowHealth(status);
+    res.status(payload.status === "starting" ? 503 : 200).json(payload);
   });
 
   app.get("/api/wnba/shadow/v1/status", (_req, res) => {
