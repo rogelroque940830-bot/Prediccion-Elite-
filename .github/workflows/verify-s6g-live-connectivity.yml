@@ -1,0 +1,92 @@
+name: VERIFY S6G Live Connectivity
+
+on:
+  push:
+    branches:
+      - verify/s6g-live-connectivity-20260731d
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect live frontend and backend
+        shell: bash
+        run: |
+          set -u
+          FRONTEND='https://web-p0-integration.up.railway.app'
+          BACKEND='https://prediccion-elite-p0-integration.up.railway.app'
+          ORIGIN="$FRONTEND"
+
+          echo '=== DNS ==='
+          getent hosts web-p0-integration.up.railway.app || true
+          getent hosts prediccion-elite-p0-integration.up.railway.app || true
+
+          echo '=== FRONTEND ROOT ==='
+          curl -sS -D frontend.headers -o frontend.html --max-time 30 "$FRONTEND/" || true
+          sed -n '1,40p' frontend.headers || true
+          sed -n '1,30p' frontend.html || true
+
+          ASSET=$(grep -oE 'src="[^"]+\.js"' frontend.html 2>/dev/null | head -1 | cut -d'"' -f2 || true)
+          echo "asset=$ASSET"
+          : > bundle.js
+          if [ -n "$ASSET" ]; then
+            case "$ASSET" in
+              http*) ASSET_URL="$ASSET" ;;
+              ./*) ASSET_URL="$FRONTEND/${ASSET#./}" ;;
+              /*) ASSET_URL="$FRONTEND$ASSET" ;;
+              *) ASSET_URL="$FRONTEND/$ASSET" ;;
+            esac
+            curl -sS -D bundle.headers -o bundle.js --max-time 60 "$ASSET_URL" || true
+            echo "bundle_url=$ASSET_URL"
+            sed -n '1,30p' bundle.headers || true
+            sha256sum bundle.js || true
+            echo '=== BUNDLE RAILWAY URLS ==='
+            grep -oE 'https://[A-Za-z0-9.-]+\.up\.railway\.app' bundle.js | sort -u || true
+            echo '=== BUNDLE EXPECTED MARKERS ==='
+            for marker in 'MLB · En foco' 'prediccion-elite-p0-integration.up.railway.app' 'web-p0-integration.up.railway.app'; do
+              if grep -Fq "$marker" bundle.js; then echo "FOUND: $marker"; else echo "MISSING: $marker"; fi
+            done
+          fi
+
+          echo '=== BACKEND DIRECT HISTORY, NO ORIGIN ==='
+          curl -sS -D backend-no-origin.headers -o backend-no-origin.body --max-time 30 \
+            "$BACKEND/api/mlb/ledger/v1/history?limit=5" || true
+          sed -n '1,60p' backend-no-origin.headers || true
+          head -c 1000 backend-no-origin.body || true; echo
+
+          echo '=== BACKEND DIRECT HISTORY, FRONTEND ORIGIN ==='
+          curl -sS -D backend-origin.headers -o backend-origin.body --max-time 30 \
+            -H "Origin: $ORIGIN" \
+            "$BACKEND/api/mlb/ledger/v1/history?limit=5" || true
+          sed -n '1,80p' backend-origin.headers || true
+          head -c 1000 backend-origin.body || true; echo
+
+          echo '=== BACKEND PREFLIGHT ==='
+          curl -sS -D preflight.headers -o preflight.body --max-time 30 -X OPTIONS \
+            -H "Origin: $ORIGIN" \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            "$BACKEND/api/mlb/ledger/v1/history?limit=5" || true
+          sed -n '1,100p' preflight.headers || true
+          cat preflight.body || true; echo
+
+          echo '=== BACKEND AUTH SESSION, FRONTEND ORIGIN ==='
+          curl -sS -D auth.headers -o auth.body --max-time 30 \
+            -H "Origin: $ORIGIN" \
+            "$BACKEND/api/auth/session" || true
+          sed -n '1,80p' auth.headers || true
+          cat auth.body || true; echo
+
+          echo '=== FRONTEND SAME-ORIGIN API PATH ==='
+          curl -sS -D frontend-api.headers -o frontend-api.body --max-time 30 \
+            "$FRONTEND/api/mlb/ledger/v1/history?limit=5" || true
+          sed -n '1,60p' frontend-api.headers || true
+          head -c 500 frontend-api.body || true; echo
+
+          echo '=== SUMMARY ==='
+          printf 'bundle_has_backend_url='; grep -Fq 'prediccion-elite-p0-integration.up.railway.app' bundle.js && echo yes || echo no
+          printf 'backend_origin_status='; awk 'NR==1{print $2}' backend-origin.headers 2>/dev/null || true
+          printf 'backend_allow_origin='; awk 'BEGIN{IGNORECASE=1}/^access-control-allow-origin:/{print $2}' backend-origin.headers 2>/dev/null | tr -d '\r' || true
+          printf 'frontend_api_content_type='; awk 'BEGIN{IGNORECASE=1}/^content-type:/{print $2}' frontend-api.headers 2>/dev/null | tr -d '\r' || true
