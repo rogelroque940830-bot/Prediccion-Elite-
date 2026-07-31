@@ -7,8 +7,7 @@
     "server/mlb-s5c-shadow-ingestion.ts",
     "server/mlb-s5c-shadow-ingestion.test.ts",
     "server/mlb-ledger-history-view.ts",
-    "server/mlb-ledger-history-view.test.ts",
-    "server/routes.ts"
+    "server/mlb-ledger-history-view.test.ts"
   ],
   "exclude": [
     "node_modules",
