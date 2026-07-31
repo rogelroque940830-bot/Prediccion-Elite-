@@ -8,6 +8,7 @@ on:
       - 'frontend/client/src/lib/mlb-history-focus.ts'
       - 'frontend/client/src/lib/mlb-history-focus.test.ts'
       - 'frontend/client/src/pages/mlb-history-focused.tsx'
+      - 'frontend/scripts/verify-frontend.mjs'
       - 'frontend/client/src/App.tsx'
       - 'frontend/client/src/components/app-sidebar.tsx'
       - '.github/workflows/validate-s6g-mlb-focus-history.yml'
@@ -33,10 +34,10 @@ jobs:
         run: |
           cd frontend
           npx tsx --test client/src/lib/mlb-history-focus.test.ts
-      - name: Type-check frontend
-        run: npm --prefix frontend run check
-      - name: Build frontend
-        run: npm --prefix frontend run build
+      - name: Run production-equivalent Railway verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
       - name: Verify focused history safety boundaries
         shell: bash
         run: |
