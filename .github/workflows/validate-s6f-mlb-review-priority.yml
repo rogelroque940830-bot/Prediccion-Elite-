@@ -1,0 +1,54 @@
+name: Validate S6F MLB Review Priority
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'frontend/client/src/lib/mlb-review-priority.ts'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'server/mlb-review-priority.test.ts'
+      - '.github/workflows/validate-s6f-mlb-review-priority.yml'
+      - 'server/mlb-s5c-shadow-ingestion.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6f:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install backend dependencies reproducibly
+        run: npm ci
+      - name: Test deterministic review classification
+        run: npx tsx --test server/mlb-review-priority.test.ts
+      - name: Verify full-slate shadow tracking remains intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'summary.gamesDiscovered = games.length' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'for (const game of games)' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'stakeUnits: 0' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-s5c-shadow-ingestion.ts
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Type-check frontend
+        run: npm --prefix frontend run check
+      - name: Build frontend
+        run: npm --prefix frontend run build
+      - name: Verify UI boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'Prioridad = pregame con ambos pitchers identificados' frontend/client/src/pages/mlb-predictor.tsx
+          grep -F 'classifyMlbDecisionReview(result?.pickQualities)' frontend/client/src/pages/mlb-predictor.tsx
+          grep -F 'no hay juegos pregame con ambos pitchers identificados' frontend/client/src/pages/mlb-predictor.tsx
