@@ -17,11 +17,33 @@ S5C performs this sequence:
 5. derives `marketImplied` from `oddsAmerican`;
 6. derives `edgePp` from model probability minus that implied probability.
 
-The S5C helper named `validAmericanOdds` currently accepts every finite non-zero number and rounds it. It does not enforce the standard American-odds domain of `<= -100` or `>= +100`.
+## Exact root cause: invalid median of American prices
 
-Therefore a source value such as `-4` passes S5C validation, is persisted as `oddsAmerican = -4`, produces an implied probability of approximately `3.846%`, and produces an apparently enormous edge when subtracted from the model probability.
+`/api/odds/mlb/f5` creates a consensus from FanDuel, BetMGM, and DraftKings. Its generic `median` helper is also used for American prices.
 
-## Deterministic reconstruction of visible anomalies
+For an even number of observations, that helper calculates:
+
+```text
+round((lower_middle + upper_middle) / 2)
+```
+
+That operation is valid for run lines and total points, but it is not valid for American odds because the scale is discontinuous around `-100/+100`.
+
+Example with two books:
+
+```text
+Book A: -110
+Book B: +100
+Current consensus: (-110 + 100) / 2 = -5
+```
+
+`-5` is not a valid American price. It is a synthetic artifact created by averaging across the sign boundary.
+
+S5C then compounds the problem because its helper named `validAmericanOdds` accepts every finite non-zero number and rounds it. It does not enforce the standard domain of `<= -100` or `>= +100`.
+
+Therefore values such as `-1`, `-4`, `-5`, `-6`, `-8`, `-9`, `-11`, `-12`, and `-15` can pass ingestion, be persisted as American odds, and generate implied probabilities between roughly 0.99% and 13.04%.
+
+## Live-ledger reconstruction
 
 ### Pittsburgh F5 at -145
 
@@ -29,7 +51,7 @@ Therefore a source value such as `-4` passes S5C validation, is persisted as `od
 - implied probability: `145 / (145 + 100) = 59.184%`;
 - model: `65.7%`;
 - recomputed edge: `6.516 pp`;
-- initial audit classification: `PASS` when source/book and capture time are present.
+- structural classification: `PASS`.
 
 ### Baltimore F5 at -120
 
@@ -40,31 +62,41 @@ Therefore a source value such as `-4` passes S5C validation, is persisted as `od
 - stored arithmetic is coherent;
 - classification: `REVIEW — EDGE_OUTLIER`.
 
-This record does not prove an arithmetic bug. It requires source/model review because the edge is extraordinary.
+This record does not prove an arithmetic bug. It requires model and source review because the edge is extraordinary.
 
-### Texas–Houston F5 Over 4.4 at -126
+### Texas–Houston F5 Over 4 at -126
 
+- live ledger line: `4.0`, not `4.4`;
 - standard American price: yes;
 - implied probability: `126 / (126 + 100) = 55.752%`;
 - model: `78.5%`;
 - recomputed edge: `22.748 pp`;
 - stored arithmetic is coherent;
-- `4.4` is not on a whole/half-run increment;
-- classification: `REVIEW — EDGE_OUTLIER, NON_STANDARD_LINE_INCREMENT`.
+- classification: `REVIEW — EDGE_OUTLIER`.
 
-The current source path copies `odds.f5Total.line` verbatim. Phase 1 cannot yet determine whether `4.4` came from the odds provider, a consensus transformation, or a projection accidentally exposed as a ticket line.
+### Kansas City–Colorado F5 Under 6 at -4
 
-### Kansas City–Colorado F5 Under 6.6 at -4
-
+- live ledger line: `6.0`, not `6.6`;
 - standard American price: no;
 - forensic formula result: `4 / (4 + 100) = 3.846%`;
 - model: `61.1%`;
 - recomputed edge: `57.254 pp`;
 - the stored implied probability and edge are internally consistent with the invalid `-4` input;
-- `6.6` is not on a whole/half-run increment;
-- classification: `REJECT — INVALID_AMERICAN_ODDS, NON_STANDARD_LINE_INCREMENT`.
+- classification: `REJECT — INVALID_AMERICAN_ODDS, EDGE_OUTLIER`.
 
-This proves the main defect is not the subtraction that calculates edge. The defect is that an invalid source price was allowed into the ledger and then treated as valid American odds.
+This proves the subtraction that calculates edge is not the primary defect. The invalid consensus price was produced upstream, accepted by S5C, and then treated as real American odds.
+
+## Corrected line finding
+
+The live export contains 139 F5-total records. Every line is on a whole-run or half-run increment:
+
+```text
+3.5, 4.0, 4.5, 5.0, 5.5, or 6.0
+```
+
+There are zero non-standard line increments in the export.
+
+The apparent `4.4` and `6.6` came from a frontend formatting defect. The ledger already returns selections such as `OVER 4` and `UNDER 6`, while S6G appends the separate `line` field again. That can display as `OVER 4 4` and `UNDER 6 6`, visually resembling `4.4` and `6.6`.
 
 ## Frontend finding
 
@@ -73,13 +105,12 @@ The S6G focused view ranks a pending record using signal, analysis stage, confid
 - American-odds domain;
 - implied-probability arithmetic;
 - edge arithmetic;
-- market/selection compatibility;
-- total-line increment;
-- source/book presence;
-- capture timestamp;
+- source-price freshness;
 - extreme-edge outliers.
 
-That is why an invalid record can become visible in `Prioridad`.
+It also appends `line` even when the selection text already contains the line.
+
+That is why an invalid record can become visible in `Prioridad` and why valid whole-number totals can look duplicated.
 
 ## Audit classifications
 
@@ -122,18 +153,18 @@ Accepted payload forms:
 
 ## Evidence boundary
 
-The repository audit establishes the transformation defect and reconstructs the visible examples. It cannot identify the exact live record IDs, original provider rows, source-set members, or raw capture payloads without an authenticated ledger export.
+The authenticated history view exposes `recordedAt`, but it does not expose the original market `capturedAt` field or the individual raw quotes used to create each consensus. Therefore price freshness and the exact two-book inputs cannot be proven from the history export alone.
 
-No service token, password, browser cookie, Railway secret, or production data is stored in this branch or workflow.
+No service token, password, browser cookie, Railway secret, or full production payload is stored in this branch or workflow.
 
 ## Phase 1 exit criteria
 
 Phase 1 is complete when:
 
-1. the deterministic fixture tests pass;
+1. deterministic tests pass;
 2. the read-only report generator produces JSON and Markdown evidence;
-3. the source path and invalid-odds acceptance defect are documented;
-4. a live authenticated export is audited without writing to the ledger;
-5. every live Priority/Waiting record is classified as PASS, REVIEW, or REJECT with explicit reasons.
+3. the consensus-price and S5C validation defects are documented;
+4. an authenticated live export is audited without writing to the ledger;
+5. every currently visible Priority/Waiting record is classified with explicit reasons.
 
-Items 1–3 are satisfied by this branch. Items 4–5 require the authenticated export and are intentionally not simulated.
+All five items are satisfied. The PR remains draft because Phase 1 is diagnostic and must not deploy a runtime change.
