@@ -1,0 +1,150 @@
+name: VERIFY S6D Live WNBA Predictor Shadow
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+
+permissions:
+  contents: read
+
+jobs:
+  verify-s6d-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: a68e0ec70a962f35dd2d104efffaf3b37d9bfb4d
+      MIN_AUDIT_AT: 2026-07-31T14:49:00Z
+    steps:
+      - name: Verify deployed S6D WNBA predictor shadow adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$API_BASE/health" || true)
+            ledger_code=$(curl -sS -o ledger.json -w '%{http_code}' --max-time 20 "$API_BASE/api/mlb/ledger/v1/status" || true)
+            s6c_code=$(curl -sS -o s6c.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6c-wnba-shadow" || true)
+            s6d_code=$(curl -sS -o s6d.json -w '%{http_code}' --max-time 20 "$API_BASE/health/s6d-wnba-predictor-shadow" || true)
+            private_status_code=$(curl -sS -o private-status.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/status" || true)
+            private_report_code=$(curl -sS -o private-report.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/report" || true)
+            private_records_code=$(curl -sS -o private-records.json -w '%{http_code}' --max-time 20 "$API_BASE/api/wnba/predictor-shadow/v1/records" || true)
+
+            echo "Attempt $attempt/120: health=$health_code ledger=$ledger_code s6c=$s6c_code s6d=$s6d_code privateStatus=$private_status_code privateReport=$private_report_code privateRecords=$private_records_code"
+
+            if [[ "$health_code" == "200" && "$ledger_code" == "200" && "$s6c_code" == "200" && "$s6d_code" == "200" && "$private_status_code" == "401" && "$private_report_code" == "401" && "$private_records_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('health.json');
+          const ledger = read('ledger.json');
+          const s6c = read('s6c.json');
+          const s6d = read('s6d.json');
+          const privateStatus = read('private-status.json');
+          const privateReport = read('private-report.json');
+          const privateRecords = read('private-records.json');
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const minimumAudit = Date.parse(String(process.env.MIN_AUDIT_AT || ''));
+
+          if (health.status !== 'healthy' || health.commit !== expected) throw new Error(`deployed commit ${health.commit} != ${expected}`);
+          if (!ledger.success || ledger.data?.schemaVersion !== 'mlb-ledger.v1' || ledger.data?.immutable !== true) throw new Error('MLB ledger regression or immutability failure');
+          if (!['healthy', 'degraded'].includes(s6c.status) || s6c.commit !== expected) throw new Error('S6C is not healthy on the expected commit');
+          if (!['healthy', 'degraded'].includes(s6d.status) || s6d.commit !== expected) throw new Error(`S6D is ${s6d.status} on ${s6d.commit}`);
+          if (s6d.enabled !== true) throw new Error('S6D is not enabled in p0-integration');
+          if (!s6d.lastRunAt || !s6d.lastSuccessAt || Date.parse(s6d.lastRunAt) < minimumAudit || Date.parse(s6d.lastSuccessAt) < minimumAudit) throw new Error('S6D has not completed a post-deploy cycle');
+          if (!s6d.cutoverAt || Date.parse(s6d.cutoverAt) < minimumAudit) throw new Error('S6D prospective cutover was not established after deployment');
+          if (s6d.lastError != null || !s6d.latest) throw new Error(`S6D cycle incomplete: ${s6d.lastError}`);
+          if (Number(s6d.latest.errors || 0) !== 0) throw new Error(`S6D source errors: ${s6d.latest.errors}`);
+
+          for (const [name, payload] of Object.entries({ privateStatus, privateReport, privateRecords })) {
+            if (payload.success !== false || !/Authentication required/i.test(String(payload.error || ''))) throw new Error(`${name} is not protected`);
+          }
+
+          const latest = s6d.latest;
+          const discovered = Number(latest.sourceOutputsDiscovered || 0);
+          const modern = Number(latest.modernOutputs || 0);
+          const legacy = Number(latest.legacyOutputs || 0);
+          if (discovered !== modern + legacy) throw new Error('S6D source inventory does not reconcile');
+          for (const key of ['preCutoverIgnored', 'newSourceOutputs', 'recordsCreated', 'idempotentOutputs', 'supersedingRecords', 'baselineLinked', 'baselineAmbiguous', 'explicitModelProbability', 'missingModelProbability']) {
+            if (!Number.isFinite(Number(latest[key])) || Number(latest[key]) < 0) throw new Error(`invalid S6D count ${key}`);
+          }
+          if (Number(latest.preCutoverIgnored) > 0) {
+            if (Number(latest.preCutoverIgnored) !== discovered || Number(latest.newSourceOutputs) !== 0 || Number(latest.recordsCreated) !== 0) {
+              throw new Error('S6D first cutover attempted a retrospective backfill');
+            }
+          }
+          if (Number(latest.recordsCreated) > Number(latest.newSourceOutputs)) throw new Error('S6D created more records than new source outputs');
+          if (Number(s6d.records || 0) < 0 || Number(s6d.report?.terminalDecisions || 0) < 0) throw new Error('S6D report counters are invalid');
+
+          const safety = s6d.safety || {};
+          const requiredSafety = {
+            mode: 'PERSISTED_OUTPUT_SHADOW',
+            predictionsCreated: 0,
+            recommendedStakeUnits: 0,
+            realFinancialExposure: 0,
+            sportsbookIntegration: false,
+            automaticBetPlacement: false,
+            productionWrites: false,
+            automaticPromotion: false,
+            predictorFormulasChanged: false,
+            predictorFiltersChanged: false,
+            predictorMarketsChanged: false,
+            predictorProbabilitiesChanged: false,
+            predictorThresholdsChanged: false,
+            stakePolicyChanged: false,
+            retrospectiveSyntheticPredictions: false,
+          };
+          for (const [key, value] of Object.entries(requiredSafety)) {
+            if (safety[key] !== value) throw new Error(`S6D safety invariant ${key}=${safety[key]} expected ${value}`);
+          }
+          if (s6c.safety?.realFinancialExposure !== 0 || s6c.safety?.automaticBetPlacement !== false || s6c.safety?.automaticPromotion !== false) throw new Error('S6C safety regression');
+
+          const publicPayload = JSON.stringify(s6d);
+          for (const forbidden of ['"homeTeam"', '"awayTeam"', '"selectedTeam"', '"opponent"', '"selection"', '"sourcePayload"', '"modelProbabilitySourceField"', '"s6cRecordId"', '"odds"']) {
+            if (publicPayload.includes(forbidden)) throw new Error(`public S6D health leaked ${forbidden}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: expected,
+            environment: health.environment,
+            ledger: {
+              predictions: ledger.data.predictions,
+              settlementEvents: ledger.data.settlementEvents,
+              immutable: ledger.data.immutable,
+            },
+            privatePredictorShadowProtected: true,
+            s6d: {
+              status: s6d.status,
+              enabled: s6d.enabled,
+              intervalMs: s6d.intervalMs,
+              initialDelayMs: s6d.initialDelayMs,
+              lastRunAt: s6d.lastRunAt,
+              lastSuccessAt: s6d.lastSuccessAt,
+              cutoverAt: s6d.cutoverAt,
+              records: s6d.records,
+              latest: s6d.latest,
+              report: s6d.report,
+              safety: s6d.safety,
+            },
+            s6c: {
+              status: s6c.status,
+              lastSuccessAt: s6c.lastSuccessAt,
+              records: s6c.records,
+              settlements: s6c.settlements,
+              report: s6c.report,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+
+          echo 'S6D live verification failed.'
+          for file in health ledger s6c s6d private-status private-report private-records; do
+            echo "--- $file"
+            cat "$file.json" 2>/dev/null || true
+          done
+          exit 1
