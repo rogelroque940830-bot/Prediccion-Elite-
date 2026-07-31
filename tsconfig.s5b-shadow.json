@@ -32,7 +32,11 @@
     "server/wnba-s6d-predictor-shadow-service.ts",
     "server/wnba-s6d-predictor-shadow-routes.ts",
     "server/wnba-s6d-predictor-shadow-service.test.ts",
-    "server/wnba-s6d-predictor-shadow-routes.test.ts"
+    "server/wnba-s6d-predictor-shadow-routes.test.ts",
+    "server/wnba-s6e-evaluation-emission-service.ts",
+    "server/wnba-s6e-evaluation-emission-routes.ts",
+    "server/wnba-s6e-evaluation-emission-service.test.ts",
+    "server/wnba-s6e-security.test.ts"
   ],
   "exclude": [
     "node_modules",
