@@ -20,7 +20,7 @@ const navItems = [
   { title: "NHL Predictor", url: "/nhl", icon: Snowflake },
   { title: "Calculadora", url: "/calculator", icon: Calculator },
   { title: "Historial NBA", url: "/history", icon: History },
-  { title: "Historial MLB", url: "/mlb-history", icon: ClipboardList },
+  { title: "MLB En Foco", url: "/mlb-history", icon: ClipboardList },
   { title: "Historial WNBA", url: "/wnba-history", icon: ClipboardList },
   { title: "Historial NHL", url: "/nhl-history", icon: ClipboardList },
 ];

@@ -1,0 +1,47 @@
+name: Validate S6G MLB Focus History
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-history-focus.ts'
+      - 'frontend/client/src/pages/mlb-history-focused.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - '.github/workflows/validate-s6g-mlb-focus-history.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Type-check frontend
+        run: npm --prefix frontend run check
+      - name: Build frontend
+        run: npm --prefix frontend run build
+      - name: Verify focused history safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'MLB_HISTORY_FOCUS_PRIORITY_LIMIT = 5' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'if (pick.analyticalDuplicate) continue' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'collapseMlbHistoryRevisions' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'path="/mlb-history-audit"' frontend/client/src/App.tsx
+          cat frontend/dist/assets/*.js > /tmp/s6g-bundle.js
+          grep -F 'MLB · En foco' /tmp/s6g-bundle.js
+          grep -F 'Solo muestra lo que merece tu atención' /tmp/s6g-bundle.js
+          grep -F 'Abrir auditoría completa' /tmp/s6g-bundle.js
+          grep -F 'Solo estudio' /tmp/s6g-bundle.js
