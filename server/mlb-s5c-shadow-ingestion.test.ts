@@ -14,13 +14,15 @@ function json(value: unknown, status = 200): Response {
   });
 }
 
-test("S5C records priced provisional/final decisions once and never creates financial exposure", async () => {
+test("S5C records priced provisional/final decisions once, preserves price provenance and never creates financial exposure", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "s5c-shadow-"));
   const dbPath = path.join(root, "ledger.sqlite");
   const store = new MlbLedgerStore(dbPath);
   const ownership = new MlbLedgerOwnershipStore(dbPath);
   let now = new Date("2026-07-30T16:00:00.000Z");
   let finalLineups = false;
+  const capturedAt = "2026-07-30T15:59:30.000Z";
+  const providerLastUpdate = "2026-07-30T15:58:00.000Z";
 
   const schedule = {
     dates: [{
@@ -115,13 +117,41 @@ test("S5C records priced provisional/final decisions once and never creates fina
     if (url.includes("/api/odds/mlb/f5")) {
       return json({
         success: true,
+        schemaVersion: "mlb-f5-odds-consensus.v2",
         games: [{
           homeTeam: "Miami Marlins",
           awayTeam: "Philadelphia Phillies",
           commence: "2026-07-30T23:10:00.000Z",
-          source: "FanDuel, DraftKings",
-          f5Ml: { home: -115, away: -105, n: 2 },
-          f5Total: { line: 4.5, overOdds: -110, underOdds: -110, n: 2 },
+          source: "fanduel, draftkings",
+          capturedAt,
+          providerLastUpdate,
+          consensusMethod: "median_implied_probability",
+          f5Ml: {
+            home: -115,
+            away: -105,
+            n: 2,
+            capturedAt,
+            consensusMethod: "median_implied_probability",
+          },
+          f5Total: {
+            line: 4.5,
+            overOdds: -110,
+            underOdds: -110,
+            n: 2,
+            capturedAt,
+            consensusMethod: "median_implied_probability",
+          },
+          provenance: {
+            provider: "the-odds-api",
+            capturedAt,
+            providerLastUpdate,
+            consensusMethod: "median_implied_probability",
+            contributingBooks: ["fanduel", "draftkings"],
+            rawQuotes: {
+              f5Ml: { home: [{ bookKey: "fanduel", price: -115 }], away: [{ bookKey: "draftkings", price: -105 }] },
+              f5Total: [{ bookKey: "fanduel", price: -110, point: 4.5 }],
+            },
+          },
         }],
       });
     }
@@ -162,6 +192,11 @@ test("S5C records priced provisional/final decisions once and never creates fina
   assert.ok(firstRecords.every((record) => record.prediction.decision.stakeUnits === 0));
   assert.ok(firstRecords.some((record) => record.prediction.decision.signal === "BET_FUERTE"));
   assert.ok(firstRecords.some((record) => record.prediction.decision.signal === "LEAN"));
+  assert.ok(firstRecords.every((record) => record.prediction.payload.market.capturedAt === capturedAt));
+  assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.rawInputs.priceCapture.providerLastUpdate === providerLastUpdate));
+  assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.rawInputs.priceCapture.consensusMethod === "median_implied_probability"));
+  assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.rawInputs.marketProvenance.contributingBooks.length === 2));
+  assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.layers.marketPriceIntegrity.standardAmericanOddsValidated === true));
 
   const exactRetry = await service.run("test-retry");
   assert.equal(exactRetry.recordsCreated, 0);

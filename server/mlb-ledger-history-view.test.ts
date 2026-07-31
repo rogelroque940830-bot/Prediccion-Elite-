@@ -126,7 +126,6 @@ test("excludes pushes and voids from ROI denominator", () => {
   assert.equal(view.summary.roiPct, 0);
 });
 
-
 test("marks equivalent C1 ledger records as analytical duplicates without removing them", () => {
   const first = record({ id: "first", recordedAtMs: 1000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
   const duplicate = record({ id: "duplicate", recordedAtMs: 2000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
@@ -138,4 +137,46 @@ test("marks equivalent C1 ledger records as analytical duplicates without removi
   const duplicatePick = view.picks.find((pick) => pick.id === "duplicate");
   assert.equal(duplicatePick?.analyticalDuplicate, true);
   assert.equal(duplicatePick?.analyticalDuplicateOfPredictionId, "first");
+});
+
+test("exposes compact price provenance without expanding raw quote arrays", () => {
+  const priced = record({
+    id: "priced-v2",
+    recordedAtMs: 4000,
+    marketType: "F5_TOTAL",
+    selection: "OVER 4.5",
+    odds: -110,
+    stake: 0,
+  });
+  priced.prediction.payload.market = {
+    type: "F5_TOTAL",
+    selection: "OVER 4.5",
+    line: 4.5,
+    oddsAmerican: -110,
+    book: "fanduel, draftkings",
+    capturedAt: "2026-07-28T20:00:00.000Z",
+  };
+  priced.prediction.payload.analysis.rawInputs = {
+    priceCapture: {
+      capturedAt: "2026-07-28T20:00:00.000Z",
+      providerLastUpdate: "2026-07-28T19:59:00.000Z",
+      consensusMethod: "median_implied_probability",
+    },
+    marketProvenance: {
+      contributingBooks: ["fanduel", "draftkings"],
+      rawQuotes: { f5Total: [{ bookKey: "fanduel", price: -110 }] },
+    },
+  };
+  priced.prediction.payload.analysis.layers = {
+    marketPriceIntegrity: { standardAmericanOddsValidated: true },
+  };
+
+  const view = buildMlbLedgerHistoryView([priced]);
+  const pick = view.picks[0];
+  assert.equal(pick.priceCapturedAt, "2026-07-28T20:00:00.000Z");
+  assert.equal(pick.providerLastUpdate, "2026-07-28T19:59:00.000Z");
+  assert.equal(pick.consensusMethod, "median_implied_probability");
+  assert.deepEqual(pick.priceContributingBooks, ["fanduel", "draftkings"]);
+  assert.equal(pick.standardAmericanOddsValidated, true);
+  assert.equal("rawQuotes" in pick, false);
 });
