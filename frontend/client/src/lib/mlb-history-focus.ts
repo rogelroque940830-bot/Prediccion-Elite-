@@ -1,6 +1,9 @@
 export const MLB_HISTORY_FOCUS_PRIORITY_LIMIT = 5;
 export const MLB_HISTORY_FOCUS_WAITING_LIMIT = 8;
+export const MLB_HISTORY_FOCUS_VERIFY_LIMIT = 12;
 export const MLB_HISTORY_FOCUS_RESULTS_LIMIT = 8;
+export const MLB_HISTORY_EDGE_REVIEW_THRESHOLD_PP = 15;
+export const MLB_HISTORY_ARITHMETIC_TOLERANCE_PP = 0.75;
 
 export interface MlbHistoryFocusPick {
   id: string;
@@ -33,10 +36,42 @@ export interface MlbHistoryFocusPick {
 }
 
 export type MlbHistoryFocusTier = "HIGH" | "SECONDARY" | "HIDDEN";
+export type MlbMarketIntegrityStatus = "PASS" | "REVIEW" | "REJECT";
+export type MlbMarketIntegritySeverity = "REVIEW" | "REJECT";
+export type MlbMarketIntegrityIssueCode =
+  | "INVALID_AMERICAN_ODDS"
+  | "INVALID_MODEL_PROBABILITY"
+  | "IMPLIED_PROBABILITY_MISMATCH"
+  | "EDGE_ARITHMETIC_MISMATCH"
+  | "EDGE_OUTLIER"
+  | "MARKET_SELECTION_MISMATCH"
+  | "MISSING_TOTAL_LINE"
+  | "NON_STANDARD_LINE_INCREMENT"
+  | "MISSING_BOOK";
+
+export interface MlbMarketIntegrityIssue {
+  code: MlbMarketIntegrityIssueCode;
+  severity: MlbMarketIntegritySeverity;
+  message: string;
+}
+
+export interface MlbMarketIntegrityAudit {
+  status: MlbMarketIntegrityStatus;
+  issues: MlbMarketIntegrityIssue[];
+  impliedFromOddsPct: number | null;
+  recomputedEdgePp: number | null;
+}
+
+export interface MlbHistoryIntegrityItem<T extends MlbHistoryFocusPick = MlbHistoryFocusPick> {
+  pick: T;
+  audit: MlbMarketIntegrityAudit;
+}
 
 export interface MlbHistoryFocusView<T extends MlbHistoryFocusPick = MlbHistoryFocusPick> {
   priority: T[];
   waiting: T[];
+  verify: Array<MlbHistoryIntegrityItem<T>>;
+  verifyTotal: number;
   results: T[];
   uniqueDecisions: number;
   collapsedRevisions: number;
@@ -58,6 +93,11 @@ function normalized(value: unknown): string {
 function finite(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function finiteOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parsedMs(value: unknown): number | null {
@@ -118,6 +158,161 @@ function stageStrength(stage: unknown): number {
 function versionStrength(pick: MlbHistoryFocusPick): number {
   const settled = pick.settlementResult != null || clean(pick.result).toUpperCase() !== "PENDING";
   return (settled ? 100 : 0) + stageStrength(pick.analysisStage) * 10;
+}
+
+function normalizedMarket(value: unknown): string {
+  return clean(value).toUpperCase().replace(/[\s-]+/g, "_");
+}
+
+function isTotalMarket(value: unknown): boolean {
+  const market = normalizedMarket(value);
+  return market.includes("TOTAL") || market.includes("O/U") || market.endsWith("_OU");
+}
+
+function isMoneylineMarket(value: unknown): boolean {
+  const market = normalizedMarket(value);
+  return market === "ML" || market.endsWith("_ML") || market.includes("MONEYLINE");
+}
+
+function selectionDirection(value: unknown): "OVER" | "UNDER" | "TEAM" {
+  const selection = clean(value).toUpperCase();
+  if (/^OVER(?:\s|$)/.test(selection)) return "OVER";
+  if (/^UNDER(?:\s|$)/.test(selection)) return "UNDER";
+  return "TEAM";
+}
+
+function hasWholeOrHalfIncrement(line: number): boolean {
+  return Math.abs(line * 2 - Math.round(line * 2)) < 1e-8;
+}
+
+function issue(
+  code: MlbMarketIntegrityIssueCode,
+  severity: MlbMarketIntegritySeverity,
+  message: string,
+): MlbMarketIntegrityIssue {
+  return { code, severity, message };
+}
+
+export function isStandardAmericanOdds(value: unknown): boolean {
+  const odds = finiteOrNull(value);
+  return odds != null
+    && (odds <= -100 || odds >= 100)
+    && Math.abs(odds) <= 10_000;
+}
+
+export function americanOddsToImpliedPct(value: unknown): number | null {
+  const odds = finiteOrNull(value);
+  if (odds == null || odds === 0) return null;
+  return odds < 0
+    ? (Math.abs(odds) / (Math.abs(odds) + 100)) * 100
+    : (100 / (odds + 100)) * 100;
+}
+
+export function auditMlbHistoryMarketIntegrity(
+  pick: MlbHistoryFocusPick,
+  tolerancePp = MLB_HISTORY_ARITHMETIC_TOLERANCE_PP,
+  edgeReviewThresholdPp = MLB_HISTORY_EDGE_REVIEW_THRESHOLD_PP,
+): MlbMarketIntegrityAudit {
+  const issues: MlbMarketIntegrityIssue[] = [];
+  const odds = finiteOrNull(pick.oddsAmerican);
+  const modelProbabilityPct = finiteOrNull(pick.modelProbabilityPct);
+  const storedImpliedPct = finiteOrNull(pick.marketImpliedProbabilityPct);
+  const storedEdgePp = finiteOrNull(pick.edgePp);
+  const impliedFromOddsPct = americanOddsToImpliedPct(odds);
+
+  if (!isStandardAmericanOdds(odds)) {
+    issues.push(issue(
+      "INVALID_AMERICAN_ODDS",
+      "REJECT",
+      `Cuota americana inválida: ${odds == null ? "sin valor" : odds}.`,
+    ));
+  }
+
+  if (modelProbabilityPct == null || modelProbabilityPct <= 0 || modelProbabilityPct >= 100) {
+    issues.push(issue(
+      "INVALID_MODEL_PROBABILITY",
+      "REJECT",
+      "La probabilidad del modelo falta o está fuera del rango válido.",
+    ));
+  }
+
+  if (impliedFromOddsPct != null && storedImpliedPct != null
+    && Math.abs(storedImpliedPct - impliedFromOddsPct) > tolerancePp) {
+    issues.push(issue(
+      "IMPLIED_PROBABILITY_MISMATCH",
+      "REJECT",
+      `Mercado guardado ${storedImpliedPct.toFixed(2)}% vs recálculo ${impliedFromOddsPct.toFixed(2)}%.`,
+    ));
+  }
+
+  const recomputedEdgePp = modelProbabilityPct != null && impliedFromOddsPct != null
+    ? modelProbabilityPct - impliedFromOddsPct
+    : null;
+
+  if (recomputedEdgePp != null && storedEdgePp != null
+    && Math.abs(storedEdgePp - recomputedEdgePp) > tolerancePp) {
+    issues.push(issue(
+      "EDGE_ARITHMETIC_MISMATCH",
+      "REJECT",
+      `Edge guardado ${storedEdgePp.toFixed(2)} pp vs recálculo ${recomputedEdgePp.toFixed(2)} pp.`,
+    ));
+  }
+
+  if (recomputedEdgePp != null && recomputedEdgePp > edgeReviewThresholdPp) {
+    issues.push(issue(
+      "EDGE_OUTLIER",
+      "REVIEW",
+      `Edge extraordinario de ${recomputedEdgePp.toFixed(2)} pp; requiere revisar fuente y calibración.`,
+    ));
+  }
+
+  const direction = selectionDirection(pick.selection);
+  if (isTotalMarket(pick.marketType || pick.marketLabel)) {
+    if (direction === "TEAM") {
+      issues.push(issue(
+        "MARKET_SELECTION_MISMATCH",
+        "REJECT",
+        "Un total debe seleccionar OVER o UNDER.",
+      ));
+    }
+    if (pick.line == null || !Number.isFinite(Number(pick.line))) {
+      issues.push(issue(
+        "MISSING_TOTAL_LINE",
+        "REJECT",
+        "El mercado total no contiene una línea válida.",
+      ));
+    } else if (!hasWholeOrHalfIncrement(Number(pick.line))) {
+      issues.push(issue(
+        "NON_STANDARD_LINE_INCREMENT",
+        "REVIEW",
+        `La línea ${pick.line} no está en un incremento de carrera completa o media carrera.`,
+      ));
+    }
+  }
+
+  if (isMoneylineMarket(pick.marketType || pick.marketLabel) && direction !== "TEAM") {
+    issues.push(issue(
+      "MARKET_SELECTION_MISMATCH",
+      "REJECT",
+      "Un moneyline no puede seleccionar OVER o UNDER.",
+    ));
+  }
+
+  if (!clean(pick.book)) {
+    issues.push(issue(
+      "MISSING_BOOK",
+      "REVIEW",
+      "La casa o fuente de la cuota no está identificada.",
+    ));
+  }
+
+  const status: MlbMarketIntegrityStatus = issues.some((entry) => entry.severity === "REJECT")
+    ? "REJECT"
+    : issues.some((entry) => entry.severity === "REVIEW")
+      ? "REVIEW"
+      : "PASS";
+
+  return { status, issues, impliedFromOddsPct, recomputedEdgePp };
 }
 
 export function mlbHistoryDecisionKey(pick: MlbHistoryFocusPick): string {
@@ -181,20 +376,33 @@ function resultTime(pick: MlbHistoryFocusPick): number {
   return parsedMs(pick.settledAt) ?? parsedMs(pick.recordedAt) ?? 0;
 }
 
+function integritySeverity(audit: MlbMarketIntegrityAudit): number {
+  if (audit.status === "REJECT") return 2;
+  if (audit.status === "REVIEW") return 1;
+  return 0;
+}
+
 export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
   picks: readonly T[],
   nowMs = Date.now(),
 ): MlbHistoryFocusView<T> {
   const unique = collapseMlbHistoryRevisions(picks);
   const pendingPregame = unique.filter((pick) => clean(pick.result).toUpperCase() === "PENDING" && isPregame(pick, nowMs));
+  const auditedPending = pendingPregame.map((pick) => ({
+    pick,
+    audit: auditMlbHistoryMarketIntegrity(pick),
+  }));
+  const integrityPassed = auditedPending
+    .filter((entry) => entry.audit.status === "PASS")
+    .map((entry) => entry.pick);
 
-  const ranked = pendingPregame
+  const ranked = integrityPassed
     .filter((pick) => classifyMlbHistoryFocus(pick) !== "HIDDEN")
     .sort((left, right) => reviewScore(right, nowMs) - reviewScore(left, nowMs));
   const priority = ranked.slice(0, MLB_HISTORY_FOCUS_PRIORITY_LIMIT);
   const priorityIds = new Set(priority.map((pick) => pick.id));
 
-  const waiting = pendingPregame
+  const waiting = integrityPassed
     .filter((pick) => !priorityIds.has(pick.id))
     .filter((pick) => {
       const edge = finite(pick.edgePp);
@@ -209,17 +417,35 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
     })
     .slice(0, MLB_HISTORY_FOCUS_WAITING_LIMIT);
 
+  const verifyCandidates = auditedPending
+    .filter((entry) => entry.audit.status !== "PASS")
+    .sort((left, right) => {
+      const severity = integritySeverity(right.audit) - integritySeverity(left.audit);
+      if (severity !== 0) return severity;
+      const leftStart = startMs(left.pick) ?? Number.MAX_SAFE_INTEGER;
+      const rightStart = startMs(right.pick) ?? Number.MAX_SAFE_INTEGER;
+      return leftStart - rightStart || reviewScore(right.pick, nowMs) - reviewScore(left.pick, nowMs);
+    });
+  const verify = verifyCandidates.slice(0, MLB_HISTORY_FOCUS_VERIFY_LIMIT);
+
   const results = unique
     .filter((pick) => clean(pick.result).toUpperCase() !== "PENDING")
     .sort((left, right) => resultTime(right) - resultTime(left))
     .slice(0, MLB_HISTORY_FOCUS_RESULTS_LIMIT);
 
-  const shownIds = new Set([...priority, ...waiting, ...results].map((pick) => pick.id));
+  const shownIds = new Set([
+    ...priority.map((pick) => pick.id),
+    ...waiting.map((pick) => pick.id),
+    ...verify.map((entry) => entry.pick.id),
+    ...results.map((pick) => pick.id),
+  ]);
   const hiddenStudyRecords = Math.max(0, picks.length - shownIds.size);
 
   return {
     priority,
     waiting,
+    verify,
+    verifyTotal: verifyCandidates.length,
     results,
     uniqueDecisions: unique.length,
     collapsedRevisions: Math.max(0, picks.length - unique.length),
