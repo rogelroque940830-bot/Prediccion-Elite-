@@ -14,7 +14,8 @@ import Predictor from "@/pages/predictor";
 import CalculatorPage from "@/pages/calculator";
 import HistoryPage from "@/pages/history";
 import MLBPredictor from "@/pages/mlb-predictor";
-import MLBHistory from "@/pages/mlb-history";
+import MLBHistoryFocused from "@/pages/mlb-history-focused";
+import MLBHistoryAudit from "@/pages/mlb-history";
 import WNBAPredictor from "@/pages/wnba-predictor";
 import WNBAHistory from "@/pages/wnba-history";
 import NHLPredictor from "@/pages/nhl-predictor";
@@ -30,7 +31,8 @@ function AppRouter() {
       <Route path="/calculator" component={CalculatorPage} />
       <Route path="/mlb" component={MLBPredictor} />
       <Route path="/history" component={HistoryPage} />
-      <Route path="/mlb-history" component={MLBHistory} />
+      <Route path="/mlb-history" component={MLBHistoryFocused} />
+      <Route path="/mlb-history-audit" component={MLBHistoryAudit} />
       <Route path="/wnba" component={WNBAPredictor} />
       <Route path="/wnba-history" component={WNBAHistory} />
       <Route path="/nhl" component={NHLPredictor} />
