@@ -1,0 +1,49 @@
+name: Apply S6Q Fifty Settlement Human Review
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/generate-s6q-fifty-settlement-human-review.mjs'
+      - '.github/workflows/apply-s6q-fifty-settlement-human-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Generate and integrate S6Q Phase 5C-6
+        run: node scripts/generate-s6q-fifty-settlement-human-review.mjs
+      - name: Commit generated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            server/mlb-s6q-fifty-settlement-human-review.ts \
+            server/mlb-s6q-fifty-settlement-human-review.test.ts \
+            server/s5b-staging-entry.ts \
+            server/route-contract.extensions.json \
+            tsconfig.s5b-shadow.json \
+            tsconfig.s6q-fifty-settlement-human-review.json \
+            package.json \
+            docs/S6Q_PHASE5C6_FIFTY_SETTLEMENT_HUMAN_REVIEW.md \
+            .github/workflows/validate-s6q-fifty-settlement-human-review.yml
+          if git diff --cached --quiet; then
+            echo 'No generated S6Q changes required.'
+            exit 0
+          fi
+          git commit -m 'Implement S6Q fifty-settlement human review gate'
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
