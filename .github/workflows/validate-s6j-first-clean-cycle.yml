@@ -1,0 +1,60 @@
+name: Validate S6J First Clean Cycle
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-s6j-first-cycle-certification.ts'
+      - 'server/mlb-s6j-first-cycle-certification.test.ts'
+      - 'server/s5b-staging-entry.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.s6j-first-cycle.json'
+      - 'tsconfig.s5b-shadow.json'
+      - 'package.json'
+      - 'docs/S6J_PHASE5A_FIRST_CLEAN_CYCLE.md'
+      - '.github/workflows/validate-s6j-first-clean-cycle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6j:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused Phase 5A tests
+        run: npx tsx --test server/mlb-s6j-first-cycle-certification.test.ts
+      - name: Type-check Phase 5A surface
+        run: npx tsc -p tsconfig.s6j-first-cycle.json
+      - name: Type-check complete shadow surface
+        run: npx tsc -p tsconfig.s5b-shadow.json
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Verify Phase 5A integration and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'mlb-s6j-first-clean-cycle.v1' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'WAITING_FOR_FINAL' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'WAITING_FOR_SETTLEMENT' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'WAITING_FOR_CLOSING' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'CERTIFIED' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'automaticBetPlacement: false' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'historicalLedgerMutation: false' server/mlb-s6j-first-cycle-certification.ts
+          grep -F 'startMlbS6jFirstCycleCertificationWorker' server/s5b-staging-entry.ts
+          grep -F '/health/s6j-first-cycle' server/s5b-staging-entry.ts
+          grep -F '/api/mlb/ledger/v1/s6j-first-cycle/status' server/route-contract.extensions.json
+          grep -F 'mlb-s6j-first-clean-cycle.v1' dist/index.cjs
