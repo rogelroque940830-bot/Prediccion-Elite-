@@ -1,0 +1,132 @@
+name: Verify S6N Phase 5C-3 Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6n-phase5c3-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway S6N worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6n-first-real-settlement'
+          expected_commit='0189a06b8ed21d3448bd696ec60d53a8a0e3c960'
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o artifacts/s6n-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6n-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6n-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            state=$(node -e "try{const x=require('./artifacts/s6n-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema commit=$commit state=$state"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6n-first-real-settlement-monitor.v1' ] && [ "$commit" = "$expected_commit" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6N Phase 5C-3 did not become ready within the verification window.' >&2
+          cat artifacts/s6n-health.json || true
+          exit 1
+      - name: Validate live Phase 5C-3 state and safety
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6n-health.json', 'utf8'));
+          const allowed = [
+            'ARMED_AND_WAITING',
+            'OBSERVING_CERTIFICATE_STABILITY',
+            'FIRST_REAL_SETTLEMENT_CERTIFIED',
+          ];
+          if (x.status !== 'healthy') throw new Error(`Unexpected health ${x.status}`);
+          if (!allowed.includes(x.latest?.state)) throw new Error(`Unexpected or actionable S6N state ${x.latest?.state}`);
+          if ((x.latest?.issueCounts?.CRITICAL ?? 0) !== 0) throw new Error('Critical S6N issues are present');
+          if (x.latest?.sourceS6m?.available !== true) throw new Error('S6M source is unavailable');
+          if (x.latest?.sourceS6m?.metricParityChecked !== true || x.latest?.sourceS6m?.metricParityPassed !== true) {
+            throw new Error(`S6M metric parity failed: ${JSON.stringify(x.latest?.sourceS6m)}`);
+          }
+          if ((x.latest?.sourceS6m?.criticalIssues ?? 0) !== 0) throw new Error('Critical S6M issues are present');
+          if (x.latest?.checks?.s6mIntegrityGatePassed !== true) throw new Error('S6M integrity gate did not pass');
+          if (x.latest?.checks?.ledgerCountMonotonic !== true) throw new Error('Ledger count is not monotonic');
+          if (x.latest?.checks?.appendOnlyBaseline !== true || x.latest?.checks?.appendOnlyEvidence !== true) {
+            throw new Error('S6N append-only guarantees are not active');
+          }
+          if (x.latest?.readiness?.conclusionsAllowed !== false) throw new Error('Scientific conclusions were enabled prematurely');
+          if (x.latest?.readiness?.automaticModelChangesAllowed !== false) throw new Error('Automatic model changes were enabled');
+          if (x.latest?.readiness?.recommendation !== 'NO_AUTOMATIC_MODEL_CHANGE') throw new Error('Unexpected recommendation');
+          if (x.latest?.persistence?.countMonotonic !== true) throw new Error('Persistence is not monotonic');
+          if (x.safety?.mode !== 'SHADOW' || x.safety?.realFinancialExposure !== 0) throw new Error('Safety mode changed');
+          for (const key of [
+            'sportsbookIntegration',
+            'automaticBetPlacement',
+            'productionWrites',
+            'historicalLedgerMutation',
+            'automaticPromotion',
+            'formulasChanged',
+            'probabilitiesChanged',
+            'signalsChanged',
+            'marketsChanged',
+            'thresholdsChanged',
+            'settlementRulesChanged',
+            'stakePolicyChanged',
+          ]) {
+            if (x.safety?.[key] !== false) throw new Error(`Safety boundary changed: ${key}`);
+          }
+          if (x.latest.state === 'ARMED_AND_WAITING') {
+            if (x.latest.target?.certificatePresent !== false) throw new Error('Certificate present while state is armed waiting');
+            if (x.latest.stability?.baselinePresent !== false || x.latest.stability?.evidencePresent !== false) {
+              throw new Error('Unexpected S6N artifacts while awaiting first certificate');
+            }
+          }
+          if (x.latest.state === 'OBSERVING_CERTIFICATE_STABILITY') {
+            if (x.latest.target?.certificatePresent !== true || x.latest.stability?.baselinePresent !== true) {
+              throw new Error('Missing certificate or baseline during stability observation');
+            }
+          }
+          if (x.latest.state === 'FIRST_REAL_SETTLEMENT_CERTIFIED') {
+            if (x.latest.target?.certificatePresent !== true || x.latest.stability?.evidencePresent !== true) {
+              throw new Error('Certified state lacks certificate or evidence');
+            }
+            if (x.latest.readiness?.firstRealSettlementCertified !== true) throw new Error('Certified readiness flag is false');
+          }
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state: x.latest.state,
+            sourceS6m: x.latest.sourceS6m,
+            sample: x.latest.sample,
+            target: x.latest.target,
+            stability: x.latest.stability,
+            checks: x.latest.checks,
+            readiness: x.latest.readiness,
+            persistence: x.latest.persistence,
+            issueCounts: x.latest.issueCounts,
+            safety: x.safety,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const x = require('./artifacts/session.json');
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6n-phase5c3-live-verification
+          path: artifacts/
+          retention-days: 14
