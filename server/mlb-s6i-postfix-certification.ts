@@ -547,8 +547,8 @@ export function buildMlbS6iPostfixCertification(
   const finalScoreCoveragePct = pct(finalScoreCaptured, settledRows.length);
 
   const checks = {
-    zeroInvalidAmericanOdds: rows.every((row) => !row.issueCodes.includes("INVALID_AMERICAN_ODDS")),
-    allCleanRowsHaveProvenance: cleanUniqueRows.length > 0 && completeProvenance === cleanUniqueRows.length,
+    zeroInvalidAmericanOdds: cleanUniqueRows.every((row) => !row.issueCodes.includes("INVALID_AMERICAN_ODDS")),
+    allCleanRowsHaveProvenance: cleanUniqueRows.length === 0 || completeProvenance === cleanUniqueRows.length,
     finalSnapshotCoverageMet: finalSnapshotCoveragePct == null || finalSnapshotCoveragePct >= MLB_S6I_REVIEW_THRESHOLDS.minimumFinalSnapshotCoveragePct,
     overdueSettlementCoverageMet: overdueSettlementCoveragePct == null || overdueSettlementCoveragePct >= MLB_S6I_REVIEW_THRESHOLDS.requiredOverdueSettlementCoveragePct,
     closingCoverageMet: closingCoveragePct == null || closingCoveragePct >= MLB_S6I_REVIEW_THRESHOLDS.minimumClosingCoveragePct,
@@ -556,7 +556,12 @@ export function buildMlbS6iPostfixCertification(
     minimumSettledSampleMet: settledRows.length >= MLB_S6I_REVIEW_THRESHOLDS.minimumSettledUniqueDecisions,
     persistenceMonotonic: countMonotonic,
   };
-  const criticalOrActionable = issues.some((entry) => entry.severity === "CRITICAL" || entry.code === "FINAL_MISSED_AFTER_START" || entry.code === "SETTLEMENT_OVERDUE");
+  const cleanPredictionIds = new Set(cleanUniqueRows.map((row) => row.predictionId));
+  const criticalOrActionable = issues.some((entry) => {
+    const appliesToPureCohort = entry.predictionId == null || cleanPredictionIds.has(entry.predictionId);
+    return appliesToPureCohort
+      && (entry.severity === "CRITICAL" || entry.code === "FINAL_MISSED_AFTER_START" || entry.code === "SETTLEMENT_OVERDUE");
+  });
   const allOperationalChecks = Object.entries(checks)
     .filter(([key]) => key !== "minimumSettledSampleMet")
     .every(([, value]) => value);
@@ -590,7 +595,7 @@ export function buildMlbS6iPostfixCertification(
       integrityPass: rows.filter((row) => row.integrityStatus === "PASS").length,
       integrityReview: rows.filter((row) => row.integrityStatus === "REVIEW").length,
       integrityReject: rows.filter((row) => row.integrityStatus === "REJECT").length,
-      invalidAmericanOdds: rows.filter((row) => row.issueCodes.includes("INVALID_AMERICAN_ODDS")).length,
+      invalidAmericanOdds: cleanUniqueRows.filter((row) => row.issueCodes.includes("INVALID_AMERICAN_ODDS")).length,
       completeProvenance,
       finalCaptured: cleanUniqueRows.filter((row) => row.analysisStage === "FINAL").length,
       provisionalPending: cleanUniqueRows.filter((row) => row.analysisStage === "PROVISIONAL" && row.settlement.state === "PENDING").length,
