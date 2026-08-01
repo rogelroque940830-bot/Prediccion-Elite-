@@ -22,7 +22,7 @@
     "typecheck:s4-operations": "tsc -p tsconfig.s4-operations.json",
     "test:s5a-e2e": "node scripts/s5a-mlb-real-save-e2e.mjs",
     "typecheck:s5b-shadow": "tsc -p tsconfig.s5b-shadow.json",
-    "test:s5b-shadow": "tsx --test server/mlb-shadow-evaluation.test.ts server/mlb-shadow-collection-worker.test.ts server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts server/mlb-s5d-gate-monitor.test.ts server/mlb-s5e-coverage-service.test.ts server/mlb-s5f-certification-service.test.ts server/multisport-readiness-service.test.ts server/wnba-s6b-data-resilience.test.ts server/wnba-s6c-shadow-service.test.ts server/wnba-s6c-shadow-routes.test.ts server/wnba-s6d-predictor-shadow-service.test.ts server/wnba-s6d-predictor-shadow-routes.test.ts server/wnba-s6e-evaluation-emission-service.test.ts server/wnba-s6e-security.test.ts server/mlb-s6j-first-cycle-certification.test.ts server/mlb-s6k-first-ten-cycles-certification.test.ts",
+    "test:s5b-shadow": "tsx --test server/mlb-shadow-evaluation.test.ts server/mlb-shadow-collection-worker.test.ts server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts server/mlb-s5d-gate-monitor.test.ts server/mlb-s5e-coverage-service.test.ts server/mlb-s5f-certification-service.test.ts server/multisport-readiness-service.test.ts server/wnba-s6b-data-resilience.test.ts server/wnba-s6c-shadow-service.test.ts server/wnba-s6c-shadow-routes.test.ts server/wnba-s6d-predictor-shadow-service.test.ts server/wnba-s6d-predictor-shadow-routes.test.ts server/wnba-s6e-evaluation-emission-service.test.ts server/wnba-s6e-security.test.ts server/mlb-s6j-first-cycle-certification.test.ts server/mlb-s6k-first-ten-cycles-certification.test.ts server/mlb-s6l-scientific-metrics.test.ts",
     "test:s5c-ingestion": "tsx --test server/mlb-terminal-ledger-records.test.ts server/mlb-s5c-shadow-ingestion.test.ts",
     "test:s5d-gate": "tsx --test server/mlb-s5d-gate-monitor.test.ts",
     "test:s5e-coverage": "tsx --test server/mlb-s5e-coverage-service.test.ts",
@@ -42,7 +42,9 @@
     "test:s6j-first-cycle": "tsx --test server/mlb-s6j-first-cycle-certification.test.ts",
     "typecheck:s6j-first-cycle": "tsc -p tsconfig.s6j-first-cycle.json",
     "test:s6k-first-ten": "tsx --test server/mlb-s6k-first-ten-cycles-certification.test.ts",
-    "typecheck:s6k-first-ten": "tsc -p tsconfig.s6k-first-ten.json"
+    "typecheck:s6k-first-ten": "tsc -p tsconfig.s6k-first-ten.json",
+    "test:s6l-scientific-metrics": "tsx --test server/mlb-s6l-scientific-metrics.test.ts",
+    "typecheck:s6l-scientific-metrics": "tsc -p tsconfig.s6l-scientific-metrics.json"
   },
   "engines": {
     "node": ">=20"
