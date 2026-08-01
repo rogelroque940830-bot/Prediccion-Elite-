@@ -1343,7 +1343,7 @@ export function startMlbS6qFiftySettlementHumanReviewWorker(
     if (running) return;
     running = true;
     service.run("scheduled")
-      .catch((error) => console.error("[s6q] minimum sample of 20 settlements certification failed", error))
+      .catch((error) => console.error("[s6q] fifty-settlement human review failed", error))
       .finally(() => { running = false; });
   };
   const initial = setTimeout(run, service.getInitialDelayMs());
