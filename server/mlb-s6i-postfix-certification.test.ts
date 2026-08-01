@@ -241,6 +241,41 @@ test("measures official settlement, CLV, final score and Brier evidence without 
   assert.equal(report.readiness.automaticPromotion, false);
 });
 
+test("excluded cross-cutoff lineage does not block the pure clean cohort", () => {
+  const oldInvalid = record({
+    id: "old-invalid-provisional",
+    recordedAtMs: cutoffMs - 60_000,
+    stage: "PROVISIONAL",
+    odds: -4,
+    fingerprint: "old-invalid-stage",
+  });
+  const transitionFinal = record({
+    id: "transition-final",
+    recordedAtMs: cutoffMs + 60_000,
+    stage: "FINAL",
+    odds: -110,
+    supersedesId: "old-invalid-provisional",
+    fingerprint: "transition-final-stage",
+  });
+  const pureClean = record({
+    id: "pure-clean",
+    recordedAtMs: cutoffMs + 120_000,
+    odds: -115,
+    fingerprint: "pure-clean-stage",
+  });
+  const report = buildMlbS6iPostfixCertification([oldInvalid, transitionFinal, pureClean], {
+    now: new Date("2026-08-01T12:00:00.000Z"),
+  });
+
+  assert.equal(report.state, "COLLECTING");
+  assert.equal(report.summary.postCutoffTerminalDecisions, 2);
+  assert.equal(report.summary.cleanUniqueDecisions, 1);
+  assert.equal(report.summary.excludedDecisions, 1);
+  assert.equal(report.summary.invalidAmericanOdds, 0);
+  assert.equal(report.readiness.checks.zeroInvalidAmericanOdds, true);
+  assert.ok(report.issues.some((entry) => entry.predictionId === "transition-final" && entry.code === "INVALID_AMERICAN_ODDS"));
+});
+
 test("detects missing FINAL snapshots, overdue settlement and persistence count regression", () => {
   const provisional = record({
     id: "overdue-provisional",
