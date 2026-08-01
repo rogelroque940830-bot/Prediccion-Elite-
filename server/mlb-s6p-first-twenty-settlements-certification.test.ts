@@ -181,3 +181,33 @@ test("S6M critical issues block certification", () => {
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.checks.s6mIntegrityGatePassed, false);
 });
+
+
+test("turns a syntactically valid but malformed baseline into ACTION_REQUIRED without throwing", () => {
+  const records = recordsFor(20);
+  const { report, certificates } = buildS6m(records, terminalIds(20));
+  const malformed = {} as S6pBaseline;
+  const result = evaluate(records, report, certificates, { baseline: malformed });
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "BASELINE_SHAPE_INVALID"), true);
+  assert.equal(result.baselineToPersist, null);
+  assert.equal(result.evidenceToPersist, null);
+});
+
+test("turns syntactically valid but malformed evidence into ACTION_REQUIRED without throwing", () => {
+  const records = recordsFor(20);
+  const { report, certificates } = buildS6m(records, terminalIds(20));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  if (!first.baselineToPersist) throw new Error("fixture baseline missing");
+  const malformed = {} as S6pEvidence;
+  const result = evaluate(
+    records,
+    report,
+    certificates,
+    { baseline: first.baselineToPersist, evidence: malformed },
+    "2026-08-01T21:03:00.000Z",
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_SHAPE_INVALID"), true);
+  assert.equal(result.evidenceToPersist, null);
+});
