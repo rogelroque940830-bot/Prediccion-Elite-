@@ -650,6 +650,8 @@ export function evaluateMlbS6mMilestones(
     deploymentCommit?: string;
     environment?: string;
     previousOwnedLedgerRecords?: number | null;
+    certificateReadErrors?: Array<{ milestone: S6mMilestone; message: string }>;
+    previouslyCertifiedMilestones?: S6mMilestone[];
   } = {},
 ): { report: S6mMilestoneReport; newCertificates: S6mMilestoneCertificate[] } {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
@@ -661,6 +663,14 @@ export function evaluateMlbS6mMilestones(
   const countMonotonic = previousCount == null || records.length >= previousCount;
   const issues: S6mMilestoneReport["issues"] = [];
   const parityMismatches: string[] = [];
+
+  for (const readError of options.certificateReadErrors ?? []) {
+    issues.push({
+      code: `MILESTONE_${readError.milestone}_CERTIFICATE_UNREADABLE`,
+      severity: "CRITICAL",
+      message: readError.message,
+    });
+  }
 
   if (!s6lReport) {
     issues.push({ code: "S6L_REPORT_PENDING", severity: "INFO", message: "The scientific metrics source report is not available yet." });
@@ -699,6 +709,14 @@ export function evaluateMlbS6mMilestones(
   }
 
   const certificates: S6mCertificateMap = { ...existingCertificates };
+  for (const milestone of options.previouslyCertifiedMilestones ?? []) {
+    if (certificates[`${milestone}`]) continue;
+    issues.push({
+      code: `MILESTONE_${milestone}_CERTIFICATE_MISSING`,
+      severity: "CRITICAL",
+      message: `Milestone ${milestone} was previously certified, but its append-only certificate file is missing.`,
+    });
+  }
   for (const milestone of MLB_S6M_MILESTONES) {
     const certificate = certificates[`${milestone}`];
     if (!certificate) continue;
@@ -746,11 +764,12 @@ export function evaluateMlbS6mMilestones(
   const independentlyCertifiedDecisions = sample.observations.filter((entry) => entry.independentlyCertified).length;
   const tenCertifiedCyclesReached = independentlyCertifiedDecisions >= 10;
   const preferredSampleCertified = highestCertifiedMilestone >= 50;
-  const humanReviewReady = preferredSampleCertified
+  const critical = issues.some((entry) => entry.severity === "CRITICAL");
+  const humanReviewReady = !critical
+    && preferredSampleCertified
     && tenCertifiedCyclesReached
     && s6lReport?.state === "READY_FOR_REVIEW"
     && s6lReport.readiness.conclusionsAllowed === true;
-  const critical = issues.some((entry) => entry.severity === "CRITICAL");
   if (!critical && highestCertifiedMilestone === 0) {
     issues.push({
       code: "FIRST_ELIGIBLE_SETTLEMENT_PENDING",
@@ -926,13 +945,28 @@ export class MlbS6mStatisticalMilestonesService {
   readLatest(): S6mMilestoneReport | null {
     return readJson<S6mMilestoneReport>(path.join(this.root, "latest.json"));
   }
-  readCertificates(): S6mCertificateMap {
+  private readCertificateInventory(): {
+    certificates: S6mCertificateMap;
+    errors: Array<{ milestone: S6mMilestone; message: string }>;
+  } {
     const certificates: S6mCertificateMap = {};
+    const errors: Array<{ milestone: S6mMilestone; message: string }> = [];
     for (const milestone of MLB_S6M_MILESTONES) {
-      const value = readJson<S6mMilestoneCertificate>(path.join(this.root, "certificates", `milestone-${milestone}.json`));
-      if (value) certificates[`${milestone}`] = value;
+      const filePath = path.join(this.root, "certificates", `milestone-${milestone}.json`);
+      if (!fs.existsSync(filePath)) continue;
+      try {
+        certificates[`${milestone}`] = JSON.parse(fs.readFileSync(filePath, "utf8")) as S6mMilestoneCertificate;
+      } catch (error) {
+        errors.push({
+          milestone,
+          message: `Unable to read append-only milestone ${milestone} certificate: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
     }
-    return certificates;
+    return { certificates, errors };
+  }
+  readCertificates(): S6mCertificateMap {
+    return this.readCertificateInventory().certificates;
   }
   status(): S6mStatus {
     return {
@@ -960,17 +994,23 @@ export class MlbS6mStatisticalMilestonesService {
         .filter((entry) => entry.state === "CERTIFIED")
         .map((entry) => entry.target.terminalPredictionId)
         .filter((entry): entry is string => Boolean(entry));
+      const certificateInventory = this.readCertificateInventory();
+      const previouslyCertifiedMilestones = (previous?.milestones ?? [])
+        .filter((entry) => entry.status === "CERTIFIED")
+        .map((entry) => entry.milestone);
       const evaluation = evaluateMlbS6mMilestones(
         records,
         s6lReport,
         certifiedTerminalPredictionIds,
-        this.readCertificates(),
+        certificateInventory.certificates,
         {
           generatedAt: now.toISOString(),
           trigger,
           deploymentCommit: this.deploymentCommit,
           environment: this.environment,
           previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
+          certificateReadErrors: certificateInventory.errors,
+          previouslyCertifiedMilestones,
         },
       );
       for (const certificate of evaluation.newCertificates) {
@@ -982,19 +1022,24 @@ export class MlbS6mStatisticalMilestonesService {
         }
       }
       const finalEvaluation = evaluation.newCertificates.length
-        ? evaluateMlbS6mMilestones(
-          records,
-          s6lReport,
-          certifiedTerminalPredictionIds,
-          this.readCertificates(),
-          {
-            generatedAt: now.toISOString(),
-            trigger,
-            deploymentCommit: this.deploymentCommit,
-            environment: this.environment,
-            previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
-          },
-        )
+        ? (() => {
+          const refreshedInventory = this.readCertificateInventory();
+          return evaluateMlbS6mMilestones(
+            records,
+            s6lReport,
+            certifiedTerminalPredictionIds,
+            refreshedInventory.certificates,
+            {
+              generatedAt: now.toISOString(),
+              trigger,
+              deploymentCommit: this.deploymentCommit,
+              environment: this.environment,
+              previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
+              certificateReadErrors: refreshedInventory.errors,
+              previouslyCertifiedMilestones,
+            },
+          );
+        })()
         : evaluation;
       const report = finalEvaluation.report;
       atomicWriteJson(path.join(this.root, "latest.json"), report);
