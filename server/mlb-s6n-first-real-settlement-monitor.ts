@@ -498,7 +498,12 @@ export function evaluateMlbS6nFirstRealSettlement(
       pushIssue(issues, "MANIFEST_DIGEST_MISMATCH", "CRITICAL", "Milestone 1 manifest digest does not match its contents.");
     }
 
-    const expectedManifest = expectedManifestEntry(records, certifiedTerminalPredictionIds);
+    const currentExpectedManifest = expectedManifestEntry(records, certifiedTerminalPredictionIds);
+    const expectedManifest = currentExpectedManifest ? {
+      ...currentExpectedManifest,
+      // Preserve the immutable certificate-time annotation while validating every pick/settlement field.
+      independentlyCertified: certificate.manifest[0].independentlyCertified,
+    } : null;
     if (!expectedManifest || canonicalDigest(expectedManifest) !== canonicalDigest(certificate.manifest[0])) {
       currentLedgerManifestMatches = false;
       pushIssue(

@@ -358,3 +358,42 @@ test("rejects evidence with a broken baseline link even when its digest is recom
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_BASELINE_LINK_INVALID"), true);
 });
+
+
+test("accepts later independent-certification maturity without changing the immutable pick", () => {
+  const records = pairedDecision(0, "WIN");
+  const initial = buildS6m(records, []);
+  const certificate = initial.certificates["1"];
+  if (!certificate) throw new Error("fixture certificate missing");
+  assert.equal(certificate.manifest[0].independentlyCertified, false);
+
+  const matureS6l = buildMlbS6lScientificMetrics(records, {
+    certifiedTerminalPredictionIds: ["final-0"],
+    generatedAt: "2026-08-01T20:04:00.000Z",
+  });
+  const matureS6m = evaluateMlbS6mMilestones(
+    records,
+    matureS6l,
+    ["final-0"],
+    { "1": certificate },
+    { generatedAt: "2026-08-01T20:05:00.000Z", deploymentCommit: "fixture", environment: "test" },
+  );
+  assert.equal(matureS6m.report.state, "MILESTONE_1_CERTIFIED");
+
+  const result = evaluateMlbS6nFirstRealSettlement(
+    records,
+    matureS6m.report,
+    { "1": certificate },
+    ["final-0"],
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T20:06:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+    },
+  );
+  assert.equal(result.report.state, "OBSERVING_CERTIFICATE_STABILITY");
+  assert.equal(result.report.checks.currentLedgerManifestMatches, true);
+  assert.equal(result.report.issues.some((entry) => entry.code === "CURRENT_LEDGER_MANIFEST_MISMATCH"), false);
+});

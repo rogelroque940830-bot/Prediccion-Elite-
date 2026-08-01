@@ -618,7 +618,12 @@ function validateCertificate(
     errors.push("Current ledger contains fewer binary decisions than the immutable certificate.");
     return errors;
   }
-  const expectedManifest = manifestFor(expected);
+  const currentManifest = manifestFor(expected);
+  const expectedManifest = currentManifest.map((entry, index) => ({
+    ...entry,
+    // Independent certification is a later lifecycle annotation, not part of the immutable pick identity.
+    independentlyCertified: certificate.manifest[index]?.independentlyCertified ?? entry.independentlyCertified,
+  }));
   if (stableDigest(certificate.manifest) !== certificate.manifestDigestSha256) {
     errors.push("Manifest digest does not match the stored manifest.");
   }
