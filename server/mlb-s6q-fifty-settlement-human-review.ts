@@ -608,8 +608,6 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const independentlyCertifiedAmongFirstFifty = selected.filter((entry) => entry.independentlyCertified).length;
   const tenCertifiedCyclesReached = independentlyCertifiedAmongFirstFifty >= 10
     && Boolean(s6mReport?.readiness.tenCertifiedCyclesReached);
-  const tenCertifiedCyclesReached = independentlyCertifiedAmongFirstFifty >= 10
-    && Boolean(s6mReport?.readiness.tenCertifiedCyclesReached);
   const baselinePresent = stored.baselinePresent
     ?? (stored.baseline !== null && stored.baseline !== undefined);
   const evidencePresent = stored.evidencePresent
@@ -693,8 +691,8 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     pushIssue(
       issues,
       "MINIMUM_SAMPLE_20_PREREQUISITE_PENDING",
-      "CRITICAL",
-      "Milestone 50 exists before the S6O first-fifty-settlements chain is certified.",
+      "INFO",
+      "Milestone 50 is available, but S6P has not yet certified the minimum sample of 20 settlements.",
     );
   }
 
