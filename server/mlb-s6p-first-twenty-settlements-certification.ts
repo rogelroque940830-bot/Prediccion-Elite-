@@ -237,6 +237,8 @@ type S6pOptions = {
 type StoredArtifacts = {
   baseline: S6pBaseline | null;
   evidence: S6pEvidence | null;
+  baselinePresent?: boolean;
+  evidencePresent?: boolean;
   baselineReadError?: string | null;
   evidenceReadError?: string | null;
 };
@@ -494,6 +496,63 @@ function makeEvidence(
   return { ...core, evidenceDigestSha256: sha256(core) };
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isS6pBaselineArtifactShape(value: unknown): value is S6pBaseline {
+  if (!isObjectRecord(value)) return false;
+  return typeof value.schemaVersion === "string"
+    && typeof value.firstObservedAt === "string"
+    && typeof value.firstObservedDeploymentCommit === "string"
+    && typeof value.sourceS6mGeneratedAt === "string"
+    && typeof value.sourceS6oGeneratedAt === "string"
+    && typeof value.certificateDigestSha256 === "string"
+    && typeof value.manifestDigestSha256 === "string"
+    && isStringArray(value.terminalPredictionIds)
+    && isStringArray(value.settlementEventIds)
+    && Array.isArray(value.results)
+    && value.results.every((entry) => entry === "WIN" || entry === "LOSS")
+    && typeof value.ownedLedgerRecordsAtFirstObservation === "number"
+    && typeof value.baselineDigestSha256 === "string";
+}
+
+function isS6pEvidenceArtifactShape(value: unknown): value is S6pEvidence {
+  if (!isObjectRecord(value)) return false;
+  const stability = value.stability;
+  const checks = value.checks;
+  return typeof value.schemaVersion === "string"
+    && typeof value.certifiedAt === "string"
+    && typeof value.deploymentCommit === "string"
+    && typeof value.environment === "string"
+    && typeof value.sourceS6mGeneratedAt === "string"
+    && typeof value.sourceS6mState === "string"
+    && typeof value.sourceS6oGeneratedAt === "string"
+    && typeof value.sourceS6oState === "string"
+    && typeof value.baselineDigestSha256 === "string"
+    && typeof value.certificateDigestSha256 === "string"
+    && typeof value.manifestDigestSha256 === "string"
+    && isObjectRecord(stability)
+    && typeof stability.firstObservedAt === "string"
+    && typeof stability.confirmedAt === "string"
+    && typeof stability.stableForMs === "number"
+    && typeof stability.minimumRequiredMs === "number"
+    && stability.distinctWorkerRuns === true
+    && Array.isArray(value.manifest)
+    && isObjectRecord(value.metrics)
+    && Array.isArray(value.marketBreakdowns)
+    && Array.isArray(value.signalBreakdowns)
+    && Array.isArray(value.calibrationBuckets)
+    && isObjectRecord(value.provisionalFinalComparison)
+    && typeof value.sampleAdequacy === "string"
+    && isObjectRecord(checks)
+    && typeof value.evidenceDigestSha256 === "string";
+}
+
 function exactStringArray(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((entry, index) => entry === right[index]);
 }
@@ -515,6 +574,10 @@ export function evaluateMlbS6pFirstTwentySettlements(
   const countMonotonic = previousCount == null || records.length >= previousCount;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
   const selected = sample.binaryObservations.slice(0, MLB_S6P_TARGET_SIZE);
+  const baselinePresent = stored.baselinePresent
+    ?? (stored.baseline !== null && stored.baseline !== undefined);
+  const evidencePresent = stored.evidencePresent
+    ?? (stored.evidence !== null && stored.evidence !== undefined);
   const issues: S6pReport["issues"] = [];
   let baselineToPersist: S6pBaseline | null = null;
   let evidenceToPersist: S6pEvidence | null = null;
@@ -702,66 +765,83 @@ export function evaluateMlbS6pFirstTwentySettlements(
     }
   }
 
-  if (stored.baseline) {
-    const baselineIdsValid = stored.baseline.terminalPredictionIds.length === MLB_S6P_TARGET_SIZE
-      && stored.baseline.settlementEventIds.length === MLB_S6P_TARGET_SIZE
-      && stored.baseline.results.length === MLB_S6P_TARGET_SIZE
-      && new Set(stored.baseline.terminalPredictionIds).size === MLB_S6P_TARGET_SIZE
-      && new Set(stored.baseline.settlementEventIds).size === MLB_S6P_TARGET_SIZE
-      && stored.baseline.results.every((entry) => entry === "WIN" || entry === "LOSS");
-    if (stored.baseline.schemaVersion !== MLB_S6P_BASELINE_VERSION
-      || sha256(baselineCore(stored.baseline)) !== stored.baseline.baselineDigestSha256
-      || !Number.isFinite(Date.parse(stored.baseline.firstObservedAt))
-      || stored.baseline.ownedLedgerRecordsAtFirstObservation < 1
+  const validStoredBaseline = isS6pBaselineArtifactShape(stored.baseline) ? stored.baseline : null;
+  const validStoredEvidence = isS6pEvidenceArtifactShape(stored.evidence) ? stored.evidence : null;
+
+  if (baselinePresent && !validStoredBaseline) {
+    pushIssue(
+      issues,
+      "BASELINE_SHAPE_INVALID",
+      "CRITICAL",
+      "The append-only twenty-result baseline is syntactically valid JSON but has an incomplete or incompatible shape.",
+    );
+  } else if (validStoredBaseline) {
+    const baselineIdsValid = validStoredBaseline.terminalPredictionIds.length === MLB_S6P_TARGET_SIZE
+      && validStoredBaseline.settlementEventIds.length === MLB_S6P_TARGET_SIZE
+      && validStoredBaseline.results.length === MLB_S6P_TARGET_SIZE
+      && new Set(validStoredBaseline.terminalPredictionIds).size === MLB_S6P_TARGET_SIZE
+      && new Set(validStoredBaseline.settlementEventIds).size === MLB_S6P_TARGET_SIZE
+      && validStoredBaseline.results.every((entry) => entry === "WIN" || entry === "LOSS");
+    if (validStoredBaseline.schemaVersion !== MLB_S6P_BASELINE_VERSION
+      || sha256(baselineCore(validStoredBaseline)) !== validStoredBaseline.baselineDigestSha256
+      || !Number.isFinite(Date.parse(validStoredBaseline.firstObservedAt))
+      || validStoredBaseline.ownedLedgerRecordsAtFirstObservation < 1
       || !baselineIdsValid) {
       pushIssue(issues, "BASELINE_INTEGRITY_INVALID", "CRITICAL", "The append-only twenty-result baseline failed integrity or semantic validation.");
     }
   }
 
-  if (stored.evidence) {
-    if (stored.evidence.schemaVersion !== MLB_S6P_EVIDENCE_VERSION
-      || sha256(evidenceCore(stored.evidence)) !== stored.evidence.evidenceDigestSha256) {
+  if (evidencePresent && !validStoredEvidence) {
+    pushIssue(
+      issues,
+      "EVIDENCE_SHAPE_INVALID",
+      "CRITICAL",
+      "The append-only twenty-result evidence is syntactically valid JSON but has an incomplete or incompatible shape.",
+    );
+  } else if (validStoredEvidence) {
+    if (validStoredEvidence.schemaVersion !== MLB_S6P_EVIDENCE_VERSION
+      || sha256(evidenceCore(validStoredEvidence)) !== validStoredEvidence.evidenceDigestSha256) {
       pushIssue(issues, "EVIDENCE_DIGEST_INVALID", "CRITICAL", "The append-only twenty-result evidence failed integrity validation.");
     }
-    if (!stored.baseline) {
-      pushIssue(issues, "EVIDENCE_WITHOUT_BASELINE", "CRITICAL", "S6P evidence exists without its append-only baseline.");
+    if (!validStoredBaseline) {
+      pushIssue(issues, "EVIDENCE_WITHOUT_BASELINE", "CRITICAL", "S6P evidence exists without a valid append-only baseline.");
     } else {
-      const firstObservedMs = Date.parse(stored.evidence.stability.firstObservedAt);
-      const confirmedMs = Date.parse(stored.evidence.stability.confirmedAt);
+      const firstObservedMs = Date.parse(validStoredEvidence.stability.firstObservedAt);
+      const confirmedMs = Date.parse(validStoredEvidence.stability.confirmedAt);
       const measuredStableMs = confirmedMs - firstObservedMs;
-      const validLink = stored.evidence.baselineDigestSha256 === stored.baseline.baselineDigestSha256
-        && stored.evidence.stability.firstObservedAt === stored.baseline.firstObservedAt
+      const validLink = validStoredEvidence.baselineDigestSha256 === validStoredBaseline.baselineDigestSha256
+        && validStoredEvidence.stability.firstObservedAt === validStoredBaseline.firstObservedAt
         && Number.isFinite(firstObservedMs)
         && Number.isFinite(confirmedMs)
-        && measuredStableMs >= stored.evidence.stability.minimumRequiredMs
-        && stored.evidence.stability.stableForMs === measuredStableMs;
+        && measuredStableMs >= validStoredEvidence.stability.minimumRequiredMs
+        && validStoredEvidence.stability.stableForMs === measuredStableMs;
       if (!validLink) {
         pushIssue(issues, "EVIDENCE_BASELINE_LINK_INVALID", "CRITICAL", "S6P evidence does not preserve a valid stability link to its baseline.");
       }
     }
-    if (!Object.values(stored.evidence.checks).every((value) => value === true)) {
+    if (!Object.values(validStoredEvidence.checks).every((value) => value === true)) {
       pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6P evidence contains a failed or missing verification assertion.");
     }
-    if (stored.evidence.sampleAdequacy !== "PRELIMINARY_REVIEW_ONLY_INSUFFICIENT_FOR_MODEL_CONCLUSIONS") {
+    if (validStoredEvidence.sampleAdequacy !== "PRELIMINARY_REVIEW_ONLY_INSUFFICIENT_FOR_MODEL_CONCLUSIONS") {
       pushIssue(issues, "EVIDENCE_SAMPLE_ADEQUACY_INVALID", "CRITICAL", "S6P evidence overstates the scientific maturity of a twenty-result sample.");
     }
     if (certificate && (
-      stored.evidence.certificateDigestSha256 !== certificate.certificateDigestSha256
-      || stored.evidence.manifestDigestSha256 !== certificate.manifestDigestSha256
-      || canonicalDigest(stored.evidence.manifest) !== canonicalDigest(certificate.manifest)
-      || canonicalDigest(stored.evidence.metrics) !== canonicalDigest(certificate.metrics)
+      validStoredEvidence.certificateDigestSha256 !== certificate.certificateDigestSha256
+      || validStoredEvidence.manifestDigestSha256 !== certificate.manifestDigestSha256
+      || canonicalDigest(validStoredEvidence.manifest) !== canonicalDigest(certificate.manifest)
+      || canonicalDigest(validStoredEvidence.metrics) !== canonicalDigest(certificate.metrics)
     )) {
       pushIssue(issues, "EVIDENCE_CERTIFICATE_LINK_INVALID", "CRITICAL", "S6P evidence no longer matches the immutable milestone 20 certificate.");
     }
   }
 
-  if (certificate && stored.baseline) {
+  if (certificate && validStoredBaseline) {
     const certificateTerminalIds = certificate.manifest.map((entry) => entry.terminalPredictionId);
     const certificateSettlementIds = certificate.manifest.map((entry) => entry.settlementEventId);
-    if (stored.baseline.certificateDigestSha256 !== certificate.certificateDigestSha256
-      || stored.baseline.manifestDigestSha256 !== certificate.manifestDigestSha256
-      || !exactStringArray(stored.baseline.terminalPredictionIds, certificateTerminalIds)
-      || !exactStringArray(stored.baseline.settlementEventIds, certificateSettlementIds)) {
+    if (validStoredBaseline.certificateDigestSha256 !== certificate.certificateDigestSha256
+      || validStoredBaseline.manifestDigestSha256 !== certificate.manifestDigestSha256
+      || !exactStringArray(validStoredBaseline.terminalPredictionIds, certificateTerminalIds)
+      || !exactStringArray(validStoredBaseline.settlementEventIds, certificateSettlementIds)) {
       pushIssue(issues, "CERTIFICATE_CHANGED_AFTER_FIRST_OBSERVATION", "CRITICAL", "Milestone 20 identity changed after the append-only baseline was recorded.");
     }
   }
@@ -779,7 +859,7 @@ export function evaluateMlbS6pFirstTwentySettlements(
   );
 
   if (certificateValid && certificate && s6mReport && s6oReport) {
-    if (!stored.baseline) {
+    if (!validStoredBaseline) {
       baselineToPersist = makeBaseline(
         certificate,
         records.length,
@@ -788,12 +868,12 @@ export function evaluateMlbS6pFirstTwentySettlements(
         s6mReport.generatedAt,
         s6oReport.generatedAt,
       );
-    } else if (!stored.evidence) {
-      const stableForMs = Date.parse(generatedAt) - Date.parse(stored.baseline.firstObservedAt);
+    } else if (!validStoredEvidence) {
+      const stableForMs = Date.parse(generatedAt) - Date.parse(validStoredBaseline.firstObservedAt);
       if (stableForMs >= minimumStabilityMs) {
         evidenceToPersist = makeEvidence(
           certificate,
-          stored.baseline,
+          validStoredBaseline,
           s6mReport,
           s6oReport,
           selected,
@@ -807,8 +887,8 @@ export function evaluateMlbS6pFirstTwentySettlements(
     }
   }
 
-  const effectiveBaseline = stored.baseline ?? baselineToPersist;
-  const effectiveEvidence = stored.evidence ?? evidenceToPersist;
+  const effectiveBaseline = validStoredBaseline ?? baselineToPersist;
+  const effectiveEvidence = validStoredEvidence ?? evidenceToPersist;
   const stableForMs = effectiveBaseline
     ? Math.max(0, Date.parse(generatedAt) - Date.parse(effectiveBaseline.firstObservedAt))
     : null;
@@ -966,6 +1046,20 @@ function atomicWriteJson(filePath: string, value: unknown): void {
   fs.renameSync(temporary, filePath);
 }
 
+export function buildMlbS6pStoredArtifacts(
+  baselineArtifact: { value: S6pBaseline | null; error: string | null; present: boolean },
+  evidenceArtifact: { value: S6pEvidence | null; error: string | null; present: boolean },
+): StoredArtifacts {
+  return {
+    baseline: baselineArtifact.value,
+    evidence: evidenceArtifact.value,
+    baselinePresent: baselineArtifact.present,
+    evidencePresent: evidenceArtifact.present,
+    baselineReadError: baselineArtifact.error,
+    evidenceReadError: evidenceArtifact.error,
+  };
+}
+
 function writeAppendOnlyJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, {
@@ -975,14 +1069,15 @@ function writeAppendOnlyJson(filePath: string, value: unknown): void {
   });
 }
 
-function readJsonArtifact<T>(filePath: string): { value: T | null; error: string | null } {
-  if (!fs.existsSync(filePath)) return { value: null, error: null };
+function readJsonArtifact<T>(filePath: string): { value: T | null; error: string | null; present: boolean } {
+  if (!fs.existsSync(filePath)) return { value: null, error: null, present: false };
   try {
-    return { value: JSON.parse(fs.readFileSync(filePath, "utf8")) as T, error: null };
+    return { value: JSON.parse(fs.readFileSync(filePath, "utf8")) as T, error: null, present: true };
   } catch (error) {
     return {
       value: null,
       error: `Unable to read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`,
+      present: true,
     };
   }
 }
@@ -1102,12 +1197,7 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
         certificates,
         s6oReport,
         certifiedTerminalPredictionIds,
-        {
-          baseline: baselineArtifact.value,
-          evidence: evidenceArtifact.value,
-          baselineReadError: baselineArtifact.error,
-          evidenceReadError: evidenceArtifact.error,
-        },
+        buildMlbS6pStoredArtifacts(baselineArtifact, evidenceArtifact),
         {
           generatedAt: now.toISOString(),
           trigger,
@@ -1142,12 +1232,7 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
           certificates,
           s6oReport,
           certifiedTerminalPredictionIds,
-          {
-            baseline: refreshedBaseline.value,
-            evidence: refreshedEvidence.value,
-            baselineReadError: refreshedBaseline.error,
-            evidenceReadError: refreshedEvidence.error,
-          },
+          buildMlbS6pStoredArtifacts(refreshedBaseline, refreshedEvidence),
           {
             generatedAt: now.toISOString(),
             trigger,
