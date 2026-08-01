@@ -1,0 +1,58 @@
+name: Validate S6I Post-fix Clean Cohort
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-s6i-postfix-certification.ts'
+      - 'server/mlb-s6i-postfix-certification.test.ts'
+      - 'server/s5b-staging-entry.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.s6i-postfix.json'
+      - 'tsconfig.s5b-shadow.json'
+      - 'docs/S6I_PHASE4_POSTFIX_CLEAN_COHORT.md'
+      - '.github/workflows/validate-s6i-postfix-clean-cohort.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6i:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run Phase 4 certification tests
+        run: npx tsx --test server/mlb-s6i-postfix-certification.test.ts
+      - name: Type-check Phase 4 surface
+        run: npx tsc -p tsconfig.s6i-postfix.json
+      - name: Type-check complete shadow surface
+        run: npx tsc -p tsconfig.s5b-shadow.json
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Verify Phase 4 safety and integration boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F '2026-08-01T00:00:50.911Z' server/mlb-s6i-postfix-certification.ts
+          grep -F 'median_implied_probability' server/mlb-s6i-postfix-certification.ts
+          grep -F 'minimumSettledUniqueDecisions: 20' server/mlb-s6i-postfix-certification.ts
+          grep -F 'automaticPromotion: false' server/mlb-s6i-postfix-certification.ts
+          grep -F 'historicalLedgerMutation: false' server/mlb-s6i-postfix-certification.ts
+          grep -F 'startMlbS6iPostfixCertificationWorker' server/s5b-staging-entry.ts
+          grep -F '/health/s6i-postfix-certification' server/s5b-staging-entry.ts
+          grep -F '/api/mlb/ledger/v1/s6i-postfix-certification/status' server/s5b-staging-entry.ts
+          grep -F '/api/mlb/ledger/v1/s6i-postfix-certification/status' server/route-contract.extensions.json
+          grep -F 'mlb-s6i-postfix-certification.v1' dist/index.cjs
+          grep -F 'READY_FOR_HUMAN_REVIEW' dist/index.cjs

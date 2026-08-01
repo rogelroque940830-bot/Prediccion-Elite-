@@ -8,6 +8,7 @@ import { startMlbS5cShadowIngestionWorker } from "./mlb-s5c-shadow-ingestion";
 import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
 import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
 import { startMlbS5fCertificationWorker } from "./mlb-s5f-certification-service";
+import { startMlbS6iPostfixCertificationWorker } from "./mlb-s6i-postfix-certification";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -30,6 +31,11 @@ const s5fCertification = startMlbS5fCertificationWorker(
   ownershipStore,
   s5eCoverage.service,
   s5dGateMonitor.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6iPostfixCertification = startMlbS6iPostfixCertificationWorker(
+  ledgerStore,
+  ownershipStore,
   { ownerUserId: systemOwnerUserId },
 );
 
@@ -230,6 +236,48 @@ app.get("/health/s5f-certification", (_req, res) => {
   });
 });
 
+app.get("/health/s6i-postfix-certification", (_req, res) => {
+  const status = s6iPostfixCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      cohort: latest.cohort,
+      summary: latest.summary,
+      coverage: latest.coverage,
+      persistence: latest.persistence,
+      readiness: latest.readiness,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.code] = (counts[entry.code] ?? 0) + 1;
+        return counts;
+      }, {} as Record<string, number>),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
   res.json({ success: true, data: shadowCollection.service.status() });
 });
@@ -331,4 +379,47 @@ app.get("/api/mlb/ledger/v1/s5f-certification/alerts", (req, res) => {
     .filter((item) => actionable == null || item.actionable === actionable)
     .slice(0, limit);
   res.json({ success: true, data: alerts });
+});
+
+app.get("/api/mlb/ledger/v1/s6i-postfix-certification/status", (_req, res) => {
+  const status = s6iPostfixCertification.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        summary: status.latest.summary,
+        coverage: status.latest.coverage,
+        persistence: status.latest.persistence,
+        performanceObservation: status.latest.performanceObservation,
+        marketBreakdowns: status.latest.marketBreakdowns,
+        readiness: status.latest.readiness,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6i-postfix-certification/issues", (req, res) => {
+  const latest = s6iPostfixCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6I post-fix certification report has completed yet" });
+    return;
+  }
+  const severity = typeof req.query.severity === "string" ? req.query.severity.toUpperCase() : null;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  const issues = latest.issues
+    .filter((entry) => !severity || entry.severity === severity)
+    .slice(0, limit);
+  res.json({ success: true, data: issues });
 });
