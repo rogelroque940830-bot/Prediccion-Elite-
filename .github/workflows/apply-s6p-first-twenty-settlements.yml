@@ -28,9 +28,15 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           path = Path('scripts/generate-s6p-first-twenty-settlements.mjs')
           source = path.read_text()
-          path.write_text(source.replace(r'\\${', r'\${'))
+          start = source.index('const tests = `')
+          end = source.index('`;\nfs.writeFileSync("server/mlb-s6p-first-twenty-settlements-certification.test.ts", tests);', start)
+          segment = source[start:end]
+          segment = re.sub(r'\\*\$\{', r'\${', segment)
+          source = source[:start] + segment + source[end:]
+          path.write_text(source)
           PY
       - name: Generate and integrate S6P Phase 5C-5
         run: node scripts/generate-s6p-first-twenty-settlements.mjs
