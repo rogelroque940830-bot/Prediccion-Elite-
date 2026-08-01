@@ -518,7 +518,8 @@ export function buildMlbS6iPostfixCertification(
     });
   }
 
-  const cleanUniqueRows = rows.filter((row) => row.integrityStatus !== "REJECT" && !row.duplicateOfPredictionId && !row.issueCodes.includes("CHAIN_CROSSES_CUTOFF"));
+  const pureCandidateRows = rows.filter((row) => !row.duplicateOfPredictionId && !row.issueCodes.includes("CHAIN_CROSSES_CUTOFF"));
+  const cleanUniqueRows = pureCandidateRows.filter((row) => row.integrityStatus !== "REJECT");
   const cleanPassRows = cleanUniqueRows.filter((row) => row.integrityStatus === "PASS");
   const startedRows = cleanUniqueRows.filter((row) => {
     const commenceMs = Date.parse(String(row.commenceTime ?? ""));
@@ -547,7 +548,7 @@ export function buildMlbS6iPostfixCertification(
   const finalScoreCoveragePct = pct(finalScoreCaptured, settledRows.length);
 
   const checks = {
-    zeroInvalidAmericanOdds: cleanUniqueRows.every((row) => !row.issueCodes.includes("INVALID_AMERICAN_ODDS")),
+    zeroInvalidAmericanOdds: pureCandidateRows.every((row) => !row.issueCodes.includes("INVALID_AMERICAN_ODDS")),
     allCleanRowsHaveProvenance: cleanUniqueRows.length === 0 || completeProvenance === cleanUniqueRows.length,
     finalSnapshotCoverageMet: finalSnapshotCoveragePct == null || finalSnapshotCoveragePct >= MLB_S6I_REVIEW_THRESHOLDS.minimumFinalSnapshotCoveragePct,
     overdueSettlementCoverageMet: overdueSettlementCoveragePct == null || overdueSettlementCoveragePct >= MLB_S6I_REVIEW_THRESHOLDS.requiredOverdueSettlementCoveragePct,
@@ -556,10 +557,15 @@ export function buildMlbS6iPostfixCertification(
     minimumSettledSampleMet: settledRows.length >= MLB_S6I_REVIEW_THRESHOLDS.minimumSettledUniqueDecisions,
     persistenceMonotonic: countMonotonic,
   };
-  const cleanPredictionIds = new Set(cleanUniqueRows.map((row) => row.predictionId));
+  const excludedTransitionPredictionIds = new Set(
+    rows
+      .filter((row) => row.issueCodes.includes("CHAIN_CROSSES_CUTOFF"))
+      .map((row) => row.predictionId),
+  );
   const criticalOrActionable = issues.some((entry) => {
-    const appliesToPureCohort = entry.predictionId == null || cleanPredictionIds.has(entry.predictionId);
-    return appliesToPureCohort
+    const belongsToExcludedTransition = entry.predictionId != null
+      && excludedTransitionPredictionIds.has(entry.predictionId);
+    return !belongsToExcludedTransition
       && (entry.severity === "CRITICAL" || entry.code === "FINAL_MISSED_AFTER_START" || entry.code === "SETTLEMENT_OVERDUE");
   });
   const allOperationalChecks = Object.entries(checks)
@@ -595,7 +601,7 @@ export function buildMlbS6iPostfixCertification(
       integrityPass: rows.filter((row) => row.integrityStatus === "PASS").length,
       integrityReview: rows.filter((row) => row.integrityStatus === "REVIEW").length,
       integrityReject: rows.filter((row) => row.integrityStatus === "REJECT").length,
-      invalidAmericanOdds: cleanUniqueRows.filter((row) => row.issueCodes.includes("INVALID_AMERICAN_ODDS")).length,
+      invalidAmericanOdds: pureCandidateRows.filter((row) => row.issueCodes.includes("INVALID_AMERICAN_ODDS")).length,
       completeProvenance,
       finalCaptured: cleanUniqueRows.filter((row) => row.analysisStage === "FINAL").length,
       provisionalPending: cleanUniqueRows.filter((row) => row.analysisStage === "PROVISIONAL" && row.settlement.state === "PENDING").length,
