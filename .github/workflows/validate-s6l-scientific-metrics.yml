@@ -1,0 +1,61 @@
+name: Validate S6L Scientific Metrics
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-s6l-scientific-metrics.ts'
+      - 'server/mlb-s6l-scientific-metrics.test.ts'
+      - 'server/s5b-staging-entry.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.s6l-scientific-metrics.json'
+      - 'tsconfig.s5b-shadow.json'
+      - 'package.json'
+      - 'docs/S6L_PHASE5C1_SCIENTIFIC_METRICS_ENGINE.md'
+      - '.github/workflows/validate-s6l-scientific-metrics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6l:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused Phase 5C-1 tests
+        run: npx tsx --test server/mlb-s6l-scientific-metrics.test.ts
+      - name: Type-check Phase 5C-1 surface
+        run: npx tsc -p tsconfig.s6l-scientific-metrics.json
+      - name: Type-check complete shadow surface
+        run: npx tsc -p tsconfig.s5b-shadow.json
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Verify scientific and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'mlb-s6l-scientific-metrics.v1' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'MLB_S6L_MIN_BINARY_SAMPLE = 20' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'MLB_S6L_PREFERRED_BINARY_SAMPLE = 50' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'brierScore' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'logLoss' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'NO_AUTOMATIC_MODEL_CHANGE' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'automaticModelChangesAllowed: false' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'historicalLedgerMutation: false' server/mlb-s6l-scientific-metrics.ts
+          grep -F 'startMlbS6lScientificMetricsWorker' server/s5b-staging-entry.ts
+          grep -F '/health/s6l-scientific-metrics' server/s5b-staging-entry.ts
+          grep -F '/api/mlb/ledger/v1/s6l-scientific-metrics/status' server/route-contract.extensions.json
+          grep -F 'mlb-s6l-scientific-metrics.v1' dist/index.cjs
