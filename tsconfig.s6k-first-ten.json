@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-ledger-store.ts",
+    "server/mlb-ledger-ownership-store.ts",
+    "server/mlb-s5e-coverage-service.ts",
+    "server/mlb-s5e-coverage-service.aliases.d.ts",
+    "server/mlb-s6i-postfix-certification.ts",
+    "server/mlb-s6j-first-cycle-certification.ts",
+    "server/mlb-s6k-first-ten-cycles-certification.ts",
+    "server/mlb-s6k-first-ten-cycles-certification.test.ts",
+    "server/mlb-settlement-worker.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
