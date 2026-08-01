@@ -10,7 +10,7 @@ import type { MlbS6kFirstTenCyclesCertificationService } from "./mlb-s6k-first-t
 import type {
   MlbS6oFirstFiveSettlementsCertificationService,
   S6oReport,
-} from "./mlb-s6o-first-twenty-settlements-certification";
+} from "./mlb-s6o-first-five-settlements-certification";
 import {
   computeMlbS6mIndependentMetrics,
   extractMlbS6mIndependentSample,
@@ -436,6 +436,7 @@ function makeEvidence(
   s6mReport: S6mMilestoneReport,
   s6oReport: S6oReport,
   selected: S6mObservation[],
+  records: LedgerRecord[],
   generatedAt: string,
   deploymentCommit: string,
   environment: string,
@@ -796,6 +797,7 @@ export function evaluateMlbS6pFirstTwentySettlements(
           s6mReport,
           s6oReport,
           selected,
+          records,
           generatedAt,
           deploymentCommit,
           environment,
