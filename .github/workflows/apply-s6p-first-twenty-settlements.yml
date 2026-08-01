@@ -46,10 +46,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if git diff --quiet; then
-            echo 'No generated changes required.'
-            exit 0
-          fi
           git add \
             server/mlb-s6p-first-twenty-settlements-certification.ts \
             server/mlb-s6p-first-twenty-settlements-certification.test.ts \
@@ -58,7 +54,10 @@ jobs:
             tsconfig.s5b-shadow.json \
             tsconfig.s6p-first-twenty-settlements.json \
             package.json \
-            docs/S6P_PHASE5C5_FIRST_TWENTY_SETTLEMENTS.md \
-            .github/workflows/validate-s6p-first-twenty-settlements.yml
+            docs/S6P_PHASE5C5_FIRST_TWENTY_SETTLEMENTS.md
+          if git diff --cached --quiet; then
+            echo 'No generated implementation changes required.'
+            exit 0
+          fi
           git commit -m 'Implement S6P first twenty settlements certification'
           git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
