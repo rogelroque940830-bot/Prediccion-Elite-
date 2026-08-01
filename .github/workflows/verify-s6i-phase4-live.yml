@@ -1,0 +1,87 @@
+name: Verify S6I Phase 4 Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6i-phase4-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway Phase 4 worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6i-postfix-certification'
+          for attempt in $(seq 1 50); do
+            code=$(curl -sS -o artifacts/s6i-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6i-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6i-postfix-certification.v1' ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6I Phase 4 health did not become ready within the verification window.' >&2
+          cat artifacts/s6i-health.json || true
+          exit 1
+      - name: Validate live clean-cohort report
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6i-health.json', 'utf8'));
+          if (x.status !== 'healthy') throw new Error(`Unexpected health status: ${x.status}`);
+          if (x.schemaVersion !== 'mlb-s6i-postfix-certification.v1') throw new Error('Unexpected S6I schema');
+          if (!x.latest) throw new Error('Missing latest report');
+          if (!['COLLECTING', 'READY_FOR_HUMAN_REVIEW', 'ACTION_REQUIRED'].includes(x.latest.state)) throw new Error(`Unexpected state ${x.latest.state}`);
+          if (x.latest.cohort?.cutoff !== '2026-08-01T00:00:50.911Z') throw new Error('Wrong cohort cutoff');
+          if (x.latest.cohort?.requiredConsensusMethod !== 'median_implied_probability') throw new Error('Wrong consensus method');
+          if (x.safety?.mode !== 'SHADOW') throw new Error('Worker is not in shadow mode');
+          if (x.safety?.realFinancialExposure !== 0) throw new Error('Financial exposure must remain zero');
+          if (x.safety?.automaticBetPlacement !== false) throw new Error('Automatic betting must remain disabled');
+          if (x.safety?.historicalLedgerMutation !== false) throw new Error('Historical mutation must remain disabled');
+          if (x.safety?.automaticPromotion !== false) throw new Error('Automatic promotion must remain disabled');
+          const s = x.latest.summary;
+          for (const key of ['ownedLedgerRecords','postCutoffTerminalDecisions','cleanUniqueDecisions','invalidAmericanOdds','settled']) {
+            if (!Number.isFinite(Number(s?.[key]))) throw new Error(`Missing numeric summary ${key}`);
+          }
+          console.log(JSON.stringify({
+            status: x.status,
+            schemaVersion: x.schemaVersion,
+            state: x.latest.state,
+            summary: x.latest.summary,
+            coverage: x.latest.coverage,
+            issueCounts: x.latest.issueCounts,
+            persistence: x.latest.persistence,
+            readiness: x.latest.readiness,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/session.json', 'utf8'));
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6i-phase4-live-verification
+          path: artifacts/
+          retention-days: 14
