@@ -56,8 +56,7 @@ jobs:
             tsconfig.s5b-shadow.json \
             tsconfig.s6q-fifty-settlement-human-review.json \
             package.json \
-            docs/S6Q_PHASE5C6_FIFTY_SETTLEMENT_HUMAN_REVIEW.md \
-            .github/workflows/validate-s6q-fifty-settlement-human-review.yml
+            docs/S6Q_PHASE5C6_FIFTY_SETTLEMENT_HUMAN_REVIEW.md
           if git diff --cached --quiet; then
             echo 'No generated S6Q changes required.'
             exit 0
