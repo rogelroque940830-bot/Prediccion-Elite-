@@ -1,0 +1,103 @@
+name: Verify S6H Phase 3 Live Backend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6h-phase3-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway backend schema v2
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint='https://web-p0-integration.up.railway.app/api/odds/mlb/f5?date=2026-07-31'
+          mkdir -p artifacts
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o artifacts/f5.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/f5.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-f5-odds-consensus.v2' ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'Backend did not expose schema v2 within the verification window.' >&2
+          cat artifacts/f5.json || true
+          exit 1
+      - name: Validate live F5 response integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('artifacts/f5.json', 'utf8'));
+          if (payload.schemaVersion !== 'mlb-f5-odds-consensus.v2') throw new Error('Unexpected schema');
+          if (payload.consensusMethod !== 'median_implied_probability') throw new Error('Unexpected consensus method');
+          if (!Array.isArray(payload.games)) throw new Error('games must be an array');
+          const invalid = [];
+          for (const game of payload.games) {
+            if (!game.capturedAt) throw new Error(`Missing capturedAt for ${game.gameKey || game.eventId}`);
+            if (game.consensusMethod !== 'median_implied_probability') throw new Error(`Wrong game consensus method for ${game.gameKey}`);
+            const fields = [
+              ['f5Ml.home', game.f5Ml?.home],
+              ['f5Ml.away', game.f5Ml?.away],
+              ['f5Spread.homeOdds', game.f5Spread?.homeOdds],
+              ['f5Spread.awayOdds', game.f5Spread?.awayOdds],
+              ['f5Total.overOdds', game.f5Total?.overOdds],
+              ['f5Total.underOdds', game.f5Total?.underOdds],
+            ];
+            for (const [field, value] of fields) {
+              if (value == null) continue;
+              if (!Number.isFinite(value) || Math.abs(value) < 100) invalid.push({ game: game.gameKey, field, value });
+            }
+            if (!game.provenance || game.provenance.consensusMethod !== 'median_implied_probability') {
+              throw new Error(`Missing provenance for ${game.gameKey}`);
+            }
+          }
+          if (invalid.length) throw new Error(`Invalid live American prices: ${JSON.stringify(invalid)}`);
+          console.log(JSON.stringify({
+            success: payload.success,
+            schemaVersion: payload.schemaVersion,
+            consensusMethod: payload.consensusMethod,
+            games: payload.games.length,
+            invalidAmericanPrices: invalid.length,
+          }, null, 2));
+          NODE
+      - name: Verify backend session endpoint remains JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 \
+            'https://web-p0-integration.up.railway.app/api/auth/session' \
+            -o artifacts/session.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('artifacts/session.json', 'utf8'));
+          if (payload.success !== true) throw new Error(`Session endpoint failed: ${JSON.stringify(payload)}`);
+          console.log(JSON.stringify({ success: payload.success, authenticated: payload.authenticated }, null, 2));
+          NODE
+      - name: Verify frontend remains available
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 \
+            'https://prediccion-elite-p0-integration.up.railway.app/' \
+            -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s6h-phase3-live-verification
+          path: artifacts/
+          retention-days: 14
