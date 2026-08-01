@@ -1,0 +1,94 @@
+name: Verify S6L Phase 5C-1 Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6l-phase5c1-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway S6L worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6l-scientific-metrics'
+          expected_commit='f8a760cde0f8f9674285cef80cbb34b5f095b8d1'
+          for attempt in $(seq 1 80); do
+            code=$(curl -sS -o artifacts/s6l-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6l-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6l-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            state=$(node -e "try{const x=require('./artifacts/s6l-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema commit=$commit state=$state"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6l-scientific-metrics.v1' ] && [ "$commit" = "$expected_commit" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6L Phase 5C-1 did not become ready within the verification window.' >&2
+          cat artifacts/s6l-health.json || true
+          exit 1
+      - name: Validate live Phase 5C-1 state and safety
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6l-health.json', 'utf8'));
+          if (x.status !== 'healthy') throw new Error(`Unexpected health ${x.status}`);
+          if (x.schemaVersion !== 'mlb-s6l-scientific-metrics.v1') throw new Error('Unexpected schema');
+          const state = x.latest?.state;
+          if (!['INSUFFICIENT_SAMPLE', 'COLLECTING', 'READY_FOR_REVIEW'].includes(state)) {
+            throw new Error(`Unexpected or actionable state: ${state}`);
+          }
+          const sample = x.latest?.sample;
+          const overall = x.latest?.overall;
+          const readiness = x.latest?.readiness;
+          if (!sample || !overall || !readiness) throw new Error('Missing scientific summary');
+          if (sample.ownedLedgerRecords < 1) throw new Error('Ledger sample is empty');
+          if (sample.binaryScoredDecisions < 0 || sample.independentlyCertifiedDecisions < 0) throw new Error('Invalid sample counts');
+          if (overall.brierScore != null && (overall.brierScore < 0 || overall.brierScore > 1)) throw new Error('Invalid Brier Score');
+          if (overall.logLoss != null && overall.logLoss < 0) throw new Error('Invalid log loss');
+          if (readiness.automaticModelChangesAllowed !== false) throw new Error('Automatic model changes enabled');
+          if (readiness.recommendation !== 'NO_AUTOMATIC_MODEL_CHANGE') throw new Error('Unexpected recommendation');
+          if (x.latest?.persistence?.countMonotonic !== true) throw new Error('Ledger persistence is not monotonic');
+          if (x.safety?.mode !== 'SHADOW') throw new Error('Not in SHADOW mode');
+          if (x.safety?.realFinancialExposure !== 0) throw new Error('Financial exposure is not zero');
+          if (x.safety?.automaticBetPlacement !== false) throw new Error('Automatic betting enabled');
+          if (x.safety?.historicalLedgerMutation !== false) throw new Error('Historical mutation enabled');
+          if (x.safety?.automaticPromotion !== false) throw new Error('Automatic promotion enabled');
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state,
+            sample,
+            overall,
+            coverage: x.latest.coverage,
+            readiness,
+            persistence: x.latest.persistence,
+            safety: x.safety,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const x = require('./artifacts/session.json');
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6l-phase5c1-live-verification
+          path: artifacts/
+          retention-days: 14
