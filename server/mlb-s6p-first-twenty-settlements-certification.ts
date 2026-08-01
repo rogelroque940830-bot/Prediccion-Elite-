@@ -1046,6 +1046,20 @@ function atomicWriteJson(filePath: string, value: unknown): void {
   fs.renameSync(temporary, filePath);
 }
 
+export function buildMlbS6pStoredArtifacts(
+  baselineArtifact: { value: S6pBaseline | null; error: string | null; present: boolean },
+  evidenceArtifact: { value: S6pEvidence | null; error: string | null; present: boolean },
+): StoredArtifacts {
+  return {
+    baseline: baselineArtifact.value,
+    evidence: evidenceArtifact.value,
+    baselinePresent: baselineArtifact.present,
+    evidencePresent: evidenceArtifact.present,
+    baselineReadError: baselineArtifact.error,
+    evidenceReadError: evidenceArtifact.error,
+  };
+}
+
 function writeAppendOnlyJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, {
@@ -1183,14 +1197,7 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
         certificates,
         s6oReport,
         certifiedTerminalPredictionIds,
-        {
-          baseline: baselineArtifact.value,
-          evidence: evidenceArtifact.value,
-          baselinePresent: baselineArtifact.present,
-          evidencePresent: evidenceArtifact.present,
-          baselineReadError: baselineArtifact.error,
-          evidenceReadError: evidenceArtifact.error,
-        },
+        buildMlbS6pStoredArtifacts(baselineArtifact, evidenceArtifact),
         {
           generatedAt: now.toISOString(),
           trigger,
@@ -1225,12 +1232,7 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
           certificates,
           s6oReport,
           certifiedTerminalPredictionIds,
-          {
-            baseline: refreshedBaseline.value,
-            evidence: refreshedEvidence.value,
-            baselineReadError: refreshedBaseline.error,
-            evidenceReadError: refreshedEvidence.error,
-          },
+          buildMlbS6pStoredArtifacts(refreshedBaseline, refreshedEvidence),
           {
             generatedAt: now.toISOString(),
             trigger,

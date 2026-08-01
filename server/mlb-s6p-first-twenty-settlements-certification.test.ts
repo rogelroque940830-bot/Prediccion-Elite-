@@ -11,6 +11,7 @@ import {
 } from "./mlb-s6m-statistical-milestones";
 import type { S6oReport } from "./mlb-s6o-first-five-settlements-certification";
 import {
+  buildMlbS6pStoredArtifacts,
   evaluateMlbS6pFirstTwentySettlements,
   type S6pBaseline,
   type S6pEvidence,
@@ -249,4 +250,16 @@ test("rejects every falsy but present evidence JSON artifact without synthesizin
     assert.equal(result.report.readiness.minimumSample20Certified, false);
     assert.equal(result.evidenceToPersist, null);
   }
+});
+
+
+test("preserves present-but-null artifacts when rebuilding refreshed worker state", () => {
+  const stored = buildMlbS6pStoredArtifacts(
+    { value: null, error: null, present: true },
+    { value: null, error: null, present: true },
+  );
+  assert.equal(stored.baseline, null);
+  assert.equal(stored.evidence, null);
+  assert.equal(stored.baselinePresent, true);
+  assert.equal(stored.evidencePresent, true);
 });
