@@ -25,8 +25,6 @@ S6P verifies the immutable first-20 manifest, FINAL stages, unique analytical id
 
 At 20 results, `preliminaryReviewAvailable=true` only after certification. The sample remains insufficient for model conclusions: `sampleAdequateForModelConclusions=false`, `conclusionsAllowed=false`, `automaticModelChangesAllowed=false`, recommendation `NO_AUTOMATIC_MODEL_CHANGE`.
 
-The preliminary report may identify questions for later investigation, but it cannot authorize parameter, market, signal, threshold, settlement, or stake changes.
-
 ## Runtime
 
 Enabled by default only in `p0-integration`, five-minute interval and stability window. Public health: `GET /health/s6p-first-twenty-settlements`. Protected status/evidence routes are under `/api/mlb/ledger/v1/s6p-first-twenty-settlements`.
