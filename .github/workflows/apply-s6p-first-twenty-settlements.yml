@@ -23,6 +23,15 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - name: Normalize nested template escaping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/generate-s6p-first-twenty-settlements.mjs')
+          source = path.read_text()
+          path.write_text(source.replace(r'\\${', r'\${'))
+          PY
       - name: Generate and integrate S6P Phase 5C-5
         run: node scripts/generate-s6p-first-twenty-settlements.mjs
       - name: Commit generated implementation
