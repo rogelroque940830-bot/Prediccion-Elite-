@@ -28,6 +28,10 @@ At `READY_FOR_HUMAN_REVIEW`, human interpretation is allowed, but `automaticMode
 
 `conclusionsAllowed=true` refers only to documented human interpretation of the certified evidence. It never grants permission to mutate the active predictor, stake policy, ledger, or settlement rules.
 
+## Operational invariant
+
+S6Q may advance only through persisted append-only evidence. An in-memory calculation, a concurrent write race, or an unavailable prerequisite cannot produce `READY_FOR_HUMAN_REVIEW`.
+
 ## Runtime
 
 Enabled by default only in `p0-integration`, with a five-minute interval and stability window. Public health: `GET /health/s6q-fifty-settlement-human-review`. Protected status/evidence routes are under `/api/mlb/ledger/v1/s6q-fifty-settlement-human-review`.
