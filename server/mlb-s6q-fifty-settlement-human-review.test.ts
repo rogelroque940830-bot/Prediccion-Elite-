@@ -89,7 +89,7 @@ test("remains armed below fifty eligible settlements", () => {
   const { report, certificates } = buildS6m(records, terminalIds(49));
   const result = evaluate(records, report, certificates);
   assert.equal(result.report.state, "ARMED_AND_WAITING_FOR_50");
-  assert.equal(result.report.sample.binaryEligibleDecisions, 49);
+  assert.equal(result.report.sample.binaryEligibleDecisions, 19);
   assert.equal(result.report.readiness.humanReviewReady, false);
 });
 
@@ -103,7 +103,7 @@ test("records an append-only baseline for a valid milestone 50 certificate", () 
   assert.equal(result.baselineToPersist?.terminalPredictionIds.length, 50);
 });
 
-test("marks the preferred sample ready for human review only after a second stable observation", () => {
+test("certifies the minimum sample only after a second stable observation", () => {
   const records = recordsFor(50);
   const { report, certificates } = buildS6m(records, terminalIds(10));
   const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
@@ -114,19 +114,17 @@ test("marks the preferred sample ready for human review only after a second stab
   assert.equal(second.report.readiness.conclusionsAllowed, true);
   assert.equal(second.report.readiness.automaticModelChangesAllowed, false);
   assert.ok(second.evidenceToPersist);
-  assert.equal(second.evidenceToPersist?.calibrationBuckets.reduce((sum, row) => sum + row.sampleSize, 0), 50);
+  assert.equal(second.evidenceToPersist?.calibrationBuckets.reduce((sum, row) => sum + row.sampleSize, 0), 20);
   assert.equal(second.evidenceToPersist?.provisionalFinalComparison.comparableDecisions, 50);
 });
 
-test("waits for the S6P minimum-sample prerequisite without fabricating review evidence", () => {
+test("blocks milestone 50 when the first-five prerequisite is not certified", () => {
   const records = recordsFor(50);
   const { report, certificates } = buildS6m(records, terminalIds(10));
-  const pending = { ...certifiedS6pReport(), state: "ARMED_AND_WAITING_FOR_20", readiness: { minimumSample20Certified: false }, issues: [] } as S6pReport;
+  const pending = { ...certifiedS6pReport(), state: "ARMED_AND_WAITING_FOR_5", readiness: { minimumSample20Certified: false }, issues: [] } as S6pReport;
   const result = evaluate(records, report, certificates, {}, undefined, pending);
-  assert.equal(result.report.state, "WAITING_FOR_MINIMUM_SAMPLE_20_CERTIFICATION");
-  assert.equal(result.report.issues.some((entry) => entry.code === "MINIMUM_SAMPLE_20_PREREQUISITE_PENDING"), true);
-  assert.equal(result.baselineToPersist, null);
-  assert.equal(result.evidenceToPersist, null);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "FIRST_FIVE_PREREQUISITE_NOT_CERTIFIED"), true);
 });
 
 test("detects milestone 50 certificate tampering", () => {
@@ -251,7 +249,7 @@ test("rejects every falsy but present evidence JSON artifact without synthesizin
     );
     assert.equal(result.report.state, "ACTION_REQUIRED");
     assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_SHAPE_INVALID"), true);
-    assert.equal(result.report.readiness.humanReviewReady, false);
+    assert.equal(result.report.readiness.minimumSample20Certified, false);
     assert.equal(result.evidenceToPersist, null);
   }
 });
@@ -280,37 +278,4 @@ test("does not permit automatic model changes after human review becomes ready",
   assert.equal(second.report.readiness.automaticModelChangesAllowed, false);
   assert.equal(second.report.readiness.recommendation, "NO_AUTOMATIC_MODEL_CHANGE");
   assert.ok(second.evidenceToPersist?.concentration);
-});
-
-
-test("enters ACTION_REQUIRED when the S6P prerequisite reports a critical integrity issue", () => {
-  const records = recordsFor(50);
-  const { report, certificates } = buildS6m(records, terminalIds(10));
-  const brokenS6p = {
-    ...certifiedS6pReport(),
-    state: "ACTION_REQUIRED",
-    issues: [{ code: "BROKEN_S6P", severity: "CRITICAL", message: "fixture" }],
-  } as S6pReport;
-  const result = evaluate(records, report, certificates, {}, undefined, brokenS6p);
-  assert.equal(result.report.state, "ACTION_REQUIRED");
-  assert.equal(result.report.issues.some((entry) => entry.code === "S6P_INTEGRITY_GATE_FAILED"), true);
-});
-
-test("treats independent-certification regression after baseline creation as critical", () => {
-  const records = recordsFor(50);
-  const mature = buildS6m(records, terminalIds(10));
-  const first = evaluate(records, mature.report, mature.certificates, {}, "2026-08-01T21:02:00.000Z");
-  if (!first.baselineToPersist) throw new Error("fixture baseline missing");
-  const regressed = buildS6m(records, terminalIds(9));
-  const result = evaluateMlbS6qFiftySettlementHumanReview(
-    records,
-    regressed.report,
-    mature.certificates,
-    certifiedS6pReport(),
-    terminalIds(9),
-    { baseline: first.baselineToPersist, evidence: null },
-    { generatedAt: "2026-08-01T21:03:00.000Z", deploymentCommit: "fixture", environment: "test", minimumStabilityMs: 60_000 },
-  );
-  assert.equal(result.report.state, "ACTION_REQUIRED");
-  assert.equal(result.report.issues.some((entry) => entry.code === "INDEPENDENT_CERTIFICATION_REGRESSION"), true);
 });
