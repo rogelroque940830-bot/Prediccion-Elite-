@@ -1,0 +1,86 @@
+name: Verify S6J Phase 5A Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6j-phase5a-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway S6J worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6j-first-cycle'
+          expected_commit='3d18564bd3efd2bced93b455f0ddecfc138d6c87'
+          for attempt in $(seq 1 60); do
+            code=$(curl -sS -o artifacts/s6j-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6j-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6j-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            state=$(node -e "try{const x=require('./artifacts/s6j-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema commit=$commit state=$state"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6j-first-clean-cycle.v1' ] && [ "$commit" = "$expected_commit" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6J Phase 5A did not become ready within the verification window.' >&2
+          cat artifacts/s6j-health.json || true
+          exit 1
+      - name: Validate live Phase 5A state and safety
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6j-health.json', 'utf8'));
+          if (x.status !== 'healthy') throw new Error(`Unexpected health ${x.status}`);
+          if (x.schemaVersion !== 'mlb-s6j-first-clean-cycle.v1') throw new Error('Unexpected schema');
+          const state = x.latest?.state;
+          const allowed = [
+            'WAITING_FOR_TARGET',
+            'WAITING_FOR_FINAL',
+            'WAITING_FOR_SETTLEMENT',
+            'WAITING_FOR_OFFICIAL_VERIFICATION',
+            'WAITING_FOR_CLOSING',
+            'CERTIFIED',
+          ];
+          if (!allowed.includes(state)) throw new Error(`Unexpected or actionable state: ${state}`);
+          if (x.latest?.criticalIssues !== 0) throw new Error(`Critical issues present: ${x.latest?.criticalIssues}`);
+          if (x.safety?.mode !== 'SHADOW') throw new Error('Not in SHADOW mode');
+          if (x.safety?.realFinancialExposure !== 0) throw new Error('Financial exposure is not zero');
+          if (x.safety?.automaticBetPlacement !== false) throw new Error('Automatic betting enabled');
+          if (x.safety?.historicalLedgerMutation !== false) throw new Error('Historical mutation enabled');
+          if (x.safety?.automaticPromotion !== false) throw new Error('Automatic promotion enabled');
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state,
+            latest: x.latest,
+            safety: x.safety,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const x = require('./artifacts/session.json');
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6j-phase5a-live-verification
+          path: artifacts/
+          retention-days: 14
