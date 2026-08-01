@@ -9,6 +9,7 @@ import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
 import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
 import { startMlbS5fCertificationWorker } from "./mlb-s5f-certification-service";
 import { startMlbS6iPostfixCertificationWorker } from "./mlb-s6i-postfix-certification";
+import { startMlbS6jFirstCycleCertificationWorker } from "./mlb-s6j-first-cycle-certification";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -36,6 +37,12 @@ const s5fCertification = startMlbS5fCertificationWorker(
 const s6iPostfixCertification = startMlbS6iPostfixCertificationWorker(
   ledgerStore,
   ownershipStore,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6jFirstCycleCertification = startMlbS6jFirstCycleCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
   { ownerUserId: systemOwnerUserId },
 );
 
@@ -276,6 +283,86 @@ app.get("/health/s6i-postfix-certification", (_req, res) => {
       stakePolicyChanged: false,
     },
   });
+});
+
+app.get("/health/s6j-first-cycle", (_req, res) => {
+  const status = s6jFirstCycleCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      chainLength: latest.lifecycle.chainLength,
+      provisionalStages: latest.lifecycle.provisionalStages,
+      finalStages: latest.lifecycle.finalStages,
+      settled: latest.lifecycle.settled,
+      officialVerified: latest.officialVerification.gameFinal && latest.lifecycle.officialGradeResult != null,
+      comparableClosingCaptured: latest.lifecycle.comparableClosingCaptured,
+      clvCaptured: latest.lifecycle.clvCaptured,
+      criticalIssues: latest.issues.filter((entry) => entry.severity === "CRITICAL").length,
+      checks: latest.checks,
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6j-first-cycle/status", (_req, res) => {
+  const status = s6jFirstCycleCertification.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        target: status.latest.target,
+        lifecycle: status.latest.lifecycle,
+        checks: status.latest.checks,
+        persistence: status.latest.persistence,
+        issueCounts: status.latest.issues.reduce((counts, entry) => {
+          counts[entry.code] = (counts[entry.code] ?? 0) + 1;
+          return counts;
+        }, {} as Record<string, number>),
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6j-first-cycle/evidence", (_req, res) => {
+  const latest = s6jFirstCycleCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6J first-cycle report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
 });
 
 app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
