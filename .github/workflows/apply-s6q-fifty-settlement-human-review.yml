@@ -23,6 +23,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - name: Patch generator assumptions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/generate-s6q-fifty-settlement-human-review.mjs')
+          source = path.read_text()
+          anchor = '  ["MINIMUM_SAMPLE_20_CERTIFIED", "READY_FOR_HUMAN_REVIEW"],'
+          insertion = '  ["ARMED_AND_WAITING_FOR_20", "ARMED_AND_WAITING_FOR_50"],\n' + anchor
+          if insertion not in source:
+            source = source.replace(anchor, insertion)
+          path.write_text(source)
+          PY
       - name: Generate and integrate S6Q Phase 5C-6
         run: node scripts/generate-s6q-fifty-settlement-human-review.mjs
       - name: Commit generated implementation
