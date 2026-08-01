@@ -10,6 +10,7 @@ import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
 import { startMlbS5fCertificationWorker } from "./mlb-s5f-certification-service";
 import { startMlbS6iPostfixCertificationWorker } from "./mlb-s6i-postfix-certification";
 import { startMlbS6jFirstCycleCertificationWorker } from "./mlb-s6j-first-cycle-certification";
+import { startMlbS6kFirstTenCyclesCertificationWorker } from "./mlb-s6k-first-ten-cycles-certification";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -40,6 +41,12 @@ const s6iPostfixCertification = startMlbS6iPostfixCertificationWorker(
   { ownerUserId: systemOwnerUserId },
 );
 const s6jFirstCycleCertification = startMlbS6jFirstCycleCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6kFirstTenCyclesCertification = startMlbS6kFirstTenCyclesCertificationWorker(
   ledgerStore,
   ownershipStore,
   s5eCoverage.service,
@@ -325,6 +332,77 @@ app.get("/health/s6j-first-cycle", (_req, res) => {
       stakePolicyChanged: false,
     },
   });
+});
+
+app.get("/health/s6k-first-ten-cycles", (_req, res) => {
+  const status = s6kFirstTenCyclesCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      summary: latest.summary,
+      readyForAnalysis: latest.readyForAnalysis,
+      persistence: latest.persistence,
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/status", (_req, res) => {
+  const status = s6kFirstTenCyclesCertification.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        summary: status.latest.summary,
+        cycles: status.latest.cycles,
+        persistence: status.latest.persistence,
+        readyForAnalysis: status.latest.readyForAnalysis,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/evidence", (_req, res) => {
+  const latest = s6kFirstTenCyclesCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6K first-ten-cycle report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
 });
 
 app.get("/api/mlb/ledger/v1/s6j-first-cycle/status", (_req, res) => {
