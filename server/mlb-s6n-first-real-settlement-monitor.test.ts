@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 import type { LedgerRecord } from "./mlb-ledger-store";
 import { MLB_S6I_CLEAN_COHORT_CUTOFF } from "./mlb-s6i-postfix-certification";
@@ -318,4 +319,42 @@ test("detects tampering after S6N evidence has been certified", () => {
   );
   assert.equal(third.report.state, "ACTION_REQUIRED");
   assert.equal(third.report.issues.some((entry) => entry.code === "EVIDENCE_DIGEST_INVALID"), true);
+});
+
+
+function recomputeDigest<T extends Record<string, any>>(value: T, digestKey: string): string {
+  const core = Object.fromEntries(Object.entries(value).filter(([key]) => key !== digestKey));
+  return crypto.createHash("sha256").update(JSON.stringify(core)).digest("hex");
+}
+
+test("rejects false certificate checks even when the certificate digest is recomputed", () => {
+  const records = pairedDecision(0, "WIN");
+  const { report, certificates } = buildS6m(records, ["final-0"]);
+  const changed = structuredClone(certificates);
+  if (!changed["1"]) throw new Error("fixture certificate missing");
+  (changed["1"].checks as any).allSettled = false;
+  changed["1"].certificateDigestSha256 = recomputeDigest(changed["1"] as any, "certificateDigestSha256");
+  const result = evaluate(records, report, changed);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "CERTIFICATE_CHECK_FLAGS_INVALID"), true);
+});
+
+test("rejects evidence with a broken baseline link even when its digest is recomputed", () => {
+  const records = pairedDecision(0, "WIN");
+  const { report, certificates } = buildS6m(records, ["final-0"]);
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T20:02:00.000Z");
+  const second = evaluate(records, report, certificates, { baseline: first.baselineToPersist }, "2026-08-01T20:03:00.000Z");
+  const changed = structuredClone(second.evidenceToPersist);
+  if (!changed) throw new Error("fixture evidence missing");
+  changed.baselineDigestSha256 = "f".repeat(64);
+  changed.evidenceDigestSha256 = recomputeDigest(changed as any, "evidenceDigestSha256");
+  const result = evaluate(
+    records,
+    report,
+    certificates,
+    { baseline: first.baselineToPersist, evidence: changed },
+    "2026-08-01T20:04:00.000Z",
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_BASELINE_LINK_INVALID"), true);
 });

@@ -8,7 +8,6 @@ import {
 } from "./mlb-ledger-ownership-store";
 import type { MlbS6kFirstTenCyclesCertificationService } from "./mlb-s6k-first-ten-cycles-certification";
 import {
-  computeMlbS6mIndependentMetrics,
   extractMlbS6mIndependentSample,
   MLB_S6M_CERTIFICATE_VERSION,
   type MlbS6mStatisticalMilestonesService,
@@ -221,6 +220,64 @@ function canonicalDigest(value: unknown): string {
   return crypto.createHash("sha256").update(JSON.stringify(canonicalize(value))).digest("hex");
 }
 
+function round(value: number, digits = 6): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function wilson95(wins: number, total: number): { low: number; high: number } | null {
+  if (total <= 0) return null;
+  const z = 1.959963984540054;
+  const p = wins / total;
+  const denominator = 1 + (z * z) / total;
+  const center = (p + (z * z) / (2 * total)) / denominator;
+  const margin = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * total)) / total) / denominator;
+  return {
+    low: round(Math.max(0, center - margin)),
+    high: round(Math.min(1, center + margin)),
+  };
+}
+
+function americanWinProfit(odds: number): number {
+  return odds > 0 ? odds / 100 : 100 / Math.abs(odds);
+}
+
+function computeFirstDecisionMetrics(entry: S6mManifestEntry): S6mMilestoneCertificate["metrics"] | null {
+  if (entry.outcome !== 0 && entry.outcome !== 1) return null;
+  const probability = entry.modelProbability;
+  if (!Number.isFinite(probability) || probability <= 0 || probability >= 1) return null;
+  const wins = entry.outcome;
+  const losses = 1 - entry.outcome;
+  const bounded = Math.min(1 - 1e-15, Math.max(1e-15, probability));
+  const brier = (probability - entry.outcome) ** 2;
+  const logLoss = -(entry.outcome * Math.log(bounded) + (1 - entry.outcome) * Math.log(1 - bounded));
+  const calibrationGap = Math.abs(entry.outcome - probability);
+  const profit = entry.result === "WIN" ? americanWinProfit(entry.oddsAmerican) : -1;
+  const clvAvailable = entry.clvPp == null ? 0 : 1;
+  return {
+    observations: 1,
+    binaryDecisions: 1,
+    wins,
+    losses,
+    pushes: 0,
+    voids: 0,
+    meanModelProbability: round(probability),
+    observedWinRate: entry.outcome,
+    winRateWilson95: wilson95(wins, 1),
+    brierScore: round(brier),
+    logLoss: round(logLoss),
+    expectedCalibrationError: round(calibrationGap),
+    maximumCalibrationError: round(calibrationGap),
+    flatStakeExposureUnits: 1,
+    flatStakeProfitUnits: round(profit, 4),
+    flatStakeRoiPct: round(profit * 100, 4),
+    clvAvailable,
+    clvCoveragePct: clvAvailable ? 100 : 0,
+    meanClvPp: entry.clvPp == null ? null : round(entry.clvPp, 4),
+    medianClvPp: entry.clvPp == null ? null : round(entry.clvPp, 4),
+  };
+}
+
 function certificateCore(certificate: S6mMilestoneCertificate): Omit<S6mMilestoneCertificate, "certificateDigestSha256"> {
   const { certificateDigestSha256: _ignored, ...core } = certificate;
   return core;
@@ -428,6 +485,10 @@ export function evaluateMlbS6nFirstRealSettlement(
       certificateIntegrity = false;
       pushIssue(issues, "CERTIFICATE_SAMPLE_SIZE_INVALID", "CRITICAL", "Milestone 1 certificate must contain exactly one binary decision.");
     }
+    if (!Object.values(certificate.checks).every((value) => value === true)) {
+      certificateIntegrity = false;
+      pushIssue(issues, "CERTIFICATE_CHECK_FLAGS_INVALID", "CRITICAL", "Milestone 1 certificate contains a failed or missing integrity assertion.");
+    }
     if (sha256(certificateCore(certificate)) !== certificate.certificateDigestSha256) {
       certificateIntegrity = false;
       pushIssue(issues, "CERTIFICATE_DIGEST_MISMATCH", "CRITICAL", "Milestone 1 certificate digest does not match its contents.");
@@ -447,8 +508,8 @@ export function evaluateMlbS6nFirstRealSettlement(
         "The current deterministic first eligible binary decision differs from the immutable milestone 1 manifest.",
       );
     }
-    const expectedMetrics = sample.binaryObservations[0]
-      ? computeMlbS6mIndependentMetrics([sample.binaryObservations[0]])
+    const expectedMetrics = certificate.manifest[0]
+      ? computeFirstDecisionMetrics(certificate.manifest[0])
       : null;
     if (!expectedMetrics || canonicalDigest(expectedMetrics) !== canonicalDigest(certificate.metrics)) {
       certificateIntegrity = false;
@@ -505,11 +566,45 @@ export function evaluateMlbS6nFirstRealSettlement(
       || sha256(baselineCore(stored.baseline)) !== stored.baseline.baselineDigestSha256) {
       pushIssue(issues, "BASELINE_DIGEST_INVALID", "CRITICAL", "The append-only first-observation baseline failed integrity validation.");
     }
+    if (!Number.isFinite(Date.parse(stored.baseline.firstObservedAt))
+      || stored.baseline.result !== "WIN" && stored.baseline.result !== "LOSS"
+      || stored.baseline.ownedLedgerRecordsAtFirstObservation < 1) {
+      pushIssue(issues, "BASELINE_SEMANTICS_INVALID", "CRITICAL", "The append-only baseline contains invalid observation metadata.");
+    }
   }
   if (stored.evidence) {
     if (stored.evidence.schemaVersion !== MLB_S6N_EVIDENCE_VERSION
       || sha256(evidenceCore(stored.evidence)) !== stored.evidence.evidenceDigestSha256) {
       pushIssue(issues, "EVIDENCE_DIGEST_INVALID", "CRITICAL", "The append-only certification evidence failed integrity validation.");
+    }
+    if (!stored.baseline) {
+      pushIssue(issues, "EVIDENCE_WITHOUT_BASELINE", "CRITICAL", "S6N evidence exists without its append-only first-observation baseline.");
+    } else {
+      const firstObservedMs = Date.parse(stored.evidence.stability.firstObservedAt);
+      const confirmedMs = Date.parse(stored.evidence.stability.confirmedAt);
+      const measuredStableMs = confirmedMs - firstObservedMs;
+      const evidenceLinksMatch = stored.evidence.baselineDigestSha256 === stored.baseline.baselineDigestSha256
+        && stored.evidence.stability.firstObservedAt === stored.baseline.firstObservedAt
+        && Number.isFinite(firstObservedMs)
+        && Number.isFinite(confirmedMs)
+        && measuredStableMs >= 0
+        && stored.evidence.stability.stableForMs === measuredStableMs
+        && stored.evidence.stability.minimumRequiredMs > 0
+        && measuredStableMs >= stored.evidence.stability.minimumRequiredMs;
+      if (!evidenceLinksMatch) {
+        pushIssue(issues, "EVIDENCE_BASELINE_LINK_INVALID", "CRITICAL", "S6N evidence does not preserve a valid stability link to its append-only baseline.");
+      }
+    }
+    if (!Object.values(stored.evidence.checks).every((value) => value === true)) {
+      pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6N evidence contains a failed or missing verification assertion.");
+    }
+    if (certificate && (
+      canonicalDigest(stored.evidence.firstDecision) !== canonicalDigest(certificate.manifest[0])
+      || canonicalDigest(stored.evidence.metrics) !== canonicalDigest(certificate.metrics)
+      || stored.evidence.certificateDigestSha256 !== certificate.certificateDigestSha256
+      || stored.evidence.manifestDigestSha256 !== certificate.manifestDigestSha256
+    )) {
+      pushIssue(issues, "EVIDENCE_CERTIFICATE_LINK_INVALID", "CRITICAL", "S6N evidence no longer matches the immutable milestone 1 certificate and metrics.");
     }
   }
 
