@@ -79,8 +79,8 @@ function certifiedS6oReport(): S6oReport {
   } as S6oReport;
 }
 
-function evaluate(records: LedgerRecord[], report: S6mMilestoneReport | null, certificates: S6mCertificateMap, stored: { baseline?: S6pBaseline | null; evidence?: S6pEvidence | null; baselineReadError?: string | null; evidenceReadError?: string | null } = {}, generatedAt = "2026-08-01T21:02:00.000Z", s6oReport: S6oReport | null = certifiedS6oReport(), previousOwnedLedgerRecords: number | null = null) {
-  return evaluateMlbS6pFirstTwentySettlements(records, report, certificates, s6oReport, terminalIds(20), { baseline: stored.baseline ?? null, evidence: stored.evidence ?? null, baselineReadError: stored.baselineReadError, evidenceReadError: stored.evidenceReadError }, { generatedAt, deploymentCommit: "fixture", environment: "test", minimumStabilityMs: 60_000, previousOwnedLedgerRecords });
+function evaluate(records: LedgerRecord[], report: S6mMilestoneReport | null, certificates: S6mCertificateMap, stored: { baseline?: S6pBaseline | null; evidence?: S6pEvidence | null; baselinePresent?: boolean; evidencePresent?: boolean; baselineReadError?: string | null; evidenceReadError?: string | null } = {}, generatedAt = "2026-08-01T21:02:00.000Z", s6oReport: S6oReport | null = certifiedS6oReport(), previousOwnedLedgerRecords: number | null = null) {
+  return evaluateMlbS6pFirstTwentySettlements(records, report, certificates, s6oReport, terminalIds(20), { baseline: stored.baseline ?? null, evidence: stored.evidence ?? null, baselinePresent: stored.baselinePresent, evidencePresent: stored.evidencePresent, baselineReadError: stored.baselineReadError, evidenceReadError: stored.evidenceReadError }, { generatedAt, deploymentCommit: "fixture", environment: "test", minimumStabilityMs: 60_000, previousOwnedLedgerRecords });
 }
 
 test("remains armed below twenty eligible settlements", () => {
@@ -210,4 +210,43 @@ test("turns syntactically valid but malformed evidence into ACTION_REQUIRED with
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_SHAPE_INVALID"), true);
   assert.equal(result.evidenceToPersist, null);
+});
+
+
+test("rejects every falsy but present baseline JSON artifact", () => {
+  const records = recordsFor(20);
+  const { report, certificates } = buildS6m(records, terminalIds(20));
+  for (const malformed of [false, 0, "", null]) {
+    const result = evaluate(records, report, certificates, {
+      baseline: malformed as unknown as S6pBaseline,
+      baselinePresent: true,
+    });
+    assert.equal(result.report.state, "ACTION_REQUIRED");
+    assert.equal(result.report.issues.some((entry) => entry.code === "BASELINE_SHAPE_INVALID"), true);
+    assert.equal(result.baselineToPersist, null);
+  }
+});
+
+test("rejects every falsy but present evidence JSON artifact without synthesizing certification", () => {
+  const records = recordsFor(20);
+  const { report, certificates } = buildS6m(records, terminalIds(20));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  if (!first.baselineToPersist) throw new Error("fixture baseline missing");
+  for (const malformed of [false, 0, "", null]) {
+    const result = evaluate(
+      records,
+      report,
+      certificates,
+      {
+        baseline: first.baselineToPersist,
+        evidence: malformed as unknown as S6pEvidence,
+        evidencePresent: true,
+      },
+      "2026-08-01T21:03:00.000Z",
+    );
+    assert.equal(result.report.state, "ACTION_REQUIRED");
+    assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_SHAPE_INVALID"), true);
+    assert.equal(result.report.readiness.minimumSample20Certified, false);
+    assert.equal(result.evidenceToPersist, null);
+  }
 });

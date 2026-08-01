@@ -237,6 +237,8 @@ type S6pOptions = {
 type StoredArtifacts = {
   baseline: S6pBaseline | null;
   evidence: S6pEvidence | null;
+  baselinePresent?: boolean;
+  evidencePresent?: boolean;
   baselineReadError?: string | null;
   evidenceReadError?: string | null;
 };
@@ -572,6 +574,10 @@ export function evaluateMlbS6pFirstTwentySettlements(
   const countMonotonic = previousCount == null || records.length >= previousCount;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
   const selected = sample.binaryObservations.slice(0, MLB_S6P_TARGET_SIZE);
+  const baselinePresent = stored.baselinePresent
+    ?? (stored.baseline !== null && stored.baseline !== undefined);
+  const evidencePresent = stored.evidencePresent
+    ?? (stored.evidence !== null && stored.evidence !== undefined);
   const issues: S6pReport["issues"] = [];
   let baselineToPersist: S6pBaseline | null = null;
   let evidenceToPersist: S6pEvidence | null = null;
@@ -762,7 +768,7 @@ export function evaluateMlbS6pFirstTwentySettlements(
   const validStoredBaseline = isS6pBaselineArtifactShape(stored.baseline) ? stored.baseline : null;
   const validStoredEvidence = isS6pEvidenceArtifactShape(stored.evidence) ? stored.evidence : null;
 
-  if (stored.baseline && !validStoredBaseline) {
+  if (baselinePresent && !validStoredBaseline) {
     pushIssue(
       issues,
       "BASELINE_SHAPE_INVALID",
@@ -785,7 +791,7 @@ export function evaluateMlbS6pFirstTwentySettlements(
     }
   }
 
-  if (stored.evidence && !validStoredEvidence) {
+  if (evidencePresent && !validStoredEvidence) {
     pushIssue(
       issues,
       "EVIDENCE_SHAPE_INVALID",
@@ -1049,14 +1055,15 @@ function writeAppendOnlyJson(filePath: string, value: unknown): void {
   });
 }
 
-function readJsonArtifact<T>(filePath: string): { value: T | null; error: string | null } {
-  if (!fs.existsSync(filePath)) return { value: null, error: null };
+function readJsonArtifact<T>(filePath: string): { value: T | null; error: string | null; present: boolean } {
+  if (!fs.existsSync(filePath)) return { value: null, error: null, present: false };
   try {
-    return { value: JSON.parse(fs.readFileSync(filePath, "utf8")) as T, error: null };
+    return { value: JSON.parse(fs.readFileSync(filePath, "utf8")) as T, error: null, present: true };
   } catch (error) {
     return {
       value: null,
       error: `Unable to read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`,
+      present: true,
     };
   }
 }
@@ -1179,6 +1186,8 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
         {
           baseline: baselineArtifact.value,
           evidence: evidenceArtifact.value,
+          baselinePresent: baselineArtifact.present,
+          evidencePresent: evidenceArtifact.present,
           baselineReadError: baselineArtifact.error,
           evidenceReadError: evidenceArtifact.error,
         },
