@@ -40,7 +40,9 @@
     "server/wnba-s6e-evaluation-emission-service.test.ts",
     "server/wnba-s6e-security.test.ts",
     "server/mlb-s6j-first-cycle-certification.ts",
-    "server/mlb-s6j-first-cycle-certification.test.ts"
+    "server/mlb-s6j-first-cycle-certification.test.ts",
+    "server/mlb-s6k-first-ten-cycles-certification.ts",
+    "server/mlb-s6k-first-ten-cycles-certification.test.ts"
   ],
   "exclude": [
     "node_modules",

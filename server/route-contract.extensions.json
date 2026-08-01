@@ -81,6 +81,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6k-first-ten-cycles/evidence",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6k-first-ten-cycles/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/multisport/readiness/v1/latest",
     "registrations": 1
   },
