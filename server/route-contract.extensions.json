@@ -71,6 +71,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6j-first-cycle/evidence",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6j-first-cycle/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/multisport/readiness/v1/latest",
     "registrations": 1
   },
@@ -97,11 +107,6 @@
   {
     "method": "GET",
     "path": "/api/wnba/predictor-shadow/v1/emission/status",
-    "registrations": 1
-  },
-  {
-    "method": "POST",
-    "path": "/api/wnba/predictor-shadow/v1/evaluations",
     "registrations": 1
   },
   {
@@ -147,6 +152,11 @@
   {
     "method": "GET",
     "path": "/api/wnba/shadow/v1/status",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/wnba/predictor-shadow/v1/evaluations",
     "registrations": 1
   }
 ]
