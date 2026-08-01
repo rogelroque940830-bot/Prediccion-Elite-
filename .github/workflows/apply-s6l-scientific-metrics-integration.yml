@@ -1,0 +1,40 @@
+name: Apply S6L Scientific Metrics Integration
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/patch-s6l-scientific-metrics-integration.mjs'
+      - '.github/workflows/apply-s6l-scientific-metrics-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply deterministic integration patch
+        run: node scripts/patch-s6l-scientific-metrics-integration.mjs
+      - name: Commit integration changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet; then
+            echo 'No integration changes required.'
+            exit 0
+          fi
+          git add server/s5b-staging-entry.ts server/route-contract.extensions.json tsconfig.s5b-shadow.json package.json
+          git commit -m 'Integrate S6L scientific metrics worker'
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
