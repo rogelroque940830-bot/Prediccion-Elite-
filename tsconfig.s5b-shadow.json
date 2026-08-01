@@ -46,7 +46,9 @@
     "server/mlb-s6l-scientific-metrics.ts",
     "server/mlb-s6l-scientific-metrics.test.ts",
     "server/mlb-s6m-statistical-milestones.ts",
-    "server/mlb-s6m-statistical-milestones.test.ts"
+    "server/mlb-s6m-statistical-milestones.test.ts",
+    "server/mlb-s6n-first-real-settlement-monitor.ts",
+    "server/mlb-s6n-first-real-settlement-monitor.test.ts"
   ],
   "exclude": [
     "node_modules",

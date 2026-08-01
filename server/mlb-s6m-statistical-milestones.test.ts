@@ -286,3 +286,18 @@ test("surfaces an unreadable append-only certificate as an integrity failure", (
   assert.equal(evaluation.newCertificates.length, 0);
   assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_1_CERTIFICATE_UNREADABLE"), true);
 });
+
+
+test("keeps an immutable milestone valid when independent certification matures later", () => {
+  const records = pairedDecision(0);
+  const first = evaluate(records, []);
+  const certificate = first.newCertificates.find((entry) => entry.milestone === 1);
+  assert.ok(certificate);
+  assert.equal(certificate.manifest[0].independentlyCertified, false);
+
+  const second = evaluate(records, ["final-0"], { "1": certificate });
+  assert.equal(second.report.state, "MILESTONE_1_CERTIFIED");
+  assert.equal(second.report.sample.independentlyCertifiedDecisions, 1);
+  assert.equal(second.report.issues.some((entry) => entry.code === "MILESTONE_1_CERTIFICATE_INVALID"), false);
+  assert.equal(second.newCertificates.length, 0);
+});
