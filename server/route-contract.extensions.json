@@ -141,6 +141,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/evidence",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/multisport/readiness/v1/latest",
     "registrations": 1
   },

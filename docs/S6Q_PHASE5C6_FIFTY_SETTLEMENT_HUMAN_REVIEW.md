@@ -1,0 +1,35 @@
+# S6Q / Phase 5C-6 — Preferred 50-settlement human review gate
+
+## Objective
+
+Certify the deterministic first 50 clean post-fix binary MLB settlements and require at least ten independently certified decisions before enabling a formal human scientific review. S6Q never authorizes automatic model changes.
+
+## Prerequisites
+
+- S6M milestone 50 certificate exists and passes independent reconstruction.
+- S6P has certified the minimum sample of 20 settlements.
+- At least ten decisions among the first 50 are independently certified by S6K.
+- S6M/S6L metric parity passes with zero critical issues.
+- The owned ledger remains immutable and monotonic.
+
+## State machine
+
+`ARMED_AND_WAITING_FOR_50 -> WAITING_FOR_MINIMUM_SAMPLE_20_CERTIFICATION -> WAITING_FOR_TEN_CERTIFIED_CYCLES -> OBSERVING_FIFTY_RESULT_STABILITY -> READY_FOR_HUMAN_REVIEW`
+
+Any integrity, persistence, certificate, prerequisite, or evidence failure enters `ACTION_REQUIRED`.
+
+## Evidence
+
+The append-only review package contains the immutable first-50 manifest, independent metrics, Brier Score, log loss, Wilson interval, ECE/MCE, informational flat-one-unit ROI, CLV coverage and distribution, market and signal breakdowns, calibration buckets, PROVISIONAL-to-FINAL movement, and descriptive market/signal concentration.
+
+## Scientific boundary
+
+At `READY_FOR_HUMAN_REVIEW`, human interpretation is allowed, but `automaticModelChangesAllowed=false` and recommendation remains `NO_AUTOMATIC_MODEL_CHANGE`. Any candidate change must be versioned separately and tested in SHADOW.
+
+## Runtime
+
+Enabled by default only in `p0-integration`, with a five-minute interval and stability window. Public health: `GET /health/s6q-fifty-settlement-human-review`. Protected status/evidence routes are under `/api/mlb/ledger/v1/s6q-fifty-settlement-human-review`.
+
+## Safety
+
+SHADOW mode, zero financial exposure, no sportsbook integration, no automatic betting, no production writes, no historical mutation, no automatic promotion, and no formula/probability/signal/market/threshold/settlement/stake changes.
