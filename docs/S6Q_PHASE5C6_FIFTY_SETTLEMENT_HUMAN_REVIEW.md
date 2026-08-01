@@ -26,6 +26,8 @@ The append-only review package contains the immutable first-50 manifest, indepen
 
 At `READY_FOR_HUMAN_REVIEW`, human interpretation is allowed, but `automaticModelChangesAllowed=false` and recommendation remains `NO_AUTOMATIC_MODEL_CHANGE`. Any candidate change must be versioned separately and tested in SHADOW.
 
+`conclusionsAllowed=true` refers only to documented human interpretation of the certified evidence. It never grants permission to mutate the active predictor, stake policy, ledger, or settlement rules.
+
 ## Runtime
 
 Enabled by default only in `p0-integration`, with a five-minute interval and stability window. Public health: `GET /health/s6q-fifty-settlement-human-review`. Protected status/evidence routes are under `/api/mlb/ledger/v1/s6q-fifty-settlement-human-review`.
