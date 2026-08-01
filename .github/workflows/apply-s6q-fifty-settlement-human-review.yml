@@ -34,6 +34,10 @@ jobs:
           insertion = '  ["ARMED_AND_WAITING_FOR_20", "ARMED_AND_WAITING_FOR_50"],\n' + anchor
           if insertion not in source:
             source = source.replace(anchor, insertion)
+          source = source.replace(
+              'const stateEnd = service.indexOf("\\n\\n  const report: S6qReport", stateStart);',
+              'const stateEnd = service.indexOf("\\n  const report: S6qReport", stateStart);',
+          )
           path.write_text(source)
           PY
       - name: Generate and integrate S6Q Phase 5C-6
