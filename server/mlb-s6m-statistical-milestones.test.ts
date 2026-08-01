@@ -240,3 +240,49 @@ test("flags ledger-count regression as ACTION_REQUIRED", () => {
   assert.equal(evaluation.report.state, "ACTION_REQUIRED");
   assert.equal(evaluation.report.persistence.countMonotonic, false);
 });
+
+
+test("blocks human review whenever a critical integrity issue exists", () => {
+  const records = Array.from({ length: 50 }, (_, index) => pairedDecision(index)).flat();
+  const certifiedIds = Array.from({ length: 10 }, (_, index) => `final-${index}`);
+  const s6l = buildMlbS6lScientificMetrics(records, {
+    certifiedTerminalPredictionIds: certifiedIds,
+  });
+  const sample = extractMlbS6mIndependentSample(records, certifiedIds);
+  const certificates: S6mCertificateMap = {};
+  for (const milestone of [1, 5, 20, 50] as const) {
+    certificates[`${milestone}`] = buildMlbS6mMilestoneCertificate(sample.binaryObservations, milestone, {
+      createdAt: "2026-08-01T19:05:00.000Z",
+      sourceS6lGeneratedAt: s6l.generatedAt,
+    });
+  }
+  const evaluation = evaluateMlbS6mMilestones(records, s6l, certifiedIds, certificates, {
+    previousOwnedLedgerRecords: records.length + 1,
+  });
+  assert.equal(evaluation.report.state, "ACTION_REQUIRED");
+  assert.equal(evaluation.report.highestCertifiedMilestone, 50);
+  assert.equal(evaluation.report.readiness.humanReviewReady, false);
+  assert.equal(evaluation.report.readiness.conclusionsAllowed, false);
+});
+
+test("refuses to recreate a previously certified missing milestone", () => {
+  const records = pairedDecision(0);
+  const s6l = buildMlbS6lScientificMetrics(records);
+  const evaluation = evaluateMlbS6mMilestones(records, s6l, [], {}, {
+    previouslyCertifiedMilestones: [1],
+  });
+  assert.equal(evaluation.report.state, "ACTION_REQUIRED");
+  assert.equal(evaluation.newCertificates.length, 0);
+  assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_1_CERTIFICATE_MISSING"), true);
+});
+
+test("surfaces an unreadable append-only certificate as an integrity failure", () => {
+  const records = pairedDecision(0);
+  const s6l = buildMlbS6lScientificMetrics(records);
+  const evaluation = evaluateMlbS6mMilestones(records, s6l, [], {}, {
+    certificateReadErrors: [{ milestone: 1, message: "invalid JSON" }],
+  });
+  assert.equal(evaluation.report.state, "ACTION_REQUIRED");
+  assert.equal(evaluation.newCertificates.length, 0);
+  assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_1_CERTIFICATE_UNREADABLE"), true);
+});
