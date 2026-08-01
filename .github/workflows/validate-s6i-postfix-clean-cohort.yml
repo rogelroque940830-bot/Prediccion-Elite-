@@ -8,6 +8,7 @@ on:
       - 'server/mlb-s6i-postfix-certification.ts'
       - 'server/mlb-s6i-postfix-certification.test.ts'
       - 'server/s5b-staging-entry.ts'
+      - 'server/route-contract.extensions.json'
       - 'tsconfig.s6i-postfix.json'
       - 'tsconfig.s5b-shadow.json'
       - 'docs/S6I_PHASE4_POSTFIX_CLEAN_COHORT.md'
@@ -36,6 +37,8 @@ jobs:
         run: npx tsc -p tsconfig.s6i-postfix.json
       - name: Type-check complete shadow surface
         run: npx tsc -p tsconfig.s5b-shadow.json
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
       - name: Build production backend bundle
         run: npm run build:backend
       - name: Verify Phase 4 safety and integration boundaries
@@ -50,5 +53,6 @@ jobs:
           grep -F 'startMlbS6iPostfixCertificationWorker' server/s5b-staging-entry.ts
           grep -F '/health/s6i-postfix-certification' server/s5b-staging-entry.ts
           grep -F '/api/mlb/ledger/v1/s6i-postfix-certification/status' server/s5b-staging-entry.ts
+          grep -F '/api/mlb/ledger/v1/s6i-postfix-certification/status' server/route-contract.extensions.json
           grep -F 'mlb-s6i-postfix-certification.v1' dist/index.cjs
           grep -F 'READY_FOR_HUMAN_REVIEW' dist/index.cjs
