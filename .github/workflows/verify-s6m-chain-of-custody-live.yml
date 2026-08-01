@@ -1,0 +1,101 @@
+name: Verify S6M Chain of Custody Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6m-chain-of-custody-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway S6M hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6m-statistical-milestones'
+          expected_commit='8dc8e9e9fcd1d87e4753b95d9df358f179cf3389'
+          for attempt in $(seq 1 90); do
+            code=$(curl -sS -o artifacts/s6m-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6m-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6m-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            state=$(node -e "try{const x=require('./artifacts/s6m-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema commit=$commit state=$state"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6m-statistical-milestones.v1' ] && [ "$commit" = "$expected_commit" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6M chain-of-custody hotfix did not become ready within the verification window.' >&2
+          cat artifacts/s6m-health.json || true
+          exit 1
+      - name: Validate live integrity and safety state
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6m-health.json', 'utf8'));
+          const allowed = [
+            'WAITING_FOR_MILESTONE_1',
+            'MILESTONE_1_CERTIFIED',
+            'MILESTONE_5_CERTIFIED',
+            'MILESTONE_20_CERTIFIED',
+            'MILESTONE_50_CERTIFIED',
+          ];
+          if (x.status !== 'healthy') throw new Error(`Unexpected health ${x.status}`);
+          if (!allowed.includes(x.latest?.state)) throw new Error(`Unexpected/actionable state ${x.latest?.state}`);
+          if (x.latest?.metricParity?.checked !== true || x.latest?.metricParity?.passed !== true) {
+            throw new Error(`Metric parity failed: ${JSON.stringify(x.latest?.metricParity)}`);
+          }
+          if ((x.latest?.metricParity?.mismatches ?? []).length !== 0) throw new Error('Metric parity mismatches present');
+          if ((x.latest?.issueCounts?.CRITICAL ?? 0) !== 0) throw new Error('Critical integrity issues present');
+          if (x.latest?.readiness?.humanReviewReady === true && x.latest?.state !== 'MILESTONE_50_CERTIFIED') {
+            throw new Error('Human review enabled before milestone 50');
+          }
+          if (x.latest?.readiness?.conclusionsAllowed !== x.latest?.readiness?.humanReviewReady) {
+            throw new Error('Conclusion and human-review gates diverged');
+          }
+          if (x.latest?.readiness?.automaticModelChangesAllowed !== false) throw new Error('Automatic model changes enabled');
+          if (x.latest?.readiness?.recommendation !== 'NO_AUTOMATIC_MODEL_CHANGE') throw new Error('Unexpected recommendation');
+          if (x.latest?.persistence?.countMonotonic !== true) throw new Error('Ledger count is not monotonic');
+          if (x.latest?.persistence?.certificatesAppendOnly !== true) throw new Error('Certificates are not append-only');
+          if (x.safety?.mode !== 'SHADOW' || x.safety?.realFinancialExposure !== 0) throw new Error('Safety mode changed');
+          if (x.safety?.automaticBetPlacement !== false || x.safety?.historicalLedgerMutation !== false || x.safety?.automaticPromotion !== false) {
+            throw new Error('Safety boundary changed');
+          }
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state: x.latest.state,
+            sample: x.latest.sample,
+            metricParity: x.latest.metricParity,
+            milestones: x.latest.milestones,
+            readiness: x.latest.readiness,
+            persistence: x.latest.persistence,
+            issueCounts: x.latest.issueCounts,
+            safety: x.safety,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const x = require('./artifacts/session.json');
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6m-chain-of-custody-live-verification
+          path: artifacts/
+          retention-days: 14
