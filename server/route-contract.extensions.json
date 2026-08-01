@@ -121,6 +121,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6o-first-five-settlements/evidence",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6o-first-five-settlements/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/multisport/readiness/v1/latest",
     "registrations": 1
   },

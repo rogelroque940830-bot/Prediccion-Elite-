@@ -14,6 +14,7 @@ import { startMlbS6kFirstTenCyclesCertificationWorker } from "./mlb-s6k-first-te
 import { startMlbS6lScientificMetricsWorker } from "./mlb-s6l-scientific-metrics";
 import { startMlbS6mStatisticalMilestoneWorker } from "./mlb-s6m-statistical-milestones";
 import { startMlbS6nFirstRealSettlementMonitorWorker } from "./mlb-s6n-first-real-settlement-monitor";
+import { startMlbS6oFirstFiveSettlementsCertificationWorker } from "./mlb-s6o-first-five-settlements-certification";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -72,6 +73,14 @@ const s6nFirstRealSettlement = startMlbS6nFirstRealSettlementMonitorWorker(
   ledgerStore,
   ownershipStore,
   s6mStatisticalMilestones.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6oFirstFiveSettlements = startMlbS6oFirstFiveSettlementsCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s6mStatisticalMilestones.service,
+  s6nFirstRealSettlement.service,
   s6kFirstTenCyclesCertification.service,
   { ownerUserId: systemOwnerUserId },
 );
@@ -393,6 +402,63 @@ app.get("/health/s6k-first-ten-cycles", (_req, res) => {
   });
 });
 
+app.get("/health/s6o-first-five-settlements", (_req, res) => {
+  const status = s6oFirstFiveSettlements.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    minimumStabilityMs: status.minimumStabilityMs,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sourceS6m: latest.sourceS6m,
+      sourceS6n: latest.sourceS6n,
+      sample: latest.sample,
+      target: {
+        certificatePresent: latest.target.certificatePresent,
+        manifestEntries: latest.target.manifestEntries,
+        wins: latest.target.wins,
+        losses: latest.target.losses,
+        clvAvailable: latest.target.clvAvailable,
+      },
+      stability: latest.stability,
+      checks: latest.checks,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      probabilitiesChanged: false,
+      signalsChanged: false,
+      marketsChanged: false,
+      thresholdsChanged: false,
+      settlementRulesChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/health/s6n-first-real-settlement", (_req, res) => {
   const status = s6nFirstRealSettlement.service.status();
   const latest = status.latest;
@@ -528,6 +594,41 @@ app.get("/health/s6l-scientific-metrics", (_req, res) => {
       formulasChanged: false,
       thresholdsChanged: false,
       stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6o-first-five-settlements/status", (_req, res) => {
+  const status = s6oFirstFiveSettlements.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      minimumStabilityMs: status.minimumStabilityMs,
+      maxSnapshots: status.maxSnapshots,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6o-first-five-settlements/evidence", (_req, res) => {
+  const latest = s6oFirstFiveSettlements.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6O first-five-settlement report has completed yet" });
+    return;
+  }
+  res.json({
+    success: true,
+    data: {
+      latest,
+      baseline: s6oFirstFiveSettlements.service.readBaseline(),
+      evidence: s6oFirstFiveSettlements.service.readEvidence(),
     },
   });
 });
