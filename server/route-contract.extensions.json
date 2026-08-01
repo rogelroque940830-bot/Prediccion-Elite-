@@ -61,6 +61,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6i-postfix-certification/issues",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/s6i-postfix-certification/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
     "path": "/api/multisport/readiness/v1/latest",
     "registrations": 1
   },
