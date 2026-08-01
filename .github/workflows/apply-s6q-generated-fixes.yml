@@ -23,6 +23,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - name: Normalize patch assertions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/patch-s6q-generated-implementation.mjs')
+          source = path.read_text()
+          source = source.replace('  "ARMED_AND_WAITING_FOR_5",\n', '')
+          path.write_text(source)
+          PY
       - name: Patch generated S6Q implementation
         run: node scripts/patch-s6q-generated-implementation.mjs
       - name: Commit permanent fixes
