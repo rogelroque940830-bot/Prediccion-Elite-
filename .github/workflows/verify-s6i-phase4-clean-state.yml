@@ -1,0 +1,65 @@
+name: Verify S6I Phase 4 Clean State
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6i-phase4-clean-state.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for corrected Phase 4 report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6i-postfix-certification'
+          for attempt in $(seq 1 50); do
+            code=$(curl -sS -o artifacts/s6i-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            state=$(node -e "try{const x=require('./artifacts/s6i-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            invalid=$(node -e "try{const x=require('./artifacts/s6i-health.json');process.stdout.write(String(x.latest?.summary?.invalidAmericanOdds??''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6i-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            echo "attempt=$attempt http=$code state=$state invalid=$invalid commit=$commit"
+            if [ "$code" = '200' ] && [ "$state" = 'COLLECTING' ] && [ "$invalid" = '0' ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          cat artifacts/s6i-health.json || true
+          exit 1
+      - name: Validate corrected live classification
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6i-health.json', 'utf8'));
+          if (x.status !== 'healthy') throw new Error('S6I health is not healthy');
+          if (x.latest?.state !== 'COLLECTING') throw new Error(`Expected COLLECTING, got ${x.latest?.state}`);
+          if (x.latest?.summary?.invalidAmericanOdds !== 0) throw new Error('Pure cohort contains invalid American odds');
+          if (x.latest?.readiness?.checks?.zeroInvalidAmericanOdds !== true) throw new Error('zeroInvalidAmericanOdds is false');
+          if (x.latest?.coverage?.integrityPassPct !== 100) throw new Error('Integrity coverage is not 100%');
+          if (x.latest?.coverage?.provenancePct !== 100) throw new Error('Provenance coverage is not 100%');
+          if (x.latest?.summary?.cleanUniqueDecisions < 1) throw new Error('No clean decisions found');
+          if (x.latest?.summary?.settled !== 0) console.log('Settlements have begun; sample remains below readiness threshold unless state changes.');
+          if (x.safety?.automaticPromotion !== false || x.safety?.automaticBetPlacement !== false) throw new Error('Safety boundary changed');
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state: x.latest.state,
+            summary: x.latest.summary,
+            coverage: x.latest.coverage,
+            issueCounts: x.latest.issueCounts,
+            readiness: x.latest.readiness,
+          }, null, 2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6i-phase4-clean-state
+          path: artifacts/
+          retention-days: 14
