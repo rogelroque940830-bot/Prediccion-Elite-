@@ -314,3 +314,58 @@ test("treats independent-certification regression after baseline creation as cri
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "INDEPENDENT_CERTIFICATION_REGRESSION"), true);
 });
+
+
+test("treats disappearance of previously certified evidence as an integrity failure", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  const certified = evaluate(records, report, certificates, { baseline: first.baselineToPersist }, "2026-08-01T21:03:00.000Z", certifiedS6pReport(), records.length);
+  if (!first.baselineToPersist || !certified.evidenceToPersist) throw new Error("fixture artifacts missing");
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(10),
+    { baseline: first.baselineToPersist, evidence: null, baselinePresent: true, evidencePresent: false },
+    {
+      generatedAt: "2026-08-01T21:04:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      previousOwnedLedgerRecords: records.length,
+      currentOwnedLedgerRecords: records.length,
+      previousBaselinePresent: true,
+      previousEvidencePresent: true,
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_DISAPPEARED_AFTER_CERTIFICATION"), true);
+  assert.equal(result.evidenceToPersist, null);
+});
+
+test("uses the uncapped owned-ledger count for monotonicity", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(10),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      previousOwnedLedgerRecords: 12_000,
+      currentOwnedLedgerRecords: 11_000,
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.persistence.currentOwnedLedgerRecords, 11_000);
+  assert.equal(result.report.sample.ownedLedgerRecords, 11_000);
+  assert.equal(result.report.issues.some((entry) => entry.code === "PERSISTENCE_COUNT_REGRESSION"), true);
+});

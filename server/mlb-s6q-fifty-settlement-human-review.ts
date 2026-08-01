@@ -260,6 +260,9 @@ type EvaluationOptions = {
   environment?: string;
   minimumStabilityMs?: number;
   previousOwnedLedgerRecords?: number | null;
+  currentOwnedLedgerRecords?: number;
+  previousBaselinePresent?: boolean;
+  previousEvidencePresent?: boolean;
 };
 
 type EvaluationResult = {
@@ -602,7 +605,8 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const environment = options.environment ?? "unknown";
   const minimumStabilityMs = options.minimumStabilityMs ?? 5 * 60 * 1000;
   const previousCount = options.previousOwnedLedgerRecords ?? null;
-  const countMonotonic = previousCount == null || records.length >= previousCount;
+  const currentOwnedLedgerRecords = options.currentOwnedLedgerRecords ?? records.length;
+  const countMonotonic = previousCount == null || currentOwnedLedgerRecords >= previousCount;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
   const selected = sample.binaryObservations.slice(0, MLB_S6Q_TARGET_SIZE);
   const independentlyCertifiedAmongFirstFifty = selected.filter((entry) => entry.independentlyCertified).length;
@@ -618,12 +622,18 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
 
   if (stored.baselineReadError) pushIssue(issues, "BASELINE_UNREADABLE", "CRITICAL", stored.baselineReadError);
   if (stored.evidenceReadError) pushIssue(issues, "EVIDENCE_UNREADABLE", "CRITICAL", stored.evidenceReadError);
+  if (options.previousBaselinePresent && !baselinePresent) {
+    pushIssue(issues, "BASELINE_DISAPPEARED_AFTER_OBSERVATION", "CRITICAL", "The append-only S6Q baseline existed in the previous successful report but is now absent.");
+  }
+  if (options.previousEvidencePresent && !evidencePresent) {
+    pushIssue(issues, "EVIDENCE_DISAPPEARED_AFTER_CERTIFICATION", "CRITICAL", "The append-only S6Q review evidence existed in the previous successful report but is now absent.");
+  }
   if (!countMonotonic) {
     pushIssue(
       issues,
       "PERSISTENCE_COUNT_REGRESSION",
       "CRITICAL",
-      `Owned ledger count decreased from ${previousCount} to ${records.length}.`,
+      `Owned ledger count decreased from ${previousCount} to ${currentOwnedLedgerRecords}.`,
     );
   }
 
@@ -920,7 +930,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     if (!validStoredBaseline) {
       baselineToPersist = makeBaseline(
         certificate,
-        records.length,
+        currentOwnedLedgerRecords,
         generatedAt,
         deploymentCommit,
         s6mReport.generatedAt,
@@ -999,7 +1009,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       criticalIssues: s6pCriticalIssues,
     },
     sample: {
-      ownedLedgerRecords: records.length,
+      ownedLedgerRecords: currentOwnedLedgerRecords,
       binaryEligibleDecisions: sample.binaryObservations.length,
       targetSize: MLB_S6Q_TARGET_SIZE,
       independentlyCertifiedAmongFirstFifty,
@@ -1045,7 +1055,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     },
     persistence: {
       previousOwnedLedgerRecords: previousCount,
-      currentOwnedLedgerRecords: records.length,
+      currentOwnedLedgerRecords,
       countMonotonic,
       baselineAppendOnly: true,
       evidenceAppendOnly: true,
@@ -1234,6 +1244,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
     this.lastRunAt = now.toISOString();
     try {
       const previous = this.readLatest();
+      const currentOwnedLedgerRecords = this.ownershipStore.listPredictionIds(this.ownerUserId).length;
       const records = ownedRecordsForUser(this.store, this.ownershipStore, this.ownerUserId, { limit: 10_000 });
       const s6mReport = this.s6mMilestones.readLatest();
       const certificates = this.s6mMilestones.readCertificates();
@@ -1258,6 +1269,9 @@ export class MlbS6qFiftySettlementHumanReviewService {
           environment: this.environment,
           minimumStabilityMs: this.minimumStabilityMs,
           previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
+          currentOwnedLedgerRecords,
+          previousBaselinePresent: previous?.stability.baselinePresent ?? false,
+          previousEvidencePresent: previous?.stability.evidencePresent ?? false,
         },
       );
 
