@@ -75,6 +75,10 @@ GET /api/mlb/ledger/v1/s6o-first-five-settlements/status
 GET /api/mlb/ledger/v1/s6o-first-five-settlements/evidence
 ```
 
+## Validation surface
+
+The focused validation executes deterministic S6O tests, the S6O and complete shadow TypeScript surfaces, the modular route contract, and the production backend build. Existing S5A, S5B, S6I, S6J, S6K, S6L, S6M, S6N, WNBA, and MLB ledger workflows remain regression gates.
+
 ## Safety boundary
 
 S6O remains:
