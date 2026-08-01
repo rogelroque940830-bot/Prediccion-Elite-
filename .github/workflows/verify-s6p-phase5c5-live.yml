@@ -1,0 +1,141 @@
+name: Verify S6P Phase 5C-5 Live
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/verify-s6p-phase5c5-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Railway S6P worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          endpoint='https://web-p0-integration.up.railway.app/health/s6p-first-twenty-settlements'
+          expected_commit='580c2f53c0f5e2c27a77b51912f161a0325c1674'
+          for attempt in $(seq 1 120); do
+            code=$(curl -sS -o artifacts/s6p-health.json -w '%{http_code}' --max-time 120 "$endpoint" || true)
+            schema=$(node -e "try{const x=require('./artifacts/s6p-health.json');process.stdout.write(String(x.schemaVersion||''))}catch{}")
+            commit=$(node -e "try{const x=require('./artifacts/s6p-health.json');process.stdout.write(String(x.commit||''))}catch{}")
+            state=$(node -e "try{const x=require('./artifacts/s6p-health.json');process.stdout.write(String(x.latest?.state||''))}catch{}")
+            echo "attempt=$attempt http=$code schema=$schema commit=$commit state=$state"
+            if [ "$code" = '200' ] && [ "$schema" = 'mlb-s6p-first-twenty-settlements-certification.v1' ] && [ "$commit" = "$expected_commit" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'S6P Phase 5C-5 did not become ready within the verification window.' >&2
+          cat artifacts/s6p-health.json || true
+          exit 1
+      - name: Validate live Phase 5C-5 state and safety
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync('artifacts/s6p-health.json', 'utf8'));
+          const allowed = [
+            'ARMED_AND_WAITING_FOR_20',
+            'OBSERVING_TWENTY_RESULT_STABILITY',
+            'MINIMUM_SAMPLE_20_CERTIFIED',
+          ];
+          if (x.status !== 'healthy') throw new Error(`Unexpected health ${x.status}`);
+          if (!allowed.includes(x.latest?.state)) throw new Error(`Unexpected or actionable S6P state ${x.latest?.state}`);
+          if ((x.latest?.issueCounts?.CRITICAL ?? 0) !== 0) throw new Error('Critical S6P issues are present');
+          if (x.latest?.sourceS6m?.available !== true) throw new Error('S6M source is unavailable');
+          if (x.latest?.sourceS6m?.metricParityChecked !== true || x.latest?.sourceS6m?.metricParityPassed !== true) {
+            throw new Error(`S6M metric parity failed: ${JSON.stringify(x.latest?.sourceS6m)}`);
+          }
+          if ((x.latest?.sourceS6m?.criticalIssues ?? 0) !== 0) throw new Error('Critical S6M issues are present');
+          if (x.latest?.sourceS6o?.available !== true) throw new Error('S6O source is unavailable');
+          if ((x.latest?.sourceS6o?.criticalIssues ?? 0) !== 0) throw new Error('Critical S6O issues are present');
+          if (x.latest?.checks?.s6mIntegrityGatePassed !== true) throw new Error('S6M integrity gate did not pass');
+          if (x.latest?.checks?.ledgerCountMonotonic !== true) throw new Error('Ledger count is not monotonic');
+          if (x.latest?.checks?.appendOnlyBaseline !== true || x.latest?.checks?.appendOnlyEvidence !== true) {
+            throw new Error('S6P append-only guarantees are not active');
+          }
+          if (x.latest?.readiness?.sampleAdequateForModelConclusions !== false) throw new Error('20-result sample was treated as conclusive');
+          if (x.latest?.readiness?.conclusionsAllowed !== false) throw new Error('Scientific conclusions were enabled prematurely');
+          if (x.latest?.readiness?.automaticModelChangesAllowed !== false) throw new Error('Automatic model changes were enabled');
+          if (x.latest?.readiness?.recommendation !== 'NO_AUTOMATIC_MODEL_CHANGE') throw new Error('Unexpected recommendation');
+          if (x.latest?.persistence?.countMonotonic !== true) throw new Error('Persistence is not monotonic');
+          if (x.safety?.mode !== 'SHADOW' || x.safety?.realFinancialExposure !== 0) throw new Error('Safety mode changed');
+          for (const key of [
+            'sportsbookIntegration',
+            'automaticBetPlacement',
+            'productionWrites',
+            'historicalLedgerMutation',
+            'automaticPromotion',
+            'formulasChanged',
+            'probabilitiesChanged',
+            'signalsChanged',
+            'marketsChanged',
+            'thresholdsChanged',
+            'settlementRulesChanged',
+            'stakePolicyChanged',
+          ]) {
+            if (x.safety?.[key] !== false) throw new Error(`Safety boundary changed: ${key}`);
+          }
+          if (x.latest.state === 'ARMED_AND_WAITING_FOR_20') {
+            if (x.latest.target?.certificatePresent !== false) throw new Error('Milestone 20 certificate present while armed waiting');
+            if (x.latest.stability?.baselinePresent !== false || x.latest.stability?.evidencePresent !== false) {
+              throw new Error('Unexpected S6P artifacts while awaiting milestone 20');
+            }
+            if (x.latest.readiness?.preliminaryReviewAvailable !== false) throw new Error('Preliminary review enabled before certification');
+          }
+          if (x.latest.state === 'OBSERVING_TWENTY_RESULT_STABILITY') {
+            if (x.latest.target?.certificatePresent !== true || x.latest.stability?.baselinePresent !== true) {
+              throw new Error('Missing milestone 20 certificate or baseline during stability observation');
+            }
+            if (x.latest.sourceS6o?.firstFiveSettlementsCertified !== true) {
+              throw new Error('S6O prerequisite is not certified during milestone 20 observation');
+            }
+          }
+          if (x.latest.state === 'MINIMUM_SAMPLE_20_CERTIFIED') {
+            if (x.latest.target?.certificatePresent !== true || x.latest.stability?.evidencePresent !== true) {
+              throw new Error('Certified state lacks certificate or evidence');
+            }
+            if (x.latest.readiness?.minimumSample20Certified !== true || x.latest.readiness?.preliminaryReviewAvailable !== true) {
+              throw new Error('Certified readiness flags are false');
+            }
+          }
+          console.log(JSON.stringify({
+            commit: x.commit,
+            state: x.latest.state,
+            sourceS6m: x.latest.sourceS6m,
+            sourceS6o: x.latest.sourceS6o,
+            sample: x.latest.sample,
+            target: x.latest.target,
+            stability: x.latest.stability,
+            checks: x.latest.checks,
+            readiness: x.latest.readiness,
+            persistence: x.latest.persistence,
+            issueCounts: x.latest.issueCounts,
+            safety: x.safety,
+          }, null, 2));
+          NODE
+      - name: Verify backend session and frontend availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 60 'https://web-p0-integration.up.railway.app/api/auth/session' -o artifacts/session.json
+          node - <<'NODE'
+          const x = require('./artifacts/session.json');
+          if (x.success !== true) throw new Error('Session endpoint failed');
+          NODE
+          curl -sS --fail --max-time 60 'https://prediccion-elite-p0-integration.up.railway.app/' -o artifacts/frontend.html
+          grep -qi '<!doctype html' artifacts/frontend.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6p-phase5c5-live-verification
+          path: artifacts/
+          retention-days: 14
