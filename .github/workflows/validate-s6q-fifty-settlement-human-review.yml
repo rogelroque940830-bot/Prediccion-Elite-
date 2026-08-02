@@ -51,6 +51,10 @@ jobs:
           grep -q 'WAITING_FOR_TEN_CERTIFIED_CYCLES' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'OBSERVING_FIFTY_RESULT_STABILITY' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'READY_FOR_HUMAN_REVIEW' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'baseline-observation-anchor.json' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'evidence-certification-anchor.json' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'BASELINE_ANCHOR_INVALID' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'EVIDENCE_ANCHOR_INVALID' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'humanReviewReady' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'automaticModelChangesAllowed: false' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'NO_AUTOMATIC_MODEL_CHANGE' server/mlb-s6q-fifty-settlement-human-review.ts
