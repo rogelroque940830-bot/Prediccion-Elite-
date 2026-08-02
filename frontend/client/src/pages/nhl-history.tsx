@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trophy, Trash2 } from "lucide-react";
+import { AlertCircle, Trophy, Trash2 } from "lucide-react";
 
 function signalColor(result: string) {
   if (result === "W") return "bg-green-500/20 text-green-400 border-green-500/30";
@@ -41,6 +41,13 @@ export default function NHLHistory() {
         <h1 className="text-xl font-display font-bold">Historial NHL</h1>
         <Badge variant="outline" className="ml-auto">{picks.length} picks</Badge>
       </div>
+
+      <Card className="border-blue-500/20 bg-blue-500/[0.04]">
+        <CardContent className="flex items-start gap-2 p-3 text-xs text-muted-foreground">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-300" />
+          <p>Este historial contiene picks guardados por el usuario. Los resultados se confirman manualmente y los pendientes no entran en el ROI.</p>
+        </CardContent>
+      </Card>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
