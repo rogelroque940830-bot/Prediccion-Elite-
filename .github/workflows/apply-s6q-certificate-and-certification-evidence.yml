@@ -1,0 +1,41 @@
+name: Apply S6Q Certificate And Certification Evidence
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/patch-s6q-certificate-and-certification-evidence.mjs'
+      - '.github/workflows/apply-s6q-certificate-and-certification-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: node scripts/patch-s6q-certificate-and-certification-evidence.mjs
+      - name: Commit permanent hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            server/mlb-s6q-fifty-settlement-human-review.ts \
+            server/mlb-s6q-fifty-settlement-human-review.test.ts
+          if git diff --cached --quiet; then
+            echo 'No S6Q hardening changes required.'
+            exit 0
+          fi
+          git commit -m 'Harden S6Q certificate and certification evidence'
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
