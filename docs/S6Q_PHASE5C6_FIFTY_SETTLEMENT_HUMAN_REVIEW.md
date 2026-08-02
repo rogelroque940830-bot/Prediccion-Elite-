@@ -33,8 +33,10 @@ At `READY_FOR_HUMAN_REVIEW`, human interpretation is allowed, but `automaticMode
 S6Q may advance only through persisted append-only evidence. An in-memory calculation, a concurrent write race, or an unavailable prerequisite cannot produce `READY_FOR_HUMAN_REVIEW`.
 
 - Previously observed baseline or evidence files may not disappear or be recreated silently.
+- `baseline-observation-anchor.json` and `evidence-certification-anchor.json` independently preserve the first-observation timestamp and artifact digests even when `latest.json` is missing or malformed.
+- The two anchor files are append-only, independently hashed, and written before the corresponding baseline or evidence artifact. An interrupted write therefore fails closed instead of silently resetting the history.
 - Once a baseline or evidence artifact has been observed, its history flag remains irreversible across later `ACTION_REQUIRED` reports.
-- The baseline first-observation timestamp and baseline/evidence digests are anchored to the previously persisted report and cannot be rewritten to bypass the stability window.
+- The baseline first-observation timestamp and baseline/evidence digests cannot be rewritten to bypass the stability window.
 - Ledger monotonicity uses the complete owned-record count, independently of the 10,000-record analytical read cap.
 - Persisted S6M, S6P, and S6K reports are shape-validated before their issue, parity, milestone, readiness, or evidence fields are traversed.
 - Every named S6M certificate check and every named S6Q evidence check must be present and exactly `true`; an empty or partial checks object cannot satisfy an integrity gate.
