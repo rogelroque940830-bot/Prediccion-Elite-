@@ -199,6 +199,21 @@ test("S5C records priced provisional/final decisions once, preserves price prove
   assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.rawInputs.marketProvenance.contributingBooks.length === 2));
   assert.ok(firstRecords.every((record) => record.prediction.payload.analysis.layers.marketPriceIntegrity.standardAmericanOddsValidated === true));
 
+  const redeployedService = new MlbS5cShadowIngestionService(store, ownership, {
+    ownerUserId: 1,
+    enabled: true,
+    root: path.join(root, "redeployed-evidence"),
+    selfBaseUrl: "http://127.0.0.1:5000",
+    deploymentCommit: "different-deployment-commit",
+    environment: "p0-integration",
+    now: () => now,
+    fetcher,
+  });
+  const redeployed = await redeployedService.run("test-redeploy");
+  assert.equal(redeployed.recordsCreated, 0);
+  assert.equal(redeployed.idempotentSkips, 2);
+  assert.equal(ownedRecordsForUser(store, ownership, 1, { limit: 100 }).length, 2);
+
   const exactRetry = await service.run("test-retry");
   assert.equal(exactRetry.recordsCreated, 0);
   assert.equal(exactRetry.idempotentSkips, 2);
