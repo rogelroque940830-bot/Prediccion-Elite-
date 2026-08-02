@@ -101,6 +101,12 @@ export type S6qEvidence = {
     distinctWorkerRuns: true;
   };
   manifest: S6mManifestEntry[];
+  independentCertification: {
+    required: 10;
+    certifiedAtReview: number;
+    terminalPredictionIds: string[];
+    digestSha256: string;
+  };
   metrics: S6mMilestoneCertificate["metrics"];
   marketBreakdowns: S6qBreakdown[];
   signalBreakdowns: S6qBreakdown[];
@@ -293,6 +299,48 @@ function canonicalDigest(value: unknown): string {
   return sha256(canonicalize(value));
 }
 
+function isS6mManifestEntryShape(value: unknown): value is S6mManifestEntry {
+  if (!isObjectRecord(value)) return false;
+  return typeof value.ordinal === "number"
+    && typeof value.rootPredictionId === "string"
+    && typeof value.terminalPredictionId === "string"
+    && typeof value.payloadSha256 === "string"
+    && typeof value.gameDate === "string"
+    && typeof value.marketType === "string"
+    && typeof value.selection === "string"
+    && typeof value.signal === "string"
+    && typeof value.modelProbability === "number"
+    && typeof value.marketImpliedProbability === "number"
+    && typeof value.oddsAmerican === "number"
+    && (value.result === "WIN" || value.result === "LOSS" || value.result === "PUSH" || value.result === "VOID")
+    && (value.outcome === 0 || value.outcome === 1 || value.outcome === null)
+    && typeof value.independentlyCertified === "boolean"
+    && typeof value.settlementEventId === "string"
+    && typeof value.settlementSource === "string"
+    && typeof value.settledAt === "string";
+}
+
+function isS6mMilestoneCertificateShape(value: unknown): value is S6mMilestoneCertificate {
+  if (!isObjectRecord(value)) return false;
+  return typeof value.schemaVersion === "string"
+    && typeof value.milestone === "number"
+    && typeof value.createdAt === "string"
+    && typeof value.sourceS6lGeneratedAt === "string"
+    && typeof value.deploymentCommit === "string"
+    && typeof value.environment === "string"
+    && typeof value.sampleRule === "string"
+    && Array.isArray(value.manifest)
+    && value.manifest.every(isS6mManifestEntryShape)
+    && typeof value.manifestDigestSha256 === "string"
+    && isObjectRecord(value.metrics)
+    && typeof value.metrics.binaryDecisions === "number"
+    && typeof value.metrics.wins === "number"
+    && typeof value.metrics.losses === "number"
+    && typeof value.metrics.clvAvailable === "number"
+    && isObjectRecord(value.checks)
+    && typeof value.certificateDigestSha256 === "string";
+}
+
 function certificateCore(certificate: S6mMilestoneCertificate): Omit<S6mMilestoneCertificate, "certificateDigestSha256"> {
   const { certificateDigestSha256: _ignored, ...core } = certificate;
   return core;
@@ -459,6 +507,18 @@ function makeBaseline(
   return { ...core, baselineDigestSha256: sha256(core) };
 }
 
+function independentCertificationEvidence(selected: S6mObservation[]) {
+  const terminalPredictionIds = selected
+    .filter((entry) => entry.independentlyCertified)
+    .map((entry) => entry.terminalPredictionId);
+  const core = {
+    required: 10 as const,
+    certifiedAtReview: terminalPredictionIds.length,
+    terminalPredictionIds,
+  };
+  return { ...core, digestSha256: sha256(core) };
+}
+
 function makeEvidence(
   certificate: S6mMilestoneCertificate,
   baseline: S6qBaseline,
@@ -492,6 +552,7 @@ function makeEvidence(
       distinctWorkerRuns: true,
     },
     manifest: certificate.manifest,
+    independentCertification: independentCertificationEvidence(selected),
     metrics: certificate.metrics,
     marketBreakdowns: groupedBreakdowns(selected, (entry) => entry.marketType),
     signalBreakdowns: groupedBreakdowns(selected, (entry) => entry.signal),
@@ -576,6 +637,11 @@ function isS6qEvidenceArtifactShape(value: unknown): value is S6qEvidence {
     && typeof stability.minimumRequiredMs === "number"
     && stability.distinctWorkerRuns === true
     && Array.isArray(value.manifest)
+    && isObjectRecord(value.independentCertification)
+    && value.independentCertification.required === 10
+    && typeof value.independentCertification.certifiedAtReview === "number"
+    && isStringArray(value.independentCertification.terminalPredictionIds)
+    && typeof value.independentCertification.digestSha256 === "string"
     && isObjectRecord(value.metrics)
     && Array.isArray(value.marketBreakdowns)
     && Array.isArray(value.signalBreakdowns)
@@ -676,12 +742,17 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       && s6pIntegrityGatePassed,
   );
 
-  const certificate = certificates["50"] ?? null;
+  const rawCertificate = certificates["50"] ?? null;
+  const certificateShapeValid = rawCertificate ? isS6mMilestoneCertificateShape(rawCertificate) : null;
+  const certificate = certificateShapeValid ? rawCertificate : null;
+  if (rawCertificate && !certificateShapeValid) {
+    pushIssue(issues, "CERTIFICATE_SHAPE_INVALID", "CRITICAL", "The persisted milestone-50 certificate has an incomplete or incompatible structure.");
+  }
   const milestoneFiftyRow = s6mReport?.milestones.find((entry) => entry.milestone === 50) ?? null;
   const s6mClaimsCertificate = milestoneFiftyRow?.status === "CERTIFIED"
     || (s6mReport?.highestCertifiedMilestone ?? 0) >= 50;
 
-  if (s6mClaimsCertificate && !certificate) {
+  if (s6mClaimsCertificate && !rawCertificate) {
     pushIssue(
       issues,
       "S6M_MILESTONE_50_CERTIFICATE_MISSING",
@@ -689,7 +760,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       "S6M reports milestone 50 as certified, but the append-only certificate is unavailable.",
     );
   }
-  if (certificate && !s6mClaimsCertificate) {
+  if (rawCertificate && !s6mClaimsCertificate) {
     pushIssue(
       issues,
       "S6M_REPORT_CERTIFICATE_DIVERGENCE",
@@ -697,7 +768,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       "A milestone 50 certificate exists, but the current S6M report does not acknowledge it.",
     );
   }
-  if (certificate && !prerequisiteMinimumSample20Certified) {
+  if (rawCertificate && !prerequisiteMinimumSample20Certified) {
     pushIssue(
       issues,
       "MINIMUM_SAMPLE_20_PREREQUISITE_PENDING",
@@ -706,11 +777,11 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     );
   }
 
-  let certificateIntegrity: boolean | null = certificate ? true : null;
-  let currentLedgerManifestMatches: boolean | null = certificate ? true : null;
-  let settlementIdentitiesMatch: boolean | null = certificate ? true : null;
+  let certificateIntegrity: boolean | null = rawCertificate ? Boolean(certificateShapeValid) : null;
+  let currentLedgerManifestMatches: boolean | null = rawCertificate ? Boolean(certificateShapeValid) : null;
+  let settlementIdentitiesMatch: boolean | null = rawCertificate ? Boolean(certificateShapeValid) : null;
 
-  if (!certificate) {
+  if (!rawCertificate) {
     if (baselinePresent || evidencePresent) {
       pushIssue(
         issues,
@@ -719,6 +790,9 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
         "Milestone 50 evidence was previously observed, but its source certificate is now absent.",
       );
     }
+  } else if (!certificate) {
+    currentLedgerManifestMatches = false;
+    settlementIdentitiesMatch = false;
   } else {
     if (certificate.schemaVersion !== MLB_S6M_CERTIFICATE_VERSION || certificate.milestone !== 50) {
       certificateIntegrity = false;
@@ -876,6 +950,24 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
         pushIssue(issues, "EVIDENCE_BASELINE_LINK_INVALID", "CRITICAL", "S6Q evidence does not preserve a valid stability link to its baseline.");
       }
     }
+    const certification = validStoredEvidence.independentCertification;
+    const certificationCore = {
+      required: certification.required,
+      certifiedAtReview: certification.certifiedAtReview,
+      terminalPredictionIds: certification.terminalPredictionIds,
+    };
+    const currentlyCertifiedIds = new Set(
+      selected.filter((entry) => entry.independentlyCertified).map((entry) => entry.terminalPredictionId),
+    );
+    const certificationValid = certification.required === 10
+      && certification.certifiedAtReview === certification.terminalPredictionIds.length
+      && certification.certifiedAtReview >= 10
+      && new Set(certification.terminalPredictionIds).size === certification.terminalPredictionIds.length
+      && certification.terminalPredictionIds.every((id) => currentlyCertifiedIds.has(id))
+      && certification.digestSha256 === sha256(certificationCore);
+    if (!certificationValid) {
+      pushIssue(issues, "INDEPENDENT_CERTIFICATION_EVIDENCE_INVALID", "CRITICAL", "S6Q evidence does not substantiate the ten independent certifications that unlocked human review.");
+    }
     if (!Object.values(validStoredEvidence.checks).every((value) => value === true)) {
       pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6Q evidence contains a failed or missing verification assertion.");
     }
@@ -1017,7 +1109,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       certifiedTerminalPredictionIds: certifiedTerminalPredictionIds.length,
     },
     target: {
-      certificatePresent: Boolean(certificate),
+      certificatePresent: Boolean(rawCertificate),
       manifestEntries: certificate?.manifest.length ?? 0,
       wins: certificate?.metrics.wins ?? null,
       losses: certificate?.metrics.losses ?? null,
