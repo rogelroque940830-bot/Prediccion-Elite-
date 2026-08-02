@@ -311,19 +311,58 @@ function hasAllS6mCertificateChecks(value: unknown): boolean {
     && value.allPriceProvenanceComplete === true;
 }
 
+function hasAllS6qEvidenceChecks(value: unknown): boolean {
+  if (!isObjectRecord(value)) return false;
+  return value.milestoneFiftyCertificatePresent === true
+    && value.prerequisiteMinimumSample20Certified === true
+    && value.tenCertifiedCyclesReached === true
+    && value.exactFiftyDecisionSample === true
+    && value.duplicateFree === true
+    && value.certificateDigestValid === true
+    && value.manifestDigestValid === true
+    && value.currentLedgerManifestMatches === true
+    && value.terminalRecordsPresent === true
+    && value.terminalStagesFinal === true
+    && value.settlementsPresent === true
+    && value.settlementIdentitiesMatch === true
+    && value.settlementResultsBinary === true
+    && value.standardAmericanOdds === true
+    && value.postFixCohort === true
+    && value.s6mMetricParityPassed === true
+    && value.independentFiftyDecisionMetricsMatch === true
+    && value.noCriticalS6mIssues === true
+    && value.ledgerCountMonotonic === true
+    && value.certificateStableAcrossRuns === true;
+}
+
+function isIssueArray(value: unknown): value is Array<{ code: string; severity: string; message: string }> {
+  return Array.isArray(value)
+    && value.every((entry) => isObjectRecord(entry)
+      && typeof entry.code === "string"
+      && typeof entry.severity === "string"
+      && typeof entry.message === "string");
+}
+
+function isS6mMilestoneRows(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.every((entry) => isObjectRecord(entry)
+      && typeof entry.milestone === "number"
+      && typeof entry.status === "string");
+}
+
 function isS6mReportArtifactShape(value: unknown): value is S6mMilestoneReport {
   if (!isObjectRecord(value)) return false;
   const parity = value.metricParity;
   const readiness = value.readiness;
   return typeof value.generatedAt === "string"
     && typeof value.state === "string"
-    && Array.isArray(value.issues)
+    && isIssueArray(value.issues)
     && isObjectRecord(parity)
     && typeof parity.checked === "boolean"
     && typeof parity.passed === "boolean"
     && Array.isArray(parity.mismatches)
     && parity.mismatches.every((entry) => typeof entry === "string")
-    && Array.isArray(value.milestones)
+    && isS6mMilestoneRows(value.milestones)
     && typeof value.highestCertifiedMilestone === "number"
     && isObjectRecord(readiness)
     && typeof readiness.tenCertifiedCyclesReached === "boolean";
@@ -334,7 +373,7 @@ function isS6pReportArtifactShape(value: unknown): value is S6pReport {
   const readiness = value.readiness;
   return typeof value.generatedAt === "string"
     && typeof value.state === "string"
-    && Array.isArray(value.issues)
+    && isIssueArray(value.issues)
     && isObjectRecord(readiness)
     && typeof readiness.minimumSample20Certified === "boolean";
 }
@@ -689,7 +728,7 @@ function isS6qEvidenceArtifactShape(value: unknown): value is S6qEvidence {
     && isObjectRecord(value.provisionalFinalComparison)
     && isObjectRecord(value.concentration)
     && typeof value.sampleAdequacy === "string"
-    && isObjectRecord(checks)
+    && hasAllS6qEvidenceChecks(checks)
     && typeof value.evidenceDigestSha256 === "string";
 }
 
@@ -1019,8 +1058,8 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     if (!certificationValid) {
       pushIssue(issues, "INDEPENDENT_CERTIFICATION_EVIDENCE_INVALID", "CRITICAL", "S6Q evidence does not substantiate the ten independent certifications that unlocked human review.");
     }
-    if (!Object.values(validStoredEvidence.checks).every((value) => value === true)) {
-      pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6Q evidence contains a failed or missing verification assertion.");
+    if (!hasAllS6qEvidenceChecks(validStoredEvidence.checks)) {
+      pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6Q evidence contains a failed or missing named verification assertion.");
     }
     if (validStoredEvidence.sampleAdequacy !== "PREFERRED_SAMPLE_READY_FOR_HUMAN_REVIEW") {
       pushIssue(issues, "EVIDENCE_SAMPLE_ADEQUACY_INVALID", "CRITICAL", "S6Q evidence overstates the scientific maturity of a fifty-result sample.");

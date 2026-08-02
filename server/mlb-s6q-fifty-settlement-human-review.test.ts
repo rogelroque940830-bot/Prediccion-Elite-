@@ -497,3 +497,62 @@ test("rejects a self-consistent milestone certificate with missing named checks"
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "CERTIFICATE_SHAPE_INVALID" || entry.code === "CERTIFICATE_CHECK_FLAGS_INVALID"), true);
 });
+
+
+test("rejects malformed S6M issue entries before filtering", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const malformed = structuredClone(report) as any;
+  malformed.issues = [null];
+  const result = evaluate(records, malformed, certificates);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6M_REPORT_SHAPE_INVALID"), true);
+});
+
+test("rejects malformed S6M milestone rows before searching them", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const malformed = structuredClone(report) as any;
+  malformed.milestones = [null];
+  const result = evaluate(records, malformed, certificates);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6M_REPORT_SHAPE_INVALID"), true);
+});
+
+test("rejects malformed S6P issue entries before filtering", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const malformed = structuredClone(certifiedS6pReport()) as any;
+  malformed.issues = [null];
+  const result = evaluate(records, report, certificates, {}, undefined, malformed);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6P_REPORT_SHAPE_INVALID"), true);
+});
+
+test("rejects self-consistent evidence with missing named checks", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  const second = evaluate(records, report, certificates, { baseline: first.baselineToPersist }, "2026-08-01T21:03:00.000Z", certifiedS6pReport(), records.length);
+  if (!first.baselineToPersist || !second.evidenceToPersist) throw new Error("fixture artifacts missing");
+  const tampered = structuredClone(second.evidenceToPersist) as any;
+  tampered.checks = {};
+  const { evidenceDigestSha256: _ignored, ...core } = tampered;
+  tampered.evidenceDigestSha256 = digest(core);
+  const result = evaluate(records, report, certificates, { baseline: first.baselineToPersist, evidence: tampered }, "2026-08-01T21:04:00.000Z");
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_SHAPE_INVALID" || entry.code === "EVIDENCE_CHECK_FLAGS_INVALID"), true);
+});
+
+test("rejects a milestone certificate when any required named check is false", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const changed = structuredClone(certificates);
+  if (!changed["50"]) throw new Error("fixture milestone-50 certificate missing");
+  (changed["50"].checks as any).allSettled = false;
+  const { certificateDigestSha256: _ignored, ...core } = changed["50"];
+  changed["50"].certificateDigestSha256 = digest(core);
+  const result = evaluate(records, report, changed);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "CERTIFICATE_SHAPE_INVALID" || entry.code === "CERTIFICATE_CHECK_FLAGS_INVALID"), true);
+});
