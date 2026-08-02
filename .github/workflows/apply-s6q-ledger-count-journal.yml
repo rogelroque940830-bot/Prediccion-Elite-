@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - name: Normalize nested template escaping
+      - name: Normalize patch source for current S6Q shape
         shell: bash
         run: |
           python - <<'PY'
@@ -37,6 +37,11 @@ jobs:
           body = segment[1:-1]
           body = body.replace('`', r'\`').replace('${', r'\${')
           source = source[:start] + '`' + body + '`' + source[end:]
+          source = source.replace('typeof persistence.currentOwnedLedgerRecords', 'typeof value.persistence.currentOwnedLedgerRecords')
+          source = source.replace('persistence.ledgerCountJournalAppendOnly', 'value.persistence.ledgerCountJournalAppendOnly')
+          source = source.replace('typeof persistence.ledgerCountAnchorPresent', 'typeof value.persistence.ledgerCountAnchorPresent')
+          source = source.replace('persistence.ledgerCountAnchorRecords', 'value.persistence.ledgerCountAnchorRecords')
+          source = source.replace('persistence.ledgerCountAnchorDigestSha256', 'value.persistence.ledgerCountAnchorDigestSha256')
           path.write_text(source)
           PY
       - name: Apply independent ledger count journal
