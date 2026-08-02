@@ -273,7 +273,7 @@ function evidenceCore(evidence: S6oEvidence): Omit<S6oEvidence, "evidenceDigestS
 }
 
 function manifestFor(observations: S6mObservation[]): S6mManifestEntry[] {
-  return observations.map(({ terminalRecordedAtMs: _ignored, ...entry }, index) => ({
+  return observations.map(({ terminalRecordedAtMs: _ignored, settlementCorrectionOfEventId: _correction, ...entry }, index) => ({
     ordinal: index + 1,
     ...entry,
   }));
@@ -586,8 +586,11 @@ export function evaluateMlbS6oFirstFiveSettlements(
         pushIssue(issues, "TERMINAL_SETTLEMENT_MISSING", "CRITICAL", `Terminal ${manifestEntry.ordinal} no longer contains settlement evidence.`);
         continue;
       }
-      const matches = String(settlement.eventId ?? "") === manifestEntry.settlementEventId
-        && String(settlement.source ?? "") === manifestEntry.settlementSource
+      const sameSealedSettlement = String(settlement.eventId ?? "") === manifestEntry.settlementEventId
+        && String(settlement.source ?? "") === manifestEntry.settlementSource;
+      const explicitlyCorrectsSealedSettlement = settlement.source === "correction"
+        && String(settlement.correctionOfEventId ?? "") === manifestEntry.settlementEventId;
+      const matches = (sameSealedSettlement || explicitlyCorrectsSealedSettlement)
         && String(settlement.settledAt ?? "") === manifestEntry.settledAt
         && settlement.result === manifestEntry.result;
       if (!matches) {

@@ -65,6 +65,7 @@ export type S6mObservation = {
   independentlyCertified: boolean;
   settlementEventId: string;
   settlementSource: string;
+  settlementCorrectionOfEventId: string | null;
   settledAt: string;
 };
 
@@ -77,7 +78,7 @@ export type S6mIndependentSample = {
   exclusionCounts: Record<string, number>;
 };
 
-export type S6mManifestEntry = Omit<S6mObservation, "terminalRecordedAtMs"> & {
+export type S6mManifestEntry = Omit<S6mObservation, "terminalRecordedAtMs" | "settlementCorrectionOfEventId"> & {
   ordinal: number;
 };
 
@@ -428,6 +429,9 @@ export function extractMlbS6mIndependentSample(
       independentlyCertified: certified.has(terminal.prediction.id),
       settlementEventId: String(terminal.settlement.eventId ?? ""),
       settlementSource: String(terminal.settlement.source ?? ""),
+      settlementCorrectionOfEventId: terminal.settlement.correctionOfEventId
+        ? String(terminal.settlement.correctionOfEventId)
+        : null,
       settledAt: String(terminal.settlement.settledAt ?? ""),
     });
   }
@@ -524,7 +528,7 @@ export function computeMlbS6mIndependentMetrics(observations: S6mObservation[]):
 }
 
 function manifestFor(observations: S6mObservation[]): S6mManifestEntry[] {
-  return observations.map(({ terminalRecordedAtMs: _ignored, ...entry }, index) => ({
+  return observations.map(({ terminalRecordedAtMs: _ignored, settlementCorrectionOfEventId: _correction, ...entry }, index) => ({
     ordinal: index + 1,
     ...entry,
   }));
@@ -637,11 +641,26 @@ function validateCertificate(
     return errors;
   }
   const currentManifest = manifestFor(expected);
-  const expectedManifest = currentManifest.map((entry, index) => ({
-    ...entry,
-    // Independent certification is a later lifecycle annotation, not part of the immutable pick identity.
-    independentlyCertified: certificate.manifest[index]?.independentlyCertified ?? entry.independentlyCertified,
-  }));
+  const expectedManifest = currentManifest.map((entry, index) => {
+    const stored = certificate.manifest[index];
+    const currentObservation = expected[index];
+    const normalized = {
+      ...entry,
+      // Independent certification is a later lifecycle annotation, not part of the immutable pick identity.
+      independentlyCertified: stored?.independentlyCertified ?? entry.independentlyCertified,
+    };
+    const otherFieldsMatch = stored && Object.keys(stored)
+      .filter((field) => field !== "settlementEventId" && field !== "settlementSource")
+      .every((field) => JSON.stringify(stored[field as keyof S6mManifestEntry])
+        === JSON.stringify(normalized[field as keyof S6mManifestEntry]));
+    const correctionLinksToSealedEvent = currentObservation?.settlementSource === "correction"
+      && currentObservation.settlementCorrectionOfEventId === stored?.settlementEventId;
+    return otherFieldsMatch && correctionLinksToSealedEvent ? {
+      ...normalized,
+      settlementEventId: stored.settlementEventId,
+      settlementSource: stored.settlementSource,
+    } : normalized;
+  });
   if (stableDigest(certificate.manifest) !== certificate.manifestDigestSha256) {
     errors.push("Manifest digest does not match the stored manifest.");
   }
