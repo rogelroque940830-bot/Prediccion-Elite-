@@ -225,6 +225,24 @@ test("does not let a late-settled earlier decision displace a sealed milestone c
   assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_5_CERTIFICATE_INVALID"), false);
 });
 
+test("reports only ordinal and field names when a sealed settlement identity changes", () => {
+  const records = Array.from({ length: 5 }, (_, index) => pairedDecision(index)).flat();
+  const sample = extractMlbS6mIndependentSample(records);
+  const certificate = buildMlbS6mMilestoneCertificate(sample.binaryObservations, 5, {
+    createdAt: "2026-08-01T19:05:00.000Z",
+    sourceS6lGeneratedAt: "2026-08-01T19:00:00.000Z",
+  });
+  const corrected = structuredClone(records);
+  const changed = corrected.find((entry) => entry.prediction.id === "final-2");
+  assert.ok(changed?.settlement);
+  changed.settlement.eventId = "replacement-settlement-event";
+
+  const evaluation = evaluate(corrected, [], { "5": certificate });
+  const issue = evaluation.report.issues.find((entry) => entry.code === "MILESTONE_5_CERTIFICATE_INVALID");
+  assert.match(issue?.message ?? "", /ordinal 3: settlementEventId/);
+  assert.doesNotMatch(issue?.message ?? "", /replacement-settlement-event|final-2/);
+});
+
 test("creates immutable milestone 1 and 5 certificates from deterministic first-N decisions", () => {
   const records = Array.from({ length: 5 }, (_, index) => pairedDecision(index)).flat();
   const evaluation = evaluate(records, ["final-0", "final-1"]);
