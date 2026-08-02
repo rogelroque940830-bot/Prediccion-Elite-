@@ -211,6 +211,20 @@ test("keeps an immutable pre-fix certificate valid at an exact ECE micro-unit bo
   assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_5_CERTIFICATE_INVALID"), false);
 });
 
+test("does not let a late-settled earlier decision displace a sealed milestone cohort", () => {
+  const originallyEligible = Array.from({ length: 5 }, (_, index) => pairedDecision(index + 1)).flat();
+  const originalSample = extractMlbS6mIndependentSample(originallyEligible);
+  const certificate = buildMlbS6mMilestoneCertificate(originalSample.binaryObservations, 5, {
+    createdAt: "2026-08-01T19:05:00.000Z",
+    sourceS6lGeneratedAt: "2026-08-01T19:00:00.000Z",
+  });
+  const lateSettledEarlier = pairedDecision(0);
+
+  const evaluation = evaluate([...lateSettledEarlier, ...originallyEligible], [], { "5": certificate });
+  assert.equal(evaluation.report.milestones.find((entry) => entry.milestone === 5)?.status, "CERTIFIED");
+  assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_5_CERTIFICATE_INVALID"), false);
+});
+
 test("creates immutable milestone 1 and 5 certificates from deterministic first-N decisions", () => {
   const records = Array.from({ length: 5 }, (_, index) => pairedDecision(index)).flat();
   const evaluation = evaluate(records, ["final-0", "final-1"]);
