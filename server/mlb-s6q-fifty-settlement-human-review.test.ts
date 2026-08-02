@@ -657,6 +657,17 @@ test("validates the S6K report before traversing its evidence", () => {
     ],
   });
   assert.deepEqual(valid, { terminalPredictionIds: ["final-1"], error: null });
+
+  const extended = buildMlbS6qCertifiedTerminalPredictionIdsFromS6k({
+    evidence: [{ state: "CERTIFIED", target: { terminalPredictionId: "sealed-first-ten" } }],
+    certificationPool: {
+      evidence: [
+        { state: "CERTIFIED", target: { terminalPredictionId: "pool-final-1" } },
+        { state: "CERTIFIED", target: { terminalPredictionId: "pool-final-2" } },
+      ],
+    },
+  });
+  assert.deepEqual(extended, { terminalPredictionIds: ["pool-final-1", "pool-final-2"], error: null });
 });
 
 test("converts malformed S6K evidence into ACTION_REQUIRED", () => {
