@@ -16,6 +16,7 @@ import type { OfficialMlbGame } from "./mlb-settlement-worker";
 
 export const MLB_S6K_FIRST_TEN_VERSION = "mlb-s6k-first-ten-clean-cycles.v1" as const;
 export const MLB_S6K_TARGET_COUNT = 10 as const;
+export const MLB_S6K_CERTIFICATION_POOL_LIMIT = 50 as const;
 
 const CUTOFF_MS = Date.parse(MLB_S6I_CLEAN_COHORT_CUTOFF);
 
@@ -96,6 +97,16 @@ export type S6kBatchReport = {
   };
   readyForAnalysis: boolean;
   evidence: S6jFirstCycleReport[];
+  certificationPool: {
+    limit: typeof MLB_S6K_CERTIFICATION_POOL_LIMIT;
+    evaluated: number;
+    certified: number;
+    review: number;
+    rejected: number;
+    waiting: number;
+    cycles: S6kCycleSummary[];
+    evidence: S6jFirstCycleReport[];
+  };
   safety: {
     mode: "SHADOW";
     realFinancialExposure: 0;
@@ -223,7 +234,7 @@ function candidateOrder(left: [string, LedgerRecord[]], right: [string, LedgerRe
 export function selectFirstTenCleanCycleTargets(
   records: LedgerRecord[],
   existingRootPredictionIds: string[] = [],
-  limit = MLB_S6K_TARGET_COUNT,
+  limit: number = MLB_S6K_TARGET_COUNT,
 ): string[] {
   const groups = groupS5cChains(records);
   const selected = [...new Set(existingRootPredictionIds.map(String).filter(Boolean))].slice(0, limit);
@@ -257,6 +268,47 @@ export function classifyS6kCycle(report: S6jFirstCycleReport): S6kCycleStatus {
   return "WAITING";
 }
 
+function cycleSummary(
+  report: S6jFirstCycleReport,
+  index: number,
+  rootPredictionIds: string[],
+): S6kCycleSummary {
+  const status = classifyS6kCycle(report);
+  return {
+    ordinal: index + 1,
+    rootPredictionId: rootPredictionIds[index] ?? report.target.rootPredictionId ?? "missing",
+    terminalPredictionId: report.target.terminalPredictionId,
+    status,
+    lifecycleState: report.state,
+    gamePk: report.target.gamePk,
+    gameDate: report.target.gameDate,
+    awayTeam: report.target.awayTeam,
+    homeTeam: report.target.homeTeam,
+    marketType: report.target.marketType,
+    selection: report.target.selection,
+    line: report.target.line,
+    chainLength: report.lifecycle.chainLength,
+    provisionalStages: report.lifecycle.provisionalStages,
+    finalStages: report.lifecycle.finalStages,
+    settled: report.lifecycle.settled,
+    result: report.lifecycle.settlementResult,
+    officialVerified: report.officialVerification.gameFinal && report.lifecycle.officialGradeResult != null,
+    comparableClosingCaptured: report.lifecycle.comparableClosingCaptured,
+    clvCaptured: report.lifecycle.clvCaptured,
+    criticalIssues: report.issues.filter((entry) => entry.severity === "CRITICAL").length,
+    warningIssues: report.issues.filter((entry) => entry.severity === "WARNING").length,
+    issueCodes: [...new Set(report.issues.map((entry) => entry.code))],
+  };
+}
+
+export function certifiedTerminalPredictionIdsFromS6k(report: S6kBatchReport | null): string[] {
+  const evidence = report?.certificationPool?.evidence ?? report?.evidence ?? [];
+  return [...new Set(evidence
+    .filter((entry) => entry.state === "CERTIFIED")
+    .map((entry) => entry.target.terminalPredictionId)
+    .filter((entry): entry is string => Boolean(entry)))];
+}
+
 export function buildMlbS6kFirstTenReport(
   reports: S6jFirstCycleReport[],
   options: {
@@ -267,39 +319,17 @@ export function buildMlbS6kFirstTenReport(
     environment?: string;
     previousOwnedLedgerRecords?: number | null;
     currentOwnedLedgerRecords: number;
+    certificationPoolReports?: S6jFirstCycleReport[];
+    certificationPoolRootPredictionIds?: string[];
   },
 ): S6kBatchReport {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const previousCount = options.previousOwnedLedgerRecords ?? null;
   const countMonotonic = previousCount == null || options.currentOwnedLedgerRecords >= previousCount;
-  const cycles = reports.map((report, index): S6kCycleSummary => {
-    const status = classifyS6kCycle(report);
-    return {
-      ordinal: index + 1,
-      rootPredictionId: options.rootPredictionIds[index] ?? report.target.rootPredictionId ?? "missing",
-      terminalPredictionId: report.target.terminalPredictionId,
-      status,
-      lifecycleState: report.state,
-      gamePk: report.target.gamePk,
-      gameDate: report.target.gameDate,
-      awayTeam: report.target.awayTeam,
-      homeTeam: report.target.homeTeam,
-      marketType: report.target.marketType,
-      selection: report.target.selection,
-      line: report.target.line,
-      chainLength: report.lifecycle.chainLength,
-      provisionalStages: report.lifecycle.provisionalStages,
-      finalStages: report.lifecycle.finalStages,
-      settled: report.lifecycle.settled,
-      result: report.lifecycle.settlementResult,
-      officialVerified: report.officialVerification.gameFinal && report.lifecycle.officialGradeResult != null,
-      comparableClosingCaptured: report.lifecycle.comparableClosingCaptured,
-      clvCaptured: report.lifecycle.clvCaptured,
-      criticalIssues: report.issues.filter((entry) => entry.severity === "CRITICAL").length,
-      warningIssues: report.issues.filter((entry) => entry.severity === "WARNING").length,
-      issueCodes: [...new Set(report.issues.map((entry) => entry.code))],
-    };
-  });
+  const cycles = reports.map((report, index) => cycleSummary(report, index, options.rootPredictionIds));
+  const poolEvidence = options.certificationPoolReports ?? reports;
+  const poolRoots = options.certificationPoolRootPredictionIds ?? options.rootPredictionIds;
+  const poolCycles = poolEvidence.map((report, index) => cycleSummary(report, index, poolRoots));
 
   const count = (status: S6kCycleStatus) => cycles.filter((cycle) => cycle.status === status).length;
   const summary = {
@@ -346,6 +376,16 @@ export function buildMlbS6kFirstTenReport(
     },
     readyForAnalysis,
     evidence: reports,
+    certificationPool: {
+      limit: MLB_S6K_CERTIFICATION_POOL_LIMIT,
+      evaluated: poolCycles.length,
+      certified: poolCycles.filter((cycle) => cycle.status === "PASS").length,
+      review: poolCycles.filter((cycle) => cycle.status === "REVIEW").length,
+      rejected: poolCycles.filter((cycle) => cycle.status === "REJECT").length,
+      waiting: poolCycles.filter((cycle) => cycle.status === "WAITING").length,
+      cycles: poolCycles,
+      evidence: poolEvidence,
+    },
     safety: {
       mode: "SHADOW",
       realFinancialExposure: 0,
@@ -560,9 +600,15 @@ export class MlbS6kFirstTenCyclesCertificationService {
       const previous = this.readLatest();
       const records = this.records();
       const registry = this.ensureTargets(records, now);
-      const official = await this.officialGamesFor(records, registry.rootPredictionIds);
+      const certificationPoolRoots = selectFirstTenCleanCycleTargets(
+        records,
+        [],
+        MLB_S6K_CERTIFICATION_POOL_LIMIT,
+      );
+      const rootsToEvaluate = [...new Set([...registry.rootPredictionIds, ...certificationPoolRoots])];
+      const official = await this.officialGamesFor(records, rootsToEvaluate);
       const observations = this.s5eCoverage.readObservations();
-      const reports = registry.rootPredictionIds.map((rootId) => {
+      const reportFor = (rootId: string) => {
         const evidence = official.get(rootId) ?? { game: null, error: null };
         return buildMlbS6jFirstCycleCertification(records, {
           targetRootId: rootId,
@@ -575,7 +621,10 @@ export class MlbS6kFirstTenCyclesCertificationService {
           deploymentCommit: this.deploymentCommit,
           environment: this.environment,
         });
-      });
+      };
+      const reportsByRoot = new Map(rootsToEvaluate.map((rootId) => [rootId, reportFor(rootId)]));
+      const certificationPoolReports = certificationPoolRoots.map((rootId) => reportsByRoot.get(rootId)!);
+      const reports = registry.rootPredictionIds.map((rootId) => reportsByRoot.get(rootId) ?? reportFor(rootId));
       const report = buildMlbS6kFirstTenReport(reports, {
         rootPredictionIds: registry.rootPredictionIds,
         generatedAt: now.toISOString(),
@@ -584,6 +633,8 @@ export class MlbS6kFirstTenCyclesCertificationService {
         environment: this.environment,
         previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
         currentOwnedLedgerRecords: records.length,
+        certificationPoolReports,
+        certificationPoolRootPredictionIds: certificationPoolRoots,
       });
       atomicWriteJson(path.join(this.root, "latest.json"), report);
       const previousDigest = previous ? stableDigest({ ...previous, generatedAt: undefined, trigger: undefined }) : null;
