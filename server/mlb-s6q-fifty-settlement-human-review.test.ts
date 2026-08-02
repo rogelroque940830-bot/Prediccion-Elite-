@@ -449,3 +449,51 @@ test("converts a malformed previous report into ACTION_REQUIRED", () => {
   assert.equal(result.baselineToPersist, null);
   assert.equal(result.evidenceToPersist, null);
 });
+
+
+test("turns a malformed S6M upstream report into ACTION_REQUIRED without throwing", () => {
+  const records = recordsFor(50);
+  const { certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    {} as S6mMilestoneReport,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(10),
+    { baseline: null, evidence: null },
+    { generatedAt: "2026-08-01T21:02:00.000Z", deploymentCommit: "fixture", environment: "test", minimumStabilityMs: 60_000 },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6M_REPORT_SHAPE_INVALID"), true);
+  assert.equal(result.baselineToPersist, null);
+});
+
+test("turns a malformed S6P upstream report into ACTION_REQUIRED without throwing", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    {} as S6pReport,
+    terminalIds(10),
+    { baseline: null, evidence: null },
+    { generatedAt: "2026-08-01T21:02:00.000Z", deploymentCommit: "fixture", environment: "test", minimumStabilityMs: 60_000 },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6P_REPORT_SHAPE_INVALID"), true);
+  assert.equal(result.baselineToPersist, null);
+});
+
+test("rejects a self-consistent milestone certificate with missing named checks", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const changed = structuredClone(certificates);
+  if (!changed["50"]) throw new Error("fixture milestone-50 certificate missing");
+  changed["50"].checks = {} as any;
+  const { certificateDigestSha256: _ignored, ...core } = changed["50"];
+  changed["50"].certificateDigestSha256 = digest(core);
+  const result = evaluate(records, report, changed);
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "CERTIFICATE_SHAPE_INVALID" || entry.code === "CERTIFICATE_CHECK_FLAGS_INVALID"), true);
+});

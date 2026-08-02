@@ -300,6 +300,45 @@ function canonicalDigest(value: unknown): string {
   return sha256(canonicalize(value));
 }
 
+function hasAllS6mCertificateChecks(value: unknown): boolean {
+  if (!isObjectRecord(value)) return false;
+  return value.exactSampleSize === true
+    && value.duplicateFree === true
+    && value.allPostFix === true
+    && value.allTerminalFinal === true
+    && value.allSettled === true
+    && value.allStandardAmericanOdds === true
+    && value.allPriceProvenanceComplete === true;
+}
+
+function isS6mReportArtifactShape(value: unknown): value is S6mMilestoneReport {
+  if (!isObjectRecord(value)) return false;
+  const parity = value.metricParity;
+  const readiness = value.readiness;
+  return typeof value.generatedAt === "string"
+    && typeof value.state === "string"
+    && Array.isArray(value.issues)
+    && isObjectRecord(parity)
+    && typeof parity.checked === "boolean"
+    && typeof parity.passed === "boolean"
+    && Array.isArray(parity.mismatches)
+    && parity.mismatches.every((entry) => typeof entry === "string")
+    && Array.isArray(value.milestones)
+    && typeof value.highestCertifiedMilestone === "number"
+    && isObjectRecord(readiness)
+    && typeof readiness.tenCertifiedCyclesReached === "boolean";
+}
+
+function isS6pReportArtifactShape(value: unknown): value is S6pReport {
+  if (!isObjectRecord(value)) return false;
+  const readiness = value.readiness;
+  return typeof value.generatedAt === "string"
+    && typeof value.state === "string"
+    && Array.isArray(value.issues)
+    && isObjectRecord(readiness)
+    && typeof readiness.minimumSample20Certified === "boolean";
+}
+
 function isS6mManifestEntryShape(value: unknown): value is S6mManifestEntry {
   if (!isObjectRecord(value)) return false;
   return typeof value.ordinal === "number"
@@ -338,7 +377,7 @@ function isS6mMilestoneCertificateShape(value: unknown): value is S6mMilestoneCe
     && typeof value.metrics.wins === "number"
     && typeof value.metrics.losses === "number"
     && typeof value.metrics.clvAvailable === "number"
-    && isObjectRecord(value.checks)
+    && hasAllS6mCertificateChecks(value.checks)
     && typeof value.certificateDigestSha256 === "string";
 }
 
@@ -660,9 +699,9 @@ function exactStringArray(left: string[], right: string[]): boolean {
 
 export function evaluateMlbS6qFiftySettlementHumanReview(
   records: LedgerRecord[],
-  s6mReport: S6mMilestoneReport | null,
+  s6mReportInput: S6mMilestoneReport | null,
   certificates: S6mCertificateMap,
-  s6pReport: S6pReport | null,
+  s6pReportInput: S6pReport | null,
   certifiedTerminalPredictionIds: string[],
   stored: StoredArtifacts,
   options: EvaluationOptions = {},
@@ -674,6 +713,10 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const previousCount = options.previousOwnedLedgerRecords ?? null;
   const currentOwnedLedgerRecords = options.currentOwnedLedgerRecords ?? records.length;
   const countMonotonic = previousCount == null || currentOwnedLedgerRecords >= previousCount;
+  const s6mReportShapeValid = s6mReportInput == null ? null : isS6mReportArtifactShape(s6mReportInput);
+  const s6pReportShapeValid = s6pReportInput == null ? null : isS6pReportArtifactShape(s6pReportInput);
+  const s6mReport = s6mReportShapeValid ? s6mReportInput : null;
+  const s6pReport = s6pReportShapeValid ? s6pReportInput : null;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
   const selected = sample.binaryObservations.slice(0, MLB_S6Q_TARGET_SIZE);
   const independentlyCertifiedAmongFirstFifty = selected.filter((entry) => entry.independentlyCertified).length;
@@ -688,6 +731,12 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   let evidenceToPersist: S6qEvidence | null = null;
 
   if (options.previousReportReadError) pushIssue(issues, "PREVIOUS_REPORT_INVALID", "CRITICAL", options.previousReportReadError);
+  if (s6mReportInput && !s6mReportShapeValid) {
+    pushIssue(issues, "S6M_REPORT_SHAPE_INVALID", "CRITICAL", "The persisted S6M report has an incomplete or incompatible structure.");
+  }
+  if (s6pReportInput && !s6pReportShapeValid) {
+    pushIssue(issues, "S6P_REPORT_SHAPE_INVALID", "CRITICAL", "The persisted S6P report has an incomplete or incompatible structure.");
+  }
   if (stored.baselineReadError) pushIssue(issues, "BASELINE_UNREADABLE", "CRITICAL", stored.baselineReadError);
   if (stored.evidenceReadError) pushIssue(issues, "EVIDENCE_UNREADABLE", "CRITICAL", stored.evidenceReadError);
   if (options.previousBaselinePresent && !baselinePresent) {
@@ -804,7 +853,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       certificateIntegrity = false;
       pushIssue(issues, "CERTIFICATE_SAMPLE_SIZE_INVALID", "CRITICAL", "Milestone 50 must contain exactly fifty binary decisions.");
     }
-    if (!Object.values(certificate.checks).every((value) => value === true)) {
+    if (!hasAllS6mCertificateChecks(certificate.checks)) {
       certificateIntegrity = false;
       pushIssue(issues, "CERTIFICATE_CHECK_FLAGS_INVALID", "CRITICAL", "Milestone 50 contains a failed or missing integrity assertion.");
     }
