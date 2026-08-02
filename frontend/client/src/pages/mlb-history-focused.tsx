@@ -408,7 +408,7 @@ export default function MLBHistoryFocused() {
   const certification = certificationQuery.data?.latest;
   const certificationPool = certification?.certificationPool;
   const certificationReasons = certificationPool
-    ? [...new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes))]
+    ? Array.from(new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes)))
       .sort()
       .map((code) => ({
         code,
