@@ -15,15 +15,20 @@ import { Button } from "@/components/ui/button";
 import {
   Activity,
   Archive,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   Database,
   Eye,
+  Hourglass,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Target,
   Trophy,
+  XCircle,
 } from "lucide-react";
 
 type FocusView = "priority" | "waiting" | "verify" | "results";
@@ -49,6 +54,27 @@ interface LedgerHistoryView {
   picks: MlbHistoryFocusPick[];
 }
 
+interface S6kCertificationCycle {
+  ordinal: number;
+  status: "PASS" | "REVIEW" | "REJECT" | "WAITING";
+  lifecycleState: string;
+  gamePk: number | null;
+  gameDate: string | null;
+  awayTeam: string | null;
+  homeTeam: string | null;
+  marketType: string | null;
+  selection: string | null;
+  line: number | null;
+  finalStages: number;
+  settled: boolean;
+  result: string | null;
+  officialVerified: boolean;
+  comparableClosingCaptured: boolean;
+  criticalIssues: number;
+  warningIssues: number;
+  issueCodes: string[];
+}
+
 interface S6kCertificationStatus {
   latest: {
     state: string;
@@ -60,9 +86,87 @@ interface S6kCertificationStatus {
       review: number;
       rejected: number;
       waiting: number;
-      cycles: Array<{ issueCodes: string[] }>;
+      cycles: S6kCertificationCycle[];
     } | null;
   } | null;
+}
+
+const CERTIFICATION_ISSUES: Record<string, { title: string; detail: string; action: string }> = {
+  FINAL_MISSING_AFTER_START: {
+    title: "Faltó la captura FINAL antes del juego",
+    detail: "El ciclo conservó una lectura provisional, pero no registró una versión FINAL válida antes del inicio.",
+    action: "No se certifica. Los casos históricos se conservan; la captura automática ahora revisa cada 5 minutos.",
+  },
+  COMPARABLE_CLOSING_MISSING: {
+    title: "Falta una cuota de cierre comparable",
+    detail: "No existe una cuota final del mismo mercado y fuente que permita medir el movimiento del precio con integridad.",
+    action: "Esperar o verificar la captura de cierre; no completar el dato con una cuota de otra fuente.",
+  },
+  CLOSING_PRICE_MISMATCH: {
+    title: "La cuota de cierre no coincide",
+    detail: "La evidencia de cierre encontrada no corresponde exactamente al mercado, selección o casa del registro.",
+    action: "Revisar la fuente y el mercado. El ciclo permanece rechazado hasta que la evidencia sea comparable.",
+  },
+  CLOSING_LINE_MISMATCH: {
+    title: "La línea de cierre no coincide",
+    detail: "El número de la línea guardada difiere de la línea comparable usada para verificar el cierre.",
+    action: "Confirmar mercado, selección y línea antes de aceptar el cálculo de CLV.",
+  },
+  FINAL_CAPTURED_AFTER_START: {
+    title: "La captura FINAL llegó tarde",
+    detail: "La versión FINAL fue registrada después de la ventana permitida alrededor del inicio del juego.",
+    action: "No usarla como evidencia prepartido; conservarla solo para auditoría.",
+  },
+  FINAL_LINEUP_EVIDENCE_INCOMPLETE: {
+    title: "Alineaciones oficiales incompletas",
+    detail: "La captura marcada como FINAL no contiene nueve bateadores oficiales por equipo.",
+    action: "Mantener el ciclo fuera de certificación hasta disponer de ambas alineaciones completas.",
+  },
+  SETTLEMENT_OVERDUE: {
+    title: "Resultado pendiente fuera de tiempo",
+    detail: "El juego ya debió finalizar, pero el ledger todavía no contiene una liquidación oficial.",
+    action: "Verificar el resultado oficial y el trabajador de liquidación; no registrar un resultado manual estimado.",
+  },
+  SETTLEMENT_RESULT_MISMATCH: {
+    title: "El resultado liquidado no coincide",
+    detail: "La clasificación guardada difiere del resultado recalculado con el marcador oficial.",
+    action: "Revisar las reglas del mercado y emitir una corrección enlazada si corresponde.",
+  },
+  SETTLEMENT_SOURCE_INVALID: {
+    title: "Fuente de resultado no válida",
+    detail: "La liquidación no está respaldada por una fuente oficial aceptada.",
+    action: "Sustituirla únicamente mediante una corrección enlazada con evidencia oficial.",
+  },
+  OFFICIAL_GAME_UNAVAILABLE: {
+    title: "Juego oficial no disponible",
+    detail: "No fue posible resolver o consultar el juego correspondiente en la fuente oficial de MLB.",
+    action: "Verificar gamePk, fecha y equipos antes de volver a evaluar.",
+  },
+  PRICE_PROVENANCE_INVALID: {
+    title: "Origen de la cuota incompleto",
+    detail: "Falta la hora, la casa o el método de consenso necesario para auditar el precio.",
+    action: "Mantener el caso fuera de certificación hasta recuperar la procedencia exacta.",
+  },
+  INVALID_AMERICAN_ODDS: {
+    title: "Cuota americana inválida",
+    detail: "El precio guardado no cumple el formato estándar de cuotas americanas.",
+    action: "Corregir la fuente de precio; no convertir ni adivinar el valor.",
+  },
+};
+
+function certificationIssue(code: string) {
+  return CERTIFICATION_ISSUES[code] ?? {
+    title: code.toLowerCase().split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" "),
+    detail: "La comprobación independiente encontró una inconsistencia que impide certificar este ciclo.",
+    action: "Abrir la auditoría completa y verificar la evidencia original antes de usar el caso.",
+  };
+}
+
+function cycleStatus(cycle: S6kCertificationCycle) {
+  if (cycle.status === "PASS") return { label: "Certificado", className: "border-green-500/40 bg-green-500/10 text-green-300" };
+  if (cycle.status === "REJECT") return { label: "Rechazado", className: "border-red-500/40 bg-red-500/10 text-red-300" };
+  if (cycle.status === "REVIEW") return { label: "Revisión", className: "border-orange-500/40 bg-orange-500/10 text-orange-300" };
+  return { label: "Esperando", className: "border-amber-500/40 bg-amber-500/10 text-amber-300" };
 }
 
 function oddsLabel(value: number): string {
@@ -344,6 +448,7 @@ export default function MLBHistoryFocused() {
   const { state } = useAppContext();
   const [activeView, setActiveView] = useState<FocusView>("priority");
   const [visibleResultCount, setVisibleResultCount] = useState(RESULTS_PAGE_SIZE);
+  const [expandedCertificationIssue, setExpandedCertificationIssue] = useState<string | null>(null);
 
   const historyQuery = useQuery({
     queryKey: ["mlb-ledger-history-focus"],
@@ -413,6 +518,7 @@ export default function MLBHistoryFocused() {
       .map((code) => ({
         code,
         count: certificationPool.cycles.filter((cycle) => cycle.issueCodes.includes(code)).length,
+        cycles: certificationPool.cycles.filter((cycle) => cycle.issueCodes.includes(code)),
       }))
     : [];
 
@@ -493,9 +599,95 @@ export default function MLBHistoryFocused() {
               ))}
             </div>
             {certificationReasons.length > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                Motivos observados: {certificationReasons.map(({ code, count }) => `${code} (${count})`).join(" · ")}
-              </p>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-violet-100">Casos que no aprobaron</p>
+                  <p className="text-[11px] text-muted-foreground">Abre cada motivo para ver los partidos afectados.</p>
+                </div>
+                {certificationReasons.map(({ code, count, cycles }) => {
+                  const issue = certificationIssue(code);
+                  const expanded = expandedCertificationIssue === code;
+                  return (
+                    <div key={code} className="overflow-hidden rounded-lg border border-violet-500/20 bg-slate-950/35">
+                      <button
+                        type="button"
+                        className="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-violet-500/[0.06]"
+                        onClick={() => setExpandedCertificationIssue(expanded ? null : code)}
+                        aria-expanded={expanded}
+                      >
+                        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-100">{issue.title}</span>
+                            <Badge variant="outline" className="h-5 border-orange-500/30 text-[10px] text-orange-200">
+                              {count} {count === 1 ? "caso" : "casos"}
+                            </Badge>
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">{issue.detail}</span>
+                        </span>
+                        {expanded
+                          ? <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          : <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+                      </button>
+
+                      {expanded && (
+                        <div className="space-y-2 border-t border-violet-500/15 p-3">
+                          <div className="rounded-md border border-cyan-500/20 bg-cyan-500/[0.05] p-2.5 text-xs text-cyan-100">
+                            <span className="font-semibold">Qué hacer:</span> {issue.action}
+                          </div>
+                          {cycles.map((cycle) => {
+                            const status = cycleStatus(cycle);
+                            const teams = cycle.awayTeam && cycle.homeTeam
+                              ? `${cycle.awayTeam} vs ${cycle.homeTeam}`
+                              : `Ciclo auditado #${cycle.ordinal}`;
+                            return (
+                              <div key={`${code}-${cycle.ordinal}`} className="rounded-md border border-border/60 bg-card/50 p-3">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-100">{teams}</p>
+                                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                      {cycle.gameDate ? formatDateTime(null, cycle.gameDate) : "Fecha no disponible"}
+                                      {cycle.marketType ? ` · ${cycle.marketType}` : ""}
+                                      {cycle.selection ? ` · ${cycle.selection}` : ""}
+                                      {cycle.line != null ? ` ${normalizedLine(cycle.line)}` : ""}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className={status.className}>{status.label}</Badge>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                  {[
+                                    [cycle.finalStages > 0, "Captura FINAL"],
+                                    [cycle.officialVerified, "Resultado oficial"],
+                                    [cycle.comparableClosingCaptured, "Cuota de cierre comparable"],
+                                  ].map(([complete, label]) => (
+                                    <div key={String(label)} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                      {complete
+                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                                        : <XCircle className="h-3.5 w-3.5 text-red-400" />}
+                                      <span>{label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {!cycle.settled && (
+                                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300">
+                                    <Hourglass className="h-3.5 w-3.5" /> Resultado todavía pendiente de liquidación.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                            <Link href="/mlb-history-audit">
+                              <Eye className="mr-1.5 h-3.5 w-3.5" />
+                              Abrir evidencia completa
+                            </Link>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
