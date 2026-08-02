@@ -91,6 +91,39 @@ interface S6kCertificationStatus {
   } | null;
 }
 
+interface S6lMetricSummary {
+  observations: number;
+  binaryDecisions: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  meanModelProbability: number | null;
+  observedWinRate: number | null;
+  winRateWilson95: { low: number; high: number } | null;
+  brierScore: number | null;
+  logLoss: number | null;
+  expectedCalibrationError: number | null;
+  flatStakeProfitUnits: number;
+  flatStakeRoiPct: number | null;
+  clvCoveragePct: number | null;
+  meanClvPp: number | null;
+  medianClvPp: number | null;
+}
+
+interface S6lScientificReport {
+  state: "INSUFFICIENT_SAMPLE" | "COLLECTING" | "READY_FOR_REVIEW" | "ACTION_REQUIRED";
+  cohort: { minimumBinarySample: number; preferredBinarySample: number };
+  overall: S6lMetricSummary;
+  byMarket: Array<{ key: string; metrics: S6lMetricSummary }>;
+  coverage: { independentCertificationPct: number | null; clvPct: number | null };
+  readiness: {
+    enoughForFirstRead: boolean;
+    preferredSampleReached: boolean;
+    conclusionsAllowed: boolean;
+    automaticModelChangesAllowed: false;
+  };
+}
+
 const CERTIFICATION_ISSUES: Record<string, { title: string; detail: string; action: string }> = {
   FINAL_MISSING_AFTER_START: {
     title: "Faltó la captura FINAL antes del juego",
@@ -167,6 +200,25 @@ function cycleStatus(cycle: S6kCertificationCycle) {
   if (cycle.status === "REJECT") return { label: "Rechazado", className: "border-red-500/40 bg-red-500/10 text-red-300" };
   if (cycle.status === "REVIEW") return { label: "Revisión", className: "border-orange-500/40 bg-orange-500/10 text-orange-300" };
   return { label: "Esperando", className: "border-amber-500/40 bg-amber-500/10 text-amber-300" };
+}
+
+function pct(value: number | null, digits = 1): string {
+  return value == null || !Number.isFinite(value) ? "—" : `${(value * 100).toFixed(digits)}%`;
+}
+
+function metricNumber(value: number | null, digits = 3): string {
+  return value == null || !Number.isFinite(value) ? "—" : value.toFixed(digits);
+}
+
+function marketLabel(value: string): string {
+  const labels: Record<string, string> = {
+    F5_ML: "Ganador primeras 5 entradas",
+    F5_TOTAL: "Total primeras 5 entradas",
+    ML: "Ganador del juego",
+    RUN_LINE: "Línea de carreras",
+    TOTAL: "Total del juego",
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
 }
 
 function oddsLabel(value: number): string {
@@ -474,6 +526,18 @@ export default function MLBHistoryFocused() {
     refetchOnMount: "always",
   });
 
+  const scientificQuery = useQuery({
+    queryKey: ["mlb-scientific-performance"],
+    queryFn: async () => {
+      const response = await fetchJson<{ success: boolean; data: S6lScientificReport }>(
+        "/api/mlb/ledger/v1/s6l-scientific-metrics/report",
+      );
+      return response.data;
+    },
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+
   const fallbackPicks: MlbHistoryFocusPick[] = [...state.mlbPicks].reverse().map((pick) => ({
     id: String(pick.id),
     recordedAt: pick.date,
@@ -512,6 +576,10 @@ export default function MLBHistoryFocused() {
   const visibleResults = focus.results.slice(0, visibleResultCount);
   const certification = certificationQuery.data?.latest;
   const certificationPool = certification?.certificationPool;
+  const scientific = scientificQuery.data;
+  const calibrationGapPp = scientific?.overall.meanModelProbability != null && scientific.overall.observedWinRate != null
+    ? (scientific.overall.observedWinRate - scientific.overall.meanModelProbability) * 100
+    : null;
   const certificationReasons = certificationPool
     ? Array.from(new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes)))
       .sort()
@@ -549,10 +617,10 @@ export default function MLBHistoryFocused() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void Promise.all([historyQuery.refetch(), certificationQuery.refetch()])}
-            disabled={historyQuery.isFetching || certificationQuery.isFetching}
+            onClick={() => void Promise.all([historyQuery.refetch(), certificationQuery.refetch(), scientificQuery.refetch()])}
+            disabled={historyQuery.isFetching || certificationQuery.isFetching || scientificQuery.isFetching}
           >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${historyQuery.isFetching || certificationQuery.isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${historyQuery.isFetching || certificationQuery.isFetching || scientificQuery.isFetching ? "animate-spin" : ""}`} />
             Actualizar
           </Button>
           <Button asChild variant="outline" size="sm">
@@ -689,6 +757,120 @@ export default function MLBHistoryFocused() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {scientific && (
+        <Card className="border-cyan-500/25 bg-cyan-500/[0.045]">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-cyan-100">Rendimiento científico del modelo</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Lectura descriptiva de decisiones liquidadas. No autoriza cambios automáticos ni promete rendimiento futuro.
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={scientific.readiness.conclusionsAllowed
+                  ? "border-green-500/40 bg-green-500/10 text-green-300"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-300"}
+              >
+                {scientific.readiness.conclusionsAllowed ? "Muestra lista para revisión" : "Muestra todavía insuficiente"}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              {[
+                ["Récord", `${scientific.overall.wins}-${scientific.overall.losses}`],
+                ["ROI plano", scientific.overall.flatStakeRoiPct == null ? "—" : `${signed(scientific.overall.flatStakeRoiPct, "%")}`],
+                ["CLV medio", scientific.overall.meanClvPp == null ? "—" : signed(scientific.overall.meanClvPp, " pp")],
+                ["Brier", metricNumber(scientific.overall.brierScore)],
+                ["Prob. modelo", pct(scientific.overall.meanModelProbability)],
+                ["Victoria observada", pct(scientific.overall.observedWinRate)],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border border-cyan-500/15 bg-slate-950/35 p-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                  <p className="mt-0.5 text-sm font-bold text-cyan-100">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="rounded-lg border border-border/60 bg-card/45 p-3">
+                <p className="text-xs font-semibold">Calibración</p>
+                <p className={`mt-1 text-lg font-bold ${calibrationGapPp != null && calibrationGapPp < -5 ? "text-red-300" : "text-slate-100"}`}>
+                  {calibrationGapPp == null ? "—" : signed(calibrationGapPp, " pp")}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Diferencia entre victorias observadas y probabilidad promedio. Un valor negativo sugiere sobreestimación.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card/45 p-3">
+                <p className="text-xs font-semibold">Incertidumbre real</p>
+                <p className="mt-1 text-lg font-bold text-slate-100">
+                  {scientific.overall.winRateWilson95
+                    ? `${pct(scientific.overall.winRateWilson95.low, 0)}–${pct(scientific.overall.winRateWilson95.high, 0)}`
+                    : "—"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Rango compatible con la muestra actual; todavía es demasiado amplio para optimizar.</p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card/45 p-3">
+                <p className="text-xs font-semibold">Progreso de muestra</p>
+                <p className="mt-1 text-lg font-bold text-slate-100">
+                  {scientific.overall.binaryDecisions}/{scientific.cohort.minimumBinarySample}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Mínimo descriptivo; la revisión preferida requiere {scientific.cohort.preferredBinarySample} decisiones binarias.
+                </p>
+              </div>
+            </div>
+
+            {scientific.byMarket.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-cyan-100">Desglose por mercado</p>
+                  <p className="text-[11px] text-muted-foreground">No clasificar un mercado como ganador con muestras pequeñas.</p>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-border/60">
+                  <table className="w-full min-w-[650px] text-left text-xs">
+                    <thead className="bg-slate-950/55 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2">Mercado</th>
+                        <th className="px-3 py-2 text-right">N</th>
+                        <th className="px-3 py-2 text-right">W-L</th>
+                        <th className="px-3 py-2 text-right">ROI</th>
+                        <th className="px-3 py-2 text-right">CLV</th>
+                        <th className="px-3 py-2 text-right">Brier</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scientific.byMarket.map(({ key, metrics }) => (
+                        <tr key={key} className="border-t border-border/50">
+                          <td className="px-3 py-2 font-medium text-slate-100">{marketLabel(key)}</td>
+                          <td className="px-3 py-2 text-right">{metrics.binaryDecisions}</td>
+                          <td className="px-3 py-2 text-right">{metrics.wins}-{metrics.losses}</td>
+                          <td className={`px-3 py-2 text-right ${Number(metrics.flatStakeRoiPct) < 0 ? "text-red-300" : "text-green-300"}`}>
+                            {metrics.flatStakeRoiPct == null ? "—" : signed(metrics.flatStakeRoiPct, "%")}
+                          </td>
+                          <td className="px-3 py-2 text-right">{metrics.meanClvPp == null ? "—" : signed(metrics.meanClvPp, " pp")}</td>
+                          <td className="px-3 py-2 text-right">{metricNumber(metrics.brierScore)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {scientificQuery.isError && (
+        <Card className="border-amber-500/25 bg-amber-500/[0.04]">
+          <CardContent className="p-3 text-xs text-amber-200">
+            El informe científico no respondió; las oportunidades siguen protegidas, pero el resumen de rendimiento no está disponible.
           </CardContent>
         </Card>
       )}
