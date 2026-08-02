@@ -424,6 +424,57 @@ test("accepts later independent-certification maturity without changing immutabl
   assert.equal(result.report.sample.independentlyCertifiedAmongFirstFive, 5);
 });
 
+test("accepts an explicitly linked settlement correction without rewriting the sealed manifest", () => {
+  const originalRecords = decisions(5);
+  const initial = buildSources(originalRecords, ["final-0"]);
+  const certificate = initial.certificates["5"];
+  if (!certificate) throw new Error("fixture certificate missing");
+
+  const correctedRecords = structuredClone(originalRecords);
+  const corrected = correctedRecords.find((entry) => entry.prediction.id === "final-2");
+  if (!corrected?.settlement) throw new Error("fixture settlement missing");
+  const sealedEventId = corrected.settlement.eventId;
+  corrected.settlement.eventId = "correction-final-2-v2";
+  corrected.settlement.source = "correction";
+  corrected.settlement.correctionOfEventId = sealedEventId;
+
+  const currentS6l = buildMlbS6lScientificMetrics(correctedRecords, {
+    certifiedTerminalPredictionIds: ["final-0"],
+    generatedAt: "2026-08-01T20:20:00.000Z",
+  });
+  const currentS6m = evaluateMlbS6mMilestones(
+    correctedRecords,
+    currentS6l,
+    ["final-0"],
+    initial.certificates,
+    {
+      generatedAt: "2026-08-01T20:21:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+    },
+  );
+  assert.equal(currentS6m.report.state, "MILESTONE_5_CERTIFIED");
+
+  const result = evaluateMlbS6oFirstFiveSettlements(
+    correctedRecords,
+    currentS6m.report,
+    initial.certificates,
+    initial.s6n,
+    ["final-0"],
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T20:22:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+    },
+  );
+  assert.equal(result.report.state, "OBSERVING_FIVE_RESULT_STABILITY");
+  assert.equal(result.report.checks.currentLedgerManifestMatches, true);
+  assert.equal(result.report.checks.settlementIdentitiesMatch, true);
+  assert.equal(certificate.manifest[2]?.settlementEventId, sealedEventId);
+});
+
 test("blocks certification when S6M has a critical integrity issue", () => {
   const records = decisions(5);
   const { report, certificates, s6n } = buildSources(records);
