@@ -769,7 +769,7 @@ export default function WNBAPredictor() {
 
     const bankroll =
       state.bankrollInitial +
-      state.picks.reduce((s, p) => s + p.profit, 0);
+      state.wnbaPicks.reduce((s, p) => s + p.profit, 0);
     const mlStake = kellyFraction(homeProb, mlOddsHomeNum) * bankroll;
 
     const spreadLineNum = parseFloat(spreadLine) || -5;
@@ -840,14 +840,14 @@ export default function WNBAPredictor() {
   const savePick = (market: string, pick: string, odds: number, modelProb: number, key: string) => {
     if (!result) return;
     const bankroll =
-      state.bankrollInitial + state.picks.reduce((s, p) => s + p.profit, 0);
+      state.bankrollInitial + state.wnbaPicks.reduce((s, p) => s + p.profit, 0);
     const stake = Math.round(kellyFraction(modelProb / 100, odds) * bankroll * 100) / 100;
 
     dispatch({
       type: "ADD_WNBA_PICK",
       payload: {
         date: new Date().toISOString().split("T")[0],
-        sport: "WNBA", // reuse NBA picks for WNBA
+        sport: "WNBA",
         team: result.homeTeam,
         opponent: result.awayTeam,
         market,
@@ -1421,7 +1421,7 @@ export default function WNBAPredictor() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Los picks WNBA se guardan en el historial NBA. Resultado pendiente (P) hasta que lo actualices.
+                Los picks WNBA se guardan en el Historial WNBA. El resultado permanece pendiente hasta que lo confirmes.
               </p>
             </CardContent>
           </Card>

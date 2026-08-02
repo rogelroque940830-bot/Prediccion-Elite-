@@ -100,6 +100,22 @@ function createPick(
   };
 }
 
+function normalizedHistoryText(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function hasEquivalentPick(items: Pick[], payload: NewHistoryPick): boolean {
+  return items.some((pick) => (
+    pick.date === payload.date
+    && normalizedHistoryText(pick.team) === normalizedHistoryText(payload.team)
+    && normalizedHistoryText(pick.opponent) === normalizedHistoryText(payload.opponent)
+    && normalizedHistoryText(pick.market) === normalizedHistoryText(payload.market)
+    && normalizedHistoryText(pick.pick) === normalizedHistoryText(payload.pick)
+    && Number(pick.odds) === Number(payload.odds)
+    && Math.abs(Number(pick.modelProb) - Number(payload.modelProb)) < 0.000001
+  ));
+}
+
 function updateResult(items: Pick[], id: number, result: string): Pick[] {
   return items.map((pick) => pick.id === id
     ? { ...pick, result, profit: calcProfit(result, pick.stake, pick.odds) }
@@ -111,6 +127,7 @@ function appReducer(state: AppState, action: Action): AppState {
     case "LOAD_STATE":
       return action.payload;
     case "ADD_PICK": {
+      if (hasEquivalentPick(state.picks, action.payload)) return state;
       const pick = createPick(state, action.payload, "NBA");
       return { ...state, picks: [...state.picks, pick], nextId: state.nextId + 1 };
     }
@@ -119,6 +136,7 @@ function appReducer(state: AppState, action: Action): AppState {
     case "DELETE_PICK":
       return { ...state, picks: state.picks.filter((pick) => pick.id !== action.payload) };
     case "ADD_MLB_PICK": {
+      if (hasEquivalentPick(state.mlbPicks, action.payload)) return state;
       const pick = createPick(state, action.payload, "MLB");
       return { ...state, mlbPicks: [...state.mlbPicks, pick], nextId: state.nextId + 1 };
     }
@@ -127,6 +145,7 @@ function appReducer(state: AppState, action: Action): AppState {
     case "DELETE_MLB_PICK":
       return { ...state, mlbPicks: state.mlbPicks.filter((pick) => pick.id !== action.payload) };
     case "ADD_WNBA_PICK": {
+      if (hasEquivalentPick(state.wnbaPicks, action.payload)) return state;
       const pick = createPick(state, action.payload, "WNBA");
       return { ...state, wnbaPicks: [...state.wnbaPicks, pick], nextId: state.nextId + 1 };
     }
@@ -135,6 +154,7 @@ function appReducer(state: AppState, action: Action): AppState {
     case "DELETE_WNBA_PICK":
       return { ...state, wnbaPicks: state.wnbaPicks.filter((pick) => pick.id !== action.payload) };
     case "ADD_NHL_PICK": {
+      if (hasEquivalentPick(state.nhlPicks, action.payload)) return state;
       const pick = createPick(state, action.payload, "NHL");
       return { ...state, nhlPicks: [...state.nhlPicks, pick], nextId: state.nextId + 1 };
     }
