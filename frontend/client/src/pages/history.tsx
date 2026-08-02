@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { History, Plus, Pencil, Trash2, TrendingUp, Target, DollarSign } from "lucide-react";
+import { AlertCircle, History, Plus, Pencil, Trash2, TrendingUp, Target, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function HistoryPage() {
@@ -62,7 +62,7 @@ export default function HistoryPage() {
     const resolved = state.picks.filter((p) => p.result === "W" || p.result === "L");
     const wins = resolved.filter((p) => p.result === "W").length;
     const totalProfit = state.picks.reduce((s, p) => s + p.profit, 0);
-    const totalStaked = state.picks.reduce((s, p) => s + p.stake, 0);
+    const totalStaked = resolved.reduce((s, p) => s + p.stake, 0);
     const winRate = resolved.length > 0 ? (wins / resolved.length) * 100 : 0;
     const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
     return { winRate, totalProfit, roi, total: state.picks.length };
@@ -116,7 +116,7 @@ export default function HistoryPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <History className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-display font-bold" data-testid="text-history-title">Historial</h1>
+          <h1 className="text-xl font-display font-bold" data-testid="text-history-title">Historial NBA</h1>
         </div>
         <Dialog open={newPickOpen} onOpenChange={setNewPickOpen}>
           <DialogTrigger asChild>
@@ -210,6 +210,13 @@ export default function HistoryPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card className="border-blue-500/20 bg-blue-500/[0.04]">
+        <CardContent className="flex items-start gap-2 p-3 text-xs text-muted-foreground">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-300" />
+          <p>Este historial contiene picks guardados por el usuario. Los resultados se confirman manualmente y los pendientes no entran en el ROI.</p>
+        </CardContent>
+      </Card>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
