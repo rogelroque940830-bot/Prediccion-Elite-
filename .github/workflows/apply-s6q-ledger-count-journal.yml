@@ -5,7 +5,6 @@ on:
     branches:
       - integration/p0-staging-secure
     paths:
-      - 'scripts/patch-s6q-ledger-count-journal.mjs'
       - '.github/workflows/apply-s6q-ledger-count-journal.yml'
   workflow_dispatch:
 
@@ -15,57 +14,34 @@ permissions:
 jobs:
   patch:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-      - name: Normalize patch source for current S6Q shape
+      - name: Use one append-only file per ledger high-water mark
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('scripts/patch-s6q-ledger-count-journal.mjs')
+          path = Path('server/mlb-s6q-fifty-settlement-human-review.ts')
           source = path.read_text()
-
-          start = source.index('`function readLedgerCountAnchorJournal')
-          closing = 'function pruneSnapshots(directory: string, maxSnapshots: number): void {`'
-          end = source.index(closing, start) + len(closing)
-          segment = source[start:end]
-          body = segment[1:-1]
-          body = body.replace('`', r'\`').replace('${', r'\${')
-          source = source[:start] + '`' + body + '`' + source[end:]
-
-          marker = '  "previous report ledger anchor shape",\n);'
-          marker_pos = source.index(marker)
-          block_start = source.rfind('service = replaceOnce(', 0, marker_pos)
-          block_end = marker_pos + len(marker)
-          replacement = r'''service = replaceOnce(
-            service,
-            `    && isObjectRecord(value.persistence)\n    && typeof value.persistence.currentOwnedLedgerRecords === "number"\n    && typeof value.persistence.countMonotonic === "boolean"\n    && Array.isArray(value.issues)`,
-            `    && isObjectRecord(value.persistence)\n    && typeof value.persistence.currentOwnedLedgerRecords === "number"\n    && value.persistence.ledgerCountJournalAppendOnly === true\n    && typeof value.persistence.ledgerCountAnchorPresent === "boolean"\n    && (value.persistence.ledgerCountAnchorRecords === null || typeof value.persistence.ledgerCountAnchorRecords === "number")\n    && (value.persistence.ledgerCountAnchorDigestSha256 === null || typeof value.persistence.ledgerCountAnchorDigestSha256 === "string")\n    && typeof value.persistence.countMonotonic === "boolean"\n    && Array.isArray(value.issues)`,
-            "previous report ledger anchor shape",
-          );'''
-          source = source[:block_start] + replacement + source[block_end:]
-          path.write_text(source)
+          before = '''function ledgerCountAnchorFileName(anchor: S6qLedgerCountAnchor): string {
+            return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}-${anchor.anchorDigestSha256.slice(0, 12)}.json`;
+          }'''
+          after = '''function ledgerCountAnchorFileName(anchor: S6qLedgerCountAnchor): string {
+            return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}.json`;
+          }'''
+          if before not in source:
+              raise SystemExit('Expected ledgerCountAnchorFileName implementation not found')
+          path.write_text(source.replace(before, after))
           PY
-      - name: Apply independent ledger count journal
-        run: node scripts/patch-s6q-ledger-count-journal.mjs
-      - name: Commit permanent hardening
+      - name: Commit concurrent-write hardening
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            server/mlb-s6q-fifty-settlement-human-review.ts \
-            server/mlb-s6q-fifty-settlement-human-review.test.ts
-          if git diff --cached --quiet; then
-            echo 'No ledger-count journal changes required.'
-            exit 0
-          fi
-          git commit -m 'Persist S6Q ledger count high-water journal'
+          git add server/mlb-s6q-fifty-settlement-human-review.ts
+          git commit -m 'Harden S6Q ledger journal concurrent writes'
           git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
