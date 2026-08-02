@@ -18,6 +18,7 @@ import {
 import { getAwayTravelDistance } from "@/lib/travel";
 import { useAppContext } from "@/lib/context";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,8 @@ export default function WNBAPredictor() {
   })();
   const [selectedDate, setSelectedDate] = useState(todayET);
   const [selGame, setSelGame] = useState("");
+  const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsSource, setOddsSource] = useState<string | null>(null);
 
   // 📅 Schedule WNBA del día — lista los partidos disponibles
   const { data: wnbaSchedule } = useQuery<{ success: boolean; data: any[] }>({
@@ -296,6 +299,57 @@ export default function WNBAPredictor() {
   const [ouLine, setOuLine] = useState("155");
   const [overOdds, setOverOdds] = useState("-110");
   const [underOdds, setUnderOdds] = useState("-110");
+
+  const loadWnbaOdds = useCallback(async () => {
+    if (!homeTeam || !awayTeam) {
+      toast({ title: "Selecciona primero un partido", variant: "destructive" });
+      return;
+    }
+    setOddsLoading(true);
+    setOddsSource(null);
+    try {
+      const response = await apiRequest("GET", `/api/odds/wnba?date=${encodeURIComponent(selectedDate)}`);
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "No se pudieron cargar las cuotas");
+      const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const selectedHome = normalize(homeTeam);
+      const selectedAway = normalize(awayTeam);
+      const matched = (data.games ?? []).find((game: any) => (
+        normalize(game.homeTeam) === selectedHome && normalize(game.awayTeam) === selectedAway
+      ));
+      if (!matched) {
+        toast({
+          title: "Cuotas no disponibles",
+          description: "El partido puede haber comenzado o todavía no tener mercados publicados.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const setFinite = (value: unknown, setter: (next: string) => void) => {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) setter(String(parsed));
+      };
+      setFinite(matched.ml?.home, setMlOddsHome);
+      setFinite(matched.ml?.away, setMlOddsAway);
+      setFinite(matched.spread?.line, setSpreadLine);
+      setFinite(matched.spread?.homeOdds, setSpreadOddsHome);
+      setFinite(matched.spread?.awayOdds, setSpreadOddsAway);
+      setFinite(matched.total?.line, setOuLine);
+      setFinite(matched.total?.overOdds, setOverOdds);
+      setFinite(matched.total?.underOdds, setUnderOdds);
+      const source = String(matched.source || data.source || "mercado verificado");
+      setOddsSource(source);
+      toast({ title: "Cuotas cargadas", description: source });
+    } catch (error) {
+      toast({
+        title: "No se pudieron cargar las cuotas",
+        description: error instanceof Error ? error.message : "Error de mercado",
+        variant: "destructive",
+      });
+    } finally {
+      setOddsLoading(false);
+    }
+  }, [awayTeam, homeTeam, selectedDate, toast]);
 
   // ── Result ──────────────────────────────────────────────────────────────
   const [result, setResult] = useState<WNBAPredictionResult | null>(null);
@@ -944,6 +998,23 @@ export default function WNBAPredictor() {
               </p>
             )}
           </div>
+          {homeTeam && awayTeam && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                onClick={loadWnbaOdds}
+                disabled={oddsLoading}
+                data-testid="button-load-wnba-odds"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${oddsLoading ? "animate-spin" : ""}`} />
+                {oddsLoading ? "Cargando cuotas..." : "Cargar cuotas"}
+              </Button>
+              {oddsSource && <span className="text-[11px] text-green-300">Fuente: {oddsSource}</span>}
+            </div>
+          )}
           {wnbaLoading && <p className="text-xs text-muted-foreground italic"><RefreshCw className="h-3 w-3 inline animate-spin mr-1" /> Cargando stats de equipos...</p>}
           {wnbaError && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-red-300">
