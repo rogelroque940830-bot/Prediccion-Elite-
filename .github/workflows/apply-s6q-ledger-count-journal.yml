@@ -30,6 +30,7 @@ jobs:
           from pathlib import Path
           path = Path('scripts/patch-s6q-ledger-count-journal.mjs')
           source = path.read_text()
+
           start = source.index('`function readLedgerCountAnchorJournal')
           closing = 'function pruneSnapshots(directory: string, maxSnapshots: number): void {`'
           end = source.index(closing, start) + len(closing)
@@ -37,11 +38,18 @@ jobs:
           body = segment[1:-1]
           body = body.replace('`', r'\`').replace('${', r'\${')
           source = source[:start] + '`' + body + '`' + source[end:]
-          source = source.replace('typeof persistence.currentOwnedLedgerRecords', 'typeof value.persistence.currentOwnedLedgerRecords')
-          source = source.replace('persistence.ledgerCountJournalAppendOnly', 'value.persistence.ledgerCountJournalAppendOnly')
-          source = source.replace('typeof persistence.ledgerCountAnchorPresent', 'typeof value.persistence.ledgerCountAnchorPresent')
-          source = source.replace('persistence.ledgerCountAnchorRecords', 'value.persistence.ledgerCountAnchorRecords')
-          source = source.replace('persistence.ledgerCountAnchorDigestSha256', 'value.persistence.ledgerCountAnchorDigestSha256')
+
+          marker = '  "previous report ledger anchor shape",\n);'
+          marker_pos = source.index(marker)
+          block_start = source.rfind('service = replaceOnce(', 0, marker_pos)
+          block_end = marker_pos + len(marker)
+          replacement = r'''service = replaceOnce(
+            service,
+            `    && isObjectRecord(value.persistence)\n    && typeof value.persistence.currentOwnedLedgerRecords === "number"\n    && typeof value.persistence.countMonotonic === "boolean"\n    && Array.isArray(value.issues)`,
+            `    && isObjectRecord(value.persistence)\n    && typeof value.persistence.currentOwnedLedgerRecords === "number"\n    && value.persistence.ledgerCountJournalAppendOnly === true\n    && typeof value.persistence.ledgerCountAnchorPresent === "boolean"\n    && (value.persistence.ledgerCountAnchorRecords === null || typeof value.persistence.ledgerCountAnchorRecords === "number")\n    && (value.persistence.ledgerCountAnchorDigestSha256 === null || typeof value.persistence.ledgerCountAnchorDigestSha256 === "string")\n    && typeof value.persistence.countMonotonic === "boolean"\n    && Array.isArray(value.issues)`,
+            "previous report ledger anchor shape",
+          );'''
+          source = source[:block_start] + replacement + source[block_end:]
           path.write_text(source)
           PY
       - name: Apply independent ledger count journal
