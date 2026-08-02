@@ -646,7 +646,15 @@ function validateCertificate(
     errors.push("Manifest digest does not match the stored manifest.");
   }
   if (stableDigest(expectedManifest) !== certificate.manifestDigestSha256) {
-    errors.push("Current deterministic first-N manifest differs from the stored certificate.");
+    const fieldDiffs = certificate.manifest.flatMap((stored, index) => {
+      const current = expectedManifest[index];
+      if (!current) return [`ordinal ${index + 1}: MISSING`];
+      const fields = Array.from(new Set([...Object.keys(stored), ...Object.keys(current)]))
+        .filter((field) => JSON.stringify(stored[field as keyof S6mManifestEntry])
+          !== JSON.stringify(current[field as keyof S6mManifestEntry]));
+      return fields.length ? [`ordinal ${index + 1}: ${fields.join(",")}`] : [];
+    });
+    errors.push(`Sealed manifest fields differ from the current ledger (${fieldDiffs.join(" | ") || "unknown field"}).`);
   }
   const expectedMetrics = computeMlbS6mIndependentMetrics(expected);
   const metricErrors = compareMetrics(expectedMetrics, certificate.metrics);
