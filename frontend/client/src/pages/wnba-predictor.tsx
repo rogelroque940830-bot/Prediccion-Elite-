@@ -926,14 +926,14 @@ export default function WNBAPredictor() {
               <div>
                 <Label className="text-xs">Equipo Local</Label>
                 <Select value={homeTeam} onValueChange={(v) => autoFillWNBA(v, "home")} disabled={wnbaLoading}>
-                  <SelectTrigger className="border-primary/30" data-testid="select-home-team"><SelectValue placeholder="Local..." /></SelectTrigger>
+                  <SelectTrigger className="border-primary/30"><SelectValue placeholder="Local..." /></SelectTrigger>
                   <SelectContent>{manualTeamOptions.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Equipo Visitante</Label>
                 <Select value={awayTeam} onValueChange={(v) => autoFillWNBA(v, "away")} disabled={wnbaLoading}>
-                  <SelectTrigger className="border-primary/30" data-testid="select-away-team"><SelectValue placeholder="Visitante..." /></SelectTrigger>
+                  <SelectTrigger className="border-primary/30"><SelectValue placeholder="Visitante..." /></SelectTrigger>
                   <SelectContent>{manualTeamOptions.map(t => <SelectItem key={t.teamId} value={t.teamName}>{t.teamName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
