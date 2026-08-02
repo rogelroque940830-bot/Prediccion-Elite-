@@ -21,6 +21,7 @@ test("S5C records priced provisional/final decisions once, preserves price prove
   const ownership = new MlbLedgerOwnershipStore(dbPath);
   let now = new Date("2026-07-30T16:00:00.000Z");
   let finalLineups = false;
+  let lineupSize = 9;
   const capturedAt = "2026-07-30T15:59:30.000Z";
   const providerLastUpdate = "2026-07-30T15:58:00.000Z";
 
@@ -63,8 +64,8 @@ test("S5C records priced provisional/final decisions once, preserves price prove
     liveData: {
       boxscore: {
         teams: {
-          home: { battingOrder: finalLineups ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : [] },
-          away: { battingOrder: finalLineups ? [11, 12, 13, 14, 15, 16, 17, 18, 19] : [] },
+          home: { battingOrder: finalLineups ? Array.from({ length: lineupSize }, (_, index) => index + 1) : [] },
+          away: { battingOrder: finalLineups ? Array.from({ length: lineupSize }, (_, index) => index + 11) : [] },
         },
       },
     },
@@ -204,7 +205,15 @@ test("S5C records priced provisional/final decisions once, preserves price prove
   assert.equal(ownedRecordsForUser(store, ownership, 1, { limit: 100 }).length, 2);
 
   finalLineups = true;
+  lineupSize = 8;
   now = new Date("2026-07-30T16:30:00.000Z");
+  const incompleteLineups = await service.run("test-incomplete-lineups");
+  assert.equal(incompleteLineups.recordsCreated, 0);
+  assert.ok(ownedRecordsForUser(store, ownership, 1, { limit: 100 })
+    .every((record) => record.prediction.analysisStage === "PROVISIONAL"));
+
+  lineupSize = 9;
+  now = new Date("2026-07-30T16:35:00.000Z");
   const final = await service.run("test-final");
   assert.equal(final.recordsCreated, 2);
 
