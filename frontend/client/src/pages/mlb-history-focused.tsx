@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 type FocusView = "priority" | "waiting" | "verify" | "results";
+const RESULTS_PAGE_SIZE = 20;
 
 interface LedgerHistoryView {
   schemaVersion: "mlb-ledger-history-view.v1";
@@ -326,6 +327,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
 export default function MLBHistoryFocused() {
   const { state } = useAppContext();
   const [activeView, setActiveView] = useState<FocusView>("priority");
+  const [visibleResultCount, setVisibleResultCount] = useState(RESULTS_PAGE_SIZE);
 
   const historyQuery = useQuery({
     queryKey: ["mlb-ledger-history-focus"],
@@ -374,6 +376,7 @@ export default function MLBHistoryFocused() {
   const recentWins = focus.results.filter((pick) => ["W", "½W"].includes(String(pick.result).toUpperCase())).length;
   const recentLosses = focus.results.filter((pick) => ["L", "½L"].includes(String(pick.result).toUpperCase())).length;
   const recentProfit = focus.results.reduce((sum, pick) => sum + Number(pick.profitUnits || 0), 0);
+  const visibleResults = focus.results.slice(0, visibleResultCount);
 
   const views: Array<{ key: FocusView; label: string; count: number; icon: typeof Target }> = [
     { key: "priority", label: "Prioridad", count: focus.priority.length, icon: Target },
@@ -444,9 +447,11 @@ export default function MLBHistoryFocused() {
         </Card>
         <Card className="border-green-500/20 bg-green-500/[0.05]">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Resultados recientes</p>
-            <p className="text-2xl font-bold text-green-200">{recentWins}-{recentLosses}</p>
-            <p className={recentProfit >= 0 ? "text-[10px] text-green-300" : "text-[10px] text-red-300"}>{signed(recentProfit, " u")}</p>
+            <p className="text-xs text-muted-foreground">Resultados liquidados</p>
+            <p className="text-2xl font-bold text-green-200">{focus.results.length}</p>
+            <p className={recentProfit >= 0 ? "text-[10px] text-green-300" : "text-[10px] text-red-300"}>
+              {recentWins}-{recentLosses} W-L · {signed(recentProfit, " u")}
+            </p>
           </CardContent>
         </Card>
         <Card className="border-slate-500/20 bg-slate-500/[0.04]">
@@ -528,7 +533,24 @@ export default function MLBHistoryFocused() {
 
         {activeView === "results" && (
           focus.results.length > 0
-            ? focus.results.map((pick) => <ResultCard key={pick.id} pick={pick} />)
+            ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <p>Mostrando {visibleResults.length} de {focus.results.length} resultados liquidados · más recientes primero.</p>
+                  {visibleResults.length < focus.results.length && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVisibleResultCount((current) => current + RESULTS_PAGE_SIZE)}
+                    >
+                      Mostrar {Math.min(RESULTS_PAGE_SIZE, focus.results.length - visibleResults.length)} más
+                    </Button>
+                  )}
+                </div>
+                {visibleResults.map((pick) => <ResultCard key={pick.id} pick={pick} />)}
+              </>
+            )
             : <EmptyState title="Todavía no hay resultados recientes" detail="Aparecerán aquí cuando el ledger liquide las decisiones únicas más recientes." />
         )}
       </div>
