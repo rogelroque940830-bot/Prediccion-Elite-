@@ -11,6 +11,7 @@ import {
 } from "./mlb-s6m-statistical-milestones";
 import type { S6pReport } from "./mlb-s6p-first-twenty-settlements-certification";
 import {
+  buildMlbS6qPreviousReportArtifact,
   buildMlbS6qStoredArtifacts,
   evaluateMlbS6qFiftySettlementHumanReview,
   type S6qBaseline,
@@ -414,4 +415,37 @@ test("rejects certification evidence that no longer substantiates the review gat
   const result = evaluate(records, report, certificates, { baseline: first.baselineToPersist, evidence: tampered }, "2026-08-01T21:04:00.000Z");
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "INDEPENDENT_CERTIFICATION_EVIDENCE_INVALID"), true);
+});
+
+
+test("rejects a syntactically valid but malformed previous S6Q report", () => {
+  const artifact = buildMlbS6qPreviousReportArtifact({ value: {}, error: null, present: true });
+  assert.equal(artifact.value, null);
+  assert.equal(artifact.present, true);
+  assert.match(artifact.error ?? "", /incomplete or incompatible/);
+});
+
+test("converts a malformed previous report into ACTION_REQUIRED", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(10),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      currentOwnedLedgerRecords: records.length,
+      previousReportReadError: "latest.json fixture is malformed",
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "PREVIOUS_REPORT_INVALID"), true);
+  assert.equal(result.baselineToPersist, null);
+  assert.equal(result.evidenceToPersist, null);
 });

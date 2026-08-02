@@ -269,6 +269,7 @@ type EvaluationOptions = {
   currentOwnedLedgerRecords?: number;
   previousBaselinePresent?: boolean;
   previousEvidencePresent?: boolean;
+  previousReportReadError?: string | null;
 };
 
 type EvaluationResult = {
@@ -686,6 +687,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   let baselineToPersist: S6qBaseline | null = null;
   let evidenceToPersist: S6qEvidence | null = null;
 
+  if (options.previousReportReadError) pushIssue(issues, "PREVIOUS_REPORT_INVALID", "CRITICAL", options.previousReportReadError);
   if (stored.baselineReadError) pushIssue(issues, "BASELINE_UNREADABLE", "CRITICAL", stored.baselineReadError);
   if (stored.evidenceReadError) pushIssue(issues, "EVIDENCE_UNREADABLE", "CRITICAL", stored.evidenceReadError);
   if (options.previousBaselinePresent && !baselinePresent) {
@@ -1201,6 +1203,53 @@ function atomicWriteJson(filePath: string, value: unknown): void {
   fs.renameSync(temporary, filePath);
 }
 
+function isS6qReportArtifactShape(value: unknown): value is S6qReport {
+  if (!isObjectRecord(value)) return false;
+  const stateValues: S6qState[] = [
+    "ARMED_AND_WAITING_FOR_50",
+    "WAITING_FOR_MINIMUM_SAMPLE_20_CERTIFICATION",
+    "WAITING_FOR_TEN_CERTIFIED_CYCLES",
+    "OBSERVING_FIFTY_RESULT_STABILITY",
+    "READY_FOR_HUMAN_REVIEW",
+    "ACTION_REQUIRED",
+  ];
+  return value.schemaVersion === MLB_S6Q_FIFTY_REVIEW_VERSION
+    && typeof value.generatedAt === "string"
+    && typeof value.trigger === "string"
+    && typeof value.deploymentCommit === "string"
+    && typeof value.environment === "string"
+    && stateValues.includes(value.state as S6qState)
+    && isObjectRecord(value.sourceS6m)
+    && isObjectRecord(value.sourceS6p)
+    && isObjectRecord(value.sample)
+    && isObjectRecord(value.target)
+    && isObjectRecord(value.stability)
+    && typeof value.stability.baselinePresent === "boolean"
+    && typeof value.stability.evidencePresent === "boolean"
+    && isObjectRecord(value.checks)
+    && isObjectRecord(value.readiness)
+    && isObjectRecord(value.persistence)
+    && typeof value.persistence.currentOwnedLedgerRecords === "number"
+    && typeof value.persistence.countMonotonic === "boolean"
+    && Array.isArray(value.issues)
+    && isObjectRecord(value.safety);
+}
+
+export function buildMlbS6qPreviousReportArtifact(
+  artifact: { value: unknown; error: string | null; present: boolean },
+): { value: S6qReport | null; error: string | null; present: boolean } {
+  if (artifact.error) return { value: null, error: artifact.error, present: artifact.present };
+  if (!artifact.present) return { value: null, error: null, present: false };
+  if (!isS6qReportArtifactShape(artifact.value)) {
+    return {
+      value: null,
+      error: "latest.json is syntactically valid but has an incomplete or incompatible S6Q report structure.",
+      present: true,
+    };
+  }
+  return { value: artifact.value, error: null, present: true };
+}
+
 export function buildMlbS6qStoredArtifacts(
   baselineArtifact: { value: S6qBaseline | null; error: string | null; present: boolean },
   evidenceArtifact: { value: S6qEvidence | null; error: string | null; present: boolean },
@@ -1298,15 +1347,20 @@ export class MlbS6qFiftySettlementHumanReviewService {
       ?? process.env.RAILWAY_ENVIRONMENT_NAME
       ?? process.env.NODE_ENV
       ?? "unknown";
-    this.lastSuccessAt = this.readLatest()?.generatedAt ?? null;
+    this.lastSuccessAt = this.readLatestArtifact().value?.generatedAt ?? null;
   }
 
   isEnabled(): boolean { return this.enabled; }
   getIntervalMs(): number { return this.intervalMs; }
   getInitialDelayMs(): number { return this.initialDelayMs; }
   getMinimumStabilityMs(): number { return this.minimumStabilityMs; }
+  private readLatestArtifact() {
+    return buildMlbS6qPreviousReportArtifact(
+      readJsonArtifact<unknown>(path.join(this.root, "latest.json")),
+    );
+  }
   readLatest(): S6qReport | null {
-    return readJson<S6qReport>(path.join(this.root, "latest.json"));
+    return this.readLatestArtifact().value;
   }
   readBaseline(): S6qBaseline | null {
     return readJson<S6qBaseline>(path.join(this.root, "baseline.json"));
@@ -1335,7 +1389,8 @@ export class MlbS6qFiftySettlementHumanReviewService {
     const now = this.now();
     this.lastRunAt = now.toISOString();
     try {
-      const previous = this.readLatest();
+      const previousArtifact = this.readLatestArtifact();
+      const previous = previousArtifact.value;
       const currentOwnedLedgerRecords = this.ownershipStore.listPredictionIds(this.ownerUserId).length;
       const records = ownedRecordsForUser(this.store, this.ownershipStore, this.ownerUserId, { limit: 10_000 });
       const s6mReport = this.s6mMilestones.readLatest();
@@ -1364,6 +1419,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
           currentOwnedLedgerRecords,
           previousBaselinePresent: previous?.stability.baselinePresent ?? false,
           previousEvidencePresent: previous?.stability.evidencePresent ?? false,
+          previousReportReadError: previousArtifact.error,
         },
       );
 
@@ -1399,6 +1455,10 @@ export class MlbS6qFiftySettlementHumanReviewService {
             environment: this.environment,
             minimumStabilityMs: this.minimumStabilityMs,
             previousOwnedLedgerRecords: previous?.persistence.currentOwnedLedgerRecords ?? null,
+            currentOwnedLedgerRecords,
+            previousBaselinePresent: previous?.stability.baselinePresent ?? false,
+            previousEvidencePresent: previous?.stability.evidencePresent ?? false,
+            previousReportReadError: previousArtifact.error,
           },
         )
         : evaluation;
