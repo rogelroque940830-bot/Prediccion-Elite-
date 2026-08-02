@@ -34,6 +34,8 @@ S6Q may advance only through persisted append-only evidence. An in-memory calcul
 
 - Previously observed baseline or evidence files may not disappear or be recreated silently.
 - Ledger monotonicity uses the complete owned-record count, independently of the 10,000-record analytical read cap.
+- Persisted S6M and S6P reports are shape-validated before any issue, parity, milestone, or readiness field is read.
+- Every named S6M certificate check and every named S6Q evidence check must be present and exactly `true`; an empty or partial checks object cannot satisfy an integrity gate.
 
 ## Runtime
 
