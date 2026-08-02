@@ -410,8 +410,24 @@ function buildDecisionLanes(context: ReturnType<typeof gameContext>, odds: any, 
   return { priced, unpriced };
 }
 
-function existingSemanticFingerprint(record: any): string | null {
-  return String(record?.prediction?.payload?.analysis?.layers?.s5c?.semanticFingerprint ?? "") || null;
+function stableRecordFingerprint(record: any): string | null {
+  const prediction = record?.prediction;
+  if (!prediction) return null;
+  return semanticHash({
+    schemaVersion: MLB_S5C_INGESTION_VERSION,
+    gamePk: prediction.game?.gamePk,
+    gameDate: prediction.game?.gameDate,
+    stage: prediction.analysisStage,
+    market: prediction.market?.type,
+    selection: prediction.market?.selection,
+    line: prediction.market?.line ?? null,
+    oddsAmerican: prediction.market?.oddsAmerican,
+    modelProbability: prediction.probabilities?.model,
+    signal: prediction.decision?.signal,
+    confidenceLabel: prediction.decision?.confidenceLabel,
+    reason: prediction.payload?.decision?.rationale ?? null,
+    consensusMethod: prediction.payload?.analysis?.layers?.marketPriceIntegrity?.consensusMethod ?? null,
+  });
 }
 
 export class MlbS5cShadowIngestionService {
@@ -608,7 +624,6 @@ export class MlbS5cShadowIngestionService {
               confidenceLabel: lane.confidenceLabel,
               reason: lane.reason,
               consensusMethod: lane.consensusMethod ?? null,
-              modelCommit: this.deploymentCommit,
             };
             const fingerprint = semanticHash(semantic);
             const owned = ownedRecordsForUser(this.store, this.ownershipStore, this.ownerUserId, {
@@ -616,7 +631,7 @@ export class MlbS5cShadowIngestionService {
               to: gameDate,
               limit: 10_000,
             });
-            if (owned.some((record) => existingSemanticFingerprint(record) === fingerprint)) {
+            if (owned.some((record) => stableRecordFingerprint(record) === fingerprint)) {
               summary.idempotentSkips += 1;
               continue;
             }
