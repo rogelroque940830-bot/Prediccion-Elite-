@@ -425,7 +425,7 @@ function stableRecordFingerprint(record: any): string | null {
     modelProbability: prediction.probabilities?.model,
     signal: prediction.decision?.signal,
     confidenceLabel: prediction.decision?.confidenceLabel,
-    reason: prediction.decision?.rationale,
+    reason: prediction.payload?.decision?.rationale ?? null,
     consensusMethod: prediction.payload?.analysis?.layers?.marketPriceIntegrity?.consensusMethod ?? null,
   });
 }
