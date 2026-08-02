@@ -573,7 +573,7 @@ export function evaluateMlbS6pFirstTwentySettlements(
   const previousCount = options.previousOwnedLedgerRecords ?? null;
   const countMonotonic = previousCount == null || records.length >= previousCount;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
-  const selected = sample.binaryObservations.slice(0, MLB_S6P_TARGET_SIZE);
+  let selected = sample.binaryObservations.slice(0, MLB_S6P_TARGET_SIZE);
   const baselinePresent = stored.baselinePresent
     ?? (stored.baseline !== null && stored.baseline !== undefined);
   const evidencePresent = stored.evidencePresent
@@ -620,6 +620,11 @@ export function evaluateMlbS6pFirstTwentySettlements(
   );
 
   const certificate = certificates["20"] ?? null;
+  if (certificate) {
+    const byId = new Map(sample.binaryObservations.map((entry) => [entry.terminalPredictionId, entry]));
+    const sealed = certificate.manifest.map((entry) => byId.get(entry.terminalPredictionId));
+    if (sealed.every((entry): entry is S6mObservation => entry != null)) selected = sealed;
+  }
   const milestoneTwentyRow = s6mReport?.milestones.find((entry) => entry.milestone === 20) ?? null;
   const s6mClaimsCertificate = milestoneTwentyRow?.status === "CERTIFIED"
     || (s6mReport?.highestCertifiedMilestone ?? 0) >= 20;
