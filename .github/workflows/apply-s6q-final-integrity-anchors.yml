@@ -23,6 +23,25 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - name: Normalize initial and refreshed worker option anchors
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/patch-s6q-final-integrity-anchors.mjs')
+          source = path.read_text()
+          start = source.index('const workerOptionsBefore =')
+          end = source.index('fs.writeFileSync(servicePath, service);', start)
+          replacement = r'''for (const indent of ["          ", "            "]) {
+            const before = `${indent}previousBaselinePresent: previous?.stability.baselinePresent ?? false,\n${indent}previousEvidencePresent: previous?.stability.evidencePresent ?? false,\n${indent}previousReportReadError: previousArtifact.error,`;
+            const after = `${indent}previousBaselinePresent: previous?.stability.baselinePresent ?? false,\n${indent}previousEvidencePresent: previous?.stability.evidencePresent ?? false,\n${indent}previousBaselineEverObserved: previous?.stability.baselineEverObserved ?? previous?.stability.baselinePresent ?? false,\n${indent}previousEvidenceEverObserved: previous?.stability.evidenceEverObserved ?? previous?.stability.evidencePresent ?? false,\n${indent}previousBaselineFirstObservedAtAnchor: previous?.stability.baselineFirstObservedAtAnchor ?? previous?.stability.firstObservedAt ?? null,\n${indent}previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,\n${indent}previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,\n${indent}previousReportReadError: previousArtifact.error,\n${indent}s6kReportReadError: s6kCertification.error,`;
+            if (!service.includes(before)) throw new Error(`Missing worker options anchor for indent ${indent.length}`);
+            service = service.replace(before, after);
+          }
+
+          '''
+          path.write_text(source[:start] + replacement + source[end:])
+          PY
       - name: Apply final S6Q integrity hardening
         run: node scripts/patch-s6q-final-integrity-anchors.mjs
       - name: Commit permanent hardening
