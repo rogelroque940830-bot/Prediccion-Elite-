@@ -55,6 +55,8 @@ jobs:
           grep -q 'evidence-certification-anchor.json' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'ledger-count-anchors' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'ledger-count-head.json' server/mlb-s6q-fifty-settlement-human-review.ts
+          grep -q 'ledger-count-journal.lock' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'LEDGER_COUNT_ANCHOR_INVALID' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'ledgerCountJournalAppendOnly' server/mlb-s6q-fifty-settlement-human-review.ts
           grep -q 'BASELINE_ANCHOR_INVALID' server/mlb-s6q-fifty-settlement-human-review.ts

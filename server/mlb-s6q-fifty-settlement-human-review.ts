@@ -30,6 +30,7 @@ export const MLB_S6Q_EVIDENCE_VERSION = "mlb-s6q-fifty-settlement-human-review-e
 export const MLB_S6Q_BASELINE_ANCHOR_VERSION = "mlb-s6q-baseline-observation-anchor.v1" as const;
 export const MLB_S6Q_EVIDENCE_ANCHOR_VERSION = "mlb-s6q-evidence-certification-anchor.v1" as const;
 export const MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION = "mlb-s6q-ledger-count-anchor.v1" as const;
+export const MLB_S6Q_LEDGER_COUNT_HEAD_VERSION = "mlb-s6q-ledger-count-head.v1" as const;
 export const MLB_S6Q_TARGET_SIZE = 50 as const;
 
 export type S6qState =
@@ -78,6 +79,14 @@ export type S6qLedgerCountAnchor = {
   previousOwnedLedgerRecords: number | null;
   previousAnchorDigestSha256: string | null;
   anchorDigestSha256: string;
+};
+
+export type S6qLedgerCountHead = {
+  schemaVersion: typeof MLB_S6Q_LEDGER_COUNT_HEAD_VERSION;
+  updatedAt: string;
+  ownedLedgerRecords: number;
+  anchorDigestSha256: string;
+  headDigestSha256: string;
 };
 
 export type S6qBreakdown = {
@@ -599,6 +608,31 @@ function makeLedgerCountAnchor(
     previousAnchorDigestSha256: previous?.anchorDigestSha256 ?? null,
   };
   return { ...core, anchorDigestSha256: sha256(core) };
+}
+
+function ledgerCountHeadCore(head: S6qLedgerCountHead): Omit<S6qLedgerCountHead, "headDigestSha256"> {
+  const { headDigestSha256: _ignored, ...core } = head;
+  return core;
+}
+
+function makeLedgerCountHead(anchor: S6qLedgerCountAnchor, updatedAt: string): S6qLedgerCountHead {
+  const core: Omit<S6qLedgerCountHead, "headDigestSha256"> = {
+    schemaVersion: MLB_S6Q_LEDGER_COUNT_HEAD_VERSION,
+    updatedAt,
+    ownedLedgerRecords: anchor.ownedLedgerRecords,
+    anchorDigestSha256: anchor.anchorDigestSha256,
+  };
+  return { ...core, headDigestSha256: sha256(core) };
+}
+
+function isS6qLedgerCountHeadShape(value: unknown): value is S6qLedgerCountHead {
+  if (!isObjectRecord(value)) return false;
+  return value.schemaVersion === MLB_S6Q_LEDGER_COUNT_HEAD_VERSION
+    && typeof value.updatedAt === "string"
+    && Number.isInteger(value.ownedLedgerRecords)
+    && Number(value.ownedLedgerRecords) >= 0
+    && typeof value.anchorDigestSha256 === "string"
+    && typeof value.headDigestSha256 === "string";
 }
 
 export function buildMlbS6qLedgerCountAnchorArtifact(
@@ -1719,15 +1753,33 @@ function readJson<T>(filePath: string): T | null {
   }
 }
 
-function readLedgerCountAnchorJournal(directory: string): {
+export function readMlbS6qLedgerCountAnchorJournal(root: string): {
   value: S6qLedgerCountAnchor | null;
   present: boolean;
   error: string | null;
 } {
-  if (!fs.existsSync(directory)) return { value: null, present: false, error: null };
+  const directory = path.join(root, "ledger-count-anchors");
+  const headPath = path.join(root, "ledger-count-head.json");
+  if (!fs.existsSync(directory)) {
+    return fs.existsSync(headPath)
+      ? { value: null, present: true, error: "Ledger-count expected head exists without its append-only journal." }
+      : { value: null, present: false, error: null };
+  }
   try {
     const files = fs.readdirSync(directory).filter((entry) => entry.endsWith(".json")).sort();
-    if (!files.length) return { value: null, present: false, error: null };
+    const headArtifact = readJsonArtifact<unknown>(headPath);
+    if (!files.length) {
+      return headArtifact.present
+        ? { value: null, present: true, error: "Ledger-count head exists without its append-only journal." }
+        : { value: null, present: false, error: null };
+    }
+    if (!headArtifact.present || headArtifact.error || !isS6qLedgerCountHeadShape(headArtifact.value)) {
+      return { value: null, present: true, error: headArtifact.error ?? "Ledger-count journal is missing a valid independent expected head." };
+    }
+    const head = headArtifact.value;
+    if (sha256(ledgerCountHeadCore(head)) !== head.headDigestSha256) {
+      return { value: null, present: true, error: "Ledger-count expected head failed its digest check." };
+    }
     let previous: S6qLedgerCountAnchor | null = null;
     for (const file of files) {
       const parsed = JSON.parse(fs.readFileSync(path.join(directory, file), "utf8")) as unknown;
@@ -1747,6 +1799,11 @@ function readLedgerCountAnchorJournal(directory: string): {
       }
       previous = artifact.value;
     }
+    if (!previous
+      || previous.ownedLedgerRecords !== head.ownedLedgerRecords
+      || previous.anchorDigestSha256 !== head.anchorDigestSha256) {
+      return { value: null, present: true, error: "Ledger-count journal tail does not match its independent expected head." };
+    }
     return { value: previous, present: true, error: null };
   } catch (error) {
     return {
@@ -1759,6 +1816,39 @@ function readLedgerCountAnchorJournal(directory: string): {
 
 function ledgerCountAnchorFileName(anchor: S6qLedgerCountAnchor): string {
   return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}.json`;
+}
+
+export function appendMlbS6qLedgerCountAnchorSerialized(
+  root: string,
+  ownedLedgerRecords: number,
+  createdAt: string,
+): { value: S6qLedgerCountAnchor | null; present: boolean; error: string | null } {
+  const lockPath = path.join(root, "ledger-count-journal.lock");
+  fs.mkdirSync(root, { recursive: true });
+  try {
+    fs.mkdirSync(lockPath);
+  } catch (error: any) {
+    if (error?.code === "EEXIST") throw new Error("Ledger-count journal update is already in progress.");
+    throw error;
+  }
+  try {
+    const current = readMlbS6qLedgerCountAnchorJournal(root);
+    if (current.error) throw new Error(current.error);
+    if (current.value && ownedLedgerRecords <= current.value.ownedLedgerRecords) return current;
+    const next = makeLedgerCountAnchor(ownedLedgerRecords, current.value, createdAt);
+    writeAppendOnlyJson(
+      path.join(root, "ledger-count-anchors", ledgerCountAnchorFileName(next)),
+      next,
+    );
+    atomicWriteJson(path.join(root, "ledger-count-head.json"), makeLedgerCountHead(next, createdAt));
+    const verified = readMlbS6qLedgerCountAnchorJournal(root);
+    if (verified.error || verified.value?.anchorDigestSha256 !== next.anchorDigestSha256) {
+      throw new Error(verified.error ?? "Ledger-count journal append could not be verified.");
+    }
+    return verified;
+  } finally {
+    fs.rmdirSync(lockPath);
+  }
 }
 
 function pruneSnapshots(directory: string, maxSnapshots: number): void {
@@ -1870,9 +1960,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const baselineAnchorArtifact = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
       const evidenceAnchorArtifact = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
       const storedAnchors = buildMlbS6qStoredAnchors(baselineAnchorArtifact, evidenceAnchorArtifact);
-      const ledgerCountAnchorArtifact = readLedgerCountAnchorJournal(
-        path.join(this.root, "ledger-count-anchors"),
-      );
+      const ledgerCountAnchorArtifact = readMlbS6qLedgerCountAnchorJournal(this.root);
       const evaluation = evaluateMlbS6qFiftySettlementHumanReview(
         records,
         s6mReport,
@@ -1903,18 +1991,11 @@ export class MlbS6qFiftySettlementHumanReviewService {
       );
 
       if (evaluation.ledgerCountAnchorToPersist) {
-        try {
-          writeAppendOnlyJson(
-            path.join(
-              this.root,
-              "ledger-count-anchors",
-              ledgerCountAnchorFileName(evaluation.ledgerCountAnchorToPersist),
-            ),
-            evaluation.ledgerCountAnchorToPersist,
-          );
-        } catch (error: any) {
-          if (error?.code !== "EEXIST") throw error;
-        }
+        appendMlbS6qLedgerCountAnchorSerialized(
+          this.root,
+          currentOwnedLedgerRecords,
+          now.toISOString(),
+        );
       }
       if (evaluation.baselineAnchorToPersist) {
         try {
@@ -1950,9 +2031,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const refreshedBaselineAnchor = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
       const refreshedEvidenceAnchor = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
       const refreshedAnchors = buildMlbS6qStoredAnchors(refreshedBaselineAnchor, refreshedEvidenceAnchor);
-      const refreshedLedgerCountAnchor = readLedgerCountAnchorJournal(
-        path.join(this.root, "ledger-count-anchors"),
-      );
+      const refreshedLedgerCountAnchor = readMlbS6qLedgerCountAnchorJournal(this.root);
       const finalEvaluation = evaluation.baselineToPersist || evaluation.evidenceToPersist
         || evaluation.baselineAnchorToPersist || evaluation.evidenceAnchorToPersist
         || evaluation.ledgerCountAnchorToPersist

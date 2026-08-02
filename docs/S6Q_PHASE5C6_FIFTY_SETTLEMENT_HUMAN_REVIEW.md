@@ -36,7 +36,8 @@ S6Q may advance only through persisted append-only evidence. An in-memory calcul
 - `baseline-observation-anchor.json` and `evidence-certification-anchor.json` independently preserve the first-observation timestamp and artifact digests even when `latest.json` is missing or malformed.
 - The two artifact anchor files are append-only, independently hashed, and written before the corresponding baseline or evidence artifact. An interrupted write therefore fails closed instead of silently resetting the history.
 - `ledger-count-anchors/*.json` is an append-only SHA-256 chain of complete owned-ledger high-water marks. It preserves monotonicity independently of `latest.json` and the 10,000-record analytical read cap.
-- Each ledger count receives one deterministic filename, so concurrent workers converge through `EEXIST` instead of creating conflicting same-count journal entries.
+- The independently hashed `ledger-count-head.json` must match the exact journal tail, so tail deletion, truncation, and pointer rollback fail closed.
+- Cross-process appends use an atomic journal lock and re-read the protected head inside the lock. Concurrent workers therefore extend one linear chain instead of creating sibling entries.
 - Once a baseline or evidence artifact has been observed, its history flag remains irreversible across later `ACTION_REQUIRED` reports.
 - The baseline first-observation timestamp and baseline/evidence digests cannot be rewritten to bypass the stability window.
 - Persisted S6M, S6P, and S6K reports are shape-validated before their issue, parity, milestone, readiness, or evidence fields are traversed.

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import type { LedgerRecord } from "./mlb-ledger-store";
 import { MLB_S6I_CLEAN_COHORT_CUTOFF } from "./mlb-s6i-postfix-certification";
@@ -12,11 +15,13 @@ import {
 import type { S6pReport } from "./mlb-s6p-first-twenty-settlements-certification";
 import {
   buildMlbS6qCertifiedTerminalPredictionIdsFromS6k,
+  appendMlbS6qLedgerCountAnchorSerialized,
   buildMlbS6qLedgerCountAnchorArtifact,
   buildMlbS6qPreviousReportArtifact,
   buildMlbS6qStoredAnchors,
   buildMlbS6qStoredArtifacts,
   evaluateMlbS6qFiftySettlementHumanReview,
+  readMlbS6qLedgerCountAnchorJournal,
   type S6qBaseline,
   type S6qEvidence,
 } from "./mlb-s6q-fifty-settlement-human-review";
@@ -809,4 +814,78 @@ test("rejects malformed ledger-count anchors", () => {
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "LEDGER_COUNT_ANCHOR_INVALID"), true);
   assert.equal(result.ledgerCountAnchorToPersist, null);
+});
+
+test("detects removal of the ledger-count journal tail through the independent expected head", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "s6q-tail-"));
+  try {
+    appendMlbS6qLedgerCountAnchorSerialized(root, 50, "2026-08-01T21:00:00.000Z");
+    appendMlbS6qLedgerCountAnchorSerialized(root, 75, "2026-08-01T21:01:00.000Z");
+    fs.rmSync(path.join(root, "ledger-count-anchors", "000000000075.json"));
+
+    const artifact = readMlbS6qLedgerCountAnchorJournal(root);
+    assert.equal(artifact.present, true);
+    assert.equal(artifact.value, null);
+    assert.match(artifact.error ?? "", /tail does not match/i);
+    assert.throws(
+      () => appendMlbS6qLedgerCountAnchorSerialized(root, 60, "2026-08-01T21:02:00.000Z"),
+      /tail does not match/i,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("serializes stale concurrent ledger-count appends into one linear digest chain", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "s6q-concurrent-"));
+  try {
+    appendMlbS6qLedgerCountAnchorSerialized(root, 50, "2026-08-01T21:00:00.000Z");
+    // These calls model two workers that evaluated against count 50. The append helper
+    // re-reads the protected head inside the lock, so 52 must extend 51 rather than 50.
+    appendMlbS6qLedgerCountAnchorSerialized(root, 51, "2026-08-01T21:01:00.000Z");
+    appendMlbS6qLedgerCountAnchorSerialized(root, 52, "2026-08-01T21:01:00.001Z");
+
+    const artifact = readMlbS6qLedgerCountAnchorJournal(root);
+    assert.equal(artifact.error, null);
+    assert.equal(artifact.value?.ownedLedgerRecords, 52);
+    assert.equal(artifact.value?.previousOwnedLedgerRecords, 51);
+    assert.equal(fs.readdirSync(path.join(root, "ledger-count-anchors")).length, 3);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fails closed while another worker owns the ledger-count journal lock", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "s6q-lock-"));
+  try {
+    appendMlbS6qLedgerCountAnchorSerialized(root, 50, "2026-08-01T21:00:00.000Z");
+    fs.mkdirSync(path.join(root, "ledger-count-journal.lock"));
+    assert.throws(
+      () => appendMlbS6qLedgerCountAnchorSerialized(root, 51, "2026-08-01T21:01:00.000Z"),
+      /already in progress/i,
+    );
+    fs.rmdirSync(path.join(root, "ledger-count-journal.lock"));
+    const artifact = readMlbS6qLedgerCountAnchorJournal(root);
+    assert.equal(artifact.error, null);
+    assert.equal(artifact.value?.ownedLedgerRecords, 50);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a missing or rolled-back expected journal head", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "s6q-head-"));
+  try {
+    appendMlbS6qLedgerCountAnchorSerialized(root, 50, "2026-08-01T21:00:00.000Z");
+    const oldHead = fs.readFileSync(path.join(root, "ledger-count-head.json"), "utf8");
+    appendMlbS6qLedgerCountAnchorSerialized(root, 75, "2026-08-01T21:01:00.000Z");
+
+    fs.writeFileSync(path.join(root, "ledger-count-head.json"), oldHead);
+    assert.match(readMlbS6qLedgerCountAnchorJournal(root).error ?? "", /tail does not match/i);
+
+    fs.rmSync(path.join(root, "ledger-count-head.json"));
+    assert.match(readMlbS6qLedgerCountAnchorJournal(root).error ?? "", /missing a valid independent expected head/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
