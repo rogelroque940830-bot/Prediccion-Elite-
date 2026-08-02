@@ -12,6 +12,7 @@ import {
 import type { S6pReport } from "./mlb-s6p-first-twenty-settlements-certification";
 import {
   buildMlbS6qCertifiedTerminalPredictionIdsFromS6k,
+  buildMlbS6qLedgerCountAnchorArtifact,
   buildMlbS6qPreviousReportArtifact,
   buildMlbS6qStoredAnchors,
   buildMlbS6qStoredArtifacts,
@@ -743,4 +744,69 @@ test("rejects malformed independent anchor files", () => {
   );
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "BASELINE_ANCHOR_INVALID"), true);
+});
+
+
+test("recovers the ledger high-water mark when latest.json is invalid", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      currentOwnedLedgerRecords: 12_000,
+    },
+  );
+  if (!first.ledgerCountAnchorToPersist) throw new Error("fixture ledger anchor missing");
+  const artifact = buildMlbS6qLedgerCountAnchorArtifact(first.ledgerCountAnchorToPersist, true);
+  const regressed = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:03:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      currentOwnedLedgerRecords: 11_000,
+      previousReportReadError: "latest.json malformed",
+      ledgerCountAnchor: artifact,
+    },
+  );
+  assert.equal(regressed.report.state, "ACTION_REQUIRED");
+  assert.equal(regressed.report.issues.some((entry) => entry.code === "PERSISTENCE_COUNT_REGRESSION"), true);
+  assert.equal(regressed.report.persistence.ledgerCountAnchorRecords, 12_000);
+  assert.equal(regressed.ledgerCountAnchorToPersist, null);
+});
+
+test("rejects malformed ledger-count anchors", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      currentOwnedLedgerRecords: 100,
+      ledgerCountAnchor: { value: {} as any, present: true, error: null },
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "LEDGER_COUNT_ANCHOR_INVALID"), true);
+  assert.equal(result.ledgerCountAnchorToPersist, null);
 });

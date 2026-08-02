@@ -29,6 +29,7 @@ export const MLB_S6Q_BASELINE_VERSION = "mlb-s6q-fifty-settlement-human-review-b
 export const MLB_S6Q_EVIDENCE_VERSION = "mlb-s6q-fifty-settlement-human-review-evidence.v1" as const;
 export const MLB_S6Q_BASELINE_ANCHOR_VERSION = "mlb-s6q-baseline-observation-anchor.v1" as const;
 export const MLB_S6Q_EVIDENCE_ANCHOR_VERSION = "mlb-s6q-evidence-certification-anchor.v1" as const;
+export const MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION = "mlb-s6q-ledger-count-anchor.v1" as const;
 export const MLB_S6Q_TARGET_SIZE = 50 as const;
 
 export type S6qState =
@@ -67,6 +68,15 @@ export type S6qEvidenceAnchor = {
   createdAt: string;
   certifiedAt: string;
   evidenceDigestSha256: string;
+  anchorDigestSha256: string;
+};
+
+export type S6qLedgerCountAnchor = {
+  schemaVersion: typeof MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION;
+  createdAt: string;
+  ownedLedgerRecords: number;
+  previousOwnedLedgerRecords: number | null;
+  previousAnchorDigestSha256: string | null;
   anchorDigestSha256: string;
 };
 
@@ -236,6 +246,10 @@ export type S6qReport = {
     countMonotonic: boolean;
     baselineAppendOnly: true;
     evidenceAppendOnly: true;
+    ledgerCountJournalAppendOnly: true;
+    ledgerCountAnchorPresent: boolean;
+    ledgerCountAnchorRecords: number | null;
+    ledgerCountAnchorDigestSha256: string | null;
   };
   issues: Array<{
     code: string;
@@ -307,6 +321,11 @@ type EvaluationOptions = {
   previousBaselineDigestAnchorSha256?: string | null;
   previousEvidenceDigestAnchorSha256?: string | null;
   anchors?: StoredAnchors;
+  ledgerCountAnchor?: {
+    value: S6qLedgerCountAnchor | null;
+    present: boolean;
+    error: string | null;
+  };
   previousReportReadError?: string | null;
   s6kReportReadError?: string | null;
 };
@@ -317,6 +336,7 @@ type EvaluationResult = {
   evidenceToPersist: S6qEvidence | null;
   baselineAnchorToPersist: S6qBaselineAnchor | null;
   evidenceAnchorToPersist: S6qEvidenceAnchor | null;
+  ledgerCountAnchorToPersist: S6qLedgerCountAnchor | null;
 };
 
 const CUTOFF_MS = Date.parse(MLB_S6I_CLEAN_COHORT_CUTOFF);
@@ -548,6 +568,53 @@ function isS6qEvidenceAnchorShape(value: unknown): value is S6qEvidenceAnchor {
     && typeof value.certifiedAt === "string"
     && typeof value.evidenceDigestSha256 === "string"
     && typeof value.anchorDigestSha256 === "string";
+}
+
+function ledgerCountAnchorCore(anchor: S6qLedgerCountAnchor): Omit<S6qLedgerCountAnchor, "anchorDigestSha256"> {
+  const { anchorDigestSha256: _ignored, ...core } = anchor;
+  return core;
+}
+
+function isS6qLedgerCountAnchorShape(value: unknown): value is S6qLedgerCountAnchor {
+  if (!isObjectRecord(value)) return false;
+  return value.schemaVersion === MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION
+    && typeof value.createdAt === "string"
+    && Number.isInteger(value.ownedLedgerRecords)
+    && Number(value.ownedLedgerRecords) >= 0
+    && (value.previousOwnedLedgerRecords === null || Number.isInteger(value.previousOwnedLedgerRecords))
+    && (value.previousAnchorDigestSha256 === null || typeof value.previousAnchorDigestSha256 === "string")
+    && typeof value.anchorDigestSha256 === "string";
+}
+
+function makeLedgerCountAnchor(
+  ownedLedgerRecords: number,
+  previous: S6qLedgerCountAnchor | null,
+  createdAt: string,
+): S6qLedgerCountAnchor {
+  const core: Omit<S6qLedgerCountAnchor, "anchorDigestSha256"> = {
+    schemaVersion: MLB_S6Q_LEDGER_COUNT_ANCHOR_VERSION,
+    createdAt,
+    ownedLedgerRecords,
+    previousOwnedLedgerRecords: previous?.ownedLedgerRecords ?? null,
+    previousAnchorDigestSha256: previous?.anchorDigestSha256 ?? null,
+  };
+  return { ...core, anchorDigestSha256: sha256(core) };
+}
+
+export function buildMlbS6qLedgerCountAnchorArtifact(
+  value: unknown,
+  present: boolean,
+  error: string | null = null,
+): { value: S6qLedgerCountAnchor | null; present: boolean; error: string | null } {
+  if (error) return { value: null, present, error };
+  if (!present) return { value: null, present: false, error: null };
+  if (!isS6qLedgerCountAnchorShape(value)) {
+    return { value: null, present: true, error: "The independent ledger-count anchor is malformed." };
+  }
+  if (sha256(ledgerCountAnchorCore(value)) !== value.anchorDigestSha256) {
+    return { value: null, present: true, error: "The independent ledger-count anchor failed its digest check." };
+  }
+  return { value, present: true, error: null };
 }
 
 function manifestFor(observations: S6mObservation[]): S6mManifestEntry[] {
@@ -864,7 +931,18 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const deploymentCommit = options.deploymentCommit ?? "unknown";
   const environment = options.environment ?? "unknown";
   const minimumStabilityMs = options.minimumStabilityMs ?? 5 * 60 * 1000;
-  const previousCount = options.previousOwnedLedgerRecords ?? null;
+  const reportPreviousCount = options.previousOwnedLedgerRecords ?? null;
+  const ledgerCountAnchorArtifact = options.ledgerCountAnchor
+    ?? { value: null, present: false, error: null };
+  const validLedgerCountAnchor = buildMlbS6qLedgerCountAnchorArtifact(
+    ledgerCountAnchorArtifact.value,
+    ledgerCountAnchorArtifact.present,
+    ledgerCountAnchorArtifact.error,
+  );
+  const previousCount = Math.max(
+    reportPreviousCount ?? 0,
+    validLedgerCountAnchor.value?.ownedLedgerRecords ?? 0,
+  ) || null;
   const storedAnchors = options.anchors ?? { baseline: null, evidence: null };
   const baselineAnchorPresent = storedAnchors.baselinePresent
     ?? (storedAnchors.baseline !== null && storedAnchors.baseline !== undefined);
@@ -906,7 +984,9 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   let evidenceToPersist: S6qEvidence | null = null;
   let baselineAnchorToPersist: S6qBaselineAnchor | null = null;
   let evidenceAnchorToPersist: S6qEvidenceAnchor | null = null;
+  let ledgerCountAnchorToPersist: S6qLedgerCountAnchor | null = null;
 
+  if (validLedgerCountAnchor.error) pushIssue(issues, "LEDGER_COUNT_ANCHOR_INVALID", "CRITICAL", validLedgerCountAnchor.error);
   if (storedAnchors.baselineReadError) pushIssue(issues, "BASELINE_ANCHOR_UNREADABLE", "CRITICAL", storedAnchors.baselineReadError);
   if (storedAnchors.evidenceReadError) pushIssue(issues, "EVIDENCE_ANCHOR_UNREADABLE", "CRITICAL", storedAnchors.evidenceReadError);
   if (baselineAnchorPresent && !validBaselineAnchor) pushIssue(issues, "BASELINE_ANCHOR_INVALID", "CRITICAL", "The independent baseline observation anchor is malformed or failed its digest check.");
@@ -1273,6 +1353,16 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     pushIssue(issues, "INDEPENDENT_CERTIFICATION_REGRESSION", "CRITICAL", "Persisted S6Q review artifacts exist but fewer than ten first-fifty decisions are independently certified.");
   }
 
+  if (countMonotonic
+    && !validLedgerCountAnchor.error
+    && currentOwnedLedgerRecords > (validLedgerCountAnchor.value?.ownedLedgerRecords ?? -1)) {
+    ledgerCountAnchorToPersist = makeLedgerCountAnchor(
+      currentOwnedLedgerRecords,
+      validLedgerCountAnchor.value,
+      generatedAt,
+    );
+  }
+
   const critical = issues.some((entry) => entry.severity === "CRITICAL");
   const certificateIntegrityValid = Boolean(
     certificate
@@ -1450,6 +1540,14 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       countMonotonic,
       baselineAppendOnly: true,
       evidenceAppendOnly: true,
+      ledgerCountJournalAppendOnly: true,
+      ledgerCountAnchorPresent: Boolean(validLedgerCountAnchor.value || ledgerCountAnchorToPersist),
+      ledgerCountAnchorRecords: ledgerCountAnchorToPersist?.ownedLedgerRecords
+        ?? validLedgerCountAnchor.value?.ownedLedgerRecords
+        ?? null,
+      ledgerCountAnchorDigestSha256: ledgerCountAnchorToPersist?.anchorDigestSha256
+        ?? validLedgerCountAnchor.value?.anchorDigestSha256
+        ?? null,
     },
     issues,
     safety: {
@@ -1470,7 +1568,14 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     },
   };
 
-  return { report, baselineToPersist, evidenceToPersist, baselineAnchorToPersist, evidenceAnchorToPersist };
+  return {
+    report,
+    baselineToPersist,
+    evidenceToPersist,
+    baselineAnchorToPersist,
+    evidenceAnchorToPersist,
+    ledgerCountAnchorToPersist,
+  };
 }
 
 function positiveInteger(value: unknown, fallback: number, minimum: number): number {
@@ -1532,6 +1637,10 @@ function isS6qReportArtifactShape(value: unknown): value is S6qReport {
     && isObjectRecord(value.readiness)
     && isObjectRecord(value.persistence)
     && typeof value.persistence.currentOwnedLedgerRecords === "number"
+    && value.persistence.ledgerCountJournalAppendOnly === true
+    && typeof value.persistence.ledgerCountAnchorPresent === "boolean"
+    && (value.persistence.ledgerCountAnchorRecords === null || typeof value.persistence.ledgerCountAnchorRecords === "number")
+    && (value.persistence.ledgerCountAnchorDigestSha256 === null || typeof value.persistence.ledgerCountAnchorDigestSha256 === "string")
     && typeof value.persistence.countMonotonic === "boolean"
     && Array.isArray(value.issues)
     && isObjectRecord(value.safety);
@@ -1608,6 +1717,48 @@ function readJson<T>(filePath: string): T | null {
   } catch {
     return null;
   }
+}
+
+function readLedgerCountAnchorJournal(directory: string): {
+  value: S6qLedgerCountAnchor | null;
+  present: boolean;
+  error: string | null;
+} {
+  if (!fs.existsSync(directory)) return { value: null, present: false, error: null };
+  try {
+    const files = fs.readdirSync(directory).filter((entry) => entry.endsWith(".json")).sort();
+    if (!files.length) return { value: null, present: false, error: null };
+    let previous: S6qLedgerCountAnchor | null = null;
+    for (const file of files) {
+      const parsed = JSON.parse(fs.readFileSync(path.join(directory, file), "utf8")) as unknown;
+      const artifact = buildMlbS6qLedgerCountAnchorArtifact(parsed, true);
+      if (!artifact.value || artifact.error) {
+        return { value: null, present: true, error: `Invalid ledger-count journal entry ${file}: ${artifact.error ?? "unknown error"}` };
+      }
+      if (previous) {
+        if (artifact.value.ownedLedgerRecords <= previous.ownedLedgerRecords
+          || artifact.value.previousOwnedLedgerRecords !== previous.ownedLedgerRecords
+          || artifact.value.previousAnchorDigestSha256 !== previous.anchorDigestSha256) {
+          return { value: null, present: true, error: `Broken ledger-count anchor chain at ${file}` };
+        }
+      } else if (artifact.value.previousOwnedLedgerRecords !== null
+        || artifact.value.previousAnchorDigestSha256 !== null) {
+        return { value: null, present: true, error: `Invalid first ledger-count anchor ${file}` };
+      }
+      previous = artifact.value;
+    }
+    return { value: previous, present: true, error: null };
+  } catch (error) {
+    return {
+      value: null,
+      present: true,
+      error: `Unable to read ledger-count anchor journal: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function ledgerCountAnchorFileName(anchor: S6qLedgerCountAnchor): string {
+  return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}-${anchor.anchorDigestSha256.slice(0, 12)}.json`;
 }
 
 function pruneSnapshots(directory: string, maxSnapshots: number): void {
@@ -1719,6 +1870,9 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const baselineAnchorArtifact = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
       const evidenceAnchorArtifact = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
       const storedAnchors = buildMlbS6qStoredAnchors(baselineAnchorArtifact, evidenceAnchorArtifact);
+      const ledgerCountAnchorArtifact = readLedgerCountAnchorJournal(
+        path.join(this.root, "ledger-count-anchors"),
+      );
       const evaluation = evaluateMlbS6qFiftySettlementHumanReview(
         records,
         s6mReport,
@@ -1742,11 +1896,26 @@ export class MlbS6qFiftySettlementHumanReviewService {
           previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
           previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
           anchors: storedAnchors,
+          ledgerCountAnchor: ledgerCountAnchorArtifact,
           previousReportReadError: previousArtifact.error,
           s6kReportReadError: s6kCertification.error,
         },
       );
 
+      if (evaluation.ledgerCountAnchorToPersist) {
+        try {
+          writeAppendOnlyJson(
+            path.join(
+              this.root,
+              "ledger-count-anchors",
+              ledgerCountAnchorFileName(evaluation.ledgerCountAnchorToPersist),
+            ),
+            evaluation.ledgerCountAnchorToPersist,
+          );
+        } catch (error: any) {
+          if (error?.code !== "EEXIST") throw error;
+        }
+      }
       if (evaluation.baselineAnchorToPersist) {
         try {
           writeAppendOnlyJson(path.join(this.root, "baseline-observation-anchor.json"), evaluation.baselineAnchorToPersist);
@@ -1781,8 +1950,12 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const refreshedBaselineAnchor = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
       const refreshedEvidenceAnchor = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
       const refreshedAnchors = buildMlbS6qStoredAnchors(refreshedBaselineAnchor, refreshedEvidenceAnchor);
+      const refreshedLedgerCountAnchor = readLedgerCountAnchorJournal(
+        path.join(this.root, "ledger-count-anchors"),
+      );
       const finalEvaluation = evaluation.baselineToPersist || evaluation.evidenceToPersist
         || evaluation.baselineAnchorToPersist || evaluation.evidenceAnchorToPersist
+        || evaluation.ledgerCountAnchorToPersist
         ? evaluateMlbS6qFiftySettlementHumanReview(
           records,
           s6mReport,
@@ -1806,6 +1979,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
             previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
             previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
             anchors: refreshedAnchors,
+            ledgerCountAnchor: refreshedLedgerCountAnchor,
             previousReportReadError: previousArtifact.error,
             s6kReportReadError: s6kCertification.error,
           },
