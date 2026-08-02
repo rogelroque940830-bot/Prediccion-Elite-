@@ -573,7 +573,10 @@ export function buildMlbS6mMilestoneCertificate(
 
 function compareNullableNumber(label: string, left: number | null, right: number | null, mismatches: string[], tolerance = 1e-6): void {
   if (left == null && right == null) return;
-  if (left == null || right == null || Math.abs(left - right) > tolerance) {
+  // Values are persisted at six-decimal precision. Include machine epsilon so
+  // an exact one-unit historical rounding boundary is not rejected merely
+  // because its binary floating-point subtraction is infinitesimally larger.
+  if (left == null || right == null || Math.abs(left - right) > tolerance + Number.EPSILON) {
     mismatches.push(`${label}: independent=${left} s6l=${right}`);
   }
 }
