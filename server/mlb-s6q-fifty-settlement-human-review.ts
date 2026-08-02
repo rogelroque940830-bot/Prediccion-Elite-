@@ -27,6 +27,8 @@ import { MLB_S6I_CLEAN_COHORT_CUTOFF } from "./mlb-s6i-postfix-certification";
 export const MLB_S6Q_FIFTY_REVIEW_VERSION = "mlb-s6q-fifty-settlement-human-review.v1" as const;
 export const MLB_S6Q_BASELINE_VERSION = "mlb-s6q-fifty-settlement-human-review-baseline.v1" as const;
 export const MLB_S6Q_EVIDENCE_VERSION = "mlb-s6q-fifty-settlement-human-review-evidence.v1" as const;
+export const MLB_S6Q_BASELINE_ANCHOR_VERSION = "mlb-s6q-baseline-observation-anchor.v1" as const;
+export const MLB_S6Q_EVIDENCE_ANCHOR_VERSION = "mlb-s6q-evidence-certification-anchor.v1" as const;
 export const MLB_S6Q_TARGET_SIZE = 50 as const;
 
 export type S6qState =
@@ -50,6 +52,22 @@ export type S6qBaseline = {
   results: Array<"WIN" | "LOSS">;
   ownedLedgerRecordsAtFirstObservation: number;
   baselineDigestSha256: string;
+};
+
+export type S6qBaselineAnchor = {
+  schemaVersion: typeof MLB_S6Q_BASELINE_ANCHOR_VERSION;
+  createdAt: string;
+  firstObservedAt: string;
+  baselineDigestSha256: string;
+  anchorDigestSha256: string;
+};
+
+export type S6qEvidenceAnchor = {
+  schemaVersion: typeof MLB_S6Q_EVIDENCE_ANCHOR_VERSION;
+  createdAt: string;
+  certifiedAt: string;
+  evidenceDigestSha256: string;
+  anchorDigestSha256: string;
 };
 
 export type S6qBreakdown = {
@@ -255,6 +273,15 @@ type S6qOptions = {
   environment?: string;
 };
 
+type StoredAnchors = {
+  baseline: S6qBaselineAnchor | null;
+  evidence: S6qEvidenceAnchor | null;
+  baselinePresent?: boolean;
+  evidencePresent?: boolean;
+  baselineReadError?: string | null;
+  evidenceReadError?: string | null;
+};
+
 type StoredArtifacts = {
   baseline: S6qBaseline | null;
   evidence: S6qEvidence | null;
@@ -279,6 +306,7 @@ type EvaluationOptions = {
   previousBaselineFirstObservedAtAnchor?: string | null;
   previousBaselineDigestAnchorSha256?: string | null;
   previousEvidenceDigestAnchorSha256?: string | null;
+  anchors?: StoredAnchors;
   previousReportReadError?: string | null;
   s6kReportReadError?: string | null;
 };
@@ -287,6 +315,8 @@ type EvaluationResult = {
   report: S6qReport;
   baselineToPersist: S6qBaseline | null;
   evidenceToPersist: S6qEvidence | null;
+  baselineAnchorToPersist: S6qBaselineAnchor | null;
+  evidenceAnchorToPersist: S6qEvidenceAnchor | null;
 };
 
 const CUTOFF_MS = Date.parse(MLB_S6I_CLEAN_COHORT_CUTOFF);
@@ -470,6 +500,54 @@ function baselineCore(baseline: S6qBaseline): Omit<S6qBaseline, "baselineDigestS
 function evidenceCore(evidence: S6qEvidence): Omit<S6qEvidence, "evidenceDigestSha256"> {
   const { evidenceDigestSha256: _ignored, ...core } = evidence;
   return core;
+}
+
+function baselineAnchorCore(anchor: S6qBaselineAnchor): Omit<S6qBaselineAnchor, "anchorDigestSha256"> {
+  const { anchorDigestSha256: _ignored, ...core } = anchor;
+  return core;
+}
+
+function evidenceAnchorCore(anchor: S6qEvidenceAnchor): Omit<S6qEvidenceAnchor, "anchorDigestSha256"> {
+  const { anchorDigestSha256: _ignored, ...core } = anchor;
+  return core;
+}
+
+function makeBaselineAnchor(baseline: S6qBaseline, createdAt: string): S6qBaselineAnchor {
+  const core: Omit<S6qBaselineAnchor, "anchorDigestSha256"> = {
+    schemaVersion: MLB_S6Q_BASELINE_ANCHOR_VERSION,
+    createdAt,
+    firstObservedAt: baseline.firstObservedAt,
+    baselineDigestSha256: baseline.baselineDigestSha256,
+  };
+  return { ...core, anchorDigestSha256: sha256(core) };
+}
+
+function makeEvidenceAnchor(evidence: S6qEvidence, createdAt: string): S6qEvidenceAnchor {
+  const core: Omit<S6qEvidenceAnchor, "anchorDigestSha256"> = {
+    schemaVersion: MLB_S6Q_EVIDENCE_ANCHOR_VERSION,
+    createdAt,
+    certifiedAt: evidence.certifiedAt,
+    evidenceDigestSha256: evidence.evidenceDigestSha256,
+  };
+  return { ...core, anchorDigestSha256: sha256(core) };
+}
+
+function isS6qBaselineAnchorShape(value: unknown): value is S6qBaselineAnchor {
+  if (!isObjectRecord(value)) return false;
+  return value.schemaVersion === MLB_S6Q_BASELINE_ANCHOR_VERSION
+    && typeof value.createdAt === "string"
+    && typeof value.firstObservedAt === "string"
+    && typeof value.baselineDigestSha256 === "string"
+    && typeof value.anchorDigestSha256 === "string";
+}
+
+function isS6qEvidenceAnchorShape(value: unknown): value is S6qEvidenceAnchor {
+  if (!isObjectRecord(value)) return false;
+  return value.schemaVersion === MLB_S6Q_EVIDENCE_ANCHOR_VERSION
+    && typeof value.createdAt === "string"
+    && typeof value.certifiedAt === "string"
+    && typeof value.evidenceDigestSha256 === "string"
+    && typeof value.anchorDigestSha256 === "string";
 }
 
 function manifestFor(observations: S6mObservation[]): S6mManifestEntry[] {
@@ -787,12 +865,27 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const environment = options.environment ?? "unknown";
   const minimumStabilityMs = options.minimumStabilityMs ?? 5 * 60 * 1000;
   const previousCount = options.previousOwnedLedgerRecords ?? null;
-  const previousBaselineEverObserved = options.previousBaselineEverObserved
-    ?? options.previousBaselinePresent
-    ?? false;
-  const previousEvidenceEverObserved = options.previousEvidenceEverObserved
-    ?? options.previousEvidencePresent
-    ?? false;
+  const storedAnchors = options.anchors ?? { baseline: null, evidence: null };
+  const baselineAnchorPresent = storedAnchors.baselinePresent
+    ?? (storedAnchors.baseline !== null && storedAnchors.baseline !== undefined);
+  const evidenceAnchorPresent = storedAnchors.evidencePresent
+    ?? (storedAnchors.evidence !== null && storedAnchors.evidence !== undefined);
+  const validBaselineAnchor = isS6qBaselineAnchorShape(storedAnchors.baseline)
+    && sha256(baselineAnchorCore(storedAnchors.baseline)) === storedAnchors.baseline.anchorDigestSha256
+    ? storedAnchors.baseline
+    : null;
+  const validEvidenceAnchor = isS6qEvidenceAnchorShape(storedAnchors.evidence)
+    && sha256(evidenceAnchorCore(storedAnchors.evidence)) === storedAnchors.evidence.anchorDigestSha256
+    ? storedAnchors.evidence
+    : null;
+  const previousBaselineEverObserved = Boolean(validBaselineAnchor)
+    || options.previousBaselineEverObserved
+    || options.previousBaselinePresent
+    || false;
+  const previousEvidenceEverObserved = Boolean(validEvidenceAnchor)
+    || options.previousEvidenceEverObserved
+    || options.previousEvidencePresent
+    || false;
   const currentOwnedLedgerRecords = options.currentOwnedLedgerRecords ?? records.length;
   const countMonotonic = previousCount == null || currentOwnedLedgerRecords >= previousCount;
   const s6mReportShapeValid = s6mReportInput == null ? null : isS6mReportArtifactShape(s6mReportInput);
@@ -811,7 +904,13 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const issues: S6qReport["issues"] = [];
   let baselineToPersist: S6qBaseline | null = null;
   let evidenceToPersist: S6qEvidence | null = null;
+  let baselineAnchorToPersist: S6qBaselineAnchor | null = null;
+  let evidenceAnchorToPersist: S6qEvidenceAnchor | null = null;
 
+  if (storedAnchors.baselineReadError) pushIssue(issues, "BASELINE_ANCHOR_UNREADABLE", "CRITICAL", storedAnchors.baselineReadError);
+  if (storedAnchors.evidenceReadError) pushIssue(issues, "EVIDENCE_ANCHOR_UNREADABLE", "CRITICAL", storedAnchors.evidenceReadError);
+  if (baselineAnchorPresent && !validBaselineAnchor) pushIssue(issues, "BASELINE_ANCHOR_INVALID", "CRITICAL", "The independent baseline observation anchor is malformed or failed its digest check.");
+  if (evidenceAnchorPresent && !validEvidenceAnchor) pushIssue(issues, "EVIDENCE_ANCHOR_INVALID", "CRITICAL", "The independent evidence certification anchor is malformed or failed its digest check.");
   if (options.previousReportReadError) pushIssue(issues, "PREVIOUS_REPORT_INVALID", "CRITICAL", options.previousReportReadError);
   if (options.s6kReportReadError) pushIssue(issues, "S6K_REPORT_SHAPE_INVALID", "CRITICAL", options.s6kReportReadError);
   if (s6mReportInput && !s6mReportShapeValid) {
@@ -1054,12 +1153,18 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       || !baselineIdsValid) {
       pushIssue(issues, "BASELINE_INTEGRITY_INVALID", "CRITICAL", "The append-only fifty-result baseline failed integrity or semantic validation.");
     }
-    if (options.previousBaselineFirstObservedAtAnchor
-      && validStoredBaseline.firstObservedAt !== options.previousBaselineFirstObservedAtAnchor) {
+    const expectedFirstObservedAtAnchor = validBaselineAnchor?.firstObservedAt
+      ?? options.previousBaselineFirstObservedAtAnchor
+      ?? null;
+    const expectedBaselineDigestAnchor = validBaselineAnchor?.baselineDigestSha256
+      ?? options.previousBaselineDigestAnchorSha256
+      ?? null;
+    if (expectedFirstObservedAtAnchor
+      && validStoredBaseline.firstObservedAt !== expectedFirstObservedAtAnchor) {
       pushIssue(issues, "BASELINE_FIRST_OBSERVATION_CHANGED", "CRITICAL", "The append-only baseline first-observation timestamp differs from its previously persisted anchor.");
     }
-    if (options.previousBaselineDigestAnchorSha256
-      && validStoredBaseline.baselineDigestSha256 !== options.previousBaselineDigestAnchorSha256) {
+    if (expectedBaselineDigestAnchor
+      && validStoredBaseline.baselineDigestSha256 !== expectedBaselineDigestAnchor) {
       pushIssue(issues, "BASELINE_DIGEST_ANCHOR_CHANGED", "CRITICAL", "The append-only baseline digest differs from its previously persisted anchor.");
     }
   }
@@ -1127,8 +1232,11 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     if (!derivedEvidenceMatches) {
       pushIssue(issues, "EVIDENCE_DERIVED_SECTIONS_MISMATCH", "CRITICAL", "S6Q evidence derived analyses do not match an independent reconstruction from the current immutable sample.");
     }
-    if (options.previousEvidenceDigestAnchorSha256
-      && validStoredEvidence.evidenceDigestSha256 !== options.previousEvidenceDigestAnchorSha256) {
+    const expectedEvidenceDigestAnchor = validEvidenceAnchor?.evidenceDigestSha256
+      ?? options.previousEvidenceDigestAnchorSha256
+      ?? null;
+    if (expectedEvidenceDigestAnchor
+      && validStoredEvidence.evidenceDigestSha256 !== expectedEvidenceDigestAnchor) {
       pushIssue(issues, "EVIDENCE_DIGEST_ANCHOR_CHANGED", "CRITICAL", "The append-only evidence digest differs from its previously persisted anchor.");
     }
     if (!hasAllS6qEvidenceChecks(validStoredEvidence.checks)) {
@@ -1191,6 +1299,9 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
         s6mReport.generatedAt,
         s6pReport.generatedAt,
       );
+      if (!validBaselineAnchor && !baselineAnchorPresent) {
+        baselineAnchorToPersist = makeBaselineAnchor(baselineToPersist, generatedAt);
+      }
     } else if (!validStoredEvidence) {
       const stableForMs = Date.parse(generatedAt) - Date.parse(validStoredBaseline.firstObservedAt);
       if (stableForMs >= minimumStabilityMs) {
@@ -1206,6 +1317,9 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
           environment,
           minimumStabilityMs,
         );
+        if (!validEvidenceAnchor && !evidenceAnchorPresent) {
+          evidenceAnchorToPersist = makeEvidenceAnchor(evidenceToPersist, generatedAt);
+        }
       }
     }
   }
@@ -1224,13 +1338,19 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   );
   const baselineEverObserved = previousBaselineEverObserved || Boolean(effectiveBaseline);
   const evidenceEverObserved = previousEvidenceEverObserved || Boolean(effectiveEvidence);
-  const baselineFirstObservedAtAnchor = options.previousBaselineFirstObservedAtAnchor
+  const baselineFirstObservedAtAnchor = validBaselineAnchor?.firstObservedAt
+    ?? baselineAnchorToPersist?.firstObservedAt
+    ?? options.previousBaselineFirstObservedAtAnchor
     ?? effectiveBaseline?.firstObservedAt
     ?? null;
-  const baselineDigestAnchorSha256 = options.previousBaselineDigestAnchorSha256
+  const baselineDigestAnchorSha256 = validBaselineAnchor?.baselineDigestSha256
+    ?? baselineAnchorToPersist?.baselineDigestSha256
+    ?? options.previousBaselineDigestAnchorSha256
     ?? effectiveBaseline?.baselineDigestSha256
     ?? null;
-  const evidenceDigestAnchorSha256 = options.previousEvidenceDigestAnchorSha256
+  const evidenceDigestAnchorSha256 = validEvidenceAnchor?.evidenceDigestSha256
+    ?? evidenceAnchorToPersist?.evidenceDigestSha256
+    ?? options.previousEvidenceDigestAnchorSha256
     ?? effectiveEvidence?.evidenceDigestSha256
     ?? null;
 
@@ -1350,7 +1470,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     },
   };
 
-  return { report, baselineToPersist, evidenceToPersist };
+  return { report, baselineToPersist, evidenceToPersist, baselineAnchorToPersist, evidenceAnchorToPersist };
 }
 
 function positiveInteger(value: unknown, fallback: number, minimum: number): number {
@@ -1430,6 +1550,20 @@ export function buildMlbS6qPreviousReportArtifact(
     };
   }
   return { value: artifact.value, error: null, present: true };
+}
+
+export function buildMlbS6qStoredAnchors(
+  baselineArtifact: { value: S6qBaselineAnchor | null; error: string | null; present: boolean },
+  evidenceArtifact: { value: S6qEvidenceAnchor | null; error: string | null; present: boolean },
+): StoredAnchors {
+  return {
+    baseline: baselineArtifact.value,
+    evidence: evidenceArtifact.value,
+    baselinePresent: baselineArtifact.present,
+    evidencePresent: evidenceArtifact.present,
+    baselineReadError: baselineArtifact.error,
+    evidenceReadError: evidenceArtifact.error,
+  };
 }
 
 export function buildMlbS6qStoredArtifacts(
@@ -1582,6 +1716,9 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const certifiedTerminalPredictionIds = s6kCertification.terminalPredictionIds;
       const baselineArtifact = readJsonArtifact<S6qBaseline>(path.join(this.root, "baseline.json"));
       const evidenceArtifact = readJsonArtifact<S6qEvidence>(path.join(this.root, "evidence.json"));
+      const baselineAnchorArtifact = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
+      const evidenceAnchorArtifact = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
+      const storedAnchors = buildMlbS6qStoredAnchors(baselineAnchorArtifact, evidenceAnchorArtifact);
       const evaluation = evaluateMlbS6qFiftySettlementHumanReview(
         records,
         s6mReport,
@@ -1604,14 +1741,30 @@ export class MlbS6qFiftySettlementHumanReviewService {
           previousBaselineFirstObservedAtAnchor: previous?.stability.baselineFirstObservedAtAnchor ?? previous?.stability.firstObservedAt ?? null,
           previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
           previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
+          anchors: storedAnchors,
+          anchors: storedAnchors,
           previousReportReadError: previousArtifact.error,
           s6kReportReadError: s6kCertification.error,
         },
       );
 
+      if (evaluation.baselineAnchorToPersist) {
+        try {
+          writeAppendOnlyJson(path.join(this.root, "baseline-observation-anchor.json"), evaluation.baselineAnchorToPersist);
+        } catch (error: any) {
+          if (error?.code !== "EEXIST") throw error;
+        }
+      }
       if (evaluation.baselineToPersist) {
         try {
           writeAppendOnlyJson(path.join(this.root, "baseline.json"), evaluation.baselineToPersist);
+        } catch (error: any) {
+          if (error?.code !== "EEXIST") throw error;
+        }
+      }
+      if (evaluation.evidenceAnchorToPersist) {
+        try {
+          writeAppendOnlyJson(path.join(this.root, "evidence-certification-anchor.json"), evaluation.evidenceAnchorToPersist);
         } catch (error: any) {
           if (error?.code !== "EEXIST") throw error;
         }
@@ -1626,7 +1779,11 @@ export class MlbS6qFiftySettlementHumanReviewService {
 
       const refreshedBaseline = readJsonArtifact<S6qBaseline>(path.join(this.root, "baseline.json"));
       const refreshedEvidence = readJsonArtifact<S6qEvidence>(path.join(this.root, "evidence.json"));
+      const refreshedBaselineAnchor = readJsonArtifact<S6qBaselineAnchor>(path.join(this.root, "baseline-observation-anchor.json"));
+      const refreshedEvidenceAnchor = readJsonArtifact<S6qEvidenceAnchor>(path.join(this.root, "evidence-certification-anchor.json"));
+      const refreshedAnchors = buildMlbS6qStoredAnchors(refreshedBaselineAnchor, refreshedEvidenceAnchor);
       const finalEvaluation = evaluation.baselineToPersist || evaluation.evidenceToPersist
+        || evaluation.baselineAnchorToPersist || evaluation.evidenceAnchorToPersist
         ? evaluateMlbS6qFiftySettlementHumanReview(
           records,
           s6mReport,
@@ -1649,6 +1806,7 @@ export class MlbS6qFiftySettlementHumanReviewService {
             previousBaselineFirstObservedAtAnchor: previous?.stability.baselineFirstObservedAtAnchor ?? previous?.stability.firstObservedAt ?? null,
             previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
             previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
+            anchors: refreshedAnchors,
             previousReportReadError: previousArtifact.error,
             s6kReportReadError: s6kCertification.error,
           },

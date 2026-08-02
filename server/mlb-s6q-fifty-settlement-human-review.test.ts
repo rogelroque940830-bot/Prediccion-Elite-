@@ -13,6 +13,7 @@ import type { S6pReport } from "./mlb-s6p-first-twenty-settlements-certification
 import {
   buildMlbS6qCertifiedTerminalPredictionIdsFromS6k,
   buildMlbS6qPreviousReportArtifact,
+  buildMlbS6qStoredAnchors,
   buildMlbS6qStoredArtifacts,
   evaluateMlbS6qFiftySettlementHumanReview,
   type S6qBaseline,
@@ -687,4 +688,59 @@ test("reconstructs every derived evidence section independently", () => {
   const result = evaluate(records, report, certificates, { baseline: first.baselineToPersist, evidence: tampered }, "2026-08-01T21:04:00.000Z");
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_DERIVED_SECTIONS_MISMATCH"), true);
+});
+
+
+test("recovers irreversible history from independent anchors when latest.json is invalid", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  if (!first.baselineToPersist || !first.baselineAnchorToPersist) throw new Error("fixture baseline anchor missing");
+  const anchors = buildMlbS6qStoredAnchors(
+    { value: first.baselineAnchorToPersist, error: null, present: true },
+    { value: null, error: null, present: false },
+  );
+  const missing = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null, baselinePresent: false, evidencePresent: false },
+    {
+      generatedAt: "2026-08-01T21:03:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      anchors,
+      previousReportReadError: "latest.json malformed",
+    },
+  );
+  assert.equal(missing.report.state, "ACTION_REQUIRED");
+  assert.equal(missing.report.stability.baselineEverObserved, true);
+  assert.equal(missing.report.stability.baselineDigestAnchorSha256, first.baselineAnchorToPersist.baselineDigestSha256);
+  assert.equal(missing.report.issues.some((entry) => entry.code === "BASELINE_DISAPPEARED_AFTER_OBSERVATION"), true);
+  assert.equal(missing.baselineToPersist, null);
+});
+
+test("rejects malformed independent anchor files", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      anchors: { baseline: {} as any, evidence: null, baselinePresent: true, evidencePresent: false },
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "BASELINE_ANCHOR_INVALID"), true);
 });
