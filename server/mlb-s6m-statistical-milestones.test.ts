@@ -168,6 +168,23 @@ test("independently recomputes the scientific metrics and certifies milestone 1"
   assert.equal(evaluation.report.readiness.automaticModelChangesAllowed, false);
 });
 
+test("matches S6L calibration precision when bin rounding crosses an ECE micro-unit", () => {
+  const records = [
+    ...pairedDecision(0, { probability: 0.4999999, result: "WIN" }),
+    ...Array.from({ length: 17 }, (_, offset) => pairedDecision(offset + 1, {
+      probability: 0.3999999,
+      result: "WIN",
+    })).flat(),
+  ];
+
+  const sample = extractMlbS6mIndependentSample(records);
+  const metrics = computeMlbS6mIndependentMetrics(sample.observations);
+  const evaluation = evaluate(records);
+  assert.equal(metrics.expectedCalibrationError, 0.594444);
+  assert.deepEqual(evaluation.report.metricParity.mismatches, []);
+  assert.equal(evaluation.report.metricParity.passed, true);
+});
+
 test("creates immutable milestone 1 and 5 certificates from deterministic first-N decisions", () => {
   const records = Array.from({ length: 5 }, (_, index) => pairedDecision(index)).flat();
   const evaluation = evaluate(records, ["final-0", "final-1"]);

@@ -466,7 +466,12 @@ function calibrationErrors(observations: S6mObservation[]): { ece: number | null
     if (!values.length) continue;
     const predicted = average(values.map((entry) => entry.modelProbability)) ?? 0;
     const observed = average(values.map((entry) => entry.outcome as number)) ?? 0;
-    gaps.push({ count: values.length, gap: Math.abs(observed - predicted) });
+    // S6L publishes each calibration-bin gap in percentage points rounded to
+    // four decimals before aggregating ECE/MCE. Mirror that public precision
+    // here so the independent parity gate compares the same defined metric,
+    // rather than disagreeing by one micro-unit because of hidden precision.
+    const publishedGap = Math.abs(round((observed - predicted) * 100, 4) / 100);
+    gaps.push({ count: values.length, gap: publishedGap });
   }
   return {
     ece: round(gaps.reduce((sum, entry) => sum + (entry.count / binary.length) * entry.gap, 0)),
