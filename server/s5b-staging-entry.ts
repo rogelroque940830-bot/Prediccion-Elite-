@@ -492,6 +492,9 @@ app.get("/health/s6o-first-five-settlements", (_req, res) => {
       checks: latest.checks,
       readiness: latest.readiness,
       persistence: latest.persistence,
+      certificateDiagnostics: latest.issues
+        .filter((entry) => /^MILESTONE_\d+_CERTIFICATE_INVALID$/.test(entry.code))
+        .map((entry) => ({ code: entry.code, severity: entry.severity, message: entry.message })),
       issueCounts: latest.issues.reduce((counts, entry) => {
         counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
         return counts;
