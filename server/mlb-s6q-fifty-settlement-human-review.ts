@@ -1742,7 +1742,6 @@ export class MlbS6qFiftySettlementHumanReviewService {
           previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
           previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
           anchors: storedAnchors,
-          anchors: storedAnchors,
           previousReportReadError: previousArtifact.error,
           s6kReportReadError: s6kCertification.error,
         },
