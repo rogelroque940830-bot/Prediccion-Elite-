@@ -1758,7 +1758,7 @@ function readLedgerCountAnchorJournal(directory: string): {
 }
 
 function ledgerCountAnchorFileName(anchor: S6qLedgerCountAnchor): string {
-  return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}-${anchor.anchorDigestSha256.slice(0, 12)}.json`;
+  return `${String(anchor.ownedLedgerRecords).padStart(12, "0")}.json`;
 }
 
 function pruneSnapshots(directory: string, maxSnapshots: number): void {
