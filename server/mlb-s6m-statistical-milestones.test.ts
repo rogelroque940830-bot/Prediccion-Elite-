@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 import type { LedgerRecord } from "./mlb-ledger-store";
 import { MLB_S6I_CLEAN_COHORT_CUTOFF } from "./mlb-s6i-postfix-certification";
@@ -183,6 +184,31 @@ test("matches S6L calibration precision when bin rounding crosses an ECE micro-u
   assert.equal(metrics.expectedCalibrationError, 0.594444);
   assert.deepEqual(evaluation.report.metricParity.mismatches, []);
   assert.equal(evaluation.report.metricParity.passed, true);
+});
+
+test("keeps an immutable pre-fix certificate valid at an exact ECE micro-unit boundary", () => {
+  const records = [
+    ...pairedDecision(0, { probability: 0.4999999, result: "WIN" }),
+    ...Array.from({ length: 4 }, (_, offset) => pairedDecision(offset + 1, {
+      probability: 0.3999999,
+      result: "WIN",
+    })).flat(),
+  ];
+  const sample = extractMlbS6mIndependentSample(records);
+  const certificate = buildMlbS6mMilestoneCertificate(sample.binaryObservations, 5, {
+    createdAt: "2026-08-01T19:05:00.000Z",
+    sourceS6lGeneratedAt: "2026-08-01T19:00:00.000Z",
+  });
+  certificate.metrics.expectedCalibrationError =
+    (certificate.metrics.expectedCalibrationError as number) + 0.000001;
+  const { certificateDigestSha256: _oldDigest, ...core } = certificate;
+  certificate.certificateDigestSha256 = crypto.createHash("sha256")
+    .update(JSON.stringify(core))
+    .digest("hex");
+
+  const evaluation = evaluate(records, [], { "5": certificate });
+  assert.equal(evaluation.report.milestones.find((entry) => entry.milestone === 5)?.status, "CERTIFIED");
+  assert.equal(evaluation.report.issues.some((entry) => entry.code === "MILESTONE_5_CERTIFICATE_INVALID"), false);
 });
 
 test("creates immutable milestone 1 and 5 certificates from deterministic first-N decisions", () => {
