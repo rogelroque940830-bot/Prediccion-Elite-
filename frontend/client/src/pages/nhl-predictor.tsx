@@ -1101,7 +1101,7 @@ export default function NHLPredictor() {
     if (goalieUnconfirmed && mlSignal === "BET") mlSignal = "LEAN";
 
     const bankroll =
-      state.bankrollInitial + state.mlbPicks.reduce((s, p) => s + p.profit, 0);
+      state.bankrollInitial + state.nhlPicks.reduce((s, p) => s + p.profit, 0);
     const mlStake = kellyFraction(mlPickProb, recommendedOdds) * bankroll;
 
     const puckLineNum = parseFloat(puckLine) || -1.5;
@@ -1215,7 +1215,7 @@ export default function NHLPredictor() {
       return;
     }
     const bankroll =
-      state.bankrollInitial + state.mlbPicks.reduce((s, p) => s + p.profit, 0);
+      state.bankrollInitial + state.nhlPicks.reduce((s, p) => s + p.profit, 0);
     const stake = Math.round(kellyFraction(modelProb / 100, odds) * bankroll * 100) / 100;
 
     dispatch({
