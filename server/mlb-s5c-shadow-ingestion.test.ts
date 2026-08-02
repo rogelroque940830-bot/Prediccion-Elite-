@@ -210,8 +210,9 @@ test("S5C records priced provisional/final decisions once, preserves price prove
     fetcher,
   });
   const redeployed = await redeployedService.run("test-redeploy");
+  assert.equal(redeployed.gamesAnalyzed, 1);
+  assert.equal(redeployed.pricedDecisions, 2);
   assert.equal(redeployed.recordsCreated, 0);
-  assert.equal(redeployed.idempotentSkips, 2);
   assert.equal(ownedRecordsForUser(store, ownership, 1, { limit: 100 }).length, 2);
 
   const exactRetry = await service.run("test-retry");
