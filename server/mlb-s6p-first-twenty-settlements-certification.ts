@@ -6,7 +6,10 @@ import {
   ownedRecordsForUser,
   type MlbLedgerOwnershipStore,
 } from "./mlb-ledger-ownership-store";
-import type { MlbS6kFirstTenCyclesCertificationService } from "./mlb-s6k-first-ten-cycles-certification";
+import {
+  certifiedTerminalPredictionIdsFromS6k,
+  type MlbS6kFirstTenCyclesCertificationService,
+} from "./mlb-s6k-first-ten-cycles-certification";
 import type {
   MlbS6oFirstFiveSettlementsCertificationService,
   S6oReport,
@@ -1208,10 +1211,7 @@ export class MlbS6pFirstTwentySettlementsCertificationService {
       const s6mReport = this.s6mMilestones.readLatest();
       const certificates = this.s6mMilestones.readCertificates();
       const s6oReport = this.s6oFirstFive.readLatest();
-      const certifiedTerminalPredictionIds = (this.s6kFirstTen.readLatest()?.evidence ?? [])
-        .filter((entry) => entry.state === "CERTIFIED")
-        .map((entry) => entry.target.terminalPredictionId)
-        .filter((entry): entry is string => Boolean(entry));
+      const certifiedTerminalPredictionIds = certifiedTerminalPredictionIdsFromS6k(this.s6kFirstTen.readLatest());
       const baselineArtifact = readJsonArtifact<S6pBaseline>(path.join(this.root, "baseline.json"));
       const evidenceArtifact = readJsonArtifact<S6pEvidence>(path.join(this.root, "evidence.json"));
       const evaluation = evaluateMlbS6pFirstTwentySettlements(
