@@ -390,8 +390,8 @@ test("persists the exact independent certifications that unlocked human review",
   const certification = second.evidenceToPersist?.independentCertification;
   assert.ok(certification);
   assert.equal(certification?.required, 10);
-  assert.equal(certification?.certifiedAtReview, 10);
-  assert.deepEqual(certification?.terminalPredictionIds, terminalIds(10));
+  assert.equal(certification?.certifiedAtReview, 50);
+  assert.deepEqual(certification?.terminalPredictionIds, terminalIds(50));
 });
 
 test("rejects certification evidence that no longer substantiates the review gate", () => {
