@@ -182,6 +182,11 @@ export type S6qReport = {
   stability: {
     baselinePresent: boolean;
     evidencePresent: boolean;
+    baselineEverObserved: boolean;
+    evidenceEverObserved: boolean;
+    baselineFirstObservedAtAnchor: string | null;
+    baselineDigestAnchorSha256: string | null;
+    evidenceDigestAnchorSha256: string | null;
     firstObservedAt: string | null;
     stableForMs: number | null;
     minimumRequiredMs: number;
@@ -269,7 +274,13 @@ type EvaluationOptions = {
   currentOwnedLedgerRecords?: number;
   previousBaselinePresent?: boolean;
   previousEvidencePresent?: boolean;
+  previousBaselineEverObserved?: boolean;
+  previousEvidenceEverObserved?: boolean;
+  previousBaselineFirstObservedAtAnchor?: string | null;
+  previousBaselineDigestAnchorSha256?: string | null;
+  previousEvidenceDigestAnchorSha256?: string | null;
   previousReportReadError?: string | null;
+  s6kReportReadError?: string | null;
 };
 
 type EvaluationResult = {
@@ -376,6 +387,32 @@ function isS6pReportArtifactShape(value: unknown): value is S6pReport {
     && isIssueArray(value.issues)
     && isObjectRecord(readiness)
     && typeof readiness.minimumSample20Certified === "boolean";
+}
+
+function isS6kEvidenceEntryShape(value: unknown): boolean {
+  if (!isObjectRecord(value) || typeof value.state !== "string" || !isObjectRecord(value.target)) return false;
+  return value.target.terminalPredictionId === null
+    || typeof value.target.terminalPredictionId === "string";
+}
+
+export function buildMlbS6qCertifiedTerminalPredictionIdsFromS6k(value: unknown): {
+  terminalPredictionIds: string[];
+  error: string | null;
+} {
+  if (value == null) return { terminalPredictionIds: [], error: null };
+  if (!isObjectRecord(value)
+    || !Array.isArray(value.evidence)
+    || !value.evidence.every(isS6kEvidenceEntryShape)) {
+    return {
+      terminalPredictionIds: [],
+      error: "The persisted S6K report has an incomplete or incompatible evidence structure.",
+    };
+  }
+  const terminalPredictionIds = [...new Set(value.evidence
+    .filter((entry) => entry.state === "CERTIFIED")
+    .map((entry) => entry.target.terminalPredictionId)
+    .filter((entry): entry is string => typeof entry === "string" && entry.length > 0))];
+  return { terminalPredictionIds, error: null };
 }
 
 function isS6mManifestEntryShape(value: unknown): value is S6mManifestEntry {
@@ -750,6 +787,12 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const environment = options.environment ?? "unknown";
   const minimumStabilityMs = options.minimumStabilityMs ?? 5 * 60 * 1000;
   const previousCount = options.previousOwnedLedgerRecords ?? null;
+  const previousBaselineEverObserved = options.previousBaselineEverObserved
+    ?? options.previousBaselinePresent
+    ?? false;
+  const previousEvidenceEverObserved = options.previousEvidenceEverObserved
+    ?? options.previousEvidencePresent
+    ?? false;
   const currentOwnedLedgerRecords = options.currentOwnedLedgerRecords ?? records.length;
   const countMonotonic = previousCount == null || currentOwnedLedgerRecords >= previousCount;
   const s6mReportShapeValid = s6mReportInput == null ? null : isS6mReportArtifactShape(s6mReportInput);
@@ -770,6 +813,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   let evidenceToPersist: S6qEvidence | null = null;
 
   if (options.previousReportReadError) pushIssue(issues, "PREVIOUS_REPORT_INVALID", "CRITICAL", options.previousReportReadError);
+  if (options.s6kReportReadError) pushIssue(issues, "S6K_REPORT_SHAPE_INVALID", "CRITICAL", options.s6kReportReadError);
   if (s6mReportInput && !s6mReportShapeValid) {
     pushIssue(issues, "S6M_REPORT_SHAPE_INVALID", "CRITICAL", "The persisted S6M report has an incomplete or incompatible structure.");
   }
@@ -778,10 +822,10 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   }
   if (stored.baselineReadError) pushIssue(issues, "BASELINE_UNREADABLE", "CRITICAL", stored.baselineReadError);
   if (stored.evidenceReadError) pushIssue(issues, "EVIDENCE_UNREADABLE", "CRITICAL", stored.evidenceReadError);
-  if (options.previousBaselinePresent && !baselinePresent) {
+  if (previousBaselineEverObserved && !baselinePresent) {
     pushIssue(issues, "BASELINE_DISAPPEARED_AFTER_OBSERVATION", "CRITICAL", "The append-only S6Q baseline existed in the previous successful report but is now absent.");
   }
-  if (options.previousEvidencePresent && !evidencePresent) {
+  if (previousEvidenceEverObserved && !evidencePresent) {
     pushIssue(issues, "EVIDENCE_DISAPPEARED_AFTER_CERTIFICATION", "CRITICAL", "The append-only S6Q review evidence existed in the previous successful report but is now absent.");
   }
   if (!countMonotonic) {
@@ -1010,6 +1054,14 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       || !baselineIdsValid) {
       pushIssue(issues, "BASELINE_INTEGRITY_INVALID", "CRITICAL", "The append-only fifty-result baseline failed integrity or semantic validation.");
     }
+    if (options.previousBaselineFirstObservedAtAnchor
+      && validStoredBaseline.firstObservedAt !== options.previousBaselineFirstObservedAtAnchor) {
+      pushIssue(issues, "BASELINE_FIRST_OBSERVATION_CHANGED", "CRITICAL", "The append-only baseline first-observation timestamp differs from its previously persisted anchor.");
+    }
+    if (options.previousBaselineDigestAnchorSha256
+      && validStoredBaseline.baselineDigestSha256 !== options.previousBaselineDigestAnchorSha256) {
+      pushIssue(issues, "BASELINE_DIGEST_ANCHOR_CHANGED", "CRITICAL", "The append-only baseline digest differs from its previously persisted anchor.");
+    }
   }
 
   if (evidencePresent && !validStoredEvidence) {
@@ -1057,6 +1109,27 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       && certification.digestSha256 === sha256(certificationCore);
     if (!certificationValid) {
       pushIssue(issues, "INDEPENDENT_CERTIFICATION_EVIDENCE_INVALID", "CRITICAL", "S6Q evidence does not substantiate the ten independent certifications that unlocked human review.");
+    }
+    const expectedMarketBreakdowns = groupedBreakdowns(selected, (entry) => entry.marketType);
+    const expectedSignalBreakdowns = groupedBreakdowns(selected, (entry) => entry.signal);
+    const expectedCalibrationBuckets = buildCalibrationBuckets(selected);
+    const expectedProvisionalFinalComparison = buildProvisionalFinalComparison(records, selected);
+    const expectedConcentration = buildConcentration(
+      expectedMarketBreakdowns,
+      expectedSignalBreakdowns,
+      selected.length,
+    );
+    const derivedEvidenceMatches = canonicalDigest(validStoredEvidence.marketBreakdowns) === canonicalDigest(expectedMarketBreakdowns)
+      && canonicalDigest(validStoredEvidence.signalBreakdowns) === canonicalDigest(expectedSignalBreakdowns)
+      && canonicalDigest(validStoredEvidence.calibrationBuckets) === canonicalDigest(expectedCalibrationBuckets)
+      && canonicalDigest(validStoredEvidence.provisionalFinalComparison) === canonicalDigest(expectedProvisionalFinalComparison)
+      && canonicalDigest(validStoredEvidence.concentration) === canonicalDigest(expectedConcentration);
+    if (!derivedEvidenceMatches) {
+      pushIssue(issues, "EVIDENCE_DERIVED_SECTIONS_MISMATCH", "CRITICAL", "S6Q evidence derived analyses do not match an independent reconstruction from the current immutable sample.");
+    }
+    if (options.previousEvidenceDigestAnchorSha256
+      && validStoredEvidence.evidenceDigestSha256 !== options.previousEvidenceDigestAnchorSha256) {
+      pushIssue(issues, "EVIDENCE_DIGEST_ANCHOR_CHANGED", "CRITICAL", "The append-only evidence digest differs from its previously persisted anchor.");
     }
     if (!hasAllS6qEvidenceChecks(validStoredEvidence.checks)) {
       pushIssue(issues, "EVIDENCE_CHECK_FLAGS_INVALID", "CRITICAL", "S6Q evidence contains a failed or missing named verification assertion.");
@@ -1149,6 +1222,17 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
       && stableForMs != null
       && stableForMs >= minimumStabilityMs,
   );
+  const baselineEverObserved = previousBaselineEverObserved || Boolean(effectiveBaseline);
+  const evidenceEverObserved = previousEvidenceEverObserved || Boolean(effectiveEvidence);
+  const baselineFirstObservedAtAnchor = options.previousBaselineFirstObservedAtAnchor
+    ?? effectiveBaseline?.firstObservedAt
+    ?? null;
+  const baselineDigestAnchorSha256 = options.previousBaselineDigestAnchorSha256
+    ?? effectiveBaseline?.baselineDigestSha256
+    ?? null;
+  const evidenceDigestAnchorSha256 = options.previousEvidenceDigestAnchorSha256
+    ?? effectiveEvidence?.evidenceDigestSha256
+    ?? null;
 
   let state: S6qState;
   if (critical) state = "ACTION_REQUIRED";
@@ -1210,6 +1294,11 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
     stability: {
       baselinePresent: Boolean(effectiveBaseline),
       evidencePresent: Boolean(effectiveEvidence),
+      baselineEverObserved,
+      evidenceEverObserved,
+      baselineFirstObservedAtAnchor,
+      baselineDigestAnchorSha256,
+      evidenceDigestAnchorSha256,
       firstObservedAt: effectiveBaseline?.firstObservedAt ?? null,
       stableForMs,
       minimumRequiredMs: minimumStabilityMs,
@@ -1314,6 +1403,11 @@ function isS6qReportArtifactShape(value: unknown): value is S6qReport {
     && isObjectRecord(value.stability)
     && typeof value.stability.baselinePresent === "boolean"
     && typeof value.stability.evidencePresent === "boolean"
+    && typeof value.stability.baselineEverObserved === "boolean"
+    && typeof value.stability.evidenceEverObserved === "boolean"
+    && (value.stability.baselineFirstObservedAtAnchor === null || typeof value.stability.baselineFirstObservedAtAnchor === "string")
+    && (value.stability.baselineDigestAnchorSha256 === null || typeof value.stability.baselineDigestAnchorSha256 === "string")
+    && (value.stability.evidenceDigestAnchorSha256 === null || typeof value.stability.evidenceDigestAnchorSha256 === "string")
     && isObjectRecord(value.checks)
     && isObjectRecord(value.readiness)
     && isObjectRecord(value.persistence)
@@ -1484,10 +1578,8 @@ export class MlbS6qFiftySettlementHumanReviewService {
       const s6mReport = this.s6mMilestones.readLatest();
       const certificates = this.s6mMilestones.readCertificates();
       const s6pReport = this.s6pMinimumSample.readLatest();
-      const certifiedTerminalPredictionIds = (this.s6kFirstTen.readLatest()?.evidence ?? [])
-        .filter((entry) => entry.state === "CERTIFIED")
-        .map((entry) => entry.target.terminalPredictionId)
-        .filter((entry): entry is string => Boolean(entry));
+      const s6kCertification = buildMlbS6qCertifiedTerminalPredictionIdsFromS6k(this.s6kFirstTen.readLatest());
+      const certifiedTerminalPredictionIds = s6kCertification.terminalPredictionIds;
       const baselineArtifact = readJsonArtifact<S6qBaseline>(path.join(this.root, "baseline.json"));
       const evidenceArtifact = readJsonArtifact<S6qEvidence>(path.join(this.root, "evidence.json"));
       const evaluation = evaluateMlbS6qFiftySettlementHumanReview(
@@ -1507,7 +1599,13 @@ export class MlbS6qFiftySettlementHumanReviewService {
           currentOwnedLedgerRecords,
           previousBaselinePresent: previous?.stability.baselinePresent ?? false,
           previousEvidencePresent: previous?.stability.evidencePresent ?? false,
+          previousBaselineEverObserved: previous?.stability.baselineEverObserved ?? previous?.stability.baselinePresent ?? false,
+          previousEvidenceEverObserved: previous?.stability.evidenceEverObserved ?? previous?.stability.evidencePresent ?? false,
+          previousBaselineFirstObservedAtAnchor: previous?.stability.baselineFirstObservedAtAnchor ?? previous?.stability.firstObservedAt ?? null,
+          previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
+          previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
           previousReportReadError: previousArtifact.error,
+          s6kReportReadError: s6kCertification.error,
         },
       );
 
@@ -1546,7 +1644,13 @@ export class MlbS6qFiftySettlementHumanReviewService {
             currentOwnedLedgerRecords,
             previousBaselinePresent: previous?.stability.baselinePresent ?? false,
             previousEvidencePresent: previous?.stability.evidencePresent ?? false,
+            previousBaselineEverObserved: previous?.stability.baselineEverObserved ?? previous?.stability.baselinePresent ?? false,
+            previousEvidenceEverObserved: previous?.stability.evidenceEverObserved ?? previous?.stability.evidencePresent ?? false,
+            previousBaselineFirstObservedAtAnchor: previous?.stability.baselineFirstObservedAtAnchor ?? previous?.stability.firstObservedAt ?? null,
+            previousBaselineDigestAnchorSha256: previous?.stability.baselineDigestAnchorSha256 ?? null,
+            previousEvidenceDigestAnchorSha256: previous?.stability.evidenceDigestAnchorSha256 ?? null,
             previousReportReadError: previousArtifact.error,
+            s6kReportReadError: s6kCertification.error,
           },
         )
         : evaluation;

@@ -11,6 +11,7 @@ import {
 } from "./mlb-s6m-statistical-milestones";
 import type { S6pReport } from "./mlb-s6p-first-twenty-settlements-certification";
 import {
+  buildMlbS6qCertifiedTerminalPredictionIdsFromS6k,
   buildMlbS6qPreviousReportArtifact,
   buildMlbS6qStoredArtifacts,
   evaluateMlbS6qFiftySettlementHumanReview,
@@ -555,4 +556,135 @@ test("rejects a milestone certificate when any required named check is false", (
   const result = evaluate(records, report, changed);
   assert.equal(result.report.state, "ACTION_REQUIRED");
   assert.equal(result.report.issues.some((entry) => entry.code === "CERTIFICATE_SHAPE_INVALID" || entry.code === "CERTIFICATE_CHECK_FLAGS_INVALID"), true);
+});
+
+
+test("preserves irreversible artifact anchors across repeated disappearance runs", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  assert.ok(first.baselineToPersist);
+  assert.equal(first.report.stability.baselineEverObserved, true);
+  const disappearedOnce = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null, baselinePresent: false, evidencePresent: false },
+    {
+      generatedAt: "2026-08-01T21:03:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      previousBaselineEverObserved: first.report.stability.baselineEverObserved,
+      previousBaselineFirstObservedAtAnchor: first.report.stability.baselineFirstObservedAtAnchor,
+      previousBaselineDigestAnchorSha256: first.report.stability.baselineDigestAnchorSha256,
+    },
+  );
+  assert.equal(disappearedOnce.report.state, "ACTION_REQUIRED");
+  assert.equal(disappearedOnce.report.stability.baselineEverObserved, true);
+  const disappearedTwice = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: null, evidence: null, baselinePresent: false, evidencePresent: false },
+    {
+      generatedAt: "2026-08-01T21:04:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      previousBaselineEverObserved: disappearedOnce.report.stability.baselineEverObserved,
+      previousBaselineFirstObservedAtAnchor: disappearedOnce.report.stability.baselineFirstObservedAtAnchor,
+      previousBaselineDigestAnchorSha256: disappearedOnce.report.stability.baselineDigestAnchorSha256,
+    },
+  );
+  assert.equal(disappearedTwice.report.state, "ACTION_REQUIRED");
+  assert.equal(disappearedTwice.report.issues.some((entry) => entry.code === "BASELINE_DISAPPEARED_AFTER_OBSERVATION"), true);
+  assert.equal(disappearedTwice.baselineToPersist, null);
+});
+
+test("rejects a baseline timestamp rewrite even with a recomputed digest", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  if (!first.baselineToPersist) throw new Error("fixture baseline missing");
+  const tampered = structuredClone(first.baselineToPersist);
+  tampered.firstObservedAt = "2020-01-01T00:00:00.000Z";
+  const { baselineDigestSha256: _ignored, ...core } = tampered;
+  tampered.baselineDigestSha256 = digest(core);
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    terminalIds(50),
+    { baseline: tampered, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:03:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      previousBaselineEverObserved: true,
+      previousBaselineFirstObservedAtAnchor: first.report.stability.baselineFirstObservedAtAnchor,
+      previousBaselineDigestAnchorSha256: first.report.stability.baselineDigestAnchorSha256,
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "BASELINE_FIRST_OBSERVATION_CHANGED"), true);
+  assert.equal(result.evidenceToPersist, null);
+});
+
+test("validates the S6K report before traversing its evidence", () => {
+  for (const malformed of [{ evidence: {} }, { evidence: [null] }]) {
+    const parsed = buildMlbS6qCertifiedTerminalPredictionIdsFromS6k(malformed);
+    assert.deepEqual(parsed.terminalPredictionIds, []);
+    assert.match(parsed.error ?? "", /incomplete or incompatible/);
+  }
+  const valid = buildMlbS6qCertifiedTerminalPredictionIdsFromS6k({
+    evidence: [
+      { state: "CERTIFIED", target: { terminalPredictionId: "final-1" } },
+      { state: "WAITING_FOR_FINAL", target: { terminalPredictionId: "final-2" } },
+    ],
+  });
+  assert.deepEqual(valid, { terminalPredictionIds: ["final-1"], error: null });
+});
+
+test("converts malformed S6K evidence into ACTION_REQUIRED", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const result = evaluateMlbS6qFiftySettlementHumanReview(
+    records,
+    report,
+    certificates,
+    certifiedS6pReport(),
+    [],
+    { baseline: null, evidence: null },
+    {
+      generatedAt: "2026-08-01T21:02:00.000Z",
+      deploymentCommit: "fixture",
+      environment: "test",
+      minimumStabilityMs: 60_000,
+      s6kReportReadError: "fixture malformed S6K evidence",
+    },
+  );
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "S6K_REPORT_SHAPE_INVALID"), true);
+});
+
+test("reconstructs every derived evidence section independently", () => {
+  const records = recordsFor(50);
+  const { report, certificates } = buildS6m(records, terminalIds(10));
+  const first = evaluate(records, report, certificates, {}, "2026-08-01T21:02:00.000Z");
+  const second = evaluate(records, report, certificates, { baseline: first.baselineToPersist }, "2026-08-01T21:03:00.000Z", certifiedS6pReport(), records.length);
+  if (!first.baselineToPersist || !second.evidenceToPersist) throw new Error("fixture evidence missing");
+  const tampered = structuredClone(second.evidenceToPersist);
+  tampered.calibrationBuckets[0].sampleSize += 1;
+  const { evidenceDigestSha256: _ignored, ...core } = tampered;
+  tampered.evidenceDigestSha256 = digest(core);
+  const result = evaluate(records, report, certificates, { baseline: first.baselineToPersist, evidence: tampered }, "2026-08-01T21:04:00.000Z");
+  assert.equal(result.report.state, "ACTION_REQUIRED");
+  assert.equal(result.report.issues.some((entry) => entry.code === "EVIDENCE_DERIVED_SECTIONS_MISMATCH"), true);
 });
