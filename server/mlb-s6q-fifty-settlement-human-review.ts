@@ -1005,7 +1005,7 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const s6mReport = s6mReportShapeValid ? s6mReportInput : null;
   const s6pReport = s6pReportShapeValid ? s6pReportInput : null;
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
-  const selected = sample.binaryObservations.slice(0, MLB_S6Q_TARGET_SIZE);
+  let selected = sample.binaryObservations.slice(0, MLB_S6Q_TARGET_SIZE);
   const independentlyCertifiedAmongFirstFifty = selected.filter((entry) => entry.independentlyCertified).length;
   const tenCertifiedCyclesReached = independentlyCertifiedAmongFirstFifty >= 10
     && Boolean(s6mReport?.readiness.tenCertifiedCyclesReached);
@@ -1092,6 +1092,11 @@ export function evaluateMlbS6qFiftySettlementHumanReview(
   const rawCertificate = certificates["50"] ?? null;
   const certificateShapeValid = rawCertificate ? isS6mMilestoneCertificateShape(rawCertificate) : null;
   const certificate = certificateShapeValid ? rawCertificate : null;
+  if (certificate) {
+    const byId = new Map(sample.binaryObservations.map((entry) => [entry.terminalPredictionId, entry]));
+    const sealed = certificate.manifest.map((entry) => byId.get(entry.terminalPredictionId));
+    if (sealed.every((entry): entry is S6mObservation => entry != null)) selected = sealed;
+  }
   if (rawCertificate && !certificateShapeValid) {
     pushIssue(issues, "CERTIFICATE_SHAPE_INVALID", "CRITICAL", "The persisted milestone-50 certificate has an incomplete or incompatible structure.");
   }
