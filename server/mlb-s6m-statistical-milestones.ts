@@ -621,9 +621,19 @@ function validateCertificate(
   if (stableDigest(certificateWithoutDigest(certificate)) !== certificate.certificateDigestSha256) {
     errors.push("Certificate digest does not match its contents.");
   }
-  const expected = binaryObservations.slice(0, certificate.milestone);
+  if (certificate.manifest.length !== certificate.milestone) {
+    errors.push("Certificate manifest length does not match its milestone.");
+    return errors;
+  }
+  // The append-only manifest freezes the cohort that was eligible when the
+  // certificate was created. A decision with an earlier prediction timestamp
+  // may settle later; it must not retroactively displace a sealed identity.
+  const observationsById = new Map(binaryObservations.map((entry) => [entry.terminalPredictionId, entry]));
+  const expected = certificate.manifest
+    .map((entry) => observationsById.get(entry.terminalPredictionId))
+    .filter((entry): entry is S6mObservation => entry != null);
   if (expected.length !== certificate.milestone) {
-    errors.push("Current ledger contains fewer binary decisions than the immutable certificate.");
+    errors.push("Current ledger is missing one or more decisions sealed by the immutable certificate.");
     return errors;
   }
   const currentManifest = manifestFor(expected);
