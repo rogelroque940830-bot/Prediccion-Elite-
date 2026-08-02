@@ -690,11 +690,26 @@ export function evaluateMlbS6pFirstTwentySettlements(
     }
 
     const currentManifest = manifestFor(selected);
-    const expectedManifest = currentManifest.map((entry, index) => ({
-      ...entry,
-      // Independent certification may mature after the immutable certificate was created.
-      independentlyCertified: certificate.manifest[index]?.independentlyCertified ?? entry.independentlyCertified,
-    }));
+    const expectedManifest = currentManifest.map((entry, index) => {
+      const storedEntry = certificate.manifest[index];
+      const observation = selected[index];
+      const normalized = {
+        ...entry,
+        // Independent certification may mature after the immutable certificate was created.
+        independentlyCertified: storedEntry?.independentlyCertified ?? entry.independentlyCertified,
+      };
+      const otherFieldsMatch = storedEntry && Object.keys(storedEntry)
+        .filter((field) => field !== "settlementEventId" && field !== "settlementSource")
+        .every((field) => JSON.stringify(storedEntry[field as keyof S6mManifestEntry])
+          === JSON.stringify(normalized[field as keyof S6mManifestEntry]));
+      const correctionLinksToSealedEvent = observation?.settlementSource === "correction"
+        && observation.settlementCorrectionOfEventId === storedEntry?.settlementEventId;
+      return otherFieldsMatch && correctionLinksToSealedEvent ? {
+        ...normalized,
+        settlementEventId: storedEntry.settlementEventId,
+        settlementSource: storedEntry.settlementSource,
+      } : normalized;
+    });
     if (expectedManifest.length !== MLB_S6P_TARGET_SIZE
       || canonicalDigest(expectedManifest) !== canonicalDigest(certificate.manifest)) {
       currentLedgerManifestMatches = false;
