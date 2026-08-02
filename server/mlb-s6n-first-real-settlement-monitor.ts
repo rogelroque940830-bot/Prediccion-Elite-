@@ -297,7 +297,7 @@ function expectedManifestEntry(records: LedgerRecord[], certifiedTerminalPredict
   const sample = extractMlbS6mIndependentSample(records, certifiedTerminalPredictionIds);
   const first = sample.binaryObservations[0];
   if (!first) return null;
-  const { terminalRecordedAtMs: _ignored, ...entry } = first;
+  const { terminalRecordedAtMs: _ignored, settlementCorrectionOfEventId: _correction, ...entry } = first;
   return { ordinal: 1, ...entry };
 }
 
@@ -550,8 +550,11 @@ export function evaluateMlbS6nFirstRealSettlement(
         settlementIdentityMatches = false;
         pushIssue(issues, "TERMINAL_SETTLEMENT_MISSING", "CRITICAL", "The milestone 1 terminal record no longer contains settlement evidence.");
       } else {
-        const settlementMatches = String(settlement.eventId ?? "") === manifest.settlementEventId
-          && String(settlement.source ?? "") === manifest.settlementSource
+        const sameSealedSettlement = String(settlement.eventId ?? "") === manifest.settlementEventId
+          && String(settlement.source ?? "") === manifest.settlementSource;
+        const explicitlyCorrectsSealedSettlement = settlement.source === "correction"
+          && String(settlement.correctionOfEventId ?? "") === manifest.settlementEventId;
+        const settlementMatches = (sameSealedSettlement || explicitlyCorrectsSealedSettlement)
           && String(settlement.settledAt ?? "") === manifest.settledAt
           && settlement.result === manifest.result;
         if (!settlementMatches) {
