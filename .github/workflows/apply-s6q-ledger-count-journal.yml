@@ -23,6 +23,22 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - name: Normalize nested template escaping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/patch-s6q-ledger-count-journal.mjs')
+          source = path.read_text()
+          start = source.index('`function readLedgerCountAnchorJournal')
+          closing = 'function pruneSnapshots(directory: string, maxSnapshots: number): void {`'
+          end = source.index(closing, start) + len(closing)
+          segment = source[start:end]
+          body = segment[1:-1]
+          body = body.replace('`', r'\`').replace('${', r'\${')
+          source = source[:start] + '`' + body + '`' + source[end:]
+          path.write_text(source)
+          PY
       - name: Apply independent ledger count journal
         run: node scripts/patch-s6q-ledger-count-journal.mjs
       - name: Commit permanent hardening
