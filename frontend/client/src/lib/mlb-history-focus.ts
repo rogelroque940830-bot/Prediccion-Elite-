@@ -1,7 +1,6 @@
 export const MLB_HISTORY_FOCUS_PRIORITY_LIMIT = 5;
 export const MLB_HISTORY_FOCUS_WAITING_LIMIT = 8;
 export const MLB_HISTORY_FOCUS_VERIFY_LIMIT = 12;
-export const MLB_HISTORY_FOCUS_RESULTS_LIMIT = 8;
 export const MLB_HISTORY_EDGE_REVIEW_THRESHOLD_PP = 15;
 export const MLB_HISTORY_ARITHMETIC_TOLERANCE_PP = 0.75;
 
@@ -430,8 +429,7 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
 
   const results = unique
     .filter((pick) => clean(pick.result).toUpperCase() !== "PENDING")
-    .sort((left, right) => resultTime(right) - resultTime(left))
-    .slice(0, MLB_HISTORY_FOCUS_RESULTS_LIMIT);
+    .sort((left, right) => resultTime(right) - resultTime(left));
 
   const shownIds = new Set([
     ...priority.map((pick) => pick.id),
