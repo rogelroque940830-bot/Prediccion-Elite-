@@ -49,6 +49,22 @@ interface LedgerHistoryView {
   picks: MlbHistoryFocusPick[];
 }
 
+interface S6kCertificationStatus {
+  latest: {
+    state: string;
+    summary: { pass: number; reject: number };
+    certificationPool: {
+      limit: number;
+      evaluated: number;
+      certified: number;
+      review: number;
+      rejected: number;
+      waiting: number;
+      cycles: Array<{ issueCodes: string[] }>;
+    } | null;
+  } | null;
+}
+
 function oddsLabel(value: number): string {
   if (!Number.isFinite(value)) return "—";
   return value > 0 ? `+${Math.round(value)}` : String(Math.round(value));
@@ -341,6 +357,18 @@ export default function MLBHistoryFocused() {
     refetchOnMount: "always",
   });
 
+  const certificationQuery = useQuery({
+    queryKey: ["mlb-independent-certification-audit"],
+    queryFn: async () => {
+      const response = await fetchJson<{ success: boolean; data: S6kCertificationStatus }>(
+        "/api/mlb/ledger/v1/s6k-first-ten-cycles/status",
+      );
+      return response.data;
+    },
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+
   const fallbackPicks: MlbHistoryFocusPick[] = [...state.mlbPicks].reverse().map((pick) => ({
     id: String(pick.id),
     recordedAt: pick.date,
@@ -377,6 +405,16 @@ export default function MLBHistoryFocused() {
   const recentLosses = focus.results.filter((pick) => ["L", "½L"].includes(String(pick.result).toUpperCase())).length;
   const recentProfit = focus.results.reduce((sum, pick) => sum + Number(pick.profitUnits || 0), 0);
   const visibleResults = focus.results.slice(0, visibleResultCount);
+  const certification = certificationQuery.data?.latest;
+  const certificationPool = certification?.certificationPool;
+  const certificationReasons = certificationPool
+    ? Array.from(new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes)))
+      .sort()
+      .map((code) => ({
+        code,
+        count: certificationPool.cycles.filter((cycle) => cycle.issueCodes.includes(code)).length,
+      }))
+    : [];
 
   const views: Array<{ key: FocusView; label: string; count: number; icon: typeof Target }> = [
     { key: "priority", label: "Prioridad", count: focus.priority.length, icon: Target },
@@ -402,8 +440,13 @@ export default function MLBHistoryFocused() {
             {historyQuery.data ? <Database className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
             {historyQuery.data ? "Ledger" : "Respaldo local"}
           </Badge>
-          <Button variant="outline" size="sm" onClick={() => void historyQuery.refetch()} disabled={historyQuery.isFetching}>
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${historyQuery.isFetching ? "animate-spin" : ""}`} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void Promise.all([historyQuery.refetch(), certificationQuery.refetch()])}
+            disabled={historyQuery.isFetching || certificationQuery.isFetching}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${historyQuery.isFetching || certificationQuery.isFetching ? "animate-spin" : ""}`} />
             Actualizar
           </Button>
           <Button asChild variant="outline" size="sm">
@@ -414,6 +457,49 @@ export default function MLBHistoryFocused() {
           </Button>
         </div>
       </div>
+
+      {certificationPool && certification && (
+        <Card className="border-violet-500/25 bg-violet-500/[0.05]">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-violet-100">Certificación independiente MLB</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  La auditoría histórica conserva los primeros 10 sin reemplazarlos; la reserva extendida evalúa ciclos posteriores con las mismas reglas estrictas.
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={certificationPool.certified >= 10
+                  ? "border-green-500/40 bg-green-500/10 text-green-300"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-300"}
+              >
+                {certificationPool.certified >= 10 ? "Objetivo 10 alcanzado" : `${certificationPool.certified}/10 certificados`}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center">
+              {[
+                ["Evaluados", certificationPool.evaluated],
+                ["Certificados", certificationPool.certified],
+                ["En revisión", certificationPool.review],
+                ["Rechazados", certificationPool.rejected],
+                ["Esperando", certificationPool.waiting],
+                ["Primeros 10", `${certification.summary.pass} PASS · ${certification.summary.reject} REJECT`],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border border-violet-500/20 bg-slate-950/35 p-2">
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                  <p className="mt-0.5 text-sm font-bold text-violet-100">{value}</p>
+                </div>
+              ))}
+            </div>
+            {certificationReasons.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Motivos observados: {certificationReasons.map(({ code, count }) => `${code} (${count})`).join(" · ")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {historyQuery.isError && (
         <Card className="border-amber-500/30 bg-amber-500/5">
