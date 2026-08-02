@@ -1,3 +1,10 @@
+import {
+  captureWnbaModelProbability,
+  captureWnbaModelTotal,
+  captureWnbaPickQuality,
+  completeWnbaEvaluationCapture,
+} from "./wnba-shadow-emission";
+
 // WNBA Prediction Model — Based on NBA model with WNBA-specific adjustments
 // Lower scoring (~80 PPG vs ~115 NBA), fewer teams (12), shorter season (40 games)
 
@@ -178,6 +185,12 @@ export function predictWNBA(home: WNBATeamStats, away: WNBATeamStats, marketImpl
     }
     prob = Math.max(0.05, Math.min(0.95, calibrated));
   }
+  captureWnbaModelProbability({
+    home,
+    away,
+    marketImpliedHomeProbability: marketImpliedHomeProb,
+    homeProbability: prob,
+  });
   return prob;
 }
 
@@ -234,7 +247,9 @@ export function predictWNBATotal(home: WNBATeamStats, away: WNBATeamStats): numb
   // Hard cap final: WNBA real rango típico 145-190. Cap [140, 195] previene outliers.
   total = Math.max(140, Math.min(195, total));
 
-  return Math.round(total * 10) / 10;
+  const estimatedTotal = Math.round(total * 10) / 10;
+  captureWnbaModelTotal({ estimatedTotal });
+  return estimatedTotal;
 }
 
 export function wnbaEvaluateSpread(homeProb: number, spreadLine: number): {
@@ -399,11 +414,13 @@ export function wnbaPickQuality(params: {
     ? (hardVeto ? "Hard veto: edge negativo, sharp en contra, o gap extremo del mercado." : `Score ${score.toFixed(1)} insuficiente — esperar mejor oportunidad.`)
     : `Edge ${edgeReal.toFixed(1)}pp + score ${score.toFixed(1)} → ${recommendation}. Kelly 1/4 = ${stakeUnits}u.`;
 
-  return {
+  const result: WNBAPickQuality = {
     market, score: Math.round(score * 10) / 10, tier, recommendation, stakeUnits,
     edgeReal: Math.round(edgeReal * 10) / 10, warnings, confirms, reasoning,
     pickedSideLabel, pickedSideOdds: oddsAmerican, modelProb, marketImpliedProb,
   };
+  captureWnbaPickQuality(result);
+  return result;
 }
 
 export interface WNBABestPlay {
@@ -416,14 +433,19 @@ export interface WNBABestPlay {
 
 export function wnbaGetBestPlay(plays: WNBABestPlay[]): WNBABestPlay | null {
   const valid = plays.filter(p => p.signal !== "PASS");
-  if (valid.length === 0) return null;
+  if (valid.length === 0) {
+    completeWnbaEvaluationCapture(plays, null);
+    return null;
+  }
   valid.sort((a, b) => {
     const sA = a.signal === "BET" ? 3 : 1;
     const sB = b.signal === "BET" ? 3 : 1;
     if (sA !== sB) return sB - sA;
     return b.confidence - a.confidence;
   });
-  return valid[0];
+  const bestPlay = valid[0];
+  completeWnbaEvaluationCapture(plays, bestPlay);
+  return bestPlay;
 }
 
 export const WNBA_TEAMS = [
