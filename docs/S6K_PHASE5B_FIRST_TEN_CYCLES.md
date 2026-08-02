@@ -35,6 +35,12 @@ The registry is persisted in:
 /app/data/mlb-s6k-first-ten-cycles/targets.json
 ```
 
+The immutable first-ten registry remains the historical repeatability audit. It is never
+rewritten when a selected lifecycle is rejected. In parallel, S6K evaluates an ordered,
+deduplicated certification pool of up to the first 50 clean post-fix lifecycles. Later clean
+cycles can therefore contribute independent certificates to S6L-S6Q without erasing or
+replacing failures in the original first-ten audit.
+
 ## Per-cycle classification
 
 - `PASS`: the underlying S6J lifecycle is `CERTIFIED`.
@@ -61,6 +67,10 @@ For every selected lifecycle the report preserves:
 - CLV availability;
 - critical and warning issue counts;
 - complete underlying S6J certificate.
+
+The additive `certificationPool` section publishes aggregate PASS/REVIEW/REJECT/WAITING
+counts, per-cycle reason codes on protected routes, and complete S6J evidence. The public
+health route exposes only aggregate counts and reason-code frequencies.
 
 ## Runtime
 

@@ -387,6 +387,16 @@ app.get("/health/s6j-first-cycle", (_req, res) => {
 app.get("/health/s6k-first-ten-cycles", (_req, res) => {
   const status = s6kFirstTenCyclesCertification.service.status();
   const latest = status.latest;
+  const certificationPool = latest?.certificationPool ?? (latest ? {
+    limit: 10 as const,
+    evaluated: latest.cycles.length,
+    certified: latest.cycles.filter((cycle) => cycle.status === "PASS").length,
+    review: latest.cycles.filter((cycle) => cycle.status === "REVIEW").length,
+    rejected: latest.cycles.filter((cycle) => cycle.status === "REJECT").length,
+    waiting: latest.cycles.filter((cycle) => cycle.status === "WAITING").length,
+    cycles: latest.cycles,
+    evidence: latest.evidence,
+  } : null);
   const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
   res.status(ready ? 200 : 503).json({
     status: ready ? "healthy" : "pending",
@@ -402,6 +412,19 @@ app.get("/health/s6k-first-ten-cycles", (_req, res) => {
     latest: latest ? {
       state: latest.state,
       summary: latest.summary,
+      certificationPool: certificationPool ? {
+        limit: certificationPool.limit,
+        evaluated: certificationPool.evaluated,
+        certified: certificationPool.certified,
+        review: certificationPool.review,
+        rejected: certificationPool.rejected,
+        waiting: certificationPool.waiting,
+        issueCounts: Object.fromEntries(
+          [...new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes))]
+            .sort()
+            .map((code) => [code, certificationPool.cycles.filter((cycle) => cycle.issueCodes.includes(code)).length]),
+        ),
+      } : null,
       readyForAnalysis: latest.readyForAnalysis,
       persistence: latest.persistence,
     } : null,
@@ -833,6 +856,7 @@ app.get("/api/mlb/ledger/v1/s6l-scientific-metrics/report", (_req, res) => {
 
 app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/status", (_req, res) => {
   const status = s6kFirstTenCyclesCertification.service.status();
+  const pool = status.latest?.certificationPool;
   res.json({
     success: true,
     data: {
@@ -848,6 +872,15 @@ app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/status", (_req, res) => {
         state: status.latest.state,
         cohort: status.latest.cohort,
         summary: status.latest.summary,
+        certificationPool: pool ? {
+          limit: pool.limit,
+          evaluated: pool.evaluated,
+          certified: pool.certified,
+          review: pool.review,
+          rejected: pool.rejected,
+          waiting: pool.waiting,
+          cycles: pool.cycles,
+        } : null,
         cycles: status.latest.cycles,
         persistence: status.latest.persistence,
         readyForAnalysis: status.latest.readyForAnalysis,

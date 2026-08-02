@@ -6,7 +6,10 @@ import {
   ownedRecordsForUser,
   type MlbLedgerOwnershipStore,
 } from "./mlb-ledger-ownership-store";
-import type { MlbS6kFirstTenCyclesCertificationService } from "./mlb-s6k-first-ten-cycles-certification";
+import {
+  certifiedTerminalPredictionIdsFromS6k,
+  type MlbS6kFirstTenCyclesCertificationService,
+} from "./mlb-s6k-first-ten-cycles-certification";
 import {
   MLB_S6I_CLEAN_COHORT_CUTOFF,
   MLB_S6I_REQUIRED_CONSENSUS_METHOD,
@@ -738,10 +741,7 @@ export class MlbS6lScientificMetricsService {
     try {
       const previous = this.readLatest();
       const records = ownedRecordsForUser(this.store, this.ownershipStore, this.ownerUserId, { limit: 10_000 });
-      const certifiedTerminalPredictionIds = (this.s6kFirstTen.readLatest()?.evidence ?? [])
-        .filter((entry) => entry.state === "CERTIFIED")
-        .map((entry) => entry.target.terminalPredictionId)
-        .filter((entry): entry is string => Boolean(entry));
+      const certifiedTerminalPredictionIds = certifiedTerminalPredictionIdsFromS6k(this.s6kFirstTen.readLatest());
       const report = buildMlbS6lScientificMetrics(records, {
         certifiedTerminalPredictionIds,
         generatedAt: now.toISOString(),

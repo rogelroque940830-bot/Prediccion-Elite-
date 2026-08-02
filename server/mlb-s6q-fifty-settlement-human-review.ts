@@ -459,15 +459,25 @@ export function buildMlbS6qCertifiedTerminalPredictionIdsFromS6k(value: unknown)
   error: string | null;
 } {
   if (value == null) return { terminalPredictionIds: [], error: null };
-  if (!isObjectRecord(value)
-    || !Array.isArray(value.evidence)
-    || !value.evidence.every(isS6kEvidenceEntryShape)) {
+  if (!isObjectRecord(value)) {
     return {
       terminalPredictionIds: [],
       error: "The persisted S6K report has an incomplete or incompatible evidence structure.",
     };
   }
-  const terminalPredictionIds = [...new Set(value.evidence
+  const pool = value.certificationPool;
+  const evidence = pool == null
+    ? value.evidence
+    : isObjectRecord(pool)
+      ? pool.evidence
+      : null;
+  if (!Array.isArray(evidence) || !evidence.every(isS6kEvidenceEntryShape)) {
+    return {
+      terminalPredictionIds: [],
+      error: "The persisted S6K report has an incomplete or incompatible evidence structure.",
+    };
+  }
+  const terminalPredictionIds = [...new Set(evidence
     .filter((entry) => entry.state === "CERTIFIED")
     .map((entry) => entry.target.terminalPredictionId)
     .filter((entry): entry is string => typeof entry === "string" && entry.length > 0))];

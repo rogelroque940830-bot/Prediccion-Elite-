@@ -21,7 +21,10 @@ A decision enters the core statistical sample only when its terminal lifecycle r
 
 `WIN` and `LOSS` enter binary probability scoring. `PUSH` and `VOID` remain visible in sample accounting but are excluded from Brier Score, log loss and observed win rate.
 
-The first-ten S6K certificates provide the independently certified subset. The engine reports that coverage separately rather than silently treating every settlement as independently re-graded.
+S6K provides the independently certified subset. Its immutable first-ten registry remains a
+separate historical audit, while its extended certification pool can certify later clean
+post-fix lifecycles up to the first 50. The engine reports that coverage separately rather
+than silently treating every settlement as independently re-graded.
 
 ## Metrics
 

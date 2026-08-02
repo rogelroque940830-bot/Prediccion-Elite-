@@ -5,6 +5,7 @@ import type { S6jFirstCycleReport } from "./mlb-s6j-first-cycle-certification";
 import { MLB_S6I_CLEAN_COHORT_CUTOFF } from "./mlb-s6i-postfix-certification";
 import {
   buildMlbS6kFirstTenReport,
+  certifiedTerminalPredictionIdsFromS6k,
   classifyS6kCycle,
   selectFirstTenCleanCycleTargets,
 } from "./mlb-s6k-first-ten-cycles-certification";
@@ -269,4 +270,32 @@ test("stays collecting with incomplete evidence and requires action for a reject
   });
   assert.equal(rejected.state, "ACTION_REQUIRED");
   assert.equal(rejected.summary.reject, 1);
+});
+
+test("preserves the immutable first ten while certifying later clean cycles in the extended pool", () => {
+  const firstTen = [
+    ...Array.from({ length: 4 }, () => report("CERTIFIED")),
+    ...Array.from({ length: 6 }, () => report("ACTION_REQUIRED")),
+  ];
+  const pool = [
+    ...firstTen,
+    ...Array.from({ length: 8 }, (_, index) => {
+      const value = report("CERTIFIED");
+      value.target.terminalPredictionId = `later-final-${index}`;
+      return value;
+    }),
+  ];
+  const batch = buildMlbS6kFirstTenReport(firstTen, {
+    rootPredictionIds: Array.from({ length: 10 }, (_, index) => `root-${index}`),
+    currentOwnedLedgerRecords: 500,
+    certificationPoolReports: pool,
+    certificationPoolRootPredictionIds: Array.from({ length: 18 }, (_, index) => `root-${index}`),
+  });
+
+  assert.equal(batch.state, "ACTION_REQUIRED");
+  assert.equal(batch.summary.pass, 4);
+  assert.equal(batch.certificationPool.evaluated, 18);
+  assert.equal(batch.certificationPool.certified, 12);
+  assert.equal(certifiedTerminalPredictionIdsFromS6k(batch).length, 9);
+  assert.equal(certifiedTerminalPredictionIdsFromS6k(batch).includes("later-final-7"), true);
 });
