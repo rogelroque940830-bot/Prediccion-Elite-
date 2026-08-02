@@ -13,6 +13,9 @@ import { findMlbSupersedesId } from "./mlb-scientific-snapshot";
 
 export const MLB_S5C_INGESTION_VERSION = "mlb-s5c-shadow-ingestion.v1" as const;
 
+const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+const COMPLETE_LINEUP_SIZE = 9;
+
 type AnalysisStage = "PROVISIONAL" | "FINAL";
 type DecisionSignal = "BET_FUERTE" | "BET" | "LEAN" | "PASS";
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -256,7 +259,10 @@ function gameContext(gameDate: string, game: any, feed: any) {
   const awayTeam = feed?.gameData?.teams?.away ?? game?.teams?.away?.team ?? {};
   const homeOrder = feed?.liveData?.boxscore?.teams?.home?.battingOrder ?? [];
   const awayOrder = feed?.liveData?.boxscore?.teams?.away?.battingOrder ?? [];
-  const stage: AnalysisStage = Array.isArray(homeOrder) && homeOrder.length >= 8 && Array.isArray(awayOrder) && awayOrder.length >= 8
+  const stage: AnalysisStage = Array.isArray(homeOrder)
+    && homeOrder.length >= COMPLETE_LINEUP_SIZE
+    && Array.isArray(awayOrder)
+    && awayOrder.length >= COMPLETE_LINEUP_SIZE
     ? "FINAL"
     : "PROVISIONAL";
   return {
@@ -430,7 +436,7 @@ export class MlbS5cShadowIngestionService {
   ) {
     this.enabled = options.enabled ?? defaultEnabled();
     this.intervalMs = options.intervalMs
-      ?? positiveInteger(process.env.MLB_S5C_INTERVAL_MS, 30 * 60 * 1000, 5 * 60 * 1000);
+      ?? positiveInteger(process.env.MLB_S5C_INTERVAL_MS, DEFAULT_INTERVAL_MS, DEFAULT_INTERVAL_MS);
     this.initialDelayMs = options.initialDelayMs
       ?? positiveInteger(process.env.MLB_S5C_INITIAL_DELAY_MS, 60_000, 10_000);
     this.ownerUserId = options.ownerUserId;
