@@ -159,3 +159,18 @@ test("missing book prevents local fallback from becoming a priority recommendati
   assert.equal(focus.verifyTotal, 1);
   assert.ok(focus.verify[0].audit.issues.some((entry) => entry.code === "MISSING_BOOK"));
 });
+
+test("results contains every unique settled decision instead of an eight-item preview", () => {
+  const settled = Array.from({ length: 18 }, (_, index) => pick({
+    id: `settled-${index}`,
+    gamePk: 3000 + index,
+    result: index % 2 === 0 ? "W" : "L",
+    settlementResult: index % 2 === 0 ? "WIN" : "LOSS",
+    settledAt: new Date(NOW - index * 60_000).toISOString(),
+  }));
+
+  const focus = buildMlbHistoryFocus(settled, NOW);
+  assert.equal(focus.results.length, 18);
+  assert.equal(focus.results[0].id, "settled-0");
+  assert.equal(focus.results[17].id, "settled-17");
+});
