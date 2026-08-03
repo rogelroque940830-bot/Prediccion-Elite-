@@ -140,5 +140,8 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"stage":"IN_PROGRESS","rationale":"Unauthorized diagnostic submission must be rejected before persistence."}' \
             "${BASE_URL}/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions")"
-          test "${HTTP_CODE}" = "403"
-          echo "Unauthenticated review submission correctly rejected with HTTP 403."
+          echo "Unauthenticated review submission returned HTTP ${HTTP_CODE}."
+          case "${HTTP_CODE}" in
+            401|403) ;;
+            *) echo "Expected an authentication or authorization rejection" >&2; exit 1 ;;
+          esac
