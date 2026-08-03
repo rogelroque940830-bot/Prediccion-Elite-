@@ -1,0 +1,144 @@
+name: Diagnostic S6R live verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - ".github/workflows/diagnostic-s6r-live-verification-20260803.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-s6r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout diagnostic PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Wait for exact merged backend commit
+        env:
+          BASE_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          EXPECTED_COMMIT="$(git rev-parse HEAD^)"
+          echo "Expected live backend commit: ${EXPECTED_COMMIT}"
+          mkdir -p audit
+
+          for attempt in $(seq 1 80); do
+            ok=1
+            curl -fsS --max-time 20 "${BASE_URL}/health/s6r-human-review-dossier" -o audit/s6r.json || ok=0
+            curl -fsS --max-time 20 "${BASE_URL}/health/s6q-fifty-settlement-human-review" -o audit/s6q.json || ok=0
+
+            if [ "${ok}" -eq 1 ]; then
+              DEPLOYED_COMMIT="$(node -e "const x=require('./audit/s6r.json'); process.stdout.write(String(x.commit||''))")"
+              if [ "${DEPLOYED_COMMIT}" = "${EXPECTED_COMMIT}" ]; then
+                echo "Exact S6R backend commit is live."
+                break
+              fi
+              echo "Attempt ${attempt}: live commit ${DEPLOYED_COMMIT}; waiting for ${EXPECTED_COMMIT}"
+            else
+              echo "Attempt ${attempt}: S6R or S6Q health endpoint unavailable"
+            fi
+
+            if [ "${attempt}" -eq 80 ]; then
+              echo "Timed out waiting for the exact S6R backend commit" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Assert S6R and S6Q live safety gates
+        env:
+          BASE_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const s6r = JSON.parse(fs.readFileSync('audit/s6r.json', 'utf8'));
+          const s6q = JSON.parse(fs.readFileSync('audit/s6q.json', 'utf8'));
+          const fail = (message) => { throw new Error(message); };
+          const assert = (condition, message) => { if (!condition) fail(message); };
+
+          for (const [name, report] of Object.entries({s6r, s6q})) {
+            assert(report.status === 'healthy', `${name} health=${report.status}`);
+            assert(report.lastError == null, `${name} lastError=${report.lastError}`);
+            assert(report.latest, `${name} latest report missing`);
+          }
+
+          const r = s6r.latest;
+          const q = s6q.latest;
+          const safeS6rStates = new Set([
+            'LOCKED_WAITING_FOR_S6Q',
+            'HUMAN_REVIEW_DOSSIER_READY',
+            'HUMAN_REVIEW_IN_PROGRESS',
+            'HUMAN_REVIEW_COMPLETED',
+            'CANDIDATE_SHADOW_STUDY_PROPOSED',
+          ]);
+          assert(safeS6rStates.has(r.state), `Unsafe S6R state=${r.state}`);
+          assert((r.issueCounts?.CRITICAL ?? 0) === 0, `S6R critical issues=${r.issueCounts?.CRITICAL}`);
+          assert(r.readiness?.automaticModelChangesAllowed === false,
+            'S6R automatic model changes unexpectedly enabled');
+          assert(r.readiness?.automaticPromotionAllowed === false,
+            'S6R automatic promotion unexpectedly enabled');
+          assert(r.readiness?.recommendation === 'NO_AUTOMATIC_MODEL_CHANGE',
+            `S6R recommendation=${r.readiness?.recommendation}`);
+          assert(s6r.safety?.mode === 'SHADOW', `S6R mode=${s6r.safety?.mode}`);
+          assert(s6r.safety?.realFinancialExposure === 0,
+            `S6R exposure=${s6r.safety?.realFinancialExposure}`);
+
+          for (const key of [
+            'sportsbookIntegration', 'automaticBetPlacement', 'productionWrites',
+            'historicalLedgerMutation', 'automaticPromotion', 'formulasChanged',
+            'probabilitiesChanged', 'signalsChanged', 'marketsChanged',
+            'thresholdsChanged', 'settlementRulesChanged', 'stakePolicyChanged'
+          ]) {
+            assert(s6r.safety?.[key] === false, `S6R safety.${key}=${s6r.safety?.[key]}`);
+          }
+
+          assert((q.issueCounts?.CRITICAL ?? 0) === 0, `S6Q critical issues=${q.issueCounts?.CRITICAL}`);
+          assert(q.readiness?.automaticModelChangesAllowed === false,
+            'S6Q automatic model changes unexpectedly enabled');
+
+          if (q.state !== 'READY_FOR_HUMAN_REVIEW') {
+            assert(r.state === 'LOCKED_WAITING_FOR_S6Q',
+              `S6Q state=${q.state} but S6R state=${r.state}`);
+            assert(r.dossier?.present === false,
+              'S6R created a dossier before S6Q readiness');
+            assert(r.review?.decisions === 0,
+              'S6R contains review decisions before dossier readiness');
+          } else {
+            assert(r.dossier?.present === true,
+              'S6Q is ready but the S6R dossier is absent');
+            assert(r.persistence?.dossierAnchorPresent === true,
+              'S6R dossier anchor is absent');
+            assert(r.persistence?.dossierDigestAnchored === true,
+              'S6R dossier digest is not anchored');
+          }
+
+          console.log(JSON.stringify({
+            commit: s6r.commit,
+            s6qState: q.state,
+            eligible: q.sample?.binaryEligibleDecisions,
+            independentlyCertified: q.sample?.independentlyCertifiedAmongFirstFifty,
+            s6rState: r.state,
+            dossierPresent: r.dossier?.present,
+            reviewDecisions: r.review?.decisions,
+            s6rCriticalIssues: r.issueCounts?.CRITICAL ?? 0,
+            s6qCriticalIssues: q.issueCounts?.CRITICAL ?? 0,
+            mode: s6r.safety?.mode,
+            exposure: s6r.safety?.realFinancialExposure,
+          }, null, 2));
+          NODE
+
+          HTTP_CODE="$(curl -sS --max-time 20 -o audit/unauthorized-post.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"stage":"IN_PROGRESS","rationale":"Unauthorized diagnostic submission must be rejected before persistence."}' \
+            "${BASE_URL}/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions")"
+          test "${HTTP_CODE}" = "403"
+          echo "Unauthenticated review submission correctly rejected with HTTP 403."
