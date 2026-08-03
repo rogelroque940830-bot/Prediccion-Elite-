@@ -117,6 +117,9 @@ export interface WnbaShadowReport {
   generatedAt: string;
   records: number;
   terminalGames: number;
+  trackedGames: number;
+  officialFinalGames: number;
+  awaitingOfficialFinal: number;
   supersededRecords: number;
   provisionalTerminal: number;
   finalTerminal: number;
@@ -490,6 +493,7 @@ export class WnbaShadowService {
   private lastRunAt: string | null = null;
   private lastSuccessAt: string | null = null;
   private lastError: string | null = null;
+  private officialFinalGameIds = new Set<string>();
 
   constructor(options: ServiceOptions = {}) {
     this.enabled = options.enabled ?? defaultEnabled();
@@ -691,6 +695,7 @@ export class WnbaShadowService {
   private async settleTerminalRecords(now: Date): Promise<number> {
     const records = terminalRecords(this.readRecords());
     const settlements = this.readSettlements();
+    this.officialFinalGameIds = new Set(settlements.map((event) => event.gameId));
     const settledIds = new Set(settlements.map((event) => event.predictionId));
     const candidates = records.filter((record) => !settledIds.has(record.id) && Date.parse(record.game.commenceTime) < now.getTime());
     if (!candidates.length) return 0;
@@ -699,6 +704,7 @@ export class WnbaShadowService {
     for (const record of candidates) {
       const final = this.findFinal(record, finals);
       if (!final) continue;
+      this.officialFinalGameIds.add(record.game.gameId);
       const homeOutcome: 0 | 1 = final.homeScore > final.awayScore ? 1 : 0;
       const scores = properScores(record.baseline.homeWinProbability, homeOutcome);
       const event: WnbaShadowSettlement = {
@@ -724,6 +730,10 @@ export class WnbaShadowService {
     const terminal = terminalRecords(records);
     const settlements = this.readSettlements();
     const settlementByPrediction = new Map(settlements.map((event) => [event.predictionId, event]));
+    const settledGameIds = new Set(settlements.map((event) => event.gameId));
+    const officialFinal = terminal.filter((record) => (
+      settledGameIds.has(record.game.gameId) || this.officialFinalGameIds.has(record.game.gameId)
+    ));
     const settledRows = terminal.flatMap((record) => {
       const settlement = settlementByPrediction.get(record.id);
       return settlement ? [{ record, settlement }] : [];
@@ -738,13 +748,16 @@ export class WnbaShadowService {
       generatedAt: this.now().toISOString(),
       records: records.length,
       terminalGames: terminal.length,
+      trackedGames: terminal.length,
+      officialFinalGames: officialFinal.length,
+      awaitingOfficialFinal: terminal.length - officialFinal.length,
       supersededRecords: Math.max(0, records.length - terminal.length),
       provisionalTerminal: terminal.filter((record) => record.analysisStage === "PROVISIONAL").length,
       finalTerminal: terminal.filter((record) => record.analysisStage === "FINAL").length,
       finalCoveragePct: terminal.length ? round((terminal.filter((record) => record.analysisStage === "FINAL").length / terminal.length) * 100, 2) : 0,
       settled: settledRows.length,
-      pending: terminal.length - settledRows.length,
-      settlementCoveragePct: terminal.length ? round((settledRows.length / terminal.length) * 100, 2) : 0,
+      pending: officialFinal.length - settledRows.length,
+      settlementCoveragePct: officialFinal.length ? round((settledRows.length / officialFinal.length) * 100, 2) : 0,
       marketCoveragePct: terminal.length ? 100 : 0,
       averageDataQualityPct: average(terminal.map((record) => record.dataQuality.coveragePct)),
       degradedSourceTerminalRecords,

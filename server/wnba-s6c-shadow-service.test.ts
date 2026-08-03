@@ -178,6 +178,24 @@ test("S6C creates a FINAL revision inside the configured pregame window", async 
   }
 });
 
+test("S6C excludes games awaiting an official final from settlement coverage", async () => {
+  const f = fixture();
+  try {
+    await f.service.run("opening");
+    f.setNow("2026-07-31T00:00:00.000Z");
+    await f.service.run("in-progress");
+    const report = f.service.buildReport();
+    assert.equal(report.trackedGames, 1);
+    assert.equal(report.officialFinalGames, 0);
+    assert.equal(report.awaitingOfficialFinal, 1);
+    assert.equal(report.settled, 0);
+    assert.equal(report.pending, 0);
+    assert.equal(report.settlementCoveragePct, 0);
+  } finally {
+    fs.rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
 test("S6C settles the terminal record from an official final score and calculates proper scores", async () => {
   const f = fixture();
   try {
@@ -194,6 +212,9 @@ test("S6C settles the terminal record from an official final score and calculate
     assert.ok(events[0].brierScore >= 0);
     assert.ok(events[0].logLoss > 0);
     const report = f.service.buildReport();
+    assert.equal(report.trackedGames, 1);
+    assert.equal(report.officialFinalGames, 1);
+    assert.equal(report.awaitingOfficialFinal, 0);
     assert.equal(report.settled, 1);
     assert.equal(report.pending, 0);
     assert.equal(report.settlementCoveragePct, 100);
