@@ -7,6 +7,7 @@ on:
     paths:
       - "server/mlb-s6r-human-review-dossier.ts"
       - "server/mlb-s6r-human-review-dossier.test.ts"
+      - "server/mlb-s6r-human-review-dossier-hardening.test.ts"
       - "server/s5b-staging-entry.ts"
       - "server/route-contract.extensions.json"
       - "docs/S6R_PHASE5C7_HUMAN_REVIEW_DOSSIER.md"
@@ -30,7 +31,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Focused S6R tests
-        run: npm run test:s6r-human-review-dossier
+        run: |
+          npm run test:s6r-human-review-dossier
+          npx tsx --test server/mlb-s6r-human-review-dossier-hardening.test.ts
       - name: Focused S6R typecheck
         run: npm run typecheck:s6r-human-review-dossier
       - name: Full shadow regressions
