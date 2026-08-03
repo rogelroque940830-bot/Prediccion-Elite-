@@ -222,6 +222,7 @@ type EvaluationInput = {
   deploymentCommit?: string;
   environment?: string;
   previousDossierEverObserved?: boolean;
+  previousReportReadError?: string | null;
 };
 
 type EvaluationResult = {
@@ -531,6 +532,16 @@ export function createMlbS6rReviewDecision(
   submittedAt: string,
   previous: S6rReviewDecision | null,
 ): S6rReviewDecision {
+  const validConclusions: S6rReviewConclusion[] = [
+    "NO_CHANGE", "COLLECT_MORE_DATA", "DESIGN_SHADOW_CANDIDATE",
+    "INVESTIGATE_DATA_QUALITY", "ACTION_REQUIRED",
+  ];
+  if (input.stage !== "IN_PROGRESS" && input.stage !== "FINAL") {
+    throw new Error("Review stage must be IN_PROGRESS or FINAL.");
+  }
+  if (input.conclusion != null && !validConclusions.includes(input.conclusion)) {
+    throw new Error("Unknown S6R review conclusion.");
+  }
   const rationale = String(input.rationale ?? "").trim();
   if (rationale.length < 20 || rationale.length > 5_000) {
     throw new Error("Review rationale must contain between 20 and 5000 characters.");
@@ -665,6 +676,7 @@ export function evaluateMlbS6rHumanReviewDossier(
   if (storedDossier.error) pushIssue(issues, "DOSSIER_UNREADABLE", "CRITICAL", storedDossier.error);
   if (storedAnchor.error) pushIssue(issues, "DOSSIER_ANCHOR_UNREADABLE", "CRITICAL", storedAnchor.error);
   if (reviewJournalReadError) pushIssue(issues, "REVIEW_JOURNAL_UNREADABLE", "CRITICAL", reviewJournalReadError);
+  if (options.previousReportReadError) pushIssue(issues, "PREVIOUS_REPORT_INVALID", "CRITICAL", options.previousReportReadError);
 
   const validDossier = storedDossier.present && isDossierShape(storedDossier.value)
     ? storedDossier.value
@@ -819,6 +831,36 @@ export function evaluateMlbS6rHumanReviewDossier(
   return { report, dossierToPersist, anchorToPersist };
 }
 
+function isReportShape(value: unknown): value is S6rReport {
+  if (!isObjectRecord(value)) return false;
+  const states: S6rState[] = [
+    "LOCKED_WAITING_FOR_S6Q",
+    "HUMAN_REVIEW_DOSSIER_READY",
+    "HUMAN_REVIEW_IN_PROGRESS",
+    "HUMAN_REVIEW_COMPLETED",
+    "CANDIDATE_SHADOW_STUDY_PROPOSED",
+    "ACTION_REQUIRED",
+  ];
+  return value.schemaVersion === MLB_S6R_HUMAN_REVIEW_DOSSIER_VERSION
+    && typeof value.generatedAt === "string"
+    && typeof value.trigger === "string"
+    && typeof value.deploymentCommit === "string"
+    && typeof value.environment === "string"
+    && states.includes(value.state as S6rState)
+    && isObjectRecord(value.sourceS6q)
+    && isObjectRecord(value.dossier)
+    && typeof value.dossier.everObserved === "boolean"
+    && isObjectRecord(value.review)
+    && isObjectRecord(value.readiness)
+    && value.readiness.automaticModelChangesAllowed === false
+    && value.readiness.automaticPromotionAllowed === false
+    && isObjectRecord(value.persistence)
+    && Array.isArray(value.issues)
+    && isObjectRecord(value.safety)
+    && value.safety.mode === "SHADOW"
+    && value.safety.realFinancialExposure === 0;
+}
+
 function positiveInteger(value: unknown, fallback: number, minimum: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= minimum ? Math.floor(parsed) : fallback;
@@ -877,8 +919,10 @@ function pruneSnapshots(directory: string, maxSnapshots: number): void {
   }
 }
 
-function reviewFileName(decision: S6rReviewDecision): string {
-  return decision.submittedAt.replace(/[:.]/g, "-") + "-" + decision.decisionDigestSha256.slice(0, 12) + ".json";
+function reviewFileName(decision: S6rReviewDecision, ordinal: number): string {
+  return String(ordinal).padStart(6, "0") + "-"
+    + decision.submittedAt.replace(/[:.]/g, "-") + "-"
+    + decision.decisionDigestSha256.slice(0, 12) + ".json";
 }
 
 function readReviewJournal(root: string): { decisions: S6rReviewDecision[]; error: string | null } {
@@ -940,7 +984,15 @@ export class MlbS6rHumanReviewDossierService {
   isEnabled(): boolean { return this.enabled; }
   getIntervalMs(): number { return this.intervalMs; }
   getInitialDelayMs(): number { return this.initialDelayMs; }
-  readLatest(): S6rReport | null { return readJsonArtifact<S6rReport>(path.join(this.root, "latest.json")).value; }
+  private readLatestArtifact(): StoredArtifact<S6rReport> {
+    const artifact = readJsonArtifact<unknown>(path.join(this.root, "latest.json"));
+    if (artifact.error || !artifact.present) return { value: null, present: artifact.present, error: artifact.error };
+    if (!isReportShape(artifact.value)) {
+      return { value: null, present: true, error: "latest.json has an incomplete or incompatible S6R report structure." };
+    }
+    return { value: artifact.value, present: true, error: null };
+  }
+  readLatest(): S6rReport | null { return this.readLatestArtifact().value; }
   readDossier(): S6rDossier | null { return readJsonArtifact<S6rDossier>(path.join(this.root, "dossier.json")).value; }
   readReviewDecisions(): S6rReviewDecision[] { return readReviewJournal(this.root).decisions; }
 
@@ -964,7 +1016,8 @@ export class MlbS6rHumanReviewDossierService {
     const now = this.now();
     this.lastRunAt = now.toISOString();
     try {
-      const previous = this.readLatest();
+      const previousArtifact = this.readLatestArtifact();
+      const previous = previousArtifact.value;
       const sourceReport = this.s6qHumanReview.readLatest();
       const sourceEvidence = this.s6qHumanReview.readEvidence();
       const dossierArtifact = readJsonArtifact<S6rDossier>(path.join(this.root, "dossier.json"));
@@ -983,6 +1036,7 @@ export class MlbS6rHumanReviewDossierService {
           deploymentCommit: this.deploymentCommit,
           environment: this.environment,
           previousDossierEverObserved: previous?.dossier.everObserved ?? false,
+          previousReportReadError: previousArtifact.error,
         },
       );
 
@@ -1015,6 +1069,7 @@ export class MlbS6rHumanReviewDossierService {
             deploymentCommit: this.deploymentCommit,
             environment: this.environment,
             previousDossierEverObserved: previous?.dossier.everObserved ?? false,
+            previousReportReadError: previousArtifact.error,
           },
         );
       }
@@ -1067,7 +1122,10 @@ export class MlbS6rHumanReviewDossierService {
       this.now().toISOString(),
       journal.decisions[journal.decisions.length - 1] ?? null,
     );
-    writeAppendOnlyJson(path.join(this.root, "review-decisions", reviewFileName(decision)), decision);
+    writeAppendOnlyJson(
+      path.join(this.root, "review-decisions", reviewFileName(decision, journal.decisions.length + 1)),
+      decision,
+    );
     const report = await this.run("review-submission");
     return { decision, report };
   }
