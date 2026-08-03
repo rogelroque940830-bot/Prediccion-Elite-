@@ -40,6 +40,9 @@ test("S6C public health accounts for every audit outcome without leaking private
       generatedAt: "2026-07-31T02:23:27.723Z",
       records: 0,
       terminalGames: 0,
+      trackedGames: 0,
+      officialFinalGames: 0,
+      awaitingOfficialFinal: 0,
       supersededRecords: 0,
       provisionalTerminal: 0,
       finalTerminal: 0,
@@ -77,6 +80,10 @@ test("S6C public health accounts for every audit outcome without leaking private
   assert.equal(latest.skippedStarted, 3);
   assert.equal(latest.unmatchedOdds, 0);
   assert.equal(latest.missingMoneyline, 0);
+  const report = payload.report as Record<string, unknown>;
+  assert.equal(report.trackedGames, 0);
+  assert.equal(report.officialFinalGames, 0);
+  assert.equal(report.awaitingOfficialFinal, 0);
 
   const serialized = JSON.stringify(payload);
   for (const forbidden of [
