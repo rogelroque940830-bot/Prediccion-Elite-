@@ -17,6 +17,7 @@ import { startMlbS6nFirstRealSettlementMonitorWorker } from "./mlb-s6n-first-rea
 import { startMlbS6oFirstFiveSettlementsCertificationWorker } from "./mlb-s6o-first-five-settlements-certification";
 import { startMlbS6pFirstTwentySettlementsCertificationWorker } from "./mlb-s6p-first-twenty-settlements-certification";
 import { startMlbS6qFiftySettlementHumanReviewWorker } from "./mlb-s6q-fifty-settlement-human-review";
+import { startMlbS6rHumanReviewDossierWorker, type S6rReviewConclusion, type S6rReviewStage } from "./mlb-s6r-human-review-dossier";
 
 const ledgerStore = getMlbLedgerStore();
 const ownershipStore = getMlbLedgerOwnershipStore();
@@ -100,6 +101,10 @@ const s6qFiftySettlementHumanReview = startMlbS6qFiftySettlementHumanReviewWorke
   s6mStatisticalMilestones.service,
   s6pFirstTwentySettlements.service,
   s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6rHumanReviewDossier = startMlbS6rHumanReviewDossierWorker(
+  s6qFiftySettlementHumanReview.service,
   { ownerUserId: systemOwnerUserId },
 );
 
@@ -462,6 +467,53 @@ app.get("/health/s6q-fifty-settlement-human-review", (_req, res) => {
   });
 });
 
+app.get("/health/s6r-human-review-dossier", (_req, res) => {
+  const status = s6rHumanReviewDossier.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sourceS6q: latest.sourceS6q,
+      dossier: latest.dossier,
+      review: latest.review,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, issue) => {
+        counts[issue.severity] = (counts[issue.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      probabilitiesChanged: false,
+      signalsChanged: false,
+      marketsChanged: false,
+      thresholdsChanged: false,
+      settlementRulesChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
 app.get("/health/s6p-first-twenty-settlements", (_req, res) => {
   const status = s6pFirstTwentySettlements.service.status();
   const latest = status.latest;
@@ -690,6 +742,45 @@ app.get("/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/evidence", (_req, 
   const latest = s6qFiftySettlementHumanReview.service.readLatest();
   if (!latest) { res.status(404).json({ success: false, error: "No S6Q fifty-settlement human-review report has completed yet" }); return; }
   res.json({ success: true, data: { latest, baseline: s6qFiftySettlementHumanReview.service.readBaseline(), evidence: s6qFiftySettlementHumanReview.service.readEvidence() } });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/status", (_req, res) => {
+  const status = s6rHumanReviewDossier.service.status();
+  res.json({ success: true, data: status });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/dossier", (_req, res) => {
+  const latest = s6rHumanReviewDossier.service.readLatest();
+  const dossier = s6rHumanReviewDossier.service.readDossier();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6R human-review dossier report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: { latest, dossier } });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions", (_req, res) => {
+  res.json({ success: true, data: { decisions: s6rHumanReviewDossier.service.readReviewDecisions() } });
+});
+
+app.post("/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions", async (req, res) => {
+  const reviewerUserId = Number((req as any).user?.id ?? (req as any).session?.passport?.user);
+  if (!Number.isInteger(reviewerUserId) || reviewerUserId !== systemOwnerUserId) {
+    res.status(403).json({ success: false, error: "Only the configured owner may submit an S6R review decision" });
+    return;
+  }
+  const body = req.body ?? {};
+  try {
+    const result = await s6rHumanReviewDossier.service.submitReviewDecision({
+      stage: String(body.stage ?? "") as S6rReviewStage,
+      conclusion: body.conclusion == null ? null : String(body.conclusion) as S6rReviewConclusion,
+      rationale: String(body.rationale ?? ""),
+      candidateVersion: body.candidateVersion == null ? null : String(body.candidateVersion),
+    }, reviewerUserId);
+    res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get("/api/mlb/ledger/v1/s6p-first-twenty-settlements/status", (_req, res) => {

@@ -54,7 +54,9 @@
     "server/mlb-s6p-first-twenty-settlements-certification.ts",
     "server/mlb-s6p-first-twenty-settlements-certification.test.ts",
     "server/mlb-s6q-fifty-settlement-human-review.ts",
-    "server/mlb-s6q-fifty-settlement-human-review.test.ts"
+    "server/mlb-s6q-fifty-settlement-human-review.test.ts",
+    "server/mlb-s6r-human-review-dossier.ts",
+    "server/mlb-s6r-human-review-dossier.test.ts"
   ],
   "exclude": [
     "node_modules",
