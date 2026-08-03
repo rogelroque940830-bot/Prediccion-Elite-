@@ -1,0 +1,37 @@
+name: Harden S6R runtime
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "scripts/harden-s6r-runtime.mjs"
+      - ".github/workflows/harden-s6r-runtime.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - run: node scripts/harden-s6r-runtime.mjs
+      - run: |
+          rm scripts/harden-s6r-runtime.mjs
+          rm .github/workflows/harden-s6r-runtime.yml
+      - name: Commit hardening
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(s6r): harden report and review journal validation"
+          git push origin "HEAD:${HEAD_BRANCH}"
