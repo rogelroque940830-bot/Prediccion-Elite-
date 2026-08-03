@@ -12,6 +12,9 @@ interface WnbaShadowStatus {
   settlements: number;
   report: {
     terminalGames: number;
+    trackedGames?: number;
+    officialFinalGames?: number;
+    awaitingOfficialFinal?: number;
     finalCoveragePct: number;
     settled: number;
     settlementCoveragePct: number;
@@ -70,14 +73,15 @@ export default function WNBAHistory() {
         <CardContent className="p-3">
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-purple-300" />
-            <p>Los picks de esta lista son decisiones guardadas por el usuario y se liquidan manualmente. La colección científica shadow se muestra aparte y nunca se mezcla con tu ROI.</p>
+            <p>Los picks de esta lista son decisiones guardadas por el usuario y se liquidan manualmente. La colección científica shadow se muestra aparte y nunca se mezcla con tu ROI; los juegos activos esperan el marcador oficial y no reducen su cobertura de liquidación.</p>
           </div>
           {shadowQuery.data && (
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {[
-                ["Juegos terminales", shadowQuery.data.report.terminalGames],
+                ["Juegos monitoreados", shadowQuery.data.report.trackedGames ?? shadowQuery.data.report.terminalGames],
+                ["Esperando marcador", shadowQuery.data.report.awaitingOfficialFinal ?? 0],
+                ["Finales oficiales", shadowQuery.data.report.officialFinalGames ?? shadowQuery.data.report.settled],
                 ["Liquidados", shadowQuery.data.report.settled],
-                ["Cobertura FINAL", `${shadowQuery.data.report.finalCoveragePct.toFixed(1)}%`],
                 ["Cobertura liquidación", `${shadowQuery.data.report.settlementCoveragePct.toFixed(1)}%`],
               ].map(([label, value]) => (
                 <div key={String(label)} className="rounded-md border border-purple-500/15 bg-slate-950/30 p-2 text-center">
