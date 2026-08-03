@@ -24,9 +24,9 @@ jobs:
       - name: Wait for exact merged backend commit
         env:
           BASE_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          EXPECTED_COMMIT="$(git rev-parse HEAD^)"
           echo "Expected live backend commit: ${EXPECTED_COMMIT}"
           mkdir -p audit
 
