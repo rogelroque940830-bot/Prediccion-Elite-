@@ -4,6 +4,8 @@
 
 S6R crea un expediente científico inmutable únicamente después de que S6Q alcance `READY_FOR_HUMAN_REVIEW` con evidencia válida de las primeras 50 decisiones binarias elegibles.
 
+Mientras S6Q siga acumulando la muestra, S6R permanece correctamente en `LOCKED_WAITING_FOR_S6Q` y no crea evidencia anticipada.
+
 ## Estados
 
 - `LOCKED_WAITING_FOR_S6Q`
