@@ -43,6 +43,9 @@ export function buildPublicWnbaShadowHealth(status: WnbaShadowStatusSnapshot): R
     } : null,
     report: {
       terminalGames: status.report.terminalGames,
+      trackedGames: status.report.trackedGames,
+      officialFinalGames: status.report.officialFinalGames,
+      awaitingOfficialFinal: status.report.awaitingOfficialFinal,
       finalCoveragePct: status.report.finalCoveragePct,
       settled: status.report.settled,
       settlementCoveragePct: status.report.settlementCoveragePct,
