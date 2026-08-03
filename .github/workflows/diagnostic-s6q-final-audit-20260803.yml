@@ -1,0 +1,153 @@
+name: Diagnostic S6Q final integrity audit
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - ".github/workflows/diagnostic-s6q-final-audit-20260803.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  repository-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Focused S6K-S6Q tests
+        run: |
+          npm run test:s6k-first-ten
+          npm run test:s6l-scientific-metrics
+          npm run test:s6m-statistical-milestones
+          npm run test:s6n-first-real-settlement
+          npm run test:s6o-first-five-settlements
+          npm run test:s6p-first-twenty-settlements
+          npm run test:s6q-fifty-settlement-human-review
+
+      - name: S6Q and full shadow typechecks
+        run: |
+          npm run typecheck:s6q-fifty-settlement-human-review
+          npm run typecheck:s5b-shadow
+
+      - name: Backend production build
+        run: npm run build:backend
+
+      - name: Verify diagnostic diff is workflow-only
+        run: |
+          BASE_SHA="$(git rev-parse HEAD^)"
+          git diff --check "$BASE_SHA" HEAD
+          CHANGED="$(git diff --name-only "$BASE_SHA" HEAD)"
+          test "$CHANGED" = ".github/workflows/diagnostic-s6q-final-audit-20260803.yml"
+
+  live-railway-audit:
+    needs: repository-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Wait for exact backend commit and fetch health reports
+        env:
+          BASE_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          EXPECTED_COMMIT="$(git rev-parse HEAD^)"
+          echo "Expected deployed backend commit: $EXPECTED_COMMIT"
+          mkdir -p audit
+          for attempt in $(seq 1 50); do
+            ok=1
+            curl -fsS --max-time 20 "$BASE_URL/health/s6q-fifty-settlement-human-review" -o audit/s6q.json || ok=0
+            curl -fsS --max-time 20 "$BASE_URL/health/s6p-first-twenty-settlements" -o audit/s6p.json || ok=0
+            curl -fsS --max-time 20 "$BASE_URL/health/s6m-statistical-milestones" -o audit/s6m.json || ok=0
+            curl -fsS --max-time 20 "$BASE_URL/health/s6k-first-ten-cycles" -o audit/s6k.json || ok=0
+            if [ "$ok" -eq 1 ]; then
+              DEPLOYED_COMMIT="$(node -e "const x=require('./audit/s6q.json'); process.stdout.write(String(x.commit||''))")"
+              if [ "$DEPLOYED_COMMIT" = "$EXPECTED_COMMIT" ]; then
+                echo "Exact backend commit is live."
+                break
+              fi
+              echo "Attempt $attempt: live commit $DEPLOYED_COMMIT; waiting for $EXPECTED_COMMIT"
+            else
+              echo "Attempt $attempt: one or more health endpoints unavailable"
+            fi
+            if [ "$attempt" -eq 50 ]; then
+              echo "Timed out waiting for exact deployed backend commit" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Assert S6Q scientific and persistence safety gates
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const load = (name) => JSON.parse(fs.readFileSync(`audit/${name}.json`, 'utf8'));
+          const s6q = load('s6q');
+          const s6p = load('s6p');
+          const s6m = load('s6m');
+          const s6k = load('s6k');
+          const fail = (message) => { throw new Error(message); };
+          const assert = (condition, message) => { if (!condition) fail(message); };
+
+          for (const [name, report] of Object.entries({s6q, s6p, s6m, s6k})) {
+            assert(report.status === 'healthy', `${name} health is ${report.status}`);
+            assert(report.lastError == null, `${name} has lastError=${report.lastError}`);
+            assert(report.latest, `${name} latest report is missing`);
+          }
+
+          const q = s6q.latest;
+          const allowedStates = new Set([
+            'ARMED_AND_WAITING_FOR_50',
+            'WAITING_FOR_MINIMUM_SAMPLE_20_CERTIFICATION',
+            'WAITING_FOR_TEN_CERTIFIED_CYCLES',
+            'OBSERVING_FIFTY_RESULT_STABILITY',
+            'READY_FOR_HUMAN_REVIEW',
+          ]);
+          assert(allowedStates.has(q.state), `Unsafe S6Q state=${q.state}`);
+          assert((q.issueCounts?.CRITICAL ?? 0) === 0, `S6Q critical issues=${q.issueCounts?.CRITICAL}`);
+          assert(q.sample?.targetSize === 50, `S6Q targetSize=${q.sample?.targetSize}`);
+          assert(q.sample?.requiredIndependentCertifications === 10, `S6Q independent target=${q.sample?.requiredIndependentCertifications}`);
+          assert(q.persistence?.countMonotonic === true, 'S6Q ledger count is not monotonic');
+          assert(q.readiness?.automaticModelChangesAllowed === false, 'S6Q automatic model changes unexpectedly enabled');
+          assert(q.readiness?.recommendation === 'NO_AUTOMATIC_MODEL_CHANGE', `S6Q recommendation=${q.readiness?.recommendation}`);
+          assert(s6q.safety?.mode === 'SHADOW', `S6Q mode=${s6q.safety?.mode}`);
+          assert(s6q.safety?.realFinancialExposure === 0, `S6Q exposure=${s6q.safety?.realFinancialExposure}`);
+          for (const key of [
+            'sportsbookIntegration','automaticBetPlacement','productionWrites','historicalLedgerMutation',
+            'automaticPromotion','formulasChanged','probabilitiesChanged','signalsChanged','marketsChanged',
+            'thresholdsChanged','settlementRulesChanged','stakePolicyChanged'
+          ]) {
+            assert(s6q.safety?.[key] === false, `S6Q safety.${key}=${s6q.safety?.[key]}`);
+          }
+
+          for (const [name, report] of Object.entries({s6p, s6m, s6k})) {
+            assert((report.latest?.issueCounts?.CRITICAL ?? report.issueCounts?.CRITICAL ?? 0) === 0,
+              `${name} reports critical issues`);
+          }
+
+          console.log(JSON.stringify({
+            commit: s6q.commit,
+            s6qState: q.state,
+            eligible: q.sample?.binaryEligibleDecisions,
+            independentlyCertified: q.sample?.independentlyCertifiedAmongFirstFifty,
+            target: q.sample?.targetSize,
+            criticalIssues: q.issueCounts?.CRITICAL ?? 0,
+            ledgerMonotonic: q.persistence?.countMonotonic,
+            mode: s6q.safety?.mode,
+            exposure: s6q.safety?.realFinancialExposure,
+          }, null, 2));
+          NODE
