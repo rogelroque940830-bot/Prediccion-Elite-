@@ -15,8 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout diagnostic branch
+      - name: Checkout diagnostic branch head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup Node 20
         uses: actions/setup-node@v4
@@ -47,7 +50,7 @@ jobs:
 
       - name: Verify diagnostic diff is workflow-only
         run: |
-          BASE_SHA="$(git rev-parse HEAD^)"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
           git diff --check "$BASE_SHA" HEAD
           CHANGED="$(git diff --name-only "$BASE_SHA" HEAD)"
           test "$CHANGED" = ".github/workflows/diagnostic-s6q-final-audit-20260803.yml"
@@ -57,15 +60,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout diagnostic branch
+      - name: Checkout diagnostic branch head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Wait for exact backend commit and fetch health reports
         env:
           BASE_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          EXPECTED_COMMIT="$(git rev-parse HEAD^)"
           echo "Expected deployed backend commit: $EXPECTED_COMMIT"
           mkdir -p audit
           for attempt in $(seq 1 50); do
