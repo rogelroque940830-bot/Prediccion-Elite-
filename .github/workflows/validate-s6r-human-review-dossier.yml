@@ -1,0 +1,45 @@
+name: Validate S6R human review dossier
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "server/mlb-s6r-human-review-dossier.ts"
+      - "server/mlb-s6r-human-review-dossier.test.ts"
+      - "server/s5b-staging-entry.ts"
+      - "server/route-contract.extensions.json"
+      - "docs/S6R_PHASE5C7_HUMAN_REVIEW_DOSSIER.md"
+      - "package.json"
+      - "tsconfig.s5b-shadow.json"
+      - "tsconfig.s6r-human-review-dossier.json"
+      - ".github/workflows/validate-s6r-human-review-dossier.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Focused S6R tests
+        run: npm run test:s6r-human-review-dossier
+      - name: Focused S6R typecheck
+        run: npm run typecheck:s6r-human-review-dossier
+      - name: Full shadow regressions
+        run: |
+          npm run test:s5b-shadow
+          npm run typecheck:s5b-shadow
+      - name: Route contract and backend build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Diff hygiene
+        run: git diff --check
