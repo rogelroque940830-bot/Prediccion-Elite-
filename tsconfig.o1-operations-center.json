@@ -2,8 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "server/operational-incident-center.ts",
-    "server/operational-incident-center.test.ts",
-    "server/routes.ts"
+    "server/operational-incident-center.test.ts"
   ],
   "exclude": [
     "node_modules",
