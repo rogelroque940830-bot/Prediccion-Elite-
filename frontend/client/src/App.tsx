@@ -18,6 +18,7 @@ import MLBHistoryFocused from "@/pages/mlb-history-focused";
 import MLBHistoryAudit from "@/pages/mlb-history";
 import MlbHumanReviewConsole from "@/pages/mlb-human-review-console";
 import OperationsIncidentCenter from "@/pages/operations-incident-center";
+import OperationsReprocessing from "@/pages/operations-reprocessing";
 import WNBAPredictor from "@/pages/wnba-predictor";
 import WNBAHistory from "@/pages/wnba-history";
 import NHLPredictor from "@/pages/nhl-predictor";
@@ -25,7 +26,7 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
-const FRONTEND_RELEASE = "o2-automatic-alerts-sla-2026-08-04";
+const FRONTEND_RELEASE = "o3-controlled-reprocessing-2026-08-04";
 
 function AppRouter() {
   return (
@@ -38,6 +39,7 @@ function AppRouter() {
       <Route path="/mlb-history" component={MLBHistoryFocused} />
       <Route path="/mlb-history-audit" component={MLBHistoryAudit} />
       <Route path="/mlb-human-review" component={MlbHumanReviewConsole} />
+      <Route path="/operations/reprocessing" component={OperationsReprocessing} />
       <Route path="/operations" component={OperationsIncidentCenter} />
       <Route path="/wnba" component={WNBAPredictor} />
       <Route path="/wnba-history" component={WNBAHistory} />
