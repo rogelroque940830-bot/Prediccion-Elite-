@@ -41,6 +41,8 @@ import {
 } from "./operational-sla-alerts";
 import { registerOperationalSlaAlertRoutes } from "./operational-sla-alert-routes";
 import { startOperationalSlaAlertWorker } from "./operational-sla-alert-worker";
+import { createOperationalReprocessingService } from "./operational-reprocessing";
+import { registerOperationalReprocessingRoutes } from "./operational-reprocessing-routes";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -87,6 +89,10 @@ const operationalAlerts = new OperationalAlertService(
 );
 const operationalSlaAlerts = new OperationalSlaAlertService(
   createOperationalIncidentCenterProvider(systemOwnerUserId),
+  operationalBackupService.getRoot(),
+);
+const operationalReprocessing = createOperationalReprocessingService(
+  systemOwnerUserId,
   operationalBackupService.getRoot(),
 );
 
@@ -179,6 +185,7 @@ app.get("/health", (_req, res) => {
     operationalDiagnostics: (() => { const report = operationalDiagnostics.evaluate(); return { status: report.status, checkedAt: report.checkedAt, counts: report.counts }; })(),
     operationalAlerts: operationalAlerts.status(),
     operationalSlaAlerts: operationalSlaAlerts.status(systemOwnerUserId),
+    operationalReprocessing: operationalReprocessing.status(systemOwnerUserId),
   });
 });
 
@@ -191,6 +198,7 @@ app.get("/health", (_req, res) => {
   registerOperationalRestoreDrillRoutes(app, operationalRestoreDrillService);
   registerOperationalObservabilityRoutes(app, operationalObservability, operationalDiagnostics, operationalAlerts);
   registerOperationalSlaAlertRoutes(app, operationalSlaAlerts);
+  registerOperationalReprocessingRoutes(app, operationalReprocessing);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);

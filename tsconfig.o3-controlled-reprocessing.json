@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/operational-reprocessing.ts",
+    "server/operational-reprocessing.test.ts",
+    "server/operational-reprocessing-routes.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

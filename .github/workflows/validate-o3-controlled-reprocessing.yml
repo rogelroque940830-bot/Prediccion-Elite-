@@ -1,0 +1,73 @@
+name: Validate O3 Controlled Reprocessing
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/operational-reprocessing.ts'
+      - 'server/operational-reprocessing.test.ts'
+      - 'server/operational-reprocessing-routes.ts'
+      - 'server/index.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.o3-controlled-reprocessing.json'
+      - 'docs/O3_SAFE_CONTROLLED_REPROCESSING.md'
+      - '.github/workflows/validate-o3-controlled-reprocessing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-o3-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused O3 typecheck
+        run: npx tsc -p tsconfig.o3-controlled-reprocessing.json
+      - name: Run focused O3 tests
+        run: npx tsx --test server/operational-reprocessing.test.ts
+      - name: Verify backend route contract
+        run: npm run test:s3-modularization
+      - name: Run O1 and O2 regressions
+        run: |
+          npx tsx --test server/operational-incident-center.test.ts
+          npx tsx --test server/operational-sla-alerts.test.ts
+      - name: Run operations regressions
+        run: npm run test:s4-operations
+      - name: Run MLB settlement regressions
+        run: npx tsx --test server/mlb-settlement-worker.test.ts server/mlb-ledger.test.ts
+      - name: Run shadow regressions
+        run: npm run test:s5b-shadow
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Verify controlled append-only safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'mode: "SHADOW_CONTROLLED_REPROCESSING"' server/operational-reprocessing.ts
+          grep -F 'automaticExecution: false' server/operational-reprocessing.ts
+          grep -F 'requiresExplicitPreview: true' server/operational-reprocessing.ts
+          grep -F 'requiresPlanDigest: true' server/operational-reprocessing.ts
+          grep -F 'requiresAdminExecution: true' server/operational-reprocessing.ts
+          grep -F 'singleGameOnly: true' server/operational-reprocessing.ts
+          grep -F 'appendOnlySettlementEvents: true' server/operational-reprocessing.ts
+          grep -F 'historicalLedgerMutation: false' server/operational-reprocessing.ts
+          grep -F 'automaticSettlementRetry: false' server/operational-reprocessing.ts
+          grep -F 'realFinancialExposure: 0' server/operational-reprocessing.ts
+          grep -F 'REPROCESS_ONE_MLB_GAME' server/operational-reprocessing.ts
+          grep -F 'requireGlobalWorkerRole' server/operational-reprocessing-routes.ts
+          grep -F 'flag: "wx"' server/operational-reprocessing.ts
+          grep -F 'fs.appendFileSync' server/operational-reprocessing.ts
+          ! grep -E 'setInterval|setTimeout|startOperationalReprocessingWorker|automaticExecution: true|historicalLedgerMutation: true|automaticSettlementRetry: true|automaticBetPlacement: true' server/operational-reprocessing*.ts
+          ! grep -Ei 'UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM|db\.prepare|db\.exec|appendPrediction|source: "correction"' server/operational-reprocessing*.ts
+      - name: Diff hygiene
+        run: git diff --check
