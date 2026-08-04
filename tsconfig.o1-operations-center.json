@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/operational-incident-center.ts",
+    "server/operational-incident-center.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
