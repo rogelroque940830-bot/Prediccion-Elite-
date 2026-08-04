@@ -19,6 +19,7 @@ import MLBHistoryAudit from "@/pages/mlb-history";
 import MlbHumanReviewConsole from "@/pages/mlb-human-review-console";
 import OperationsIncidentCenter from "@/pages/operations-incident-center";
 import OperationsReprocessing from "@/pages/operations-reprocessing";
+import OperationsEvidenceRepair from "@/pages/operations-evidence-repair";
 import WNBAPredictor from "@/pages/wnba-predictor";
 import WNBAHistory from "@/pages/wnba-history";
 import NHLPredictor from "@/pages/nhl-predictor";
@@ -26,7 +27,8 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
-const FRONTEND_RELEASE = "o3-controlled-reprocessing-2026-08-04";
+const FRONTEND_RELEASE = "o31-mlb-evidence-repair-2026-08-04";
+const PREVIOUS_OPERATIONAL_RELEASES = "o2-automatic-alerts-sla-2026-08-04 o3-controlled-reprocessing-2026-08-04";
 
 function AppRouter() {
   return (
@@ -39,6 +41,7 @@ function AppRouter() {
       <Route path="/mlb-history" component={MLBHistoryFocused} />
       <Route path="/mlb-history-audit" component={MLBHistoryAudit} />
       <Route path="/mlb-human-review" component={MlbHumanReviewConsole} />
+      <Route path="/operations/evidence-repair" component={OperationsEvidenceRepair} />
       <Route path="/operations/reprocessing" component={OperationsReprocessing} />
       <Route path="/operations" component={OperationsIncidentCenter} />
       <Route path="/wnba" component={WNBAPredictor} />
@@ -59,7 +62,11 @@ function AppLayout() {
 
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-      <div className="flex h-screen w-full" data-frontend-release={FRONTEND_RELEASE}>
+      <div
+        className="flex h-screen w-full"
+        data-frontend-release={FRONTEND_RELEASE}
+        data-previous-operational-releases={PREVIOUS_OPERATIONAL_RELEASES}
+      >
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-3 h-12 px-3 border-b border-border shrink-0">
