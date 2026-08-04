@@ -53,7 +53,7 @@ jobs:
           grep -F 'Solo lectura · sin reintentos' frontend/client/src/pages/operations-incident-center.tsx
           grep -F 'automaticSettlementRetry === false' frontend/client/src/lib/operations-sla-alerts.ts
           ! grep -F '/api/ops/v1/sla-alerts/evaluate' frontend/client/src/pages/operations-incident-center.tsx
-          ! grep -E 'method:\s*["'"'](POST|PUT|PATCH|DELETE)' frontend/client/src/pages/operations-incident-center.tsx
+          ! grep -F 'method:' frontend/client/src/pages/operations-incident-center.tsx
           cat frontend/dist/assets/*.js > /tmp/o2-bundle.js
           grep -F 'o2-automatic-alerts-sla-2026-08-04' /tmp/o2-bundle.js
           grep -F 'Alertas SLA' /tmp/o2-bundle.js
