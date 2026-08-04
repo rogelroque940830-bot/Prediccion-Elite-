@@ -1,0 +1,64 @@
+name: Diagnostic O1 live backend verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-o1-live-backend-20260804.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for exact O1 backend deployment
+        env:
+          BASE_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 80); do
+            health_code=$(curl -sS -o health.json -w '%{http_code}' --max-time 20 "$BASE_URL/health" || true)
+            o1_code=$(curl -sS -o o1-private.json -w '%{http_code}' --max-time 20 "$BASE_URL/api/ops/v1/incident-center" || true)
+            echo "Attempt $attempt/80: health=$health_code o1Private=$o1_code"
+
+            if [[ "$health_code" == "200" && "$o1_code" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const privateResponse = JSON.parse(fs.readFileSync('o1-private.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          if (health.status !== 'healthy') throw new Error(`health=${health.status}`);
+          if (String(health.commit || '') !== expected) {
+            throw new Error(`live commit ${health.commit} != expected ${expected}`);
+          }
+          if (health.privateReadProtection !== true) throw new Error('private read protection disabled');
+          if (privateResponse.success !== false || !/Authentication required/i.test(String(privateResponse.error || ''))) {
+            throw new Error('O1 endpoint did not fail closed for an unauthenticated request');
+          }
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            privateReadProtection: health.privateReadProtection,
+            o1UnauthenticatedStatus: 401,
+            operationalDiagnostics: health.operationalDiagnostics,
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+
+            if [[ "$attempt" == "80" ]]; then
+              echo 'Timed out waiting for exact O1 backend deployment' >&2
+              echo '--- health'; cat health.json 2>/dev/null || true
+              echo '--- o1 private'; cat o1-private.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 15
+          done
