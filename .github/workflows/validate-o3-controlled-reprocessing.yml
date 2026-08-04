@@ -68,6 +68,6 @@ jobs:
           grep -F 'flag: "wx"' server/operational-reprocessing.ts
           grep -F 'fs.appendFileSync' server/operational-reprocessing.ts
           ! grep -E 'setInterval|setTimeout|startOperationalReprocessingWorker|automaticExecution: true|historicalLedgerMutation: true|automaticSettlementRetry: true|automaticBetPlacement: true' server/operational-reprocessing*.ts
-          ! grep -E '\.(update|delete)\(' server/operational-reprocessing.ts
+          ! grep -Ei '\b(UPDATE|DELETE)\b|db\.prepare|db\.exec|appendPrediction|source: "correction"' server/operational-reprocessing*.ts
       - name: Diff hygiene
         run: git diff --check
