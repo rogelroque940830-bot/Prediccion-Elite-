@@ -1,0 +1,112 @@
+name: Diagnostic O2 live frontend verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-o2-live-frontend-20260804.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o2-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for exact O2 frontend release
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+          EXPECTED_RELEASE: o2-automatic-alerts-sla-2026-08-04
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 80); do
+            cache_bust="o2-${attempt}-$(date +%s)"
+            if curl -fsS --max-time 25 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/?${cache_bust}" -o audit/index.html; then
+              asset_path="$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/')"
+              asset_path="${asset_path#./}"
+              if [[ -n "${asset_path}" ]] && curl -fsS --max-time 40 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/${asset_path}?${cache_bust}" -o audit/app.js; then
+                if grep -Fq "${EXPECTED_RELEASE}" audit/app.js; then
+                  echo 'Exact O2 frontend release marker is live.'
+                  break
+                fi
+              fi
+            fi
+            echo "Attempt ${attempt}/80: waiting for O2 frontend deployment"
+            if [[ "${attempt}" == "80" ]]; then
+              echo 'Timed out waiting for O2 frontend release' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Assert live O2 bundle and backend safety
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_BACKEND_COMMIT: 52a11a54debbc8a2e5b508dcf849faf8210bc7a3
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Centro de Operaciones e Incidencias' audit/app.js
+          grep -Fq 'Alertas SLA' audit/app.js
+          grep -Fq 'Historial append-only' audit/app.js
+          grep -Fq 'SLA limitado suprimido' audit/app.js
+          grep -Fq 'Alertas temporales bloqueadas' audit/app.js
+          grep -Fq 'Eventos emitidos' audit/app.js
+          grep -Fq 'Abierta' audit/app.js
+          grep -Fq 'Escalada' audit/app.js
+          grep -Fq 'Recordatorio' audit/app.js
+          grep -Fq 'Resuelta' audit/app.js
+          grep -Fq 'OBSERVE ONLY' audit/app.js
+          grep -Fq 'Solo lectura' audit/app.js
+          grep -Fq '/api/ops/v1/sla-alerts?limit=500' audit/app.js
+          ! grep -Fq '/api/ops/v1/sla-alerts/evaluate' audit/app.js
+
+          health_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health")
+          private_code=$(curl -sS -o audit/o2-private.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/ops/v1/sla-alerts")
+          [[ "${health_code}" == "200" ]]
+          [[ "${private_code}" == "401" ]]
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const privateResponse = JSON.parse(fs.readFileSync('audit/o2-private.json', 'utf8'));
+          const expectedCommit = String(process.env.EXPECTED_BACKEND_COMMIT || '');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(health.status === 'healthy', `backend health=${health.status}`);
+          assert(String(health.commit || '') === expectedCommit, `backend commit=${health.commit}`);
+          assert(health.privateReadProtection === true, 'private read protection disabled');
+          const o2 = health.operationalSlaAlerts;
+          assert(o2?.schemaVersion === 'courtedge-operational-sla-policy.v1', 'O2 health missing');
+          assert(o2.lastSuccessAt, 'O2 has no successful automatic cycle');
+          assert(o2.lastError == null, `O2 lastError=${o2.lastError}`);
+          assert(o2.safety?.mode === 'OBSERVE_ONLY', `O2 mode=${o2.safety?.mode}`);
+          assert(o2.safety?.readOnly === true, 'O2 readOnly disabled');
+          assert(o2.safety?.realFinancialExposure === 0, `O2 exposure=${o2.safety?.realFinancialExposure}`);
+          assert(o2.safety?.automaticSettlementRetry === false, 'O2 settlement retry enabled');
+          assert(o2.safety?.historicalLedgerMutation === false, 'O2 historical mutation enabled');
+          assert(privateResponse.success === false, 'private O2 endpoint did not reject access');
+          assert(/Authentication required/i.test(String(privateResponse.error || '')), 'authentication error missing');
+          console.log(JSON.stringify({
+            frontendRelease: 'o2-automatic-alerts-sla-2026-08-04',
+            backendCommit: health.commit,
+            backendEnvironment: health.environment,
+            privateReadProtection: health.privateReadProtection,
+            unauthenticatedO2Status: 401,
+            o2: {
+              events: o2.events,
+              active: o2.active,
+              activeCritical: o2.activeCritical,
+              activeWarnings: o2.activeWarnings,
+              lastRunAt: o2.lastRunAt,
+              lastSuccessAt: o2.lastSuccessAt,
+              lastCandidateCount: o2.lastCandidateCount,
+              lastEmittedCount: o2.lastEmittedCount,
+              lastSuppressedLimitedEvidence: o2.lastSuppressedLimitedEvidence,
+              safety: o2.safety,
+            },
+          }, null, 2));
+          NODE
