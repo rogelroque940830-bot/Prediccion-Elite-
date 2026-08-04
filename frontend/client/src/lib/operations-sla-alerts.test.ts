@@ -112,5 +112,8 @@ test("O2 safety validation fails closed", () => {
     automaticPromotionAllowed: false as const,
   };
   assert.equal(operationalSlaSafetyValid(safe), true);
-  assert.equal(operationalSlaSafetyValid({ ...safe, automaticSettlementRetry: true as false }), false);
+  assert.equal(operationalSlaSafetyValid({
+    ...safe,
+    automaticSettlementRetry: true,
+  } as unknown as Parameters<typeof operationalSlaSafetyValid>[0]), false);
 });
