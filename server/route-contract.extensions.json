@@ -1,4 +1,5 @@
 [
+  { "method": "GET", "path": "/api/mlb/p1/v1/slate", "registrations": 1 },
   { "method": "GET", "path": "/api/mlb/ledger/v1/s5c-ingestion/latest", "registrations": 1 },
   { "method": "GET", "path": "/api/mlb/ledger/v1/s5c-ingestion/status", "registrations": 1 },
   { "method": "GET", "path": "/api/mlb/ledger/v1/s5d-gate/latest", "registrations": 1 },
