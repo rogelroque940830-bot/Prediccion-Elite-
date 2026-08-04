@@ -1,0 +1,157 @@
+name: Diagnostic O3.1 Live Backend Verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-o31-live-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o31-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: b9f3b0057e620d54a17ef51c94e171c5508d14d1
+    steps:
+      - name: Wait for exact O3.1 deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o audit/health-before.json -w '%{http_code}' --max-time 25 "${BASE_URL}/health" || true)
+            if [[ "${code}" == "200" ]]; then
+              live_commit=$(node -e "const h=require('./audit/health-before.json'); process.stdout.write(String(h.commit||''))" 2>/dev/null || true)
+              if [[ "${live_commit}" == "${EXPECTED_COMMIT}" ]]; then
+                echo "Exact O3.1 backend commit is live."
+                break
+              fi
+              echo "Attempt ${attempt}/100: live=${live_commit:-unknown} expected=${EXPECTED_COMMIT}"
+            else
+              echo "Attempt ${attempt}/100: health HTTP ${code}"
+            fi
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for exact O3.1 backend deployment' >&2
+              cat audit/health-before.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify O3.1 safety and private routes without creating state
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_code=$(curl -sS -o audit/status-private.json -w '%{http_code}' --max-time 25 "${BASE_URL}/api/ops/v1/evidence-repair/status")
+          audit_code=$(curl -sS -o audit/audit-private.json -w '%{http_code}' --max-time 25 "${BASE_URL}/api/ops/v1/evidence-repair/audit")
+          inspection_code=$(curl -sS -o audit/inspection-private.json -w '%{http_code}' --max-time 25 "${BASE_URL}/api/ops/v1/evidence-repair/inspections/o31-inspection-diagnostic-never-created")
+          plan_get_code=$(curl -sS -o audit/plan-get-private.json -w '%{http_code}' --max-time 25 "${BASE_URL}/api/ops/v1/evidence-repair/plans/o31-plan-diagnostic-never-created")
+          inspect_code=$(curl -sS -o audit/inspect-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"incidentId":"ops-MLB:diagnostic-never-created"}' \
+            "${BASE_URL}/api/ops/v1/evidence-repair/inspect")
+          plan_post_code=$(curl -sS -o audit/plan-post-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"inspectionId":"o31-inspection-diagnostic-never-created","inspectionDigest":"invalid","patches":[],"repairSource":{"sourceName":"Diagnostic","evidenceReference":"diagnostic:none","capturedAt":"2026-08-04T18:00:00.000Z","note":"Unauthenticated diagnostic request that must be rejected."}}' \
+            "${BASE_URL}/api/ops/v1/evidence-repair/plan")
+          execute_code=$(curl -sS -o audit/execute-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"planId":"o31-plan-diagnostic-never-created","planDigest":"invalid","idempotencyKey":"diagnostic-never-created","confirmation":"APPEND_SUPERSEDING_MLB_EVIDENCE","reason":"Unauthenticated diagnostic request that must be rejected before execution."}' \
+            "${BASE_URL}/api/ops/v1/evidence-repair/execute")
+          curl -fsS --max-time 25 "${BASE_URL}/health" -o audit/health-after.json
+
+          STATUS_CODE="${status_code}" AUDIT_CODE="${audit_code}" INSPECTION_CODE="${inspection_code}" PLAN_GET_CODE="${plan_get_code}" INSPECT_CODE="${inspect_code}" PLAN_POST_CODE="${plan_post_code}" EXECUTE_CODE="${execute_code}" node <<'NODE'
+          const fs = require('node:fs');
+          const before = JSON.parse(fs.readFileSync('audit/health-before.json', 'utf8'));
+          const after = JSON.parse(fs.readFileSync('audit/health-after.json', 'utf8'));
+          const payloads = {
+            status: JSON.parse(fs.readFileSync('audit/status-private.json', 'utf8')),
+            audit: JSON.parse(fs.readFileSync('audit/audit-private.json', 'utf8')),
+            inspection: JSON.parse(fs.readFileSync('audit/inspection-private.json', 'utf8')),
+            planGet: JSON.parse(fs.readFileSync('audit/plan-get-private.json', 'utf8')),
+            inspect: JSON.parse(fs.readFileSync('audit/inspect-private.json', 'utf8')),
+            planPost: JSON.parse(fs.readFileSync('audit/plan-post-private.json', 'utf8')),
+            execute: JSON.parse(fs.readFileSync('audit/execute-private.json', 'utf8')),
+          };
+          const codes = {
+            status: Number(process.env.STATUS_CODE),
+            audit: Number(process.env.AUDIT_CODE),
+            inspection: Number(process.env.INSPECTION_CODE),
+            planGet: Number(process.env.PLAN_GET_CODE),
+            inspect: Number(process.env.INSPECT_CODE),
+            planPost: Number(process.env.PLAN_POST_CODE),
+            execute: Number(process.env.EXECUTE_CODE),
+          };
+          const expected = String(process.env.EXPECTED_COMMIT || '');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(before.status === 'healthy', `health=${before.status}`);
+          assert(before.commit === expected, `commit=${before.commit}`);
+          assert(before.environment === 'p0-integration', `environment=${before.environment}`);
+          assert(before.privateReadProtection === true, 'private read protection disabled');
+
+          const o31 = before.operationalEvidenceRepair;
+          assert(o31?.schemaVersion === 'courtedge-o31-evidence-repair-status.v1', 'O3.1 status missing');
+          assert(o31.confirmationPhrase === 'APPEND_SUPERSEDING_MLB_EVIDENCE', `confirmation=${o31.confirmationPhrase}`);
+          assert(o31.ttlMs === 600000, `ttlMs=${o31.ttlMs}`);
+          assert(o31.maxTargets === 50, `maxTargets=${o31.maxTargets}`);
+          assert(o31.inspections === 0, `inspections=${o31.inspections}`);
+          assert(o31.plans === 0, `plans=${o31.plans}`);
+          assert(o31.executions === 0, `executions=${o31.executions}`);
+
+          const safety = o31.safety;
+          assert(safety?.mode === 'SHADOW_EVIDENCE_REPAIR', `mode=${safety?.mode}`);
+          assert(safety?.shadowOnly === true, 'shadowOnly disabled');
+          assert(safety?.realFinancialExposure === 0, `exposure=${safety?.realFinancialExposure}`);
+          for (const key of [
+            'requiresExplicitInspection',
+            'requiresSealedPlan',
+            'requiresAdminExecution',
+            'requiresConfirmationPhrase',
+            'singleGameOnly',
+            'appendOnlySupersedingPredictions',
+          ]) assert(safety?.[key] === true, `safety.${key}=${safety?.[key]}`);
+          for (const key of [
+            'automaticRepair',
+            'historicalLedgerMutation',
+            'settlementExecution',
+            'automaticBetPlacement',
+            'automaticModelChangesAllowed',
+            'automaticPromotionAllowed',
+          ]) assert(safety?.[key] === false, `safety.${key}=${safety?.[key]}`);
+          assert(Array.isArray(safety.supportedLeagues) && safety.supportedLeagues.length === 1 && safety.supportedLeagues[0] === 'MLB', 'supported leagues invalid');
+
+          for (const [name, code] of Object.entries(codes)) {
+            assert(code === 401, `${name} HTTP ${code}`);
+            assert(payloads[name]?.success === false, `${name} did not fail closed`);
+            assert(/Authentication required/i.test(String(payloads[name]?.error || '')), `${name} auth message missing`);
+          }
+
+          const afterO31 = after.operationalEvidenceRepair;
+          assert(after.commit === expected, `after commit=${after.commit}`);
+          for (const key of ['inspections', 'plans', 'executions', 'latestInspectionAt', 'latestExecutionAt']) {
+            assert(afterO31[key] === o31[key], `${key} changed ${o31[key]} -> ${afterO31[key]}`);
+          }
+
+          console.log(JSON.stringify({
+            commit: before.commit,
+            environment: before.environment,
+            privateReadProtection: before.privateReadProtection,
+            o31,
+            unauthenticated: codes,
+            noStateChange: {
+              inspectionsBefore: o31.inspections,
+              inspectionsAfter: afterO31.inspections,
+              plansBefore: o31.plans,
+              plansAfter: afterO31.plans,
+              executionsBefore: o31.executions,
+              executionsAfter: afterO31.executions,
+            },
+          }, null, 2));
+          NODE
