@@ -1,0 +1,114 @@
+name: Diagnostic O2 live backend verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-o2-live-backend-20260804.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o2-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for exact O2 backend deployment and first successful cycle
+        env:
+          BASE_URL: https://web-p0-integration.up.railway.app
+          EXPECTED_COMMIT: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 90); do
+            health_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 20 "${BASE_URL}/health" || true)
+            alerts_code=$(curl -sS -o audit/alerts-private.json -w '%{http_code}' --max-time 20 "${BASE_URL}/api/ops/v1/sla-alerts" || true)
+            status_code=$(curl -sS -o audit/status-private.json -w '%{http_code}' --max-time 20 "${BASE_URL}/api/ops/v1/sla-status" || true)
+            evaluate_code=$(curl -sS -o audit/evaluate-private.json -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' -d '{}' "${BASE_URL}/api/ops/v1/sla-alerts/evaluate" || true)
+            echo "Attempt ${attempt}/90: health=${health_code} alerts=${alerts_code} status=${status_code} evaluate=${evaluate_code}"
+
+            if [[ "${health_code}" == "200" && "${alerts_code}" == "401" && "${status_code}" == "401" && "${evaluate_code}" == "401" ]]; then
+              if node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_COMMIT || '').trim();
+          const alertsPrivate = JSON.parse(fs.readFileSync('audit/alerts-private.json', 'utf8'));
+          const statusPrivate = JSON.parse(fs.readFileSync('audit/status-private.json', 'utf8'));
+          const evaluatePrivate = JSON.parse(fs.readFileSync('audit/evaluate-private.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(health.status === 'healthy', `health=${health.status}`);
+          assert(String(health.commit || '') === expected, `live commit ${health.commit} != ${expected}`);
+          assert(health.environment === 'p0-integration', `environment=${health.environment}`);
+          assert(health.privateReadProtection === true, 'private read protection disabled');
+
+          const o2 = health.operationalSlaAlerts;
+          assert(o2 && o2.schemaVersion === 'courtedge-operational-sla-policy.v1', 'O2 health status missing');
+          assert(o2.lastRunAt, 'O2 automatic worker has not run');
+          assert(o2.lastSuccessAt, 'O2 automatic worker has no successful cycle');
+          assert(o2.lastError == null, `O2 lastError=${o2.lastError}`);
+          assert(Number.isFinite(Number(o2.lastCandidateCount)), 'O2 candidate count invalid');
+          assert(Number.isFinite(Number(o2.lastEmittedCount)), 'O2 emitted count invalid');
+          assert(Number.isFinite(Number(o2.lastSuppressedLimitedEvidence)), 'O2 suppression count invalid');
+          assert(o2.policy?.limitedEvidenceTimedAlerts === false, 'limited-evidence timed alerts enabled');
+          assert(o2.safety?.mode === 'OBSERVE_ONLY', `O2 mode=${o2.safety?.mode}`);
+          assert(o2.safety?.readOnly === true, 'O2 readOnly disabled');
+          assert(o2.safety?.realFinancialExposure === 0, `O2 exposure=${o2.safety?.realFinancialExposure}`);
+          for (const key of [
+            'automaticBetPlacement',
+            'automaticSettlementRetry',
+            'historicalLedgerMutation',
+            'automaticModelChangesAllowed',
+            'automaticPromotionAllowed',
+          ]) {
+            assert(o2.safety?.[key] === false, `O2 safety.${key}=${o2.safety?.[key]}`);
+          }
+
+          for (const [name, payload] of Object.entries({alertsPrivate, statusPrivate, evaluatePrivate})) {
+            assert(payload.success === false, `${name} did not fail closed`);
+            assert(/Authentication required/i.test(String(payload.error || '')), `${name} authentication message missing`);
+          }
+
+          console.log(JSON.stringify({
+            commit: health.commit,
+            environment: health.environment,
+            privateReadProtection: health.privateReadProtection,
+            o2: {
+              schemaVersion: o2.schemaVersion,
+              events: o2.events,
+              active: o2.active,
+              activeCritical: o2.activeCritical,
+              activeWarnings: o2.activeWarnings,
+              lastRunAt: o2.lastRunAt,
+              lastSuccessAt: o2.lastSuccessAt,
+              lastCandidateCount: o2.lastCandidateCount,
+              lastEmittedCount: o2.lastEmittedCount,
+              lastSuppressedLimitedEvidence: o2.lastSuppressedLimitedEvidence,
+              webhookConfigured: o2.webhookConfigured,
+              safety: o2.safety,
+            },
+            unauthenticated: {
+              alerts: 401,
+              status: 401,
+              evaluate: 401,
+            },
+          }, null, 2));
+          NODE
+              then
+                exit 0
+              fi
+            fi
+
+            if [[ "${attempt}" == "90" ]]; then
+              echo 'Timed out waiting for exact O2 deployment and successful automatic cycle' >&2
+              echo '--- health'; cat audit/health.json 2>/dev/null || true
+              echo '--- alerts'; cat audit/alerts-private.json 2>/dev/null || true
+              echo '--- status'; cat audit/status-private.json 2>/dev/null || true
+              echo '--- evaluate'; cat audit/evaluate-private.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 15
+          done
