@@ -1,0 +1,115 @@
+name: Diagnostic S6S live verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-s6s-live-verification-20260803.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-s6s:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout diagnostic PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Wait for S6S frontend release
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+          EXPECTED_RELEASE: s6s-human-review-console-2026-08-03
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 80); do
+            if curl -fsS --max-time 25 "${FRONTEND_URL}/" -o audit/index.html; then
+              ASSET_PATH="$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/')"
+              if [ -n "${ASSET_PATH}" ] && curl -fsS --max-time 40 "${FRONTEND_URL}${ASSET_PATH}" -o audit/app.js; then
+                if grep -Fq "${EXPECTED_RELEASE}" audit/app.js; then
+                  echo "Exact S6S release marker is live."
+                  break
+                fi
+              fi
+            fi
+            echo "Attempt ${attempt}: waiting for S6S frontend deployment"
+            if [ "${attempt}" -eq 80 ]; then
+              echo "Timed out waiting for S6S frontend release" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Assert live bundle and backend safety
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          grep -Fq 'Consola de revisión humana MLB' audit/app.js
+          grep -Fq 'Revisión MLB' audit/app.js
+          grep -Fq 'Añadir al diario append-only' audit/app.js
+          grep -Fq '/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/status' audit/app.js
+          grep -Fq '/api/mlb/ledger/v1/s6r-human-review-dossier/status' audit/app.js
+          grep -Fq '/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions' audit/app.js
+          grep -Fq 'Cambios automáticos' audit/app.js
+          grep -Fq 'Exposición: 0' audit/app.js
+
+          curl -fsS --max-time 25 "${BACKEND_URL}/health/s6q-fifty-settlement-human-review" -o audit/s6q.json
+          curl -fsS --max-time 25 "${BACKEND_URL}/health/s6r-human-review-dossier" -o audit/s6r.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const q = JSON.parse(fs.readFileSync('audit/s6q.json', 'utf8'));
+          const r = JSON.parse(fs.readFileSync('audit/s6r.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          for (const [name, report] of Object.entries({q, r})) {
+            assert(report.status === 'healthy', `${name} status=${report.status}`);
+            assert(report.lastError == null, `${name} lastError=${report.lastError}`);
+            assert(report.latest, `${name} latest missing`);
+          }
+          assert((q.latest.issueCounts?.CRITICAL ?? 0) === 0, 'S6Q critical issue present');
+          assert((r.latest.issueCounts?.CRITICAL ?? 0) === 0, 'S6R critical issue present');
+          assert(q.safety?.mode === 'SHADOW', `S6Q mode=${q.safety?.mode}`);
+          assert(r.safety?.mode === 'SHADOW', `S6R mode=${r.safety?.mode}`);
+          assert(q.safety?.realFinancialExposure === 0, 'S6Q exposure is nonzero');
+          assert(r.safety?.realFinancialExposure === 0, 'S6R exposure is nonzero');
+          assert(q.latest.readiness?.automaticModelChangesAllowed === false, 'S6Q auto model changes enabled');
+          assert(r.latest.readiness?.automaticModelChangesAllowed === false, 'S6R auto model changes enabled');
+          assert(r.latest.readiness?.automaticPromotionAllowed === false, 'S6R auto promotion enabled');
+          if (q.latest.state !== 'READY_FOR_HUMAN_REVIEW') {
+            assert(r.latest.state === 'LOCKED_WAITING_FOR_S6Q', `Unexpected S6R state=${r.latest.state}`);
+            assert(r.latest.dossier?.present === false, 'Dossier created before S6Q readiness');
+          }
+          console.log(JSON.stringify({
+            s6qState: q.latest.state,
+            eligible: q.latest.sample?.binaryEligibleDecisions,
+            target: q.latest.sample?.targetSize,
+            independentlyCertified: q.latest.sample?.independentlyCertifiedAmongFirstFifty,
+            s6rState: r.latest.state,
+            dossierPresent: r.latest.dossier?.present,
+            reviewDecisions: r.latest.review?.decisions,
+            s6qCriticalIssues: q.latest.issueCounts?.CRITICAL ?? 0,
+            s6rCriticalIssues: r.latest.issueCounts?.CRITICAL ?? 0,
+            mode: r.safety?.mode,
+            exposure: r.safety?.realFinancialExposure,
+          }, null, 2));
+          NODE
+
+          HTTP_CODE="$(curl -sS --max-time 25 -o audit/unauthorized-post.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"stage":"IN_PROGRESS","rationale":"Unauthorized live verification submission must never be persisted."}' \
+            "${BACKEND_URL}/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions")"
+          case "${HTTP_CODE}" in
+            401|403) echo "Unauthenticated review submission rejected with HTTP ${HTTP_CODE}." ;;
+            *) echo "Expected HTTP 401 or 403, received ${HTTP_CODE}" >&2; exit 1 ;;
+          esac
+
+          curl -fsS --max-time 25 "${FRONTEND_URL}/" -o /dev/null
+          echo "S6S live frontend and backend safety verification passed."
