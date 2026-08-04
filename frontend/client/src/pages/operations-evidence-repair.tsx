@@ -4,7 +4,7 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
-  ClipboardSearch,
+  FileSearch,
   Clock3,
   DatabaseZap,
   FileCheck2,
@@ -139,7 +139,7 @@ function IncidentCard({
           <p className="mt-1 text-xs text-muted-foreground">{incident.reasonCode} · Worker: {incident.worker}</p>
         </div>
         <Button type="button" variant={selected ? "default" : "outline"} disabled={busy} onClick={() => onInspect(incident)}>
-          <ClipboardSearch className="mr-2 h-4 w-4" />
+          <FileSearch className="mr-2 h-4 w-4" />
           {busy && selected ? "Consultando evidencia…" : "Inspeccionar evidencia"}
         </Button>
       </CardContent>
@@ -484,7 +484,7 @@ export default function OperationsEvidenceRepair() {
       {actionError && <Card className="border-red-500/35 bg-red-500/[0.05]"><CardContent className="flex gap-3 p-4"><Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-300" /><div><p className="font-medium text-red-200">Acción O3.1 rechazada</p><p className="mt-1 text-sm text-muted-foreground">{actionError}</p></div></CardContent></Card>}
 
       {status && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Card><CardContent className="p-4"><ClipboardSearch className="h-5 w-5 text-cyan-300" /><p className="mt-3 text-2xl font-bold">{status.inspections}</p><p className="text-xs text-muted-foreground">Inspecciones</p></CardContent></Card>
+        <Card><CardContent className="p-4"><FileSearch className="h-5 w-5 text-cyan-300" /><p className="mt-3 text-2xl font-bold">{status.inspections}</p><p className="text-xs text-muted-foreground">Inspecciones</p></CardContent></Card>
         <Card><CardContent className="p-4"><FileCheck2 className="h-5 w-5 text-violet-300" /><p className="mt-3 text-2xl font-bold">{status.plans}</p><p className="text-xs text-muted-foreground">Planes</p></CardContent></Card>
         <Card><CardContent className="p-4"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-2xl font-bold">{status.readyPlans}</p><p className="text-xs text-muted-foreground">Planes READY</p></CardContent></Card>
         <Card><CardContent className="p-4"><PlayCircle className="h-5 w-5 text-amber-300" /><p className="mt-3 text-2xl font-bold">{status.executions}</p><p className="text-xs text-muted-foreground">Ejecuciones</p></CardContent></Card>
