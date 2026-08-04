@@ -1,0 +1,41 @@
+name: Apply P1-M1 MLB Predictor Integration
+
+on:
+  push:
+    branches:
+      - feature/p1-m1-mlb-daily-slate-frontend
+    paths:
+      - 'frontend/scripts/apply-p1-m1-mlb-integration.mjs'
+      - '.github/workflows/apply-p1-m1-mlb-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/p1-m1-mlb-daily-slate-frontend
+          fetch-depth: 0
+      - name: Apply deterministic integration
+        run: node frontend/scripts/apply-p1-m1-mlb-integration.mjs
+      - name: Verify targeted diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'MlbDailySlatePanel' frontend/client/src/pages/mlb-predictor.tsx
+          grep -F 'id="mlb-analysis-workspace"' frontend/client/src/pages/mlb-predictor.tsx
+          grep -F 'handleMLBAutoFill(String(game.gamePk))' frontend/client/src/pages/mlb-predictor.tsx
+          git diff --check
+      - name: Commit integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/pages/mlb-predictor.tsx frontend/scripts/apply-p1-m1-mlb-integration.mjs .github/workflows/apply-p1-m1-mlb-integration.yml
+          git commit -m 'feat(p1): integrate daily slate into MLB predictor'
+          git push origin HEAD:feature/p1-m1-mlb-daily-slate-frontend
