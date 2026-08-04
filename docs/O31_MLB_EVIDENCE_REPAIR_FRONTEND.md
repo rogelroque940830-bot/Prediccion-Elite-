@@ -37,6 +37,10 @@ The private O3.1 console exposes the append-only evidence repair backend without
 - Invalid safety contracts keep actions disabled.
 - Errors are displayed without fabricating state.
 
+## Production validation boundary
+
+The live deployment check verifies only the served route, bundle markers, private authentication and unchanged O3.1 counters. It does not inspect a real game, create a repair plan or append a superseding prediction.
+
 ## Safety
 
 - `SHADOW_EVIDENCE_REPAIR`
