@@ -35,13 +35,11 @@ import { OperationalDiagnosticsService } from "./operational-diagnostics";
 import { OperationalAlertService } from "./operational-alerts";
 import { startOperationalAlertWorker } from "./operational-alert-worker";
 import { registerOperationalObservabilityRoutes } from "./operational-observability-routes";
-import {
-  createOperationalIncidentCenterProvider,
-  OperationalSlaAlertService,
-} from "./operational-sla-alerts";
+import { OperationalSlaAlertService } from "./operational-sla-alerts";
+import { createActiveOperationalIncidentCenterProvider } from "./operational-incident-center-active";
 import { registerOperationalSlaAlertRoutes } from "./operational-sla-alert-routes";
 import { startOperationalSlaAlertWorker } from "./operational-sla-alert-worker";
-import { createOperationalReprocessingService } from "./operational-reprocessing";
+import { createActiveOperationalReprocessingService } from "./operational-reprocessing-active";
 import { registerOperationalReprocessingRoutes } from "./operational-reprocessing-routes";
 import { createOperationalEvidenceRepairService } from "./operational-evidence-repair";
 import { registerOperationalEvidenceRepairRoutes } from "./operational-evidence-repair-routes";
@@ -89,11 +87,12 @@ const operationalAlerts = new OperationalAlertService(
   operationalDiagnostics,
   operationalBackupService.getRoot(),
 );
+const activeIncidentProvider = createActiveOperationalIncidentCenterProvider(systemOwnerUserId);
 const operationalSlaAlerts = new OperationalSlaAlertService(
-  createOperationalIncidentCenterProvider(systemOwnerUserId),
+  activeIncidentProvider,
   operationalBackupService.getRoot(),
 );
-const operationalReprocessing = createOperationalReprocessingService(
+const operationalReprocessing = createActiveOperationalReprocessingService(
   systemOwnerUserId,
   operationalBackupService.getRoot(),
 );
