@@ -152,7 +152,7 @@ export function evaluateS6sReviewGate(source: S6sReviewGateSource) {
 
   return {
     allowed: reasons.length === 0,
-    reasons: [...new Set(reasons)],
+    reasons: Array.from(new Set(reasons)),
   };
 }
 
