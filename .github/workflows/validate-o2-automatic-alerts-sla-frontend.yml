@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -F 'path="/operations"' frontend/client/src/App.tsx
-          grep -E 'const FRONTEND_RELEASE = "o(2-automatic-alerts-sla|3-controlled-reprocessing)-2026-08-04";' frontend/client/src/App.tsx
+          grep -F 'o2-automatic-alerts-sla-2026-08-04' frontend/client/src/App.tsx
           grep -F '/api/ops/v1/incident-center?limit=500' frontend/client/src/pages/operations-incident-center.tsx
           grep -F '/api/ops/v1/sla-alerts?limit=500' frontend/client/src/pages/operations-incident-center.tsx
           grep -F 'Historial append-only' frontend/client/src/pages/operations-incident-center.tsx
@@ -55,6 +55,7 @@ jobs:
           ! grep -F '/api/ops/v1/sla-alerts/evaluate' frontend/client/src/pages/operations-incident-center.tsx
           ! grep -F 'method:' frontend/client/src/pages/operations-incident-center.tsx
           cat frontend/dist/assets/*.js > /tmp/o2-bundle.js
+          grep -F 'o2-automatic-alerts-sla-2026-08-04' /tmp/o2-bundle.js
           grep -F 'Alertas SLA' /tmp/o2-bundle.js
           grep -F 'Historial append-only' /tmp/o2-bundle.js
           grep -F 'SLA limitado suprimido' /tmp/o2-bundle.js
