@@ -1,0 +1,59 @@
+name: Validate S6S human review console
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-human-review-console.ts'
+      - 'frontend/client/src/lib/mlb-human-review-console.test.ts'
+      - 'frontend/client/src/pages/mlb-human-review-console.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/scripts/**'
+      - 'docs/S6S_PHASE5C8_HUMAN_REVIEW_CONSOLE.md'
+      - '.github/workflows/validate-s6s-human-review-console.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused S6S tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-human-review-console.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private route and fail-closed safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'path="/mlb-human-review"' frontend/client/src/App.tsx
+          grep -F 'authenticated ? [...navItems, ...privateNavItems] : navItems' frontend/client/src/components/app-sidebar.tsx
+          grep -F 'evaluateS6sReviewGate' frontend/client/src/pages/mlb-human-review-console.tsx
+          grep -F 'automaticModelChangesAllowed: false' frontend/client/src/lib/mlb-human-review-console.ts
+          grep -F 'automaticPromotionAllowed: false' frontend/client/src/lib/mlb-human-review-console.ts
+          grep -F 'realFinancialExposure: 0' frontend/client/src/lib/mlb-human-review-console.ts
+          grep -F 'Añadir al diario append-only' frontend/client/src/pages/mlb-human-review-console.tsx
+          grep -F '/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions' frontend/client/src/pages/mlb-human-review-console.tsx
+          cat frontend/dist/assets/*.js > /tmp/s6s-bundle.js
+          grep -F 'Consola de revisión humana MLB' /tmp/s6s-bundle.js
+          grep -F 'Cambios automáticos' /tmp/s6s-bundle.js
+          grep -F 'Añadir al diario append-only' /tmp/s6s-bundle.js
+      - name: Diff hygiene
+        run: git diff --check
