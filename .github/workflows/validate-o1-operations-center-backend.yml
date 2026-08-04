@@ -8,6 +8,7 @@ on:
       - 'server/operational-incident-center.ts'
       - 'server/operational-incident-center.test.ts'
       - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
       - 'tsconfig.o1-operations-center.json'
       - 'docs/O1_OPERATIONS_INCIDENT_CENTER.md'
       - '.github/workflows/validate-o1-operations-center-backend.yml'
@@ -33,6 +34,8 @@ jobs:
         run: npx tsc -p tsconfig.o1-operations-center.json
       - name: Run focused O1 tests
         run: npx tsx --test server/operational-incident-center.test.ts
+      - name: Verify backend route contract
+        run: npm run test:s3-modularization
       - name: Run operations regressions
         run: npm run test:s4-operations
       - name: Run shadow regressions
