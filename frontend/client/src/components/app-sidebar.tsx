@@ -1,4 +1,4 @@
-import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, Snowflake, Heart } from "lucide-react";
+import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, ClipboardCheck, Snowflake, Heart } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -11,6 +11,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -23,6 +24,10 @@ const navItems = [
   { title: "MLB En Foco", url: "/mlb-history", icon: ClipboardList },
   { title: "Historial WNBA", url: "/wnba-history", icon: ClipboardList },
   { title: "Historial NHL", url: "/nhl-history", icon: ClipboardList },
+];
+
+const privateNavItems = [
+  { title: "Revisión MLB", url: "/mlb-human-review", icon: ClipboardCheck },
 ];
 
 function CourtEdgeLogo() {
@@ -50,6 +55,8 @@ function CourtEdgeLogo() {
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { authenticated } = useAuth();
+  const visibleItems = authenticated ? [...navItems, ...privateNavItems] : navItems;
 
   return (
     <Sidebar>
@@ -60,7 +67,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {visibleItems.map((item) => {
                 const isActive = location === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
