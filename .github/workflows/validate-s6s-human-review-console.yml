@@ -46,9 +46,9 @@ jobs:
           grep -F 'path="/mlb-human-review"' frontend/client/src/App.tsx
           grep -F 'authenticated ? [...navItems, ...privateNavItems] : navItems' frontend/client/src/components/app-sidebar.tsx
           grep -F 'evaluateS6sReviewGate' frontend/client/src/pages/mlb-human-review-console.tsx
-          grep -F 'automaticModelChangesAllowed: false' frontend/client/src/lib/mlb-human-review-console.ts
-          grep -F 'automaticPromotionAllowed: false' frontend/client/src/lib/mlb-human-review-console.ts
-          grep -F 'realFinancialExposure: 0' frontend/client/src/lib/mlb-human-review-console.ts
+          grep -F 'automaticModelChangesAllowed: false' frontend/client/src/pages/mlb-human-review-console.tsx
+          grep -F 'automaticPromotionAllowed: false' frontend/client/src/pages/mlb-human-review-console.tsx
+          grep -F 'realFinancialExposure: 0' frontend/client/src/pages/mlb-human-review-console.tsx
           grep -F 'Añadir al diario append-only' frontend/client/src/pages/mlb-human-review-console.tsx
           grep -F '/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions' frontend/client/src/pages/mlb-human-review-console.tsx
           cat frontend/dist/assets/*.js > /tmp/s6s-bundle.js
