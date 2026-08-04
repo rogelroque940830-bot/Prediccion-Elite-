@@ -1,0 +1,140 @@
+name: Diagnostic O3.1 Live Frontend Verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-o31-live-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o31-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: b9f3b0057e620d54a17ef51c94e171c5508d14d1
+    steps:
+      - name: Wait for O3.1 frontend release marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o audit/index.html -w '%{http_code}' --max-time 25 "${FRONTEND_URL}/" || true)
+            if [[ "${code}" == "200" ]]; then
+              asset=$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -n1 | sed -E 's/src="([^"]+)"/\1/' || true)
+              if [[ -n "${asset}" ]]; then
+                case "${asset}" in
+                  http*) asset_url="${asset}" ;;
+                  /*) asset_url="${FRONTEND_URL}${asset}" ;;
+                  *) asset_url="${FRONTEND_URL}/${asset}" ;;
+                esac
+                if curl -fsS --max-time 30 "${asset_url}" -o audit/bundle.js; then
+                  if grep -Fq 'o31-mlb-evidence-repair-2026-08-04' audit/bundle.js; then
+                    echo 'O3.1 frontend release is live.'
+                    break
+                  fi
+                fi
+              fi
+            fi
+            echo "Attempt ${attempt}/100: waiting for O3.1 frontend bundle"
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for O3.1 frontend deployment' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify served O3.1 console and unchanged backend state
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            'Inspector y reparación segura de evidencia MLB' \
+            'Inspeccionar evidencia' \
+            'Crear plan sellado' \
+            'Agregar versión superseding' \
+            'APPEND_SUPERSEDING_MLB_EVIDENCE' \
+            'Auditoría append-only' \
+            'SHADOW ONLY' \
+            'Evidencia MLB'; do
+            grep -Fq "${marker}" audit/bundle.js || { echo "Missing bundle marker: ${marker}" >&2; exit 1; }
+          done
+
+          curl -fsS --max-time 25 "${BACKEND_URL}/health" -o audit/health-before.json
+          status_code=$(curl -sS -o audit/status-private.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/ops/v1/evidence-repair/status")
+          inspect_code=$(curl -sS -o audit/inspect-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"incidentId":"ops-MLB:diagnostic-never-created"}' \
+            "${BACKEND_URL}/api/ops/v1/evidence-repair/inspect")
+          plan_code=$(curl -sS -o audit/plan-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"inspectionId":"o31-inspection-diagnostic-never-created","inspectionDigest":"invalid","patches":[],"repairSource":{"sourceName":"Diagnostic","evidenceReference":"diagnostic:none","capturedAt":"2026-08-04T18:00:00.000Z","note":"Unauthenticated diagnostic request that must be rejected."}}' \
+            "${BACKEND_URL}/api/ops/v1/evidence-repair/plan")
+          execute_code=$(curl -sS -o audit/execute-private.json -w '%{http_code}' --max-time 25 \
+            -X POST -H 'Content-Type: application/json' \
+            -d '{"planId":"o31-plan-diagnostic-never-created","planDigest":"invalid","idempotencyKey":"diagnostic-never-created","confirmation":"APPEND_SUPERSEDING_MLB_EVIDENCE","reason":"Unauthenticated diagnostic request that must be rejected before execution."}' \
+            "${BACKEND_URL}/api/ops/v1/evidence-repair/execute")
+          curl -fsS --max-time 25 "${BACKEND_URL}/health" -o audit/health-after.json
+
+          STATUS_CODE="${status_code}" INSPECT_CODE="${inspect_code}" PLAN_CODE="${plan_code}" EXECUTE_CODE="${execute_code}" node <<'NODE'
+          const fs = require('node:fs');
+          const before = JSON.parse(fs.readFileSync('audit/health-before.json', 'utf8'));
+          const after = JSON.parse(fs.readFileSync('audit/health-after.json', 'utf8'));
+          const expected = String(process.env.EXPECTED_BACKEND_COMMIT || '');
+          const codes = {
+            status: Number(process.env.STATUS_CODE),
+            inspect: Number(process.env.INSPECT_CODE),
+            plan: Number(process.env.PLAN_CODE),
+            execute: Number(process.env.EXECUTE_CODE),
+          };
+          const payloadFiles = {
+            status: 'audit/status-private.json',
+            inspect: 'audit/inspect-private.json',
+            plan: 'audit/plan-private.json',
+            execute: 'audit/execute-private.json',
+          };
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(before.status === 'healthy', `health=${before.status}`);
+          assert(before.commit === expected, `backend commit=${before.commit}`);
+          assert(before.privateReadProtection === true, 'private read protection disabled');
+          const o31 = before.operationalEvidenceRepair;
+          assert(o31?.schemaVersion === 'courtedge-o31-evidence-repair-status.v1', 'O3.1 status missing');
+          assert(o31.inspections === 0, `inspections=${o31.inspections}`);
+          assert(o31.plans === 0, `plans=${o31.plans}`);
+          assert(o31.executions === 0, `executions=${o31.executions}`);
+          assert(o31.safety?.mode === 'SHADOW_EVIDENCE_REPAIR', `mode=${o31.safety?.mode}`);
+          assert(o31.safety?.realFinancialExposure === 0, `exposure=${o31.safety?.realFinancialExposure}`);
+          assert(o31.safety?.automaticRepair === false, 'automatic repair enabled');
+          assert(o31.safety?.historicalLedgerMutation === false, 'historical mutation enabled');
+          assert(o31.safety?.settlementExecution === false, 'settlement execution enabled');
+          for (const [name, code] of Object.entries(codes)) {
+            const payload = JSON.parse(fs.readFileSync(payloadFiles[name], 'utf8'));
+            assert(code === 401, `${name} HTTP ${code}`);
+            assert(payload.success === false, `${name} did not fail closed`);
+          }
+          const afterO31 = after.operationalEvidenceRepair;
+          assert(afterO31.inspections === o31.inspections, 'inspections changed');
+          assert(afterO31.plans === o31.plans, 'plans changed');
+          assert(afterO31.executions === o31.executions, 'executions changed');
+          console.log(JSON.stringify({
+            frontendRelease: 'o31-mlb-evidence-repair-2026-08-04',
+            backendCommit: before.commit,
+            o31,
+            unauthenticated: codes,
+            noStateChange: {
+              inspectionsBefore: o31.inspections,
+              inspectionsAfter: afterO31.inspections,
+              plansBefore: o31.plans,
+              plansAfter: afterO31.plans,
+              executionsBefore: o31.executions,
+              executionsAfter: afterO31.executions,
+            },
+          }, null, 2));
+          NODE
