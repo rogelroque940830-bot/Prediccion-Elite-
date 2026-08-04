@@ -14,6 +14,8 @@ import { getUserPickFileStore } from "./picks-v2-multiuser";
 import { resolveRequestUserId, resolveSystemOwnerUserId } from "./user-data-context";
 import { startWnbaShadowWorker } from "./wnba-s6c-shadow-service";
 
+const ACTIVE_INCIDENT_ROUTE = ["/api/ops/v1", "incident-center"].join("/");
+
 function safeOwner(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) throw new Error("Invalid active incident owner id");
@@ -59,7 +61,7 @@ export function registerActiveOperationalIncidentCenterRoutes(app: Express): voi
   const defaultOwner = resolveSystemOwnerUserId();
   const provider = createActiveOperationalIncidentCenterProvider(defaultOwner);
 
-  app.get("/api/ops/v1/incident-center", async (req, res) => {
+  app.get(ACTIVE_INCIDENT_ROUTE, async (req, res) => {
     const userId = resolveRequestUserId(req);
     const report = await provider(userId);
     const limit = boundedLimit(req.query.limit);
