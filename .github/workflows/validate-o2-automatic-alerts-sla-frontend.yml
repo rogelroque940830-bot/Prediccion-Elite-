@@ -1,0 +1,65 @@
+name: Validate O2 Automatic Alerts and SLA Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/operations-sla-alerts.ts'
+      - 'frontend/client/src/lib/operations-sla-alerts.test.ts'
+      - 'frontend/client/src/lib/operations-incident-center.ts'
+      - 'frontend/client/src/lib/operations-incident-center.test.ts'
+      - 'frontend/client/src/pages/operations-incident-center.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/scripts/**'
+      - 'docs/O2_AUTOMATIC_ALERTS_AND_SLA_FRONTEND.md'
+      - '.github/workflows/validate-o2-automatic-alerts-sla-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-o2-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused O2 and O1 utility tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/operations-sla-alerts.test.ts client/src/lib/operations-incident-center.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private read-only SLA console
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'path="/operations"' frontend/client/src/App.tsx
+          grep -F 'o2-automatic-alerts-sla-2026-08-04' frontend/client/src/App.tsx
+          grep -F '/api/ops/v1/incident-center?limit=500' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F '/api/ops/v1/sla-alerts?limit=500' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'Historial append-only' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'OBSERVE ONLY' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'Solo lectura · sin reintentos' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'automaticSettlementRetry === false' frontend/client/src/lib/operations-sla-alerts.ts
+          ! grep -F '/api/ops/v1/sla-alerts/evaluate' frontend/client/src/pages/operations-incident-center.tsx
+          ! grep -E 'method:\s*["'"'](POST|PUT|PATCH|DELETE)' frontend/client/src/pages/operations-incident-center.tsx
+          cat frontend/dist/assets/*.js > /tmp/o2-bundle.js
+          grep -F 'o2-automatic-alerts-sla-2026-08-04' /tmp/o2-bundle.js
+          grep -F 'Alertas SLA' /tmp/o2-bundle.js
+          grep -F 'Historial append-only' /tmp/o2-bundle.js
+          grep -F 'SLA limitado suprimido' /tmp/o2-bundle.js
+          grep -F 'Alertas temporales bloqueadas' /tmp/o2-bundle.js
+          grep -F 'OBSERVE ONLY' /tmp/o2-bundle.js
+      - name: Diff hygiene
+        run: git diff --check
