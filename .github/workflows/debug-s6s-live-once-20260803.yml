@@ -1,0 +1,38 @@
+name: Debug S6S live once
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/debug-s6s-live-once-20260803.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect currently served frontend
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+        run: |
+          set -euo pipefail
+          CACHE_BUST="debug-$(date +%s)"
+          curl -fsS --max-time 25 -D headers.txt -H 'Cache-Control: no-cache' "${FRONTEND_URL}/?${CACHE_BUST}" -o index.html
+          echo '--- response headers ---'
+          cat headers.txt
+          echo '--- index ---'
+          cat index.html
+          ASSET_PATH="$(grep -oE 'src="[^"]+\.js"' index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/')"
+          echo "asset=${ASSET_PATH}"
+          curl -fsS --max-time 40 -H 'Cache-Control: no-cache' "${FRONTEND_URL}${ASSET_PATH}?${CACHE_BUST}" -o app.js
+          echo "bundle_bytes=$(wc -c < app.js)"
+          echo '--- known release markers ---'
+          grep -oE 's6[a-z0-9-]+-2026-[0-9-]+' app.js | sort -u | tail -20 || true
+          echo "s6s_release=$(grep -Fc 's6s-human-review-console-2026-08-03' app.js || true)"
+          echo "s6s_title=$(grep -Fc 'Consola de revisión humana MLB' app.js || true)"
+          echo "s6s_form=$(grep -Fc 'Añadir al diario append-only' app.js || true)"
