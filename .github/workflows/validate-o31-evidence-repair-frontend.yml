@@ -1,0 +1,89 @@
+name: Validate O3.1 MLB Evidence Repair Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/operations-evidence-repair.ts'
+      - 'frontend/client/src/lib/operations-evidence-repair.test.ts'
+      - 'frontend/client/src/pages/operations-evidence-repair.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/scripts/**'
+      - 'docs/O31_MLB_EVIDENCE_REPAIR_FRONTEND.md'
+      - '.github/workflows/validate-o31-evidence-repair-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-o31-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused O3.1 O3 O2 and O1 utility tests
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/operations-evidence-repair.test.ts \
+            client/src/lib/operations-reprocessing.test.ts \
+            client/src/lib/operations-sla-alerts.test.ts \
+            client/src/lib/operations-incident-center.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private explicit three-step evidence repair console
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/operations-evidence-repair.tsx'
+          contract='frontend/client/src/lib/operations-evidence-repair.ts'
+          grep -F 'path="/operations/evidence-repair"' frontend/client/src/App.tsx
+          grep -F 'o31-mlb-evidence-repair-2026-08-04' frontend/client/src/App.tsx
+          grep -F 'o2-automatic-alerts-sla-2026-08-04' frontend/client/src/App.tsx
+          grep -F 'o3-controlled-reprocessing-2026-08-04' frontend/client/src/App.tsx
+          grep -F 'title: "Evidencia MLB"' frontend/client/src/components/app-sidebar.tsx
+          grep -F '/api/ops/v1/incident-center?limit=500' "$page"
+          grep -F '/api/ops/v1/evidence-repair/status' "$page"
+          grep -F '/api/ops/v1/evidence-repair/audit?limit=250' "$page"
+          grep -F '/api/ops/v1/evidence-repair/inspect' "$page"
+          grep -F '/api/ops/v1/evidence-repair/plan' "$page"
+          grep -F '/api/ops/v1/evidence-repair/execute' "$page"
+          grep -F 'Inspeccionar evidencia' "$page"
+          grep -F 'Crear plan sellado' "$page"
+          grep -F 'Agregar versión superseding' "$page"
+          grep -F 'APPEND_SUPERSEDING_MLB_EVIDENCE' "$contract"
+          grep -F 'automaticRepair === false' "$contract"
+          grep -F 'requiresExplicitInspection === true' "$contract"
+          grep -F 'requiresSealedPlan === true' "$contract"
+          grep -F 'requiresAdminExecution === true' "$contract"
+          grep -F 'appendOnlySupersedingPredictions === true' "$contract"
+          grep -F 'historicalLedgerMutation === false' "$contract"
+          grep -F 'settlementExecution === false' "$contract"
+          grep -F 'realFinancialExposure === 0' "$contract"
+          [[ "$(grep -Fc 'method: "POST"' "$page")" == '3' ]]
+          [[ "$(grep -Fc '/api/ops/v1/evidence-repair/execute' "$page")" == '1' ]]
+          ! grep -E 'useEffect|setInterval|setTimeout|automaticRepair: true|historicalLedgerMutation: true|settlementExecution: true|automaticBetPlacement: true' "$page" "$contract"
+          ! grep -Ei 'placeBet|auto.?repair|source: "correction"|appendSettlement' "$page" "$contract"
+          cat frontend/dist/assets/*.js > /tmp/o31-bundle.js
+          grep -F 'o31-mlb-evidence-repair-2026-08-04' /tmp/o31-bundle.js
+          grep -F 'Inspector y reparación segura de evidencia MLB' /tmp/o31-bundle.js
+          grep -F 'Inspeccionar evidencia' /tmp/o31-bundle.js
+          grep -F 'Crear plan sellado' /tmp/o31-bundle.js
+          grep -F 'Agregar versión superseding' /tmp/o31-bundle.js
+          grep -F 'APPEND_SUPERSEDING_MLB_EVIDENCE' /tmp/o31-bundle.js
+          grep -F 'Auditoría append-only' /tmp/o31-bundle.js
+          grep -F 'SHADOW ONLY' /tmp/o31-bundle.js
+      - name: Diff hygiene
+        run: git diff --check

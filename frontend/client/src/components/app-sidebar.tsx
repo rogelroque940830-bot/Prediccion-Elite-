@@ -1,4 +1,4 @@
-import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, ClipboardCheck, RadioTower, Snowflake, Heart, RotateCcw } from "lucide-react";
+import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, ClipboardCheck, RadioTower, Snowflake, Heart, RotateCcw, FileSearch } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -28,6 +28,7 @@ const navItems = [
 
 const privateNavItems = [
   { title: "Operaciones", url: "/operations", icon: RadioTower },
+  { title: "Evidencia MLB", url: "/operations/evidence-repair", icon: FileSearch },
   { title: "Reprocesamiento", url: "/operations/reprocessing", icon: RotateCcw },
   { title: "Revisión MLB", url: "/mlb-human-review", icon: ClipboardCheck },
 ];
@@ -41,13 +42,11 @@ function CourtEdgeLogo() {
       className="h-8 w-auto"
       aria-label="CourtEdge Logo"
     >
-      {/* Basketball icon */}
       <circle cx="20" cy="20" r="14" stroke="hsl(217 91% 60%)" strokeWidth="2.5" fill="none" />
       <path d="M6 20 h28" stroke="hsl(217 91% 60%)" strokeWidth="1.5" />
       <path d="M20 6 v28" stroke="hsl(217 91% 60%)" strokeWidth="1.5" />
       <path d="M8.5 10 C14 14, 14 26, 8.5 30" stroke="hsl(217 91% 60%)" strokeWidth="1.5" fill="none" />
       <path d="M31.5 10 C26 14, 26 26, 31.5 30" stroke="hsl(217 91% 60%)" strokeWidth="1.5" fill="none" />
-      {/* Text */}
       <text x="42" y="17" fontFamily="var(--font-display)" fontWeight="700" fontSize="14" fill="hsl(210 40% 93%)">Court</text>
       <text x="84" y="17" fontFamily="var(--font-display)" fontWeight="700" fontSize="14" fill="hsl(217 91% 60%)">Edge</text>
       <text x="42" y="32" fontFamily="var(--font-sans)" fontWeight="400" fontSize="8.5" fill="hsl(215 20% 55%)" letterSpacing="0.12em">SPORTS BETTING PREDICTOR</text>
