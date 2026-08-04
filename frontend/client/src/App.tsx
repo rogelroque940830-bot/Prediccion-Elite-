@@ -26,7 +26,7 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
-const FRONTEND_RELEASE = "o3-controlled-reprocessing-2026-08-04";
+const FRONTEND_RELEASE = "o2-automatic-alerts-sla-2026-08-04+o3-controlled-reprocessing-2026-08-04";
 
 function AppRouter() {
   return (
