@@ -13,7 +13,7 @@ import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
 import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
 import { registerMarketSupportRoutes } from "./market-support-routes";
-import { registerOperationalIncidentCenterRoutes } from "./operational-incident-center";
+import { registerActiveOperationalIncidentCenterRoutes } from "./operational-incident-center-active";
 
 /**
  * Backend route composition root. Domain behavior lives in dedicated modules;
@@ -35,5 +35,5 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerWnbaNhlDataRoutes(app);
   registerLegacyPicksCompatibilityRoutes(app);
   registerMarketSupportRoutes(app);
-  registerOperationalIncidentCenterRoutes(app);
+  registerActiveOperationalIncidentCenterRoutes(app);
 }
