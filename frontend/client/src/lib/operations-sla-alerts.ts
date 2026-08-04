@@ -112,7 +112,7 @@ export function latestOperationalSlaEvents(
   for (const event of [...events].sort((left, right) => right.emittedAtMs - left.emittedAtMs)) {
     if (!latest.has(event.alertKey)) latest.set(event.alertKey, event);
   }
-  return [...latest.values()].sort((left, right) => {
+  return Array.from(latest.values()).sort((left, right) => {
     const severity = (right.severity === "CRITICAL" ? 2 : 1) - (left.severity === "CRITICAL" ? 2 : 1);
     if (severity !== 0) return severity;
     return right.sla.breachedByMinutes - left.sla.breachedByMinutes;
