@@ -1,0 +1,84 @@
+name: Diagnostic O1 live frontend verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-o1-live-frontend-20260804.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-o1-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for exact O1 frontend release
+        env:
+          FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+          EXPECTED_RELEASE: o1-operations-center-2026-08-03
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 80); do
+            cache_bust="o1-${attempt}-$(date +%s)"
+            if curl -fsS --max-time 25 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/?${cache_bust}" -o audit/index.html; then
+              asset_path="$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/')"
+              asset_path="${asset_path#./}"
+              if [[ -n "${asset_path}" ]] && curl -fsS --max-time 40 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/${asset_path}?${cache_bust}" -o audit/app.js; then
+                if grep -Fq "${EXPECTED_RELEASE}" audit/app.js; then
+                  echo 'Exact O1 frontend release marker is live.'
+                  break
+                fi
+              fi
+            fi
+            echo "Attempt ${attempt}/80: waiting for O1 frontend deployment"
+            if [[ "${attempt}" == "80" ]]; then
+              echo 'Timed out waiting for O1 frontend release' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Assert live O1 bundle and backend boundary
+        env:
+          BACKEND_URL: https://web-p0-integration.up.railway.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Centro de Operaciones e Incidencias' audit/app.js
+          grep -Fq 'Operaciones' audit/app.js
+          grep -Fq '/api/ops/v1/incident-center?limit=500' audit/app.js
+          grep -Fq 'Siguiente acción segura' audit/app.js
+          grep -Fq 'Settlement vencido' audit/app.js
+          grep -Fq 'OBSERVE ONLY' audit/app.js
+          grep -Fq 'Solo lectura' audit/app.js
+          grep -Fq 'Sin heartbeat' audit/app.js
+          grep -Fq 'Evidencia limitada' audit/app.js
+
+          health_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health")
+          private_code=$(curl -sS -o audit/o1-private.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/ops/v1/incident-center")
+          [[ "${health_code}" == "200" ]]
+          [[ "${private_code}" == "401" ]]
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const privateResponse = JSON.parse(fs.readFileSync('audit/o1-private.json', 'utf8'));
+          if (health.status !== 'healthy') throw new Error(`backend health=${health.status}`);
+          if (health.privateReadProtection !== true) throw new Error('private read protection disabled');
+          if (privateResponse.success !== false || !/Authentication required/i.test(String(privateResponse.error || ''))) {
+            throw new Error('private O1 endpoint did not reject unauthenticated access');
+          }
+          console.log(JSON.stringify({
+            frontendRelease: 'o1-operations-center-2026-08-03',
+            backendCommit: health.commit,
+            backendEnvironment: health.environment,
+            privateReadProtection: health.privateReadProtection,
+            unauthenticatedO1Status: 401,
+            operationalDiagnostics: health.operationalDiagnostics,
+          }, null, 2));
+          NODE
