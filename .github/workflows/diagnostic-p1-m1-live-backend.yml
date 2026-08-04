@@ -1,0 +1,111 @@
+name: Diagnostic P1-M1 Live Backend Verification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-p1-m1-live-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m1-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 01d7d4de51af0f8aa83c1d2bec74bc0633564c11
+      SLATE_DATE: '2026-08-04'
+    steps:
+      - name: Wait for exact P1-M1 backend deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BASE_URL}/health" || true)
+            if [[ "${code}" == "200" ]]; then
+              live_commit=$(node -e "const h=require('./audit/health.json'); process.stdout.write(String(h.commit||''))" 2>/dev/null || true)
+              if [[ "${live_commit}" == "${EXPECTED_COMMIT}" ]]; then
+                echo "Exact P1-M1 backend commit is live."
+                break
+              fi
+              echo "Attempt ${attempt}/100: live=${live_commit:-unknown} expected=${EXPECTED_COMMIT}"
+            else
+              echo "Attempt ${attempt}/100: health HTTP ${code}"
+            fi
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for exact P1-M1 backend deployment' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+      - name: Verify authoritative daily slate contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o audit/slate.json -w '%{http_code}' --max-time 90 "${BASE_URL}/api/mlb/p1/v1/slate?date=${SLATE_DATE}")
+          CODE="${code}" node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const payload = JSON.parse(fs.readFileSync('audit/slate.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(Number(process.env.CODE) === 200, `slate HTTP ${process.env.CODE}`);
+          assert(health.commit === process.env.EXPECTED_COMMIT, `commit=${health.commit}`);
+          assert(payload.success === true, 'slate success=false');
+          const report = payload.data;
+          assert(report?.schemaVersion === 'courtedge-p1-mlb-daily-slate.v1', `schema=${report?.schemaVersion}`);
+          assert(report.date === process.env.SLATE_DATE, `date=${report.date}`);
+          assert(Array.isArray(report.games), 'games is not an array');
+          assert(report.summary?.total === report.games.length, 'summary total mismatch');
+          assert(report.safety?.mode === 'SHADOW_DECISION_SUPPORT', `mode=${report.safety?.mode}`);
+          assert(report.safety?.realFinancialExposure === 0, `exposure=${report.safety?.realFinancialExposure}`);
+          assert(report.safety?.automaticBetPlacement === false, 'automaticBetPlacement enabled');
+          assert(report.safety?.automaticModelChangesAllowed === false, 'automatic model changes enabled');
+          assert(report.safety?.automaticPromotionAllowed === false, 'automatic promotion enabled');
+          const allowedReadiness = new Set([
+            'READY_TO_ANALYZE',
+            'PROVISIONAL_WAITING_FOR_LINEUPS',
+            'WAITING_FOR_PITCHERS',
+            'GAME_ALREADY_STARTED',
+            'GAME_CLOSED',
+            'DATA_INSUFFICIENT',
+          ]);
+          for (const game of report.games) {
+            assert(Number.isInteger(game.gamePk) && game.gamePk > 0, `invalid gamePk ${game.gamePk}`);
+            assert(game.homeTeam?.name && game.awayTeam?.name, `missing teams ${game.gamePk}`);
+            assert(allowedReadiness.has(game.readiness), `invalid readiness ${game.readiness}`);
+            assert(game.source?.name === 'MLB_STATS_API', `invalid source ${game.gamePk}`);
+            if (game.readiness === 'READY_TO_ANALYZE') {
+              assert(game.analysisStage === 'FINAL' && game.analysisAllowed === true, `READY mismatch ${game.gamePk}`);
+              assert(game.lineupState === 'CONFIRMED', `READY without confirmed lineups ${game.gamePk}`);
+            }
+            if (game.readiness === 'PROVISIONAL_WAITING_FOR_LINEUPS') {
+              assert(game.analysisStage === 'PROVISIONAL' && game.analysisAllowed === true, `PROVISIONAL mismatch ${game.gamePk}`);
+            }
+            if (['WAITING_FOR_PITCHERS','GAME_ALREADY_STARTED','GAME_CLOSED','DATA_INSUFFICIENT'].includes(game.readiness)) {
+              assert(game.analysisAllowed === false, `blocked readiness allowed ${game.gamePk}`);
+            }
+          }
+          console.log(JSON.stringify({
+            commit: health.commit,
+            schemaVersion: report.schemaVersion,
+            date: report.date,
+            generatedAt: report.generatedAt,
+            cache: payload.cache,
+            summary: report.summary,
+            games: report.games.map((game) => ({
+              gamePk: game.gamePk,
+              matchup: `${game.awayTeam.name} @ ${game.homeTeam.name}`,
+              state: game.state,
+              readiness: game.readiness,
+              lineupState: game.lineupState,
+              pitchers: [game.awayPitcher?.name, game.homePitcher?.name],
+              sourceQuality: game.source?.quality,
+            })),
+            safety: report.safety,
+          }, null, 2));
+          NODE
