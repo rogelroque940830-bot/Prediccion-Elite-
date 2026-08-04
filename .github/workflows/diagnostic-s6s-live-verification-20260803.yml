@@ -32,7 +32,8 @@ jobs:
             CACHE_BUST="s6s-${attempt}-$(date +%s)"
             if curl -fsS --max-time 25 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/?${CACHE_BUST}" -o audit/index.html; then
               ASSET_PATH="$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/')"
-              if [ -n "${ASSET_PATH}" ] && curl -fsS --max-time 40 -H 'Cache-Control: no-cache' "${FRONTEND_URL}${ASSET_PATH}?${CACHE_BUST}" -o audit/app.js; then
+              ASSET_PATH="${ASSET_PATH#./}"
+              if [ -n "${ASSET_PATH}" ] && curl -fsS --max-time 40 -H 'Cache-Control: no-cache' "${FRONTEND_URL}/${ASSET_PATH}?${CACHE_BUST}" -o audit/app.js; then
                 if grep -Fq "${EXPECTED_RELEASE}" audit/app.js; then
                   echo "Exact S6S release marker is live."
                   break
