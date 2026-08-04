@@ -5,8 +5,12 @@
   },
   "include": [
     "server/mlb-active-records.ts",
+    "server/operational-incident-center-active.ts",
+    "server/operational-reprocessing-active.ts",
     "server/operational-evidence-repair.ts",
     "server/operational-evidence-repair-routes.ts",
-    "server/operational-evidence-repair.test.ts"
+    "server/operational-evidence-repair.test.ts",
+    "server/index.ts",
+    "server/routes.ts"
   ]
 }
