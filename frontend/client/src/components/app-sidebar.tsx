@@ -1,4 +1,4 @@
-import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, ClipboardCheck, RadioTower, Snowflake, Heart } from "lucide-react";
+import { LayoutDashboard, Brain, Calculator, History, Trophy, ClipboardList, ClipboardCheck, RadioTower, Snowflake, Heart, RotateCcw } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -28,6 +28,7 @@ const navItems = [
 
 const privateNavItems = [
   { title: "Operaciones", url: "/operations", icon: RadioTower },
+  { title: "Reprocesamiento", url: "/operations/reprocessing", icon: RotateCcw },
   { title: "Revisión MLB", url: "/mlb-human-review", icon: ClipboardCheck },
 ];
 
