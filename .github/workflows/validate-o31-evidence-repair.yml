@@ -1,0 +1,80 @@
+name: Validate O3.1 MLB Evidence Repair
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-active-records.ts'
+      - 'server/operational-incident-center-active.ts'
+      - 'server/operational-reprocessing-active.ts'
+      - 'server/operational-evidence-repair.ts'
+      - 'server/operational-evidence-repair-routes.ts'
+      - 'server/operational-evidence-repair.test.ts'
+      - 'server/index.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.o31-evidence-repair.json'
+      - 'docs/O31_MLB_EVIDENCE_REPAIR.md'
+      - '.github/workflows/validate-o31-evidence-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-o31-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused O3.1 typecheck
+        run: npx tsc -p tsconfig.o31-evidence-repair.json
+      - name: Run focused O3.1 tests
+        run: npx tsx --test server/operational-evidence-repair.test.ts
+      - name: Verify backend route contract
+        run: npm run test:s3-modularization
+      - name: Run O1 O2 and O3 regressions
+        run: |
+          npx tsx --test server/operational-incident-center.test.ts
+          npx tsx --test server/operational-sla-alerts.test.ts
+          npx tsx --test server/operational-reprocessing.test.ts
+      - name: Run MLB ledger and settlement regressions
+        run: npx tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts
+      - name: Run operations regressions
+        run: npm run test:s4-operations
+      - name: Run shadow regressions
+        run: npm run test:s5b-shadow
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Verify append-only evidence repair boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'mode: "SHADOW_EVIDENCE_REPAIR"' server/operational-evidence-repair.ts
+          grep -F 'automaticRepair: false' server/operational-evidence-repair.ts
+          grep -F 'requiresExplicitInspection: true' server/operational-evidence-repair.ts
+          grep -F 'requiresSealedPlan: true' server/operational-evidence-repair.ts
+          grep -F 'requiresAdminExecution: true' server/operational-evidence-repair.ts
+          grep -F 'appendOnlySupersedingPredictions: true' server/operational-evidence-repair.ts
+          grep -F 'historicalLedgerMutation: false' server/operational-evidence-repair.ts
+          grep -F 'settlementExecution: false' server/operational-evidence-repair.ts
+          grep -F 'realFinancialExposure: 0' server/operational-evidence-repair.ts
+          grep -F 'APPEND_SUPERSEDING_MLB_EVIDENCE' server/operational-evidence-repair.ts
+          grep -F 'requireGlobalWorkerRole' server/operational-evidence-repair-routes.ts
+          grep -F 'supersedesId: record.prediction.id' server/operational-evidence-repair.ts
+          grep -F 'activeMlbLedgerRecords' server/operational-incident-center-active.ts
+          grep -F 'activeMlbLedgerRecords' server/operational-reprocessing-active.ts
+          grep -F 'flag: "wx"' server/operational-evidence-repair.ts
+          grep -F 'fs.appendFileSync' server/operational-evidence-repair.ts
+          ! grep -E 'setInterval|setTimeout|automaticRepair: true|historicalLedgerMutation: true|settlementExecution: true|automaticBetPlacement: true' server/operational-evidence-repair*.ts
+          ! grep -Ei 'UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM|db\.prepare|db\.exec|appendSettlement|source: "correction"' server/operational-evidence-repair*.ts
+      - name: Diff hygiene
+        run: git diff --check
