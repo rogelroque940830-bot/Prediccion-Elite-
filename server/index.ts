@@ -35,6 +35,12 @@ import { OperationalDiagnosticsService } from "./operational-diagnostics";
 import { OperationalAlertService } from "./operational-alerts";
 import { startOperationalAlertWorker } from "./operational-alert-worker";
 import { registerOperationalObservabilityRoutes } from "./operational-observability-routes";
+import {
+  createOperationalIncidentCenterProvider,
+  OperationalSlaAlertService,
+} from "./operational-sla-alerts";
+import { registerOperationalSlaAlertRoutes } from "./operational-sla-alert-routes";
+import { startOperationalSlaAlertWorker } from "./operational-sla-alert-worker";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -77,6 +83,10 @@ const operationalDiagnostics = new OperationalDiagnosticsService({
 });
 const operationalAlerts = new OperationalAlertService(
   operationalDiagnostics,
+  operationalBackupService.getRoot(),
+);
+const operationalSlaAlerts = new OperationalSlaAlertService(
+  createOperationalIncidentCenterProvider(systemOwnerUserId),
   operationalBackupService.getRoot(),
 );
 
@@ -168,6 +178,7 @@ app.get("/health", (_req, res) => {
     operationalRestoreDrill: operationalRestoreDrillService.status(),
     operationalDiagnostics: (() => { const report = operationalDiagnostics.evaluate(); return { status: report.status, checkedAt: report.checkedAt, counts: report.counts }; })(),
     operationalAlerts: operationalAlerts.status(),
+    operationalSlaAlerts: operationalSlaAlerts.status(systemOwnerUserId),
   });
 });
 
@@ -179,10 +190,12 @@ app.get("/health", (_req, res) => {
   registerOperationalRoutes(app, operationalBackupService);
   registerOperationalRestoreDrillRoutes(app, operationalRestoreDrillService);
   registerOperationalObservabilityRoutes(app, operationalObservability, operationalDiagnostics, operationalAlerts);
+  registerOperationalSlaAlertRoutes(app, operationalSlaAlerts);
   startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);
   startOperationalAlertWorker(operationalAlerts);
+  startOperationalSlaAlertWorker(operationalSlaAlerts, systemOwnerUserId);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
