@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
+import { MlbDailySlatePanel } from "@/components/mlb-daily-slate-panel";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
@@ -3161,8 +3162,27 @@ export default function MLBPredictor() {
           </div>
         </div>
 
+        <MlbDailySlatePanel
+          date={selectedDate}
+          selectedGamePk={selectedGameId}
+          onDateChange={(date) => {
+            setSelectedDate(date);
+            setSelectedGameId("");
+            setMlbQueueView("priority");
+            setResult(null);
+          }}
+          onAnalyze={async (game) => {
+            setSelectedGameId(String(game.gamePk));
+            setMlbQueueView(game.analysisStage === "FINAL" ? "priority" : "pending");
+            await handleMLBAutoFill(String(game.gamePk));
+            window.requestAnimationFrame(() => {
+              document.getElementById("mlb-analysis-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+          }}
+        />
+
         {/* ── AUTO-LLENADO MLB ── */}
-      <Card className="border-primary/30 bg-primary/5">
+      <Card id="mlb-analysis-workspace" className="border-primary/30 bg-primary/5">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />

@@ -27,8 +27,8 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
-const FRONTEND_RELEASE = "o31-mlb-evidence-repair-2026-08-04";
-const PREVIOUS_OPERATIONAL_RELEASES = "o2-automatic-alerts-sla-2026-08-04 o3-controlled-reprocessing-2026-08-04";
+const FRONTEND_RELEASE = "p1-m1-mlb-daily-slate-2026-08-04";
+const PREVIOUS_OPERATIONAL_RELEASES = "o2-automatic-alerts-sla-2026-08-04 o3-controlled-reprocessing-2026-08-04 o31-mlb-evidence-repair-2026-08-04";
 
 function AppRouter() {
   return (
