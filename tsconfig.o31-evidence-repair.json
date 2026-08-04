@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "server/mlb-active-records.ts",
+    "server/operational-evidence-repair.ts",
+    "server/operational-evidence-repair-routes.ts",
+    "server/operational-evidence-repair.test.ts"
+  ]
+}
