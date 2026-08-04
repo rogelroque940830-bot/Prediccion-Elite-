@@ -26,7 +26,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
-import { fetchJson, queryClient } from "@/lib/queryClient";
 import {
   MLB_S6S_CONSOLE_VERSION,
   S6S_CONCLUSION_LABELS,
@@ -41,14 +40,10 @@ import {
   type S6sReviewConclusion,
   type S6sReviewStage,
 } from "@/lib/mlb-human-review-console";
+import { fetchJson, queryClient } from "@/lib/queryClient";
 
 type Severity = "INFO" | "WARNING" | "CRITICAL";
-
-type Issue = {
-  code: string;
-  severity: Severity;
-  message: string;
-};
+type Issue = { code: string; severity: Severity; message: string };
 
 type MetricSummary = {
   observations: number;
@@ -83,70 +78,27 @@ type SubgroupReview = {
 
 type CalibrationBucket = {
   label: string;
-  minimumProbability: number;
-  maximumProbability: number;
   sampleSize: number;
   meanPredictedProbability: number | null;
   observedWinRate: number | null;
   calibrationGap: number | null;
 };
 
-type Dossier = {
-  schemaVersion: string;
-  createdAt: string;
-  deploymentCommit: string;
-  environment: string;
-  sourceS6qGeneratedAt: string;
-  sourceS6qEvidenceDigestSha256: string;
-  sourceCertificateDigestSha256: string;
-  sourceManifestDigestSha256: string;
-  sampleRule: string;
-  sampleSize: number;
-  manifest: unknown[];
-  metrics: MetricSummary;
-  marketReviews: SubgroupReview[];
-  signalReviews: SubgroupReview[];
-  calibrationBuckets: CalibrationBucket[];
-  provisionalFinalComparison: {
-    comparableDecisions: number;
-    meanSignedProbabilityChangePp: number | null;
-    meanAbsoluteProbabilityChangePp: number | null;
-    signalChangedCount: number;
-    marketIdentityChangedCount: number;
-  };
-  concentration: {
-    largestMarket: { key: string; sampleSize: number; sharePct: number } | null;
-    largestSignal: { key: string; sampleSize: number; sharePct: number } | null;
-  };
-  exclusionsAndWarnings: Issue[];
-  reviewGuardrails: {
-    humanInterpretationOnly: true;
-    subgroupResultsAreDescriptive: true;
-    profitabilityNotEstablishedAutomatically: true;
-    candidateMustBeSeparatelyVersioned: true;
-    candidateMustRunInShadow: true;
-    automaticPromotionAllowed: false;
-    automaticModelChangesAllowed: false;
-    realFinancialExposure: 0;
-  };
-  dossierDigestSha256: string;
-};
-
-type ReviewDecision = {
-  decisionId: string;
-  submittedAt: string;
-  stage: S6sReviewStage;
-  conclusion: S6sReviewConclusion | null;
-  rationale: string;
-  candidateVersion: string | null;
-  previousDecisionDigestSha256: string | null;
-  decisionDigestSha256: string;
-  constraints: {
-    shadowOnly: true;
-    automaticPromotionAllowed: false;
-    automaticModelChangesAllowed: false;
-    realFinancialExposure: 0;
-  };
+type Safety = {
+  mode: "SHADOW";
+  realFinancialExposure: 0;
+  sportsbookIntegration: false;
+  automaticBetPlacement: false;
+  productionWrites: false;
+  historicalLedgerMutation: false;
+  automaticPromotion: false;
+  formulasChanged: false;
+  probabilitiesChanged: false;
+  signalsChanged: false;
+  marketsChanged: false;
+  thresholdsChanged: false;
+  settlementRulesChanged: false;
+  stakePolicyChanged: false;
 };
 
 type S6qReport = {
@@ -170,10 +122,7 @@ type S6qReport = {
     manifestDigestSha256: string | null;
   };
   readiness: {
-    armed: boolean;
-    preferredSample50Certified: boolean;
     humanReviewReady: boolean;
-    sampleAdequateForHumanReview: boolean;
     conclusionsAllowed: boolean;
     automaticModelChangesAllowed: false;
     recommendation: "NO_AUTOMATIC_MODEL_CHANGE";
@@ -182,31 +131,12 @@ type S6qReport = {
   safety: Safety;
 };
 
-type Safety = {
-  mode: "SHADOW";
-  realFinancialExposure: 0;
-  sportsbookIntegration: false;
-  automaticBetPlacement: false;
-  productionWrites: false;
-  historicalLedgerMutation: false;
-  automaticPromotion: false;
-  formulasChanged: false;
-  probabilitiesChanged: false;
-  signalsChanged: false;
-  marketsChanged: false;
-  thresholdsChanged: false;
-  settlementRulesChanged: false;
-  stakePolicyChanged: false;
-};
-
 type S6rReport = {
   state: string;
   generatedAt: string;
   sourceS6q: {
-    available: boolean;
     state: string | null;
     humanReviewReady: boolean;
-    conclusionsAllowed: boolean;
     criticalIssues: number;
     evidenceAvailable: boolean;
     evidenceDigestSha256: string | null;
@@ -249,6 +179,49 @@ type S6rReport = {
   safety: Safety;
 };
 
+type Dossier = {
+  createdAt: string;
+  deploymentCommit: string;
+  environment: string;
+  sourceS6qEvidenceDigestSha256: string;
+  sourceCertificateDigestSha256: string;
+  sourceManifestDigestSha256: string;
+  sampleSize: number;
+  manifest: unknown[];
+  metrics: MetricSummary;
+  marketReviews: SubgroupReview[];
+  signalReviews: SubgroupReview[];
+  calibrationBuckets: CalibrationBucket[];
+  provisionalFinalComparison: {
+    comparableDecisions: number;
+    meanSignedProbabilityChangePp: number | null;
+    meanAbsoluteProbabilityChangePp: number | null;
+    signalChangedCount: number;
+    marketIdentityChangedCount: number;
+  };
+  concentration: {
+    largestMarket: { key: string; sampleSize: number; sharePct: number } | null;
+    largestSignal: { key: string; sampleSize: number; sharePct: number } | null;
+  };
+  exclusionsAndWarnings: Issue[];
+  reviewGuardrails: {
+    automaticPromotionAllowed: false;
+    automaticModelChangesAllowed: false;
+    realFinancialExposure: 0;
+  };
+  dossierDigestSha256: string;
+};
+
+type ReviewDecision = {
+  decisionId: string;
+  submittedAt: string;
+  stage: S6sReviewStage;
+  conclusion: S6sReviewConclusion | null;
+  rationale: string;
+  candidateVersion: string | null;
+  decisionDigestSha256: string;
+};
+
 type WorkerStatus<T> = {
   enabled: boolean;
   lastRunAt: string | null;
@@ -259,7 +232,7 @@ type WorkerStatus<T> = {
 
 type Envelope<T> = { success: boolean; data: T };
 
-const emptySafety: Safety = {
+const EMPTY_SAFETY: Safety = {
   mode: "SHADOW",
   realFinancialExposure: 0,
   sportsbookIntegration: false,
@@ -276,11 +249,15 @@ const emptySafety: Safety = {
   stakePolicyChanged: false,
 };
 
-function pct(value: number | null | undefined, digits = 1): string {
+function ratioPct(value: number | null | undefined, digits = 1): string {
   return value == null || !Number.isFinite(value) ? "—" : `${(value * 100).toFixed(digits)}%`;
 }
 
-function number(value: number | null | undefined, digits = 3): string {
+function percentagePoints(value: number | null | undefined, digits = 1): string {
+  return value == null || !Number.isFinite(value) ? "—" : `${value.toFixed(digits)}%`;
+}
+
+function decimal(value: number | null | undefined, digits = 3): string {
   return value == null || !Number.isFinite(value) ? "—" : value.toFixed(digits);
 }
 
@@ -300,7 +277,7 @@ function dateTime(value: string | null | undefined): string {
   }).format(date);
 }
 
-function stateBadgeClass(state: string | null | undefined): string {
+function badgeClass(state: string | null | undefined): string {
   if (state === "ACTION_REQUIRED") return "border-red-500/40 bg-red-500/10 text-red-300";
   if (state?.includes("READY") || state?.includes("COMPLETED") || state?.includes("PROPOSED")) {
     return "border-green-500/40 bg-green-500/10 text-green-300";
@@ -335,11 +312,7 @@ function MetricCard({ title, value, detail, icon: Icon }: {
 
 function IssueList({ issues }: { issues: Issue[] }) {
   if (!issues.length) {
-    return (
-      <div className="rounded-lg border border-green-500/25 bg-green-500/[0.05] p-4 text-sm text-green-200">
-        No hay hallazgos registrados en esta sección.
-      </div>
-    );
+    return <p className="rounded-lg border border-green-500/25 bg-green-500/[0.05] p-4 text-sm text-green-200">Sin hallazgos.</p>;
   }
   return (
     <div className="space-y-2">
@@ -369,7 +342,7 @@ function SubgroupTable({ title, rows }: { title: string; rows: SubgroupReview[] 
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
         {!rows.length ? (
-          <p className="text-sm text-muted-foreground">El expediente todavía no contiene este desglose.</p>
+          <p className="text-sm text-muted-foreground">Disponible cuando S6R selle el expediente.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
@@ -389,12 +362,10 @@ function SubgroupTable({ title, rows }: { title: string; rows: SubgroupReview[] 
                   <tr key={row.key} className="border-b border-border/50 last:border-0">
                     <td className="py-3 pr-3 font-medium">{row.key.replace(/_/g, " ")}</td>
                     <td className="py-3 pr-3 tabular-nums">{row.sampleSize}</td>
-                    <td className="py-3 pr-3">
-                      <Badge variant="outline">{s6sSubgroupLabel(row.classification)}</Badge>
-                    </td>
+                    <td className="py-3 pr-3"><Badge variant="outline">{s6sSubgroupLabel(row.classification)}</Badge></td>
                     <td className="py-3 pr-3 tabular-nums">{row.metrics.wins}-{row.metrics.losses}</td>
-                    <td className="py-3 pr-3 tabular-nums">{number(row.metrics.brierScore)}</td>
-                    <td className="py-3 pr-3 tabular-nums">{pct(row.metrics.flatStakeRoiPct)}</td>
+                    <td className="py-3 pr-3 tabular-nums">{decimal(row.metrics.brierScore)}</td>
+                    <td className="py-3 pr-3 tabular-nums">{percentagePoints(row.metrics.flatStakeRoiPct)}</td>
                     <td className="py-3 tabular-nums">{signed(row.metrics.meanClvPp, " pp")}</td>
                   </tr>
                 ))}
@@ -455,11 +426,12 @@ export default function MlbHumanReviewConsole() {
 
   const dossier = dossierQuery.data?.data.dossier ?? null;
   const decisions = decisionsQuery.data?.data.decisions ?? [];
+  const metrics = dossier?.metrics ?? null;
   const progress = buildS6sProgress(s6q?.sample);
   const s6qIssues = summarizeS6sIssues(s6q?.issues);
   const s6rIssues = summarizeS6sIssues(s6r?.issues);
   const criticalIssues = s6qIssues.CRITICAL + s6rIssues.CRITICAL;
-  const safety = s6r?.safety ?? s6q?.safety ?? emptySafety;
+  const safety = s6r?.safety ?? s6q?.safety ?? EMPTY_SAFETY;
   const safetyValid = isS6sSafetyInvariantValid({
     ...safety,
     automaticModelChangesAllowed: s6r?.readiness.automaticModelChangesAllowed
@@ -467,7 +439,6 @@ export default function MlbHumanReviewConsole() {
       ?? false,
     automaticPromotionAllowed: s6r?.readiness.automaticPromotionAllowed ?? false,
   });
-
   const gate = evaluateS6sReviewGate({
     authenticated,
     s6rState: s6r?.state,
@@ -478,7 +449,6 @@ export default function MlbHumanReviewConsole() {
     automaticPromotionAllowed: s6r?.readiness.automaticPromotionAllowed,
     realFinancialExposure: safety.realFinancialExposure,
   });
-
   const draftErrors = useMemo(() => validateS6sReviewDraft({
     stage,
     conclusion,
@@ -510,13 +480,11 @@ export default function MlbHumanReviewConsole() {
         description: "La entrada fue añadida al diario append-only de revisión humana.",
       });
     },
-    onError: (error) => {
-      toast({
-        title: "No se pudo registrar",
-        description: error instanceof Error ? error.message : "Error desconocido",
-        variant: "destructive",
-      });
-    },
+    onError: (error) => toast({
+      title: "No se pudo registrar",
+      description: error instanceof Error ? error.message : "Error desconocido",
+      variant: "destructive",
+    }),
   });
 
   const refresh = async () => {
@@ -528,9 +496,7 @@ export default function MlbHumanReviewConsole() {
     ]);
   };
 
-  if (authLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Verificando sesión segura…</div>;
-  }
+  if (authLoading) return <div className="p-6 text-sm text-muted-foreground">Verificando sesión segura…</div>;
 
   if (!authenticated) {
     return (
@@ -543,9 +509,7 @@ export default function MlbHumanReviewConsole() {
             <CardTitle>Consola privada de revisión MLB</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Esta pantalla contiene evidencia científica y decisiones humanas append-only. Inicia sesión con la cuenta autorizada para continuar.
-            </p>
+            <p className="text-sm text-muted-foreground">Inicia sesión con la cuenta autorizada para consultar evidencia y registrar decisiones humanas.</p>
             <Button onClick={requestLogin}>Iniciar sesión</Button>
           </CardContent>
         </Card>
@@ -555,7 +519,6 @@ export default function MlbHumanReviewConsole() {
 
   const loading = s6qQuery.isLoading || s6rQuery.isLoading;
   const loadError = s6qQuery.error || s6rQuery.error;
-  const metrics = dossier?.metrics ?? null;
   const lastUpdated = s6r?.generatedAt ?? s6q?.generatedAt ?? null;
 
   return (
@@ -568,9 +531,7 @@ export default function MlbHumanReviewConsole() {
             <Badge variant="outline">Exposición: 0</Badge>
           </div>
           <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Consola de revisión humana MLB</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Lee la evidencia sellada de S6Q/S6R y registra decisiones humanas sin modificar automáticamente el predictor.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">Lee la evidencia sellada de S6Q/S6R y registra decisiones humanas sin modificar automáticamente el predictor.</p>
           <p className="mt-2 text-xs text-muted-foreground">Última actualización: {dateTime(lastUpdated)}</p>
         </div>
         <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
@@ -592,11 +553,8 @@ export default function MlbHumanReviewConsole() {
         <Card className="border-cyan-500/25 bg-cyan-500/[0.04]">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Target className="h-5 w-5 text-cyan-300" />
-                Progreso hacia el expediente
-              </CardTitle>
-              <Badge className={stateBadgeClass(s6q?.state)}>{s6sStateLabel(s6q?.state)}</Badge>
+              <CardTitle className="flex items-center gap-2 text-lg"><Target className="h-5 w-5 text-cyan-300" />Progreso hacia el expediente</CardTitle>
+              <Badge className={badgeClass(s6q?.state)}>{s6sStateLabel(s6q?.state)}</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -611,59 +569,34 @@ export default function MlbHumanReviewConsole() {
               <Progress value={progress.percent} className="h-2.5" />
             </div>
             <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span>Certificación independiente</span>
-                <span className="tabular-nums">{progress.independent}/{progress.independentRequired}</span>
-              </div>
+              <div className="mb-2 flex items-center justify-between text-sm"><span>Certificación independiente</span><span className="tabular-nums">{progress.independent}/{progress.independentRequired}</span></div>
               <Progress value={progress.independentPercent} className="h-2" />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border/70 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Ledger</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.sample.ownedLedgerRecords ?? "—"}</p>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">W-L sellado</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.target.wins ?? "—"}-{s6q?.target.losses ?? "—"}</p>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">CLV disponible</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.target.clvAvailable ?? "—"}</p>
-              </div>
+              <div className="rounded-lg border border-border/70 bg-background/40 p-3"><p className="text-xs text-muted-foreground">Ledger</p><p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.sample.ownedLedgerRecords ?? "—"}</p></div>
+              <div className="rounded-lg border border-border/70 bg-background/40 p-3"><p className="text-xs text-muted-foreground">W-L sellado</p><p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.target.wins ?? "—"}-{s6q?.target.losses ?? "—"}</p></div>
+              <div className="rounded-lg border border-border/70 bg-background/40 p-3"><p className="text-xs text-muted-foreground">CLV disponible</p><p className="mt-1 text-lg font-semibold tabular-nums">{s6q?.target.clvAvailable ?? "—"}</p></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className={safetyValid && criticalIssues === 0
-          ? "border-green-500/25 bg-green-500/[0.04]"
-          : "border-red-500/30 bg-red-500/[0.06]"}
-        >
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ShieldCheck className="h-5 w-5" />
-              Compuerta de seguridad
-            </CardTitle>
-          </CardHeader>
+        <Card className={safetyValid && criticalIssues === 0 ? "border-green-500/25 bg-green-500/[0.04]" : "border-red-500/30 bg-red-500/[0.06]"}>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5" />Compuerta de seguridad</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3"><span>Modo</span><strong>{safety.mode}</strong></div>
-            <div className="flex items-center justify-between gap-3"><span>Exposición financiera</span><strong>{safety.realFinancialExposure}</strong></div>
-            <div className="flex items-center justify-between gap-3"><span>Cambios automáticos</span><strong>Deshabilitados</strong></div>
-            <div className="flex items-center justify-between gap-3"><span>Promoción automática</span><strong>Deshabilitada</strong></div>
-            <div className="flex items-center justify-between gap-3"><span>Problemas críticos</span><strong>{criticalIssues}</strong></div>
-            <div className={`rounded-md border p-3 ${safetyValid && criticalIssues === 0
-              ? "border-green-500/25 bg-green-500/10 text-green-200"
-              : "border-red-500/30 bg-red-500/10 text-red-200"}`}
-            >
-              {safetyValid && criticalIssues === 0
-                ? "Invariantes de seguridad verificadas."
-                : "La consola permanece bloqueada por una condición de seguridad."}
-            </div>
+            <div className="flex items-center justify-between"><span>Modo</span><strong>{safety.mode}</strong></div>
+            <div className="flex items-center justify-between"><span>Exposición financiera</span><strong>{safety.realFinancialExposure}</strong></div>
+            <div className="flex items-center justify-between"><span>Cambios automáticos</span><strong>Deshabilitados</strong></div>
+            <div className="flex items-center justify-between"><span>Promoción automática</span><strong>Deshabilitada</strong></div>
+            <div className="flex items-center justify-between"><span>Problemas críticos</span><strong>{criticalIssues}</strong></div>
+            <p className={`rounded-md border p-3 ${safetyValid && criticalIssues === 0 ? "border-green-500/25 bg-green-500/10 text-green-200" : "border-red-500/30 bg-red-500/10 text-red-200"}`}>
+              {safetyValid && criticalIssues === 0 ? "Invariantes de seguridad verificadas." : "La consola permanece bloqueada por seguridad."}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className={stateBadgeClass(s6r?.state)}>S6R: {s6sStateLabel(s6r?.state)}</Badge>
+        <Badge className={badgeClass(s6r?.state)}>S6R: {s6sStateLabel(s6r?.state)}</Badge>
         <Badge variant="outline">Expediente: {s6r?.dossier.present ? "presente" : "pendiente"}</Badge>
         <Badge variant="outline">Diario: {s6r?.review.journalValid === false ? "inválido" : "válido"}</Badge>
         <Badge variant="outline">Decisiones humanas: {s6r?.review.decisions ?? 0}</Badge>
@@ -681,67 +614,51 @@ export default function MlbHumanReviewConsole() {
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard title="Récord" value={metrics ? `${metrics.wins}-${metrics.losses}` : "—"} detail="Muestra sellada" icon={ClipboardCheck} />
-            <MetricCard title="Win rate" value={pct(metrics?.observedWinRate)} detail={metrics?.winRateWilson95 ? `Wilson ${pct(metrics.winRateWilson95.low)}–${pct(metrics.winRateWilson95.high)}` : "Wilson pendiente"} icon={Target} />
-            <MetricCard title="Brier Score" value={number(metrics?.brierScore)} detail="Menor es mejor; no prueba rentabilidad" icon={Scale} />
-            <MetricCard title="ROI plano" value={pct(metrics?.flatStakeRoiPct)} detail="Informativo · 1 unidad plana" icon={TrendingUp} />
+            <MetricCard title="Win rate" value={ratioPct(metrics?.observedWinRate)} detail={metrics?.winRateWilson95 ? `Wilson ${ratioPct(metrics.winRateWilson95.low)}–${ratioPct(metrics.winRateWilson95.high)}` : "Wilson pendiente"} icon={Target} />
+            <MetricCard title="Brier Score" value={decimal(metrics?.brierScore)} detail="Menor es mejor; no prueba rentabilidad" icon={Scale} />
+            <MetricCard title="ROI plano" value={percentagePoints(metrics?.flatStakeRoiPct)} detail="Informativo · 1 unidad plana" icon={TrendingUp} />
           </div>
           <Card>
-            <CardHeader><CardTitle className="text-base">Estado interpretativo</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Límite interpretativo</CardTitle></CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-sm font-medium">Lo permitido</p>
-                <p className="mt-2 text-sm text-muted-foreground">Revisar evidencia, documentar una conclusión y proponer un candidato separado exclusivamente en SHADOW.</p>
-              </div>
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-sm font-medium">Lo bloqueado</p>
-                <p className="mt-2 text-sm text-muted-foreground">Cambiar automáticamente probabilidades, señales, mercados, thresholds, reglas de settlement o stakes.</p>
-              </div>
+              <div className="rounded-lg border border-border p-4"><p className="text-sm font-medium">Permitido</p><p className="mt-2 text-sm text-muted-foreground">Revisar evidencia, documentar conclusiones y proponer un candidato separado solo en SHADOW.</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-sm font-medium">Bloqueado</p><p className="mt-2 text-sm text-muted-foreground">Modificar automáticamente probabilidades, señales, mercados, thresholds, settlement o stakes.</p></div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="metrics" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard title="Log Loss" value={number(metrics?.logLoss)} detail="Calidad probabilística" icon={BarChart3} />
-            <MetricCard title="ECE" value={number(metrics?.expectedCalibrationError)} detail="Error esperado de calibración" icon={Activity} />
-            <MetricCard title="MCE" value={number(metrics?.maximumCalibrationError)} detail="Máximo error de calibración" icon={AlertTriangle} />
-            <MetricCard title="CLV medio" value={signed(metrics?.meanClvPp, " pp")} detail={`Cobertura ${pct(metrics?.clvCoveragePct)}`} icon={TrendingUp} />
+            <MetricCard title="Log Loss" value={decimal(metrics?.logLoss)} detail="Calidad probabilística" icon={BarChart3} />
+            <MetricCard title="ECE" value={decimal(metrics?.expectedCalibrationError)} detail={ratioPct(metrics?.expectedCalibrationError)} icon={Activity} />
+            <MetricCard title="MCE" value={decimal(metrics?.maximumCalibrationError)} detail={ratioPct(metrics?.maximumCalibrationError)} icon={AlertTriangle} />
+            <MetricCard title="CLV medio" value={signed(metrics?.meanClvPp, " pp")} detail={`Cobertura ${percentagePoints(metrics?.clvCoveragePct)}`} icon={TrendingUp} />
           </div>
           <Card>
             <CardHeader><CardTitle className="text-base">Bandas de calibración</CardTitle></CardHeader>
             <CardContent>
-              {!dossier?.calibrationBuckets.length ? (
-                <p className="text-sm text-muted-foreground">Disponibles cuando S6R selle el expediente.</p>
-              ) : (
+              {!dossier?.calibrationBuckets.length ? <p className="text-sm text-muted-foreground">Disponibles cuando S6R selle el expediente.</p> : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[650px] text-sm">
-                    <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <tr><th className="py-2 pr-3">Banda</th><th className="py-2 pr-3">n</th><th className="py-2 pr-3">Predicha</th><th className="py-2 pr-3">Observada</th><th className="py-2">Brecha</th></tr>
-                    </thead>
-                    <tbody>
-                      {dossier.calibrationBuckets.map((bucket) => (
-                        <tr key={bucket.label} className="border-b border-border/50 last:border-0">
-                          <td className="py-3 pr-3 font-medium">{bucket.label}</td>
-                          <td className="py-3 pr-3 tabular-nums">{bucket.sampleSize}</td>
-                          <td className="py-3 pr-3 tabular-nums">{pct(bucket.meanPredictedProbability)}</td>
-                          <td className="py-3 pr-3 tabular-nums">{pct(bucket.observedWinRate)}</td>
-                          <td className="py-3 tabular-nums">{signed(bucket.calibrationGap == null ? null : bucket.calibrationGap * 100, " pp")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="py-2 pr-3">Banda</th><th className="py-2 pr-3">n</th><th className="py-2 pr-3">Predicha</th><th className="py-2 pr-3">Observada</th><th className="py-2">Brecha</th></tr></thead>
+                    <tbody>{dossier.calibrationBuckets.map((bucket) => (
+                      <tr key={bucket.label} className="border-b border-border/50 last:border-0">
+                        <td className="py-3 pr-3 font-medium">{bucket.label}</td><td className="py-3 pr-3">{bucket.sampleSize}</td><td className="py-3 pr-3">{ratioPct(bucket.meanPredictedProbability)}</td><td className="py-3 pr-3">{ratioPct(bucket.observedWinRate)}</td><td className="py-3">{bucket.calibrationGap == null ? "—" : `${(bucket.calibrationGap * 100).toFixed(2)} pp`}</td>
+                      </tr>
+                    ))}</tbody>
                   </table>
                 </div>
               )}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle className="text-base">Cambios PROVISIONAL → FINAL</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">PROVISIONAL → FINAL</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div><p className="text-xs text-muted-foreground">Comparables</p><p className="mt-1 font-semibold tabular-nums">{dossier?.provisionalFinalComparison.comparableDecisions ?? "—"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Cambio medio</p><p className="mt-1 font-semibold tabular-nums">{signed(dossier?.provisionalFinalComparison.meanSignedProbabilityChangePp, " pp")}</p></div>
-              <div><p className="text-xs text-muted-foreground">Cambio absoluto</p><p className="mt-1 font-semibold tabular-nums">{signed(dossier?.provisionalFinalComparison.meanAbsoluteProbabilityChangePp, " pp")}</p></div>
-              <div><p className="text-xs text-muted-foreground">Señal cambió</p><p className="mt-1 font-semibold tabular-nums">{dossier?.provisionalFinalComparison.signalChangedCount ?? "—"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Mercado cambió</p><p className="mt-1 font-semibold tabular-nums">{dossier?.provisionalFinalComparison.marketIdentityChangedCount ?? "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Comparables</p><p className="mt-1 font-semibold">{dossier?.provisionalFinalComparison.comparableDecisions ?? "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Cambio medio</p><p className="mt-1 font-semibold">{signed(dossier?.provisionalFinalComparison.meanSignedProbabilityChangePp, " pp")}</p></div>
+              <div><p className="text-xs text-muted-foreground">Cambio absoluto</p><p className="mt-1 font-semibold">{signed(dossier?.provisionalFinalComparison.meanAbsoluteProbabilityChangePp, " pp")}</p></div>
+              <div><p className="text-xs text-muted-foreground">Señal cambió</p><p className="mt-1 font-semibold">{dossier?.provisionalFinalComparison.signalChangedCount ?? "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Mercado cambió</p><p className="mt-1 font-semibold">{dossier?.provisionalFinalComparison.marketIdentityChangedCount ?? "—"}</p></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -750,16 +667,8 @@ export default function MlbHumanReviewConsole() {
           <Card>
             <CardHeader><CardTitle className="text-base">Concentración de la muestra</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs text-muted-foreground">Mercado principal</p>
-                <p className="mt-1 font-medium">{dossier?.concentration.largestMarket?.key.replace(/_/g, " ") ?? "—"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{dossier?.concentration.largestMarket ? `${dossier.concentration.largestMarket.sampleSize} casos · ${dossier.concentration.largestMarket.sharePct.toFixed(1)}%` : "Pendiente"}</p>
-              </div>
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs text-muted-foreground">Señal principal</p>
-                <p className="mt-1 font-medium">{dossier?.concentration.largestSignal?.key.replace(/_/g, " ") ?? "—"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{dossier?.concentration.largestSignal ? `${dossier.concentration.largestSignal.sampleSize} casos · ${dossier.concentration.largestSignal.sharePct.toFixed(1)}%` : "Pendiente"}</p>
-              </div>
+              <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Mercado principal</p><p className="mt-1 font-medium">{dossier?.concentration.largestMarket?.key.replace(/_/g, " ") ?? "—"}</p><p className="mt-1 text-sm text-muted-foreground">{dossier?.concentration.largestMarket ? `${dossier.concentration.largestMarket.sampleSize} casos · ${percentagePoints(dossier.concentration.largestMarket.sharePct)}` : "Pendiente"}</p></div>
+              <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Señal principal</p><p className="mt-1 font-medium">{dossier?.concentration.largestSignal?.key.replace(/_/g, " ") ?? "—"}</p><p className="mt-1 text-sm text-muted-foreground">{dossier?.concentration.largestSignal ? `${dossier.concentration.largestSignal.sampleSize} casos · ${percentagePoints(dossier.concentration.largestSignal.sharePct)}` : "Pendiente"}</p></div>
             </CardContent>
           </Card>
           <SubgroupTable title="Por mercado" rows={dossier?.marketReviews ?? []} />
@@ -800,119 +709,62 @@ export default function MlbHumanReviewConsole() {
 
         <TabsContent value="decision" className="space-y-4">
           <Card className={gate.allowed ? "border-cyan-500/25" : "border-amber-500/25"}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5" />Registrar revisión humana</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5" />Registrar revisión humana</CardTitle></CardHeader>
             <CardContent className="space-y-5">
               {!gate.allowed && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm text-amber-100">
-                  La escritura permanece bloqueada hasta que S6R tenga un expediente verificado, cero problemas críticos y todas las invariantes de seguridad válidas.
+                  La escritura permanece bloqueada hasta que S6R tenga expediente verificado, cero problemas críticos y guardas válidas.
                   <p className="mt-2 font-mono text-xs text-amber-200/80">{gate.reasons.join(" · ")}</p>
                 </div>
               )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="s6s-stage">Etapa</Label>
-                  <select
-                    id="s6s-stage"
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={stage}
-                    onChange={(event) => {
-                      const next = event.target.value as S6sReviewStage;
-                      setStage(next);
-                      if (next === "IN_PROGRESS") {
-                        setConclusion(null);
-                        setCandidateVersion("");
-                      }
-                    }}
-                    disabled={!gate.allowed || submitReview.isPending}
-                  >
-                    <option value="IN_PROGRESS">Revisión en curso</option>
-                    <option value="FINAL">Revisión final</option>
+                  <select id="s6s-stage" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={stage} onChange={(event) => {
+                    const next = event.target.value as S6sReviewStage;
+                    setStage(next);
+                    if (next === "IN_PROGRESS") { setConclusion(null); setCandidateVersion(""); }
+                  }} disabled={!gate.allowed || submitReview.isPending}>
+                    <option value="IN_PROGRESS">Revisión en curso</option><option value="FINAL">Revisión final</option>
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="s6s-conclusion">Conclusión</Label>
-                  <select
-                    id="s6s-conclusion"
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={conclusion ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value as S6sReviewConclusion | "";
-                      setConclusion(value || null);
-                      if (value !== "DESIGN_SHADOW_CANDIDATE") setCandidateVersion("");
-                    }}
-                    disabled={!gate.allowed || stage !== "FINAL" || submitReview.isPending}
-                  >
+                  <select id="s6s-conclusion" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={conclusion ?? ""} onChange={(event) => {
+                    const value = event.target.value as S6sReviewConclusion | "";
+                    setConclusion(value || null);
+                    if (value !== "DESIGN_SHADOW_CANDIDATE") setCandidateVersion("");
+                  }} disabled={!gate.allowed || stage !== "FINAL" || submitReview.isPending}>
                     <option value="">Selecciona una conclusión</option>
-                    {Object.entries(S6S_CONCLUSION_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
+                    {Object.entries(S6S_CONCLUSION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
               </div>
               {conclusion === "DESIGN_SHADOW_CANDIDATE" && (
-                <div className="space-y-2">
-                  <Label htmlFor="s6s-candidate-version">Versión separada del candidato</Label>
-                  <Input
-                    id="s6s-candidate-version"
-                    value={candidateVersion}
-                    onChange={(event) => setCandidateVersion(event.target.value)}
-                    placeholder="Ejemplo: mlb-shadow-candidate-v2"
-                    disabled={!gate.allowed || submitReview.isPending}
-                  />
-                  <p className="text-xs text-muted-foreground">El nombre no promueve ni activa el candidato; solo registra la propuesta de estudio SHADOW.</p>
-                </div>
+                <div className="space-y-2"><Label htmlFor="s6s-candidate-version">Versión separada del candidato</Label><Input id="s6s-candidate-version" value={candidateVersion} onChange={(event) => setCandidateVersion(event.target.value)} placeholder="mlb-shadow-candidate-v2" disabled={!gate.allowed || submitReview.isPending} /><p className="text-xs text-muted-foreground">Solo registra la propuesta; no activa ni promueve el candidato.</p></div>
               )}
               <div className="space-y-2">
                 <Label htmlFor="s6s-rationale">Justificación</Label>
-                <Textarea
-                  id="s6s-rationale"
-                  rows={7}
-                  value={rationale}
-                  onChange={(event) => setRationale(event.target.value)}
-                  placeholder="Describe la evidencia revisada, las limitaciones de la muestra y el motivo de la decisión…"
-                  disabled={!gate.allowed || submitReview.isPending}
-                />
-                <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                  <span>{rationale.trim().length}/5000 caracteres</span>
-                  <span>Mínimo: 20</span>
-                </div>
+                <Textarea id="s6s-rationale" rows={7} value={rationale} onChange={(event) => setRationale(event.target.value)} placeholder="Describe evidencia, limitaciones y motivo…" disabled={!gate.allowed || submitReview.isPending} />
+                <div className="flex justify-between text-xs text-muted-foreground"><span>{rationale.trim().length}/5000</span><span>Mínimo: 20</span></div>
               </div>
-              {draftErrors.length > 0 && rationale.length > 0 && (
-                <div className="rounded-lg border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-200">
-                  {draftErrors.map((error) => <p key={error}>{error}</p>)}
-                </div>
-              )}
-              <Button
-                onClick={() => submitReview.mutate()}
-                disabled={!gate.allowed || draftErrors.length > 0 || submitReview.isPending}
-              >
-                {submitReview.isPending ? "Registrando…" : "Añadir al diario append-only"}
-              </Button>
+              {draftErrors.length > 0 && rationale.length > 0 && <div className="rounded-lg border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-200">{draftErrors.map((error) => <p key={error}>{error}</p>)}</div>}
+              <Button onClick={() => submitReview.mutate()} disabled={!gate.allowed || draftErrors.length > 0 || submitReview.isPending}>{submitReview.isPending ? "Registrando…" : "Añadir al diario append-only"}</Button>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader><CardTitle className="text-base">Historial de decisiones humanas</CardTitle></CardHeader>
             <CardContent>
-              {!decisions.length ? (
-                <p className="text-sm text-muted-foreground">Todavía no hay decisiones registradas.</p>
-              ) : (
-                <div className="space-y-3">
-                  {[...decisions].reverse().map((decision) => (
-                    <div key={decision.decisionId} className="rounded-lg border border-border p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{decision.stage === "FINAL" ? "FINAL" : "EN CURSO"}</Badge>
-                        {decision.conclusion && <Badge>{S6S_CONCLUSION_LABELS[decision.conclusion]}</Badge>}
-                        <span className="text-xs text-muted-foreground">{dateTime(decision.submittedAt)}</span>
-                      </div>
-                      <p className="mt-3 whitespace-pre-wrap text-sm">{decision.rationale}</p>
-                      {decision.candidateVersion && <p className="mt-2 text-sm text-cyan-200">Candidato: {decision.candidateVersion}</p>}
-                      <p className="mt-3 font-mono text-xs text-muted-foreground">Hash: {shortS6sDigest(decision.decisionDigestSha256)}</p>
-                    </div>
-                  ))}
-                </div>
+              {!decisions.length ? <p className="text-sm text-muted-foreground">Todavía no hay decisiones registradas.</p> : (
+                <div className="space-y-3">{[...decisions].reverse().map((decision) => (
+                  <div key={decision.decisionId} className="rounded-lg border border-border p-4">
+                    <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{decision.stage === "FINAL" ? "FINAL" : "EN CURSO"}</Badge>{decision.conclusion && <Badge>{S6S_CONCLUSION_LABELS[decision.conclusion]}</Badge>}<span className="text-xs text-muted-foreground">{dateTime(decision.submittedAt)}</span></div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm">{decision.rationale}</p>
+                    {decision.candidateVersion && <p className="mt-2 text-sm text-cyan-200">Candidato: {decision.candidateVersion}</p>}
+                    <p className="mt-3 font-mono text-xs text-muted-foreground">Hash: {shortS6sDigest(decision.decisionDigestSha256)}</p>
+                  </div>
+                ))}</div>
               )}
             </CardContent>
           </Card>
