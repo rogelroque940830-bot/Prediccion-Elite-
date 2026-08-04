@@ -1,0 +1,91 @@
+name: Diagnostic P1 M1 Live Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-p1-m1-live-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      SCHEDULE_DATE: '2026-08-04'
+    steps:
+      - name: Wait for exact P1-M1 bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o audit/index.html -w '%{http_code}' --max-time 25 "${FRONTEND_URL}/" || true)
+            if [[ "${code}" == "200" ]]; then
+              asset=$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -n1 | sed -E 's/src="([^"]+)"/\1/' || true)
+              if [[ -n "${asset}" ]]; then
+                case "${asset}" in
+                  http*) asset_url="${asset}" ;;
+                  /*) asset_url="${FRONTEND_URL}${asset}" ;;
+                  *) asset_url="${FRONTEND_URL}/${asset}" ;;
+                esac
+                if curl -fsS --max-time 30 "${asset_url}" -o audit/bundle.js; then
+                  if grep -Fq 'p1-m1-mlb-daily-flow-2026-08-04' audit/bundle.js; then
+                    echo 'P1-M1 frontend release is live.'
+                    break
+                  fi
+                fi
+              fi
+            fi
+            echo "Attempt ${attempt}/100: waiting for P1-M1 frontend bundle"
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for P1-M1 frontend deployment' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+      - name: Verify served flow and live schedule source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            'P1 · Jornada MLB' \
+            'Preparar análisis' \
+            'Cargar datos disponibles' \
+            'LISTO PARA PREPARAR' \
+            'ESPERAR PITCHERS' \
+            'JUEGO CERRADO' \
+            'Preparar el juego no genera, guarda ni apuesta automáticamente.'; do
+            grep -Fq "${marker}" audit/bundle.js || { echo "Missing bundle marker: ${marker}" >&2; exit 1; }
+          done
+
+          schedule_code=$(curl -sS -o audit/schedule.json -w '%{http_code}' --max-time 30 "${BACKEND_URL}/api/mlb/all?date=${SCHEDULE_DATE}")
+          [[ "${schedule_code}" == "200" ]] || { echo "Schedule HTTP ${schedule_code}" >&2; cat audit/schedule.json; exit 1; }
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const raw = JSON.parse(fs.readFileSync('audit/schedule.json', 'utf8'));
+          const games = Array.isArray(raw) ? raw : Array.isArray(raw?.games) ? raw.games : [];
+          if (!Array.isArray(games)) throw new Error('Schedule payload is not an array');
+          for (const game of games) {
+            if (game == null || typeof game !== 'object') throw new Error('Invalid game payload');
+            if (game.gameId == null) throw new Error('Game missing gameId');
+          }
+          console.log(JSON.stringify({
+            release: 'p1-m1-mlb-daily-flow-2026-08-04',
+            scheduleDate: process.env.SCHEDULE_DATE,
+            scheduleHttp: 200,
+            games: games.length,
+            markersVerified: 7,
+            requests: ['GET frontend /', 'GET frontend bundle', 'GET backend /api/mlb/all'],
+            mutationsPerformed: 0,
+            predictionsGenerated: 0,
+            picksSaved: 0,
+            betsPlaced: 0,
+          }, null, 2));
+          NODE
