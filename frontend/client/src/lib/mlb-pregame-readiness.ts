@@ -107,70 +107,28 @@ function americanOdds(value: string): number | null {
   return Math.round(parsed);
 }
 
-function lineValue(value: string): number | null {
-  return finite(value);
-}
-
 export function buildMlbPregameManualOddsParams(
   market: MlbPregameMarket,
   lines: MlbPregameLineInputs,
   capturedAt: string,
 ): URLSearchParams | null {
+  // The existing full-game fields have seeded defaults and do not yet carry an
+  // explicit observedAt/source transition. Treating those values as a newly
+  // captured manual quote would manufacture freshness. ML, Run Line and Total
+  // therefore use the backend market source until the form records provenance.
+  if (market !== "F5_ML" || lines.f5OddsSource !== "manual") return null;
+
+  const home = americanOdds(lines.f5MlHome);
+  const away = americanOdds(lines.f5MlAway);
+  if (home == null || away == null) return null;
+
   const params = new URLSearchParams();
   params.set("oddsMode", "manual");
   params.set("manualCapturedAt", capturedAt);
-
-  if (market === "ML") {
-    const home = americanOdds(lines.mlHome);
-    const away = americanOdds(lines.mlAway);
-    if (home == null || away == null) return null;
-    params.set("manualBook", "Formulario MLB (captura explícita)");
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return params;
-  }
-
-  if (market === "F5_ML") {
-    // Consensus quotes already have provider timestamps in P1-M2B. Preserve that
-    // provenance by using the automatic backend source unless the user explicitly
-    // entered a manual F5 price.
-    if (lines.f5OddsSource !== "manual") return null;
-    const home = americanOdds(lines.f5MlHome);
-    const away = americanOdds(lines.f5MlAway);
-    if (home == null || away == null) return null;
-    params.set("manualBook", "Hard Rock F5 formulario");
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return params;
-  }
-
-  if (market === "RUN_LINE") {
-    const line = lineValue(lines.runLine);
-    const home = americanOdds(lines.runLineHomeOdds);
-    const away = americanOdds(lines.runLineAwayOdds);
-    if (line == null || home == null || away == null) return null;
-    params.set("manualBook", "Formulario MLB (captura explícita)");
-    params.set("manualLine", String(line));
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return params;
-  }
-
-  if (market === "TOTAL") {
-    const line = lineValue(lines.totalLine);
-    const over = americanOdds(lines.overOdds);
-    const under = americanOdds(lines.underOdds);
-    if (line == null || over == null || under == null) return null;
-    params.set("manualBook", "Formulario MLB (captura explícita)");
-    params.set("manualLine", String(line));
-    params.set("manualOverOdds", String(over));
-    params.set("manualUnderOdds", String(under));
-    return params;
-  }
-
-  // The current predictor does not collect separate F5 total prices. Never reuse
-  // full-game total prices as if they belonged to the F5 market.
-  return null;
+  params.set("manualBook", "Hard Rock F5 formulario");
+  params.set("manualHomeOdds", String(home));
+  params.set("manualAwayOdds", String(away));
+  return params;
 }
 
 export function buildMlbPregameReadinessUrl(input: {
