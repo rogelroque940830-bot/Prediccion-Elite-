@@ -21,7 +21,7 @@ import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MlbDailySlatePanel } from "@/components/mlb-daily-slate-panel";
 import { MlbPregameReadinessGate } from "@/components/mlb-pregame-readiness-gate";
-import { type MlbPregameGateSnapshot } from "@/lib/mlb-pregame-readiness";
+import { buildMlbPregameCertifiedLinePatch, type MlbPregameGateSnapshot, type MlbPregameMarket } from "@/lib/mlb-pregame-readiness";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
@@ -1259,6 +1259,31 @@ export default function MLBPredictor() {
       setF5OddsSource("manual");
     }
   }, [f5MlHome, f5MlAway, f5OddsSource]);
+
+  const applyCertifiedQuote = useCallback((market: MlbPregameMarket, quote: Record<string, unknown>) => {
+    const patch = buildMlbPregameCertifiedLinePatch(market, quote);
+    if (!patch) {
+      toast({ title: "Cuota certificada incompleta", description: "La respuesta no contiene todos los precios necesarios para este mercado.", variant: "destructive" });
+      return;
+    }
+    if (patch.mlHome != null) setMlOdds(patch.mlHome);
+    if (patch.mlAway != null) setMlOddsAway(patch.mlAway);
+    if (patch.runLine != null) setRunLine(patch.runLine);
+    if (patch.runLineHomeOdds != null) setRlOdds(patch.runLineHomeOdds);
+    if (patch.runLineAwayOdds != null) setRlOddsAway(patch.runLineAwayOdds);
+    if (patch.totalLine != null) setOuLine(patch.totalLine);
+    if (patch.overOdds != null) setOverOdds(patch.overOdds);
+    if (patch.underOdds != null) setUnderOdds(patch.underOdds);
+    if (patch.f5MlHome != null && patch.f5MlAway != null) {
+      setF5MlHome(patch.f5MlHome);
+      setF5MlAway(patch.f5MlAway);
+      f5ConsensoSnapshot.current = { home: patch.f5MlHome, away: patch.f5MlAway };
+      setF5OddsSource("consenso");
+    }
+    setPregameGate(null);
+    setResult(null);
+    toast({ title: "Cuota certificada aplicada", description: "La compuerta volverá a verificar el mismo precio que usará el modelo." });
+  }, [toast]);
 
   // ── H2H / SPLITS / SOS ───────────────────────────────────────────────────
   const [h2hLabel, setH2hLabel] = useState("");
@@ -4698,6 +4723,7 @@ export default function MLBPredictor() {
             f5TotalLine: f5OuLine,
             f5OddsSource: f5OddsSource || "none",
           }}
+          onApplyCertifiedQuote={applyCertifiedQuote}
           onSnapshot={(snapshot) => {
             setPregameGate(snapshot);
             if (!snapshot) setResult(null);

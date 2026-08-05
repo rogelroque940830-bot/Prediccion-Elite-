@@ -213,6 +213,51 @@ export function validateMlbPregameModelQuote(
   };
 }
 
+export function buildMlbPregameCertifiedLinePatch(
+  market: MlbPregameMarket,
+  certifiedQuote: Record<string, unknown> | null,
+): Partial<MlbPregameLineInputs> | null {
+  if (!certifiedQuote) return null;
+  const first = (...keys: string[]): number | null => {
+    for (const key of keys) {
+      const value = finite(certifiedQuote[key]);
+      if (value != null) return value;
+    }
+    return null;
+  };
+  const text = (value: number): string => String(value);
+
+  if (market === "ML") {
+    const home = first("home", "homeOdds");
+    const away = first("away", "awayOdds");
+    return home != null && away != null ? { mlHome: text(home), mlAway: text(away) } : null;
+  }
+  if (market === "F5_ML") {
+    const home = first("home", "homeOdds");
+    const away = first("away", "awayOdds");
+    return home != null && away != null
+      ? { f5MlHome: text(home), f5MlAway: text(away), f5OddsSource: "consenso" }
+      : null;
+  }
+  if (market === "RUN_LINE") {
+    const line = first("line");
+    const homeOdds = first("homeOdds");
+    const awayOdds = first("awayOdds");
+    return line != null && homeOdds != null && awayOdds != null
+      ? { runLine: text(line), runLineHomeOdds: text(homeOdds), runLineAwayOdds: text(awayOdds) }
+      : null;
+  }
+  if (market === "TOTAL") {
+    const line = first("line");
+    const overOdds = first("overOdds");
+    const underOdds = first("underOdds");
+    return line != null && overOdds != null && underOdds != null
+      ? { totalLine: text(line), overOdds: text(overOdds), underOdds: text(underOdds) }
+      : null;
+  }
+  return null;
+}
+
 export function mlbPregameSafetyValid(report: MlbPregameReadinessReport | null | undefined): boolean {
   return Boolean(
     report

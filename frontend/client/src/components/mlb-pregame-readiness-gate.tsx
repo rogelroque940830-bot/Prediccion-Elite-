@@ -90,6 +90,41 @@ function EvidenceSummary({ items }: { items: MlbPregameEvidence[] }) {
   );
 }
 
+function quoteNumber(quote: Record<string, unknown> | null, ...keys: string[]): number | null {
+  if (!quote) return null;
+  for (const key of keys) {
+    const parsed = Number(quote[key]);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function americanLabel(value: number | null): string {
+  if (value == null) return "—";
+  return value > 0 ? `+${Math.round(value)}` : String(Math.round(value));
+}
+
+function modelQuoteLabel(market: MlbPregameMarket, lines: MlbPregameLineInputs): string {
+  if (market === "ML") return `Local ${lines.mlHome || "—"} · Visitante ${lines.mlAway || "—"}`;
+  if (market === "F5_ML") return `Local ${lines.f5MlHome || "—"} · Visitante ${lines.f5MlAway || "—"}`;
+  if (market === "RUN_LINE") return `Línea ${lines.runLine || "—"} · Local ${lines.runLineHomeOdds || "—"} · Visitante ${lines.runLineAwayOdds || "—"}`;
+  if (market === "TOTAL") return `Total ${lines.totalLine || "—"} · Over ${lines.overOdds || "—"} · Under ${lines.underOdds || "—"}`;
+  return "Sin precios F5 Total exactos";
+}
+
+function certifiedQuoteLabel(market: MlbPregameMarket, quote: Record<string, unknown> | null): string {
+  if (market === "ML" || market === "F5_ML") {
+    return `Local ${americanLabel(quoteNumber(quote, "home", "homeOdds"))} · Visitante ${americanLabel(quoteNumber(quote, "away", "awayOdds"))}`;
+  }
+  if (market === "RUN_LINE") {
+    return `Línea ${quoteNumber(quote, "line") ?? "—"} · Local ${americanLabel(quoteNumber(quote, "homeOdds"))} · Visitante ${americanLabel(quoteNumber(quote, "awayOdds"))}`;
+  }
+  if (market === "TOTAL") {
+    return `Total ${quoteNumber(quote, "line") ?? "—"} · Over ${americanLabel(quoteNumber(quote, "overOdds"))} · Under ${americanLabel(quoteNumber(quote, "underOdds"))}`;
+  }
+  return "No disponible";
+}
+
 function EvidenceRow({ evidence }: { evidence: MlbPregameEvidence }) {
   return (
     <div
@@ -130,11 +165,13 @@ export function MlbPregameReadinessGate({
   gamePk,
   date,
   lines,
+  onApplyCertifiedQuote,
   onSnapshot,
 }: {
   gamePk: string;
   date: string;
   lines: MlbPregameLineInputs;
+  onApplyCertifiedQuote: (market: MlbPregameMarket, quote: Record<string, unknown>) => void;
   onSnapshot: (snapshot: MlbPregameGateSnapshot | null) => void;
 }) {
   const [market, setMarket] = useState<MlbPregameMarket>("ML");
@@ -228,6 +265,8 @@ export function MlbPregameReadinessGate({
   const complementaryEvidence = useMemo(() => evidence.filter((item) => !item.required), [evidence]);
   const complementarySummary = useMemo(() => summarizeEvidence(complementaryEvidence), [complementaryEvidence]);
   const selectedMarketLabel = mlbPregameMarketLabel(market);
+  const modelQuote = modelQuoteLabel(market, lines);
+  const certifiedQuote = certifiedQuoteLabel(market, quoteCompatibility?.certifiedQuote ?? null);
 
   if (!gamePk) {
     return (
@@ -251,6 +290,7 @@ export function MlbPregameReadinessGate({
             <div className="flex flex-wrap gap-2">
               <Badge className="border-violet-500/40 bg-violet-500/15 text-violet-100">P1-M2C · COMPUERTA PREGAME</Badge>
               <Badge variant="outline" className="border-cyan-500/40 text-cyan-200">P1-M2C.1 · FLUJO CONSOLIDADO</Badge>
+              <Badge variant="outline" className="border-blue-500/40 text-blue-200">P1-M2C.2 · PRIORITY FIRST</Badge>
               <Badge variant="outline" className={gateBadgeClasses(status)} data-testid="p1-m2c-gate-status">
                 {gateLabel(status)}
               </Badge>
@@ -337,12 +377,37 @@ export function MlbPregameReadinessGate({
               <div className="rounded-lg border border-red-500/40 bg-red-500/[0.07] p-4" data-testid="p1-m2c-quote-mismatch">
                 <div className="flex gap-3">
                   <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-red-200">La cuota del modelo no coincide con la cuota certificada</p>
-                    <p className="mt-1 text-xs text-red-100/80">Carga las cuotas reales del partido o corrige el formulario antes de generar la predicción.</p>
-                    {quoteCompatibility.reasons.map((reason) => (
-                      <p key={reason} className="mt-1 text-xs text-red-100/85">• {mlbPregameReasonLabel(reason)}</p>
-                    ))}
+                    <p className="mt-1 text-xs text-red-100/80">Compara ambos precios y aplica la cotización certificada antes de generar la predicción.</p>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="p1-m2c2-quote-comparison">
+                      <div className="rounded-md border border-red-500/25 bg-slate-950/35 p-3">
+                        <p className="text-xs font-semibold text-slate-300">Cuota introducida</p>
+                        <p className="mt-1 text-sm font-mono text-white">{modelQuote}</p>
+                      </div>
+                      <div className="rounded-md border border-emerald-500/30 bg-emerald-500/[0.05] p-3">
+                        <p className="text-xs font-semibold text-emerald-300">Cuota certificada</p>
+                        <p className="mt-1 text-sm font-mono text-white">{certifiedQuote}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        {quoteCompatibility.reasons.map((reason) => (
+                          <p key={reason} className="text-xs text-red-100/85">• {mlbPregameReasonLabel(reason)}</p>
+                        ))}
+                      </div>
+                      {quoteCompatibility.certifiedQuote && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0 bg-emerald-600 hover:bg-emerald-500"
+                          onClick={() => onApplyCertifiedQuote(market, quoteCompatibility.certifiedQuote!)}
+                          data-testid="p1-m2c2-use-certified-quote"
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />Usar cuota certificada
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

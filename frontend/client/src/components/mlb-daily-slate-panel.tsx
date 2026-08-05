@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
   UserRoundCheck,
-  Users,
+  EyeOff,
 } from "lucide-react";
 import { fetchJson } from "@/lib/queryClient";
 import { DatePickerFL } from "@/components/date-picker-fl";
@@ -45,12 +45,14 @@ function GameCard({
   selected,
   analyzing,
   safetyValid,
+  compact = false,
   onAnalyze,
 }: {
   game: MlbDailySlateGame;
   selected: boolean;
   analyzing: boolean;
   safetyValid: boolean;
+  compact?: boolean;
   onAnalyze: (game: MlbDailySlateGame) => Promise<void>;
 }) {
   const actionable = game.analysisAllowed && safetyValid;
@@ -58,9 +60,10 @@ function GameCard({
     <Card
       className={selected ? "border-blue-400/60 bg-blue-500/[0.06]" : "border-border bg-card/70"}
       data-testid={`p1-mlb-game-${game.gamePk}`}
+      data-compact={compact ? "true" : "false"}
     >
-      <CardContent className="space-y-4 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <CardContent className={compact ? "space-y-2.5 p-3" : "space-y-4 p-4"}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline" className={readinessClass(game)}>
@@ -71,17 +74,17 @@ function GameCard({
                 {game.source.quality === "AUTHORITATIVE" ? "MLB oficial" : "Fuente degradada"}
               </Badge>
             </div>
-            <h3 className="mt-3 truncate text-lg font-bold text-white">
+            <h3 className={`mt-2 truncate font-bold text-white ${compact ? "text-base" : "text-lg"}`}>
               {game.awayTeam.name} @ {game.homeTeam.name}
             </h3>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatMlbSlateTime(game.startTime)} ET</span>
               <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{game.venue || "Estadio no disponible"}</span>
-              <span>{game.detailedState}</span>
             </div>
           </div>
           <Button
             type="button"
+            size="sm"
             disabled={!actionable || analyzing}
             onClick={() => void onAnalyze(game)}
             className={game.analysisStage === "FINAL" ? "bg-emerald-600 hover:bg-emerald-500" : "bg-amber-600 hover:bg-amber-500"}
@@ -89,7 +92,7 @@ function GameCard({
           >
             {analyzing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
             {analyzing
-              ? "Cargando análisis…"
+              ? "Cargando…"
               : game.analysisStage === "FINAL"
                 ? "Analizar partido"
                 : game.analysisStage === "PROVISIONAL"
@@ -98,28 +101,39 @@ function GameCard({
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-lg border border-border bg-background/30 p-3">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pitcher visitante</p>
-            <p className="mt-1 text-sm font-medium text-white">{pitcherLabel(game, "away")}</p>
+        {compact ? (
+          <div className="rounded-lg border border-border bg-background/25 px-3 py-2 text-xs text-muted-foreground">
+            <p><span className="text-slate-400">Pitchers:</span> {pitcherLabel(game, "away")} vs {pitcherLabel(game, "home")}</p>
+            <p className="mt-1 inline-flex items-center gap-2">
+              {game.lineupState === "CONFIRMED" ? <UserRoundCheck className="h-3.5 w-3.5 text-emerald-300" /> : <Users className="h-3.5 w-3.5 text-amber-300" />}
+              {mlbDailySlateLineupLabel(game)}
+            </p>
           </div>
-          <div className="rounded-lg border border-border bg-background/30 p-3">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pitcher local</p>
-            <p className="mt-1 text-sm font-medium text-white">{pitcherLabel(game, "home")}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/25 p-3 text-sm">
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
-            {game.lineupState === "CONFIRMED" ? <UserRoundCheck className="h-4 w-4 text-emerald-300" /> : <Users className="h-4 w-4 text-amber-300" />}
-            {mlbDailySlateLineupLabel(game)}
-          </span>
-          <span className="font-mono text-xs text-muted-foreground">gamePk {game.gamePk}</span>
-        </div>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-border bg-background/30 p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Pitcher visitante</p>
+                <p className="mt-1 text-sm font-medium text-white">{pitcherLabel(game, "away")}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-background/30 p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Pitcher local</p>
+                <p className="mt-1 text-sm font-medium text-white">{pitcherLabel(game, "home")}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/25 p-3 text-sm">
+              <span className="inline-flex items-center gap-2 text-muted-foreground">
+                {game.lineupState === "CONFIRMED" ? <UserRoundCheck className="h-4 w-4 text-emerald-300" /> : <Users className="h-4 w-4 text-amber-300" />}
+                {mlbDailySlateLineupLabel(game)}
+              </span>
+              <span className="font-mono text-xs text-muted-foreground">gamePk {game.gamePk}</span>
+            </div>
+          </>
+        )}
 
         {game.blockers.length > 0 && (
-          <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3">
-            {game.blockers.map((blocker) => (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] px-3 py-2">
+            {(compact ? game.blockers.slice(0, 1) : game.blockers).map((blocker) => (
               <p key={blocker} className="text-xs text-amber-100/80">• {blocker}</p>
             ))}
           </div>
@@ -140,7 +154,7 @@ export function MlbDailySlatePanel({
   onDateChange: (date: string) => void;
   onAnalyze: (game: MlbDailySlateGame) => Promise<void>;
 }) {
-  const [view, setView] = useState<MlbDailySlateView>("ready");
+  const [view, setView] = useState<Extract<MlbDailySlateView, "ready" | "provisional">>("ready");
   const [analyzingPk, setAnalyzingPk] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -156,6 +170,10 @@ export function MlbDailySlatePanel({
   const report = slateQuery.data?.data ?? null;
   const games = report?.games ?? [];
   const visibleGames = useMemo(() => filterMlbDailySlateGames(games, view), [games, view]);
+  const inactiveGames = useMemo(() => games.filter((game) =>
+    game.readiness !== "READY_TO_ANALYZE"
+    && game.readiness !== "PROVISIONAL_WAITING_FOR_LINEUPS"
+  ), [games]);
   const safetyValid = mlbDailySlateSafetyValid(report);
 
   const analyze = async (game: MlbDailySlateGame) => {
@@ -172,12 +190,13 @@ export function MlbDailySlatePanel({
   };
 
   return (
-    <Card className="border-blue-500/35 bg-gradient-to-br from-blue-500/[0.08] to-cyan-500/[0.03]" data-testid="p1-mlb-daily-slate">
+    <Card className="border-blue-500/35 bg-gradient-to-br from-blue-500/[0.08] to-cyan-500/[0.03]" data-testid="p1-mlb-daily-slate" data-priority-first="true">
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border-blue-500/40 bg-blue-500/15 text-blue-100">P1 · JORNADA DIARIA</Badge>
+              <Badge variant="outline" className="border-cyan-500/40 text-cyan-200">P1-M2C.2 · PRIORITY FIRST</Badge>
               <Badge variant="outline" className="border-emerald-500/35 text-emerald-200">MLB oficial</Badge>
               <Badge variant="outline">SHADOW · exposición 0</Badge>
             </div>
@@ -185,7 +204,7 @@ export function MlbDailySlatePanel({
               <CalendarDays className="h-5 w-5 text-blue-300" />Partidos de la jornada
             </CardTitle>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Primero elige un juego con pitchers verificados. Los partidos con dos lineups oficiales permiten análisis FINAL; los demás solo análisis PROVISIONAL.
+              La pantalla abre en los juegos listos. Los provisionales quedan compactos y los iniciados o no accionables permanecen ocultos por defecto.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -202,7 +221,7 @@ export function MlbDailySlatePanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-5" data-testid="p1-m2c2-priority-first">
         {slateQuery.error && (
           <div className="flex gap-3 rounded-lg border border-red-500/35 bg-red-500/[0.06] p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
@@ -222,26 +241,23 @@ export function MlbDailySlatePanel({
 
         {report && (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-lg border border-border bg-background/35 p-3"><p className="text-2xl font-bold">{report.summary.total}</p><p className="text-xs text-muted-foreground">Partidos</p></div>
-              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-3"><p className="text-2xl font-bold text-emerald-200">{report.summary.ready}</p><p className="text-xs text-muted-foreground">Listos FINAL</p></div>
-              <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3"><p className="text-2xl font-bold text-amber-200">{report.summary.provisional}</p><p className="text-xs text-muted-foreground">Provisionales</p></div>
-              <div className="rounded-lg border border-border bg-background/35 p-3"><p className="text-2xl font-bold">{report.summary.waitingForPitchers}</p><p className="text-xs text-muted-foreground">Sin pitchers</p></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-border bg-background/35 p-3"><p className="text-2xl font-bold">{report.summary.total}</p><p className="text-sm text-muted-foreground">Partidos del día</p></div>
+              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-3"><p className="text-2xl font-bold text-emerald-200">{report.summary.ready}</p><p className="text-sm text-muted-foreground">Listos FINAL</p></div>
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3"><p className="text-2xl font-bold text-amber-200">{report.summary.provisional}</p><p className="text-sm text-muted-foreground">Provisionales</p></div>
               <div className={`rounded-lg border p-3 ${safetyValid ? "border-emerald-500/25 bg-emerald-500/[0.04]" : "border-red-500/35 bg-red-500/[0.05]"}`}>
                 <ShieldCheck className={`h-5 w-5 ${safetyValid ? "text-emerald-300" : "text-red-300"}`} />
-                <p className="mt-2 text-xs font-medium">{safetyValid ? "Compuertas válidas" : "Compuerta inválida"}</p>
+                <p className="mt-2 text-sm font-semibold">{safetyValid ? "Modo seguro activo" : "Seguridad inválida"}</p>
+                <p className="text-xs text-muted-foreground">SHADOW · exposición real 0</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2" aria-label="Filtro de jornada MLB">
-              <Button type="button" size="sm" variant={view === "ready" ? "default" : "outline"} onClick={() => setView("ready")}>
+            <div className="grid grid-cols-2 gap-2" aria-label="Filtro prioritario de jornada MLB">
+              <Button type="button" size="sm" variant={view === "ready" ? "default" : "outline"} onClick={() => setView("ready")} data-testid="p1-m2c2-view-ready">
                 <CheckCircle2 className="mr-2 h-4 w-4" />Listos {report.summary.ready}
               </Button>
-              <Button type="button" size="sm" variant={view === "provisional" ? "default" : "outline"} onClick={() => setView("provisional")}>
-                <Clock3 className="mr-2 h-4 w-4" />Esperando {report.summary.provisional}
-              </Button>
-              <Button type="button" size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => setView("all")}>
-                <Users className="mr-2 h-4 w-4" />Todos {report.summary.total}
+              <Button type="button" size="sm" variant={view === "provisional" ? "default" : "outline"} onClick={() => setView("provisional")} data-testid="p1-m2c2-view-provisional">
+                <Clock3 className="mr-2 h-4 w-4" />Provisionales {report.summary.provisional}
               </Button>
             </div>
           </>
@@ -260,6 +276,7 @@ export function MlbDailySlatePanel({
                 selected={selectedGamePk === String(game.gamePk)}
                 analyzing={analyzingPk === game.gamePk}
                 safetyValid={safetyValid}
+                compact={view === "provisional"}
                 onAnalyze={analyze}
               />
             ))}
@@ -268,9 +285,37 @@ export function MlbDailySlatePanel({
           <div className="rounded-lg border border-border p-8 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-300" />
             <p className="mt-3 font-medium">No hay partidos en esta categoría</p>
-            <p className="text-sm text-muted-foreground">Selecciona otra vista o cambia la fecha.</p>
+            <p className="text-sm text-muted-foreground">La jornada seguirá abriendo en Listos; consulta Provisionales cuando sea necesario.</p>
           </div>
         ) : null}
+
+        {inactiveGames.length > 0 && (
+          <details className="group rounded-lg border border-slate-700/60 bg-slate-950/30" data-testid="p1-m2c2-inactive-games">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <EyeOff className="h-4 w-4 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-200">Iniciados, cerrados o no accionables</p>
+                  <p className="text-xs text-muted-foreground">Ocultos para no contaminar el flujo pregame.</p>
+                </div>
+              </div>
+              <Badge variant="outline">{inactiveGames.length}</Badge>
+            </summary>
+            <div className="grid gap-3 border-t border-slate-700/50 p-3 xl:grid-cols-2">
+              {inactiveGames.map((game) => (
+                <GameCard
+                  key={game.gamePk}
+                  game={game}
+                  selected={false}
+                  analyzing={false}
+                  safetyValid={safetyValid}
+                  compact
+                  onAnalyze={analyze}
+                />
+              ))}
+            </div>
+          </details>
+        )}
 
         {report && (
           <p className="text-xs text-muted-foreground">
