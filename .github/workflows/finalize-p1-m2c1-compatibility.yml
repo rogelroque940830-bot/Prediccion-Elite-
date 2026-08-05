@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: p1-m2c1-compatibility-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   finalize:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/p1-m2c1-mlb-visual-consolidation'
