@@ -39,6 +39,10 @@ La UI nunca reutiliza cuotas del total completo como si fueran cuotas de F5 Tota
 
 Una respuesta con schema o límites de seguridad diferentes se considera inválida y mantiene la predicción bloqueada.
 
+## Verificación
+
+La integración del predictor se aplica mediante un reemplazo determinista que exige coincidencias únicas en el archivo existente. El proceso se detiene sin escribir si la estructura esperada cambió.
+
 ## Alcance
 
 P1-M2C no modifica fórmulas, probabilidades, señales, calibración, thresholds, stakes, ledger, settlement ni integración con sportsbooks. Solo controla la etapa visible y la autorización de ejecución según P1-M2B.
