@@ -15,7 +15,7 @@ on:
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-p1-m3c:
@@ -25,35 +25,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply isolated test-runtime import fix
-        shell: bash
-        run: |
-          set -euo pipefail
-          file='frontend/client/src/lib/mlb-scientific-capture.ts'
-          if ! grep -Fq 'import { apiRequest } from "./queryClient";' "$file"; then
-            echo 'Dynamic HTTP import already applied.'
-            exit 0
-          fi
-          python <<'PY'
-          from pathlib import Path
-          path = Path('frontend/client/src/lib/mlb-scientific-capture.ts')
-          source = path.read_text()
-          old_import = 'import { apiRequest } from "./queryClient";\n'
-          old_call = 'export async function postMlbP1M3cScientificCapture(candidate: unknown): Promise<MlbP1M3bCaptureResult> {\n  const response = await apiRequest("POST", MLB_P1_M3B_ENDPOINT, candidate);'
-          new_call = 'export async function postMlbP1M3cScientificCapture(candidate: unknown): Promise<MlbP1M3bCaptureResult> {\n  const { apiRequest } = await import("./queryClient");\n  const response = await apiRequest("POST", MLB_P1_M3B_ENDPOINT, candidate);'
-          if source.count(old_import) != 1:
-              raise SystemExit(f'static import count={source.count(old_import)}')
-          if source.count(old_call) != 1:
-              raise SystemExit(f'post call count={source.count(old_call)}')
-          path.write_text(source.replace(old_import, '', 1).replace(old_call, new_call, 1))
-          PY
-          git diff --check
-          [[ "$(git diff --name-only)" == "$file" ]]
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$file"
-          git commit -m 'P1-M3C: load capture HTTP client lazily'
-          git push origin HEAD:${GITHUB_HEAD_REF}
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
