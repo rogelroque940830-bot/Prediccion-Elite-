@@ -7,12 +7,17 @@ on:
       - '.github/workflows/p1-m2c-predictor-patcher.yml'
   schedule:
     - cron: '*/5 * * * *'
+  workflow_run:
+    workflows: ['Court Edge P0 Frontend Integration']
+    types: [completed]
+    branches: [integration/p0-frontend-session]
 
 permissions:
   contents: write
 
 jobs:
   patch-exact-p1-m2c-branch:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact same-repository feature branch
