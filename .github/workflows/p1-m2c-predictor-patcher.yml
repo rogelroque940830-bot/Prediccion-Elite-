@@ -3,6 +3,8 @@ name: Restricted P1-M2C Predictor Patcher
 on:
   schedule:
     - cron: '*/5 * * * *'
+  issue_comment:
+    types: [created]
   pull_request_target:
     branches:
       - integration/p0-frontend-session
@@ -15,7 +17,12 @@ jobs:
   patch-exact-p1-m2c-branch:
     if: >-
       github.event_name == 'schedule' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event_name == 'issue_comment' &&
+      github.event.issue.number == 257 &&
+      github.event.comment.user.login == 'rogelroque940830-bot' &&
+      github.event.comment.body == '/run-p1-m2c-patcher') ||
+      (github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'agent/p1-m2c-mlb-pregame-readiness-ui')
     runs-on: ubuntu-latest
     steps:
