@@ -36,6 +36,26 @@ jobs:
           fi
           git fetch origin main --depth=1
           git show origin/main:.github/scripts/tmp_p1_m3c_patch.py > /tmp/p1_m3c_patch.py
+          python <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/p1_m3c_patch.py')
+          source = path.read_text()
+          old = '''    text = replace_once(
+                  text,
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={setPregameGate}\\n',
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={setPregameGate}\\n          onExecutionReport={setPregameExecutionReport}\\n',
+                  "gate report callback",
+              )'''
+          new = '''    text = replace_once(
+                  text,
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={(snapshot) => {\\n            setPregameGate(snapshot);\\n            if (!snapshot) setResult(null);\\n          }}\\n',
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={(snapshot) => {\\n            setPregameGate(snapshot);\\n            if (!snapshot) setResult(null);\\n          }}\\n          onExecutionReport={setPregameExecutionReport}\\n',
+                  "gate report callback",
+              )'''
+          if source.count(old) != 1:
+              raise SystemExit(f'callback patch expected one script match, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1))
+          PY
           python /tmp/p1_m3c_patch.py
           git diff --check
           changed=$(git diff --name-only | sort)
