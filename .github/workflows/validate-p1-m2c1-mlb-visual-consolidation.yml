@@ -5,14 +5,10 @@ on:
     branches:
       - integration/p0-frontend-session
     paths:
-      - 'frontend/client/src/App.tsx'
-      - 'frontend/client/src/pages/mlb-predictor.tsx'
       - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
-      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
-      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
-      - 'frontend/client/src/lib/mlb-pregame-readiness.test.ts'
       - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
       - '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml'
+      - '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml'
 
 permissions:
   contents: read
@@ -109,12 +105,9 @@ jobs:
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
             '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml' \
-            'frontend/client/src/App.tsx' \
-            'frontend/client/src/components/mlb-daily-slate-panel.tsx' \
-            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
-            'frontend/client/src/lib/mlb-pregame-readiness.test.ts' \
-            'frontend/client/src/lib/mlb-pregame-readiness.ts' \
-            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+            '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' | sort)
           [[ "${changed}" == "${expected}" ]]
           ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
-            frontend/client/src/components/mlb-pregame-readiness-gate.tsx
+            frontend/client/src/components/mlb-pregame-readiness-gate.tsx \
+            frontend/client/src/components/mlb-daily-slate-panel.tsx

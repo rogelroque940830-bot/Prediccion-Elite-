@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -158,6 +158,7 @@ export function MlbDailySlatePanel({
   const [view, setView] = useState<Extract<MlbDailySlateView, "ready" | "provisional">>("ready");
   const [analyzingPk, setAnalyzingPk] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const smartDefaultAppliedDate = useRef<string | null>(null);
 
   const slateQuery = useQuery({
     queryKey: ["mlb-p1-daily-slate", date],
@@ -170,12 +171,21 @@ export function MlbDailySlatePanel({
 
   const report = slateQuery.data?.data ?? null;
   const games = report?.games ?? [];
+  const readyCount = report?.summary.ready ?? 0;
+  const provisionalCount = report?.summary.provisional ?? 0;
+  const reportAvailable = report !== null;
   const visibleGames = useMemo(() => filterMlbDailySlateGames(games, view), [games, view]);
   const inactiveGames = useMemo(() => games.filter((game) =>
     game.readiness !== "READY_TO_ANALYZE"
     && game.readiness !== "PROVISIONAL_WAITING_FOR_LINEUPS"
   ), [games]);
   const safetyValid = mlbDailySlateSafetyValid(report);
+
+  useEffect(() => {
+    if (!reportAvailable || smartDefaultAppliedDate.current === date) return;
+    setView(readyCount > 0 ? "ready" : provisionalCount > 0 ? "provisional" : "ready");
+    smartDefaultAppliedDate.current = date;
+  }, [date, provisionalCount, readyCount, reportAvailable]);
 
   const analyze = async (game: MlbDailySlateGame) => {
     if (!game.analysisAllowed || !safetyValid || analyzingPk != null) return;
@@ -191,13 +201,20 @@ export function MlbDailySlatePanel({
   };
 
   return (
-    <Card className="border-blue-500/35 bg-gradient-to-br from-blue-500/[0.08] to-cyan-500/[0.03]" data-testid="p1-mlb-daily-slate" data-priority-first="true">
+    <Card
+      className="border-blue-500/35 bg-gradient-to-br from-blue-500/[0.08] to-cyan-500/[0.03]"
+      data-testid="p1-mlb-daily-slate"
+      data-priority-first="true"
+      data-smart-default="true"
+      data-smart-default-view={view}
+    >
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border-blue-500/40 bg-blue-500/15 text-blue-100">P1 · JORNADA DIARIA</Badge>
               <Badge variant="outline" className="border-cyan-500/40 text-cyan-200">P1-M2C.2 · PRIORITY FIRST</Badge>
+              <Badge variant="outline" className="border-violet-500/40 text-violet-200">P1-M2C.3 · SMART DEFAULT</Badge>
               <Badge variant="outline" className="border-emerald-500/35 text-emerald-200">MLB oficial</Badge>
               <Badge variant="outline">SHADOW · exposición 0</Badge>
             </div>
@@ -205,13 +222,14 @@ export function MlbDailySlatePanel({
               <CalendarDays className="h-5 w-5 text-blue-300" />Partidos de la jornada
             </CardTitle>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              La pantalla abre en los juegos listos. Los provisionales quedan compactos y los iniciados o no accionables permanecen ocultos por defecto.
+              Abre en Listos cuando existe al menos un FINAL; si no hay ninguno y sí existen provisionales, cambia automáticamente a Provisionales.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <DatePickerFL
               value={date}
               onChange={(nextDate) => {
+                smartDefaultAppliedDate.current = null;
                 setView("ready");
                 onDateChange(nextDate);
               }}
@@ -261,6 +279,12 @@ export function MlbDailySlatePanel({
                 <Clock3 className="mr-2 h-4 w-4" />Provisionales {report.summary.provisional}
               </Button>
             </div>
+
+            {report.summary.ready === 0 && report.summary.provisional > 0 && view === "provisional" && (
+              <div className="rounded-lg border border-violet-500/30 bg-violet-500/[0.06] px-4 py-3 text-sm text-violet-100" data-testid="p1-m2c3-auto-provisional">
+                No hay juegos FINAL disponibles; Provisionales se abrió automáticamente para evitar una pantalla vacía.
+              </div>
+            )}
           </>
         )}
 
@@ -286,7 +310,7 @@ export function MlbDailySlatePanel({
           <div className="rounded-lg border border-border p-8 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-300" />
             <p className="mt-3 font-medium">No hay partidos en esta categoría</p>
-            <p className="text-sm text-muted-foreground">La jornada seguirá abriendo en Listos; consulta Provisionales cuando sea necesario.</p>
+            <p className="text-sm text-muted-foreground">Puedes cambiar manualmente a la otra pestaña cuando necesites revisar su contenido.</p>
           </div>
         ) : null}
 
