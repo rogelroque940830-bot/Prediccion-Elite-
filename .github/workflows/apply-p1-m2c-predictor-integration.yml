@@ -1,22 +1,25 @@
 name: Apply P1-M2C Predictor Integration
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/p1-m2c-mlb-pregame-readiness-ui
+      - integration/p0-frontend-session
     paths:
       - '.github/workflows/apply-p1-m2c-predictor-integration.yml'
+      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
 
 permissions:
   contents: write
 
 jobs:
   patch-predictor:
+    if: github.head_ref == 'agent/p1-m2c-mlb-pregame-readiness-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/p1-m2c-mlb-pregame-readiness-ui
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Apply deterministic P1-M2C integration
         shell: bash
@@ -27,6 +30,9 @@ jobs:
 
           path = Path('frontend/client/src/pages/mlb-predictor.tsx')
           source = path.read_text()
+          if 'data-pregame-stage={pregameGate?.analysisStage' in source:
+              print('P1-M2C predictor integration already applied')
+              raise SystemExit(0)
 
           def replace_once(old: str, new: str, label: str) -> None:
               global source
@@ -197,8 +203,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if git diff --quiet; then
+            echo 'No predictor integration changes to commit.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add frontend/client/src/pages/mlb-predictor.tsx
           git commit -m 'P1-M2C wire pregame gate into predictor'
-          git push origin HEAD:agent/p1-m2c-mlb-pregame-readiness-ui
+          git push origin HEAD:${{ github.head_ref }}
