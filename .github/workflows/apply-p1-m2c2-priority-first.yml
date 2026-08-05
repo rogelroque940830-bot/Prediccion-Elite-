@@ -1,0 +1,64 @@
+name: Apply P1-M2C.2 Priority First
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-p1-m2c2-priority-first.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted patcher
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted
+          fetch-depth: 1
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/p1-m2c2-mlb-priority-first
+          path: work
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply exact P1-M2C.2 patch
+        working-directory: work
+        run: node ../trusted/scripts/apply-p1-m2c2-priority-first-trusted.mjs
+      - name: Verify exact product scope
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(git status --short | awk '{print $2}' | sort)
+          expected=$(printf '%s\n' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/lib/mlb-pregame-readiness.test.ts' \
+            'frontend/client/src/lib/mlb-pregame-readiness.ts' \
+            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+          [[ "${changed}" == "${expected}" ]]
+          git diff --check
+      - name: Commit product changes
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/App.tsx \
+            frontend/client/src/components/mlb-daily-slate-panel.tsx \
+            frontend/client/src/components/mlb-pregame-readiness-gate.tsx \
+            frontend/client/src/lib/mlb-pregame-readiness.test.ts \
+            frontend/client/src/lib/mlb-pregame-readiness.ts \
+            frontend/client/src/pages/mlb-predictor.tsx
+          git commit -m 'P1-M2C.2: prioritize actionable MLB games'
+          git push origin HEAD:feature/p1-m2c2-mlb-priority-first
