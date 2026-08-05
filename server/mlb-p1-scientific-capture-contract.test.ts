@@ -235,6 +235,8 @@ test("semantic identity ignores transmission time and deployment commit but chan
     origin: { ...candidate().origin, clientEvaluationId: "ui-retry-824466-f5ml-home" },
     model: { ...candidate().model, gitCommit: "frontend-commit-b" },
   });
+  (retry.scientificSnapshot.payload.model as Record<string, unknown>).gitCommit = "frontend-commit-b";
+  retry.scientificSnapshot.payloadDigest = mlbP1M3aSha256(retry.scientificSnapshot.payload);
   const firstIdentity = buildMlbP1M3aCaptureIdentity(original);
   const retryIdentity = buildMlbP1M3aCaptureIdentity(retry);
   assert.equal(firstIdentity.semanticFingerprint, retryIdentity.semanticFingerprint);

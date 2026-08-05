@@ -349,7 +349,6 @@ export function buildMlbP1M3aCaptureIdentity(candidate: MlbP1M3aCaptureCandidate
       recommendedStakeUnits: candidate.decision.recommendedStakeUnits,
       filterReasons: [...candidate.decision.filterReasons].sort(),
     },
-    scientificSnapshotDigest: candidate.scientificSnapshot.payloadDigest,
   };
   const lifecycleKey = mlbP1M3aSha256(lifecycleBasis);
   const semanticFingerprint = mlbP1M3aSha256(semanticBasis);
@@ -430,6 +429,7 @@ export function validateMlbP1M3aCapture(
   if (candidate.decision.confidencePct != null && (!finite(candidate.decision.confidencePct) || candidate.decision.confidencePct < 0 || candidate.decision.confidencePct > 100)) pushUnique(errors, "CONFIDENCE_INVALID");
 
   if (candidate.scientificSnapshot.schemaVersion !== MLB_P1_M3A_SNAPSHOT_SCHEMA) pushUnique(errors, "SCIENTIFIC_SNAPSHOT_SCHEMA_MISMATCH");
+  if (candidate.scientificSnapshot.payload.schemaVersion !== MLB_P1_M3A_SNAPSHOT_SCHEMA) pushUnique(errors, "SCIENTIFIC_SNAPSHOT_PAYLOAD_SCHEMA_MISMATCH");
   if (!HEX_64.test(candidate.scientificSnapshot.payloadDigest)) pushUnique(errors, "SCIENTIFIC_SNAPSHOT_DIGEST_INVALID");
   else if (mlbP1M3aSha256(candidate.scientificSnapshot.payload) !== candidate.scientificSnapshot.payloadDigest) pushUnique(errors, "SCIENTIFIC_SNAPSHOT_DIGEST_MISMATCH");
   if (snapshotBytes(candidate.scientificSnapshot.payload) > MLB_P1_M3A_MAX_SNAPSHOT_BYTES) pushUnique(errors, "SCIENTIFIC_SNAPSHOT_TOO_LARGE");
