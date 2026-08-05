@@ -1,0 +1,83 @@
+name: Validate P1-M2C MLB Pregame Readiness UI
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
+      - 'frontend/client/src/lib/mlb-pregame-readiness.test.ts'
+      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'docs/P1_M2C_MLB_PREGAME_READINESS_UI.md'
+      - '.github/workflows/validate-p1-m2c-mlb-pregame-readiness-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2c-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M2C and P1-M1 regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify P1-M2C integration and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/mlb-predictor.tsx'
+          panel='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+          contract='frontend/client/src/lib/mlb-pregame-readiness.ts'
+          app='frontend/client/src/App.tsx'
+
+          grep -F 'p1-m2c-mlb-pregame-readiness-ui-2026-08-05' "$app"
+          grep -F 'MlbPregameReadinessGate' "$page"
+          grep -F 'data-pregame-stage' "$page"
+          grep -F 'Pregame readiness' "$page" || true
+          grep -F '/api/mlb/p1/v1/pregame-readiness' "$contract"
+          grep -F 'courtedge-p1-m2b-pregame-readiness.v1' "$contract"
+          grep -F 'courtedge-p1-m2a-pregame-readiness-contract.v1' "$contract"
+          grep -F 'SHADOW_DECISION_SUPPORT' "$contract"
+          grep -F 'realFinancialExposure === 0' "$contract"
+          grep -F 'automaticBetPlacement === false' "$contract"
+          grep -F 'READY_FINAL' "$panel"
+          grep -F 'READY_PROVISIONAL' "$panel"
+          grep -F 'BLOCKED' "$panel"
+          grep -F 'Predicción bloqueada · verifica P1-M2C' "$page"
+          grep -F 'f5OddsSource: f5OddsSource || "none"' "$page"
+          [[ "$(grep -Fc '<MlbPregameReadinessGate' "$page")" == '1' ]]
+          [[ "$(grep -Fc '/api/mlb/p1/v1/pregame-readiness' "$contract")" == '1' ]]
+
+          ! grep -E 'method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"|useMutation|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$panel" "$contract"
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m2c-bundle.js
+          grep -F 'p1-m2c-mlb-pregame-readiness-ui-2026-08-05' /tmp/p1-m2c-bundle.js
+          grep -F 'P1-M2C · COMPUERTA PREGAME' /tmp/p1-m2c-bundle.js
+          grep -F 'LISTO FINAL' /tmp/p1-m2c-bundle.js
+          grep -F 'LISTO PROVISIONAL' /tmp/p1-m2c-bundle.js
+          grep -F 'BLOQUEADO' /tmp/p1-m2c-bundle.js
+          grep -F 'Predicción bloqueada · verifica P1-M2C' /tmp/p1-m2c-bundle.js
+          grep -F '/api/mlb/p1/v1/pregame-readiness' /tmp/p1-m2c-bundle.js
+          grep -F 'SHADOW · exposición 0' /tmp/p1-m2c-bundle.js
+      - name: Diff hygiene
+        run: git diff --check
