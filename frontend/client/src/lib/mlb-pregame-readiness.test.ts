@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   MLB_P1_M2A_CONTRACT_SCHEMA,
   MLB_P1_M2B_READINESS_SCHEMA,
+  buildMlbPregameCertifiedLinePatch,
   buildMlbPregameManualOddsParams,
   buildMlbPregameReadinessUrl,
   mlbPregameSafetyValid,
@@ -215,4 +216,33 @@ test("P1-M2C snapshot preserves FINAL, PROVISIONAL and BLOCKED authority", () =>
   }));
   assert.equal(blocked.status, "BLOCKED");
   assert.equal(blocked.analysisAllowed, false);
+});
+
+
+test("P1-M2C.2 maps each certified quote only into its matching model fields", () => {
+  assert.deepEqual(buildMlbPregameCertifiedLinePatch("ML", { home: -150, away: 130 }), {
+    mlHome: "-150",
+    mlAway: "130",
+  });
+  assert.deepEqual(buildMlbPregameCertifiedLinePatch("F5_ML", { homeOdds: -125, awayOdds: 110 }), {
+    f5MlHome: "-125",
+    f5MlAway: "110",
+    f5OddsSource: "consenso",
+  });
+  assert.deepEqual(buildMlbPregameCertifiedLinePatch("RUN_LINE", { line: -1.5, homeOdds: 145, awayOdds: -165 }), {
+    runLine: "-1.5",
+    runLineHomeOdds: "145",
+    runLineAwayOdds: "-165",
+  });
+  assert.deepEqual(buildMlbPregameCertifiedLinePatch("TOTAL", { line: 8.5, overOdds: -105, underOdds: -115 }), {
+    totalLine: "8.5",
+    overOdds: "-105",
+    underOdds: "-115",
+  });
+});
+
+test("P1-M2C.2 refuses incomplete or unsupported certified quotes", () => {
+  assert.equal(buildMlbPregameCertifiedLinePatch("ML", { home: -150 }), null);
+  assert.equal(buildMlbPregameCertifiedLinePatch("TOTAL", { line: 8.5, overOdds: -110 }), null);
+  assert.equal(buildMlbPregameCertifiedLinePatch("F5_TOTAL", { line: 4.5, overOdds: -110, underOdds: -110 }), null);
 });
