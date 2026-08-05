@@ -48,6 +48,18 @@ test("P1-M2C builds run-line and total snapshots with the correct fields", () =>
   assert.equal(total?.get("manualUnderOdds"), "-110");
 });
 
+test("P1-M2C preserves automatic provider timestamps for F5 consensus", () => {
+  const request = buildMlbPregameReadinessUrl({
+    gamePk: "824158",
+    date: "2026-08-05",
+    market: "F5_ML",
+    lines: { ...lines, f5OddsSource: "consenso" },
+    capturedAt,
+  });
+  assert.equal(request.oddsMode, "automatic");
+  assert.doesNotMatch(request.url, /oddsMode=manual/);
+});
+
 test("P1-M2C never reuses full-game total prices for F5 total", () => {
   assert.equal(buildMlbPregameManualOddsParams("F5_TOTAL", lines, capturedAt), null);
   const request = buildMlbPregameReadinessUrl({
