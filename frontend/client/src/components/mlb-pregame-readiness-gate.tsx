@@ -22,6 +22,7 @@ import {
   toMlbPregameGateSnapshot,
   validateMlbPregameModelQuote,
   type MlbPregameEvidence,
+  type MlbPregameEvidenceState,
   type MlbPregameGateSnapshot,
   type MlbPregameLineInputs,
   type MlbPregameMarket,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/mlb-pregame-readiness";
 
 const MARKETS: MlbPregameMarket[] = ["ML", "F5_ML", "RUN_LINE", "TOTAL"];
+const EVIDENCE_STATES: MlbPregameEvidenceState[] = ["FRESH", "DEGRADED", "MISSING", "STALE", "CONFLICT", "UNKNOWN"];
 
 function gateClasses(status: string | null): string {
   if (status === "READY_FINAL") return "border-emerald-500/45 bg-emerald-500/[0.07]";
@@ -67,6 +69,27 @@ function evidenceStateLabel(state: string): string {
   return "SIN CERTIFICAR";
 }
 
+function summarizeEvidence(items: MlbPregameEvidence[]): Record<MlbPregameEvidenceState, number> {
+  return EVIDENCE_STATES.reduce((summary, state) => {
+    summary[state] = items.filter((item) => item.state === state).length;
+    return summary;
+  }, { FRESH: 0, DEGRADED: 0, MISSING: 0, STALE: 0, CONFLICT: 0, UNKNOWN: 0 } as Record<MlbPregameEvidenceState, number>);
+}
+
+function EvidenceSummary({ items }: { items: MlbPregameEvidence[] }) {
+  const summary = summarizeEvidence(items);
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" data-testid="p1-m2c1-required-summary">
+      <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-2.5"><p className="text-lg font-bold text-emerald-200">{summary.FRESH}</p><p className="text-[10px] text-muted-foreground">Frescos</p></div>
+      <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-2.5"><p className="text-lg font-bold text-amber-200">{summary.DEGRADED}</p><p className="text-[10px] text-muted-foreground">Degradados</p></div>
+      <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-2.5"><p className="text-lg font-bold text-red-200">{summary.MISSING}</p><p className="text-[10px] text-muted-foreground">Faltantes</p></div>
+      <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-2.5"><p className="text-lg font-bold text-red-200">{summary.STALE}</p><p className="text-[10px] text-muted-foreground">Vencidos</p></div>
+      <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-2.5"><p className="text-lg font-bold text-red-200">{summary.CONFLICT}</p><p className="text-[10px] text-muted-foreground">Conflictos</p></div>
+      <div className="rounded-lg border border-slate-500/25 bg-slate-500/[0.04] p-2.5"><p className="text-lg font-bold text-slate-200">{summary.UNKNOWN}</p><p className="text-[10px] text-muted-foreground">Sin certificar</p></div>
+    </div>
+  );
+}
+
 function EvidenceRow({ evidence }: { evidence: MlbPregameEvidence }) {
   return (
     <div
@@ -84,7 +107,7 @@ function EvidenceRow({ evidence }: { evidence: MlbPregameEvidence }) {
           <Badge variant="outline" className={`text-[9px] ${evidenceClasses(evidence.state)}`}>
             {evidenceStateLabel(evidence.state)}
           </Badge>
-          <p className="mt-1 text-[9px] opacity-70">{evidence.required ? "Requerido" : "No requerido"}</p>
+          <p className="mt-1 text-[9px] opacity-70">{evidence.required ? "Requerido" : "Complementario"}</p>
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9px] opacity-75">
@@ -95,7 +118,7 @@ function EvidenceRow({ evidence }: { evidence: MlbPregameEvidence }) {
       {evidence.errors.length > 0 && (
         <div className="mt-2 border-t border-current/15 pt-2">
           {evidence.errors.slice(0, 2).map((error) => (
-            <p key={error} className="text-[9px] opacity-85">• {error}</p>
+            <p key={error} className="text-[9px] opacity-85">• {mlbPregameReasonLabel(error)}</p>
           ))}
         </div>
       )}
@@ -200,11 +223,10 @@ export function MlbPregameReadinessGate({
     onSnapshotRef.current(null);
   }, [gamePk, date, market]);
 
-  const evidence = useMemo(() => {
-    if (!contractReport) return [];
-    return [...contractReport.evidence].sort((left, right) => Number(right.required) - Number(left.required));
-  }, [contractReport]);
-
+  const evidence = useMemo(() => contractReport?.evidence ?? [], [contractReport]);
+  const requiredEvidence = useMemo(() => evidence.filter((item) => item.required), [evidence]);
+  const complementaryEvidence = useMemo(() => evidence.filter((item) => !item.required), [evidence]);
+  const complementarySummary = useMemo(() => summarizeEvidence(complementaryEvidence), [complementaryEvidence]);
   const selectedMarketLabel = mlbPregameMarketLabel(market);
 
   if (!gamePk) {
@@ -228,6 +250,7 @@ export function MlbPregameReadinessGate({
           <div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border-violet-500/40 bg-violet-500/15 text-violet-100">P1-M2C · COMPUERTA PREGAME</Badge>
+              <Badge variant="outline" className="border-cyan-500/40 text-cyan-200">P1-M2C.1 · FLUJO CONSOLIDADO</Badge>
               <Badge variant="outline" className={gateBadgeClasses(status)} data-testid="p1-m2c-gate-status">
                 {gateLabel(status)}
               </Badge>
@@ -325,14 +348,16 @@ export function MlbPregameReadinessGate({
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-3"><p className="text-xl font-bold text-emerald-200">{contractReport.summary.fresh}</p><p className="text-[10px] text-muted-foreground">Frescos</p></div>
-              <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3"><p className="text-xl font-bold text-amber-200">{contractReport.summary.degraded}</p><p className="text-[10px] text-muted-foreground">Degradados</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.missing}</p><p className="text-[10px] text-muted-foreground">Faltantes</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.stale}</p><p className="text-[10px] text-muted-foreground">Vencidos</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.conflict}</p><p className="text-[10px] text-muted-foreground">Conflictos</p></div>
-              <div className="rounded-lg border border-slate-500/25 bg-slate-500/[0.04] p-3"><p className="text-xl font-bold text-slate-200">{contractReport.summary.unknown}</p><p className="text-[10px] text-muted-foreground">Sin certificar</p></div>
-            </div>
+            <section className="space-y-3" data-testid="p1-m2c1-required-evidence">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-white">Evidencia requerida</p>
+                  <p className="text-[10px] text-muted-foreground">Estos {requiredEvidence.length} campos determinan FINAL, PROVISIONAL o BLOQUEADO.</p>
+                </div>
+                <Badge variant="outline">{requiredEvidence.length} requeridos</Badge>
+              </div>
+              <EvidenceSummary items={requiredEvidence} />
+            </section>
 
             {contractReport.gate.blockers.length > 0 && (
               <div className="rounded-lg border border-red-500/35 bg-red-500/[0.06] p-4" data-testid="p1-m2c-blockers">
@@ -353,8 +378,29 @@ export function MlbPregameReadinessGate({
             )}
 
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" data-testid="p1-m2c-evidence-grid">
-              {evidence.map((item) => <EvidenceRow key={item.field} evidence={item} />)}
+              {requiredEvidence.map((item) => <EvidenceRow key={item.field} evidence={item} />)}
             </div>
+
+            {complementaryEvidence.length > 0 && (
+              <details className="group rounded-lg border border-slate-600/45 bg-slate-950/35" data-testid="p1-m2c1-complementary-evidence">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200">Evidencia complementaria</p>
+                    <p className="text-[10px] text-muted-foreground">No altera por sí sola la autorización del mercado seleccionado.</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1 text-[9px]">
+                    <Badge variant="outline" className="border-emerald-500/30 text-emerald-300">{complementarySummary.FRESH} frescos</Badge>
+                    <Badge variant="outline" className="border-amber-500/30 text-amber-300">{complementarySummary.DEGRADED} degradados</Badge>
+                    <Badge variant="outline" className="border-slate-500/30 text-slate-300">{complementarySummary.UNKNOWN} sin certificar</Badge>
+                    <span className="px-2 py-1 text-slate-400 group-open:hidden">Abrir</span>
+                    <span className="hidden px-2 py-1 text-slate-400 group-open:inline">Cerrar</span>
+                  </div>
+                </summary>
+                <div className="grid gap-2 border-t border-slate-700/50 p-4 md:grid-cols-2 xl:grid-cols-3">
+                  {complementaryEvidence.map((item) => <EvidenceRow key={item.field} evidence={item} />)}
+                </div>
+              </details>
+            )}
 
             <p className="text-[10px] text-muted-foreground">
               Verificado {new Intl.DateTimeFormat("es-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(contractReport.generatedAt))} ET · El selector cambia los requisitos según el mercado.
