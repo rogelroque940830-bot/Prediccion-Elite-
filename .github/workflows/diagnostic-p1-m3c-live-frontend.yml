@@ -46,7 +46,7 @@ jobs:
                 if [[ "${source}" =~ ^https?:// ]]; then
                   asset_url="${source}"
                 else
-                  asset_url="${FRONTEND_URL}${source#/}"
+                  asset_url="${FRONTEND_URL}/${source#/}"
                 fi
                 curl -sS -L --max-time 30 "${asset_url}" >> audit/bundle.js || true
                 printf '\n' >> audit/bundle.js
