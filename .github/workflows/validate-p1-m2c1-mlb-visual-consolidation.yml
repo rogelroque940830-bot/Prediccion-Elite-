@@ -1,0 +1,112 @@
+name: Validate P1-M2C.1 MLB Visual Consolidation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+      - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2c1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run P1-M2C and P1-M1 focused regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify consolidated operator flow and compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/mlb-predictor.tsx'
+          gate='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+          app='frontend/client/src/App.tsx'
+
+          grep -F 'p1-m2c1-mlb-visual-consolidation-2026-08-05' "$app"
+          grep -F 'p1-m2c-mlb-pregame-readiness-ui-2026-08-05' "$app"
+          grep -F 'max-w-[1480px]' "$page"
+          grep -F 'data-testid="p1-m2c1-operational-checkpoint"' "$page"
+          grep -F 'data-testid="p1-m2c1-sticky-summary"' "$page"
+          grep -F 'data-testid="p1-m2c1-manual-controls"' "$page"
+          grep -F 'data-testid="p1-m2c1-advanced-evidence"' "$page"
+          grep -F 'data-testid="p1-m2c1-manual-data"' "$page"
+          grep -F 'data-p1-m2c1-single-slate-note="true"' "$page"
+          grep -F 'data-testid="p1-m2c1-required-evidence"' "$gate"
+          grep -F 'data-testid="p1-m2c1-complementary-evidence"' "$gate"
+          grep -F 'P1-M2C · COMPUERTA PREGAME' "$gate"
+          grep -F 'P1-M2C.1 · FLUJO CONSOLIDADO' "$gate"
+          grep -F 'data-testid="p1-mlb-daily-slate"' "$page"
+          grep -F 'P1 · Jornada MLB' "$page"
+
+          [[ "$(grep -Fc '<MlbDailySlatePanel' "$page")" == '1' ]]
+          [[ "$(grep -Fc 'data-testid="p1-mlb-daily-slate"' "$page")" == '1' ]]
+          [[ "$(grep -Fc '<MlbPregameReadinessGate' "$page")" == '1' ]]
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const page = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
+          const slate = page.indexOf('<MlbDailySlatePanel');
+          const compatibility = page.indexOf('data-testid="p1-mlb-daily-slate"');
+          const checkpoint = page.indexOf('data-testid="p1-m2c1-operational-checkpoint"');
+          const lines = page.indexOf('id="mlb-betting-lines"');
+          const results = page.indexOf('{/* RESULTS */}');
+          if ([slate, compatibility, checkpoint, lines, results].some((value) => value < 0)) {
+            throw new Error('P1-M2C.1 operator flow marker missing');
+          }
+          if (!(slate < compatibility && compatibility < checkpoint && checkpoint < lines && lines < results)) {
+            throw new Error('P1-M2C.1 operator flow is out of order');
+          }
+          for (const forbidden of ['handlePredict(', 'savePick(', 'placeBet', 'method: "POST"']) {
+            const pregame = page.slice(slate, checkpoint);
+            if (pregame.includes(forbidden)) throw new Error(`Forbidden action before readiness checkpoint: ${forbidden}`);
+          }
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m2c1-bundle.js
+          grep -F 'p1-m2c1-mlb-visual-consolidation-2026-08-05' /tmp/p1-m2c1-bundle.js
+          grep -F 'P1-M2C.1 · FLUJO CONSOLIDADO' /tmp/p1-m2c1-bundle.js
+          grep -F 'Evidencia requerida' /tmp/p1-m2c1-bundle.js
+          grep -F 'Evidencia complementaria' /tmp/p1-m2c1-bundle.js
+          grep -F 'Controles manuales y fuentes de cuotas' /tmp/p1-m2c1-bundle.js
+          grep -F 'Evidencia técnica avanzada' /tmp/p1-m2c1-bundle.js
+          grep -F 'Datos editables y contexto del partido' /tmp/p1-m2c1-bundle.js
+      - name: Diff hygiene and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+          [[ "${changed}" == "${expected}" ]]
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
+            frontend/client/src/components/mlb-pregame-readiness-gate.tsx
