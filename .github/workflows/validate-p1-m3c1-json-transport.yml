@@ -10,6 +10,7 @@ on:
       - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
       - 'frontend/client/src/lib/queryClient.ts'
       - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
       - '.github/workflows/validate-p1-m3c1-json-transport.yml'
 
 permissions:
@@ -51,6 +52,7 @@ jobs:
           capture='frontend/client/src/lib/mlb-scientific-capture.ts'
           transport='frontend/client/src/lib/mlb-scientific-capture-transport.ts'
           query='frontend/client/src/lib/queryClient.ts'
+          legacy_workflow='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
 
           grep -F 'p1-m3c1-json-digest-transport-2026-08-05' "$capture"
           grep -F 'prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)' "$capture"
@@ -61,6 +63,8 @@ jobs:
           grep -F 'P1_M3C_SNAPSHOT_TOO_LARGE' "$transport"
           grep -F 'contractErrors' "$query"
           grep -F 'parsed?.details?.errors' "$query"
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' "$legacy_workflow"
+          grep -F 'mlb-scientific-capture-transport.test.ts' "$legacy_workflow"
           grep -F 'realFinancialExposure: 0 as const' "$capture"
           grep -F 'automaticBetPlacement: false as const' "$capture"
 
@@ -93,6 +97,7 @@ jobs:
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
           expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
             '.github/workflows/validate-p1-m3c1-json-transport.yml' \
             'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md' \
             'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts' \
