@@ -181,6 +181,7 @@ const PROTECTED_WRITE_PATHS = [
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/sharp(?:\/|$)/,
   /^\/api\/mlb\/ledger(?:\/|$)/,
+  /^\/api\/mlb\/p1\/v1\/scientific-captures(?:\/|$)/,
   /^\/api\/wnba\/predictor-shadow(?:\/|$)/,
   /^\/api\/auth\/users(?:\/|$)/,
   /^\/api\/ops(?:\/|$)/,
