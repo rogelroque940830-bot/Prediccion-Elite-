@@ -1,0 +1,131 @@
+name: Diagnostic P1-M2B Live Backend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-p1-m2b-live-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m2b-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: a490b0eb9e28c36e3e358d44b50cf4be7cbd274a
+      SLATE_DATE: '2026-08-05'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for exact P1-M2B backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "${code}" == "200" ]]; then
+              commit=$(node -e "const fs=require('fs'); try { console.log(JSON.parse(fs.readFileSync('audit/health.json','utf8')).commit || '') } catch {}")
+              if [[ "${commit}" == "${EXPECTED_BACKEND_COMMIT}" ]]; then
+                echo "Exact P1-M2B backend commit is live: ${commit}"
+                break
+              fi
+            fi
+            echo "Attempt ${attempt}/100: backend code=${code}; waiting for ${EXPECTED_BACKEND_COMMIT}"
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for exact P1-M2B backend deployment' >&2
+              cat audit/health.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 15
+          done
+      - name: Select an eligible live-slate game
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o audit/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate?date=${SLATE_DATE}")
+          [[ "${code}" == "200" ]] || { echo "slate HTTP ${code}" >&2; cat audit/slate.json; exit 1; }
+          node <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('audit/slate.json', 'utf8'));
+          if (payload.success !== true) throw new Error('slate success=false');
+          const games = payload.data?.games ?? [];
+          const game = games.find((item) =>
+            ['SCHEDULED', 'PREGAME'].includes(item.state)
+            && item.homePitcher?.confirmed === true
+            && item.awayPitcher?.confirmed === true
+          );
+          if (!game) throw new Error('No future game with both probable pitchers was available');
+          fs.appendFileSync(process.env.GITHUB_ENV, `GAME_PK=${game.gamePk}\n`);
+          fs.writeFileSync('audit/selected-game.json', JSON.stringify(game, null, 2));
+          console.log(JSON.stringify({
+            gamePk: game.gamePk,
+            matchup: `${game.awayTeam?.name} @ ${game.homeTeam?.name}`,
+            state: game.state,
+            lineupState: game.lineupState,
+            readiness: game.readiness,
+          }, null, 2));
+          NODE
+      - name: Verify live P1-M2B readiness contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          captured_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          code=$(curl -sS -G -o audit/readiness.json -w '%{http_code}' --max-time 180 \
+            "${BACKEND_URL}/api/mlb/p1/v1/pregame-readiness" \
+            --data-urlencode "gamePk=${GAME_PK}" \
+            --data-urlencode 'market=F5_ML' \
+            --data-urlencode "date=${SLATE_DATE}" \
+            --data-urlencode 'oddsMode=manual' \
+            --data-urlencode 'manualBook=Diagnostic read-only snapshot' \
+            --data-urlencode "manualCapturedAt=${captured_at}" \
+            --data-urlencode 'manualHomeOdds=-110' \
+            --data-urlencode 'manualAwayOdds=-110')
+          [[ "${code}" == "200" ]] || { echo "readiness HTTP ${code}" >&2; cat audit/readiness.json; exit 1; }
+          EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" GAME_PK="${GAME_PK}" node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const payload = JSON.parse(fs.readFileSync('audit/readiness.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(health.commit === process.env.EXPECTED_BACKEND_COMMIT, `health commit=${health.commit}`);
+          assert(payload.success === true, 'readiness success=false');
+          const report = payload.data;
+          assert(report?.schemaVersion === 'courtedge-p1-m2b-pregame-readiness.v1', `schema=${report?.schemaVersion}`);
+          assert(report?.contractSchemaVersion === 'courtedge-p1-m2a-pregame-readiness-contract.v1', `contract=${report?.contractSchemaVersion}`);
+          assert(String(report?.game?.gamePk) === process.env.GAME_PK, `gamePk=${report?.game?.gamePk}`);
+          assert(report?.market === 'F5_ML', `market=${report?.market}`);
+          assert(['READY_FINAL', 'READY_PROVISIONAL'].includes(report?.gate?.status), `gate=${report?.gate?.status}`);
+          assert(report?.gate?.analysisAllowed === true, 'analysisAllowed=false');
+          assert(Array.isArray(report?.evidence) && report.evidence.length === 11, `evidence=${report?.evidence?.length}`);
+          const byField = Object.fromEntries(report.evidence.map((item) => [item.field, item]));
+          assert(byField.GAME_IDENTITY?.state === 'FRESH', `identity=${byField.GAME_IDENTITY?.state}`);
+          assert(byField.PITCHERS?.state === 'FRESH', `pitchers=${byField.PITCHERS?.state}`);
+          assert(byField.MARKET_ODDS?.state === 'FRESH', `odds=${byField.MARKET_ODDS?.state}`);
+          assert(byField.MARKET_ODDS?.sourceStatus === 'MANUAL_OVERRIDE', `odds source=${byField.MARKET_ODDS?.sourceStatus}`);
+          assert(report?.safety?.mode === 'SHADOW_DECISION_SUPPORT', `mode=${report?.safety?.mode}`);
+          assert(report?.safety?.realFinancialExposure === 0, `exposure=${report?.safety?.realFinancialExposure}`);
+          assert(report?.safety?.automaticBetPlacement === false, 'automatic betting enabled');
+          console.log(JSON.stringify({
+            backendCommit: health.commit,
+            gamePk: report.game.gamePk,
+            market: report.market,
+            gate: report.gate,
+            summary: report.summary,
+            evidence: report.evidence.map(({ field, required, state, sourceStatus, quality }) => ({ field, required, state, sourceStatus, quality })),
+            predictionsGenerated: 0,
+            picksSaved: 0,
+            betsPlaced: 0,
+            safety: report.safety,
+          }, null, 2));
+          NODE
+      - name: Upload read-only diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-live-backend-evidence
+          path: audit
+          if-no-files-found: warn
