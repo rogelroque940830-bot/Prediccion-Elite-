@@ -33,7 +33,7 @@ export function prepareMlbP1M3cSnapshotForTransport(
   snapshot: MlbScientificSnapshot,
 ): MlbP1M3cPreparedSnapshot {
   const redactedFieldNames = new Set<string>();
-  let json: string;
+  let json: string | undefined;
 
   try {
     json = JSON.stringify(snapshot, (key, value) => {
