@@ -221,7 +221,7 @@ export function resolveMlbP1M3cAutomaticSelection(
       marketLabel: "ML",
       pick: `${side === "home" ? home : away} ML`,
       oddsAmerican: odds,
-      modelProbPct: (side === "home" ? input.result.homeProb : input.result.awayProb) * 100,
+      modelProbPct: round((side === "home" ? input.result.homeProb : input.result.awayProb) * 100, 8),
     };
   }
 
@@ -235,7 +235,7 @@ export function resolveMlbP1M3cAutomaticSelection(
       marketLabel: "F5",
       pick: `${side === "home" ? home : away} F5`,
       oddsAmerican: odds,
-      modelProbPct: (side === "home" ? input.result.f5HomeProb : input.result.f5AwayProb) * 100,
+      modelProbPct: round((side === "home" ? input.result.f5HomeProb : input.result.f5AwayProb) * 100, 8),
     };
   }
 
@@ -249,7 +249,7 @@ export function resolveMlbP1M3cAutomaticSelection(
       marketLabel: "Run Line",
       pick: `${input.result.runLine.side} (${side === "home" ? home : away})`,
       oddsAmerican: odds,
-      modelProbPct: (input.result.runLine.coverProb ?? (input.result.runLine.coversRL ? 0.56 : 0.44)) * 100,
+      modelProbPct: round((input.result.runLine.coverProb ?? (input.result.runLine.coversRL ? 0.56 : 0.44)) * 100, 8),
     };
   }
 
@@ -263,7 +263,7 @@ export function resolveMlbP1M3cAutomaticSelection(
       marketLabel: "O/U",
       pick: `${side} ${input.result.ouLine}`,
       oddsAmerican: odds,
-      modelProbPct: (input.result.ouResult.hitProb ?? 0.55) * 100,
+      modelProbPct: round((input.result.ouResult.hitProb ?? 0.55) * 100, 8),
     };
   }
 
