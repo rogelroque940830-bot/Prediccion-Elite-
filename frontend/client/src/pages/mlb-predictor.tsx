@@ -20,6 +20,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MlbDailySlatePanel } from "@/components/mlb-daily-slate-panel";
+import { MlbPregameReadinessGate } from "@/components/mlb-pregame-readiness-gate";
+import { type MlbPregameGateSnapshot } from "@/lib/mlb-pregame-readiness";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
@@ -729,6 +731,19 @@ export default function MLBPredictor() {
     }
 
     const normalizedMarket = market.trim().toLowerCase();
+    const certifiedMarket = normalizedMarket === "ml" ? "ML"
+      : normalizedMarket === "f5" ? "F5_ML"
+        : normalizedMarket.includes("run line") ? "RUN_LINE"
+          : normalizedMarket.includes("f5 o/u") ? "F5_TOTAL"
+            : "TOTAL";
+    if (!pregameGate?.analysisAllowed || pregameGate.market !== certifiedMarket) {
+      toast({
+        title: "Mercado no certificado por la compuerta",
+        description: "Verifica este mercado en P1-M2C antes de guardar el pick.",
+        variant: "destructive",
+      });
+      return;
+    }
     const selectedHome = pick.toLowerCase().includes((homeTeam || "Local").toLowerCase());
     const pq = normalizedMarket === "ml" ? result.pickQualities?.ml
       : normalizedMarket === "f5" ? result.pickQualities?.f5
@@ -791,17 +806,11 @@ export default function MLBPredictor() {
         : status === "SOURCE_UNAVAILABLE" ? "MISSING" : "UNKNOWN";
     const completeFactorFeeds = [lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed]
       .filter(Boolean).length;
-    const stage = Boolean(
-      gamePkForTesi
-      && selectedGameId
-      && commenceTime
-      && completeFactorFeeds >= 10
-      && homeInjuryFeed.status === "VERIFIED"
-      && awayInjuryFeed.status === "VERIFIED"
-    ) ? "FINAL" as const : "PROVISIONAL" as const;
+    const stage = pregameGate.analysisStage === "FINAL" ? "FINAL" as const : "PROVISIONAL" as const;
     const warnings = [
       ...(pq?.warnings || []),
-      ...(stage === "PROVISIONAL" ? ["Snapshot provisional: faltan identificador oficial del juego o verificación completa de lesiones."] : []),
+      ...pregameGate.warnings.map((warning) => `Compuerta pregame: ${warning}`),
+      ...(stage === "PROVISIONAL" ? ["Snapshot provisional por decisión autoritativa de P1-M2B."] : []),
     ];
 
     const homeAuditResolution = resolveMlbPhaseBSelection(homeInjuryRoster, homeInjuryFeed, bullpenStatus?.home);
@@ -1021,6 +1030,7 @@ export default function MLBPredictor() {
 
   // Auto-fill
   const [selectedGameId, setSelectedGameId] = useState("");
+  const [pregameGate, setPregameGate] = useState<MlbPregameGateSnapshot | null>(null);
   const [autoStatus, setAutoStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [selectedDate, setSelectedDate] = useState<string>(todayFL()); // YYYY-MM-DD Florida
   const [mlbQueueView, setMlbQueueView] = useState<MlbGameQueueView>("priority");
@@ -1743,6 +1753,22 @@ export default function MLBPredictor() {
 
   // ── PREDICT ───────────────────────────────────────────────────────────────
   const handlePredict = useCallback(() => {
+    if (!selectedGameId || !pregameGate || String(pregameGate.gamePk) !== selectedGameId) {
+      toast({
+        title: "Verifica la compuerta pregame",
+        description: "Selecciona el mercado y espera la certificación P1-M2B.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!pregameGate.analysisAllowed || pregameGate.status === "BLOCKED") {
+      toast({
+        title: "Predicción bloqueada",
+        description: pregameGate.blockers.join(" · ") || "La evidencia requerida no es suficiente.",
+        variant: "destructive",
+      });
+      return;
+    }
     const homePitcher: MLBPitcher = {
       era: parseFloat(homeEra) || 3.80,
       whip: parseFloat(homeWhip) || 1.20,
@@ -2737,6 +2763,7 @@ export default function MLBPredictor() {
     awayHomeRPG, awayHomeERA, awayAwayRPG, awayAwayERA,
     homeSeasonWR, awaySeasonWR,
     umpireData, advancedData,
+    selectedGameId, pregameGate,
     toast,
   ]);
 
@@ -3168,11 +3195,13 @@ export default function MLBPredictor() {
           onDateChange={(date) => {
             setSelectedDate(date);
             setSelectedGameId("");
+            setPregameGate(null);
             setMlbQueueView("priority");
             setResult(null);
           }}
           onAnalyze={async (game) => {
             setSelectedGameId(String(game.gamePk));
+            setPregameGate(null);
             setMlbQueueView(game.analysisStage === "FINAL" ? "priority" : "pending");
             await handleMLBAutoFill(String(game.gamePk));
             window.requestAnimationFrame(() => {
@@ -3193,6 +3222,7 @@ export default function MLBPredictor() {
             onChange={(date) => {
               setSelectedDate(date);
               setSelectedGameId("");
+            setPregameGate(null);
               setMlbQueueView("priority");
               setAutoStatus("idle");
               setResult(null);
@@ -3277,6 +3307,7 @@ export default function MLBPredictor() {
                         disabled={!canPrepare || autoStatus === "loading"}
                         onClick={() => {
                           setSelectedGameId(gameId);
+                          setPregameGate(null);
                           void handleMLBAutoFill(gameId);
                         }}
                         data-testid={`p1-prepare-${gameId}`}
@@ -4682,6 +4713,29 @@ export default function MLBPredictor() {
           </CardContent>
         </Card>
 
+        <MlbPregameReadinessGate
+          gamePk={selectedGameId}
+          date={selectedDate}
+          lines={{
+            mlHome: mlOdds,
+            mlAway: mlOddsAway,
+            runLine,
+            runLineHomeOdds: rlOdds,
+            runLineAwayOdds: rlOddsAway,
+            totalLine: ouLine,
+            overOdds,
+            underOdds,
+            f5MlHome,
+            f5MlAway,
+            f5TotalLine: f5OuLine,
+            f5OddsSource: f5OddsSource || "none",
+          }}
+          onSnapshot={(snapshot) => {
+            setPregameGate(snapshot);
+            if (!snapshot) setResult(null);
+          }}
+        />
+
         {/* LÍNEAS */}
         <Card className="border border-slate-700/50 bg-slate-900/50">
           <CardHeader className="pb-3">
@@ -4725,11 +4779,23 @@ export default function MLBPredictor() {
             </div>
             <Button
               onClick={handlePredict}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
+              disabled={!pregameGate?.analysisAllowed || pregameGate.status === "BLOCKED"}
+              className={`w-full text-white font-semibold py-3 ${
+                pregameGate?.analysisStage === "FINAL"
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : pregameGate?.analysisStage === "PROVISIONAL"
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : "bg-slate-700"
+              }`}
               data-testid="btn-predict"
+              data-pregame-stage={pregameGate?.analysisStage ?? "BLOCKED"}
             >
               <Brain className="w-4 h-4 mr-2" />
-              Generar Predicción
+              {pregameGate?.analysisStage === "FINAL"
+                ? `Generar Predicción FINAL · ${pregameGate.market}`
+                : pregameGate?.analysisStage === "PROVISIONAL"
+                  ? `Generar Predicción PROVISIONAL · ${pregameGate.market}`
+                  : "Predicción bloqueada · verifica P1-M2C"}
             </Button>
           </CardContent>
         </Card>
@@ -4750,7 +4816,11 @@ export default function MLBPredictor() {
                 { key: "runLine", label: "Run Line", pq: result.pickQualities.runLine },
                 { key: "ou", label: "Total O/U", pq: result.pickQualities.ou },
               ].filter(x => x.pq);
-              const playable = allPqs.filter(x => x.pq!.recommendation !== "PASS");
+              const certifiedKey = pregameGate?.market === "ML" ? "ml"
+                : pregameGate?.market === "F5_ML" ? "f5"
+                  : pregameGate?.market === "RUN_LINE" ? "runLine"
+                    : pregameGate?.market === "TOTAL" ? "ou" : null;
+              const playable = allPqs.filter(x => x.pq!.recommendation !== "PASS" && x.key === certifiedKey);
               const bestPick = playable.length > 0
                 ? playable.reduce((a, b) => (b.pq!.score > a.pq!.score) ? b : a)
                 : null;
