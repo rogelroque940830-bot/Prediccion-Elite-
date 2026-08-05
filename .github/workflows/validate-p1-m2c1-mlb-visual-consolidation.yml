@@ -7,8 +7,12 @@ on:
     paths:
       - 'frontend/client/src/App.tsx'
       - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
       - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
+      - 'frontend/client/src/lib/mlb-pregame-readiness.test.ts'
       - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
+      - '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml'
 
 permissions:
   contents: read
@@ -104,8 +108,12 @@ jobs:
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
+            '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml' \
             'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' \
             'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/lib/mlb-pregame-readiness.test.ts' \
+            'frontend/client/src/lib/mlb-pregame-readiness.ts' \
             'frontend/client/src/pages/mlb-predictor.tsx' | sort)
           [[ "${changed}" == "${expected}" ]]
           ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
