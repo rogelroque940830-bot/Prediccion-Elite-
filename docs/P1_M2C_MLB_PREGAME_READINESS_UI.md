@@ -8,16 +8,15 @@ Consumir el contrato runtime de P1-M2B dentro de MLB Predictor y convertir su de
 
 1. El usuario selecciona y prepara un partido desde la jornada P1-M1.
 2. La compuerta consulta `GET /api/mlb/p1/v1/pregame-readiness` con `gamePk`, fecha y mercado.
-3. Cuando el formulario contiene un snapshot bilateral válido, la consulta lo identifica como captura manual del mercado.
-4. La pantalla muestra las 11 evidencias con estado, fuente, calidad, edad y ventana máxima.
-5. El backend conserva autoridad sobre `READY_FINAL`, `READY_PROVISIONAL` y `BLOCKED`.
-6. `BLOCKED` deshabilita `Generar Predicción`.
-7. `READY_PROVISIONAL` permite ejecutar el cálculo, pero lo rotula como PROVISIONAL.
-8. `READY_FINAL` permite ejecutar el cálculo y guardar el snapshot como FINAL.
-9. La recomendación única queda restringida al mercado certificado por la compuerta; los demás resultados permanecen informativos.
-10. Un pick solo puede guardarse si corresponde al mercado actualmente certificado.
+3. La pantalla muestra las 11 evidencias con estado, fuente, calidad, edad y ventana máxima.
+4. El backend conserva autoridad sobre `READY_FINAL`, `READY_PROVISIONAL` y `BLOCKED`.
+5. `BLOCKED` deshabilita `Generar Predicción`.
+6. `READY_PROVISIONAL` permite ejecutar el cálculo, pero lo rotula como PROVISIONAL.
+7. `READY_FINAL` permite ejecutar el cálculo y guardar el snapshot como FINAL.
+8. La recomendación única queda restringida al mercado certificado por la compuerta; los demás resultados permanecen informativos.
+9. Un pick solo puede guardarse si corresponde al mercado actualmente certificado.
 
-## Mercados
+## Mercados y procedencia de cuotas
 
 - Moneyline
 - F5 Moneyline
@@ -25,7 +24,9 @@ Consumir el contrato runtime de P1-M2B dentro de MLB Predictor y convertir su de
 - Total O/U
 - F5 Total
 
-La UI nunca reutiliza cuotas del total completo como si fueran cuotas de F5 Total. Cuando el formulario no contiene el precio exacto requerido, P1-M2C solicita la fuente automática del backend. Un consenso F5 conserva la procedencia y los timestamps del backend; solo una edición explícita del usuario se presenta como captura manual.
+Los campos full-game existentes contienen valores iniciales y todavía no registran una transición uniforme `source/observedAt`. Para no fabricar frescura, P1-M2C verifica ML, Run Line y Total mediante la fuente automática de P1-M2B.
+
+F5 Moneyline puede usar una captura manual únicamente después de que el formulario la identifique expresamente como edición manual bilateral. Un consenso F5 conserva la procedencia y los timestamps del backend. F5 Total siempre usa la fuente automática porque la pantalla todavía no recoge un par separado de precios F5 O/U. La UI nunca reutiliza cuotas del total completo como si fueran cuotas F5.
 
 ## Integridad
 
