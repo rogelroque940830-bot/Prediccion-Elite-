@@ -28,24 +28,28 @@ const lines: MlbPregameLineInputs = {
 
 const capturedAt = "2026-08-05T15:30:00.000Z";
 
-test("P1-M2C builds market-aware manual ML odds", () => {
-  const params = buildMlbPregameManualOddsParams("ML", lines, capturedAt);
-  assert.ok(params);
-  assert.equal(params.get("manualHomeOdds"), "-125");
-  assert.equal(params.get("manualAwayOdds"), "115");
-  assert.equal(params.get("manualLine"), null);
+test("P1-M2C does not manufacture freshness from seeded full-game form values", () => {
+  for (const market of ["ML", "RUN_LINE", "TOTAL"] as const) {
+    assert.equal(buildMlbPregameManualOddsParams(market, lines, capturedAt), null);
+    const request = buildMlbPregameReadinessUrl({
+      gamePk: "824158",
+      date: "2026-08-05",
+      market,
+      lines,
+      capturedAt,
+    });
+    assert.equal(request.oddsMode, "automatic");
+    assert.doesNotMatch(request.url, /oddsMode=manual/);
+  }
 });
 
-test("P1-M2C builds run-line and total snapshots with the correct fields", () => {
-  const runLine = buildMlbPregameManualOddsParams("RUN_LINE", lines, capturedAt);
-  assert.equal(runLine?.get("manualLine"), "-1.5");
-  assert.equal(runLine?.get("manualHomeOdds"), "135");
-  assert.equal(runLine?.get("manualAwayOdds"), "-155");
-
-  const total = buildMlbPregameManualOddsParams("TOTAL", lines, capturedAt);
-  assert.equal(total?.get("manualLine"), "8.5");
-  assert.equal(total?.get("manualOverOdds"), "-110");
-  assert.equal(total?.get("manualUnderOdds"), "-110");
+test("P1-M2C sends a bilateral F5 quote only after an explicit manual edit", () => {
+  const params = buildMlbPregameManualOddsParams("F5_ML", lines, capturedAt);
+  assert.ok(params);
+  assert.equal(params.get("manualHomeOdds"), "-120");
+  assert.equal(params.get("manualAwayOdds"), "105");
+  assert.equal(params.get("manualCapturedAt"), capturedAt);
+  assert.equal(params.get("manualBook"), "Hard Rock F5 formulario");
 });
 
 test("P1-M2C preserves automatic provider timestamps for F5 consensus", () => {
@@ -73,7 +77,7 @@ test("P1-M2C never reuses full-game total prices for F5 total", () => {
   assert.doesNotMatch(request.url, /oddsMode=manual/);
 });
 
-test("P1-M2C falls back to automatic odds when manual quotes are incomplete", () => {
+test("P1-M2C falls back to automatic odds when a manual F5 pair is incomplete", () => {
   const request = buildMlbPregameReadinessUrl({
     gamePk: "824158",
     date: "2026-08-05",
