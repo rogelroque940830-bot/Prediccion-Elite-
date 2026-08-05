@@ -1088,7 +1088,7 @@ export default function MLBPredictor() {
             confidencePct: resolvedModelProb,
             recommendedStakeUnits: scientificStake,
             rationale: pq?.reasoning || activeResult.bestPlay?.reason || "Evaluación automática del mercado certificado.",
-            filterReasons: [...new Set(pq?.warnings || [])].slice(0, 100),
+            filterReasons: Array.from(new Set(pq?.warnings || [])).slice(0, 100),
           },
           capturedAt,
           clientEvaluationId,

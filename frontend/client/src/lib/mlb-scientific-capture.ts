@@ -486,7 +486,7 @@ export async function buildMlbP1M3cCandidate(input: MlbP1M3cCandidateInput) {
         ? evaluation.recommendedStakeUnits
         : 0,
       rationale: evaluation.rationale,
-      filterReasons: [...new Set(evaluation.filterReasons)].slice(0, 100),
+      filterReasons: Array.from(new Set(evaluation.filterReasons)).slice(0, 100),
     },
     scientificSnapshot: {
       schemaVersion: "mlb-scientific-snapshot.v1" as const,
