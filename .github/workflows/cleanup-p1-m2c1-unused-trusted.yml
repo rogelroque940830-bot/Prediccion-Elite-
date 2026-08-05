@@ -2,7 +2,7 @@ name: Cleanup trusted P1-M2C.1 unused code
 
 on:
   pull_request_target:
-    types: [reopened, synchronize, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - integration/p0-frontend-session
 
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   cleanup:
-    if: github.event.pull_request.number == 265 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/p1-m2c1-mlb-visual-consolidation'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/p1-m2c1-mlb-visual-consolidation'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted implementation
