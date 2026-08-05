@@ -3,8 +3,9 @@ import type {
   MlbPregameReadinessReport,
 } from "./mlb-pregame-readiness";
 import type { MlbScientificSnapshot } from "./mlb-scientific-snapshot";
+import { prepareMlbP1M3cSnapshotForTransport } from "./mlb-scientific-capture-transport";
 
-export const MLB_P1_M3C_FRONTEND_RELEASE = "p1-m3c-mlb-scientific-emission-2026-08-05" as const;
+export const MLB_P1_M3C_FRONTEND_RELEASE = "p1-m3c1-json-digest-transport-2026-08-05" as const;
 export const MLB_P1_M3A_SCHEMA = "courtedge-p1-m3a-scientific-capture-contract.v1" as const;
 export const MLB_P1_M3B_SCHEMA = "courtedge-p1-m3b-scientific-capture-service.v1" as const;
 export const MLB_P1_M3B_ENDPOINT = "/api/mlb/p1/v1/scientific-captures" as const;
@@ -429,7 +430,8 @@ export async function buildMlbP1M3cCandidate(input: MlbP1M3cCandidateInput) {
     summary: report.summary,
     evidence: report.evidence,
   });
-  const payloadDigest = await mlbP1M3cSha256(input.scientificSnapshot);
+  const preparedSnapshot = prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot);
+  const payloadDigest = await mlbP1M3cSha256(preparedSnapshot.payload);
 
   return {
     schemaVersion: MLB_P1_M3A_SCHEMA,
@@ -490,7 +492,7 @@ export async function buildMlbP1M3cCandidate(input: MlbP1M3cCandidateInput) {
     },
     scientificSnapshot: {
       schemaVersion: "mlb-scientific-snapshot.v1" as const,
-      payload: input.scientificSnapshot as unknown as Record<string, unknown>,
+      payload: preparedSnapshot.payload as unknown as Record<string, unknown>,
       payloadDigest,
     },
     safety: {

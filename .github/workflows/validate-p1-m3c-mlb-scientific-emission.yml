@@ -10,9 +10,14 @@ on:
       - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
       - 'frontend/client/src/lib/mlb-scientific-capture.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture.test.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
+      - 'frontend/client/src/lib/queryClient.ts'
       - 'frontend/client/src/pages/mlb-predictor.tsx'
       - 'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md'
+      - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
 
 permissions:
   contents: read
@@ -35,12 +40,17 @@ jobs:
       - name: Run focused P1-M3C and MLB gate regressions
         run: |
           cd frontend
-          npx tsx --test \
-            client/src/lib/mlb-scientific-capture.test.ts \
-            client/src/lib/mlb-pregame-readiness.test.ts \
-            client/src/lib/mlb-daily-flow.test.ts \
-            client/src/lib/mlb-daily-slate.test.ts \
+          tests=(
+            client/src/lib/mlb-scientific-capture.test.ts
+            client/src/lib/mlb-pregame-readiness.test.ts
+            client/src/lib/mlb-daily-flow.test.ts
+            client/src/lib/mlb-daily-slate.test.ts
             client/src/lib/mlb-review-priority.test.ts
+          )
+          if [[ -f client/src/lib/mlb-scientific-capture-transport.test.ts ]]; then
+            tests+=(client/src/lib/mlb-scientific-capture-transport.test.ts)
+          fi
+          npx tsx --test "${tests[@]}"
       - name: Run production-equivalent frontend verification
         env:
           COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
@@ -55,7 +65,7 @@ jobs:
           client='frontend/client/src/lib/mlb-scientific-capture.ts'
           predictor='frontend/client/src/pages/mlb-predictor.tsx'
 
-          grep -F 'p1-m3c-mlb-scientific-emission-2026-08-05' "$client"
+          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05' "$client"
           grep -F 'MLB_P1_M3C_FRONTEND_RELEASE' "$app"
           grep -F '/api/mlb/p1/v1/scientific-captures' "$client"
           grep -F 'userAction: "GENERATE_PREDICTION"' "$client"
@@ -92,10 +102,19 @@ jobs:
           assert(client.includes('P1_M3C_CERTIFIED_RUN_LINE_MISMATCH'), 'run line fail-closed rule missing');
           assert(gate.includes('onExecutionReportRef.current(null)'), 'full execution report is not invalidated fail-closed');
           assert(!client.includes('sportsbook'), 'scientific client must not contain sportsbook integration');
+
+          if (fs.existsSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts')) {
+            const transport = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts', 'utf8');
+            assert(client.includes('prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)'), 'exact JSON transport preparation missing');
+            assert(client.includes('mlbP1M3cSha256(preparedSnapshot.payload)'), 'wire-stable digest missing');
+            assert(client.includes('payload: preparedSnapshot.payload'), 'prepared payload not sent');
+            assert(!client.includes('mlbP1M3cSha256(input.scientificSnapshot)'), 'in-memory snapshot still hashed directly');
+            assert(transport.includes('MLB_P1_M3A_MAX_SNAPSHOT_BYTES = 280_000'), 'snapshot byte limit missing');
+          }
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m3c-bundle.js
-          grep -F 'p1-m3c-mlb-scientific-emission-2026-08-05' /tmp/p1-m3c-bundle.js
+          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05' /tmp/p1-m3c-bundle.js
           grep -F 'Registrando evaluación científica SHADOW' /tmp/p1-m3c-bundle.js
           grep -F 'Evaluación científica RECHAZADA' /tmp/p1-m3c-bundle.js
           grep -F 'IDEMPOTENTE' /tmp/p1-m3c-bundle.js
@@ -107,15 +126,27 @@ jobs:
           git fetch origin integration/p0-frontend-session --depth=1
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
-          expected=$(printf '%s\n' \
-            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
-            'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md' \
-            'frontend/client/src/App.tsx' \
-            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
-            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
-            'frontend/client/src/lib/mlb-scientific-capture.test.ts' \
-            'frontend/client/src/lib/mlb-scientific-capture.ts' \
-            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+
+          if grep -Fqx 'frontend/client/src/lib/mlb-scientific-capture-transport.ts' <<< "$changed"; then
+            expected=$(printf '%s\n' \
+              '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+              '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+              'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md' \
+              'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts' \
+              'frontend/client/src/lib/mlb-scientific-capture-transport.ts' \
+              'frontend/client/src/lib/mlb-scientific-capture.ts' \
+              'frontend/client/src/lib/queryClient.ts' | sort)
+          else
+            expected=$(printf '%s\n' \
+              '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+              'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md' \
+              'frontend/client/src/App.tsx' \
+              'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+              'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
+              'frontend/client/src/lib/mlb-scientific-capture.test.ts' \
+              'frontend/client/src/lib/mlb-scientific-capture.ts' \
+              'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+          fi
           [[ "$changed" == "$expected" ]]
 
           ! grep -E 'realFinancialExposure:[[:space:]]*[1-9]|automaticBetPlacement:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' \

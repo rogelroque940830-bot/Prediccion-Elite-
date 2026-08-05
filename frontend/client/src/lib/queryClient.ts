@@ -54,7 +54,13 @@ async function responseMessage(res: Response): Promise<string> {
   if (!text) return res.statusText || "Request failed";
   try {
     const parsed = JSON.parse(text);
-    return parsed.error || parsed.message || text;
+    const message = parsed.error || parsed.message || text;
+    const contractErrors = Array.isArray(parsed?.details?.errors)
+      ? parsed.details.errors.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)
+      : [];
+    return contractErrors.length > 0
+      ? `${message} [${contractErrors.join(", ")}]`
+      : message;
   } catch {
     return text;
   }

@@ -1,0 +1,110 @@
+name: Validate P1-M3C.1 JSON Transport Hotfix
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
+      - 'frontend/client/src/lib/queryClient.ts'
+      - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3c1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M3C.1 and P1 regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-scientific-capture-transport.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify exact JSON transport and safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          capture='frontend/client/src/lib/mlb-scientific-capture.ts'
+          transport='frontend/client/src/lib/mlb-scientific-capture-transport.ts'
+          query='frontend/client/src/lib/queryClient.ts'
+          legacy_workflow='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' "$capture"
+          grep -F 'prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)' "$capture"
+          grep -F 'mlbP1M3cSha256(preparedSnapshot.payload)' "$capture"
+          grep -F 'payload: preparedSnapshot.payload as unknown as Record<string, unknown>' "$capture"
+          grep -F 'MLB_P1_M3A_MAX_SNAPSHOT_BYTES = 280_000' "$transport"
+          grep -F 'SENSITIVE_KEY' "$transport"
+          grep -F 'P1_M3C_SNAPSHOT_TOO_LARGE' "$transport"
+          grep -F 'contractErrors' "$query"
+          grep -F 'parsed?.details?.errors' "$query"
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' "$legacy_workflow"
+          grep -F 'mlb-scientific-capture-transport.test.ts' "$legacy_workflow"
+          grep -F 'realFinancialExposure: 0 as const' "$capture"
+          grep -F 'automaticBetPlacement: false as const' "$capture"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const capture = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
+          const transport = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts', 'utf8');
+          const query = fs.readFileSync('frontend/client/src/lib/queryClient.ts', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const prepare = capture.indexOf('prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)');
+          const digest = capture.indexOf('mlbP1M3cSha256(preparedSnapshot.payload)', prepare);
+          const payload = capture.indexOf('payload: preparedSnapshot.payload', digest);
+          assert(prepare >= 0 && digest > prepare && payload > digest, 'transport/digest/payload order is invalid');
+          assert(!capture.includes('mlbP1M3cSha256(input.scientificSnapshot)'), 'in-memory snapshot is still hashed directly');
+          assert(transport.includes('JSON.stringify(snapshot'), 'native JSON transport normalization missing');
+          assert(transport.includes('JSON.parse(json)'), 'wire payload reconstruction missing');
+          assert(query.includes('details?.errors'), 'server contract details are not surfaced');
+          assert(!capture.includes('automaticBetPlacement: true'), 'automatic betting enabled');
+          assert(!capture.includes('realFinancialExposure: 1'), 'non-zero exposure found');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m3c1-bundle.js
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' /tmp/p1-m3c1-bundle.js
+          grep -F 'P1_M3C_SNAPSHOT_TOO_LARGE' /tmp/p1-m3c1-bundle.js
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md' \
+            'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts' \
+            'frontend/client/src/lib/mlb-scientific-capture-transport.ts' \
+            'frontend/client/src/lib/mlb-scientific-capture.ts' \
+            'frontend/client/src/lib/queryClient.ts' | sort)
+          [[ "$changed" == "$expected" ]]
+          ! grep -E 'sportsbook|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' \
+            frontend/client/src/lib/mlb-scientific-capture-transport.ts \
+            frontend/client/src/lib/mlb-scientific-capture.ts
