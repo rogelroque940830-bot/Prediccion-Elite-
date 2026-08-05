@@ -1,0 +1,166 @@
+name: Validate P1-M3C MLB Scientific Emission
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+      - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture.test.ts'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate-p1-m3c:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply trusted pending P1-M3C integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          predictor='frontend/client/src/pages/mlb-predictor.tsx'
+          if grep -Fq 'onExecutionReport={setPregameExecutionReport}' "$predictor"; then
+            echo 'P1-M3C integration patch already present.'
+            exit 0
+          fi
+          git fetch origin main --depth=1
+          git show origin/main:.github/scripts/tmp_p1_m3c_patch.py > /tmp/p1_m3c_patch.py
+          python <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/p1_m3c_patch.py')
+          source = path.read_text()
+          old = '''    text = replace_once(
+                  text,
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={setPregameGate}\\n',
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={setPregameGate}\\n          onExecutionReport={setPregameExecutionReport}\\n',
+                  "gate report callback",
+              )'''
+          new = '''    text = replace_once(
+                  text,
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={(snapshot) => {\\n            setPregameGate(snapshot);\\n            if (!snapshot) setResult(null);\\n          }}\\n',
+                  '          onApplyCertifiedQuote={applyCertifiedQuote}\\n          onSnapshot={(snapshot) => {\\n            setPregameGate(snapshot);\\n            if (!snapshot) setResult(null);\\n          }}\\n          onExecutionReport={setPregameExecutionReport}\\n',
+                  "gate report callback",
+              )'''
+          if source.count(old) != 1:
+              raise SystemExit(f'callback patch expected one script match, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1))
+          PY
+          python /tmp/p1_m3c_patch.py
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/components/mlb-pregame-readiness-gate.tsx frontend/client/src/pages/mlb-predictor.tsx
+          git commit -m 'P1-M3C: connect MLB predictor scientific emission'
+          git push origin HEAD:${GITHUB_HEAD_REF}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M3C and MLB gate regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify P1-M3C execution and receipt contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='frontend/client/src/App.tsx'
+          gate='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+          status='frontend/client/src/components/mlb-scientific-capture-status.tsx'
+          client='frontend/client/src/lib/mlb-scientific-capture.ts'
+          predictor='frontend/client/src/pages/mlb-predictor.tsx'
+
+          grep -F 'p1-m3c-mlb-scientific-emission-2026-08-05' "$client"
+          grep -F 'MLB_P1_M3C_FRONTEND_RELEASE' "$app"
+          grep -F '/api/mlb/p1/v1/scientific-captures' "$client"
+          grep -F 'userAction: "GENERATE_PREDICTION"' "$client"
+          grep -F 'buildMlbP1M3cCandidate' "$predictor"
+          grep -F 'postMlbP1M3cScientificCapture' "$predictor"
+          grep -F 'saveToHistory: false' "$predictor"
+          grep -F 'emitScientific: true' "$predictor"
+          grep -F 'if (!saveToHistory) return;' "$predictor"
+          grep -F 'onExecutionReport={setPregameExecutionReport}' "$predictor"
+          grep -F 'onExecutionReportRef.current(executionReport)' "$gate"
+          grep -F '<MlbScientificCaptureStatus state={scientificCaptureState} />' "$predictor"
+          grep -F 'Evaluación científica RECHAZADA' "$status"
+          grep -F 'Evaluación {appended ? "REGISTRADA" : "IDEMPOTENTE"}' "$status"
+          grep -F 'SHADOW · exposición 0' "$status"
+          grep -F 'realFinancialExposure: 0 as const' "$client"
+          grep -F 'automaticBetPlacement: false as const' "$client"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const predictor = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
+          const client = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
+          const gate = fs.readFileSync('frontend/client/src/components/mlb-pregame-readiness-gate.tsx', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const automaticStart = predictor.indexOf('saveToHistory: false');
+          const historyBarrier = predictor.indexOf('if (!saveToHistory) return;');
+          const dispatch = predictor.indexOf('type: "ADD_MLB_PICK"', historyBarrier);
+          assert(automaticStart >= 0, 'automatic scientific emission missing');
+          assert(historyBarrier >= 0 && dispatch > historyBarrier, 'automatic emission is not separated from canonical pick saving');
+          assert(client.includes('P1_M3C_CERTIFIED_QUOTE_SELECTION_MISMATCH'), 'selected quote fail-closed rule missing');
+          assert(client.includes('P1_M3C_CERTIFIED_TOTAL_LINE_MISMATCH'), 'total line fail-closed rule missing');
+          assert(client.includes('P1_M3C_CERTIFIED_RUN_LINE_MISMATCH'), 'run line fail-closed rule missing');
+          assert(gate.includes('onExecutionReportRef.current(null)'), 'full execution report is not invalidated fail-closed');
+          assert(!client.includes('sportsbook'), 'scientific client must not contain sportsbook integration');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m3c-bundle.js
+          grep -F 'p1-m3c-mlb-scientific-emission-2026-08-05' /tmp/p1-m3c-bundle.js
+          grep -F 'Registrando evaluación científica SHADOW' /tmp/p1-m3c-bundle.js
+          grep -F 'Evaluación científica RECHAZADA' /tmp/p1-m3c-bundle.js
+          grep -F 'IDEMPOTENTE' /tmp/p1-m3c-bundle.js
+          grep -F '/api/mlb/p1/v1/scientific-captures' /tmp/p1-m3c-bundle.js
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
+            'frontend/client/src/lib/mlb-scientific-capture.test.ts' \
+            'frontend/client/src/lib/mlb-scientific-capture.ts' \
+            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
+
+          ! grep -E 'realFinancialExposure:[[:space:]]*[1-9]|automaticBetPlacement:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' \
+            frontend/client/src/lib/mlb-scientific-capture.ts \
+            frontend/client/src/pages/mlb-predictor.tsx
+          ! grep -E 'fetch\([^)]*sportsbook|apiRequest\("(PUT|PATCH|DELETE)"' \
+            frontend/client/src/lib/mlb-scientific-capture.ts \
+            frontend/client/src/pages/mlb-predictor.tsx
