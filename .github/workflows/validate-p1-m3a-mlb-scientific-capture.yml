@@ -1,0 +1,82 @@
+name: Validate P1-M3A MLB Scientific Capture Contract
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-scientific-capture-contract.ts'
+      - 'server/mlb-p1-scientific-capture-contract.test.ts'
+      - 'docs/P1_M3A_MLB_SCIENTIFIC_CAPTURE_CONTRACT.md'
+      - 'tsconfig.p1-m3a-mlb-scientific-capture.json'
+      - '.github/workflows/validate-p1-m3a-mlb-scientific-capture.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M3A contract
+        run: npx tsc -p tsconfig.p1-m3a-mlb-scientific-capture.json --noEmit
+      - name: Run focused P1-M3A tests
+        run: npx tsx --test server/mlb-p1-scientific-capture-contract.test.ts
+      - name: Run readiness and shadow-accounting regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-pregame-readiness-contract.test.ts \
+            server/mlb-p1-daily-slate.test.ts \
+            server/mlb-shadow-evaluation.test.ts \
+            server/mlb-terminal-ledger-records.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify contract and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='server/mlb-p1-scientific-capture-contract.ts'
+          docs='docs/P1_M3A_MLB_SCIENTIFIC_CAPTURE_CONTRACT.md'
+
+          grep -F 'courtedge-p1-m3a-scientific-capture-contract.v1' "$contract"
+          grep -F 'mlb-ledger.v1' "$contract"
+          grep -F 'courtedge-p1-m2b-pregame-readiness.v1' "$contract"
+          grep -F 'validateMlbP1M3aCapture' "$contract"
+          grep -F 'buildMlbP1M3aCaptureIdentity' "$contract"
+          grep -F 'decideMlbP1M3aRevision' "$contract"
+          grep -F 'toMlbP1M3aLedgerCompatibleInput' "$contract"
+          grep -F 'CONTROL_DECISIONS_MUST_BE_RETAINED' "$contract"
+          grep -F 'QUOTE_MODEL_EQUALITY_MUST_SURVIVE_CAPTURE' "$contract"
+          grep -F 'P1-M3B — Authenticated append-only capture service' "$docs"
+          grep -F 'realFinancialExposure = 0' "$docs"
+
+          ! grep -E 'appendOwnedPrediction|createMlbLedgerStore|writeFileSync|router\.|app\.(post|put|patch|delete)' "$contract"
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$contract"
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3a-mlb-scientific-capture.yml' \
+            'docs/P1_M3A_MLB_SCIENTIFIC_CAPTURE_CONTRACT.md' \
+            'server/mlb-p1-scientific-capture-contract.test.ts' \
+            'server/mlb-p1-scientific-capture-contract.ts' \
+            'tsconfig.p1-m3a-mlb-scientific-capture.json' | sort)
+          [[ "${changed}" == "${expected}" ]]
