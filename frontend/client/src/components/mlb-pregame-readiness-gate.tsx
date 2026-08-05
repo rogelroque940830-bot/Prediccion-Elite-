@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -115,6 +115,11 @@ export function MlbPregameReadinessGate({
 }) {
   const [market, setMarket] = useState<MlbPregameMarket>("ML");
   const [verificationNonce, setVerificationNonce] = useState(0);
+  const onSnapshotRef = useRef(onSnapshot);
+
+  useEffect(() => {
+    onSnapshotRef.current = onSnapshot;
+  }, [onSnapshot]);
 
   const capturedAt = useMemo(() => new Date().toISOString(), [
     gamePk,
@@ -159,15 +164,15 @@ export function MlbPregameReadinessGate({
 
   useEffect(() => {
     if (!validReport || String(validReport.game.gamePk) !== gamePk) {
-      onSnapshot(null);
+      onSnapshotRef.current(null);
       return;
     }
-    onSnapshot(toMlbPregameGateSnapshot(validReport));
-  }, [gamePk, onSnapshot, validReport]);
+    onSnapshotRef.current(toMlbPregameGateSnapshot(validReport));
+  }, [gamePk, validReport]);
 
   useEffect(() => {
-    onSnapshot(null);
-  }, [gamePk, date, market, onSnapshot]);
+    onSnapshotRef.current(null);
+  }, [gamePk, date, market]);
 
   const evidence = useMemo(() => {
     if (!validReport) return [];
