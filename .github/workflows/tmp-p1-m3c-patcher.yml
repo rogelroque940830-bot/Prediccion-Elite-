@@ -1,5 +1,6 @@
 name: Temporary P1-M3C Patcher
 
+# Second trusted push triggers the workflow after its definition exists on main.
 on:
   push:
     branches:
