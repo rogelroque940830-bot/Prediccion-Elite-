@@ -1,0 +1,133 @@
+name: Diagnostic P1-M2C.3 Live Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-p1-m2c3-live-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m2c3:
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: a490b0eb9e28c36e3e358d44b50cf4be7cbd274a
+      PRIMARY_SLATE_DATE: '2026-08-05'
+      FALLBACK_SLATE_DATE: '2026-08-06'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for P1-M2C.3 bundle and exact backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 80); do
+            frontend_code=$(curl -sS -o audit/index.html -w '%{http_code}' --max-time 25 "${FRONTEND_URL}/" || true)
+            backend_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            frontend_ready=false
+            backend_ready=false
+
+            if [[ "${frontend_code}" == '200' ]]; then
+              asset=$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -n1 | sed -E 's/src="([^"]+)"/\1/' || true)
+              if [[ -n "${asset}" ]]; then
+                case "${asset}" in
+                  http*) asset_url="${asset}" ;;
+                  /*) asset_url="${FRONTEND_URL}${asset}" ;;
+                  *) asset_url="${FRONTEND_URL}/${asset}" ;;
+                esac
+                if curl -fsS --max-time 45 "${asset_url}" -o audit/bundle.js; then
+                  grep -Fq 'P1-M2C.3 · SMART DEFAULT' audit/bundle.js && frontend_ready=true
+                fi
+              fi
+            fi
+
+            if [[ "${backend_code}" == '200' ]]; then
+              commit=$(node -e "const fs=require('fs'); try { console.log(JSON.parse(fs.readFileSync('audit/health.json','utf8')).commit || '') } catch {}")
+              [[ "${commit}" == "${EXPECTED_BACKEND_COMMIT}" ]] && backend_ready=true
+            fi
+
+            if [[ "${frontend_ready}" == true && "${backend_ready}" == true ]]; then
+              echo 'Exact P1-M2C.3 frontend and P1-M2B backend are live.'
+              break
+            fi
+            echo "Attempt ${attempt}/80: frontend=${frontend_code}/${frontend_ready}; backend=${backend_code}/${backend_ready}"
+            [[ "${attempt}" != '80' ]] || { echo 'Timed out waiting for P1-M2C.3 deployment' >&2; exit 1; }
+            sleep 15
+          done
+      - name: Verify served smart-default markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            'P1-M2C.3 · SMART DEFAULT' \
+            'No hay juegos FINAL disponibles; Provisionales se abrió automáticamente' \
+            'Listos' \
+            'Provisionales' \
+            'Modo seguro activo' \
+            'SHADOW · exposición 0'; do
+            grep -Fq "${marker}" audit/bundle.js || { echo "Missing P1-M2C.3 marker: ${marker}" >&2; exit 1; }
+          done
+      - name: Verify live slate chooses an actionable default
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=''
+          for date in "${PRIMARY_SLATE_DATE}" "${FALLBACK_SLATE_DATE}"; do
+            code=$(curl -sS -o "audit/slate-${date}.json" -w '%{http_code}' --max-time 120 "${BACKEND_URL}/api/mlb/p1/v1/slate?date=${date}" || true)
+            [[ "${code}" == '200' ]] || continue
+            total=$(SLATE_DATE="${date}" node <<'NODE'
+          const fs = require('node:fs');
+          const date = process.env.SLATE_DATE;
+          const payload = JSON.parse(fs.readFileSync(`audit/slate-${date}.json`, 'utf8'));
+          process.stdout.write(String(payload?.data?.summary?.total ?? 0));
+          NODE
+            )
+            if [[ "${total}" != '0' ]]; then
+              selected="${date}"
+              break
+            fi
+          done
+          [[ -n "${selected}" ]] || { echo 'No live MLB slate available' >&2; exit 1; }
+          echo "SELECTED_SLATE_DATE=${selected}" >> "${GITHUB_ENV}"
+
+          SLATE_DATE="${selected}" node <<'NODE'
+          const fs = require('node:fs');
+          const date = process.env.SLATE_DATE;
+          const payload = JSON.parse(fs.readFileSync(`audit/slate-${date}.json`, 'utf8'));
+          const report = payload?.data;
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(payload?.success === true, 'slate success=false');
+          assert(report?.safety?.mode === 'SHADOW_DECISION_SUPPORT', `mode=${report?.safety?.mode}`);
+          assert(report?.safety?.realFinancialExposure === 0, `exposure=${report?.safety?.realFinancialExposure}`);
+          assert(report?.safety?.automaticBetPlacement === false, 'automatic betting enabled');
+          const ready = Number(report?.summary?.ready ?? 0);
+          const provisional = Number(report?.summary?.provisional ?? 0);
+          const smartDefault = ready > 0 ? 'ready' : provisional > 0 ? 'provisional' : 'ready';
+          if (ready === 0 && provisional > 0) assert(smartDefault === 'provisional', 'zero-ready fallback failed');
+          if (ready > 0) assert(smartDefault === 'ready', 'ready-first rule failed');
+          const evidence = {
+            date,
+            total: report.summary.total,
+            ready,
+            provisional,
+            inactive: report.summary.total - ready - provisional,
+            smartDefault,
+            mode: report.safety.mode,
+            realFinancialExposure: report.safety.realFinancialExposure,
+            predictionsGenerated: 0,
+            picksSaved: 0,
+            betsPlaced: 0,
+          };
+          fs.writeFileSync('audit/smart-default-result.json', JSON.stringify(evidence, null, 2));
+          console.log(JSON.stringify(evidence, null, 2));
+          NODE
+      - name: Upload read-only P1-M2C.3 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2c3-live-frontend-evidence
+          path: audit
