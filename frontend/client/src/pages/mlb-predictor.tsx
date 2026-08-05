@@ -21,7 +21,18 @@ import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { MlbDailySlatePanel } from "@/components/mlb-daily-slate-panel";
 import { MlbPregameReadinessGate } from "@/components/mlb-pregame-readiness-gate";
-import { buildMlbPregameCertifiedLinePatch, type MlbPregameGateSnapshot, type MlbPregameMarket } from "@/lib/mlb-pregame-readiness";
+import { MlbScientificCaptureStatus } from "@/components/mlb-scientific-capture-status";
+import { buildMlbPregameCertifiedLinePatch, type MlbPregameGateSnapshot, type MlbPregameMarket, type MlbPregameReadinessReport } from "@/lib/mlb-pregame-readiness";
+import {
+  MLB_P1_M3C_IDLE_STATE,
+  buildMlbP1M3cCandidate,
+  createMlbP1M3cClientEvaluationId,
+  postMlbP1M3cScientificCapture,
+  resolveMlbP1M3cAutomaticSelection,
+  toMlbP1M3cUiSuccess,
+  type MlbP1M3cSignal,
+  type MlbP1M3cUiState,
+} from "@/lib/mlb-scientific-capture";
 import { MLBUmpireCard, MLBAdvancedCard, EliteBanner, SharpSignalsCard, sharpBadgeFor, MLBContextualCard, type SharpDirection } from "@/components/elite-factors";
 import { americanImpliedProbability, createMlbScientificSnapshot, isoDateTimeOrUndefined, mapMlbLedgerMarket, noVigSideProbability, parseMlbMarketLine, type MlbSourceStatus } from "@/lib/mlb-scientific-snapshot";
 import { resolveMlbPhaseBSelection, scaleMlbPhaseBRuns } from "@/lib/mlb-injury-phase-b";
@@ -724,8 +735,20 @@ export default function MLBPredictor() {
   const { toast } = useToast();
 
   // Save MLB pick + one canonical scientific snapshot.
-  const savePick = (market: string, pick: string, odds: number, modelProbFallback: number) => {
-    if (!result) {
+  const savePick = async (
+    market: string,
+    pick: string,
+    odds: number,
+    modelProbFallback: number,
+    options: {
+      saveToHistory?: boolean;
+      emitScientific?: boolean;
+      clientEvaluationId?: string;
+      resultOverride?: MLBResult;
+    } = {},
+  ) => {
+    const activeResult = options.resultOverride ?? result;
+    if (!activeResult) {
       toast({ title: "Genera la predicción antes de guardar", variant: "destructive" });
       return;
     }
@@ -744,45 +767,58 @@ export default function MLBPredictor() {
       });
       return;
     }
+    if (options.emitScientific && (!pregameExecutionReport || pregameExecutionReport.market !== certifiedMarket)) {
+      const clientEvaluationId = options.clientEvaluationId ?? null;
+      setScientificCaptureState({
+        status: "REJECTED",
+        clientEvaluationId,
+        message: "La respuesta P1-M2B completa ya no está disponible para esta ejecución.",
+        code: "P1_M3C_EXECUTION_REPORT_MISSING",
+      });
+      return;
+    }
     const selectedHome = pick.toLowerCase().includes((homeTeam || "Local").toLowerCase());
-    const pq = normalizedMarket === "ml" ? result.pickQualities?.ml
-      : normalizedMarket === "f5" ? result.pickQualities?.f5
-        : normalizedMarket.includes("run line") ? result.pickQualities?.runLine
-          : normalizedMarket === "o/u" ? result.pickQualities?.ou
+    const pq = normalizedMarket === "ml" ? activeResult.pickQualities?.ml
+      : normalizedMarket === "f5" ? activeResult.pickQualities?.f5
+        : normalizedMarket.includes("run line") ? activeResult.pickQualities?.runLine
+          : normalizedMarket === "o/u" ? activeResult.pickQualities?.ou
             : undefined;
 
     let resolvedModelProb = modelProbFallback;
     let oppositeOdds: number | undefined;
     if (normalizedMarket === "ml") {
-      resolvedModelProb = (selectedHome ? result.homeProb : result.awayProb) * 100;
+      resolvedModelProb = (selectedHome ? activeResult.homeProb : activeResult.awayProb) * 100;
       oppositeOdds = selectedHome ? (parseInt(mlOddsAway) || undefined) : (parseInt(mlOdds) || undefined);
     } else if (normalizedMarket === "f5") {
-      resolvedModelProb = (selectedHome ? result.f5HomeProb : result.f5AwayProb) * 100;
+      resolvedModelProb = (selectedHome ? activeResult.f5HomeProb : activeResult.f5AwayProb) * 100;
       oppositeOdds = selectedHome ? (parseInt(f5MlAway) || undefined) : (parseInt(f5MlHome) || undefined);
     } else if (normalizedMarket.includes("run line")) {
-      resolvedModelProb = ((result.runLine as any).coverProb ?? (result.runLine.coversRL ? 0.56 : 0.44)) * 100;
-      oppositeOdds = result.runLine.pickedSide === "home" ? (parseInt(rlOddsAway) || undefined) : (parseInt(rlOdds) || undefined);
+      resolvedModelProb = ((activeResult.runLine as any).coverProb ?? (activeResult.runLine.coversRL ? 0.56 : 0.44)) * 100;
+      oppositeOdds = activeResult.runLine.pickedSide === "home" ? (parseInt(rlOddsAway) || undefined) : (parseInt(rlOdds) || undefined);
     } else if (normalizedMarket === "o/u") {
-      resolvedModelProb = ((result.ouResult as any).hitProb ?? 0.55) * 100;
-      oppositeOdds = result.ouResult.side === "OVER" ? (parseInt(underOdds) || undefined) : (parseInt(overOdds) || undefined);
-    } else if (normalizedMarket.includes("f5 o/u") && result.f5OuResult) {
-      resolvedModelProb = ((result.f5OuResult as any).hitProb ?? 0.55) * 100;
+      resolvedModelProb = ((activeResult.ouResult as any).hitProb ?? 0.55) * 100;
+      oppositeOdds = activeResult.ouResult.side === "OVER" ? (parseInt(underOdds) || undefined) : (parseInt(overOdds) || undefined);
+    } else if (normalizedMarket.includes("f5 o/u") && activeResult.f5OuResult) {
+      resolvedModelProb = ((activeResult.f5OuResult as any).hitProb ?? 0.55) * 100;
     }
 
     resolvedModelProb = Math.max(0.1, Math.min(99.9, resolvedModelProb));
-    const duplicatePick = state.mlbPicks.some((existing) =>
-      existing.date === selectedDate
-      && existing.market.trim().toLowerCase() === normalizedMarket
-      && existing.pick.trim().toLowerCase() === pick.trim().toLowerCase()
-      && existing.odds === odds
-      && Math.abs(existing.modelProb - resolvedModelProb) < 0.01
-    );
-    if (duplicatePick) {
-      toast({
-        title: "Este pick MLB ya está guardado",
-        description: "No se creó otra entrada en el historial ni en el ledger.",
-      });
-      return;
+    const saveToHistory = options.saveToHistory !== false;
+    if (saveToHistory) {
+      const duplicatePick = state.mlbPicks.some((existing) =>
+        existing.date === selectedDate
+        && existing.market.trim().toLowerCase() === normalizedMarket
+        && existing.pick.trim().toLowerCase() === pick.trim().toLowerCase()
+        && existing.odds === odds
+        && Math.abs(existing.modelProb - resolvedModelProb) < 0.01
+      );
+      if (duplicatePick) {
+        toast({
+          title: "Este pick MLB ya está guardado",
+          description: "No se creó otra entrada en el historial. La captura científica automática usa idempotencia del servidor.",
+        });
+        return;
+      }
     }
     const implied = americanImpliedProbability(odds);
     const noVig = noVigSideProbability(odds, oppositeOdds);
@@ -790,9 +826,17 @@ export default function MLBPredictor() {
     const b = odds > 0 ? odds / 100 : 100 / Math.abs(odds);
     const fallbackKelly = Math.max(0, (b * (resolvedModelProb / 100) - (1 - resolvedModelProb / 100)) / b) * 0.25 * 100;
     const operationalStake = Math.min(1, Math.max(0, pq?.stakeUnits ?? fallbackKelly));
+    const resolvedSignal = (pq?.recommendation || (normalizedMarket === "ml" ? activeResult.mlSignal
+      : normalizedMarket === "f5" ? activeResult.f5Signal
+        : normalizedMarket.includes("run line") ? activeResult.runLine.signal
+          : normalizedMarket.includes("f5 o/u") ? activeResult.f5OuResult?.signal || "INFO"
+            : activeResult.ouResult.signal)) as MlbP1M3cSignal;
+    const scientificStake = resolvedSignal === "BET" || resolvedSignal === "BET_FUERTE"
+      ? Math.round(operationalStake * 100) / 100
+      : 0;
     const capturedAt = new Date().toISOString();
     const selectedGame = mlbGames.find((game) => String(game.gameId) === selectedGameId) as any;
-    const commenceTime = isoDateTimeOrUndefined(selectedGame?.commenceTime || selectedGame?.gameTime || selectedGame?.gameDate);
+    const commenceTime = isoDateTimeOrUndefined(selectedGame?.commenceTime || selectedGame?.gameTime || selectedGame?.gameDate || pregameExecutionReport?.game.startTime);
     if (commenceTime && Date.parse(capturedAt) > Date.parse(commenceTime)) {
       toast({
         title: "El juego ya comenzó",
@@ -907,21 +951,17 @@ export default function MLBPredictor() {
         ...(edgePp != null ? { edgePp } : {}),
       },
       decision: {
-        signal: pq?.recommendation || (normalizedMarket === "ml" ? result.mlSignal
-          : normalizedMarket === "f5" ? result.f5Signal
-            : normalizedMarket.includes("run line") ? result.runLine.signal
-              : normalizedMarket.includes("f5 o/u") ? result.f5OuResult?.signal || "INFO"
-                : result.ouResult.signal),
+        signal: resolvedSignal,
         confidenceLabel: pq?.rating || "MODEL",
         confidencePct: resolvedModelProb,
-        stakeUnits: Math.round(operationalStake * 100) / 100,
-        rationale: pq?.reasoning || result.bestPlay?.reason || "Mercado seleccionado por el usuario después del cálculo completo.",
+        stakeUnits: scientificStake,
+        rationale: pq?.reasoning || activeResult.bestPlay?.reason || "Mercado seleccionado por el usuario después del cálculo completo.",
       },
       analysis: {
         stage,
         warnings,
         injuryAudit,
-        factors: (result.factorBreakdown?.notes || []).slice(0, 100).map((note) => ({
+        factors: (activeResult.factorBreakdown?.notes || []).slice(0, 100).map((note) => ({
           name: note.slice(0, 120),
           direction: "NEUTRAL" as const,
           confidence: "PARTIAL" as const,
@@ -963,20 +1003,20 @@ export default function MLBPredictor() {
           },
         ],
         layers: {
-          factorBreakdown: result.factorBreakdown,
+          factorBreakdown: activeResult.factorBreakdown,
           injuryEffect: {
             schemaVersion: "mlb-injury-effect.v1",
             source: "COUNTERFACTUAL_RECALCULATION_V1",
             scope: "HOME_ML_AND_GAME_TOTAL_COUNTERFACTUAL",
-            homeProbabilityDeltaPp: result.factorBreakdown?.injuryHomeProbabilityDeltaPp ?? 0,
-            totalRunsDelta: result.factorBreakdown?.injuryTotalRunsDelta ?? 0,
-            dataQuality: result.factorBreakdown?.injuryDataQuality ?? "DEGRADED",
-            hasAppliedAdjustment: result.factorBreakdown?.injuryHasAppliedAdjustment ?? false,
+            homeProbabilityDeltaPp: activeResult.factorBreakdown?.injuryHomeProbabilityDeltaPp ?? 0,
+            totalRunsDelta: activeResult.factorBreakdown?.injuryTotalRunsDelta ?? 0,
+            dataQuality: activeResult.factorBreakdown?.injuryDataQuality ?? "DEGRADED",
+            hasAppliedAdjustment: activeResult.factorBreakdown?.injuryHasAppliedAdjustment ?? false,
           },
-          pickQualities: result.pickQualities,
-          bestPlay: result.bestPlay,
-          safePlay: result.safePlay,
-          poisson: result.poisson,
+          pickQualities: activeResult.pickQualities,
+          bestPlay: activeResult.bestPlay,
+          safePlay: activeResult.safePlay,
+          poisson: activeResult.poisson,
         },
         rawInputs: {
           selectedDate,
@@ -1002,9 +1042,91 @@ export default function MLBPredictor() {
           context: { parkFactor, parkName, tempF, windFavorable, isNight, sharpDir, sharpGameKey, mlbCtxAdj, umpireData, advancedData },
           sourcePayloads: { lineupMatchup, archetypeMatchup, bullpenStatus, parkPitcher, pitcherVsTeam, windPark, catcherFraming, rookiePitcher, pitcherForm, teamFatigue, pitcherRecent, statcastMatchup, statcastQuality, sos, discSpeed },
         },
-        rawOutput: result,
+        rawOutput: activeResult,
       },
     });
+
+    if (options.emitScientific) {
+      const clientEvaluationId = options.clientEvaluationId
+        ?? createMlbP1M3cClientEvaluationId(Number(selectedGameId), certifiedMarket);
+      setScientificCaptureState({ status: "CAPTURING", clientEvaluationId });
+      try {
+        if (!pregameExecutionReport) throw new Error("P1_M3C_EXECUTION_REPORT_MISSING");
+        if (implied == null || edgePp == null) throw new Error("P1_M3C_MARKET_MATH_INCOMPLETE");
+        const side = normalizedMarket === "o/u"
+          ? activeResult.ouResult.side
+          : normalizedMarket.includes("f5 o/u")
+            ? activeResult.f5OuResult?.side ?? "OVER"
+            : selectedHome ? "HOME" : "AWAY";
+        const line = certifiedMarket === "ML" || certifiedMarket === "F5_ML"
+          ? null
+          : parseMlbMarketLine(pick) ?? null;
+        const category = resolvedSignal === "BET_FUERTE" ? "ELITE"
+          : resolvedSignal === "BET" ? "PREMIUM"
+            : resolvedSignal === "LEAN" ? "LEAN"
+              : resolvedSignal === "PASS" ? "PASS" : "INFO";
+        const candidate = await buildMlbP1M3cCandidate({
+          report: pregameExecutionReport,
+          scientificSnapshot,
+          evaluation: {
+            market: certifiedMarket,
+            side,
+            selection: pick,
+            line,
+            oddsAmerican: Math.round(odds),
+            oppositeOddsAmerican: oppositeOdds ?? null,
+            sourceModeHint: normalizedMarket === "f5"
+              ? f5OddsSource === "manual" ? "MANUAL" : f5OddsSource === "consenso" ? "CONSENSUS" : null
+              : "AUTOMATIC",
+            modelProbability: resolvedModelProb / 100,
+            marketImplied: implied,
+            noVig: noVig ?? null,
+            edgePp,
+            signal: resolvedSignal,
+            category,
+            confidenceLabel: pq?.rating ?? "MODEL",
+            confidencePct: resolvedModelProb,
+            recommendedStakeUnits: scientificStake,
+            rationale: pq?.reasoning || activeResult.bestPlay?.reason || "Evaluación automática del mercado certificado.",
+            filterReasons: [...new Set(pq?.warnings || [])].slice(0, 100),
+          },
+          capturedAt,
+          clientEvaluationId,
+          venue: selectedGame?.venue ? String(selectedGame.venue) : null,
+          model: {
+            name: "CourtEdge MLB",
+            version: "predictor-full-snapshot-v2",
+            gitCommit: null,
+            environment: import.meta.env.MODE || null,
+          },
+        });
+        const captureResult = await postMlbP1M3cScientificCapture(candidate);
+        setScientificCaptureState(toMlbP1M3cUiSuccess(captureResult, clientEvaluationId));
+        toast({
+          title: captureResult.outcome === "APPENDED"
+            ? "Evaluación científica registrada"
+            : "Evaluación científica idempotente",
+          description: captureResult.outcome === "APPENDED"
+            ? "Esta ejecución ya cuenta para ROI, CLV y calibración SHADOW."
+            : "La misma decisión ya estaba registrada; no se infló la muestra.",
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "No se pudo registrar la evaluación científica.";
+        setScientificCaptureState({
+          status: "REJECTED",
+          clientEvaluationId,
+          message,
+          code: error instanceof Error ? error.name : null,
+        });
+        toast({
+          title: "Captura científica rechazada",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (!saveToHistory) return;
 
     dispatch({
       type: "ADD_MLB_PICK",
@@ -1031,6 +1153,8 @@ export default function MLBPredictor() {
   // Auto-fill
   const [selectedGameId, setSelectedGameId] = useState("");
   const [pregameGate, setPregameGate] = useState<MlbPregameGateSnapshot | null>(null);
+  const [pregameExecutionReport, setPregameExecutionReport] = useState<MlbPregameReadinessReport | null>(null);
+  const [scientificCaptureState, setScientificCaptureState] = useState<MlbP1M3cUiState>(MLB_P1_M3C_IDLE_STATE);
   const [autoStatus, setAutoStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [selectedDate, setSelectedDate] = useState<string>(todayFL()); // YYYY-MM-DD Florida
   const [mlbQueueView, setMlbQueueView] = useState<MlbGameQueueView>("priority");
@@ -1281,6 +1405,8 @@ export default function MLBPredictor() {
       setF5OddsSource("consenso");
     }
     setPregameGate(null);
+    setPregameExecutionReport(null);
+    setScientificCaptureState(MLB_P1_M3C_IDLE_STATE);
     setResult(null);
     toast({ title: "Cuota certificada aplicada", description: "La compuerta volverá a verificar el mismo precio que usará el modelo." });
   }, [toast]);
@@ -1325,6 +1451,8 @@ export default function MLBPredictor() {
   const handleMLBAutoFill = async (gameId: string) => {
     setAutoStatus("loading");
     // P1-M1: fail closed between games. No factor from the previous matchup may remain visible or enter a new calculation.
+    setScientificCaptureState(MLB_P1_M3C_IDLE_STATE);
+    setPregameExecutionReport(null);
     setResult(null);
     setLineupMatchup(null);
     setArchetypeMatchup(null);
@@ -2619,7 +2747,7 @@ export default function MLBPredictor() {
 
     const bestPlay = mlbGetBestPlay(candidates);
 
-    setResult({
+    const nextResult: MLBResult = {
       homeProb,
       awayProb,
       f5HomeProb,
@@ -2760,9 +2888,49 @@ export default function MLBPredictor() {
         modelF5HomeProb: modelF5HomeProb * 100,
         marketF5HomeProb: marketF5HomeProb !== undefined ? marketF5HomeProb * 100 : undefined,
       },
-    });
+    };
 
-    toast({ title: "Predicción generada", description: "Análisis MLB completado" });
+    setResult(nextResult);
+    const automaticSelection = resolveMlbP1M3cAutomaticSelection({
+      market: pregameGate.market,
+      homeTeam,
+      awayTeam,
+      lines: {
+        mlHome: mlOdds,
+        mlAway: mlOddsAway,
+        runLineHomeOdds: rlOdds,
+        runLineAwayOdds: rlOddsAway,
+        overOdds,
+        underOdds,
+        f5MlHome,
+        f5MlAway,
+      },
+      result: nextResult,
+    });
+    if (!automaticSelection) {
+      setScientificCaptureState({
+        status: "REJECTED",
+        clientEvaluationId: null,
+        message: "El mercado certificado no tiene una selección y precio exactos para emitir.",
+        code: "P1_M3C_AUTOMATIC_SELECTION_UNAVAILABLE",
+      });
+    } else {
+      const clientEvaluationId = createMlbP1M3cClientEvaluationId(Number(selectedGameId), pregameGate.market);
+      void savePick(
+        automaticSelection.marketLabel,
+        automaticSelection.pick,
+        automaticSelection.oddsAmerican,
+        automaticSelection.modelProbPct,
+        {
+          saveToHistory: false,
+          emitScientific: true,
+          clientEvaluationId,
+          resultOverride: nextResult,
+        },
+      );
+    }
+
+    toast({ title: "Predicción generada", description: "Análisis MLB completado; captura científica en proceso." });
   }, [
     homeTeam, awayTeam,
     homeEra, homeWhip, homeFip, homeK9, homeBb9, homeRest, homeHand, homeRecord, homeRecentEra, homeIP,
@@ -2788,7 +2956,7 @@ export default function MLBPredictor() {
     awayHomeRPG, awayHomeERA, awayAwayRPG, awayAwayERA,
     homeSeasonWR, awaySeasonWR,
     umpireData, advancedData,
-    selectedGameId, pregameGate,
+    selectedGameId, pregameGate, pregameExecutionReport,
     toast,
   ]);
 
@@ -3221,12 +3389,16 @@ export default function MLBPredictor() {
             setSelectedDate(date);
             setSelectedGameId("");
             setPregameGate(null);
+            setPregameExecutionReport(null);
+            setScientificCaptureState(MLB_P1_M3C_IDLE_STATE);
             setMlbQueueView("priority");
             setResult(null);
           }}
           onAnalyze={async (game) => {
             setSelectedGameId(String(game.gamePk));
             setPregameGate(null);
+            setPregameExecutionReport(null);
+            setScientificCaptureState(MLB_P1_M3C_IDLE_STATE);
             setMlbQueueView(game.analysisStage === "FINAL" ? "priority" : "pending");
             await handleMLBAutoFill(String(game.gamePk));
             window.requestAnimationFrame(() => {
@@ -3247,7 +3419,9 @@ export default function MLBPredictor() {
             onChange={(date) => {
               setSelectedDate(date);
               setSelectedGameId("");
-            setPregameGate(null);
+              setPregameGate(null);
+              setPregameExecutionReport(null);
+              setScientificCaptureState(MLB_P1_M3C_IDLE_STATE);
               setMlbQueueView("priority");
               setAutoStatus("idle");
               setResult(null);
@@ -4728,6 +4902,7 @@ export default function MLBPredictor() {
             setPregameGate(snapshot);
             if (!snapshot) setResult(null);
           }}
+          onExecutionReport={setPregameExecutionReport}
         />
 
         {/* LÍNEAS */}
@@ -4803,6 +4978,7 @@ export default function MLBPredictor() {
               <Star className="w-5 h-5 text-yellow-400" />
               Resultados del Análisis
             </h2>
+            <MlbScientificCaptureStatus state={scientificCaptureState} />
 
             {/* ⚭ PICK QUALITY SCORES — UNO POR MERCADO */}
             {result.pickQualities && (() => {
