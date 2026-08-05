@@ -1,19 +1,23 @@
 name: Temporary P1-M3C Patcher
 
-# Second trusted push triggers the workflow after its definition exists on main.
 on:
-  push:
+  pull_request_target:
     branches:
-      - main
-    paths:
-      - '.github/scripts/tmp_p1_m3c_patch.py'
-      - '.github/workflows/tmp-p1-m3c-patcher.yml'
+      - integration/p0-frontend-session
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/p1-m3c-mlb-scientific-emission-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
