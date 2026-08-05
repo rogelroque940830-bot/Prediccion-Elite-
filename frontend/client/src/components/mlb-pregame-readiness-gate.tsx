@@ -20,6 +20,7 @@ import {
   mlbPregameReasonLabel,
   mlbPregameSafetyValid,
   toMlbPregameGateSnapshot,
+  validateMlbPregameModelQuote,
   type MlbPregameEvidence,
   type MlbPregameGateSnapshot,
   type MlbPregameLineInputs,
@@ -27,7 +28,7 @@ import {
   type MlbPregameReadinessEnvelope,
 } from "@/lib/mlb-pregame-readiness";
 
-const MARKETS: MlbPregameMarket[] = ["ML", "F5_ML", "RUN_LINE", "TOTAL", "F5_TOTAL"];
+const MARKETS: MlbPregameMarket[] = ["ML", "F5_ML", "RUN_LINE", "TOTAL"];
 
 function gateClasses(status: string | null): string {
   if (status === "READY_FINAL") return "border-emerald-500/45 bg-emerald-500/[0.07]";
@@ -116,6 +117,7 @@ export function MlbPregameReadinessGate({
   const [market, setMarket] = useState<MlbPregameMarket>("ML");
   const [verificationNonce, setVerificationNonce] = useState(0);
   const onSnapshotRef = useRef(onSnapshot);
+  const lastDecisionSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     onSnapshotRef.current = onSnapshot;
@@ -159,25 +161,49 @@ export function MlbPregameReadinessGate({
 
   const report = readinessQuery.data?.data ?? null;
   const safetyValid = mlbPregameSafetyValid(report);
-  const validReport = report && safetyValid ? report : null;
-  const status = validReport?.gate.status ?? null;
+  const contractReport = report && safetyValid ? report : null;
+  const quoteCompatibility = useMemo(
+    () => contractReport ? validateMlbPregameModelQuote(contractReport, lines) : null,
+    [contractReport, lines],
+  );
+  const executionReport = contractReport && quoteCompatibility?.matches ? contractReport : null;
+  const status = contractReport
+    ? quoteCompatibility?.matches ? contractReport.gate.status : "BLOCKED"
+    : null;
 
   useEffect(() => {
-    if (!validReport || String(validReport.game.gamePk) !== gamePk) {
+    if (!executionReport || String(executionReport.game.gamePk) !== gamePk || !executionReport.gate.analysisAllowed) {
+      lastDecisionSignatureRef.current = null;
       onSnapshotRef.current(null);
       return;
     }
-    onSnapshotRef.current(toMlbPregameGateSnapshot(validReport));
-  }, [gamePk, validReport]);
+
+    const snapshot = toMlbPregameGateSnapshot(executionReport);
+    const signature = JSON.stringify([
+      snapshot.gamePk,
+      snapshot.market,
+      snapshot.status,
+      snapshot.analysisAllowed,
+      snapshot.analysisStage,
+      snapshot.blockers,
+      snapshot.warnings,
+    ]);
+    if (lastDecisionSignatureRef.current && lastDecisionSignatureRef.current !== signature) {
+      onSnapshotRef.current(null);
+    }
+    lastDecisionSignatureRef.current = signature;
+    onSnapshotRef.current(snapshot);
+  }, [executionReport, gamePk]);
 
   useEffect(() => {
+    lastDecisionSignatureRef.current = null;
     onSnapshotRef.current(null);
   }, [gamePk, date, market]);
 
   const evidence = useMemo(() => {
-    if (!validReport) return [];
-    return [...validReport.evidence].sort((left, right) => Number(right.required) - Number(left.required));
-  }, [validReport]);
+    if (!contractReport) return [];
+    return [...contractReport.evidence].sort((left, right) => Number(right.required) - Number(left.required));
+  }, [contractReport]);
 
   const selectedMarketLabel = mlbPregameMarketLabel(market);
 
@@ -206,6 +232,11 @@ export function MlbPregameReadinessGate({
                 {gateLabel(status)}
               </Badge>
               <Badge variant="outline">SHADOW · exposición 0</Badge>
+              {contractReport && !quoteCompatibility?.matches && (
+                <Badge variant="outline" className="border-red-500/40 text-red-200">
+                  Backend {contractReport.gate.status}
+                </Badge>
+              )}
             </div>
             <CardTitle className="mt-3 flex items-center gap-2 text-lg">
               {status === "READY_FINAL" ? <CheckCircle2 className="h-5 w-5 text-emerald-300" />
@@ -215,7 +246,7 @@ export function MlbPregameReadinessGate({
               Verificación de {selectedMarketLabel}
             </CardTitle>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              El backend decide la etapa. La pantalla no convierte datos faltantes o sin timestamp en evidencia fresca.
+              El backend decide la etapa y la pantalla confirma que la cuota certificada sea exactamente la que usará el modelo.
             </p>
           </div>
           <div className="flex min-w-[250px] flex-col gap-2 sm:flex-row lg:flex-col">
@@ -240,19 +271,24 @@ export function MlbPregameReadinessGate({
               <RefreshCw className={`mr-2 h-4 w-4 ${readinessQuery.isFetching ? "animate-spin" : ""}`} />
               Verificar ahora
             </Button>
+            <p className="text-[9px] text-muted-foreground">F5 Total se habilitará cuando el formulario capture precios Over/Under específicos de F5.</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2 text-[10px]">
           <Badge variant="outline">gamePk {gamePk}</Badge>
-          <Badge variant="outline">Cuotas: {request.oddsMode === "manual" ? "captura del formulario" : "fuente automática"}</Badge>
-          {validReport && <Badge variant="outline">{validReport.game.awayTeam.name} @ {validReport.game.homeTeam.name}</Badge>}
+          <Badge variant="outline">Cuotas: {request.oddsMode === "manual" ? "captura manual F5" : "fuente automática"}</Badge>
+          {contractReport && (
+            <Badge variant="outline">
+              {contractReport.game.awayTeam.name ?? "Visitante"} @ {contractReport.game.homeTeam.name ?? "Local"}
+            </Badge>
+          )}
         </div>
 
         {readinessQuery.isLoading || readinessQuery.isFetching && !report ? (
           <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-600/50 py-8 text-sm text-muted-foreground">
-            <RefreshCw className="h-5 w-5 animate-spin" />Verificando fuentes, frescura y suficiencia…
+            <RefreshCw className="h-5 w-5 animate-spin" />Verificando fuentes, frescura, suficiencia y cuota…
           </div>
         ) : readinessQuery.error || readinessQuery.data?.success === false ? (
           <div className="flex gap-3 rounded-lg border border-red-500/35 bg-red-500/[0.06] p-4">
@@ -272,30 +308,45 @@ export function MlbPregameReadinessGate({
               <p className="mt-1 text-sm text-muted-foreground">La predicción permanece bloqueada porque la respuesta no certifica P1-M2B, SHADOW y exposición 0.</p>
             </div>
           </div>
-        ) : validReport ? (
+        ) : contractReport ? (
           <>
+            {quoteCompatibility && !quoteCompatibility.matches && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/[0.07] p-4" data-testid="p1-m2c-quote-mismatch">
+                <div className="flex gap-3">
+                  <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-200">La cuota del modelo no coincide con la cuota certificada</p>
+                    <p className="mt-1 text-xs text-red-100/80">Carga las cuotas reales del partido o corrige el formulario antes de generar la predicción.</p>
+                    {quoteCompatibility.reasons.map((reason) => (
+                      <p key={reason} className="mt-1 text-xs text-red-100/85">• {mlbPregameReasonLabel(reason)}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-3"><p className="text-xl font-bold text-emerald-200">{validReport.summary.fresh}</p><p className="text-[10px] text-muted-foreground">Frescos</p></div>
-              <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3"><p className="text-xl font-bold text-amber-200">{validReport.summary.degraded}</p><p className="text-[10px] text-muted-foreground">Degradados</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{validReport.summary.missing}</p><p className="text-[10px] text-muted-foreground">Faltantes</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{validReport.summary.stale}</p><p className="text-[10px] text-muted-foreground">Vencidos</p></div>
-              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{validReport.summary.conflict}</p><p className="text-[10px] text-muted-foreground">Conflictos</p></div>
-              <div className="rounded-lg border border-slate-500/25 bg-slate-500/[0.04] p-3"><p className="text-xl font-bold text-slate-200">{validReport.summary.unknown}</p><p className="text-[10px] text-muted-foreground">Sin certificar</p></div>
+              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04] p-3"><p className="text-xl font-bold text-emerald-200">{contractReport.summary.fresh}</p><p className="text-[10px] text-muted-foreground">Frescos</p></div>
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3"><p className="text-xl font-bold text-amber-200">{contractReport.summary.degraded}</p><p className="text-[10px] text-muted-foreground">Degradados</p></div>
+              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.missing}</p><p className="text-[10px] text-muted-foreground">Faltantes</p></div>
+              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.stale}</p><p className="text-[10px] text-muted-foreground">Vencidos</p></div>
+              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-3"><p className="text-xl font-bold text-red-200">{contractReport.summary.conflict}</p><p className="text-[10px] text-muted-foreground">Conflictos</p></div>
+              <div className="rounded-lg border border-slate-500/25 bg-slate-500/[0.04] p-3"><p className="text-xl font-bold text-slate-200">{contractReport.summary.unknown}</p><p className="text-[10px] text-muted-foreground">Sin certificar</p></div>
             </div>
 
-            {validReport.gate.blockers.length > 0 && (
+            {contractReport.gate.blockers.length > 0 && (
               <div className="rounded-lg border border-red-500/35 bg-red-500/[0.06] p-4" data-testid="p1-m2c-blockers">
-                <p className="text-sm font-semibold text-red-200">Bloqueos</p>
-                {validReport.gate.blockers.map((reason) => (
+                <p className="text-sm font-semibold text-red-200">Bloqueos del backend</p>
+                {contractReport.gate.blockers.map((reason) => (
                   <p key={reason} className="mt-1 text-xs text-red-100/85">• {mlbPregameReasonLabel(reason)}</p>
                 ))}
               </div>
             )}
 
-            {validReport.gate.warnings.length > 0 && (
+            {contractReport.gate.warnings.length > 0 && (
               <div className="rounded-lg border border-amber-500/35 bg-amber-500/[0.06] p-4" data-testid="p1-m2c-warnings">
                 <p className="text-sm font-semibold text-amber-200">Advertencias que impiden FINAL</p>
-                {validReport.gate.warnings.map((reason) => (
+                {contractReport.gate.warnings.map((reason) => (
                   <p key={reason} className="mt-1 text-xs text-amber-100/85">• {mlbPregameReasonLabel(reason)}</p>
                 ))}
               </div>
@@ -306,7 +357,7 @@ export function MlbPregameReadinessGate({
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Verificado {new Intl.DateTimeFormat("es-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(validReport.generatedAt))} ET · El selector cambia los requisitos según el mercado.
+              Verificado {new Intl.DateTimeFormat("es-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(contractReport.generatedAt))} ET · El selector cambia los requisitos según el mercado.
             </p>
           </>
         ) : null}
