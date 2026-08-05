@@ -7,6 +7,8 @@ import {
   buildMlbPregameReadinessUrl,
   mlbPregameSafetyValid,
   toMlbPregameGateSnapshot,
+  validateMlbPregameModelQuote,
+  type MlbPregameEvidence,
   type MlbPregameLineInputs,
   type MlbPregameReadinessReport,
 } from "./mlb-pregame-readiness";
@@ -89,20 +91,40 @@ test("P1-M2C falls back to automatic odds when a manual F5 pair is incomplete", 
   assert.match(request.url, /market=F5_ML/);
 });
 
+function marketEvidence(details: Record<string, unknown>): MlbPregameEvidence {
+  return {
+    field: "MARKET_ODDS",
+    required: true,
+    state: "FRESH",
+    sourceIds: ["market"],
+    endpoints: ["/api/odds/mlb"],
+    authority: "MARKET",
+    fetchedAt: capturedAt,
+    observedAt: capturedAt,
+    ageSeconds: 0,
+    maxAgeSeconds: 300,
+    sourceStatus: "EXPLICIT_PROVIDER_TIME",
+    quality: "MARKET_PROVENANCE",
+    details,
+    errors: [],
+  };
+}
+
 function report(overrides: Partial<MlbPregameReadinessReport> = {}): MlbPregameReadinessReport {
   return {
     schemaVersion: MLB_P1_M2B_READINESS_SCHEMA,
     contractSchemaVersion: MLB_P1_M2A_CONTRACT_SCHEMA,
     generatedAt: capturedAt,
+    market: "F5_ML",
     game: {
       gamePk: 824158,
-      date: "2026-08-05",
+      officialDate: "2026-08-05",
       state: "SCHEDULED",
+      detailedState: "Scheduled",
       startTime: "2026-08-06T00:10:00.000Z",
-      homeTeam: { name: "Houston Astros" },
-      awayTeam: { name: "Toronto Blue Jays" },
+      homeTeam: { id: 117, name: "Houston Astros" },
+      awayTeam: { id: 141, name: "Toronto Blue Jays" },
     },
-    market: "F5_ML",
     gate: {
       schemaVersion: MLB_P1_M2A_CONTRACT_SCHEMA,
       status: "READY_PROVISIONAL",
@@ -124,6 +146,52 @@ function report(overrides: Partial<MlbPregameReadinessReport> = {}): MlbPregameR
     ...overrides,
   };
 }
+
+test("P1-M2C requires the model ML pair to equal the certified quote", () => {
+  const ready = report({ market: "ML", evidence: [marketEvidence({ quote: { home: -125, away: 115 } })] });
+  assert.equal(validateMlbPregameModelQuote(ready, lines).matches, true);
+  const mismatch = validateMlbPregameModelQuote(ready, { ...lines, mlAway: "+120" });
+  assert.equal(mismatch.matches, false);
+  assert.deepEqual(mismatch.reasons, ["MODEL_AWAY_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE"]);
+});
+
+test("P1-M2C requires run line and total inputs to equal their certified quotes", () => {
+  const runLineReport = report({
+    market: "RUN_LINE",
+    evidence: [marketEvidence({ quote: { line: -1.5, homeOdds: 135, awayOdds: -155 } })],
+  });
+  assert.equal(validateMlbPregameModelQuote(runLineReport, lines).matches, true);
+  assert.equal(validateMlbPregameModelQuote(runLineReport, { ...lines, runLine: "-2.5" }).matches, false);
+
+  const totalReport = report({
+    market: "TOTAL",
+    evidence: [marketEvidence({ quote: { line: 8.5, overOdds: -110, underOdds: -110 } })],
+  });
+  assert.equal(validateMlbPregameModelQuote(totalReport, lines).matches, true);
+  assert.equal(validateMlbPregameModelQuote(totalReport, { ...lines, overOdds: "+100" }).matches, false);
+});
+
+test("P1-M2C accepts manual and automatic F5 ML shapes but blocks F5 Total without exact prices", () => {
+  const manualF5 = report({
+    market: "F5_ML",
+    evidence: [marketEvidence({ homeOdds: -120, awayOdds: 105 })],
+  });
+  assert.equal(validateMlbPregameModelQuote(manualF5, lines).matches, true);
+
+  const automaticF5 = report({
+    market: "F5_ML",
+    evidence: [marketEvidence({ quote: { home: -120, away: 105, n: 3 } })],
+  });
+  assert.equal(validateMlbPregameModelQuote(automaticF5, lines).matches, true);
+
+  const f5Total = report({
+    market: "F5_TOTAL",
+    evidence: [marketEvidence({ quote: { line: 4.5, overOdds: -110, underOdds: -110 } })],
+  });
+  const result = validateMlbPregameModelQuote(f5Total, lines);
+  assert.equal(result.matches, false);
+  assert.deepEqual(result.reasons, ["F5_TOTAL_EXACT_PRICES_NOT_CAPTURED"]);
+});
 
 test("P1-M2C accepts only the exact P1-M2B SHADOW safety envelope", () => {
   assert.equal(mlbPregameSafetyValid(report()), true);
