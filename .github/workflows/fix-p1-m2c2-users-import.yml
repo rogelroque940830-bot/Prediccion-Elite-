@@ -1,0 +1,50 @@
+name: Fix P1-M2C.2 Users import
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-p1-m2c2-users-import.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/p1-m2c2-mlb-priority-first
+          path: work
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply exact import fix
+        working-directory: work
+        run: node ../trusted/scripts/fix-p1-m2c2-users-import-trusted.mjs
+      - name: Verify scope
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(git status --short | awk '{print $2}')
+          [[ "${changed}" == 'frontend/client/src/components/mlb-daily-slate-panel.tsx' ]]
+          git diff --check
+      - name: Commit fix
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/components/mlb-daily-slate-panel.tsx
+          git commit -m 'P1-M2C.2: fix compact slate icon import'
+          git push origin HEAD:feature/p1-m2c2-mlb-priority-first
