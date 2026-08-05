@@ -1,0 +1,52 @@
+name: Apply trusted P1-M2C.1 visual consolidation
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches:
+      - integration/p0-frontend-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.number == 265 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/p1-m2c1-mlb-visual-consolidation'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted implementation
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted
+          fetch-depth: 1
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/p1-m2c1-mlb-visual-consolidation
+          path: work
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply trusted deterministic patch
+        working-directory: work
+        run: node ../trusted/scripts/apply-p1-m2c1-visual-consolidation-trusted.mjs
+      - name: Verify exact file scope
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(git status --short | awk '{print $2}')
+          [[ "${changed}" == 'frontend/client/src/pages/mlb-predictor.tsx' ]]
+          git diff --check
+      - name: Commit and push
+        working-directory: work
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/pages/mlb-predictor.tsx
+          git commit -m 'P1-M2C.1: consolidate the MLB operational flow'
+          git push origin HEAD:feature/p1-m2c1-mlb-visual-consolidation
