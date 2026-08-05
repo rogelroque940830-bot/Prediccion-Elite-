@@ -17,6 +17,7 @@ import { SELF_URL } from "./route-runtime";
 export const MLB_P1_M2B_SCHEMA = "courtedge-p1-m2b-pregame-readiness.v1" as const;
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type GameState = "SCHEDULED" | "PREGAME" | "IN_PROGRESS" | "FINAL" | "CLOSED" | "UNKNOWN";
 
 export interface MlbP1M2bManualOdds {
   mode: "MANUAL";
@@ -55,21 +56,15 @@ export interface MlbP1M2bReadinessReport {
     gamePk: number;
     officialDate: string | null;
     startTime: string | null;
-    state: "SCHEDULED" | "PREGAME" | "IN_PROGRESS" | "FINAL" | "CLOSED" | "UNKNOWN";
+    state: GameState;
     detailedState: string | null;
     homeTeam: { id: number | null; name: string | null };
     awayTeam: { id: number | null; name: string | null };
   };
   gate: ReturnType<typeof decideMlbP1M2aPregameGate>;
   evidence: MlbP1M2bEvidenceEnvelope[];
-  summary: {
+  summary: Record<"fresh" | "stale" | "degraded" | "missing" | "conflict" | "unknown", number> & {
     requiredFields: MlbP1M2aField[];
-    fresh: number;
-    stale: number;
-    degraded: number;
-    missing: number;
-    conflict: number;
-    unknown: number;
   };
   warnings: string[];
   safety: {
@@ -81,7 +76,7 @@ export interface MlbP1M2bReadinessReport {
   };
 }
 
-interface SourceCall {
+interface Call {
   url: string;
   ok: boolean;
   status: number;
@@ -108,40 +103,54 @@ interface OfficialGame {
 }
 
 const FIELD_ORDER: readonly MlbP1M2aField[] = [
-  "GAME_IDENTITY",
-  "PITCHERS",
-  "LINEUPS",
-  "INJURIES",
-  "MARKET_ODDS",
-  "BULLPEN",
-  "PITCHER_FORM",
-  "LINEUP_MATCHUP",
-  "ENVIRONMENT",
-  "UMPIRE",
-  "ADVANCED_FACTORS",
-] as const;
+  "GAME_IDENTITY", "PITCHERS", "LINEUPS", "INJURIES", "MARKET_ODDS",
+  "BULLPEN", "PITCHER_FORM", "LINEUP_MATCHUP", "ENVIRONMENT", "UMPIRE", "ADVANCED_FACTORS",
+];
 
-const EXPLICIT_TIMESTAMP_KEYS = new Set([
-  "observedAt",
-  "generatedAt",
-  "fetchedAt",
-  "capturedAt",
-  "providerLastUpdate",
-  "updatedAt",
-  "lastUpdate",
-  "lastUpdated",
+const TIMESTAMP_KEYS = new Set([
+  "observedAt", "generatedAt", "fetchedAt", "capturedAt",
+  "providerLastUpdate", "updatedAt", "lastUpdate", "lastUpdated",
 ]);
 
-function sourceDefinitions(field: MlbP1M2aField) {
+const clean = (value: unknown) => String(value ?? "").trim();
+const finite = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : null;
+const positiveInt = (value: unknown) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
+
+function iso(value: unknown): string | null {
+  const text = clean(value);
+  const parsed = text ? Date.parse(text) : NaN;
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function newest(values: readonly unknown[]): string | null {
+  return values.map(iso).filter((value): value is string => value != null)
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+}
+
+function collectTimes(value: unknown, depth = 0, seen = new Set<unknown>()): string[] {
+  if (depth > 4 || !value || typeof value !== "object" || seen.has(value)) return [];
+  seen.add(value);
+  const result: string[] = [];
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (TIMESTAMP_KEYS.has(key)) {
+      const parsed = iso(child);
+      if (parsed) result.push(parsed);
+    }
+    if (child && typeof child === "object") result.push(...collectTimes(child, depth + 1, seen));
+  }
+  return result;
+}
+
+function definitions(field: MlbP1M2aField) {
   return MLB_P1_M2A_SOURCE_INVENTORY.filter((source) => source.field === field);
 }
 
-function maxAgeFor(field: MlbP1M2aField): number {
-  const ages = sourceDefinitions(field).map((source) => source.requiredMaxAgeSeconds);
-  return ages.length ? Math.min(...ages) : 300;
+function maxAge(field: MlbP1M2aField): number {
+  const values = definitions(field).map((source) => source.requiredMaxAgeSeconds);
+  return values.length ? Math.min(...values) : 300;
 }
 
-function requiredFieldsFor(market: MlbP1M2aMarket): MlbP1M2aField[] {
+function requiredFor(market: MlbP1M2aMarket): MlbP1M2aField[] {
   return Array.from(new Set([
     ...MLB_P1_M2A_HARD_BLOCKING_FIELDS,
     ...MLB_P1_M2A_FINAL_ONLY_FIELDS,
@@ -149,123 +158,12 @@ function requiredFieldsFor(market: MlbP1M2aMarket): MlbP1M2aField[] {
   ]));
 }
 
-function cleanText(value: unknown): string {
-  return String(value ?? "").trim();
-}
-
-function finite(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function positiveInteger(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function isoOrNull(value: unknown): string | null {
-  const text = cleanText(value);
-  if (!text) return null;
-  const parsed = Date.parse(text);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-}
-
-function ageSeconds(observedAt: string | null, now: Date): number | null {
-  if (!observedAt) return null;
-  const parsed = Date.parse(observedAt);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.max(0, Math.round((now.getTime() - parsed) / 1000));
-}
-
-function newestIso(values: readonly (string | null | undefined)[]): string | null {
-  const parsed = values
-    .map((value) => isoOrNull(value))
-    .filter((value): value is string => value != null)
-    .sort((left, right) => Date.parse(right) - Date.parse(left));
-  return parsed[0] ?? null;
-}
-
-function collectTimestamps(value: unknown, depth = 0, seen = new Set<unknown>()): string[] {
-  if (depth > 4 || value == null || typeof value !== "object" || seen.has(value)) return [];
-  seen.add(value);
-  const result: string[] = [];
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (EXPLICIT_TIMESTAMP_KEYS.has(key)) {
-      const timestamp = isoOrNull(child);
-      if (timestamp) result.push(timestamp);
-    }
-    if (child && typeof child === "object") {
-      result.push(...collectTimestamps(child, depth + 1, seen));
-    }
-  }
-  return result;
-}
-
-function payloadUsable(data: any): boolean {
-  if (data == null) return false;
-  if (data?.success === false) return false;
-  if (data?.error && Object.keys(data).length <= 5) return false;
-  return true;
-}
-
-async function fetchJson(
-  fetchImpl: FetchLike,
-  url: string,
-  fetchedAt: string,
-  timeoutMs: number,
-): Promise<SourceCall> {
-  const started = Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: { accept: "application/json" },
-    });
-    let data: any = null;
-    try {
-      data = await response.json();
-    } catch {
-      return {
-        url,
-        ok: false,
-        status: response.status,
-        data: null,
-        fetchedAt,
-        durationMs: Date.now() - started,
-        error: "INVALID_JSON",
-      };
-    }
-    const usable = response.ok && payloadUsable(data);
-    return {
-      url,
-      ok: usable,
-      status: response.status,
-      data,
-      fetchedAt,
-      durationMs: Date.now() - started,
-      error: usable ? null : cleanText(data?.error || data?.message || `HTTP_${response.status}`),
-    };
-  } catch (error: any) {
-    return {
-      url,
-      ok: false,
-      status: 0,
-      data: null,
-      fetchedAt,
-      durationMs: Date.now() - started,
-      error: error?.name === "AbortError" ? "TIMEOUT" : cleanText(error?.message || error || "FETCH_FAILED"),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function evidenceEnvelope(input: {
+function envelope(input: {
   field: MlbP1M2aField;
   required: boolean;
   state: MlbP1M2aEvidenceState;
   fetchedAt: string;
+  now: Date;
   observedAt?: string | null;
   sourceStatus: string;
   quality: string;
@@ -274,20 +172,20 @@ function evidenceEnvelope(input: {
   sourceIds?: string[];
   endpoints?: string[];
   authority?: string;
-  now: Date;
 }): MlbP1M2bEvidenceEnvelope {
-  const definitions = sourceDefinitions(input.field);
+  const sources = definitions(input.field);
+  const observedAt = input.observedAt ?? null;
   return {
     field: input.field,
     required: input.required,
     state: input.state,
-    sourceIds: input.sourceIds ?? definitions.map((source) => source.id),
-    endpoints: input.endpoints ?? definitions.map((source) => source.endpoint),
-    authority: input.authority ?? definitions.map((source) => source.authority).join("+") || "UNKNOWN",
+    sourceIds: input.sourceIds ?? sources.map((source) => source.id),
+    endpoints: input.endpoints ?? sources.map((source) => source.endpoint),
+    authority: input.authority ?? (sources.map((source) => source.authority).join("+") || "UNKNOWN"),
     fetchedAt: input.fetchedAt,
-    observedAt: input.observedAt ?? null,
-    ageSeconds: ageSeconds(input.observedAt ?? null, input.now),
-    maxAgeSeconds: maxAgeFor(input.field),
+    observedAt,
+    ageSeconds: observedAt ? Math.max(0, Math.round((input.now.getTime() - Date.parse(observedAt)) / 1000)) : null,
+    maxAgeSeconds: maxAge(input.field),
     sourceStatus: input.sourceStatus,
     quality: input.quality,
     details: input.details ?? {},
@@ -295,110 +193,93 @@ function evidenceEnvelope(input: {
   };
 }
 
-function notRequiredEvidence(field: MlbP1M2aField, fetchedAt: string, now: Date): MlbP1M2bEvidenceEnvelope {
-  return evidenceEnvelope({
-    field,
-    required: false,
-    state: "UNKNOWN",
-    fetchedAt,
-    observedAt: null,
-    sourceStatus: "NOT_REQUIRED_FOR_SELECTED_MARKET",
-    quality: "NOT_LOADED",
-    details: {},
-    errors: [],
-    now,
-  });
+function usable(data: any): boolean {
+  return data != null && data?.success !== false && !(data?.error && Object.keys(data).length <= 5);
 }
 
-function normalizeGameState(state: string): MlbP1M2bReadinessReport["game"]["state"] {
-  const normalized = cleanText(state).toUpperCase();
-  if (normalized === "SCHEDULED") return "SCHEDULED";
-  if (normalized === "PREGAME") return "PREGAME";
-  if (normalized === "IN_PROGRESS") return "IN_PROGRESS";
-  if (normalized === "FINAL") return "FINAL";
-  if (["POSTPONED", "CANCELLED", "SUSPENDED", "CLOSED"].includes(normalized)) return "CLOSED";
+async function fetchJson(fetchImpl: FetchLike, url: string, fetchedAt: string, timeoutMs: number): Promise<Call> {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal, headers: { accept: "application/json" } });
+    let data: any;
+    try { data = await response.json(); }
+    catch {
+      return { url, ok: false, status: response.status, data: null, fetchedAt, durationMs: Date.now() - started, error: "INVALID_JSON" };
+    }
+    const ok = response.ok && usable(data);
+    return {
+      url, ok, status: response.status, data, fetchedAt, durationMs: Date.now() - started,
+      error: ok ? null : clean(data?.error || data?.message || `HTTP_${response.status}`),
+    };
+  } catch (error: any) {
+    return {
+      url, ok: false, status: 0, data: null, fetchedAt, durationMs: Date.now() - started,
+      error: error?.name === "AbortError" ? "TIMEOUT" : clean(error?.message || error || "FETCH_FAILED"),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function gameState(value: unknown): GameState {
+  const state = clean(value).toUpperCase();
+  if (state === "SCHEDULED" || state === "PREGAME" || state === "IN_PROGRESS" || state === "FINAL") return state;
+  if (["POSTPONED", "CANCELLED", "SUSPENDED", "CLOSED"].includes(state)) return "CLOSED";
   return "UNKNOWN";
 }
 
 function teamKey(value: unknown): string {
-  return cleanText(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+  return clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function gameStart(value: any): string | null {
-  return isoOrNull(value?.commence ?? value?.commenceTime ?? value?.startTime ?? value?.gameDate);
-}
+const startTime = (game: any) => iso(game?.commence ?? game?.commenceTime ?? game?.startTime ?? game?.gameDate);
 
-function chooseMarketGame(
-  games: any[],
-  officialGame: OfficialGame,
-): { game: any | null; conflict: string | null } {
-  const homeKey = teamKey(officialGame.homeTeam.name);
-  const awayKey = teamKey(officialGame.awayTeam.name);
+function chooseMarketGame(games: any[], official: OfficialGame): { game: any | null; conflict: string | null } {
   const matches = games.filter((game) =>
-    teamKey(game?.homeTeam ?? game?.home_team ?? game?.home?.name) === homeKey
-    && teamKey(game?.awayTeam ?? game?.away_team ?? game?.away?.name) === awayKey
+    teamKey(game?.homeTeam ?? game?.home_team ?? game?.home?.name) === teamKey(official.homeTeam.name)
+    && teamKey(game?.awayTeam ?? game?.away_team ?? game?.away?.name) === teamKey(official.awayTeam.name)
   );
-  if (matches.length === 0) return { game: null, conflict: null };
+  if (!matches.length) return { game: null, conflict: null };
   if (matches.length === 1) {
-    const candidateStart = gameStart(matches[0]);
-    if (officialGame.startTime && candidateStart) {
-      const deltaMs = Math.abs(Date.parse(candidateStart) - Date.parse(officialGame.startTime));
-      if (deltaMs > 6 * 60 * 60 * 1000) return { game: null, conflict: "MARKET_START_TIME_MISMATCH" };
+    const candidate = startTime(matches[0]);
+    if (official.startTime && candidate && Math.abs(Date.parse(candidate) - Date.parse(official.startTime)) > 21_600_000) {
+      return { game: null, conflict: "MARKET_START_TIME_MISMATCH" };
     }
     return { game: matches[0], conflict: null };
   }
-  if (!officialGame.startTime) return { game: null, conflict: "AMBIGUOUS_DOUBLEHEADER_WITHOUT_START_TIME" };
-  const ranked = matches
-    .map((game) => ({
-      game,
-      start: gameStart(game),
-      delta: gameStart(game)
-        ? Math.abs(Date.parse(gameStart(game)!) - Date.parse(officialGame.startTime!))
-        : Number.POSITIVE_INFINITY,
-    }))
-    .sort((left, right) => left.delta - right.delta);
-  if (!Number.isFinite(ranked[0]?.delta) || ranked[0].delta > 6 * 60 * 60 * 1000) {
+  if (!official.startTime) return { game: null, conflict: "AMBIGUOUS_DOUBLEHEADER_WITHOUT_START_TIME" };
+  const ranked = matches.map((game) => {
+    const candidate = startTime(game);
+    return { game, delta: candidate ? Math.abs(Date.parse(candidate) - Date.parse(official.startTime!)) : Infinity };
+  }).sort((a, b) => a.delta - b.delta);
+  if (!Number.isFinite(ranked[0]?.delta) || ranked[0].delta > 21_600_000) {
     return { game: null, conflict: "AMBIGUOUS_OR_MISMATCHED_DOUBLEHEADER" };
   }
-  if (ranked[1] && ranked[1].delta === ranked[0].delta) {
-    return { game: null, conflict: "AMBIGUOUS_DOUBLEHEADER_TIME_TIE" };
-  }
+  if (ranked[1]?.delta === ranked[0].delta) return { game: null, conflict: "AMBIGUOUS_DOUBLEHEADER_TIME_TIE" };
   return { game: ranked[0].game, conflict: null };
 }
 
-function validMarketNumbers(market: MlbP1M2aMarket, game: any): boolean {
-  if (market === "ML") {
-    return isStandardAmericanOdds(game?.ml?.home) && isStandardAmericanOdds(game?.ml?.away);
-  }
+function validMarket(market: MlbP1M2aMarket, game: any): boolean {
+  if (market === "ML") return isStandardAmericanOdds(game?.ml?.home) && isStandardAmericanOdds(game?.ml?.away);
   if (market === "RUN_LINE") {
-    return finite(game?.spread?.line) != null
-      && isStandardAmericanOdds(game?.spread?.homeOdds)
-      && isStandardAmericanOdds(game?.spread?.awayOdds);
+    return finite(game?.spread?.line) != null && isStandardAmericanOdds(game?.spread?.homeOdds) && isStandardAmericanOdds(game?.spread?.awayOdds);
   }
   if (market === "TOTAL") {
-    return finite(game?.total?.line) != null
-      && isStandardAmericanOdds(game?.total?.overOdds)
-      && isStandardAmericanOdds(game?.total?.underOdds);
+    return finite(game?.total?.line) != null && isStandardAmericanOdds(game?.total?.overOdds) && isStandardAmericanOdds(game?.total?.underOdds);
   }
-  if (market === "F5_ML") {
-    return isStandardAmericanOdds(game?.f5Ml?.home) && isStandardAmericanOdds(game?.f5Ml?.away);
-  }
+  if (market === "F5_ML") return isStandardAmericanOdds(game?.f5Ml?.home) && isStandardAmericanOdds(game?.f5Ml?.away);
   return finite(game?.f5Total?.line) != null
     && isStandardAmericanOdds(game?.f5Total?.overOdds)
     && isStandardAmericanOdds(game?.f5Total?.underOdds);
 }
 
-export function validateMlbP1M2bManualOdds(
-  market: MlbP1M2aMarket,
-  manual: MlbP1M2bManualOdds,
-): string[] {
+export function validateMlbP1M2bManualOdds(market: MlbP1M2aMarket, manual: MlbP1M2bManualOdds): string[] {
   const errors: string[] = [];
-  if (!cleanText(manual.book)) errors.push("MANUAL_BOOK_REQUIRED");
-  if (!isoOrNull(manual.capturedAt)) errors.push("MANUAL_CAPTURED_AT_INVALID");
+  if (!clean(manual.book)) errors.push("MANUAL_BOOK_REQUIRED");
+  if (!iso(manual.capturedAt)) errors.push("MANUAL_CAPTURED_AT_INVALID");
   if (market === "ML" || market === "F5_ML") {
     if (!isStandardAmericanOdds(manual.homeOdds)) errors.push("MANUAL_HOME_ODDS_INVALID");
     if (!isStandardAmericanOdds(manual.awayOdds)) errors.push("MANUAL_AWAY_ODDS_INVALID");
@@ -414,284 +295,146 @@ export function validateMlbP1M2bManualOdds(
   return errors;
 }
 
-async function resolveDateByGamePk(
+async function resolveDate(
   gamePk: number,
-  dateHint: string | null,
+  hint: string | null,
   fetchImpl: FetchLike,
   fetchedAt: string,
   timeoutMs: number,
-): Promise<{ date: string | null; call: SourceCall | null; error: string | null }> {
-  if (dateHint) {
-    return isValidMlbP1Date(dateHint)
-      ? { date: dateHint, call: null, error: null }
-      : { date: null, call: null, error: "INVALID_DATE_HINT" };
-  }
-  const call = await fetchJson(
-    fetchImpl,
-    `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`,
-    fetchedAt,
-    timeoutMs,
-  );
-  const date = cleanText(call.data?.gameData?.datetime?.officialDate);
+): Promise<{ date: string | null; error: string | null }> {
+  if (hint) return isValidMlbP1Date(hint)
+    ? { date: hint, error: null }
+    : { date: null, error: "INVALID_DATE_HINT" };
+  const call = await fetchJson(fetchImpl, `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, fetchedAt, timeoutMs);
+  const date = clean(call.data?.gameData?.datetime?.officialDate);
   return isValidMlbP1Date(date)
-    ? { date, call, error: null }
-    : { date: null, call, error: call.error || "OFFICIAL_DATE_UNAVAILABLE" };
+    ? { date, error: null }
+    : { date: null, error: call.error || "OFFICIAL_DATE_UNAVAILABLE" };
 }
 
 function officialEvidence(
-  officialGame: OfficialGame | null,
-  slateCall: SourceCall,
+  game: OfficialGame | null,
+  call: Call,
   required: Set<MlbP1M2aField>,
   now: Date,
 ): MlbP1M2bEvidenceEnvelope[] {
-  const fetchedAt = slateCall.fetchedAt;
-  if (!officialGame) {
-    const error = slateCall.error || "GAME_NOT_FOUND_IN_OFFICIAL_SLATE";
-    return (["GAME_IDENTITY", "PITCHERS", "LINEUPS"] as const).map((field) => evidenceEnvelope({
-      field,
-      required: required.has(field),
-      state: field === "GAME_IDENTITY" && slateCall.ok ? "CONFLICT" : "MISSING",
-      fetchedAt,
-      sourceStatus: slateCall.ok ? "GAME_NOT_FOUND" : "SOURCE_UNAVAILABLE",
-      quality: "UNAVAILABLE",
-      errors: [error],
-      now,
+  if (!game) {
+    return (["GAME_IDENTITY", "PITCHERS", "LINEUPS"] as const).map((field) => envelope({
+      field, required: required.has(field), state: field === "GAME_IDENTITY" && call.ok ? "CONFLICT" : "MISSING",
+      fetchedAt: call.fetchedAt, now, sourceStatus: call.ok ? "GAME_NOT_FOUND" : "SOURCE_UNAVAILABLE",
+      quality: "UNAVAILABLE", errors: [call.error || "GAME_NOT_FOUND_IN_OFFICIAL_SLATE"],
     }));
   }
 
-  const observedAt = isoOrNull(officialGame.source?.fetchedAt) ?? isoOrNull(slateCall.data?.data?.generatedAt);
-  const identityFreshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now,
-    maxAgeSeconds: maxAgeFor("GAME_IDENTITY"),
-  });
-  const sourceQuality = cleanText(officialGame.source?.quality).toUpperCase();
-  const identityState: MlbP1M2aEvidenceState = sourceQuality === "DEGRADED"
-    ? "DEGRADED"
-    : identityFreshness;
-
-  const homePitcherConfirmed = Boolean(officialGame.homePitcher?.confirmed);
-  const awayPitcherConfirmed = Boolean(officialGame.awayPitcher?.confirmed);
-  const pitcherFreshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now,
-    maxAgeSeconds: maxAgeFor("PITCHERS"),
-  });
-  const pitcherState: MlbP1M2aEvidenceState = homePitcherConfirmed && awayPitcherConfirmed
-    ? (sourceQuality === "DEGRADED" ? "DEGRADED" : pitcherFreshness)
+  const observedAt = iso(game.source?.fetchedAt) ?? iso(call.data?.data?.generatedAt);
+  const quality = clean(game.source?.quality).toUpperCase();
+  const freshness = (field: MlbP1M2aField) => classifyMlbP1M2aFreshness({ observedAt, now, maxAgeSeconds: maxAge(field) });
+  const identity = quality === "DEGRADED" ? "DEGRADED" : freshness("GAME_IDENTITY");
+  const pitchers = game.homePitcher?.confirmed && game.awayPitcher?.confirmed
+    ? (quality === "DEGRADED" ? "DEGRADED" : freshness("PITCHERS"))
     : "MISSING";
-
-  const lineupState = cleanText(officialGame.lineupState).toUpperCase();
-  const lineupFreshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now,
-    maxAgeSeconds: maxAgeFor("LINEUPS"),
-  });
-  let lineupsState: MlbP1M2aEvidenceState = "MISSING";
-  if (lineupState === "CONFIRMED") {
-    lineupsState = sourceQuality === "DEGRADED" ? "DEGRADED" : lineupFreshness;
-  } else if (lineupState === "PARTIAL") {
-    lineupsState = "DEGRADED";
-  } else if (lineupState === "UNKNOWN") {
-    lineupsState = "UNKNOWN";
-  }
+  const lineupLabel = clean(game.lineupState).toUpperCase();
+  const lineups: MlbP1M2aEvidenceState = lineupLabel === "CONFIRMED"
+    ? (quality === "DEGRADED" ? "DEGRADED" : freshness("LINEUPS"))
+    : lineupLabel === "PARTIAL" ? "DEGRADED"
+      : lineupLabel === "UNKNOWN" ? "UNKNOWN" : "MISSING";
 
   return [
-    evidenceEnvelope({
-      field: "GAME_IDENTITY",
-      required: required.has("GAME_IDENTITY"),
-      state: identityState,
-      fetchedAt,
-      observedAt,
-      sourceStatus: sourceQuality || "AUTHORITATIVE",
-      quality: sourceQuality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
-      details: {
-        gamePk: officialGame.gamePk,
-        officialDate: officialGame.officialDate,
-        state: officialGame.state,
-        detailedState: officialGame.detailedState,
-      },
-      errors: identityState === "FRESH" ? [] : [`GAME_IDENTITY_${identityState}`],
-      now,
+    envelope({
+      field: "GAME_IDENTITY", required: required.has("GAME_IDENTITY"), state: identity,
+      fetchedAt: call.fetchedAt, observedAt, now, sourceStatus: quality || "AUTHORITATIVE",
+      quality: quality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
+      details: { gamePk: game.gamePk, officialDate: game.officialDate, state: game.state, detailedState: game.detailedState },
+      errors: identity === "FRESH" ? [] : [`GAME_IDENTITY_${identity}`],
     }),
-    evidenceEnvelope({
-      field: "PITCHERS",
-      required: required.has("PITCHERS"),
-      state: pitcherState,
-      fetchedAt,
-      observedAt,
-      sourceStatus: homePitcherConfirmed && awayPitcherConfirmed ? "BOTH_IDENTIFIED" : "PITCHER_MISSING",
-      quality: sourceQuality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
-      details: {
-        home: officialGame.homePitcher ?? null,
-        away: officialGame.awayPitcher ?? null,
-      },
-      errors: pitcherState === "FRESH" ? [] : [`PITCHERS_${pitcherState}`],
-      now,
+    envelope({
+      field: "PITCHERS", required: required.has("PITCHERS"), state: pitchers,
+      fetchedAt: call.fetchedAt, observedAt, now,
+      sourceStatus: game.homePitcher?.confirmed && game.awayPitcher?.confirmed ? "BOTH_IDENTIFIED" : "PITCHER_MISSING",
+      quality: quality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
+      details: { home: game.homePitcher ?? null, away: game.awayPitcher ?? null },
+      errors: pitchers === "FRESH" ? [] : [`PITCHERS_${pitchers}`],
     }),
-    evidenceEnvelope({
-      field: "LINEUPS",
-      required: required.has("LINEUPS"),
-      state: lineupsState,
-      fetchedAt,
-      observedAt,
-      sourceStatus: lineupState || "UNKNOWN",
-      quality: sourceQuality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
-      details: {
-        lineupState,
-        homeLineupCount: officialGame.homeLineupCount ?? 0,
-        awayLineupCount: officialGame.awayLineupCount ?? 0,
-      },
-      errors: lineupsState === "FRESH" ? [] : [`LINEUPS_${lineupsState}`],
-      now,
+    envelope({
+      field: "LINEUPS", required: required.has("LINEUPS"), state: lineups,
+      fetchedAt: call.fetchedAt, observedAt, now, sourceStatus: lineupLabel || "UNKNOWN",
+      quality: quality === "DEGRADED" ? "DEGRADED" : "AUTHORITATIVE",
+      details: { lineupState: lineupLabel, homeLineupCount: game.homeLineupCount ?? 0, awayLineupCount: game.awayLineupCount ?? 0 },
+      errors: lineups === "FRESH" ? [] : [`LINEUPS_${lineups}`],
     }),
   ];
 }
 
-function findAnalysisGame(payload: any, gamePk: number): any | null {
-  const games = Array.isArray(payload?.games)
-    ? payload.games
-    : Array.isArray(payload?.data?.games)
-      ? payload.data.games
-      : [];
-  return games.find((game: any) =>
-    positiveInteger(game?.gamePk ?? game?.gameId ?? game?.id) === gamePk
-  ) ?? null;
+function analysisGame(payload: any, gamePk: number): any | null {
+  const games = Array.isArray(payload?.games) ? payload.games
+    : Array.isArray(payload?.data?.games) ? payload.data.games : [];
+  return games.find((game: any) => positiveInt(game?.gamePk ?? game?.gameId ?? game?.id) === gamePk) ?? null;
 }
 
-function injuryEvidence(
-  analysisCall: SourceCall,
-  analysisGame: any | null,
-  required: boolean,
-  now: Date,
-): MlbP1M2bEvidenceEnvelope {
-  if (!analysisCall.ok || !analysisGame) {
-    return evidenceEnvelope({
-      field: "INJURIES",
-      required,
-      state: analysisCall.ok ? "CONFLICT" : "MISSING",
-      fetchedAt: analysisCall.fetchedAt,
-      observedAt: null,
-      sourceStatus: analysisCall.ok ? "GAME_NOT_FOUND" : "SOURCE_UNAVAILABLE",
-      quality: "UNAVAILABLE",
-      details: {},
-      errors: [analysisCall.error || "INJURY_GAME_NOT_FOUND"],
-      now,
+function injuries(call: Call, game: any | null, required: boolean, now: Date): MlbP1M2bEvidenceEnvelope {
+  if (!call.ok || !game) {
+    return envelope({
+      field: "INJURIES", required, state: call.ok ? "CONFLICT" : "MISSING",
+      fetchedAt: call.fetchedAt, now, sourceStatus: call.ok ? "GAME_NOT_FOUND" : "SOURCE_UNAVAILABLE",
+      quality: "UNAVAILABLE", errors: [call.error || "INJURY_GAME_NOT_FOUND"],
     });
   }
-  const home = analysisGame?.homeInjuryData ?? null;
-  const away = analysisGame?.awayInjuryData ?? null;
+  const home = game.homeInjuryData;
+  const away = game.awayInjuryData;
   if (!home || !away) {
-    return evidenceEnvelope({
-      field: "INJURIES",
-      required,
-      state: "MISSING",
-      fetchedAt: analysisCall.fetchedAt,
-      observedAt: null,
-      sourceStatus: "METADATA_MISSING",
-      quality: "UNAVAILABLE",
-      details: {
-        homePresent: Boolean(home),
-        awayPresent: Boolean(away),
-      },
-      errors: ["INJURY_METADATA_MISSING"],
-      now,
+    return envelope({
+      field: "INJURIES", required, state: "MISSING", fetchedAt: call.fetchedAt, now,
+      sourceStatus: "METADATA_MISSING", quality: "UNAVAILABLE",
+      details: { homePresent: Boolean(home), awayPresent: Boolean(away) }, errors: ["INJURY_METADATA_MISSING"],
     });
   }
-
-  const statuses = [cleanText(home.status).toUpperCase(), cleanText(away.status).toUpperCase()];
-  const observedAt = newestIso([home.fetchedAt, home.officialFetchedAt, away.fetchedAt, away.officialFetchedAt]);
-  const freshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now,
-    maxAgeSeconds: maxAgeFor("INJURIES"),
-  });
+  const statuses = [clean(home.status).toUpperCase(), clean(away.status).toUpperCase()];
+  const observedAt = newest([home.fetchedAt, home.officialFetchedAt, away.fetchedAt, away.officialFetchedAt]);
+  const freshness = classifyMlbP1M2aFreshness({ observedAt, now, maxAgeSeconds: maxAge("INJURIES") });
   let state: MlbP1M2aEvidenceState;
-  if (statuses.some((status) => status === "SOURCE_UNAVAILABLE")) state = "MISSING";
+  if (statuses.includes("SOURCE_UNAVAILABLE")) state = "MISSING";
   else if (freshness === "STALE" || home.stale === true || away.stale === true) state = "STALE";
   else if (statuses.every((status) => status === "VERIFIED") && freshness === "FRESH") state = "FRESH";
-  else if (!observedAt) state = "UNKNOWN";
-  else state = "DEGRADED";
-
-  return evidenceEnvelope({
-    field: "INJURIES",
-    required,
-    state,
-    fetchedAt: analysisCall.fetchedAt,
-    observedAt,
-    sourceStatus: statuses.join("+") || "UNKNOWN",
-    quality: state === "FRESH" ? "VALIDATED_EXTERNAL" : "DEGRADED",
+  else state = observedAt ? "DEGRADED" : "UNKNOWN";
+  return envelope({
+    field: "INJURIES", required, state, fetchedAt: call.fetchedAt, observedAt, now,
+    sourceStatus: statuses.join("+") || "UNKNOWN", quality: state === "FRESH" ? "VALIDATED_EXTERNAL" : "DEGRADED",
     details: {
-      home: {
-        status: home.status ?? null,
-        stale: home.stale ?? null,
-        count: home.count ?? analysisGame?.homeInjuries?.length ?? null,
-        officialValidationStatus: home.officialValidationStatus ?? null,
-      },
-      away: {
-        status: away.status ?? null,
-        stale: away.stale ?? null,
-        count: away.count ?? analysisGame?.awayInjuries?.length ?? null,
-        officialValidationStatus: away.officialValidationStatus ?? null,
-      },
+      home: { status: home.status ?? null, stale: home.stale ?? null, count: home.count ?? game.homeInjuries?.length ?? null },
+      away: { status: away.status ?? null, stale: away.stale ?? null, count: away.count ?? game.awayInjuries?.length ?? null },
     },
-    errors: state === "FRESH"
-      ? []
-      : [
-          ...((Array.isArray(home.sourceErrors) ? home.sourceErrors : []).map(cleanText)),
-          ...((Array.isArray(away.sourceErrors) ? away.sourceErrors : []).map(cleanText)),
-          `INJURIES_${state}`,
-        ].filter(Boolean),
-    now,
+    errors: state === "FRESH" ? [] : [`INJURIES_${state}`],
   });
 }
 
-function manualOddsEvidence(
+function manualOdds(
   market: MlbP1M2aMarket,
-  manual: MlbP1M2bManualOdds,
+  snapshot: MlbP1M2bManualOdds,
   required: boolean,
   fetchedAt: string,
   now: Date,
 ): MlbP1M2bEvidenceEnvelope {
-  const validationErrors = validateMlbP1M2bManualOdds(market, manual);
-  const observedAt = isoOrNull(manual.capturedAt);
-  const freshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now,
-    maxAgeSeconds: maxAgeFor("MARKET_ODDS"),
-  });
-  const state: MlbP1M2aEvidenceState = validationErrors.length
-    ? "CONFLICT"
-    : freshness;
-  return evidenceEnvelope({
-    field: "MARKET_ODDS",
-    required,
-    state,
-    fetchedAt,
-    observedAt,
-    sourceStatus: "MANUAL_OVERRIDE",
-    quality: "USER_VERIFIED_MARKET_SNAPSHOT",
+  const errors = validateMlbP1M2bManualOdds(market, snapshot);
+  const observedAt = iso(snapshot.capturedAt);
+  const freshness = classifyMlbP1M2aFreshness({ observedAt, now, maxAgeSeconds: maxAge("MARKET_ODDS") });
+  const state: MlbP1M2aEvidenceState = errors.length ? "CONFLICT" : freshness;
+  return envelope({
+    field: "MARKET_ODDS", required, state, fetchedAt, observedAt, now,
+    sourceStatus: "MANUAL_OVERRIDE", quality: "USER_VERIFIED_MARKET_SNAPSHOT",
+    sourceIds: ["manual-market-odds"], endpoints: [], authority: "MARKET",
     details: {
-      book: manual.book,
-      market,
-      line: manual.line ?? null,
-      homeOdds: manual.homeOdds ?? null,
-      awayOdds: manual.awayOdds ?? null,
-      overOdds: manual.overOdds ?? null,
-      underOdds: manual.underOdds ?? null,
+      book: snapshot.book, market, line: snapshot.line ?? null,
+      homeOdds: snapshot.homeOdds ?? null, awayOdds: snapshot.awayOdds ?? null,
+      overOdds: snapshot.overOdds ?? null, underOdds: snapshot.underOdds ?? null,
     },
-    errors: validationErrors.length ? validationErrors : (state === "FRESH" ? [] : [`MARKET_ODDS_${state}`]),
-    sourceIds: ["manual-market-odds"],
-    endpoints: [],
-    authority: "MARKET",
-    now,
+    errors: errors.length ? errors : state === "FRESH" ? [] : [`MARKET_ODDS_${state}`],
   });
 }
 
-async function automaticOddsEvidence(input: {
+async function autoOdds(input: {
   market: MlbP1M2aMarket;
   date: string;
-  officialGame: OfficialGame;
+  official: OfficialGame;
   fetchImpl: FetchLike;
   baseUrl: string;
   fetchedAt: string;
@@ -699,232 +442,115 @@ async function automaticOddsEvidence(input: {
   required: boolean;
   now: Date;
 }): Promise<MlbP1M2bEvidenceEnvelope> {
-  const f5 = input.market === "F5_ML" || input.market === "F5_TOTAL";
-  const endpoint = f5
+  const endpoint = input.market.startsWith("F5_")
     ? `/api/odds/mlb/f5?date=${encodeURIComponent(input.date)}`
     : `/api/odds/mlb?date=${encodeURIComponent(input.date)}`;
   const call = await fetchJson(input.fetchImpl, `${input.baseUrl}${endpoint}`, input.fetchedAt, input.timeoutMs);
   if (!call.ok) {
-    return evidenceEnvelope({
-      field: "MARKET_ODDS",
-      required: input.required,
-      state: "MISSING",
-      fetchedAt: call.fetchedAt,
-      observedAt: null,
-      sourceStatus: "SOURCE_UNAVAILABLE",
-      quality: "UNAVAILABLE",
-      details: { endpoint },
-      errors: [call.error || "MARKET_ODDS_UNAVAILABLE"],
-      endpoints: [endpoint],
-      now: input.now,
+    return envelope({
+      field: "MARKET_ODDS", required: input.required, state: "MISSING", fetchedAt: call.fetchedAt, now: input.now,
+      sourceStatus: "SOURCE_UNAVAILABLE", quality: "UNAVAILABLE", endpoints: [endpoint],
+      details: { endpoint }, errors: [call.error || "MARKET_ODDS_UNAVAILABLE"],
     });
   }
-
-  const games = Array.isArray(call.data?.games)
-    ? call.data.games
-    : Array.isArray(call.data?.data?.games)
-      ? call.data.data.games
-      : [];
-  const selected = chooseMarketGame(games, input.officialGame);
-  if (selected.conflict) {
-    return evidenceEnvelope({
-      field: "MARKET_ODDS",
-      required: input.required,
-      state: "CONFLICT",
-      fetchedAt: call.fetchedAt,
-      observedAt: null,
-      sourceStatus: "IDENTITY_CONFLICT",
-      quality: "CONFLICT",
-      details: { endpoint, candidateCount: games.length },
-      errors: [selected.conflict],
-      endpoints: [endpoint],
-      now: input.now,
+  const games = Array.isArray(call.data?.games) ? call.data.games
+    : Array.isArray(call.data?.data?.games) ? call.data.data.games : [];
+  const selected = chooseMarketGame(games, input.official);
+  if (selected.conflict || !selected.game) {
+    const conflict = Boolean(selected.conflict);
+    return envelope({
+      field: "MARKET_ODDS", required: input.required, state: conflict ? "CONFLICT" : "MISSING",
+      fetchedAt: call.fetchedAt, now: input.now, sourceStatus: conflict ? "IDENTITY_CONFLICT" : "GAME_MARKET_NOT_FOUND",
+      quality: conflict ? "CONFLICT" : "UNAVAILABLE", endpoints: [endpoint],
+      details: { endpoint, candidateCount: games.length }, errors: [selected.conflict || "MARKET_GAME_NOT_FOUND"],
     });
   }
-  if (!selected.game) {
-    return evidenceEnvelope({
-      field: "MARKET_ODDS",
-      required: input.required,
-      state: "MISSING",
-      fetchedAt: call.fetchedAt,
-      observedAt: null,
-      sourceStatus: "GAME_MARKET_NOT_FOUND",
-      quality: "UNAVAILABLE",
-      details: { endpoint },
-      errors: ["MARKET_GAME_NOT_FOUND"],
-      endpoints: [endpoint],
-      now: input.now,
-    });
-  }
-  if (!validMarketNumbers(input.market, selected.game)) {
-    return evidenceEnvelope({
-      field: "MARKET_ODDS",
-      required: input.required,
-      state: "MISSING",
-      fetchedAt: call.fetchedAt,
-      observedAt: null,
-      sourceStatus: "SELECTED_MARKET_INCOMPLETE",
-      quality: "UNAVAILABLE",
-      details: { endpoint, source: selected.game?.source ?? call.data?.source ?? null },
+  if (!validMarket(input.market, selected.game)) {
+    return envelope({
+      field: "MARKET_ODDS", required: input.required, state: "MISSING", fetchedAt: call.fetchedAt, now: input.now,
+      sourceStatus: "SELECTED_MARKET_INCOMPLETE", quality: "UNAVAILABLE", endpoints: [endpoint],
+      details: { endpoint, source: selected.game.source ?? call.data?.source ?? null },
       errors: ["SELECTED_MARKET_QUOTES_INCOMPLETE"],
-      endpoints: [endpoint],
-      now: input.now,
     });
   }
-
-  const explicitObservedAt = newestIso([
-    selected.game?.providerLastUpdate,
-    selected.game?.capturedAt,
-    selected.game?.provenance?.providerLastUpdate,
-    selected.game?.provenance?.capturedAt,
+  const explicit = newest([
+    selected.game.providerLastUpdate, selected.game.capturedAt,
+    selected.game.provenance?.providerLastUpdate, selected.game.provenance?.capturedAt,
     call.data?.generatedAt,
   ]);
-  const observedAt = explicitObservedAt ?? call.fetchedAt;
-  const freshness = classifyMlbP1M2aFreshness({
-    observedAt,
-    now: input.now,
-    maxAgeSeconds: maxAgeFor("MARKET_ODDS"),
-  });
-  const requestTimeOnly = !explicitObservedAt;
-  return evidenceEnvelope({
-    field: "MARKET_ODDS",
-    required: input.required,
-    state: freshness,
-    fetchedAt: call.fetchedAt,
-    observedAt,
-    sourceStatus: requestTimeOnly ? "REQUEST_TIME_ONLY" : "EXPLICIT_PROVIDER_TIME",
-    quality: requestTimeOnly ? "REQUEST_TIME_ONLY" : "MARKET_PROVENANCE",
-    details: {
-      endpoint,
-      source: selected.game?.source ?? call.data?.source ?? null,
-      commence: gameStart(selected.game),
-      market: input.market,
-      quote: input.market === "ML"
-        ? selected.game.ml
-        : input.market === "RUN_LINE"
-          ? selected.game.spread
-          : input.market === "TOTAL"
-            ? selected.game.total
-            : input.market === "F5_ML"
-              ? selected.game.f5Ml
-              : selected.game.f5Total,
-      requestTimeOnly,
-    },
-    errors: freshness === "FRESH" ? [] : [`MARKET_ODDS_${freshness}`],
-    endpoints: [endpoint],
-    now: input.now,
+  const observedAt = explicit ?? call.fetchedAt;
+  const state = classifyMlbP1M2aFreshness({ observedAt, now: input.now, maxAgeSeconds: maxAge("MARKET_ODDS") });
+  const quote = input.market === "ML" ? selected.game.ml
+    : input.market === "RUN_LINE" ? selected.game.spread
+      : input.market === "TOTAL" ? selected.game.total
+        : input.market === "F5_ML" ? selected.game.f5Ml : selected.game.f5Total;
+  return envelope({
+    field: "MARKET_ODDS", required: input.required, state, fetchedAt: call.fetchedAt, observedAt, now: input.now,
+    sourceStatus: explicit ? "EXPLICIT_PROVIDER_TIME" : "REQUEST_TIME_ONLY",
+    quality: explicit ? "MARKET_PROVENANCE" : "REQUEST_TIME_ONLY", endpoints: [endpoint],
+    details: { endpoint, source: selected.game.source ?? call.data?.source ?? null, commence: startTime(selected.game), quote },
+    errors: state === "FRESH" ? [] : [`MARKET_ODDS_${state}`],
   });
 }
 
-function explicitTimestampFromCalls(calls: readonly SourceCall[]): string | null {
-  return newestIso(calls.flatMap((call) => collectTimestamps(call.data)));
-}
-
-async function derivedEvidence(input: {
-  field: MlbP1M2aField;
-  urls: string[];
-  fetchImpl: FetchLike;
-  fetchedAt: string;
-  timeoutMs: number;
-  required: boolean;
-  now: Date;
-}): Promise<MlbP1M2bEvidenceEnvelope> {
-  const calls = await Promise.all(
-    input.urls.map((url) => fetchJson(input.fetchImpl, url, input.fetchedAt, input.timeoutMs)),
-  );
-  const successful = calls.filter((call) => call.ok);
-  const observedAt = explicitTimestampFromCalls(successful);
-  const errors = calls.filter((call) => !call.ok).map((call) => `${call.url}: ${call.error || "FAILED"}`);
-  let state: MlbP1M2aEvidenceState;
-  let quality: string;
-  if (successful.length === 0) {
-    state = "MISSING";
-    quality = "UNAVAILABLE";
-  } else if (successful.length < calls.length) {
-    state = "DEGRADED";
-    quality = "PARTIAL_SOURCE_COVERAGE";
-  } else if (!observedAt) {
-    state = "DEGRADED";
-    quality = "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP";
-  } else {
-    state = classifyMlbP1M2aFreshness({
-      observedAt,
-      now: input.now,
-      maxAgeSeconds: maxAgeFor(input.field),
-    });
-    quality = state === "FRESH" ? "DERIVED_WITH_EXPLICIT_TIMESTAMP" : "DERIVED_STALE";
-  }
-  return evidenceEnvelope({
-    field: input.field,
-    required: input.required,
-    state,
-    fetchedAt: input.fetchedAt,
-    observedAt,
-    sourceStatus: `${successful.length}/${calls.length}_SOURCES_AVAILABLE`,
-    quality,
-    details: {
-      requested: calls.length,
-      available: successful.length,
-      calls: calls.map((call) => ({
-        endpoint: call.url,
-        ok: call.ok,
-        status: call.status,
-        durationMs: call.durationMs,
-        explicitTimestamp: newestIso(collectTimestamps(call.data)),
-      })),
-    },
-    errors: state === "FRESH" ? [] : [...errors, `${input.field}_${state}`],
-    endpoints: input.urls,
-    now: input.now,
-  });
-}
-
-function fieldUrls(input: {
-  field: MlbP1M2aField;
-  baseUrl: string;
-  gamePk: number;
-  homeCode: string;
-  awayCode: string;
-}): string[] {
-  const root = input.baseUrl;
-  const gamePk = input.gamePk;
-  if (input.field === "BULLPEN") {
-    return [`${root}/api/mlb/bullpen-status/${gamePk}`];
-  }
-  if (input.field === "PITCHER_FORM") {
-    return [
-      `${root}/api/mlb/pitcher-form/${gamePk}`,
-      `${root}/api/mlb/pitcher-recent/${gamePk}`,
-    ];
-  }
-  if (input.field === "LINEUP_MATCHUP") {
-    return [`${root}/api/mlb/lineup-matchup/${gamePk}`];
-  }
-  if (input.field === "ENVIRONMENT") {
-    return [
-      `${root}/api/mlb/wind-park/${gamePk}`,
-      `${root}/api/mlb/team-fatigue/${gamePk}`,
-      `${root}/api/mlb/context?home=${encodeURIComponent(input.homeCode)}&away=${encodeURIComponent(input.awayCode)}&gamePk=${gamePk}`,
-    ];
-  }
-  if (input.field === "UMPIRE") {
-    return [`${root}/api/mlb/umpire/${gamePk}`];
-  }
-  if (input.field === "ADVANCED_FACTORS") {
-    return [
-      `${root}/api/mlb/quality/${gamePk}`,
-      `${root}/api/mlb/statcast-matchup/${gamePk}`,
-      `${root}/api/mlb/discipline-speed/${gamePk}`,
-      `${root}/api/mlb/sos/${gamePk}`,
-      `${root}/api/mlb/advanced/${gamePk}`,
-    ];
-  }
+function fieldUrls(field: MlbP1M2aField, base: string, gamePk: number, home: string, away: string): string[] {
+  if (field === "BULLPEN") return [`${base}/api/mlb/bullpen-status/${gamePk}`];
+  if (field === "PITCHER_FORM") return [`${base}/api/mlb/pitcher-form/${gamePk}`, `${base}/api/mlb/pitcher-recent/${gamePk}`];
+  if (field === "LINEUP_MATCHUP") return [`${base}/api/mlb/lineup-matchup/${gamePk}`];
+  if (field === "ENVIRONMENT") return [
+    `${base}/api/mlb/wind-park/${gamePk}`,
+    `${base}/api/mlb/team-fatigue/${gamePk}`,
+    `${base}/api/mlb/context?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&gamePk=${gamePk}`,
+  ];
+  if (field === "UMPIRE") return [`${base}/api/mlb/umpire/${gamePk}`];
+  if (field === "ADVANCED_FACTORS") return [
+    `${base}/api/mlb/quality/${gamePk}`, `${base}/api/mlb/statcast-matchup/${gamePk}`,
+    `${base}/api/mlb/discipline-speed/${gamePk}`, `${base}/api/mlb/sos/${gamePk}`,
+    `${base}/api/mlb/advanced/${gamePk}`,
+  ];
   return [];
 }
 
-function analysisTeamCode(analysisGame: any, side: "home" | "away", fallback: string | null): string {
-  const team = analysisGame?.[`${side}Team`] ?? analysisGame?.teams?.[side] ?? {};
-  return cleanText(team?.tricode ?? team?.abbreviation ?? team?.abbr ?? team?.name ?? fallback);
+async function derived(
+  field: MlbP1M2aField,
+  urls: string[],
+  fetchImpl: FetchLike,
+  fetchedAt: string,
+  timeoutMs: number,
+  required: boolean,
+  now: Date,
+): Promise<MlbP1M2bEvidenceEnvelope> {
+  const calls = await Promise.all(urls.map((url) => fetchJson(fetchImpl, url, fetchedAt, timeoutMs)));
+  const successful = calls.filter((call) => call.ok);
+  const observedAt = newest(successful.flatMap((call) => collectTimes(call.data)));
+  let state: MlbP1M2aEvidenceState;
+  let quality: string;
+  if (!successful.length) { state = "MISSING"; quality = "UNAVAILABLE"; }
+  else if (successful.length < calls.length) { state = "DEGRADED"; quality = "PARTIAL_SOURCE_COVERAGE"; }
+  else if (!observedAt) { state = "DEGRADED"; quality = "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP"; }
+  else {
+    state = classifyMlbP1M2aFreshness({ observedAt, now, maxAgeSeconds: maxAge(field) });
+    quality = state === "FRESH" ? "DERIVED_WITH_EXPLICIT_TIMESTAMP" : "DERIVED_STALE";
+  }
+  return envelope({
+    field, required, state, fetchedAt, observedAt, now,
+    sourceStatus: `${successful.length}/${calls.length}_SOURCES_AVAILABLE`, quality, endpoints: urls,
+    details: {
+      requested: calls.length, available: successful.length,
+      calls: calls.map((call) => ({
+        endpoint: call.url, ok: call.ok, status: call.status,
+        durationMs: call.durationMs, explicitTimestamp: newest(collectTimes(call.data)),
+      })),
+    },
+    errors: state === "FRESH"
+      ? []
+      : [...calls.filter((call) => !call.ok).map((call) => `${call.url}: ${call.error || "FAILED"}`), `${field}_${state}`],
+  });
+}
+
+function teamCode(game: any, side: "home" | "away", fallback: string | null): string {
+  const team = game?.[`${side}Team`] ?? game?.teams?.[side] ?? {};
+  return clean(team.tricode ?? team.abbreviation ?? team.abbr ?? team.name ?? fallback);
 }
 
 export async function buildMlbP1M2bPregameReadiness(options: {
@@ -937,183 +563,117 @@ export async function buildMlbP1M2bPregameReadiness(options: {
   now?: Date;
   timeoutMs?: number;
 }): Promise<MlbP1M2bReadinessReport> {
-  const gamePk = positiveInteger(options.gamePk);
+  const gamePk = positiveInt(options.gamePk);
   if (!gamePk) throw new Error("INVALID_GAME_PK");
   const now = options.now ?? new Date();
-  const generatedAt = now.toISOString();
+  const fetchedAt = now.toISOString();
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = (options.baseUrl ?? SELF_URL).replace(/\/+$/, "");
   const timeoutMs = Math.max(1000, options.timeoutMs ?? 15_000);
-  const required = new Set(requiredFieldsFor(options.market));
-
-  const dateResolution = await resolveDateByGamePk(
-    gamePk,
-    options.dateHint ?? null,
-    fetchImpl,
-    generatedAt,
-    timeoutMs,
-  );
-  const officialDate = dateResolution.date;
+  const required = new Set(requiredFor(options.market));
+  const dateResult = await resolveDate(gamePk, options.dateHint ?? null, fetchImpl, fetchedAt, timeoutMs);
   const evidence = new Map<MlbP1M2aField, MlbP1M2bEvidenceEnvelope>();
-  let officialGame: OfficialGame | null = null;
-  let analysisGame: any | null = null;
+  let official: OfficialGame | null = null;
+  let aggregateGame: any | null = null;
 
-  if (!officialDate) {
+  if (!dateResult.date) {
     for (const field of ["GAME_IDENTITY", "PITCHERS", "LINEUPS"] as const) {
-      evidence.set(field, evidenceEnvelope({
-        field,
-        required: required.has(field),
-        state: "MISSING",
-        fetchedAt: generatedAt,
-        observedAt: null,
-        sourceStatus: "OFFICIAL_DATE_UNAVAILABLE",
-        quality: "UNAVAILABLE",
-        errors: [dateResolution.error || "OFFICIAL_DATE_UNAVAILABLE"],
-        now,
+      evidence.set(field, envelope({
+        field, required: required.has(field), state: "MISSING", fetchedAt, now,
+        sourceStatus: "OFFICIAL_DATE_UNAVAILABLE", quality: "UNAVAILABLE",
+        errors: [dateResult.error || "OFFICIAL_DATE_UNAVAILABLE"],
       }));
     }
   } else {
-    const slateEndpoint = `/api/mlb/p1/v1/slate?date=${encodeURIComponent(officialDate)}`;
-    const slateCall = await fetchJson(fetchImpl, `${baseUrl}${slateEndpoint}`, generatedAt, timeoutMs);
-    const slate = slateCall.data?.data ?? slateCall.data;
-    const games: any[] = Array.isArray(slate?.games) ? slate.games : [];
-    officialGame = games.find((game: any) => positiveInteger(game?.gamePk) === gamePk) ?? null;
-    for (const item of officialEvidence(officialGame, slateCall, required, now)) {
-      evidence.set(item.field, item);
-    }
+    const slateCall = await fetchJson(
+      fetchImpl, `${baseUrl}/api/mlb/p1/v1/slate?date=${encodeURIComponent(dateResult.date)}`, fetchedAt, timeoutMs,
+    );
+    const games = Array.isArray((slateCall.data?.data ?? slateCall.data)?.games)
+      ? (slateCall.data?.data ?? slateCall.data).games : [];
+    official = games.find((game: any) => positiveInt(game.gamePk) === gamePk) ?? null;
+    for (const item of officialEvidence(official, slateCall, required, now)) evidence.set(item.field, item);
 
-    const analysisEndpoint = `/api/mlb/all?date=${encodeURIComponent(officialDate)}`;
-    const analysisCall = await fetchJson(fetchImpl, `${baseUrl}${analysisEndpoint}`, generatedAt, timeoutMs);
-    analysisGame = findAnalysisGame(analysisCall.data, gamePk);
-    evidence.set("INJURIES", injuryEvidence(analysisCall, analysisGame, required.has("INJURIES"), now));
+    const aggregateCall = await fetchJson(
+      fetchImpl, `${baseUrl}/api/mlb/all?date=${encodeURIComponent(dateResult.date)}`, fetchedAt, timeoutMs,
+    );
+    aggregateGame = analysisGame(aggregateCall.data, gamePk);
+    evidence.set("INJURIES", injuries(aggregateCall, aggregateGame, required.has("INJURIES"), now));
 
-    if (officialGame) {
-      const odds = options.manualOdds
-        ? manualOddsEvidence(options.market, options.manualOdds, required.has("MARKET_ODDS"), generatedAt, now)
-        : await automaticOddsEvidence({
-            market: options.market,
-            date: officialDate,
-            officialGame,
-            fetchImpl,
-            baseUrl,
-            fetchedAt: generatedAt,
-            timeoutMs,
-            required: required.has("MARKET_ODDS"),
-            now,
-          });
-      evidence.set("MARKET_ODDS", odds);
+    if (official) {
+      evidence.set("MARKET_ODDS", options.manualOdds
+        ? manualOdds(options.market, options.manualOdds, required.has("MARKET_ODDS"), fetchedAt, now)
+        : await autoOdds({
+            market: options.market, date: dateResult.date, official, fetchImpl, baseUrl,
+            fetchedAt, timeoutMs, required: required.has("MARKET_ODDS"), now,
+          }));
     }
   }
 
-  if (!evidence.has("INJURIES")) {
-    evidence.set("INJURIES", evidenceEnvelope({
-      field: "INJURIES",
-      required: required.has("INJURIES"),
-      state: "MISSING",
-      fetchedAt: generatedAt,
-      sourceStatus: "OFFICIAL_GAME_UNAVAILABLE",
-      quality: "UNAVAILABLE",
-      errors: ["INJURY_LOOKUP_NOT_RUN"],
-      now,
-    }));
-  }
-  if (!evidence.has("MARKET_ODDS")) {
-    evidence.set("MARKET_ODDS", evidenceEnvelope({
-      field: "MARKET_ODDS",
-      required: required.has("MARKET_ODDS"),
-      state: "MISSING",
-      fetchedAt: generatedAt,
-      sourceStatus: "OFFICIAL_GAME_UNAVAILABLE",
-      quality: "UNAVAILABLE",
-      errors: ["MARKET_LOOKUP_NOT_RUN"],
-      now,
-    }));
-  }
+  if (!evidence.has("INJURIES")) evidence.set("INJURIES", envelope({
+    field: "INJURIES", required: required.has("INJURIES"), state: "MISSING", fetchedAt, now,
+    sourceStatus: "OFFICIAL_GAME_UNAVAILABLE", quality: "UNAVAILABLE", errors: ["INJURY_LOOKUP_NOT_RUN"],
+  }));
+  if (!evidence.has("MARKET_ODDS")) evidence.set("MARKET_ODDS", envelope({
+    field: "MARKET_ODDS", required: true, state: "MISSING", fetchedAt, now,
+    sourceStatus: "OFFICIAL_GAME_UNAVAILABLE", quality: "UNAVAILABLE", errors: ["MARKET_LOOKUP_NOT_RUN"],
+  }));
 
-  const homeCode = analysisTeamCode(analysisGame, "home", officialGame?.homeTeam.name ?? null);
-  const awayCode = analysisTeamCode(analysisGame, "away", officialGame?.awayTeam.name ?? null);
-  const derivedFields = MLB_P1_M2A_MARKET_REQUIREMENTS[options.market];
-  if (officialGame) {
-    await Promise.all(derivedFields.map(async (field) => {
-      const urls = fieldUrls({ field, baseUrl, gamePk, homeCode, awayCode });
-      if (urls.length === 0) return;
-      evidence.set(field, await derivedEvidence({
-        field,
-        urls,
-        fetchImpl,
-        fetchedAt: generatedAt,
-        timeoutMs,
-        required: required.has(field),
-        now,
-      }));
+  const marketFields = MLB_P1_M2A_MARKET_REQUIREMENTS[options.market];
+  if (official) {
+    const home = teamCode(aggregateGame, "home", official.homeTeam.name);
+    const away = teamCode(aggregateGame, "away", official.awayTeam.name);
+    await Promise.all(marketFields.map(async (field) => {
+      const urls = fieldUrls(field, baseUrl, gamePk, home, away);
+      if (urls.length) evidence.set(field, await derived(field, urls, fetchImpl, fetchedAt, timeoutMs, required.has(field), now));
     }));
   } else {
-    for (const field of derivedFields) {
-      evidence.set(field, evidenceEnvelope({
-        field,
-        required: required.has(field),
-        state: "MISSING",
-        fetchedAt: generatedAt,
-        sourceStatus: "OFFICIAL_GAME_UNAVAILABLE",
-        quality: "UNAVAILABLE",
-        errors: [`${field}_LOOKUP_NOT_RUN`],
-        now,
-      }));
-    }
+    for (const field of marketFields) evidence.set(field, envelope({
+      field, required: true, state: "MISSING", fetchedAt, now,
+      sourceStatus: "OFFICIAL_GAME_UNAVAILABLE", quality: "UNAVAILABLE", errors: [`${field}_LOOKUP_NOT_RUN`],
+    }));
   }
 
   for (const field of FIELD_ORDER) {
-    if (!evidence.has(field)) evidence.set(field, notRequiredEvidence(field, generatedAt, now));
+    if (!evidence.has(field)) evidence.set(field, envelope({
+      field, required: false, state: "UNKNOWN", fetchedAt, now,
+      sourceStatus: "NOT_REQUIRED_FOR_SELECTED_MARKET", quality: "NOT_LOADED",
+    }));
   }
 
-  const normalizedState = normalizeGameState(officialGame?.state ?? "UNKNOWN");
-  const evidenceStates = Object.fromEntries(
-    [...evidence.entries()].map(([field, item]) => [field, item.state]),
-  ) as Partial<Record<MlbP1M2aField, MlbP1M2aEvidenceState>>;
+  const normalizedState = gameState(official?.state);
   const gate = decideMlbP1M2aPregameGate({
     market: options.market,
     gameState: normalizedState,
-    evidence: evidenceStates,
+    evidence: Object.fromEntries([...evidence].map(([field, item]) => [field, item.state])),
   });
-
-  const orderedEvidence = FIELD_ORDER.map((field) => evidence.get(field)!);
-  const warnings = [
-    ...orderedEvidence
-      .filter((item) => item.required && item.state !== "FRESH")
-      .map((item) => `${item.field}_${item.state}`),
-    ...orderedEvidence
-      .filter((item) => item.quality === "REQUEST_TIME_ONLY")
-      .map((item) => `${item.field}_REQUEST_TIME_ONLY`),
-  ];
-  const count = (state: MlbP1M2aEvidenceState) =>
-    orderedEvidence.filter((item) => item.required && item.state === state).length;
+  const ordered = FIELD_ORDER.map((field) => evidence.get(field)!);
+  const count = (state: MlbP1M2aEvidenceState) => ordered.filter((item) => item.required && item.state === state).length;
 
   return {
     schemaVersion: MLB_P1_M2B_SCHEMA,
     contractSchemaVersion: MLB_P1_M2A_SCHEMA,
-    generatedAt,
+    generatedAt: fetchedAt,
     market: options.market,
     game: {
       gamePk,
-      officialDate: officialGame?.officialDate ?? officialDate,
-      startTime: officialGame?.startTime ?? null,
+      officialDate: official?.officialDate ?? dateResult.date,
+      startTime: official?.startTime ?? null,
       state: normalizedState,
-      detailedState: officialGame?.detailedState ?? null,
-      homeTeam: officialGame?.homeTeam ?? { id: null, name: null },
-      awayTeam: officialGame?.awayTeam ?? { id: null, name: null },
+      detailedState: official?.detailedState ?? null,
+      homeTeam: official?.homeTeam ?? { id: null, name: null },
+      awayTeam: official?.awayTeam ?? { id: null, name: null },
     },
     gate,
-    evidence: orderedEvidence,
+    evidence: ordered,
     summary: {
-      requiredFields: requiredFieldsFor(options.market),
-      fresh: count("FRESH"),
-      stale: count("STALE"),
-      degraded: count("DEGRADED"),
-      missing: count("MISSING"),
-      conflict: count("CONFLICT"),
-      unknown: count("UNKNOWN"),
+      requiredFields: requiredFor(options.market),
+      fresh: count("FRESH"), stale: count("STALE"), degraded: count("DEGRADED"),
+      missing: count("MISSING"), conflict: count("CONFLICT"), unknown: count("UNKNOWN"),
     },
-    warnings: Array.from(new Set(warnings)),
+    warnings: Array.from(new Set([
+      ...ordered.filter((item) => item.required && item.state !== "FRESH").map((item) => `${item.field}_${item.state}`),
+      ...ordered.filter((item) => item.quality === "REQUEST_TIME_ONLY").map((item) => `${item.field}_REQUEST_TIME_ONLY`),
+    ])),
     safety: {
       mode: "SHADOW_DECISION_SUPPORT",
       realFinancialExposure: 0,
