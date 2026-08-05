@@ -103,7 +103,7 @@ function finite(value: string): number | null {
 
 function americanOdds(value: string): number | null {
   const parsed = finite(value);
-  if (parsed == null || Math.abs(parsed) < 100) return null;
+  if (parsed == null || Math.abs(parsed) < 100 || Math.abs(parsed) > 100_000) return null;
   return Math.round(parsed);
 }
 
@@ -124,17 +124,21 @@ export function buildMlbPregameManualOddsParams(
     const home = americanOdds(lines.mlHome);
     const away = americanOdds(lines.mlAway);
     if (home == null || away == null) return null;
-    params.set("manualBook", "Hard Rock formulario");
+    params.set("manualBook", "Formulario MLB (captura explícita)");
     params.set("manualHomeOdds", String(home));
     params.set("manualAwayOdds", String(away));
     return params;
   }
 
   if (market === "F5_ML") {
+    // Consensus quotes already have provider timestamps in P1-M2B. Preserve that
+    // provenance by using the automatic backend source unless the user explicitly
+    // entered a manual F5 price.
+    if (lines.f5OddsSource !== "manual") return null;
     const home = americanOdds(lines.f5MlHome);
     const away = americanOdds(lines.f5MlAway);
     if (home == null || away == null) return null;
-    params.set("manualBook", lines.f5OddsSource === "consenso" ? "Consenso F5 formulario" : "Hard Rock F5 formulario");
+    params.set("manualBook", "Hard Rock F5 formulario");
     params.set("manualHomeOdds", String(home));
     params.set("manualAwayOdds", String(away));
     return params;
@@ -145,7 +149,7 @@ export function buildMlbPregameManualOddsParams(
     const home = americanOdds(lines.runLineHomeOdds);
     const away = americanOdds(lines.runLineAwayOdds);
     if (line == null || home == null || away == null) return null;
-    params.set("manualBook", "Hard Rock formulario");
+    params.set("manualBook", "Formulario MLB (captura explícita)");
     params.set("manualLine", String(line));
     params.set("manualHomeOdds", String(home));
     params.set("manualAwayOdds", String(away));
@@ -157,7 +161,7 @@ export function buildMlbPregameManualOddsParams(
     const over = americanOdds(lines.overOdds);
     const under = americanOdds(lines.underOdds);
     if (line == null || over == null || under == null) return null;
-    params.set("manualBook", "Hard Rock formulario");
+    params.set("manualBook", "Formulario MLB (captura explícita)");
     params.set("manualLine", String(line));
     params.set("manualOverOdds", String(over));
     params.set("manualUnderOdds", String(under));
