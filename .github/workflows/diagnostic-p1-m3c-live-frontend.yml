@@ -39,14 +39,16 @@ jobs:
           const fs = require('node:fs');
           const html = fs.readFileSync('audit/index.html', 'utf8');
           const sources = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((match) => match[1]);
-          fs.writeFileSync('audit/script-sources.txt', sources.join('\n'));
+          fs.writeFileSync('audit/script-sources.txt', `${sources.join('\n')}\n`);
           NODE
-              while IFS= read -r source; do
+              while IFS= read -r source || [[ -n "${source}" ]]; do
                 [[ -n "${source}" ]] || continue
                 if [[ "${source}" =~ ^https?:// ]]; then
                   asset_url="${source}"
                 else
-                  asset_url="${FRONTEND_URL}/${source#/}"
+                  clean="${source#./}"
+                  clean="${clean#/}"
+                  asset_url="${FRONTEND_URL}/${clean}"
                 fi
                 curl -sS -L --max-time 30 "${asset_url}" >> audit/bundle.js || true
                 printf '\n' >> audit/bundle.js
