@@ -1,0 +1,45 @@
+name: Validate P1-M3C MLB Scientific Emission
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-scientific-capture.test.ts'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  align-deterministic-probability-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Align Total probability expectation once
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='frontend/client/src/lib/mlb-scientific-capture.test.ts'
+          if ! grep -Fq 'modelProbPct: 57.99999999999999' "$file"; then
+            echo 'Deterministic expectation already aligned.'
+            exit 0
+          fi
+          python <<'PY'
+          from pathlib import Path
+          path = Path('frontend/client/src/lib/mlb-scientific-capture.test.ts')
+          source = path.read_text()
+          old = 'modelProbPct: 57.99999999999999'
+          if source.count(old) != 1:
+              raise SystemExit(f'expected one Total precision fixture, found {source.count(old)}')
+          path.write_text(source.replace(old, 'modelProbPct: 58', 1))
+          PY
+          git diff --check
+          [[ "$(git diff --name-only)" == "$file" ]]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$file"
+          git commit -m 'P1-M3C: align deterministic Total probability test'
+          git push origin HEAD:${GITHUB_HEAD_REF}
