@@ -8,12 +8,17 @@ import {
 } from "./mlb-p1-scientific-capture-service";
 import { getRequestIdentity, requireOwnDataWriteRole } from "./user-data-context";
 
+function hasAuthenticatedInteractiveSession(req: Request): boolean {
+  const session = (req as Request & { session?: Record<string, unknown> }).session;
+  return session?.courtEdgeAuthenticated === true && Boolean(getRequestIdentity(req));
+}
+
 export function requireInteractiveMlbCaptureSession(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  if (getRequestIdentity(req)) {
+  if (hasAuthenticatedInteractiveSession(req)) {
     next();
     return;
   }
@@ -36,7 +41,7 @@ export function registerMlbP1ScientificCaptureRoutes(
     requireInteractiveMlbCaptureSession,
     requireOwnDataWriteRole,
     async (req, res) => {
-      const identity = getRequestIdentity(req);
+      const identity = hasAuthenticatedInteractiveSession(req) ? getRequestIdentity(req) : null;
       if (!identity) {
         return res.status(401).json({
           success: false,
