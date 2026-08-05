@@ -32,7 +32,7 @@ export function registerMlbP1ScientificCaptureRoutes(
   ),
 ): void {
   app.post(
-    MLB_P1_M3B_ENDPOINT,
+    "/api/mlb/p1/v1/scientific-captures",
     requireInteractiveMlbCaptureSession,
     requireOwnDataWriteRole,
     async (req, res) => {
@@ -50,6 +50,7 @@ export function registerMlbP1ScientificCaptureRoutes(
         return res.status(data.idempotent ? 200 : 201).json({
           success: true,
           data,
+          endpoint: MLB_P1_M3B_ENDPOINT,
         });
       } catch (error: unknown) {
         if (isMlbP1M3bCaptureError(error)) {
