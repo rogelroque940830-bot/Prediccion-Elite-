@@ -56,16 +56,11 @@ jobs:
             fi
 
             if [[ "${frontend_ready}" == true && "${backend_ready}" == true ]]; then
-              echo "Exact P1-M2C frontend and P1-M2B backend are live."
+              echo 'Exact P1-M2C frontend and P1-M2B backend are live.'
               break
             fi
-
             echo "Attempt ${attempt}/100: frontend=${frontend_code}/${frontend_ready}; backend=${backend_code}/${backend_ready}"
-            if [[ "${attempt}" == '100' ]]; then
-              echo 'Timed out waiting for exact P1-M2C deployment' >&2
-              cat audit/health.json 2>/dev/null || true
-              exit 1
-            fi
+            [[ "${attempt}" != '100' ]] || { echo 'Timed out waiting for exact P1-M2C deployment' >&2; exit 1; }
             sleep 15
           done
 
@@ -115,29 +110,35 @@ jobs:
               break
             fi
           done
-
-          [[ -n "${GAME_PK:-}" || -f audit/selected-game.json ]] || { echo 'No eligible future game with both probable pitchers' >&2; exit 1; }
-          if [[ -z "${GAME_PK:-}" ]]; then
-            game_pk=$(node -e "console.log(JSON.parse(require('fs').readFileSync('audit/selected-game.json','utf8')).gamePk)")
-            echo "GAME_PK=${game_pk}" >> "${GITHUB_ENV}"
-          fi
+          [[ -f audit/selected-game.json ]] || { echo 'No eligible future game with both probable pitchers' >&2; exit 1; }
 
       - name: Verify live readiness remains fail-closed and read-only
         shell: bash
         run: |
           set -euo pipefail
-          captured_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-          code=$(curl -sS -G -o audit/readiness.json -w '%{http_code}' --max-time 180 \
-            "${BACKEND_URL}/api/mlb/p1/v1/pregame-readiness" \
-            --data-urlencode "gamePk=${GAME_PK}" \
-            --data-urlencode 'market=F5_ML' \
-            --data-urlencode "date=${SELECTED_SLATE_DATE}" \
-            --data-urlencode 'oddsMode=manual' \
-            --data-urlencode 'manualBook=P1-M2C diagnostic read-only snapshot' \
-            --data-urlencode "manualCapturedAt=${captured_at}" \
-            --data-urlencode 'manualHomeOdds=-110' \
-            --data-urlencode 'manualAwayOdds=-110')
-          [[ "${code}" == '200' ]] || { echo "readiness HTTP ${code}" >&2; cat audit/readiness.json; exit 1; }
+          code=000
+          for attempt in $(seq 1 10); do
+            captured_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            code=$(curl -sS -G -o audit/readiness.json -w '%{http_code}' --max-time 180 \
+              "${BACKEND_URL}/api/mlb/p1/v1/pregame-readiness" \
+              --data-urlencode "gamePk=${GAME_PK}" \
+              --data-urlencode 'market=F5_ML' \
+              --data-urlencode "date=${SELECTED_SLATE_DATE}" \
+              --data-urlencode 'oddsMode=manual' \
+              --data-urlencode 'manualBook=P1-M2C diagnostic read-only snapshot' \
+              --data-urlencode "manualCapturedAt=${captured_at}" \
+              --data-urlencode 'manualHomeOdds=-110' \
+              --data-urlencode 'manualAwayOdds=-110' || true)
+            if [[ "${code}" == '200' ]]; then
+              echo "Readiness succeeded on attempt ${attempt}."
+              break
+            fi
+            echo "Readiness attempt ${attempt}/10 returned HTTP ${code}."
+            cp audit/readiness.json "audit/readiness-attempt-${attempt}.txt" 2>/dev/null || true
+            [[ "${attempt}" != '10' ]] || break
+            sleep 15
+          done
+          [[ "${code}" == '200' ]] || { echo "readiness final HTTP ${code}" >&2; cat audit/readiness.json; exit 1; }
 
           EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" GAME_PK="${GAME_PK}" node <<'NODE'
           const fs = require('node:fs');
@@ -176,6 +177,7 @@ jobs:
           NODE
 
       - name: Upload read-only P1-M2C evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: p1-m2c-live-frontend-evidence
