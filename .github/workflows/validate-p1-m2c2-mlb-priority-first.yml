@@ -5,14 +5,10 @@ on:
     branches:
       - integration/p0-frontend-session
     paths:
-      - 'frontend/client/src/App.tsx'
       - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
-      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
-      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
-      - 'frontend/client/src/lib/mlb-pregame-readiness.test.ts'
-      - 'frontend/client/src/pages/mlb-predictor.tsx'
       - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
       - '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml'
+      - '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml'
 
 permissions:
   contents: read
@@ -77,7 +73,7 @@ jobs:
           const gate = fs.readFileSync('frontend/client/src/components/mlb-pregame-readiness-gate.tsx', 'utf8');
           const predictor = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
           const assert = (condition, message) => { if (!condition) throw new Error(message); };
-          assert(slate.includes('>("ready")'), 'daily slate does not default to ready');
+          assert(slate.includes('>("ready")'), 'daily slate does not initialize safely');
           assert(slate.indexOf('visibleGames.map') < slate.indexOf('p1-m2c2-inactive-games'), 'inactive games are not secondary');
           assert(gate.indexOf('Cuota introducida') < gate.indexOf('Usar cuota certificada'), 'quote comparison order invalid');
           assert(predictor.includes('setPregameGate(null);') && predictor.includes('setResult(null);'), 'quote application does not invalidate prior decision');
@@ -101,12 +97,8 @@ jobs:
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
             '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml' \
-            'frontend/client/src/App.tsx' \
-            'frontend/client/src/components/mlb-daily-slate-panel.tsx' \
-            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
-            'frontend/client/src/lib/mlb-pregame-readiness.test.ts' \
-            'frontend/client/src/lib/mlb-pregame-readiness.ts' \
-            'frontend/client/src/pages/mlb-predictor.tsx' | sort)
+            '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' | sort)
           [[ "${changed}" == "${expected}" ]]
           ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
             frontend/client/src/components/mlb-pregame-readiness-gate.tsx \
