@@ -145,7 +145,7 @@ export function buildMlbPregameReadinessUrl(input: {
   });
   const manual = buildMlbPregameManualOddsParams(input.market, input.lines, input.capturedAt);
   if (manual) {
-    for (const [key, value] of manual.entries()) params.set(key, value);
+    manual.forEach((value, key) => params.set(key, value));
   }
   return {
     url: `/api/mlb/p1/v1/pregame-readiness?${params.toString()}`,
