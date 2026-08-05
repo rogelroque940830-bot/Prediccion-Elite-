@@ -27,15 +27,16 @@ export interface MlbPregameReadinessReport {
   schemaVersion: typeof MLB_P1_M2B_READINESS_SCHEMA;
   contractSchemaVersion: typeof MLB_P1_M2A_CONTRACT_SCHEMA;
   generatedAt: string;
+  market: MlbPregameMarket;
   game: {
     gamePk: number;
-    date: string;
-    state: string;
+    officialDate: string | null;
     startTime: string | null;
-    homeTeam: { id?: number | null; name: string };
-    awayTeam: { id?: number | null; name: string };
+    state: string;
+    detailedState: string | null;
+    homeTeam: { id: number | null; name: string | null };
+    awayTeam: { id: number | null; name: string | null };
   };
-  market: MlbPregameMarket;
   gate: {
     schemaVersion: typeof MLB_P1_M2A_CONTRACT_SCHEMA;
     status: MlbPregameGateStatus;
@@ -55,6 +56,7 @@ export interface MlbPregameReadinessReport {
     unknown: number;
   };
   evidence: MlbPregameEvidence[];
+  warnings?: string[];
   safety: {
     mode: string;
     realFinancialExposure: number;
@@ -96,15 +98,35 @@ export interface MlbPregameGateSnapshot {
   generatedAt: string;
 }
 
-function finite(value: string): number | null {
-  const parsed = Number(String(value ?? "").trim());
+export interface MlbPregameQuoteCompatibility {
+  matches: boolean;
+  reasons: string[];
+  sourceStatus: string | null;
+  certifiedQuote: Record<string, unknown> | null;
+}
+
+function finite(value: unknown): number | null {
+  if (value == null || String(value).trim() === "") return null;
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function americanOdds(value: string): number | null {
+function americanOdds(value: unknown): number | null {
   const parsed = finite(value);
   if (parsed == null || Math.abs(parsed) < 100 || Math.abs(parsed) > 100_000) return null;
   return Math.round(parsed);
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function sameNumber(left: unknown, right: unknown, tolerance = 0.001): boolean {
+  const a = finite(left);
+  const b = finite(right);
+  return a != null && b != null && Math.abs(a - b) <= tolerance;
 }
 
 export function buildMlbPregameManualOddsParams(
@@ -144,12 +166,50 @@ export function buildMlbPregameReadinessUrl(input: {
     market: input.market,
   });
   const manual = buildMlbPregameManualOddsParams(input.market, input.lines, input.capturedAt);
-  if (manual) {
-    manual.forEach((value, key) => params.set(key, value));
-  }
+  if (manual) manual.forEach((value, key) => params.set(key, value));
   return {
     url: `/api/mlb/p1/v1/pregame-readiness?${params.toString()}`,
     oddsMode: manual ? "manual" : "automatic",
+  };
+}
+
+export function validateMlbPregameModelQuote(
+  report: MlbPregameReadinessReport,
+  lines: MlbPregameLineInputs,
+): MlbPregameQuoteCompatibility {
+  const marketEvidence = report.evidence.find((item) => item.field === "MARKET_ODDS") ?? null;
+  const details = record(marketEvidence?.details);
+  const certifiedQuote = record(details?.quote) ?? details;
+  const reasons: string[] = [];
+
+  if (!marketEvidence || !certifiedQuote) {
+    reasons.push("CERTIFIED_MARKET_QUOTE_MISSING");
+  } else if (report.market === "ML") {
+    if (!sameNumber(lines.mlHome, certifiedQuote.home ?? certifiedQuote.homeOdds)) reasons.push("MODEL_HOME_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.mlAway, certifiedQuote.away ?? certifiedQuote.awayOdds)) reasons.push("MODEL_AWAY_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+  } else if (report.market === "F5_ML") {
+    if (!sameNumber(lines.f5MlHome, certifiedQuote.home ?? certifiedQuote.homeOdds)) reasons.push("MODEL_HOME_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.f5MlAway, certifiedQuote.away ?? certifiedQuote.awayOdds)) reasons.push("MODEL_AWAY_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+  } else if (report.market === "RUN_LINE") {
+    if (!sameNumber(lines.runLine, certifiedQuote.line)) reasons.push("MODEL_LINE_DOES_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.runLineHomeOdds, certifiedQuote.homeOdds)) reasons.push("MODEL_HOME_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.runLineAwayOdds, certifiedQuote.awayOdds)) reasons.push("MODEL_AWAY_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+  } else if (report.market === "TOTAL") {
+    if (!sameNumber(lines.totalLine, certifiedQuote.line)) reasons.push("MODEL_LINE_DOES_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.overOdds, certifiedQuote.overOdds)) reasons.push("MODEL_OVER_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+    if (!sameNumber(lines.underOdds, certifiedQuote.underOdds)) reasons.push("MODEL_UNDER_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE");
+  } else {
+    // The predictor has only an F5 total line and currently reuses full-game
+    // prices. Until a separate F5 over/under pair is captured, this market
+    // cannot be certified for model execution or saving.
+    reasons.push("F5_TOTAL_EXACT_PRICES_NOT_CAPTURED");
+  }
+
+  return {
+    matches: reasons.length === 0,
+    reasons,
+    sourceStatus: marketEvidence?.sourceStatus ?? null,
+    certifiedQuote,
   };
 }
 
@@ -205,6 +265,16 @@ export function mlbPregameFieldLabel(field: string): string {
 }
 
 export function mlbPregameReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    CERTIFIED_MARKET_QUOTE_MISSING: "La respuesta no contiene la cuota certificada del mercado.",
+    MODEL_HOME_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE: "La cuota local del formulario no coincide con la cuota certificada.",
+    MODEL_AWAY_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE: "La cuota visitante del formulario no coincide con la cuota certificada.",
+    MODEL_LINE_DOES_NOT_MATCH_CERTIFIED_QUOTE: "La línea del formulario no coincide con la línea certificada.",
+    MODEL_OVER_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE: "La cuota Over del formulario no coincide con la cuota certificada.",
+    MODEL_UNDER_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE: "La cuota Under del formulario no coincide con la cuota certificada.",
+    F5_TOTAL_EXACT_PRICES_NOT_CAPTURED: "F5 Total permanece bloqueado hasta capturar precios Over y Under específicos de F5.",
+  };
+  if (labels[reason]) return labels[reason];
   return reason
     .replaceAll("_", " ")
     .replace("MISSING", "faltante")
