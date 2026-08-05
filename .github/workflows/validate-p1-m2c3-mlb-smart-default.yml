@@ -1,0 +1,86 @@
+name: Validate P1-M2C.3 MLB Smart Default
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
+      - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
+      - '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml'
+      - '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2c3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused MLB regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify smart-default contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate='frontend/client/src/components/mlb-daily-slate-panel.tsx'
+
+          grep -F 'P1-M2C.3 · SMART DEFAULT' "$slate"
+          grep -F 'data-smart-default="true"' "$slate"
+          grep -F 'data-smart-default-view={view}' "$slate"
+          grep -F 'smartDefaultAppliedDate' "$slate"
+          grep -F 'readyCount > 0 ? "ready" : provisionalCount > 0 ? "provisional" : "ready"' "$slate"
+          grep -F 'data-testid="p1-m2c3-auto-provisional"' "$slate"
+          grep -F 'No hay juegos FINAL disponibles; Provisionales se abrió automáticamente' "$slate"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('frontend/client/src/components/mlb-daily-slate-panel.tsx', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(source.includes('useEffect') && source.includes('useRef'), 'smart-default hooks are missing');
+          assert(source.includes('smartDefaultAppliedDate.current === date'), 'default is not limited to once per slate date');
+          assert(source.includes('report.summary.ready === 0 && report.summary.provisional > 0 && view === "provisional"'), 'automatic provisional notice condition is invalid');
+          assert(source.includes('onClick={() => setView("ready")}'), 'manual ready navigation was removed');
+          assert(source.includes('onClick={() => setView("provisional")}'), 'manual provisional navigation was removed');
+          assert(!source.includes('method: "POST"') && !source.includes('method: "PUT"') && !source.includes('method: "PATCH"') && !source.includes('method: "DELETE"'), 'smart-default introduced a write request');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m2c3-bundle.js
+          grep -F 'P1-M2C.3 · SMART DEFAULT' /tmp/p1-m2c3-bundle.js
+          grep -F 'No hay juegos FINAL disponibles; Provisionales se abrió automáticamente' /tmp/p1-m2c3-bundle.js
+          grep -F 'SHADOW · exposición 0' /tmp/p1-m2c3-bundle.js
+      - name: Diff hygiene and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
+            '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml' \
+            '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' | sort)
+          [[ "${changed}" == "${expected}" ]]
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
+            frontend/client/src/components/mlb-daily-slate-panel.tsx
