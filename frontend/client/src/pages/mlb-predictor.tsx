@@ -3176,7 +3176,7 @@ export default function MLBPredictor() {
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white pb-16">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <div className="mx-auto max-w-[1480px] space-y-5 px-3 py-6 sm:px-5 lg:px-6">
 
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -3205,7 +3205,7 @@ export default function MLBPredictor() {
             setMlbQueueView(game.analysisStage === "FINAL" ? "priority" : "pending");
             await handleMLBAutoFill(String(game.gamePk));
             window.requestAnimationFrame(() => {
-              document.getElementById("mlb-analysis-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              document.getElementById("mlb-operational-checkpoint")?.scrollIntoView({ behavior: "smooth", block: "start" });
             });
           }}
         />
@@ -3229,103 +3229,20 @@ export default function MLBPredictor() {
             }}
           />
 
-          <div
-            className="rounded-xl border border-cyan-500/25 bg-slate-950/45 p-3 space-y-3"
-            data-testid="p1-mlb-daily-slate"
-            data-p1-release={P1_M1_RELEASE}
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-cyan-200">P1 · Jornada MLB</p>
-                <p className="text-[11px] text-muted-foreground">La jornada se carga automáticamente. Selecciona un partido para preparar todos los datos existentes del predictor.</p>
-              </div>
-              <div className="flex flex-wrap gap-1.5 text-[10px]">
-                <Badge variant="outline">Total {mlbDailySummary.total}</Badge>
-                <Badge variant="outline" className="border-emerald-500/40 text-emerald-300">Listos {mlbDailySummary.ready}</Badge>
-                <Badge variant="outline" className="border-amber-500/40 text-amber-300">Pitchers pendientes {mlbDailySummary.waitingPitchers}</Badge>
-                <Badge variant="outline" className="border-slate-500/40 text-slate-400">Cerrados {mlbDailySummary.closed}</Badge>
-              </div>
-            </div>
-
-            {mlbLoading && mlbGames.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-cyan-500/30 p-5 text-center text-sm text-muted-foreground">
-                <RefreshCw className="mx-auto mb-2 h-4 w-4 animate-spin text-cyan-300" />
-                Cargando la jornada seleccionada…
-              </div>
-            ) : mlbReviewQueue.all.length > 0 ? (
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                {mlbReviewQueue.all.map(({ game, readiness }) => {
-                  const gameId = String(game.gameId);
-                  const selected = selectedGameId === gameId;
-                  const awayName = game.awayTeam?.name || "Visitante";
-                  const homeName = game.homeTeam?.name || "Local";
-                  const awayPitcher = mlbDailyPitcherName(game.awayPitcher);
-                  const homePitcher = mlbDailyPitcherName(game.homePitcher);
-                  const canPrepare = mlbDailyCanPrepare(readiness);
-                  return (
-                    <div
-                      key={gameId}
-                      className={
-                        selected
-                          ? "rounded-lg border border-cyan-400/60 bg-cyan-500/10 p-3"
-                          : readiness === "READY"
-                            ? "rounded-lg border border-emerald-500/25 bg-emerald-500/[0.035] p-3"
-                            : readiness === "PENDING"
-                              ? "rounded-lg border border-amber-500/25 bg-amber-500/[0.035] p-3"
-                              : "rounded-lg border border-slate-700/50 bg-slate-900/35 p-3 opacity-65"
-                      }
-                      data-testid={`p1-mlb-game-${gameId}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">{awayName} @ {homeName}</p>
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">{mlbDailyGameTimeLabel((game as any).commenceTime || game.gameDate || game.gameTime)}</p>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={
-                            readiness === "READY"
-                              ? "shrink-0 border-emerald-500/40 text-[9px] text-emerald-300"
-                              : readiness === "PENDING"
-                                ? "shrink-0 border-amber-500/40 text-[9px] text-amber-300"
-                                : "shrink-0 border-slate-500/40 text-[9px] text-slate-400"
-                          }
-                        >
-                          {mlbDailyReadinessLabel(readiness)}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 space-y-1 rounded bg-slate-950/35 p-2 text-[10px]">
-                        <p><span className="text-slate-500">Visitante:</span> <span className={awayPitcher === "TBD" ? "text-amber-300" : "text-slate-200"}>{awayPitcher}</span></p>
-                        <p><span className="text-slate-500">Local:</span> <span className={homePitcher === "TBD" ? "text-amber-300" : "text-slate-200"}>{homePitcher}</span></p>
-                      </div>
-                      <p className="mt-2 min-h-8 text-[10px] leading-4 text-muted-foreground">{mlbDailyReadinessDetail(readiness)}</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="mt-2 w-full"
-                        variant={selected ? "default" : "outline"}
-                        disabled={!canPrepare || autoStatus === "loading"}
-                        onClick={() => {
-                          setSelectedGameId(gameId);
-                          setPregameGate(null);
-                          void handleMLBAutoFill(gameId);
-                        }}
-                        data-testid={`p1-prepare-${gameId}`}
-                      >
-                        {autoStatus === "loading" && selected ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Zap className="mr-2 h-3.5 w-3.5" />}
-                        {readiness === "READY" ? "Preparar análisis" : "Cargar datos disponibles"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-slate-600/50 p-5 text-center text-sm text-muted-foreground">
-                No hay partidos MLB disponibles para esta fecha.
-              </div>
-            )}
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-3 py-2 text-xs text-cyan-100/80" data-testid="p1-m2c1-single-slate-note">
+            La jornada autoritativa aparece arriba. Este panel conserva únicamente controles manuales y fuentes de cuotas.
           </div>
 
+          <details className="group rounded-lg border border-slate-700/60 bg-slate-950/35" data-testid="p1-m2c1-manual-controls">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
+              <div>
+                <p className="text-xs font-semibold text-slate-200">Controles manuales y fuentes de cuotas</p>
+                <p className="text-[10px] text-muted-foreground">Cargar nuevamente, cambiar cola o reemplazar cuotas.</p>
+              </div>
+              <span className="text-[10px] text-cyan-300 group-open:hidden">Abrir</span>
+              <span className="hidden text-[10px] text-cyan-300 group-open:inline">Cerrar</span>
+            </summary>
+            <div className="border-t border-slate-700/50 p-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="outline" size="sm"
@@ -3486,6 +3403,8 @@ export default function MLBPredictor() {
               </Button>
             )}
           </div>
+            </div>
+          </details>
           {mlbError && <p className="text-xs text-red-400">No se pudo conectar con MLB. Llena manual.</p>}
           {autoStatus === "success" && <p className="text-xs text-green-400">✅ Pitchers + Stats + Bullpen cargados — solo agrega líneas</p>}
           {selectedDailyEntry && (
@@ -3531,6 +3450,16 @@ export default function MLBPredictor() {
             &nbsp;&nbsp;<span className="font-medium text-amber-400">Tú:</span> Líneas Hard Rock
           </div>
 
+          <details className="group rounded-xl border border-slate-700/60 bg-slate-950/35" data-testid="p1-m2c1-advanced-evidence">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Evidencia técnica avanzada</p>
+                <p className="text-[10px] text-muted-foreground">Park, Statcast, bullpen, SOS, catcher, arquetipos y matchups detallados.</p>
+              </div>
+              <span className="text-[10px] text-cyan-300 group-open:hidden">Abrir detalles</span>
+              <span className="hidden text-[10px] text-cyan-300 group-open:inline">Cerrar detalles</span>
+            </summary>
+            <div className="space-y-4 border-t border-slate-700/50 p-4">
           <EliteBanner sport="MLB" />
           {selectedGameId && <MLBUmpireCard gamePk={selectedGameId} onUmpire={(u) => setUmpireData(u || null)} />}
           {contextTri.home && contextTri.away && (
@@ -4655,9 +4584,21 @@ export default function MLBPredictor() {
               </CardContent>
             </Card>
           )}
+            </div>
+          </details>
         </CardContent>
       </Card>
 
+      <details className="group rounded-xl border border-slate-700/60 bg-slate-950/35" data-testid="p1-m2c1-manual-data">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Datos editables y contexto del partido</p>
+            <p className="text-[10px] text-muted-foreground">Equipos, pitchers, ofensiva, bullpen, lesiones y contexto manual.</p>
+          </div>
+          <span className="text-[10px] text-cyan-300 group-open:hidden">Abrir formulario</span>
+          <span className="hidden text-[10px] text-cyan-300 group-open:inline">Cerrar formulario</span>
+        </summary>
+        <div className="space-y-5 border-t border-slate-700/50 p-4">
       {/* Team Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {buildTeamCard("home")}
@@ -4713,6 +4654,26 @@ export default function MLBPredictor() {
           </CardContent>
         </Card>
 
+        </div>
+      </details>
+
+      <section id="mlb-operational-checkpoint" className="scroll-mt-3 space-y-4" data-testid="p1-m2c1-operational-checkpoint">
+        <div className="sticky top-2 z-20 flex flex-col gap-2 rounded-xl border border-cyan-500/35 bg-[#0b1220]/95 px-4 py-3 shadow-xl backdrop-blur md:flex-row md:items-center md:justify-between" data-testid="p1-m2c1-sticky-summary">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{awayTeam || selectedDailyEntry?.game.awayTeam?.name || "Visitante"} @ {homeTeam || selectedDailyEntry?.game.homeTeam?.name || "Local"}</p>
+            <p className="text-[10px] text-muted-foreground">Primero verifica la compuerta; después confirma las líneas y genera.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={pregameGate?.status === "READY_FINAL" ? "border-emerald-500/40 text-emerald-300" : pregameGate?.status === "READY_PROVISIONAL" ? "border-amber-500/40 text-amber-300" : "border-red-500/40 text-red-300"}>
+              {pregameGate?.status === "READY_FINAL" ? "LISTO FINAL" : pregameGate?.status === "READY_PROVISIONAL" ? "LISTO PROVISIONAL" : "VERIFICACIÓN PENDIENTE"}
+            </Badge>
+            <Badge variant="outline">SHADOW · exposición 0</Badge>
+            <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById("mlb-betting-lines")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Ir a líneas
+            </Button>
+          </div>
+        </div>
+
         <MlbPregameReadinessGate
           gamePk={selectedGameId}
           date={selectedDate}
@@ -4737,7 +4698,7 @@ export default function MLBPredictor() {
         />
 
         {/* LÍNEAS */}
-        <Card className="border border-slate-700/50 bg-slate-900/50">
+        <Card id="mlb-betting-lines" className="scroll-mt-24 border border-slate-700/50 bg-slate-900/50">
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-slate-300">Líneas de Apuesta</CardTitle>
           </CardHeader>
@@ -4799,6 +4760,8 @@ export default function MLBPredictor() {
             </Button>
           </CardContent>
         </Card>
+
+      </section>
 
         {/* RESULTS */}
         {result && (
