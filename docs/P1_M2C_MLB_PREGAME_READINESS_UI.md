@@ -25,7 +25,7 @@ Consumir el contrato runtime de P1-M2B dentro de MLB Predictor y convertir su de
 - Total O/U
 - F5 Total
 
-La UI nunca reutiliza cuotas del total completo como si fueran cuotas de F5 Total. Cuando el formulario no contiene el precio exacto requerido, P1-M2C solicita la fuente automática del backend.
+La UI nunca reutiliza cuotas del total completo como si fueran cuotas de F5 Total. Cuando el formulario no contiene el precio exacto requerido, P1-M2C solicita la fuente automática del backend. Un consenso F5 conserva la procedencia y los timestamps del backend; solo una edición explícita del usuario se presenta como captura manual.
 
 ## Integridad
 
@@ -41,7 +41,9 @@ Una respuesta con schema o límites de seguridad diferentes se considera inváli
 
 ## Verificación
 
-La integración del predictor se aplica mediante un reemplazo determinista que exige coincidencias únicas en el archivo existente. El proceso se detiene sin escribir si la estructura esperada cambió.
+La integración del predictor fue aplicada mediante un reemplazo determinista que exigió coincidencias únicas y permitió modificar exclusivamente `frontend/client/src/pages/mlb-predictor.tsx`. El commit resultante es `e625bda20ccd1a489d7adca2cae8139f54ba11f7`.
+
+La validación permanente comprueba contrato frontend, regresiones P1-M1, build productivo, marcadores del bundle, estados de la compuerta y límites SHADOW/exposición 0.
 
 ## Alcance
 
