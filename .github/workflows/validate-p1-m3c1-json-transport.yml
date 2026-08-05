@@ -1,0 +1,111 @@
+name: Validate P1-M3C.1 JSON Transport Hotfix
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
+      - 'frontend/client/src/lib/queryClient.ts'
+      - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply deterministic P1-M3C.1 integration patch once
+        shell: bash
+        run: |
+          set -euo pipefail
+          capture='frontend/client/src/lib/mlb-scientific-capture.ts'
+          query='frontend/client/src/lib/queryClient.ts'
+          if grep -Fq 'prepareMlbP1M3cSnapshotForTransport' "$capture" && grep -Fq 'contractErrors' "$query"; then
+            echo 'P1-M3C.1 integration patch already present.'
+            exit 0
+          fi
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return source.replace(old, new, 1)
+
+          capture_path = Path('frontend/client/src/lib/mlb-scientific-capture.ts')
+          source = capture_path.read_text()
+          source = replace_once(
+              source,
+              'import type { MlbScientificSnapshot } from "./mlb-scientific-snapshot";\n',
+              'import type { MlbScientificSnapshot } from "./mlb-scientific-snapshot";\nimport { prepareMlbP1M3cSnapshotForTransport } from "./mlb-scientific-capture-transport";\n',
+              'capture transport import',
+          )
+          source = replace_once(
+              source,
+              'export const MLB_P1_M3C_FRONTEND_RELEASE = "p1-m3c-mlb-scientific-emission-2026-08-05" as const;',
+              'export const MLB_P1_M3C_FRONTEND_RELEASE = "p1-m3c1-json-digest-transport-2026-08-05" as const;',
+              'release marker',
+          )
+          source = replace_once(
+              source,
+              '  const payloadDigest = await mlbP1M3cSha256(input.scientificSnapshot);\n',
+              '  const preparedSnapshot = prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot);\n  const payloadDigest = await mlbP1M3cSha256(preparedSnapshot.payload);\n',
+              'prepared snapshot digest',
+          )
+          source = replace_once(
+              source,
+              '      payload: input.scientificSnapshot as unknown as Record<string, unknown>,\n',
+              '      payload: preparedSnapshot.payload as unknown as Record<string, unknown>,\n',
+              'prepared snapshot payload',
+          )
+          capture_path.write_text(source)
+
+          query_path = Path('frontend/client/src/lib/queryClient.ts')
+          source = query_path.read_text()
+          old = '''async function responseMessage(res: Response): Promise<string> {\n  const text = await res.text();\n  if (!text) return res.statusText || "Request failed";\n  try {\n    const parsed = JSON.parse(text);\n    return parsed.error || parsed.message || text;\n  } catch {\n    return text;\n  }\n}\n'''
+          new = '''async function responseMessage(res: Response): Promise<string> {\n  const text = await res.text();\n  if (!text) return res.statusText || "Request failed";\n  try {\n    const parsed = JSON.parse(text);\n    const message = parsed.error || parsed.message || text;\n    const contractErrors = Array.isArray(parsed?.details?.errors)\n      ? parsed.details.errors.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)\n      : [];\n    return contractErrors.length > 0\n      ? `${message} [${contractErrors.join(", ")}]`\n      : message;\n  } catch {\n    return text;\n  }\n}\n'''
+          source = replace_once(source, old, new, 'structured contract errors')
+          query_path.write_text(source)
+          PY
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' "$capture" "$query" | sort)
+          [[ "$changed" == "$expected" ]]
+          grep -F 'prepareMlbP1M3cSnapshotForTransport' "$capture"
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' "$capture"
+          grep -F 'contractErrors' "$query"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$capture" "$query"
+          git commit -m 'P1-M3C.1: hash exact JSON transport payload'
+          git push origin HEAD:${GITHUB_HEAD_REF}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M3C.1 and P1 regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-scientific-capture-transport.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
