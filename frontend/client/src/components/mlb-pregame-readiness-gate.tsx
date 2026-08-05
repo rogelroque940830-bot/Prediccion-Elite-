@@ -27,6 +27,7 @@ import {
   type MlbPregameLineInputs,
   type MlbPregameMarket,
   type MlbPregameReadinessEnvelope,
+  type MlbPregameReadinessReport,
 } from "@/lib/mlb-pregame-readiness";
 
 const MARKETS: MlbPregameMarket[] = ["ML", "F5_ML", "RUN_LINE", "TOTAL"];
@@ -167,21 +168,28 @@ export function MlbPregameReadinessGate({
   lines,
   onApplyCertifiedQuote,
   onSnapshot,
+  onExecutionReport,
 }: {
   gamePk: string;
   date: string;
   lines: MlbPregameLineInputs;
   onApplyCertifiedQuote: (market: MlbPregameMarket, quote: Record<string, unknown>) => void;
   onSnapshot: (snapshot: MlbPregameGateSnapshot | null) => void;
+  onExecutionReport: (report: MlbPregameReadinessReport | null) => void;
 }) {
   const [market, setMarket] = useState<MlbPregameMarket>("ML");
   const [verificationNonce, setVerificationNonce] = useState(0);
   const onSnapshotRef = useRef(onSnapshot);
+  const onExecutionReportRef = useRef(onExecutionReport);
   const lastDecisionSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     onSnapshotRef.current = onSnapshot;
   }, [onSnapshot]);
+
+  useEffect(() => {
+    onExecutionReportRef.current = onExecutionReport;
+  }, [onExecutionReport]);
 
   const capturedAt = useMemo(() => new Date().toISOString(), [
     gamePk,
@@ -235,6 +243,7 @@ export function MlbPregameReadinessGate({
     if (!executionReport || String(executionReport.game.gamePk) !== gamePk || !executionReport.gate.analysisAllowed) {
       lastDecisionSignatureRef.current = null;
       onSnapshotRef.current(null);
+      onExecutionReportRef.current(null);
       return;
     }
 
@@ -253,11 +262,13 @@ export function MlbPregameReadinessGate({
     }
     lastDecisionSignatureRef.current = signature;
     onSnapshotRef.current(snapshot);
+    onExecutionReportRef.current(executionReport);
   }, [executionReport, gamePk]);
 
   useEffect(() => {
     lastDecisionSignatureRef.current = null;
     onSnapshotRef.current(null);
+    onExecutionReportRef.current(null);
   }, [gamePk, date, market]);
 
   const evidence = useMemo(() => contractReport?.evidence ?? [], [contractReport]);

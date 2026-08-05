@@ -1,0 +1,57 @@
+name: Validate P1-M3C MLB Scientific Emission
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture.test.ts'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  normalize-probability-precision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Normalize emitted probability precision once
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='frontend/client/src/lib/mlb-scientific-capture.ts'
+          if grep -Fq 'modelProbPct: round((side === "home" ? input.result.homeProb' "$file"; then
+            echo 'Probability precision already normalized.'
+            exit 0
+          fi
+          python <<'PY'
+          from pathlib import Path
+          path = Path('frontend/client/src/lib/mlb-scientific-capture.ts')
+          source = path.read_text()
+          replacements = [
+              ('modelProbPct: (side === "home" ? input.result.homeProb : input.result.awayProb) * 100,',
+               'modelProbPct: round((side === "home" ? input.result.homeProb : input.result.awayProb) * 100, 8),'),
+              ('modelProbPct: (side === "home" ? input.result.f5HomeProb : input.result.f5AwayProb) * 100,',
+               'modelProbPct: round((side === "home" ? input.result.f5HomeProb : input.result.f5AwayProb) * 100, 8),'),
+              ('modelProbPct: (input.result.runLine.coverProb ?? (input.result.runLine.coversRL ? 0.56 : 0.44)) * 100,',
+               'modelProbPct: round((input.result.runLine.coverProb ?? (input.result.runLine.coversRL ? 0.56 : 0.44)) * 100, 8),'),
+              ('modelProbPct: (input.result.ouResult.hitProb ?? 0.55) * 100,',
+               'modelProbPct: round((input.result.ouResult.hitProb ?? 0.55) * 100, 8),'),
+          ]
+          for old, new in replacements:
+              if source.count(old) != 1:
+                  raise SystemExit(f'expected one match for {old!r}, found {source.count(old)}')
+              source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+          git diff --check
+          [[ "$(git diff --name-only)" == "$file" ]]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$file"
+          git commit -m 'P1-M3C: normalize emitted probability precision'
+          git push origin HEAD:${GITHUB_HEAD_REF}
