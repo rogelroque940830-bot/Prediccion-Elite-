@@ -1,0 +1,64 @@
+name: Inspect P1-M3C Live Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/inspect-p1-m3c-live-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+    steps:
+      - name: Inspect current live bundle and security
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --max-time 30 "${FRONTEND_URL}/" -o index.html
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const sources = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((m) => m[1]);
+          fs.writeFileSync('sources.txt', sources.join('\n'));
+          console.log({ sources });
+          NODE
+          : > bundle.js
+          while IFS= read -r source; do
+            [[ -n "$source" ]] || continue
+            if [[ "$source" =~ ^https?:// ]]; then url="$source"; else url="${FRONTEND_URL}/${source#/}"; fi
+            echo "asset=$url"
+            curl -sS -L --max-time 30 "$url" >> bundle.js
+            printf '\n' >> bundle.js
+          done < sources.txt
+          curl -sS --max-time 30 "${BACKEND_URL}/health" -o health.json
+          capture_code=$(curl -sS -o capture.json -w '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' --data '{}' "${BACKEND_URL}/api/mlb/p1/v1/scientific-captures")
+          node <<'NODE'
+          const fs = require('node:fs');
+          const bundle = fs.readFileSync('bundle.js', 'utf8');
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const capture = JSON.parse(fs.readFileSync('capture.json', 'utf8'));
+          const markers = [
+            'p1-m3c-mlb-scientific-emission-2026-08-05',
+            'Registrando evaluación científica SHADOW',
+            'Evaluación científica RECHAZADA',
+            'IDEMPOTENTE',
+            '/api/mlb/p1/v1/scientific-captures',
+            'SHADOW · exposición 0',
+          ];
+          console.log(JSON.stringify({
+            backendCommit: health.commit,
+            frontendBytes: bundle.length,
+            markers: Object.fromEntries(markers.map((marker) => [marker, bundle.includes(marker)])),
+            anonymousCapture: capture,
+          }, null, 2));
+          if (!markers.every((marker) => bundle.includes(marker))) process.exit(2);
+          if (capture.success !== false || !/Authentication required/i.test(String(capture.error || ''))) process.exit(3);
+          NODE
+          [[ "$capture_code" == "401" ]]
