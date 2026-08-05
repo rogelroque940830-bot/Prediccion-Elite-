@@ -249,7 +249,8 @@ export function MlbPregameReadinessGate({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap gap-2">
-              <Badge className="border-violet-500/40 bg-violet-500/15 text-violet-100">P1-M2C.1 · COMPUERTA PREGAME</Badge>
+              <Badge className="border-violet-500/40 bg-violet-500/15 text-violet-100">P1-M2C · COMPUERTA PREGAME</Badge>
+              <Badge variant="outline" className="border-cyan-500/40 text-cyan-200">P1-M2C.1 · FLUJO CONSOLIDADO</Badge>
               <Badge variant="outline" className={gateBadgeClasses(status)} data-testid="p1-m2c-gate-status">
                 {gateLabel(status)}
               </Badge>

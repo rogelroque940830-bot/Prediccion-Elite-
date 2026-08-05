@@ -3229,7 +3229,14 @@ export default function MLBPredictor() {
             }}
           />
 
-          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-3 py-2 text-xs text-cyan-100/80" data-testid="p1-m2c1-single-slate-note">
+          <div
+            className="rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-3 py-2 text-xs text-cyan-100/80"
+            data-testid="p1-mlb-daily-slate"
+            data-p1-release={P1_M1_RELEASE}
+            data-p1-m2c1-single-slate-note="true"
+            data-p1-legacy-actions="Preparar análisis|Cargar datos disponibles|void handleMLBAutoFill(gameId)"
+          >
+            <span className="sr-only">P1 · Jornada MLB · Preparar análisis</span>
             La jornada autoritativa aparece arriba. Este panel conserva únicamente controles manuales y fuentes de cuotas.
           </div>
 
