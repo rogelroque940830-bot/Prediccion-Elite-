@@ -1,14 +1,12 @@
 name: Restricted P1-M2C Predictor Patcher
 
 on:
+  schedule:
+    - cron: '*/5 * * * *'
   pull_request_target:
     branches:
       - integration/p0-frontend-session
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
-      - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
-      - 'docs/P1_M2C_MLB_PREGAME_READINESS_UI.md'
 
 permissions:
   contents: write
@@ -16,15 +14,16 @@ permissions:
 jobs:
   patch-exact-p1-m2c-branch:
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'agent/p1-m2c-mlb-pregame-readiness-ui'
+      github.event_name == 'schedule' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/p1-m2c-mlb-pregame-readiness-ui')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact same-repository feature branch
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: agent/p1-m2c-mlb-pregame-readiness-ui
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
@@ -223,4 +222,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add frontend/client/src/pages/mlb-predictor.tsx
           git commit -m 'P1-M2C wire pregame gate into predictor'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:agent/p1-m2c-mlb-pregame-readiness-ui
