@@ -1,0 +1,197 @@
+name: Diagnostic P1-M2C.2 Live Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-p1-m2c2-live-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m2c2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_FRONTEND_RELEASE: p1-m2c2-mlb-priority-first-2026-08-05
+      EXPECTED_BACKEND_COMMIT: a490b0eb9e28c36e3e358d44b50cf4be7cbd274a
+      PRIMARY_SLATE_DATE: '2026-08-05'
+      FALLBACK_SLATE_DATE: '2026-08-06'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for exact P1-M2C.2 frontend and P1-M2B backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 120); do
+            frontend_code=$(curl -sS -o audit/index.html -w '%{http_code}' --max-time 25 "${FRONTEND_URL}/" || true)
+            backend_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            frontend_ready=false
+            backend_ready=false
+
+            if [[ "${frontend_code}" == '200' ]]; then
+              asset=$(grep -oE 'src="[^"]+\.js"' audit/index.html | head -n1 | sed -E 's/src="([^"]+)"/\1/' || true)
+              if [[ -n "${asset}" ]]; then
+                case "${asset}" in
+                  http*) asset_url="${asset}" ;;
+                  /*) asset_url="${FRONTEND_URL}${asset}" ;;
+                  *) asset_url="${FRONTEND_URL}/${asset}" ;;
+                esac
+                if curl -fsS --max-time 45 "${asset_url}" -o audit/bundle.js; then
+                  grep -Fq "${EXPECTED_FRONTEND_RELEASE}" audit/bundle.js && frontend_ready=true
+                fi
+              fi
+            fi
+
+            if [[ "${backend_code}" == '200' ]]; then
+              commit=$(node -e "const fs=require('fs'); try { console.log(JSON.parse(fs.readFileSync('audit/health.json','utf8')).commit || '') } catch {}")
+              [[ "${commit}" == "${EXPECTED_BACKEND_COMMIT}" ]] && backend_ready=true
+            fi
+
+            if [[ "${frontend_ready}" == true && "${backend_ready}" == true ]]; then
+              echo 'Exact P1-M2C.2 frontend and P1-M2B backend are live.'
+              break
+            fi
+            echo "Attempt ${attempt}/120: frontend=${frontend_code}/${frontend_ready}; backend=${backend_code}/${backend_ready}"
+            [[ "${attempt}" != '120' ]] || { echo 'Timed out waiting for exact P1-M2C.2 deployment' >&2; exit 1; }
+            sleep 15
+          done
+
+      - name: Verify served Priority First markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            'p1-m2c2-mlb-priority-first-2026-08-05' \
+            'P1-M2C.2 · PRIORITY FIRST' \
+            'Listos' \
+            'Provisionales' \
+            'Iniciados, cerrados o no accionables' \
+            'Modo seguro activo' \
+            'Cuota introducida' \
+            'Cuota certificada' \
+            'Usar cuota certificada' \
+            'SHADOW · exposición 0'; do
+            grep -Fq "${marker}" audit/bundle.js || { echo "Missing P1-M2C.2 bundle marker: ${marker}" >&2; exit 1; }
+          done
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const bundle = fs.readFileSync('audit/bundle.js', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(!bundle.includes('Todos {report.summary.total}'), 'legacy all-games control remains in served bundle');
+          console.log(JSON.stringify({
+            release: process.env.EXPECTED_FRONTEND_RELEASE,
+            priorityFirst: true,
+            readyDefaultContract: true,
+            provisionalCompactContract: true,
+            inactiveGamesCollapsedContract: true,
+            certifiedQuoteActionPresent: true,
+          }, null, 2));
+          NODE
+
+      - name: Select an eligible official MLB game
+        shell: bash
+        run: |
+          set -euo pipefail
+          for date in "${PRIMARY_SLATE_DATE}" "${FALLBACK_SLATE_DATE}"; do
+            code=$(curl -sS -o "audit/slate-${date}.json" -w '%{http_code}' --max-time 120 "${BACKEND_URL}/api/mlb/p1/v1/slate?date=${date}" || true)
+            [[ "${code}" == '200' ]] || continue
+            selected=$(SLATE_DATE="${date}" node <<'NODE'
+          const fs = require('node:fs');
+          const date = process.env.SLATE_DATE;
+          const payload = JSON.parse(fs.readFileSync(`audit/slate-${date}.json`, 'utf8'));
+          const games = payload?.data?.games ?? [];
+          const game = games.find((item) =>
+            ['SCHEDULED', 'PREGAME'].includes(item?.state)
+            && item?.homePitcher?.confirmed === true
+            && item?.awayPitcher?.confirmed === true
+          );
+          if (game) {
+            fs.writeFileSync('audit/selected-game.json', JSON.stringify(game, null, 2));
+            process.stdout.write(String(game.gamePk));
+          }
+          NODE
+            )
+            if [[ -n "${selected}" ]]; then
+              echo "GAME_PK=${selected}" >> "${GITHUB_ENV}"
+              echo "SELECTED_SLATE_DATE=${date}" >> "${GITHUB_ENV}"
+              break
+            fi
+          done
+          [[ -f audit/selected-game.json ]] || { echo 'No eligible future game with both probable pitchers' >&2; exit 1; }
+
+      - name: Verify readiness remains fail-closed and read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for attempt in $(seq 1 10); do
+            captured_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            code=$(curl -sS -G -o audit/readiness.json -w '%{http_code}' --max-time 180 \
+              "${BACKEND_URL}/api/mlb/p1/v1/pregame-readiness" \
+              --data-urlencode "gamePk=${GAME_PK}" \
+              --data-urlencode 'market=F5_ML' \
+              --data-urlencode "date=${SELECTED_SLATE_DATE}" \
+              --data-urlencode 'oddsMode=manual' \
+              --data-urlencode 'manualBook=P1-M2C.2 diagnostic read-only snapshot' \
+              --data-urlencode "manualCapturedAt=${captured_at}" \
+              --data-urlencode 'manualHomeOdds=-110' \
+              --data-urlencode 'manualAwayOdds=-110' || true)
+            [[ "${code}" == '200' ]] && break
+            echo "Readiness attempt ${attempt}/10 returned HTTP ${code}."
+            [[ "${attempt}" != '10' ]] || break
+            sleep 15
+          done
+          [[ "${code}" == '200' ]] || { echo "readiness final HTTP ${code}" >&2; cat audit/readiness.json; exit 1; }
+
+          EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" GAME_PK="${GAME_PK}" node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const payload = JSON.parse(fs.readFileSync('audit/readiness.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(health.commit === process.env.EXPECTED_BACKEND_COMMIT, `backend commit=${health.commit}`);
+          assert(payload.success === true, 'readiness success=false');
+          const report = payload.data;
+          assert(report?.schemaVersion === 'courtedge-p1-m2b-pregame-readiness.v1', `schema=${report?.schemaVersion}`);
+          assert(report?.contractSchemaVersion === 'courtedge-p1-m2a-pregame-readiness-contract.v1', `contract=${report?.contractSchemaVersion}`);
+          assert(String(report?.game?.gamePk) === process.env.GAME_PK, `gamePk=${report?.game?.gamePk}`);
+          assert(report?.market === 'F5_ML', `market=${report?.market}`);
+          assert(['READY_FINAL', 'READY_PROVISIONAL'].includes(report?.gate?.status), `gate=${report?.gate?.status}`);
+          assert(report?.gate?.analysisAllowed === true, 'analysisAllowed=false');
+          assert(Array.isArray(report?.evidence) && report.evidence.length === 11, `evidence=${report?.evidence?.length}`);
+          const odds = report.evidence.find((item) => item.field === 'MARKET_ODDS');
+          assert(odds?.state === 'FRESH', `market odds state=${odds?.state}`);
+          assert(odds?.sourceStatus === 'MANUAL_OVERRIDE', `market odds source=${odds?.sourceStatus}`);
+          assert(odds?.details?.homeOdds === -110 && odds?.details?.awayOdds === -110, 'manual quote mismatch');
+          assert(report?.safety?.mode === 'SHADOW_DECISION_SUPPORT', `mode=${report?.safety?.mode}`);
+          assert(report?.safety?.realFinancialExposure === 0, `exposure=${report?.safety?.realFinancialExposure}`);
+          assert(report?.safety?.automaticBetPlacement === false, 'automatic betting enabled');
+          console.log(JSON.stringify({
+            frontendRelease: process.env.EXPECTED_FRONTEND_RELEASE,
+            backendCommit: health.commit,
+            gamePk: report.game.gamePk,
+            matchup: `${report.game.awayTeam.name} @ ${report.game.homeTeam.name}`,
+            market: report.market,
+            gate: report.gate,
+            summary: report.summary,
+            predictionsGenerated: 0,
+            picksSaved: 0,
+            betsPlaced: 0,
+            safety: report.safety,
+          }, null, 2));
+          NODE
+
+      - name: Upload read-only P1-M2C.2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2c2-live-frontend-evidence
+          path: audit
