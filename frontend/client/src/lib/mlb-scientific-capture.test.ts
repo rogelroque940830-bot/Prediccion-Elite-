@@ -189,7 +189,7 @@ test("P1-M3C resolves only the market certified for the execution", () => {
     marketLabel: "O/U",
     pick: "UNDER 8.5",
     oddsAmerican: -115,
-    modelProbPct: 57.99999999999999,
+    modelProbPct: 58,
   });
   assert.equal(resolveMlbP1M3cAutomaticSelection({ ...base, market: "F5_TOTAL" }), null);
 });
