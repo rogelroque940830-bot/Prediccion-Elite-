@@ -1,4 +1,3 @@
-import { apiRequest } from "./queryClient";
 import type {
   MlbPregameMarket,
   MlbPregameReadinessReport,
@@ -520,6 +519,7 @@ function validCaptureResult(value: unknown): value is MlbP1M3bCaptureResult {
 }
 
 export async function postMlbP1M3cScientificCapture(candidate: unknown): Promise<MlbP1M3bCaptureResult> {
+  const { apiRequest } = await import("./queryClient");
   const response = await apiRequest("POST", MLB_P1_M3B_ENDPOINT, candidate);
   const envelope = await response.json() as { success?: boolean; data?: unknown; error?: string };
   if (envelope.success !== true || !validCaptureResult(envelope.data)) {
