@@ -140,15 +140,6 @@ function isPregame(pick: MlbHistoryFocusPick, nowMs: number): boolean {
   return clean(pick.gameDate) >= floridaDateKey(nowMs);
 }
 
-function signalStrength(signal: unknown): number {
-  const value = upper(signal);
-  if (["BET_FUERTE", "STRONG_BET", "BEST_BET", "PREMIUM"].includes(value)) return 4;
-  if (["BET", "PLAY", "ACTIONABLE"].includes(value)) return 3;
-  if (["LEAN", "REVIEW"].includes(value)) return 2;
-  if (["INFO", "WATCH"].includes(value)) return 1;
-  return 0;
-}
-
 function economicDecisionStrength(decision: unknown): number {
   const value = upper(decision);
   if (value === "BET") return 3;
@@ -209,6 +200,12 @@ function issue(
   message: string,
 ): MlbMarketIntegrityIssue {
   return { code, severity, message };
+}
+
+function withEffectiveDisplaySignal<T extends MlbHistoryFocusPick>(pick: T): T {
+  const effective = upper(pick.economicEffectiveDecision);
+  if (effective !== "BET" && effective !== "LEAN" && effective !== "PASS") return pick;
+  return { ...pick, signal: `EFECTIVA_${effective}` } as T;
 }
 
 export function isMlbHistoryEconomicLayerAdapted(pick: MlbHistoryFocusPick): boolean {
@@ -435,6 +432,7 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
 
   const ranked = integrityPassed
     .filter((pick) => classifyMlbHistoryFocus(pick) !== "HIDDEN")
+    .map(withEffectiveDisplaySignal)
     .sort((left, right) => reviewScore(right, nowMs) - reviewScore(left, nowMs));
   const priority = ranked.slice(0, MLB_HISTORY_FOCUS_PRIORITY_LIMIT);
   const priorityIds = new Set(priority.map((pick) => pick.id));
@@ -442,6 +440,7 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
   const waiting = integrityPassed
     .filter((pick) => !priorityIds.has(pick.id))
     .filter((pick) => finite(pick.edgePp) > 0 && isMlbHistoryWaitingForFinal(pick))
+    .map(withEffectiveDisplaySignal)
     .sort((left, right) => {
       const leftStart = startMs(left) ?? Number.MAX_SAFE_INTEGER;
       const rightStart = startMs(right) ?? Number.MAX_SAFE_INTEGER;
