@@ -5,53 +5,124 @@ on:
     branches:
       - integration/p0-frontend-session
     paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/mlb-real-cohort-activation-card.tsx'
       - 'frontend/client/src/lib/mlb-real-cohort-activation.ts'
+      - 'frontend/client/src/lib/mlb-real-cohort-activation.test.ts'
+      - 'frontend/client/src/pages/mlb-economic-review-activated.tsx'
+      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION_UI.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+      - '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply-typescript-narrowing-fix:
+  validate-p1-m5a-ui:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Add explicit non-null activation guard once
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run P1-M5A and inherited MLB tests
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-real-cohort-activation.test.ts \
+            client/src/lib/mlb-interactive-economic-review.test.ts \
+            client/src/lib/mlb-economic-decision.test.ts \
+            client/src/lib/mlb-scientific-capture-transport.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify activation contract, display and safety
         shell: bash
         run: |
           set -euo pipefail
-          file='frontend/client/src/lib/mlb-real-cohort-activation.ts'
-          if grep -Fq 'if (!activation) throw new Error("P1_M5A_INVALID_ACTIVATION:object")' "$file"; then
-            echo 'P1-M5A activation guard already applied.'
-            exit 0
-          fi
-          python <<'PY'
-          from pathlib import Path
-          path = Path('frontend/client/src/lib/mlb-real-cohort-activation.ts')
-          source = path.read_text()
-          old = '''  const fail = (message: string): never => {
-    throw new Error(`P1_M5A_INVALID_ACTIVATION:${message}`);
-  };
+          app='frontend/client/src/App.tsx'
+          helper='frontend/client/src/lib/mlb-real-cohort-activation.ts'
+          testfile='frontend/client/src/lib/mlb-real-cohort-activation.test.ts'
+          card='frontend/client/src/components/mlb-real-cohort-activation-card.tsx'
+          wrapper='frontend/client/src/pages/mlb-economic-review-activated.tsx'
+          docs='docs/P1_M5A_REAL_COHORT_ACTIVATION_UI.md'
 
-  if (activation?.schemaVersion !== MLB_P1_M5A_SCHEMA) fail("schema");
-'''
-          new = '''  const fail = (message: string): never => {
-    throw new Error(`P1_M5A_INVALID_ACTIVATION:${message}`);
-  };
+          grep -F 'p1-m5a-real-cohort-activation-ui-2026-08-06' "$helper"
+          grep -F 'MLB_P1_M5A_FRONTEND_RELEASE' "$app"
+          grep -F 'MLB_P1_M3D_B_FRONTEND_RELEASE' "$app"
+          grep -F 'MlbEconomicReviewActivated' "$app"
+          grep -F 'courtedge-p1-m5a-real-cohort-activation.v1' "$helper"
+          grep -F 'state_certified_mismatch' "$helper"
+          grep -F 'certified_checklist' "$helper"
+          grep -F 'synthetic_capture' "$helper"
+          grep -F 'Activación de la cohorte interactiva real' "$card"
+          grep -F 'Cohorte real certificada de extremo a extremo' "$card"
+          grep -F 'Esperando primera predicción real' "$card"
+          grep -F 'Decisión económica registrada' "$card"
+          grep -F 'Certificación bloqueada por integridad' "$card"
+          grep -F 'SHADOW · exposición 0' "$card"
+          grep -F 'parseMlbP1M5aActivation(raw)' "$wrapper"
+          grep -F 'P1_M5A_ACTIVATION_SETTLEMENT_COUNT_DRIFT' "$wrapper"
+          grep -F '<MlbEconomicReview />' "$wrapper"
+          grep -F 'browser does not recompute' "$docs"
+          grep -F 'rejects exposure, sportsbook, writes and synthetic captures' "$testfile"
 
-  if (!activation) throw new Error("P1_M5A_INVALID_ACTIVATION:object");
-  if (activation.schemaVersion !== MLB_P1_M5A_SCHEMA) fail("schema");
-'''
-          if source.count(old) != 1:
-              raise SystemExit(f'activation guard anchor count={source.count(old)}')
-          path.write_text(source.replace(old, new, 1))
-          PY
-          git diff --check
-          [[ "$(git diff --name-only)" == "$file" ]]
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$file"
-          git commit -m 'P1-M5A: narrow validated activation object'
-          git push origin HEAD:${GITHUB_HEAD_REF}
+          node <<'NODE'
+          const fs = require('node:fs');
+          const helper = fs.readFileSync('frontend/client/src/lib/mlb-real-cohort-activation.ts', 'utf8');
+          const card = fs.readFileSync('frontend/client/src/components/mlb-real-cohort-activation-card.tsx', 'utf8');
+          const wrapper = fs.readFileSync('frontend/client/src/pages/mlb-economic-review-activated.tsx', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(helper.includes('profitabilityConclusionAllowed !== false'), 'profitability conclusion is not rejected');
+          assert(helper.includes('safety?.realFinancialExposure !== 0'), 'nonzero exposure is not rejected');
+          assert(helper.includes('safety?.syntheticCaptureCreation !== false'), 'synthetic capture is not rejected');
+          assert(helper.includes('checklist?.sameDecisionEndToEndObserved !== true'), 'same-decision certificate is not required');
+          assert(wrapper.includes('["p1-m3d-interactive-economic-review"]'), 'wrapper does not share the P1-M3D query cache');
+          assert(!/\bfetch\s*\(|\bapiRequest\s*\(/.test(card), 'activation card performs a network side effect');
+          assert(!/POST|PUT|PATCH|DELETE/.test(card + wrapper), 'activation UI contains a write method');
+          assert(!/automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]|syntheticCaptureCreation:\s*true/.test(helper + card + wrapper), 'unsafe activation UI setting');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m5a-ui-bundle.js
+          grep -F 'p1-m5a-real-cohort-activation-ui-2026-08-06' /tmp/p1-m5a-ui-bundle.js
+          grep -F 'Activación de la cohorte interactiva real' /tmp/p1-m5a-ui-bundle.js
+          grep -F 'Cohorte real certificada de extremo a extremo' /tmp/p1-m5a-ui-bundle.js
+          grep -F 'Esperando primera predicción real' /tmp/p1-m5a-ui-bundle.js
+          grep -F 'Certificación bloqueada por integridad' /tmp/p1-m5a-ui-bundle.js
+          grep -F 'SHADOW · exposición 0' /tmp/p1-m5a-ui-bundle.js
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION_UI.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-real-cohort-activation-card.tsx' \
+            'frontend/client/src/lib/mlb-real-cohort-activation.test.ts' \
+            'frontend/client/src/lib/mlb-real-cohort-activation.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
