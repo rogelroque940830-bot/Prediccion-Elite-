@@ -5,6 +5,7 @@ import {
   MLB_P1_M3D_SCHEMA,
   buildMlbP1M3dEconomicReview,
 } from "./mlb-p1-economic-review";
+import { MLB_P1_M5A_SCHEMA } from "./mlb-p1-real-cohort-activation";
 
 const NOW = "2026-08-06T04:50:00.000Z";
 
@@ -156,6 +157,9 @@ test("P1-M3D separates flat and effective-policy accounting", () => {
   assert.equal(report.overall.policyStakeRoiPct, 33.3333);
   assert.equal(report.safety.realFinancialExposure, 0);
   assert.equal(report.safety.automaticBetPlacement, false);
+  assert.equal(report.activation.schemaVersion, MLB_P1_M5A_SCHEMA);
+  assert.equal(report.activation.state, "END_TO_END_CERTIFIED");
+  assert.equal(report.activation.certified, true);
 });
 
 test("P1-M3D evaluates only the terminal revision of a PROVISIONAL to FINAL chain", () => {
@@ -223,6 +227,8 @@ test("P1-M3D excludes branched lifecycles fail closed", () => {
   assert.equal(report.sample.lifecycleBranchesExcluded, 1);
   assert.equal(report.sample.uniqueAnalyticalDecisions, 0);
   assert.equal(report.issues.some((issue) => issue.code === "INTERACTIVE_LIFECYCLE_BRANCH_CONFLICT"), true);
+  assert.equal(report.activation.state, "BLOCKED_INTEGRITY");
+  assert.equal(report.activation.certified, false);
 });
 
 test("P1-M3D keeps flat evidence but excludes invalid economic units from policy ROI", () => {
@@ -253,4 +259,19 @@ test("P1-M3D milestone states remain descriptive and never authorize automatic c
   assert.equal(report.readiness.conclusionsAllowed, false);
   assert.equal(report.readiness.automaticModelChangesAllowed, false);
   assert.equal(report.readiness.automaticPromotionAllowed, false);
+});
+
+
+test("P1-M3D exposes the P1-M5A activation sequence without changing review economics", () => {
+  const empty = buildMlbP1M3dEconomicReview([], { generatedAt: NOW });
+  assert.equal(empty.activation.state, "WAITING_FOR_REAL_CAPTURE");
+  assert.equal(empty.activation.nextAction, "GENERATE_FIRST_REAL_PREDICTION");
+
+  const pending = buildMlbP1M3dEconomicReview([record({ id: "pending", result: null })], { generatedAt: NOW });
+  assert.equal(pending.activation.state, "ECONOMIC_DECISION_REGISTERED");
+  assert.equal(pending.activation.nextAction, "WAIT_FOR_OFFICIAL_SETTLEMENT");
+  assert.equal(pending.activation.checklist.validEconomicLayerObserved, true);
+  assert.equal(pending.activation.checklist.officialSettlementObserved, false);
+  assert.equal(pending.activation.safety.realFinancialExposure, 0);
+  assert.equal(pending.activation.interpretation.profitabilityConclusionAllowed, false);
 });
