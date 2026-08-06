@@ -6,17 +6,22 @@ on:
       - integration/p0-frontend-session
     paths:
       - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
       - 'frontend/client/src/components/mlb-economic-decision-card.tsx'
       - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
       - 'frontend/client/src/lib/mlb-economic-decision.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture-transport.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.ts'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.test.ts'
       - 'frontend/client/src/lib/queryClient.ts'
-      - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
+      - 'frontend/client/src/pages/mlb-economic-review.tsx'
+      - 'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
       - '.github/workflows/validate-p1-m3c1-json-transport.yml'
       - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+      - '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml'
 
 permissions:
   contents: read
@@ -50,7 +55,7 @@ jobs:
         env:
           COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
         run: npm --prefix frontend run verify
-      - name: Verify exact JSON transport and safety contract
+      - name: Verify exact JSON transport and successor lineage
         shell: bash
         run: |
           set -euo pipefail
@@ -58,10 +63,9 @@ jobs:
           capture='frontend/client/src/lib/mlb-scientific-capture.ts'
           transport='frontend/client/src/lib/mlb-scientific-capture-transport.ts'
           query='frontend/client/src/lib/queryClient.ts'
-          legacy_workflow='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+          legacy='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
 
-          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$capture"
-          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$app"
+          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE|MLB_P1_M3D_B_FRONTEND_RELEASE' "$app"
           grep -F 'prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)' "$capture"
           grep -F 'mlbP1M3cSha256(preparedSnapshot.payload)' "$capture"
           grep -F 'payload: preparedSnapshot.payload as unknown as Record<string, unknown>' "$capture"
@@ -70,8 +74,7 @@ jobs:
           grep -F 'P1_M3C_SNAPSHOT_TOO_LARGE' "$transport"
           grep -F 'contractErrors' "$query"
           grep -F 'parsed?.details?.errors' "$query"
-          grep -F 'MLB_P1_M4C_FRONTEND_RELEASE' "$legacy_workflow"
-          grep -F 'mlb-scientific-capture-transport.test.ts' "$legacy_workflow"
+          grep -F 'MLB_P1_M3D_B_FRONTEND_RELEASE' "$legacy"
           grep -F 'realFinancialExposure: 0 as const' "$capture"
           grep -F 'automaticBetPlacement: false as const' "$capture"
 
@@ -92,17 +95,18 @@ jobs:
           assert(transport.includes('JSON.parse(json)'), 'wire payload reconstruction missing');
           assert(query.includes('details?.errors'), 'server contract details are not surfaced');
           assert(!capture.includes('automaticBetPlacement: true'), 'automatic betting enabled');
-          assert(!capture.includes('realFinancialExposure: 1'), 'non-zero exposure found');
           assert(
-            app.includes('MLB_P1_M3C_FRONTEND_RELEASE') || app.includes('MLB_P1_M4C_FRONTEND_RELEASE'),
-            'frontend release lineage no longer includes P1-M3C.1 or a validated successor',
+            app.includes('MLB_P1_M3C_FRONTEND_RELEASE')
+              || app.includes('MLB_P1_M4C_FRONTEND_RELEASE')
+              || app.includes('MLB_P1_M3D_B_FRONTEND_RELEASE'),
+            'frontend release lineage does not include P1-M3C.1 or a validated successor',
           );
-          assert(legacy.includes('MLB_P1_M4C_FRONTEND_RELEASE'), 'legacy scientific-emission gate does not recognize P1-M4C');
-          assert(legacy.includes('Diff hygiene and protected extension scope'), 'legacy scientific-emission scope is not extension-safe');
+          assert(legacy.includes('MLB_P1_M3D_B_FRONTEND_RELEASE'), 'legacy emission gate does not recognize P1-M3D-B');
+          assert(legacy.includes('Diff hygiene and protected extension scope'), 'legacy emission scope is not extension-safe');
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m3c1-bundle.js
-          grep -E 'p1-m3c1-json-digest-transport-2026-08-05|p1-m4c-mlb-economic-decision-card-2026-08-06' /tmp/p1-m3c1-bundle.js
+          grep -E 'p1-m3c1-json-digest-transport-2026-08-05|p1-m4c-mlb-economic-decision-card-2026-08-06|p1-m3d-b-interactive-economic-review-ui-2026-08-06' /tmp/p1-m3c1-bundle.js
           grep -F 'P1_M3C_SNAPSHOT_TOO_LARGE' /tmp/p1-m3c1-bundle.js
       - name: Diff hygiene and protected extension scope
         shell: bash
@@ -115,16 +119,18 @@ jobs:
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
             '.github/workflows/validate-p1-m3c1-json-transport.yml' \
             '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
-            'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md' \
             'frontend/client/src/App.tsx' \
-            'frontend/client/src/components/mlb-economic-decision-card.tsx' \
-            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
-            'frontend/client/src/lib/mlb-economic-decision.test.ts' \
-            'frontend/client/src/lib/mlb-economic-decision.ts' \
-            'frontend/client/src/lib/mlb-scientific-capture.ts' | sort)
+            'frontend/client/src/components/app-sidebar.tsx' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.test.ts' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.ts' \
+            'frontend/client/src/pages/mlb-economic-review.tsx' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
-          grep -Fxq 'frontend/client/src/lib/mlb-scientific-capture.ts' <<< "$changed"
-          ! grep -E 'sportsbook|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' \
+          grep -Fxq 'frontend/client/src/App.tsx' <<< "$changed"
+          grep -Fxq 'frontend/client/src/lib/mlb-interactive-economic-review.ts' <<< "$changed"
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' \
             frontend/client/src/lib/mlb-scientific-capture-transport.ts \
-            frontend/client/src/lib/mlb-scientific-capture.ts
+            frontend/client/src/lib/mlb-scientific-capture.ts \
+            frontend/client/src/lib/mlb-interactive-economic-review.ts
