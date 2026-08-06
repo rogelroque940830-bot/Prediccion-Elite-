@@ -1,0 +1,109 @@
+name: Temporary P1-M5A Backend Patcher
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/tmp-p1-m5a-backend-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'agent/p1-m5a-real-cohort-activation-backend'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p1-m5a-real-cohort-activation-backend
+          fetch-depth: 0
+      - name: Apply deterministic activation integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          review = Path('server/mlb-p1-economic-review.ts')
+          test = Path('server/mlb-p1-economic-review.test.ts')
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              return source.replace(old, new, 1)
+
+          source = review.read_text()
+          source = replace_once(
+              source,
+              'import { MLB_P1_M4B_SCHEMA } from "./mlb-p1-economic-decision-adapter";\n',
+              'import { MLB_P1_M4B_SCHEMA } from "./mlb-p1-economic-decision-adapter";\nimport {\n  buildMlbP1M5aRealCohortActivation,\n  type MlbP1M5aActivation,\n} from "./mlb-p1-real-cohort-activation";\n',
+              'activation import',
+          )
+          source = replace_once(
+              source,
+              '  lifecycle: {\n    provisionalToFinalChains: number;\n    finalOnlyChains: number;\n    provisionalOnlyChains: number;\n  };\n  readiness: {\n',
+              '  lifecycle: {\n    provisionalToFinalChains: number;\n    finalOnlyChains: number;\n    provisionalOnlyChains: number;\n  };\n  activation: MlbP1M5aActivation;\n  readiness: {\n',
+              'activation report field',
+          )
+          source = replace_once(
+              source,
+              '  const actionableRows = rows.filter((row) => row.economicLayerValid\n    && row.effectiveDecision === "BET"\n    && row.actionability === "ACTIONABLE_FINAL");\n\n  return {\n',
+              '  const actionableRows = rows.filter((row) => row.economicLayerValid\n    && row.effectiveDecision === "BET"\n    && row.actionability === "ACTIONABLE_FINAL");\n  const generatedAt = options.generatedAt ?? new Date().toISOString();\n  const activation = buildMlbP1M5aRealCohortActivation({\n    generatedAt,\n    rows,\n    ownerScoped: true,\n    terminalSupersessionLeavesOnly: true,\n    lifecycleChains: terminal.lifecycleChains,\n    terminalLeaves: terminal.terminals.length,\n    analyticalDuplicatesExcluded: built.duplicatesExcluded,\n    lifecycleBranchesExcluded: terminal.branchesExcluded,\n    malformedInteractiveRecordsExcluded: terminal.malformedExcluded,\n  });\n\n  return {\n',
+              'activation builder',
+          )
+          source = replace_once(
+              source,
+              '    generatedAt: options.generatedAt ?? new Date().toISOString(),\n',
+              '    generatedAt,\n',
+              'generatedAt reuse',
+          )
+          source = replace_once(
+              source,
+              '    lifecycle: {\n      provisionalToFinalChains: terminal.provisionalToFinalChains,\n      finalOnlyChains: terminal.finalOnlyChains,\n      provisionalOnlyChains: terminal.provisionalOnlyChains,\n    },\n    readiness: {\n',
+              '    lifecycle: {\n      provisionalToFinalChains: terminal.provisionalToFinalChains,\n      finalOnlyChains: terminal.finalOnlyChains,\n      provisionalOnlyChains: terminal.provisionalOnlyChains,\n    },\n    activation,\n    readiness: {\n',
+              'activation return',
+          )
+          review.write_text(source)
+
+          source = test.read_text()
+          source = replace_once(
+              source,
+              'import {\n  MLB_P1_M3D_SCHEMA,\n  buildMlbP1M3dEconomicReview,\n} from "./mlb-p1-economic-review";\n',
+              'import {\n  MLB_P1_M3D_SCHEMA,\n  buildMlbP1M3dEconomicReview,\n} from "./mlb-p1-economic-review";\nimport { MLB_P1_M5A_SCHEMA } from "./mlb-p1-real-cohort-activation";\n',
+              'test activation import',
+          )
+          source = replace_once(
+              source,
+              '  assert.equal(report.safety.realFinancialExposure, 0);\n  assert.equal(report.safety.automaticBetPlacement, false);\n});\n',
+              '  assert.equal(report.safety.realFinancialExposure, 0);\n  assert.equal(report.safety.automaticBetPlacement, false);\n  assert.equal(report.activation.schemaVersion, MLB_P1_M5A_SCHEMA);\n  assert.equal(report.activation.state, "END_TO_END_CERTIFIED");\n  assert.equal(report.activation.certified, true);\n});\n',
+              'certified integration assertion',
+          )
+          source = replace_once(
+              source,
+              '  assert.equal(report.issues.some((issue) => issue.code === "INTERACTIVE_LIFECYCLE_BRANCH_CONFLICT"), true);\n});\n',
+              '  assert.equal(report.issues.some((issue) => issue.code === "INTERACTIVE_LIFECYCLE_BRANCH_CONFLICT"), true);\n  assert.equal(report.activation.state, "BLOCKED_INTEGRITY");\n  assert.equal(report.activation.certified, false);\n});\n',
+              'branch activation assertion',
+          )
+          source += '''\n\ntest("P1-M3D exposes the P1-M5A activation sequence without changing review economics", () => {\n  const empty = buildMlbP1M3dEconomicReview([], { generatedAt: NOW });\n  assert.equal(empty.activation.state, "WAITING_FOR_REAL_CAPTURE");\n  assert.equal(empty.activation.nextAction, "GENERATE_FIRST_REAL_PREDICTION");\n\n  const pending = buildMlbP1M3dEconomicReview([record({ id: "pending", result: null })], { generatedAt: NOW });\n  assert.equal(pending.activation.state, "ECONOMIC_DECISION_REGISTERED");\n  assert.equal(pending.activation.nextAction, "WAIT_FOR_OFFICIAL_SETTLEMENT");\n  assert.equal(pending.activation.checklist.validEconomicLayerObserved, true);\n  assert.equal(pending.activation.checklist.officialSettlementObserved, false);\n  assert.equal(pending.activation.safety.realFinancialExposure, 0);\n  assert.equal(pending.activation.interpretation.profitabilityConclusionAllowed, false);\n});\n'''
+          test.write_text(source)
+          PY
+
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' | sort)
+          [[ "$changed" == "$expected" ]]
+          grep -F 'activation: MlbP1M5aActivation' server/mlb-p1-economic-review.ts
+          grep -F 'buildMlbP1M5aRealCohortActivation' server/mlb-p1-economic-review.ts
+          grep -F 'report.activation.state' server/mlb-p1-economic-review.test.ts
+      - name: Commit product integration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/mlb-p1-economic-review.ts server/mlb-p1-economic-review.test.ts
+          git commit -m 'P1-M5A: integrate real cohort activation into economic review'
+          git push origin HEAD:agent/p1-m5a-real-cohort-activation-backend
