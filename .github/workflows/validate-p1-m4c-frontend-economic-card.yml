@@ -13,6 +13,7 @@ on:
       - 'frontend/client/src/lib/mlb-scientific-capture.ts'
       - 'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
       - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
 
 permissions:
@@ -59,6 +60,7 @@ jobs:
           status='frontend/client/src/components/mlb-scientific-capture-status.tsx'
           docs='docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md'
           inherited='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+          transport_gate='.github/workflows/validate-p1-m3c1-json-transport.yml'
 
           grep -F 'p1-m4c-mlb-economic-decision-card-2026-08-06' "$helper"
           grep -F 'MLB_P1_M4C_FRONTEND_RELEASE' "$app"
@@ -74,6 +76,7 @@ jobs:
           grep -F 'The frontend does not recalculate' "$docs"
           grep -F 'rejects an adapter response that weakens SHADOW safety' "$testfile"
           grep -F 'Diff hygiene and protected extension scope' "$inherited"
+          grep -F 'Diff hygiene and protected extension scope' "$transport_gate"
 
           node <<'NODE'
           const fs = require('node:fs');
@@ -81,6 +84,7 @@ jobs:
           const card = fs.readFileSync('frontend/client/src/components/mlb-economic-decision-card.tsx', 'utf8');
           const capture = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
           const inherited = fs.readFileSync('.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml', 'utf8');
+          const transportGate = fs.readFileSync('.github/workflows/validate-p1-m3c1-json-transport.yml', 'utf8');
           const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
           assert(helper.includes('safety.realFinancialExposure !== 0'), 'response parser does not reject nonzero exposure');
@@ -95,6 +99,8 @@ jobs:
           assert(!/automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]/.test(helper + card), 'unsafe economic card setting');
           assert(inherited.includes('MLB_P1_M4C_FRONTEND_RELEASE'), 'P1-M3C release lineage does not recognize P1-M4C');
           assert(inherited.includes('unexpected=$(comm -23'), 'P1-M3C scope gate is not extension-safe');
+          assert(transportGate.includes('MLB_P1_M4C_FRONTEND_RELEASE'), 'P1-M3C.1 release lineage does not recognize P1-M4C');
+          assert(transportGate.includes('unexpected=$(comm -23'), 'P1-M3C.1 scope gate is not extension-safe');
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m4c-frontend-bundle.js
@@ -113,6 +119,7 @@ jobs:
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
             '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
             'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
             'frontend/client/src/App.tsx' \
