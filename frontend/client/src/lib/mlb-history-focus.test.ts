@@ -154,6 +154,7 @@ test("focus view never places rejected or review records in Priority or Waiting"
 
   const focus = buildMlbHistoryFocus([valid, invalid, outlier], NOW);
   assert.deepEqual(focus.priority.map((entry) => entry.id), ["valid"]);
+  assert.equal(focus.priority[0].signal, "EFECTIVA_BET");
   assert.equal(focus.waiting.length, 0);
   assert.equal(focus.verifyTotal, 2);
   assert.deepEqual(new Set(focus.verify.map((entry) => entry.pick.id)), new Set(["invalid", "outlier"]));
@@ -198,6 +199,8 @@ test("provisional source BET remains waiting when P1-M4 says WAIT_FOR_FINAL", ()
   assert.equal(isMlbHistoryWaitingForFinal(provisional), true);
   assert.equal(focus.priority.length, 0);
   assert.deepEqual(focus.waiting.map((entry) => entry.id), ["provisional-bet"]);
+  assert.equal(focus.waiting[0].signal, "EFECTIVA_LEAN");
+  assert.equal(focus.waiting[0].economicSourceSignal, "BET_FUERTE");
 });
 
 test("FINAL source BET downgraded to effective PASS is hidden", () => {
@@ -220,6 +223,8 @@ test("only FINAL effective BET with ACTIONABLE_FINAL and positive units is high 
   const focus = buildMlbHistoryFocus([zeroUnits, blocked, actionable], NOW);
   assert.equal(isMlbHistoryEconomicallyActionable(actionable), true);
   assert.deepEqual(focus.priority.map((entry) => entry.id), ["actionable"]);
+  assert.equal(focus.priority[0].signal, "EFECTIVA_BET");
+  assert.equal(focus.priority[0].economicSourceSignal, "BET_FUERTE");
 });
 
 test("results contains every unique settled decision instead of an eight-item preview", () => {
