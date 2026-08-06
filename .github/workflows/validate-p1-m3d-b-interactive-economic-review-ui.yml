@@ -1,0 +1,136 @@
+name: Validate P1-M3D-B Interactive Economic Review UI
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.ts'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.test.ts'
+      - 'frontend/client/src/pages/mlb-economic-review.tsx'
+      - 'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+      - '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3d-b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run P1-M3D-B and inherited MLB tests
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-interactive-economic-review.test.ts \
+            client/src/lib/mlb-economic-decision.test.ts \
+            client/src/lib/mlb-scientific-capture-transport.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private read-only report contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='frontend/client/src/App.tsx'
+          sidebar='frontend/client/src/components/app-sidebar.tsx'
+          helper='frontend/client/src/lib/mlb-interactive-economic-review.ts'
+          testfile='frontend/client/src/lib/mlb-interactive-economic-review.test.ts'
+          page='frontend/client/src/pages/mlb-economic-review.tsx'
+          docs='docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md'
+
+          grep -F 'p1-m3d-b-interactive-economic-review-ui-2026-08-06' "$helper"
+          grep -F 'MLB_P1_M3D_B_FRONTEND_RELEASE' "$app"
+          grep -F '<Route path="/mlb-economic-review" component={MlbEconomicReview} />' "$app"
+          grep -F 'Rendimiento MLB' "$sidebar"
+          grep -F 'privateNavItems' "$sidebar"
+          grep -F '/api/mlb/p1/v1/economic-review' "$helper"
+          grep -F 'parseMlbP1M3dEconomicReviewEnvelope(raw).data' "$page"
+          grep -F 'Rendimiento económico MLB' "$page"
+          grep -F 'Muestra técnica solamente' "$page"
+          grep -F 'Simulación plana de 1 unidad' "$page"
+          grep -F 'Política efectiva P1-M4 SHADOW' "$page"
+          grep -F 'Brier' "$page"
+          grep -F 'Log Loss' "$page"
+          grep -F 'CLV medio' "$page"
+          grep -F 'Reporte de solo lectura' "$page"
+          grep -F 'browser does not recompute' "$docs"
+          grep -F 'rejects any real financial exposure' "$testfile"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const app = fs.readFileSync('frontend/client/src/App.tsx', 'utf8');
+          const sidebar = fs.readFileSync('frontend/client/src/components/app-sidebar.tsx', 'utf8');
+          const helper = fs.readFileSync('frontend/client/src/lib/mlb-interactive-economic-review.ts', 'utf8');
+          const page = fs.readFileSync('frontend/client/src/pages/mlb-economic-review.tsx', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(app.includes('MLB_P1_M3D_B_FRONTEND_RELEASE'), 'release marker not published');
+          assert(sidebar.indexOf('Rendimiento MLB') > sidebar.indexOf('const privateNavItems'), 'economic review is not private navigation');
+          assert(helper.includes('readiness?.conclusionsAllowed !== false'), 'parser does not reject conclusions');
+          assert(helper.includes('safety?.realFinancialExposure !== 0'), 'parser does not reject nonzero exposure');
+          assert(helper.includes('safety?.sportsbookIntegration !== false'), 'parser does not reject sportsbook integration');
+          assert(helper.includes('safety?.automaticBetPlacement !== false'), 'parser does not reject automatic betting');
+          assert(helper.includes('safety?.productionWrites !== false'), 'parser does not reject production writes');
+          assert(helper.includes('safety?.settlementWrites !== false'), 'parser does not reject settlement writes');
+          assert(helper.includes('safety?.historicalLedgerMutation !== false'), 'parser does not reject historical mutation');
+          assert(page.includes('fetchJson<unknown>(MLB_P1_M3D_ENDPOINT)'), 'page does not use the server-authoritative endpoint');
+          assert(!/\bfetch\s*\(/.test(page), 'page performs a native fetch side effect');
+          assert(!/\bapiRequest\s*\(/.test(page), 'page performs an apiRequest side effect');
+          assert(!/POST|PUT|PATCH|DELETE/.test(page), 'page contains a write method');
+          assert(!/automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]/.test(helper + page), 'unsafe review setting');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m3d-b-bundle.js
+          grep -F 'p1-m3d-b-interactive-economic-review-ui-2026-08-06' /tmp/p1-m3d-b-bundle.js
+          grep -F 'Rendimiento económico MLB' /tmp/p1-m3d-b-bundle.js
+          grep -F 'Muestra técnica solamente' /tmp/p1-m3d-b-bundle.js
+          grep -F 'Simulación plana de 1 unidad' /tmp/p1-m3d-b-bundle.js
+          grep -F 'Política efectiva P1-M4 SHADOW' /tmp/p1-m3d-b-bundle.js
+          grep -F '/api/mlb/p1/v1/economic-review' /tmp/p1-m3d-b-bundle.js
+          grep -F 'SHADOW · exposición 0' /tmp/p1-m3d-b-bundle.js
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/app-sidebar.tsx' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.test.ts' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.ts' \
+            'frontend/client/src/pages/mlb-economic-review.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
+
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|productionWrites:[[:space:]]*true|settlementWrites:[[:space:]]*true|historicalLedgerMutation:[[:space:]]*true' \
+            frontend/client/src/lib/mlb-interactive-economic-review.ts \
+            frontend/client/src/pages/mlb-economic-review.tsx
