@@ -8,12 +8,18 @@ on:
       - 'server/mlb-p1-scientific-capture-service.ts'
       - 'server/mlb-p1-scientific-capture-routes.ts'
       - 'server/mlb-p1-scientific-capture-service.test.ts'
+      - 'server/mlb-p1-economic-review.ts'
+      - 'server/mlb-p1-economic-review-routes.ts'
+      - 'server/mlb-p1-economic-review.test.ts'
       - 'server/security.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M3B_MLB_SCIENTIFIC_CAPTURE_SERVICE.md'
+      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
       - 'tsconfig.p1-m3b-mlb-scientific-capture.json'
+      - 'tsconfig.p1-m3d-interactive-economic-review.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
 
 permissions:
   contents: read
@@ -78,18 +84,30 @@ jobs:
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
 
-          # The P1-M3B service is an extension point. Later phases may modify the
-          # service and its tests, but may not silently alter auth, routing,
-          # ownership, contracts, persistence, settlements or unrelated code.
+          # P1-M3B remains the protected write boundary. A later phase may either
+          # extend that service and its paired tests, or add a separately scoped,
+          # authenticated read-only review. No unrelated files are permitted.
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
+            'server/mlb-p1-economic-review-routes.ts' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
             'server/mlb-p1-scientific-capture-service.test.ts' \
-            'server/mlb-p1-scientific-capture-service.ts' | sort)
+            'server/mlb-p1-scientific-capture-service.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
-          grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed"
-          grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed"
 
-          ! grep -Eq '^(server/(security|routes|mlb-ledger|mlb-p1-scientific-capture-contract|mlb-p1-scientific-capture-routes)|server/route-contract)' <<< "$unexpected"
+          if grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed" \
+            || grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed"; then
+            grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed"
+          fi
+
+          ! grep -Eq '^(server/(security|mlb-ledger|mlb-p1-scientific-capture-contract|mlb-p1-scientific-capture-routes))' <<< "$unexpected"

@@ -1,0 +1,108 @@
+name: Validate P1-M3D Interactive Economic Review
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-economic-review.ts'
+      - 'server/mlb-p1-economic-review-routes.ts'
+      - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
+      - 'tsconfig.p1-m3d-interactive-economic-review.json'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M3D surface
+        run: npx tsc -p tsconfig.p1-m3d-interactive-economic-review.json
+      - name: Run focused economic review and contract regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-economic-review.test.ts \
+            server/mlb-shadow-evaluation.test.ts \
+            server/mlb-p1-economic-decision-adapter.test.ts \
+            server/mlb-p1-scientific-capture-service.test.ts
+      - name: Verify modular routes and production backend build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B/S6 scientific regression
+        run: npm run test:s5b-shadow
+      - name: Verify P1-M3D endpoint and safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          review='server/mlb-p1-economic-review.ts'
+          routes='server/mlb-p1-economic-review-routes.ts'
+          composition='server/routes.ts'
+
+          grep -F 'courtedge-p1-m3d-interactive-economic-review.v1' "$review"
+          grep -F '/api/mlb/p1/v1/economic-review' "$review"
+          grep -F 'INTERACTIVE_MLB_PREDICTOR' "$review"
+          grep -F 'terminalSupersessionLeavesOnly: true' "$review"
+          grep -F 'buildMlbShadowRows' "$review"
+          grep -F 'flatStakeRoiPct' "$review"
+          grep -F 'policyStakeRoiPct' "$review"
+          grep -F 'brierScore' "$review"
+          grep -F 'logLoss' "$review"
+          grep -F 'meanClvPp' "$review"
+          grep -F 'leanPassInfoControls' "$review"
+          grep -F 'conclusionsAllowed: false' "$review"
+          grep -F 'automaticModelChangesAllowed: false' "$review"
+          grep -F 'automaticPromotionAllowed: false' "$review"
+          grep -F 'mode: "SHADOW_ECONOMIC_REVIEW"' "$review"
+          grep -F 'realFinancialExposure: 0' "$review"
+          grep -F 'productionWrites: false' "$review"
+          grep -F 'settlementWrites: false' "$review"
+          grep -F 'app.get(' "$routes"
+          grep -F '"/api/mlb/p1/v1/economic-review"' "$routes"
+          grep -F 'ownershipStore.listPredictionIds(userId)' "$routes"
+          grep -F 'store.getRecord(predictionId)' "$routes"
+          grep -F 'requireInteractiveMlbCaptureSession' "$routes"
+          grep -F 'registerMlbP1EconomicReviewRoutes(app)' "$composition"
+          grep -F '"GET", "path": "/api/mlb/p1/v1/economic-review"' server/route-contract.extensions.json
+
+          ! grep -E 'app\.(post|put|patch|delete)\(' "$routes"
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$review" "$routes"
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$review" "$routes"
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
+            'server/mlb-p1-economic-review-routes.ts' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)
+          [[ "$changed" == "$expected" ]]

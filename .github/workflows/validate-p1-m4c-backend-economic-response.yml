@@ -7,8 +7,16 @@ on:
     paths:
       - 'server/mlb-p1-scientific-capture-service.ts'
       - 'server/mlb-p1-scientific-capture-service.test.ts'
+      - 'server/mlb-p1-economic-review.ts'
+      - 'server/mlb-p1-economic-review-routes.ts'
+      - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
       - 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
+      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
+      - 'tsconfig.p1-m3d-interactive-economic-review.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
 
 permissions:
@@ -84,17 +92,37 @@ jobs:
           assert(inherited.includes('unexpected=$(comm -23'), 'inherited scope gate is not extension-safe');
           assert(inherited.includes('server/mlb-p1-scientific-capture-service.ts'), 'service protection missing');
           NODE
-      - name: Diff hygiene and exact scope
+      - name: Diff hygiene and protected successor scope
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin integration/p0-staging-secure --depth=1
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          expected=$(printf '%s\n' \
+
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
+            'server/mlb-p1-economic-review-routes.ts' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
             'server/mlb-p1-scientific-capture-service.test.ts' \
-            'server/mlb-p1-scientific-capture-service.ts' | sort)
-          [[ "$changed" == "$expected" ]]
+            'server/mlb-p1-scientific-capture-service.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          if grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed" \
+            || grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed" \
+            || grep -Fxq 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' <<< "$changed"; then
+            grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed"
+            grep -Fxq 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' <<< "$changed"
+          fi
+
+          ! grep -Eq '^(server/(security|mlb-ledger|mlb-p1-scientific-capture-contract|mlb-p1-scientific-capture-routes|mlb-p1-economic-decision-contract|mlb-p1-economic-decision-adapter))' <<< "$unexpected"
