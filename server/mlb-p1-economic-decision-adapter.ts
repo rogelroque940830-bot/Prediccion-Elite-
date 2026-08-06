@@ -12,6 +12,7 @@ import {
   MLB_P1_M4A_SCHEMA,
   evaluateMlbP1M4aEconomicDecision,
   isMlbP1M4aStandardAmericanOdds,
+  type MlbP1M4aActionability,
   type MlbP1M4aDecisionInput,
   type MlbP1M4aDecisionResult,
   type MlbP1M4aSignal,
@@ -43,6 +44,14 @@ export interface MlbP1M4bSignalCompatibility {
   originalDecisionPreserved: true;
 }
 
+export interface MlbP1M4bEffectiveDecision {
+  decision: MlbP1M4aSignal;
+  actionability: MlbP1M4aActionability;
+  analyticalUnits: number;
+  sourceSignalCeilingApplied: boolean;
+  reasons: string[];
+}
+
 export interface MlbP1M4bAdapterResult {
   schemaVersion: typeof MLB_P1_M4B_SCHEMA;
   adapterVersion: typeof MLB_P1_M4B_ADAPTER_VERSION;
@@ -67,6 +76,7 @@ export interface MlbP1M4bAdapterResult {
     sourcePolicy: MlbP1M4bSourceSignalPolicy;
   };
   economicDecision: MlbP1M4aDecisionResult | null;
+  effectiveDecision: MlbP1M4bEffectiveDecision | null;
   signalCompatibility: MlbP1M4bSignalCompatibility | null;
   errors: string[];
   warnings: string[];
@@ -173,6 +183,48 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function effectiveDecision(
+  candidate: MlbP1M3aCaptureCandidate,
+  economicDecision: MlbP1M4aDecisionResult,
+  compatibility: MlbP1M4bSignalCompatibility,
+): MlbP1M4bEffectiveDecision {
+  const reasons = [...economicDecision.reasons];
+  if (economicDecision.actionability === "BLOCKED") {
+    return {
+      decision: economicDecision.decision,
+      actionability: "BLOCKED",
+      analyticalUnits: 0,
+      sourceSignalCeilingApplied: false,
+      reasons,
+    };
+  }
+  if (candidate.decision.signal === "INFO") {
+    return {
+      decision: "PASS",
+      actionability: "OBSERVE_ONLY",
+      analyticalUnits: 0,
+      sourceSignalCeilingApplied: true,
+      reasons: unique([...reasons, "SOURCE_INFO_CONTROL_ONLY"]),
+    };
+  }
+  if (signalRank(economicDecision.decision) > signalRank(compatibility.sourceSignalNormalized)) {
+    return {
+      decision: compatibility.sourceSignalNormalized,
+      actionability: "OBSERVE_ONLY",
+      analyticalUnits: 0,
+      sourceSignalCeilingApplied: true,
+      reasons: unique([...reasons, "SOURCE_SIGNAL_CEILING_APPLIED"]),
+    };
+  }
+  return {
+    decision: economicDecision.decision,
+    actionability: economicDecision.actionability,
+    analyticalUnits: economicDecision.stake.analyticalUnits,
+    sourceSignalCeilingApplied: false,
+    reasons,
+  };
+}
+
 function sourceDigest(candidate: MlbP1M3aCaptureCandidate): string {
   return mlbP1M3aSha256({
     schemaVersion: MLB_P1_M4B_SCHEMA,
@@ -242,6 +294,7 @@ export function adaptMlbP1M4bEconomicDecision(
       economicInputDigest: null,
       source: sourceSummary(candidate, captureDecision),
       economicDecision: null,
+      effectiveDecision: null,
       signalCompatibility: null,
       errors: captureDecision.errors.map((error) => `P1_M3A:${error}`),
       warnings: captureDecision.warnings,
@@ -267,6 +320,7 @@ export function adaptMlbP1M4bEconomicDecision(
   };
   const economicDecision = evaluateMlbP1M4aEconomicDecision(economicInput);
   const compatibility = signalCompatibility(candidate, economicDecision);
+  const effective = effectiveDecision(candidate, economicDecision, compatibility);
   const warnings = [...economicInput.warnings];
   if (compatibility.relation !== "MATCH" && compatibility.relation !== "NON_COMPARABLE_INFO") {
     warnings.push(
@@ -276,6 +330,7 @@ export function adaptMlbP1M4bEconomicDecision(
     );
   }
   if (compatibility.relation === "NON_COMPARABLE_INFO") warnings.push("SOURCE_INFO_SIGNAL_RETAINED_AS_CONTROL");
+  if (effective.sourceSignalCeilingApplied) warnings.push("SOURCE_SIGNAL_CEILING_APPLIED");
 
   return {
     schemaVersion: MLB_P1_M4B_SCHEMA,
@@ -288,6 +343,7 @@ export function adaptMlbP1M4bEconomicDecision(
     }),
     source: sourceSummary(candidate, captureDecision),
     economicDecision,
+    effectiveDecision: effective,
     signalCompatibility: compatibility,
     errors: [],
     warnings: unique(warnings),
@@ -324,7 +380,7 @@ export function attachMlbP1M4bEconomicDecision(
   now = new Date(),
 ): MlbP1M4bAttachmentResult {
   const adapter = adaptMlbP1M4bEconomicDecision(candidate, now);
-  if (adapter.status !== "ADAPTED" || !adapter.economicDecision) {
+  if (adapter.status !== "ADAPTED" || !adapter.economicDecision || !adapter.effectiveDecision) {
     return { adapter, candidate: null, attached: false, idempotent: false };
   }
 
