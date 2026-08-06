@@ -9,7 +9,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SessionControl } from "@/components/session-control";
 import { AuthProvider } from "@/lib/auth-context";
 import { AppProvider } from "@/lib/context";
-import { MLB_P1_M3C_FRONTEND_RELEASE } from "@/lib/mlb-scientific-capture";
+import { MLB_P1_M4C_FRONTEND_RELEASE } from "@/lib/mlb-economic-decision";
 import Dashboard from "@/pages/dashboard";
 import Predictor from "@/pages/predictor";
 import CalculatorPage from "@/pages/calculator";
@@ -28,8 +28,8 @@ import NHLHistory from "@/pages/nhl-history";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
-const FRONTEND_RELEASE = MLB_P1_M3C_FRONTEND_RELEASE;
-const PREVIOUS_OPERATIONAL_RELEASES = "p1-m2c3-mlb-smart-default-2026-08-05 p1-m2c2-mlb-priority-first-2026-08-05 p1-m2c1-mlb-visual-consolidation-2026-08-05 p1-m2c-mlb-pregame-readiness-ui-2026-08-05 o2-automatic-alerts-sla-2026-08-04 o3-controlled-reprocessing-2026-08-04 o31-mlb-evidence-repair-2026-08-04 p1-m1-mlb-daily-slate-2026-08-04";
+const FRONTEND_RELEASE = MLB_P1_M4C_FRONTEND_RELEASE;
+const PREVIOUS_OPERATIONAL_RELEASES = "p1-m3c1-json-digest-transport-2026-08-05 p1-m2c3-mlb-smart-default-2026-08-05 p1-m2c2-mlb-priority-first-2026-08-05 p1-m2c1-mlb-visual-consolidation-2026-08-05 p1-m2c-mlb-pregame-readiness-ui-2026-08-05 o2-automatic-alerts-sla-2026-08-04 o3-controlled-reprocessing-2026-08-04 o31-mlb-evidence-repair-2026-08-04 p1-m1-mlb-daily-slate-2026-08-04";
 
 function AppRouter() {
   return (

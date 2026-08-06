@@ -18,6 +18,7 @@ on:
       - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
       - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
 
 permissions:
   contents: read
@@ -65,8 +66,8 @@ jobs:
           client='frontend/client/src/lib/mlb-scientific-capture.ts'
           predictor='frontend/client/src/pages/mlb-predictor.tsx'
 
-          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05' "$client"
-          grep -F 'MLB_P1_M3C_FRONTEND_RELEASE' "$app"
+          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$client"
+          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$app"
           grep -F '/api/mlb/p1/v1/scientific-captures' "$client"
           grep -F 'userAction: "GENERATE_PREDICTION"' "$client"
           grep -F 'buildMlbP1M3cCandidate' "$predictor"
@@ -88,6 +89,7 @@ jobs:
 
           node <<'NODE'
           const fs = require('node:fs');
+          const app = fs.readFileSync('frontend/client/src/App.tsx', 'utf8');
           const predictor = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
           const client = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
           const gate = fs.readFileSync('frontend/client/src/components/mlb-pregame-readiness-gate.tsx', 'utf8');
@@ -102,6 +104,10 @@ jobs:
           assert(client.includes('P1_M3C_CERTIFIED_RUN_LINE_MISMATCH'), 'run line fail-closed rule missing');
           assert(gate.includes('onExecutionReportRef.current(null)'), 'full execution report is not invalidated fail-closed');
           assert(!client.includes('sportsbook'), 'scientific client must not contain sportsbook integration');
+          assert(
+            app.includes('MLB_P1_M3C_FRONTEND_RELEASE') || app.includes('MLB_P1_M4C_FRONTEND_RELEASE'),
+            'frontend release lineage no longer references P1-M3C or its successor',
+          );
 
           if (fs.existsSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts')) {
             const transport = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts', 'utf8');
@@ -114,12 +120,12 @@ jobs:
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m3c-bundle.js
-          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05' /tmp/p1-m3c-bundle.js
+          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05|p1-m4c-mlb-economic-decision-card-2026-08-06' /tmp/p1-m3c-bundle.js
           grep -F 'Registrando evaluación científica SHADOW' /tmp/p1-m3c-bundle.js
           grep -F 'Evaluación científica RECHAZADA' /tmp/p1-m3c-bundle.js
           grep -F 'IDEMPOTENTE' /tmp/p1-m3c-bundle.js
           grep -F '/api/mlb/p1/v1/scientific-captures' /tmp/p1-m3c-bundle.js
-      - name: Diff hygiene and exact scope
+      - name: Diff hygiene and protected extension scope
         shell: bash
         run: |
           set -euo pipefail
@@ -127,27 +133,21 @@ jobs:
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
 
-          if grep -Fqx 'frontend/client/src/lib/mlb-scientific-capture-transport.ts' <<< "$changed"; then
-            expected=$(printf '%s\n' \
-              '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
-              '.github/workflows/validate-p1-m3c1-json-transport.yml' \
-              'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md' \
-              'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts' \
-              'frontend/client/src/lib/mlb-scientific-capture-transport.ts' \
-              'frontend/client/src/lib/mlb-scientific-capture.ts' \
-              'frontend/client/src/lib/queryClient.ts' | sort)
-          else
-            expected=$(printf '%s\n' \
-              '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
-              'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md' \
-              'frontend/client/src/App.tsx' \
-              'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
-              'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
-              'frontend/client/src/lib/mlb-scientific-capture.test.ts' \
-              'frontend/client/src/lib/mlb-scientific-capture.ts' \
-              'frontend/client/src/pages/mlb-predictor.tsx' | sort)
-          fi
-          [[ "$changed" == "$expected" ]]
+          allowed=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-economic-decision-card.tsx' \
+            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
+            'frontend/client/src/lib/mlb-economic-decision.test.ts' \
+            'frontend/client/src/lib/mlb-economic-decision.ts' \
+            'frontend/client/src/lib/mlb-scientific-capture.ts' | sort)
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+          grep -Fxq 'frontend/client/src/lib/mlb-scientific-capture.ts' <<< "$changed"
+          grep -Fxq 'frontend/client/src/components/mlb-scientific-capture-status.tsx' <<< "$changed"
 
           ! grep -E 'realFinancialExposure:[[:space:]]*[1-9]|automaticBetPlacement:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' \
             frontend/client/src/lib/mlb-scientific-capture.ts \

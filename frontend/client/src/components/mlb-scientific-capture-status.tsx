@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Database, Loader2, ShieldCheck } from "luc
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { MlbP1M3cUiState } from "@/lib/mlb-scientific-capture";
+import { MlbEconomicDecisionCard } from "@/components/mlb-economic-decision-card";
 
 function recordedAtLabel(value: string): string {
   const parsed = Date.parse(value);
@@ -96,6 +97,9 @@ export function MlbScientificCaptureStatus({ state }: { state: MlbP1M3cUiState }
             Sin apuesta automática, sin sportsbook y sin exposición financiera real.
           </div>
         </div>
+      </CardContent>
+      <CardContent className="px-4 pb-4 pt-0">
+        <MlbEconomicDecisionCard decision={state.economicDecision} />
       </CardContent>
     </Card>
   );

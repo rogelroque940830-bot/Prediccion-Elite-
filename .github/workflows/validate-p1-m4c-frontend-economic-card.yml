@@ -1,0 +1,131 @@
+name: Validate P1-M4C Frontend Economic Card
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/mlb-economic-decision-card.tsx'
+      - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
+      - 'frontend/client/src/lib/mlb-economic-decision.ts'
+      - 'frontend/client/src/lib/mlb-economic-decision.test.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m4c-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M4C and MLB regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-economic-decision.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify server-authoritative decision card contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='frontend/client/src/App.tsx'
+          helper='frontend/client/src/lib/mlb-economic-decision.ts'
+          testfile='frontend/client/src/lib/mlb-economic-decision.test.ts'
+          card='frontend/client/src/components/mlb-economic-decision-card.tsx'
+          capture='frontend/client/src/lib/mlb-scientific-capture.ts'
+          status='frontend/client/src/components/mlb-scientific-capture-status.tsx'
+          docs='docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md'
+          inherited='.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+          transport_gate='.github/workflows/validate-p1-m3c1-json-transport.yml'
+
+          grep -F 'p1-m4c-mlb-economic-decision-card-2026-08-06' "$helper"
+          grep -F 'MLB_P1_M4C_FRONTEND_RELEASE' "$app"
+          grep -F 'parseMlbEconomicAdapterResult(data?.economicDecision)' "$capture"
+          grep -F 'economicDecision: result.economicDecision' "$capture"
+          grep -F 'MlbEconomicDecisionCard decision={state.economicDecision}' "$status"
+          grep -F 'Decisión económica certificada' "$card"
+          grep -F 'Precio mínimo' "$card"
+          grep -F 'EV por unidad' "$card"
+          grep -F 'ESPERAR FINAL' "$card"
+          grep -F 'FINAL ACCIONABLE' "$card"
+          grep -F 'SHADOW · exposición 0' "$card"
+          grep -F 'The frontend does not recalculate' "$docs"
+          grep -F 'rejects an adapter response that weakens SHADOW safety' "$testfile"
+          grep -F 'Diff hygiene and protected extension scope' "$inherited"
+          grep -F 'Diff hygiene and protected extension scope' "$transport_gate"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const helper = fs.readFileSync('frontend/client/src/lib/mlb-economic-decision.ts', 'utf8');
+          const card = fs.readFileSync('frontend/client/src/components/mlb-economic-decision-card.tsx', 'utf8');
+          const capture = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
+          const inherited = fs.readFileSync('.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml', 'utf8');
+          const transportGate = fs.readFileSync('.github/workflows/validate-p1-m3c1-json-transport.yml', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(helper.includes('safety.realFinancialExposure !== 0'), 'response parser does not reject nonzero exposure');
+          assert(helper.includes('safety.automaticBetPlacement !== false'), 'response parser does not reject automatic betting');
+          assert(helper.includes('safety.sportsbookIntegration !== false'), 'response parser does not reject sportsbook integration');
+          assert(capture.includes('economicDecision != null'), 'capture success does not require economics');
+          assert(card.includes('decision.source.modelProbability'), 'model probability not displayed');
+          assert(card.includes('raw.minimumPrices.active'), 'minimum acceptable price not displayed');
+          assert(card.includes('raw.economics.expectedValuePerUnit'), 'EV not displayed');
+          assert(card.includes('effective.analyticalUnits'), 'effective SHADOW stake not displayed');
+          assert(!/fetch\s*\(|apiRequest\s*\(/.test(card), 'card performs a network side effect');
+          assert(!/automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]/.test(helper + card), 'unsafe economic card setting');
+          assert(inherited.includes('MLB_P1_M4C_FRONTEND_RELEASE'), 'P1-M3C release lineage does not recognize P1-M4C');
+          assert(inherited.includes('unexpected=$(comm -23'), 'P1-M3C scope gate is not extension-safe');
+          assert(transportGate.includes('MLB_P1_M4C_FRONTEND_RELEASE'), 'P1-M3C.1 release lineage does not recognize P1-M4C');
+          assert(transportGate.includes('unexpected=$(comm -23'), 'P1-M3C.1 scope gate is not extension-safe');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'p1-m4c-mlb-economic-decision-card-2026-08-06' /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'Decisión económica certificada' /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'ESPERAR FINAL' /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'FINAL ACCIONABLE' /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'Precio mínimo' /tmp/p1-m4c-frontend-bundle.js
+          grep -F 'EV por unidad' /tmp/p1-m4c-frontend-bundle.js
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-economic-decision-card.tsx' \
+            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
+            'frontend/client/src/lib/mlb-economic-decision.test.ts' \
+            'frontend/client/src/lib/mlb-economic-decision.ts' \
+            'frontend/client/src/lib/mlb-scientific-capture.ts' | sort)
+          [[ "$changed" == "$expected" ]]
