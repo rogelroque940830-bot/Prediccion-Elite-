@@ -56,7 +56,7 @@ jobs:
           assert(before.data?.predictions === after.data?.predictions, 'prediction count changed');
           assert(before.data?.settlementEvents === after.data?.settlementEvents, 'settlement count changed');
           assert(review.success === false, 'anonymous economic review unexpectedly succeeded');
-          assert(/Authentication required/i.test(String(review.error || '')), `review error=${review.error}`);
+          assert(/Authenticated user session required/i.test(String(review.error || '')), `review error=${review.error}`);
 
           const evidence = {
             backendCommit: health.commit,
