@@ -8,6 +8,7 @@ on:
       - 'server/mlb-p1-scientific-capture-service.ts'
       - 'server/mlb-p1-scientific-capture-service.test.ts'
       - 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
 
 permissions:
@@ -56,6 +57,7 @@ jobs:
           service='server/mlb-p1-scientific-capture-service.ts'
           testfile='server/mlb-p1-scientific-capture-service.test.ts'
           docs='docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
+          inherited='.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
 
           grep -F 'p1-m4c-backend-economic-response-2026-08-06' "$service"
           grep -F 'attachMlbP1M4bEconomicDecision(candidate, serverNow)' "$service"
@@ -66,10 +68,12 @@ jobs:
           grep -F 'layers[MLB_P1_M4B_LAYER_KEY]' "$testfile"
           grep -F 'WAIT_FOR_FINAL' "$testfile"
           grep -F 'economicDecision: MlbP1M4bAdapterResult' "$docs"
+          grep -F 'Diff hygiene and protected extension scope' "$inherited"
 
           node <<'NODE'
           const fs = require('node:fs');
           const service = fs.readFileSync('server/mlb-p1-scientific-capture-service.ts', 'utf8');
+          const inherited = fs.readFileSync('.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml', 'utf8');
           const assert = (condition, message) => { if (!condition) throw new Error(message); };
           assert(service.includes('toMlbP1M3aLedgerCompatibleInput(\n        enrichedCandidate,'), 'ledger does not use enriched candidate');
           assert(service.includes('validation: enrichedValidation'), 'response does not expose enriched validation');
@@ -77,6 +81,8 @@ jobs:
           assert(service.includes('realFinancialExposure: 0'), 'zero exposure invariant missing');
           assert(!/automaticBetPlacement:\s*true/.test(service), 'automatic betting enabled');
           assert(!/sportsbook/i.test(service), 'sportsbook integration introduced');
+          assert(inherited.includes('unexpected=$(comm -23'), 'inherited scope gate is not extension-safe');
+          assert(inherited.includes('server/mlb-p1-scientific-capture-service.ts'), 'service protection missing');
           NODE
       - name: Diff hygiene and exact scope
         shell: bash
@@ -86,6 +92,7 @@ jobs:
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
           expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
             'server/mlb-p1-scientific-capture-service.test.ts' \
