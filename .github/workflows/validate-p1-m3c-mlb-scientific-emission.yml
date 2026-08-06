@@ -18,6 +18,7 @@ on:
       - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
       - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
 
 permissions:
   contents: read
@@ -134,6 +135,7 @@ jobs:
 
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
             '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
             'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
             'frontend/client/src/App.tsx' \
