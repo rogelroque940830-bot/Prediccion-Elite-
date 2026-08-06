@@ -3,10 +3,15 @@ import { getMlbLedgerStore } from "./mlb-ledger";
 import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import {
   MLB_P1_M3D_ENDPOINT,
-  MlbP1EconomicReviewService,
+  buildMlbP1M3dEconomicReview,
+  type MlbP1M3dReport,
 } from "./mlb-p1-economic-review";
 import { requireInteractiveMlbCaptureSession } from "./mlb-p1-scientific-capture-routes";
 import { getRequestIdentity } from "./user-data-context";
+
+interface MlbP1EconomicReviewReader {
+  review(userId: number): MlbP1M3dReport;
+}
 
 function authenticatedIdentity(req: Request) {
   const session = (req as Request & { session?: Record<string, unknown> }).session;
@@ -14,12 +19,23 @@ function authenticatedIdentity(req: Request) {
   return getRequestIdentity(req);
 }
 
+function createCompleteOwnedReviewReader(): MlbP1EconomicReviewReader {
+  const store = getMlbLedgerStore();
+  const ownershipStore = getMlbLedgerOwnershipStore();
+  return {
+    review(userId: number): MlbP1M3dReport {
+      const records = ownershipStore.listPredictionIds(userId).flatMap((predictionId) => {
+        const record = store.getRecord(predictionId);
+        return record ? [record] : [];
+      });
+      return buildMlbP1M3dEconomicReview(records);
+    },
+  };
+}
+
 export function registerMlbP1EconomicReviewRoutes(
   app: Express,
-  service = new MlbP1EconomicReviewService(
-    getMlbLedgerStore(),
-    getMlbLedgerOwnershipStore(),
-  ),
+  service: MlbP1EconomicReviewReader = createCompleteOwnedReviewReader(),
 ): void {
   app.get(
     "/api/mlb/p1/v1/economic-review",
