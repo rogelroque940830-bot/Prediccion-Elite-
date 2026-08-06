@@ -1,4 +1,3 @@
-# CI trigger: clean PR #295
 name: Validate S6G/S6H MLB Focus History
 
 on:
@@ -20,7 +19,7 @@ permissions:
 
 jobs:
   validate-frontend:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
