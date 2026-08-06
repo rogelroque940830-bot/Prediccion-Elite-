@@ -4,8 +4,13 @@ import type {
 } from "./mlb-pregame-readiness";
 import type { MlbScientificSnapshot } from "./mlb-scientific-snapshot";
 import { prepareMlbP1M3cSnapshotForTransport } from "./mlb-scientific-capture-transport";
+import {
+  MLB_P1_M4C_FRONTEND_RELEASE,
+  parseMlbEconomicAdapterResult,
+  type MlbEconomicAdapterResult,
+} from "./mlb-economic-decision";
 
-export const MLB_P1_M3C_FRONTEND_RELEASE = "p1-m3c1-json-digest-transport-2026-08-05" as const;
+export const MLB_P1_M3C_FRONTEND_RELEASE = MLB_P1_M4C_FRONTEND_RELEASE;
 export const MLB_P1_M3A_SCHEMA = "courtedge-p1-m3a-scientific-capture-contract.v1" as const;
 export const MLB_P1_M3B_SCHEMA = "courtedge-p1-m3b-scientific-capture-service.v1" as const;
 export const MLB_P1_M3B_ENDPOINT = "/api/mlb/p1/v1/scientific-captures" as const;
@@ -112,6 +117,7 @@ export interface MlbP1M3bCaptureResult {
     supersedesId: string | null;
     reason: string;
   };
+  economicDecision: MlbEconomicAdapterResult;
   safety: {
     mode: "SHADOW_DECISION_SUPPORT";
     realFinancialExposure: 0;
@@ -130,6 +136,7 @@ export type MlbP1M3cUiState =
       predictionId: string;
       recordedAt: string;
       revisionDecision: string;
+      economicDecision: MlbEconomicAdapterResult;
     }
   | {
       status: "REJECTED";
@@ -508,11 +515,13 @@ export async function buildMlbP1M3cCandidate(input: MlbP1M3cCandidateInput) {
 function validCaptureResult(value: unknown): value is MlbP1M3bCaptureResult {
   const data = record(value);
   const safety = record(data?.safety);
+  const economicDecision = parseMlbEconomicAdapterResult(data?.economicDecision);
   return data?.schemaVersion === MLB_P1_M3B_SCHEMA
     && data?.endpoint === MLB_P1_M3B_ENDPOINT
     && (data?.outcome === "APPENDED" || data?.outcome === "IDEMPOTENT")
     && typeof data?.predictionId === "string"
     && typeof data?.recordedAt === "string"
+    && economicDecision != null
     && safety?.mode === "SHADOW_DECISION_SUPPORT"
     && safety?.realFinancialExposure === 0
     && safety?.automaticBetPlacement === false
@@ -540,5 +549,6 @@ export function toMlbP1M3cUiSuccess(
     predictionId: result.predictionId,
     recordedAt: result.recordedAt,
     revisionDecision: result.revision.decision,
+    economicDecision: result.economicDecision,
   };
 }
