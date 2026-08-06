@@ -217,9 +217,9 @@ test("FINAL source BET downgraded to effective PASS is hidden", () => {
 });
 
 test("only FINAL effective BET with ACTIONABLE_FINAL and positive units is high priority", () => {
-  const zeroUnits = pick({ id: "zero-units", economicAnalyticalUnits: 0 });
-  const blocked = pick({ id: "blocked", economicActionability: "BLOCKED" });
-  const actionable = pick({ id: "actionable" });
+  const zeroUnits = pick({ id: "zero-units", gamePk: 4001, economicAnalyticalUnits: 0 });
+  const blocked = pick({ id: "blocked", gamePk: 4002, economicActionability: "BLOCKED" });
+  const actionable = pick({ id: "actionable", gamePk: 4003 });
   const focus = buildMlbHistoryFocus([zeroUnits, blocked, actionable], NOW);
   assert.equal(isMlbHistoryEconomicallyActionable(actionable), true);
   assert.deepEqual(focus.priority.map((entry) => entry.id), ["actionable"]);
