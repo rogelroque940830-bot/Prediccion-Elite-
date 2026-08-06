@@ -98,7 +98,7 @@ jobs:
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m3c-bundle.js
-          grep -F 'p1-m3c-mlb-scientific-emission-2026-08-05' /tmp/p1-m3c-bundle.js
+          grep -F 'p1-m3c1-json-digest-transport-2026-08-05' /tmp/p1-m3c-bundle.js
           grep -F 'p1-m5a-real-cohort-activation-ui-2026-08-06' /tmp/p1-m3c-bundle.js
           grep -F 'Registrando evaluación científica SHADOW' /tmp/p1-m3c-bundle.js
       - name: Diff hygiene and protected successor scope
