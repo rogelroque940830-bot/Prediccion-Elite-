@@ -170,12 +170,13 @@ export function parseMlbP1M5aActivation(value: unknown): MlbP1M5aActivation {
     throw new Error(`P1_M5A_INVALID_ACTIVATION:${message}`);
   };
 
-  if (activation?.schemaVersion !== MLB_P1_M5A_SCHEMA) fail("schema");
-  if (activation?.release !== MLB_P1_M5A_RELEASE) fail("release");
-  if (!validIso(activation?.generatedAt)) fail("generated_at");
-  if (!STATES.includes(String(activation?.state) as MlbP1M5aActivationState)) fail("state");
-  if (typeof activation?.certified !== "boolean") fail("certified");
-  if (!NEXT_ACTIONS.includes(String(activation?.nextAction) as MlbP1M5aNextAction)) fail("next_action");
+  if (!activation) throw new Error("P1_M5A_INVALID_ACTIVATION:object");
+  if (activation.schemaVersion !== MLB_P1_M5A_SCHEMA) fail("schema");
+  if (activation.release !== MLB_P1_M5A_RELEASE) fail("release");
+  if (!validIso(activation.generatedAt)) fail("generated_at");
+  if (!STATES.includes(String(activation.state) as MlbP1M5aActivationState)) fail("state");
+  if (typeof activation.certified !== "boolean") fail("certified");
+  if (!NEXT_ACTIONS.includes(String(activation.nextAction) as MlbP1M5aNextAction)) fail("next_action");
 
   for (const key of CHECKLIST_KEYS) {
     if (typeof checklist?.[key] !== "boolean") fail(`checklist_${key}`);
@@ -184,7 +185,7 @@ export function parseMlbP1M5aActivation(value: unknown): MlbP1M5aActivation {
     if (!nonNegativeInteger(counts?.[key])) fail(`counts_${key}`);
   }
 
-  if (!Array.isArray(activation?.blockingReasons)
+  if (!Array.isArray(activation.blockingReasons)
     || !activation.blockingReasons.every(nonEmptyText)) fail("blocking_reasons");
 
   if (interpretation?.activationOnly !== true) fail("activation_only");
