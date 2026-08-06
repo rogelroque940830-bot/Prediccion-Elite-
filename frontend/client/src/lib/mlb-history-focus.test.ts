@@ -4,6 +4,8 @@ import {
   americanOddsToImpliedPct,
   auditMlbHistoryMarketIntegrity,
   buildMlbHistoryFocus,
+  isMlbHistoryEconomicallyActionable,
+  isMlbHistoryWaitingForFinal,
   isStandardAmericanOdds,
   type MlbHistoryFocusPick,
 } from "./mlb-history-focus";
@@ -31,6 +33,13 @@ function pick(overrides: Partial<MlbHistoryFocusPick> = {}): MlbHistoryFocusPick
     signal: "BET_FUERTE",
     confidenceLabel: "PREMIUM",
     analysisStage: "FINAL",
+    economicLayerSchemaVersion: "courtedge-p1-m4b-economic-decision-adapter.v1",
+    economicLayerStatus: "ADAPTED",
+    economicSourceSignal: "BET_FUERTE",
+    economicEffectiveDecision: "BET",
+    economicActionability: "ACTIONABLE_FINAL",
+    economicAnalyticalUnits: 0.5,
+    economicReasons: ["POSITIVE_EXPECTED_VALUE"],
     result: "PENDING",
     settlementResult: null,
     settledAt: null,
@@ -158,6 +167,59 @@ test("missing book prevents local fallback from becoming a priority recommendati
   assert.equal(focus.waiting.length, 0);
   assert.equal(focus.verifyTotal, 1);
   assert.ok(focus.verify[0].audit.issues.some((entry) => entry.code === "MISSING_BOOK"));
+});
+
+test("legacy BET_FUERTE without P1-M4 layer is hidden instead of presented as playable", () => {
+  const legacy = pick({
+    id: "legacy-strong",
+    economicLayerSchemaVersion: null,
+    economicLayerStatus: null,
+    economicEffectiveDecision: null,
+    economicActionability: null,
+    economicAnalyticalUnits: 0,
+  });
+  const focus = buildMlbHistoryFocus([legacy], NOW);
+  assert.equal(isMlbHistoryEconomicallyActionable(legacy), false);
+  assert.equal(focus.priority.length, 0);
+  assert.equal(focus.waiting.length, 0);
+  assert.equal(focus.hiddenStudyRecords, 1);
+});
+
+test("provisional source BET remains waiting when P1-M4 says WAIT_FOR_FINAL", () => {
+  const provisional = pick({
+    id: "provisional-bet",
+    analysisStage: "PROVISIONAL",
+    economicEffectiveDecision: "LEAN",
+    economicActionability: "WAIT_FOR_FINAL",
+    economicAnalyticalUnits: 0,
+  });
+  const focus = buildMlbHistoryFocus([provisional], NOW);
+  assert.equal(isMlbHistoryEconomicallyActionable(provisional), false);
+  assert.equal(isMlbHistoryWaitingForFinal(provisional), true);
+  assert.equal(focus.priority.length, 0);
+  assert.deepEqual(focus.waiting.map((entry) => entry.id), ["provisional-bet"]);
+});
+
+test("FINAL source BET downgraded to effective PASS is hidden", () => {
+  const downgraded = pick({
+    id: "effective-pass",
+    economicEffectiveDecision: "PASS",
+    economicActionability: "OBSERVE_ONLY",
+    economicAnalyticalUnits: 0,
+  });
+  const focus = buildMlbHistoryFocus([downgraded], NOW);
+  assert.equal(isMlbHistoryEconomicallyActionable(downgraded), false);
+  assert.equal(focus.priority.length, 0);
+  assert.equal(focus.waiting.length, 0);
+});
+
+test("only FINAL effective BET with ACTIONABLE_FINAL and positive units is high priority", () => {
+  const zeroUnits = pick({ id: "zero-units", economicAnalyticalUnits: 0 });
+  const blocked = pick({ id: "blocked", economicActionability: "BLOCKED" });
+  const actionable = pick({ id: "actionable" });
+  const focus = buildMlbHistoryFocus([zeroUnits, blocked, actionable], NOW);
+  assert.equal(isMlbHistoryEconomicallyActionable(actionable), true);
+  assert.deepEqual(focus.priority.map((entry) => entry.id), ["actionable"]);
 });
 
 test("results contains every unique settled decision instead of an eight-item preview", () => {
