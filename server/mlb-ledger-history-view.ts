@@ -50,6 +50,11 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+function stringOrNull(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
 export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
   const ordered = [...records].sort((a, b) => b.prediction.recordedAtMs - a.prediction.recordedAtMs);
   const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
@@ -120,6 +125,8 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
     const priceCapture = prediction.payload?.analysis?.rawInputs?.priceCapture ?? {};
     const priceIntegrity = prediction.payload?.analysis?.layers?.marketPriceIntegrity ?? {};
     const provenance = prediction.payload?.analysis?.rawInputs?.marketProvenance ?? {};
+    const economicLayer = prediction.payload?.analysis?.layers?.p1M4bEconomicDecision ?? null;
+    const effectiveDecision = economicLayer?.effectiveDecision ?? null;
     return {
       id: prediction.id,
       clientRequestId: prediction.clientRequestId,
@@ -148,6 +155,13 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
       stakeUnits: round(prediction.decision.stakeUnits, 2),
       analysisStage: prediction.analysisStage,
       modelVersion: prediction.model.version,
+      economicLayerSchemaVersion: stringOrNull(economicLayer?.schemaVersion),
+      economicLayerStatus: stringOrNull(economicLayer?.status),
+      economicSourceSignal: stringOrNull(economicLayer?.source?.sourceSignal),
+      economicEffectiveDecision: stringOrNull(effectiveDecision?.decision),
+      economicActionability: stringOrNull(effectiveDecision?.actionability),
+      economicAnalyticalUnits: round(Number(effectiveDecision?.analyticalUnits || 0), 4),
+      economicReasons: stringArray(effectiveDecision?.reasons).slice(0, 12),
       result: settlement ? RESULT_LABELS[settlement.result] || settlement.result : "PENDING",
       settlementResult: settlement?.result || null,
       settledAt: settlement?.settledAt || null,
