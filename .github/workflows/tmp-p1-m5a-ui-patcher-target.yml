@@ -1,0 +1,58 @@
+name: Temporary Trusted P1-M5A UI Patcher
+
+on:
+  pull_request_target:
+    branches:
+      - integration/p0-frontend-session
+    types:
+      - ready_for_review
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/p1-m5a-real-cohort-activation-ui'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p1-m5a-real-cohort-activation-ui
+          fetch-depth: 0
+      - name: Load trusted patcher from main
+        run: |
+          git fetch origin main --depth=1
+          git show origin/main:.github/scripts/tmp_p1_m5a_ui_patch.py > /tmp/p1_m5a_ui_patch.py
+      - name: Apply deterministic product integration
+        run: python /tmp/p1_m5a_ui_patch.py
+      - name: Verify exact product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.test.ts' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.ts' \
+            'frontend/client/src/pages/mlb-economic-review.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
+          grep -F 'activation: MlbP1M5aActivation' frontend/client/src/lib/mlb-interactive-economic-review.ts
+          grep -F 'parseMlbP1M5aActivation(data?.activation)' frontend/client/src/lib/mlb-interactive-economic-review.ts
+          grep -F '<MlbRealCohortActivationCard activation={report.activation} />' frontend/client/src/pages/mlb-economic-review.tsx
+          grep -F 'MLB_P1_M5A_FRONTEND_RELEASE' frontend/client/src/App.tsx
+      - name: Commit product integration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            frontend/client/src/App.tsx \
+            frontend/client/src/lib/mlb-interactive-economic-review.test.ts \
+            frontend/client/src/lib/mlb-interactive-economic-review.ts \
+            frontend/client/src/pages/mlb-economic-review.tsx
+          git commit -m 'P1-M5A: render real cohort activation certificate'
+          git push origin HEAD:agent/p1-m5a-real-cohort-activation-ui
