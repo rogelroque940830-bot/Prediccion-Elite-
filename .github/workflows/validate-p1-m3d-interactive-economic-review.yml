@@ -14,6 +14,7 @@ on:
       - 'tsconfig.p1-m3d-interactive-economic-review.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
 
 permissions:
   contents: read
@@ -77,6 +78,8 @@ jobs:
           grep -F 'settlementWrites: false' "$review"
           grep -F 'app.get(' "$routes"
           grep -F '"/api/mlb/p1/v1/economic-review"' "$routes"
+          grep -F 'ownershipStore.listPredictionIds(userId)' "$routes"
+          grep -F 'store.getRecord(predictionId)' "$routes"
           grep -F 'requireInteractiveMlbCaptureSession' "$routes"
           grep -F 'registerMlbP1EconomicReviewRoutes(app)' "$composition"
           grep -F '"GET", "path": "/api/mlb/p1/v1/economic-review"' server/route-contract.extensions.json
@@ -94,6 +97,7 @@ jobs:
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'server/mlb-p1-economic-review-routes.ts' \
             'server/mlb-p1-economic-review.test.ts' \
