@@ -1,0 +1,87 @@
+name: Court Edge P0 Security Remediation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - security/p0-remediation
+    paths:
+      - 'server/**'
+      - 'scripts/p0-**'
+      - '.github/workflows/p0-security-remediation.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - 'scripts/p0-**'
+      - '.github/workflows/p0-security-remediation.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  security-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout current revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify source is already sanitized
+        run: |
+          python3 scripts/p0-sanitize-routes.py
+          git diff --exit-code -- server/routes.ts
+
+      - name: Scan tracked source for credential-like literals
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/p0-secret-scan.py 2>&1 | tee p0-secret-scan-report.txt
+
+      - name: Upload credential scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-secret-scan-report
+          path: p0-secret-scan-report.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Require reproducible lockfile
+        run: test -f package-lock.json
+
+      - name: Install backend dependencies reproducibly
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Execute P0 middleware smoke test
+        run: npx tsx scripts/p0-security-smoke.ts
+
+      - name: Verify required P0 controls are present
+        run: |
+          grep -q 'trust proxy' server/index.ts
+          grep -q 'restrictedCors' server/index.ts
+          grep -q 'apiRateLimit' server/index.ts
+          grep -q 'requireWriteAuth' server/index.ts
+          grep -q 'COURTEDGE_WRITE_TOKEN' server/security.ts
+          grep -q 'ALLOW_LEGACY_PICKS_SYNC' server/security.ts
+          grep -q 'requireSecret("ODDS_API_KEY")' server/routes.ts
+          grep -q 'requireSecret("BDL_API_KEY")' server/routes.ts
+          echo 'PASS: P0 middleware and runtime-secret controls detected'
