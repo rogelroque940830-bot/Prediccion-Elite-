@@ -24,6 +24,13 @@ export interface MlbHistoryFocusPick {
   signal: string;
   confidenceLabel: string | null;
   analysisStage: string;
+  economicLayerSchemaVersion?: string | null;
+  economicLayerStatus?: string | null;
+  economicSourceSignal?: string | null;
+  economicEffectiveDecision?: string | null;
+  economicActionability?: string | null;
+  economicAnalyticalUnits?: number;
+  economicReasons?: string[];
   result: string;
   settlementResult: string | null;
   settledAt: string | null;
@@ -81,6 +88,10 @@ function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function upper(value: unknown): string {
+  return clean(value).toUpperCase().replace(/[\s-]+/g, "_");
+}
+
 function normalized(value: unknown): string {
   return clean(value)
     .normalize("NFD")
@@ -130,11 +141,19 @@ function isPregame(pick: MlbHistoryFocusPick, nowMs: number): boolean {
 }
 
 function signalStrength(signal: unknown): number {
-  const value = clean(signal).toUpperCase().replace(/[\s-]+/g, "_");
+  const value = upper(signal);
   if (["BET_FUERTE", "STRONG_BET", "BEST_BET", "PREMIUM"].includes(value)) return 4;
   if (["BET", "PLAY", "ACTIONABLE"].includes(value)) return 3;
   if (["LEAN", "REVIEW"].includes(value)) return 2;
   if (["INFO", "WATCH"].includes(value)) return 1;
+  return 0;
+}
+
+function economicDecisionStrength(decision: unknown): number {
+  const value = upper(decision);
+  if (value === "BET") return 3;
+  if (value === "LEAN") return 2;
+  if (value === "PASS") return 0;
   return 0;
 }
 
@@ -190,6 +209,26 @@ function issue(
   message: string,
 ): MlbMarketIntegrityIssue {
   return { code, severity, message };
+}
+
+export function isMlbHistoryEconomicLayerAdapted(pick: MlbHistoryFocusPick): boolean {
+  return upper(pick.economicLayerStatus) === "ADAPTED"
+    && upper(pick.economicLayerSchemaVersion) === "COURTEDGE_P1_M4B_ECONOMIC_DECISION_ADAPTER.V1";
+}
+
+export function isMlbHistoryEconomicallyActionable(pick: MlbHistoryFocusPick): boolean {
+  return isMlbHistoryEconomicLayerAdapted(pick)
+    && upper(pick.analysisStage) === "FINAL"
+    && upper(pick.economicEffectiveDecision) === "BET"
+    && upper(pick.economicActionability) === "ACTIONABLE_FINAL"
+    && finite(pick.economicAnalyticalUnits) > 0;
+}
+
+export function isMlbHistoryWaitingForFinal(pick: MlbHistoryFocusPick): boolean {
+  return isMlbHistoryEconomicLayerAdapted(pick)
+    && upper(pick.analysisStage) !== "FINAL"
+    && upper(pick.economicActionability) === "WAIT_FOR_FINAL"
+    && economicDecisionStrength(pick.economicEffectiveDecision) > 0;
 }
 
 export function isStandardAmericanOdds(value: unknown): boolean {
@@ -349,14 +388,12 @@ export function collapseMlbHistoryRevisions<T extends MlbHistoryFocusPick>(picks
 
 export function classifyMlbHistoryFocus(pick: MlbHistoryFocusPick): MlbHistoryFocusTier {
   const edge = finite(pick.edgePp);
-  if (edge <= 0) return "HIDDEN";
-  const signal = signalStrength(pick.signal);
-  const confidence = confidenceStrength(pick.confidenceLabel);
-  const final = clean(pick.analysisStage).toUpperCase() === "FINAL";
+  if (edge <= 0 || !isMlbHistoryEconomicLayerAdapted(pick)) return "HIDDEN";
+  const final = upper(pick.analysisStage) === "FINAL";
+  const effectiveDecision = upper(pick.economicEffectiveDecision);
 
-  if (signal >= 3) return "HIGH";
-  if (signal === 2 && final && edge >= 2.5) return "SECONDARY";
-  if (final && confidence >= 2 && edge >= 4) return "SECONDARY";
+  if (isMlbHistoryEconomicallyActionable(pick)) return "HIGH";
+  if (final && effectiveDecision === "LEAN" && edge >= 2.5) return "SECONDARY";
   return "HIDDEN";
 }
 
@@ -364,10 +401,11 @@ function reviewScore(pick: MlbHistoryFocusPick, nowMs: number): number {
   const start = startMs(pick);
   const hoursUntil = start == null ? Number.POSITIVE_INFINITY : Math.max(0, (start - nowMs) / 3_600_000);
   const soonBonus = hoursUntil <= 2 ? 12 : hoursUntil <= 6 ? 8 : hoursUntil <= 12 ? 4 : 0;
-  return signalStrength(pick.signal) * 30
+  return economicDecisionStrength(pick.economicEffectiveDecision) * 30
     + Math.min(15, Math.max(0, finite(pick.edgePp))) * 2
     + stageStrength(pick.analysisStage) * 5
     + confidenceStrength(pick.confidenceLabel) * 4
+    + Math.min(10, Math.max(0, finite(pick.economicAnalyticalUnits)) * 10)
     + soonBonus;
 }
 
@@ -403,12 +441,7 @@ export function buildMlbHistoryFocus<T extends MlbHistoryFocusPick>(
 
   const waiting = integrityPassed
     .filter((pick) => !priorityIds.has(pick.id))
-    .filter((pick) => {
-      const edge = finite(pick.edgePp);
-      const signal = signalStrength(pick.signal);
-      const confidence = confidenceStrength(pick.confidenceLabel);
-      return edge > 0 && (signal >= 1 || confidence >= 1);
-    })
+    .filter((pick) => finite(pick.edgePp) > 0 && isMlbHistoryWaitingForFinal(pick))
     .sort((left, right) => {
       const leftStart = startMs(left) ?? Number.MAX_SAFE_INTEGER;
       const rightStart = startMs(right) ?? Number.MAX_SAFE_INTEGER;
