@@ -8,13 +8,18 @@ on:
       - 'server/mlb-p1-economic-review.ts'
       - 'server/mlb-p1-economic-review-routes.ts'
       - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/mlb-p1-real-cohort-activation.ts'
+      - 'server/mlb-p1-real-cohort-activation.test.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
+      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
       - 'tsconfig.p1-m3d-interactive-economic-review.json'
+      - 'tsconfig.p1-m5a-real-cohort-activation.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
 
 permissions:
   contents: read
@@ -87,22 +92,37 @@ jobs:
           ! grep -E 'app\.(post|put|patch|delete)\(' "$routes"
           ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$review" "$routes"
           ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$review" "$routes"
-      - name: Diff hygiene and exact scope
+      - name: Diff hygiene and protected successor scope
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin integration/p0-staging-secure --depth=1
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          expected=$(printf '%s\n' \
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
             'server/mlb-p1-economic-review-routes.ts' \
             'server/mlb-p1-economic-review.test.ts' \
             'server/mlb-p1-economic-review.ts' \
+            'server/mlb-p1-real-cohort-activation.test.ts' \
+            'server/mlb-p1-real-cohort-activation.ts' \
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
-            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)
-          [[ "$changed" == "$expected" ]]
+            'tsconfig.p1-m3d-interactive-economic-review.json' \
+            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          if grep -Fxq 'server/mlb-p1-real-cohort-activation.ts' <<< "$changed"; then
+            grep -Fxq 'server/mlb-p1-real-cohort-activation.test.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.test.ts' <<< "$changed"
+            grep -Fxq 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' <<< "$changed"
+            grep -Fxq 'tsconfig.p1-m5a-real-cohort-activation.json' <<< "$changed"
+            grep -Fxq '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' <<< "$changed"
+          fi

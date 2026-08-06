@@ -9,6 +9,10 @@ import {
 } from "./mlb-shadow-evaluation";
 import { MLB_P1_M3A_SCHEMA } from "./mlb-p1-scientific-capture-contract";
 import { MLB_P1_M4B_SCHEMA } from "./mlb-p1-economic-decision-adapter";
+import {
+  buildMlbP1M5aRealCohortActivation,
+  type MlbP1M5aActivation,
+} from "./mlb-p1-real-cohort-activation";
 
 export const MLB_P1_M3D_SCHEMA = "courtedge-p1-m3d-interactive-economic-review.v1" as const;
 export const MLB_P1_M3D_ENDPOINT = "/api/mlb/p1/v1/economic-review" as const;
@@ -144,6 +148,7 @@ export interface MlbP1M3dReport {
     finalOnlyChains: number;
     provisionalOnlyChains: number;
   };
+  activation: MlbP1M5aActivation;
   readiness: {
     firstSettlementReached: boolean;
     technicalFiveReached: boolean;
@@ -590,12 +595,24 @@ export function buildMlbP1M3dEconomicReview(
   const actionableRows = rows.filter((row) => row.economicLayerValid
     && row.effectiveDecision === "BET"
     && row.actionability === "ACTIONABLE_FINAL");
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const activation = buildMlbP1M5aRealCohortActivation({
+    generatedAt,
+    rows,
+    ownerScoped: true,
+    terminalSupersessionLeavesOnly: true,
+    lifecycleChains: terminal.lifecycleChains,
+    terminalLeaves: terminal.terminals.length,
+    analyticalDuplicatesExcluded: built.duplicatesExcluded,
+    lifecycleBranchesExcluded: terminal.branchesExcluded,
+    malformedInteractiveRecordsExcluded: terminal.malformedExcluded,
+  });
 
   return {
     schemaVersion: MLB_P1_M3D_SCHEMA,
     release: MLB_P1_M3D_RELEASE,
     endpoint: MLB_P1_M3D_ENDPOINT,
-    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    generatedAt,
     state,
     cohort: {
       source: "INTERACTIVE_MLB_PREDICTOR",
@@ -641,6 +658,7 @@ export function buildMlbP1M3dEconomicReview(
       finalOnlyChains: terminal.finalOnlyChains,
       provisionalOnlyChains: terminal.provisionalOnlyChains,
     },
+    activation,
     readiness: {
       firstSettlementReached: overall.settled >= 1,
       technicalFiveReached: overall.settled >= 5,
