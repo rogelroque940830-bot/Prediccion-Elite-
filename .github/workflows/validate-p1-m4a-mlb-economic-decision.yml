@@ -80,7 +80,7 @@ jobs:
 
           assert(contract.includes('edgePp > MLB_P1_M4A_BET_EDGE_FLOOR_PP'), 'BET edge must remain strict > 8pp');
           assert(contract.includes('edgePp > MLB_P1_M4A_LEAN_EDGE_FLOOR_PP'), 'LEAN edge must remain strict > 3pp');
-          assert(contract.includes('input.modelProbability >= MLB_P1_M4A_BET_CONFIDENCE_FLOOR'), 'selected-side confidence floor missing');
+          assert(contract.includes('modelProbability >= MLB_P1_M4A_BET_CONFIDENCE_FLOOR'), 'selected-side confidence floor missing');
           assert(contract.includes('currentDecimal + 1e-12 >= minimumDecimal'), 'price comparison must use decimal payout space');
           assert(contract.includes('modelProbability * decimal - 1'), 'EV per unit formula missing');
           assert(contract.includes('Math.min(\n        MLB_P1_M4A_MAX_SHADOW_STAKE_UNITS'), 'SHADOW stake cap missing');
