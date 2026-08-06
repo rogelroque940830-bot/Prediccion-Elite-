@@ -22,7 +22,7 @@ export function registerMlbP1EconomicReviewRoutes(
   ),
 ): void {
   app.get(
-    MLB_P1_M3D_ENDPOINT,
+    "/api/mlb/p1/v1/economic-review",
     requireInteractiveMlbCaptureSession,
     (req, res) => {
       const identity = authenticatedIdentity(req);
