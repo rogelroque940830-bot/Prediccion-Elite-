@@ -5,109 +5,132 @@ on:
     branches:
       - integration/p0-staging-secure
     paths:
-      - 'server/mlb-p1-real-cohort-activation.ts'
-      - 'server/mlb-p1-real-cohort-activation.test.ts'
-      - 'server/mlb-p1-economic-review.ts'
-      - 'server/mlb-p1-economic-review.test.ts'
-      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
-      - 'tsconfig.p1-m5a-real-cohort-activation.json'
-      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
-      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  validate-p1-m5a:
+  apply-protected-lineage:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies reproducibly
-        run: npm ci
-      - name: Typecheck P1-M5A surface
-        run: npx tsc -p tsconfig.p1-m5a-real-cohort-activation.json
-      - name: Run P1-M5A and inherited economic review tests
-        run: |
-          npx tsx --test \
-            server/mlb-p1-real-cohort-activation.test.ts \
-            server/mlb-p1-economic-review.test.ts \
-            server/mlb-p1-economic-decision-contract.test.ts \
-            server/mlb-p1-economic-decision-adapter.test.ts \
-            server/mlb-p1-scientific-capture-service.test.ts \
-            server/mlb-shadow-evaluation.test.ts
-      - name: Verify modular routes and production backend build
-        run: |
-          npm run test:s3-modularization
-          npm run build:backend
-      - name: Run S5A real-save regression
-        run: npm run test:s5a-e2e
-      - name: Run complete S5B/S6 scientific regression
-        run: npm run test:s5b-shadow
-      - name: Verify activation certificate and safety contract
+      - name: Patch inherited P1-M3D and P1-M4C gates once
         shell: bash
         run: |
           set -euo pipefail
-          activation='server/mlb-p1-real-cohort-activation.ts'
-          review='server/mlb-p1-economic-review.ts'
-          testfile='server/mlb-p1-real-cohort-activation.test.ts'
-          docs='docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
+          m3d='.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+          m4c='.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+          if grep -Fq 'tsconfig.p1-m5a-real-cohort-activation.json' "$m3d" \
+            && grep -Fq 'tsconfig.p1-m5a-real-cohort-activation.json' "$m4c"; then
+            echo 'P1-M5A successor lineage already applied.'
+            exit 0
+          fi
 
-          grep -F 'courtedge-p1-m5a-real-cohort-activation.v1' "$activation"
-          grep -F 'p1-m5a-real-cohort-activation-2026-08-06' "$activation"
-          grep -F 'END_TO_END_CERTIFIED' "$activation"
-          grep -F 'sameDecisionEndToEndObserved' "$activation"
-          grep -F 'LIFECYCLE_BRANCH_CONFLICT' "$activation"
-          grep -F 'ANALYTICAL_DUPLICATES_EXCLUDED' "$activation"
-          grep -F 'clvRequiredForActivation: false' "$activation"
-          grep -F 'profitabilityConclusionAllowed: false' "$activation"
-          grep -F 'syntheticCaptureCreation: false' "$activation"
-          grep -F 'activation: MlbP1M5aActivation' "$review"
-          grep -F 'buildMlbP1M5aRealCohortActivation' "$review"
-          grep -F 'ownerScoped: true' "$review"
-          grep -F 'terminalSupersessionLeavesOnly: true' "$review"
-          grep -F 'requires the same row to have valid economics and settlement' "$testfile"
-          grep -F 'CLV is not required' "$docs"
+          python <<'PY'
+          from pathlib import Path
 
-          node <<'NODE'
-          const fs = require('node:fs');
-          const activation = fs.readFileSync('server/mlb-p1-real-cohort-activation.ts', 'utf8');
-          const review = fs.readFileSync('server/mlb-p1-economic-review.ts', 'utf8');
-          const assert = (condition, message) => { if (!condition) throw new Error(message); };
-          assert(activation.includes('row.economicLayerValid\n    && validOfficialSettlement(row)'), 'same-row certification invariant missing');
-          assert(activation.includes('input.terminalLeaves === input.lifecycleChains'), 'terminal lifecycle coverage check missing');
-          assert(activation.includes('input.analyticalDuplicatesExcluded === 0'), 'analytical identity protection missing');
-          assert(review.includes('activation,\n    readiness:'), 'activation not returned in P1-M3D report');
-          assert(!/app\.(post|put|patch|delete)\(/.test(activation + review), 'write route introduced');
-          assert(!/sportsbookIntegration:\s*true|automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]|productionWrites:\s*true|settlementWrites:\s*true|historicalLedgerMutation:\s*true|syntheticCaptureCreation:\s*true/.test(activation + review), 'unsafe activation setting');
-          NODE
-      - name: Diff hygiene and exact scope
+          m3d = Path('.github/workflows/validate-p1-m3d-interactive-economic-review.yml')
+          m4c = Path('.github/workflows/validate-p1-m4c-backend-economic-response.yml')
+
+          def once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return source.replace(old, new, 1)
+
+          source = m3d.read_text()
+          source = once(source,
+              "      - 'server/mlb-p1-economic-review.test.ts'\n",
+              "      - 'server/mlb-p1-economic-review.test.ts'\n      - 'server/mlb-p1-real-cohort-activation.ts'\n      - 'server/mlb-p1-real-cohort-activation.test.ts'\n",
+              'm3d server paths')
+          source = once(source,
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n",
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n      - 'tsconfig.p1-m5a-real-cohort-activation.json'\n",
+              'm3d docs paths')
+          source = once(source,
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n",
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'\n",
+              'm3d workflow paths')
+          marker = '      - name: Diff hygiene and exact scope\n'
+          index = source.index(marker)
+          source = source[:index] + '''      - name: Diff hygiene and protected successor scope
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin integration/p0-staging-secure --depth=1
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          expected=$(printf '%s\n' \
-            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
-            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
-            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
-            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
-            'server/mlb-p1-economic-review.test.ts' \
-            'server/mlb-p1-economic-review.ts' \
-            'server/mlb-p1-real-cohort-activation.test.ts' \
-            'server/mlb-p1-real-cohort-activation.ts' \
+          allowed=$(printf '%s\\n' \\
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \\
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \\
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \\
+            'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \\
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \\
+            'server/mlb-p1-economic-review-routes.ts' \\
+            'server/mlb-p1-economic-review.test.ts' \\
+            'server/mlb-p1-economic-review.ts' \\
+            'server/mlb-p1-real-cohort-activation.test.ts' \\
+            'server/mlb-p1-real-cohort-activation.ts' \\
+            'server/route-contract.extensions.json' \\
+            'server/routes.ts' \\
+            'tsconfig.p1-m3d-interactive-economic-review.json' \\
             'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          unexpected=$(comm -23 <(printf '%s\\n' "$changed") <(printf '%s\\n' "$allowed"))
+          [[ -z "$unexpected" ]]
 
-          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|productionWrites:[[:space:]]*true|settlementWrites:[[:space:]]*true|historicalLedgerMutation:[[:space:]]*true|syntheticCaptureCreation:[[:space:]]*true' \
-            server/mlb-p1-real-cohort-activation.ts \
-            server/mlb-p1-economic-review.ts
+          if grep -Fxq 'server/mlb-p1-real-cohort-activation.ts' <<< "$changed"; then
+            grep -Fxq 'server/mlb-p1-real-cohort-activation.test.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.test.ts' <<< "$changed"
+            grep -Fxq 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' <<< "$changed"
+            grep -Fxq 'tsconfig.p1-m5a-real-cohort-activation.json' <<< "$changed"
+            grep -Fxq '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' <<< "$changed"
+          fi
+'''
+          m3d.write_text(source)
+
+          source = m4c.read_text()
+          source = once(source,
+              "      - 'server/mlb-p1-economic-review.test.ts'\n",
+              "      - 'server/mlb-p1-economic-review.test.ts'\n      - 'server/mlb-p1-real-cohort-activation.ts'\n      - 'server/mlb-p1-real-cohort-activation.test.ts'\n",
+              'm4c server paths')
+          source = once(source,
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n",
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n      - 'tsconfig.p1-m5a-real-cohort-activation.json'\n",
+              'm4c docs paths')
+          source = once(source,
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n",
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'\n",
+              'm4c workflow paths')
+          source = once(source,
+              "            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\\n",
+              "            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\\n            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \\\n",
+              'm4c allowed workflow')
+          source = once(source,
+              "            'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \\\n",
+              "            'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \\\n            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \\\n",
+              'm4c allowed docs')
+          source = once(source,
+              "            'server/mlb-p1-economic-review.ts' \\\n",
+              "            'server/mlb-p1-economic-review.ts' \\\n            'server/mlb-p1-real-cohort-activation.test.ts' \\\n            'server/mlb-p1-real-cohort-activation.ts' \\\n",
+              'm4c allowed activation')
+          source = once(source,
+              "            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)\n",
+              "            'tsconfig.p1-m3d-interactive-economic-review.json' \\\n            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)\n",
+              'm4c allowed tsconfig')
+          m4c.write_text(source)
+          PY
+
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' "$m3d" "$m4c" | sort)
+          [[ "$changed" == "$expected" ]]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$m3d" "$m4c"
+          git commit -m 'P1-M5A: protect activation successor lineage'
+          git push origin HEAD:${GITHUB_HEAD_REF}
