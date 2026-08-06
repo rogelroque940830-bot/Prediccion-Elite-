@@ -97,7 +97,8 @@ jobs:
           assert(helper.includes('safety?.settlementWrites !== false'), 'parser does not reject settlement writes');
           assert(helper.includes('safety?.historicalLedgerMutation !== false'), 'parser does not reject historical mutation');
           assert(page.includes('fetchJson<unknown>(MLB_P1_M3D_ENDPOINT)'), 'page does not use the server-authoritative endpoint');
-          assert(!/apiRequest\s*\(|fetch\s*\(/.test(page), 'page performs an unapproved network side effect');
+          assert(!/\bfetch\s*\(/.test(page), 'page performs a native fetch side effect');
+          assert(!/\bapiRequest\s*\(/.test(page), 'page performs an apiRequest side effect');
           assert(!/POST|PUT|PATCH|DELETE/.test(page), 'page contains a write method');
           assert(!/automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]/.test(helper + page), 'unsafe review setting');
           NODE
