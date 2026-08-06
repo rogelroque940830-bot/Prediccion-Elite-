@@ -25,6 +25,7 @@ import {
   MlbP1ScientificCaptureService,
 } from "./mlb-p1-scientific-capture-service";
 import { requireInteractiveMlbCaptureSession } from "./mlb-p1-scientific-capture-routes";
+import { MLB_P1_M4B_SCHEMA, MLB_P1_M4B_LAYER_KEY } from "./mlb-p1-economic-decision-adapter";
 
 const GAME_PK = 824999;
 
@@ -230,11 +231,18 @@ test("valid interactive capture appends once with authenticated ownership and P1
     assert.equal(result.outcome, "APPENDED");
     assert.equal(result.ownership.userId, 11);
     assert.equal(result.safety.realFinancialExposure, 0);
+    assert.equal(result.economicDecision.schemaVersion, MLB_P1_M4B_SCHEMA);
+    assert.equal(result.economicDecision.status, "ADAPTED");
+    assert.equal(result.economicDecision.effectiveDecision?.decision, "LEAN");
+    assert.equal(result.economicDecision.effectiveDecision?.actionability, "WAIT_FOR_FINAL");
+    assert.equal(result.economicDecision.effectiveDecision?.analyticalUnits, 0);
 
     const records = ownedRecordsForUser(store, ownership, 11, { limit: 100 });
     assert.equal(records.length, 1);
     const layers = (records[0].prediction.payload as any).analysis.layers;
     assert.equal(layers.p1M3aCapture.schemaVersion, MLB_P1_M3A_SCHEMA);
+    assert.equal(layers[MLB_P1_M4B_LAYER_KEY].schemaVersion, MLB_P1_M4B_SCHEMA);
+    assert.equal(layers[MLB_P1_M4B_LAYER_KEY].effectiveDecision.actionability, "WAIT_FOR_FINAL");
     assert.equal(layers.p1M3bCapture.schemaVersion, MLB_P1_M3B_SCHEMA);
     assert.equal(layers.p1M3bCapture.ownerAuthority, "AUTHENTICATED_SESSION");
     assert.equal(records[0].prediction.decision.stakeUnits, 1);
@@ -250,6 +258,8 @@ test("identical retry is idempotent and does not inflate the sample", async () =
     assert.equal(second.outcome, "IDEMPOTENT");
     assert.equal(second.predictionId, first.predictionId);
     assert.equal(second.revision.decision, "IDEMPOTENT_RETRY");
+    assert.equal(second.economicDecision.sourceDigest, first.economicDecision.sourceDigest);
+    assert.equal(second.economicDecision.effectiveDecision?.actionability, "WAIT_FOR_FINAL");
     assert.equal(ownedRecordsForUser(store, ownership, 12, { limit: 100 }).length, 1);
   });
 });

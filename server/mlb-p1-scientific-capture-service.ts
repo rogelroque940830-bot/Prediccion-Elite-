@@ -23,9 +23,15 @@ import {
   type MlbP1M3aRevisionDecision,
   type MlbP1M3aRevisionResult,
 } from "./mlb-p1-scientific-capture-contract";
+import {
+  MLB_P1_M4B_SCHEMA,
+  attachMlbP1M4bEconomicDecision,
+  type MlbP1M4bAdapterResult,
+} from "./mlb-p1-economic-decision-adapter";
 
 export const MLB_P1_M3B_SCHEMA = "courtedge-p1-m3b-scientific-capture-service.v1" as const;
 export const MLB_P1_M3B_ENDPOINT = "/api/mlb/p1/v1/scientific-captures" as const;
+export const MLB_P1_M4C_BACKEND_RELEASE = "p1-m4c-backend-economic-response-2026-08-06" as const;
 
 const hex64 = z.string().regex(/^[a-f0-9]{64}$/);
 const isoText = z.string().datetime();
@@ -134,6 +140,7 @@ export interface MlbP1M3bCaptureResult {
   identity: MlbP1M3aCaptureIdentity;
   validation: MlbP1M3aCaptureDecision;
   revision: MlbP1M3aRevisionResult;
+  economicDecision: MlbP1M4bAdapterResult;
   ownership: {
     userId: number;
     source: "AUTHENTICATED_SESSION";
@@ -248,6 +255,7 @@ function responseFor(input: {
   identity: MlbP1M3aCaptureIdentity;
   validation: MlbP1M3aCaptureDecision;
   revision: MlbP1M3aRevisionResult;
+  economicDecision: MlbP1M4bAdapterResult;
   userId: number;
 }): MlbP1M3bCaptureResult {
   return {
@@ -260,6 +268,7 @@ function responseFor(input: {
     identity: input.identity,
     validation: input.validation,
     revision: input.revision,
+    economicDecision: input.economicDecision,
     ownership: {
       userId: input.userId,
       source: "AUTHENTICATED_SESSION",
@@ -322,7 +331,33 @@ export class MlbP1ScientificCaptureService {
       );
     }
 
-    const identity = validation.identity;
+    const attachment = attachMlbP1M4bEconomicDecision(candidate, serverNow);
+    if (
+      attachment.adapter.status !== "ADAPTED"
+      || !attachment.adapter.economicDecision
+      || !attachment.adapter.effectiveDecision
+      || !attachment.candidate
+      || (!attachment.attached && !attachment.idempotent)
+    ) {
+      throw new MlbP1M3bCaptureError(
+        422,
+        "P1_M4B_ADAPTER_REJECTED",
+        "The scientific capture could not be enriched with the P1-M4B economic decision.",
+        { errors: attachment.adapter.errors, warnings: attachment.adapter.warnings },
+      );
+    }
+    const enrichedCandidate = attachment.candidate;
+    const enrichedValidation = validateMlbP1M3aCapture(enrichedCandidate, serverNow);
+    if (!enrichedValidation.captureAllowed || !enrichedValidation.identity) {
+      throw new MlbP1M3bCaptureError(
+        422,
+        "P1_M4B_ENRICHED_CAPTURE_REJECTED",
+        "The P1-M4B enriched scientific capture failed P1-M3A revalidation.",
+        { errors: enrichedValidation.errors, warnings: enrichedValidation.warnings },
+      );
+    }
+    const economicDecision = attachment.adapter;
+    const identity = enrichedValidation.identity;
     return this.withLifecycleLock(`${userId}:${identity.lifecycleKey}`, async () => {
       const previous = latestCaptureForLifecycle(
         this.store,
@@ -330,15 +365,16 @@ export class MlbP1ScientificCaptureService {
         userId,
         identity.lifecycleKey,
       );
-      const revision = decideMlbP1M3aRevision(previous?.ref ?? null, candidate);
+      const revision = decideMlbP1M3aRevision(previous?.ref ?? null, enrichedCandidate);
 
       if (revision.decision === "IDEMPOTENT_RETRY" && previous) {
         return responseFor({
           outcome: "IDEMPOTENT",
           record: previous.record,
           identity,
-          validation,
+          validation: enrichedValidation,
           revision,
+          economicDecision,
           userId,
         });
       }
@@ -351,7 +387,7 @@ export class MlbP1ScientificCaptureService {
       }
 
       const ledgerInput = toMlbP1M3aLedgerCompatibleInput(
-        candidate,
+        enrichedCandidate,
         identity,
         revision.supersedesId ?? undefined,
       ) as Record<string, any>;
@@ -368,7 +404,7 @@ export class MlbP1ScientificCaptureService {
           p1M3bCapture: {
             schemaVersion: MLB_P1_M3B_SCHEMA,
             endpoint: MLB_P1_M3B_ENDPOINT,
-            candidateCapturedAt: candidate.capturedAt,
+            candidateCapturedAt: enrichedCandidate.capturedAt,
             serverReceivedAt: serverNow.toISOString(),
             ownerAuthority: "AUTHENTICATED_SESSION",
             lifecycleSerializedInProcess: true,
@@ -405,8 +441,9 @@ export class MlbP1ScientificCaptureService {
         outcome: appended.idempotent ? "IDEMPOTENT" : "APPENDED",
         record: owned,
         identity,
-        validation,
+        validation: enrichedValidation,
         revision: effectiveRevision,
+        economicDecision,
         userId,
       });
     });
