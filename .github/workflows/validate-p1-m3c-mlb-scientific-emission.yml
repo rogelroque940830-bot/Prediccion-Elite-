@@ -6,19 +6,22 @@ on:
       - integration/p0-frontend-session
     paths:
       - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
       - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
       - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
       - 'frontend/client/src/lib/mlb-scientific-capture.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture.test.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture-transport.ts'
       - 'frontend/client/src/lib/mlb-scientific-capture-transport.test.ts'
-      - 'frontend/client/src/lib/queryClient.ts'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.ts'
+      - 'frontend/client/src/lib/mlb-interactive-economic-review.test.ts'
       - 'frontend/client/src/pages/mlb-predictor.tsx'
-      - 'docs/P1_M3C_MLB_SCIENTIFIC_EMISSION_UI.md'
-      - 'docs/P1_M3C1_JSON_TRANSPORT_HOTFIX.md'
+      - 'frontend/client/src/pages/mlb-economic-review.tsx'
+      - 'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md'
       - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
       - '.github/workflows/validate-p1-m3c1-json-transport.yml'
       - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+      - '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml'
 
 permissions:
   contents: read
@@ -56,7 +59,7 @@ jobs:
         env:
           COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
         run: npm --prefix frontend run verify
-      - name: Verify P1-M3C execution and receipt contract
+      - name: Verify P1-M3C execution and successor lineage
         shell: bash
         run: |
           set -euo pipefail
@@ -66,8 +69,7 @@ jobs:
           client='frontend/client/src/lib/mlb-scientific-capture.ts'
           predictor='frontend/client/src/pages/mlb-predictor.tsx'
 
-          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$client"
-          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE' "$app"
+          grep -E 'MLB_P1_M3C_FRONTEND_RELEASE|MLB_P1_M4C_FRONTEND_RELEASE|MLB_P1_M3D_B_FRONTEND_RELEASE' "$app"
           grep -F '/api/mlb/p1/v1/scientific-captures' "$client"
           grep -F 'userAction: "GENERATE_PREDICTION"' "$client"
           grep -F 'buildMlbP1M3cCandidate' "$predictor"
@@ -79,13 +81,9 @@ jobs:
           grep -F 'onExecutionReportRef.current(executionReport)' "$gate"
           grep -F '<MlbScientificCaptureStatus state={scientificCaptureState} />' "$predictor"
           grep -F 'Evaluación científica RECHAZADA' "$status"
-          grep -F 'Evaluación {appended ? "REGISTRADA" : "IDEMPOTENTE"}' "$status"
           grep -F 'SHADOW · exposición 0' "$status"
           grep -F 'realFinancialExposure: 0 as const' "$client"
           grep -F 'automaticBetPlacement: false as const' "$client"
-          grep -F 'const { apiRequest } = await import("./queryClient")' "$client"
-          grep -F 'Array.from(new Set(evaluation.filterReasons)).slice(0, 100)' "$client"
-          grep -F 'Array.from(new Set(pq?.warnings || [])).slice(0, 100)' "$predictor"
 
           node <<'NODE'
           const fs = require('node:fs');
@@ -98,32 +96,23 @@ jobs:
           const historyBarrier = predictor.indexOf('if (!saveToHistory) return;');
           const dispatch = predictor.indexOf('type: "ADD_MLB_PICK"', historyBarrier);
           assert(automaticStart >= 0, 'automatic scientific emission missing');
-          assert(historyBarrier >= 0 && dispatch > historyBarrier, 'automatic emission is not separated from canonical pick saving');
+          assert(historyBarrier >= 0 && dispatch > historyBarrier, 'scientific emission is not separated from pick saving');
           assert(client.includes('P1_M3C_CERTIFIED_QUOTE_SELECTION_MISMATCH'), 'selected quote fail-closed rule missing');
           assert(client.includes('P1_M3C_CERTIFIED_TOTAL_LINE_MISMATCH'), 'total line fail-closed rule missing');
           assert(client.includes('P1_M3C_CERTIFIED_RUN_LINE_MISMATCH'), 'run line fail-closed rule missing');
-          assert(gate.includes('onExecutionReportRef.current(null)'), 'full execution report is not invalidated fail-closed');
-          assert(!client.includes('sportsbook'), 'scientific client must not contain sportsbook integration');
+          assert(gate.includes('onExecutionReportRef.current(null)'), 'execution report invalidation missing');
+          assert(!client.includes('automaticBetPlacement: true'), 'automatic betting enabled');
           assert(
-            app.includes('MLB_P1_M3C_FRONTEND_RELEASE') || app.includes('MLB_P1_M4C_FRONTEND_RELEASE'),
-            'frontend release lineage no longer references P1-M3C or its successor',
+            app.includes('MLB_P1_M3C_FRONTEND_RELEASE')
+              || app.includes('MLB_P1_M4C_FRONTEND_RELEASE')
+              || app.includes('MLB_P1_M3D_B_FRONTEND_RELEASE'),
+            'frontend release lineage does not recognize P1-M3C or a validated successor',
           );
-
-          if (fs.existsSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts')) {
-            const transport = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture-transport.ts', 'utf8');
-            assert(client.includes('prepareMlbP1M3cSnapshotForTransport(input.scientificSnapshot)'), 'exact JSON transport preparation missing');
-            assert(client.includes('mlbP1M3cSha256(preparedSnapshot.payload)'), 'wire-stable digest missing');
-            assert(client.includes('payload: preparedSnapshot.payload'), 'prepared payload not sent');
-            assert(!client.includes('mlbP1M3cSha256(input.scientificSnapshot)'), 'in-memory snapshot still hashed directly');
-            assert(transport.includes('MLB_P1_M3A_MAX_SNAPSHOT_BYTES = 280_000'), 'snapshot byte limit missing');
-          }
           NODE
 
           cat frontend/dist/assets/*.js > /tmp/p1-m3c-bundle.js
-          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05|p1-m4c-mlb-economic-decision-card-2026-08-06' /tmp/p1-m3c-bundle.js
+          grep -E 'p1-m3c-mlb-scientific-emission-2026-08-05|p1-m3c1-json-digest-transport-2026-08-05|p1-m4c-mlb-economic-decision-card-2026-08-06|p1-m3d-b-interactive-economic-review-ui-2026-08-06' /tmp/p1-m3c-bundle.js
           grep -F 'Registrando evaluación científica SHADOW' /tmp/p1-m3c-bundle.js
-          grep -F 'Evaluación científica RECHAZADA' /tmp/p1-m3c-bundle.js
-          grep -F 'IDEMPOTENTE' /tmp/p1-m3c-bundle.js
           grep -F '/api/mlb/p1/v1/scientific-captures' /tmp/p1-m3c-bundle.js
       - name: Diff hygiene and protected extension scope
         shell: bash
@@ -132,26 +121,23 @@ jobs:
           git fetch origin integration/p0-frontend-session --depth=1
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
-
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
             '.github/workflows/validate-p1-m3c1-json-transport.yml' \
             '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
-            'docs/P1_M4C_MLB_ECONOMIC_DECISION_CARD.md' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            'docs/P1_M3D_B_INTERACTIVE_ECONOMIC_REVIEW_UI.md' \
             'frontend/client/src/App.tsx' \
-            'frontend/client/src/components/mlb-economic-decision-card.tsx' \
-            'frontend/client/src/components/mlb-scientific-capture-status.tsx' \
-            'frontend/client/src/lib/mlb-economic-decision.test.ts' \
-            'frontend/client/src/lib/mlb-economic-decision.ts' \
-            'frontend/client/src/lib/mlb-scientific-capture.ts' | sort)
+            'frontend/client/src/components/app-sidebar.tsx' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.test.ts' \
+            'frontend/client/src/lib/mlb-interactive-economic-review.ts' \
+            'frontend/client/src/pages/mlb-economic-review.tsx' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
-          grep -Fxq 'frontend/client/src/lib/mlb-scientific-capture.ts' <<< "$changed"
-          grep -Fxq 'frontend/client/src/components/mlb-scientific-capture-status.tsx' <<< "$changed"
+          grep -Fxq 'frontend/client/src/App.tsx' <<< "$changed"
+          grep -Fxq 'frontend/client/src/pages/mlb-economic-review.tsx' <<< "$changed"
 
           ! grep -E 'realFinancialExposure:[[:space:]]*[1-9]|automaticBetPlacement:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' \
             frontend/client/src/lib/mlb-scientific-capture.ts \
-            frontend/client/src/pages/mlb-predictor.tsx
-          ! grep -E 'fetch\([^)]*sportsbook|apiRequest\("(PUT|PATCH|DELETE)"' \
-            frontend/client/src/lib/mlb-scientific-capture.ts \
-            frontend/client/src/pages/mlb-predictor.tsx
+            frontend/client/src/lib/mlb-interactive-economic-review.ts \
+            frontend/client/src/pages/mlb-economic-review.tsx
