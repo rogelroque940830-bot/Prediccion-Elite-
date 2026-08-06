@@ -1,0 +1,122 @@
+name: Validate P1-M4A MLB Economic Decision Contract
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-economic-decision-contract.ts'
+      - 'server/mlb-p1-economic-decision-contract.test.ts'
+      - 'docs/P1_M4A_MLB_ECONOMIC_DECISION_CONTRACT.md'
+      - 'tsconfig.p1-m4a-mlb-economic-decision.json'
+      - '.github/workflows/validate-p1-m4a-mlb-economic-decision.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m4a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M4A contract
+        run: npx tsc -p tsconfig.p1-m4a-mlb-economic-decision.json --noEmit
+      - name: Run focused P1-M4A economic tests
+        run: npx tsx --test server/mlb-p1-economic-decision-contract.test.ts
+      - name: Run P1 readiness, capture and accounting regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-scientific-capture-contract.test.ts \
+            server/mlb-p1-scientific-capture-service.test.ts \
+            server/mlb-p1-pregame-readiness-contract.test.ts \
+            server/mlb-p1-daily-slate.test.ts \
+            server/mlb-shadow-evaluation.test.ts \
+            server/mlb-terminal-ledger-records.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify economic policy and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='server/mlb-p1-economic-decision-contract.ts'
+          docs='docs/P1_M4A_MLB_ECONOMIC_DECISION_CONTRACT.md'
+
+          grep -F 'courtedge-p1-m4a-economic-decision-contract.v1' "$contract"
+          grep -F 'mlb-economic-policy-v1-existing-signal-parity' "$contract"
+          grep -F 'MLB_P1_M4A_LEAN_EDGE_FLOOR_PP = 3' "$contract"
+          grep -F 'MLB_P1_M4A_BET_EDGE_FLOOR_PP = 8' "$contract"
+          grep -F 'MLB_P1_M4A_BET_CONFIDENCE_FLOOR = 0.70' "$contract"
+          grep -F 'MLB_P1_M4A_KELLY_FRACTION = 0.25' "$contract"
+          grep -F 'MLB_P1_M4A_MAX_SHADOW_STAKE_UNITS = 1' "$contract"
+          grep -F 'mlbP1M4aMinimumAcceptablePrice' "$contract"
+          grep -F 'mlbP1M4aExpectedValuePerUnit' "$contract"
+          grep -F 'mlbP1M4aPriceMeetsMinimum' "$contract"
+          grep -F 'PROVISIONAL_REQUIRES_FINAL_CONFIRMATION' "$contract"
+          grep -F 'realFinancialExposure: 0' "$contract"
+          grep -F 'automaticBetPlacement: false' "$contract"
+          grep -F 'sportsbookIntegration: false' "$contract"
+          grep -F 'P1-M4B — Economic decision adapter' "$docs"
+          grep -F 'P1-M4C — Actionable decision card' "$docs"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const contract = fs.readFileSync('server/mlb-p1-economic-decision-contract.ts', 'utf8');
+          const docs = fs.readFileSync('docs/P1_M4A_MLB_ECONOMIC_DECISION_CONTRACT.md', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(contract.includes('edgePp > MLB_P1_M4A_BET_EDGE_FLOOR_PP'), 'BET edge must remain strict > 8pp');
+          assert(contract.includes('edgePp > MLB_P1_M4A_LEAN_EDGE_FLOOR_PP'), 'LEAN edge must remain strict > 3pp');
+          assert(contract.includes('input.modelProbability >= MLB_P1_M4A_BET_CONFIDENCE_FLOOR'), 'selected-side confidence floor missing');
+          assert(contract.includes('currentDecimal + 1e-12 >= minimumDecimal'), 'price comparison must use decimal payout space');
+          assert(contract.includes('modelProbability * decimal - 1'), 'EV per unit formula missing');
+          assert(contract.includes('Math.min(\n        MLB_P1_M4A_MAX_SHADOW_STAKE_UNITS'), 'SHADOW stake cap missing');
+          assert(contract.includes('input.stage === "PROVISIONAL"'), 'PROVISIONAL decision boundary missing');
+          assert(docs.includes('This phase is contract-only'), 'contract-only scope not documented');
+          assert(docs.includes('It is not a command to place a wager'), 'stake interpretation boundary missing');
+
+          const forbidden = [
+            /appendOwnedPrediction/,
+            /MlbLedgerStore/,
+            /registerRoutes/,
+            /app\.(post|put|patch|delete)\s*\(/,
+            /router\.(post|put|patch|delete)\s*\(/,
+            /fetch\s*\(/,
+            /apiRequest\s*\(/,
+          ];
+          for (const pattern of forbidden) {
+            assert(!pattern.test(contract), `contract contains forbidden side effect: ${pattern}`);
+          }
+          assert(!/realFinancialExposure:\s*[1-9]/.test(contract), 'non-zero financial exposure found');
+          assert(!/automaticBetPlacement:\s*true/.test(contract), 'automatic betting enabled');
+          assert(!/sportsbookIntegration:\s*true/.test(contract), 'sportsbook integration enabled');
+          assert(!/automaticModelChangesAllowed:\s*true/.test(contract), 'automatic model changes enabled');
+          assert(!/automaticPromotionAllowed:\s*true/.test(contract), 'automatic promotion enabled');
+          NODE
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m4a-mlb-economic-decision.yml' \
+            'docs/P1_M4A_MLB_ECONOMIC_DECISION_CONTRACT.md' \
+            'server/mlb-p1-economic-decision-contract.test.ts' \
+            'server/mlb-p1-economic-decision-contract.ts' \
+            'tsconfig.p1-m4a-mlb-economic-decision.json' | sort)
+          [[ "$changed" == "$expected" ]]
