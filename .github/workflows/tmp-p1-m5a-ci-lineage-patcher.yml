@@ -1,0 +1,156 @@
+name: Temporary P1-M5A CI Lineage Patcher
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/tmp-p1-m5a-ci-lineage-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'agent/p1-m5a-real-cohort-activation-backend'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p1-m5a-real-cohort-activation-backend
+          fetch-depth: 0
+      - name: Patch inherited successor lineage gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          m3d = Path('.github/workflows/validate-p1-m3d-interactive-economic-review.yml')
+          m4c = Path('.github/workflows/validate-p1-m4c-backend-economic-response.yml')
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return source.replace(old, new, 1)
+
+          source = m3d.read_text()
+          source = replace_once(
+              source,
+              "      - 'server/mlb-p1-economic-review.test.ts'\n",
+              "      - 'server/mlb-p1-economic-review.test.ts'\n      - 'server/mlb-p1-real-cohort-activation.ts'\n      - 'server/mlb-p1-real-cohort-activation.test.ts'\n",
+              'm3d activation paths',
+          )
+          source = replace_once(
+              source,
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n",
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n      - 'tsconfig.p1-m5a-real-cohort-activation.json'\n",
+              'm3d activation docs paths',
+          )
+          source = replace_once(
+              source,
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n",
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'\n",
+              'm3d activation workflow path',
+          )
+          marker = '      - name: Diff hygiene and exact scope\n'
+          index = source.index(marker)
+          source = source[:index] + '''      - name: Diff hygiene and protected successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          allowed=$(printf '%s\\n' \\
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \\
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \\
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \\
+            'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \\
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \\
+            'server/mlb-p1-economic-review-routes.ts' \\
+            'server/mlb-p1-economic-review.test.ts' \\
+            'server/mlb-p1-economic-review.ts' \\
+            'server/mlb-p1-real-cohort-activation.test.ts' \\
+            'server/mlb-p1-real-cohort-activation.ts' \\
+            'server/route-contract.extensions.json' \\
+            'server/routes.ts' \\
+            'tsconfig.p1-m3d-interactive-economic-review.json' \\
+            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
+          unexpected=$(comm -23 <(printf '%s\\n' "$changed") <(printf '%s\\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          if grep -Fxq 'server/mlb-p1-real-cohort-activation.ts' <<< "$changed"; then
+            grep -Fxq 'server/mlb-p1-real-cohort-activation.test.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.ts' <<< "$changed"
+            grep -Fxq 'server/mlb-p1-economic-review.test.ts' <<< "$changed"
+            grep -Fxq 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' <<< "$changed"
+            grep -Fxq 'tsconfig.p1-m5a-real-cohort-activation.json' <<< "$changed"
+            grep -Fxq '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' <<< "$changed"
+          fi
+'''
+          m3d.write_text(source)
+
+          source = m4c.read_text()
+          source = replace_once(
+              source,
+              "      - 'server/mlb-p1-economic-review.test.ts'\n",
+              "      - 'server/mlb-p1-economic-review.test.ts'\n      - 'server/mlb-p1-real-cohort-activation.ts'\n      - 'server/mlb-p1-real-cohort-activation.test.ts'\n",
+              'm4c activation paths',
+          )
+          source = replace_once(
+              source,
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n",
+              "      - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'\n      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'\n      - 'tsconfig.p1-m3d-interactive-economic-review.json'\n      - 'tsconfig.p1-m5a-real-cohort-activation.json'\n",
+              'm4c activation docs paths',
+          )
+          source = replace_once(
+              source,
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n",
+              "      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'\n      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'\n",
+              'm4c activation workflow path',
+          )
+          source = replace_once(
+              source,
+              "            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\\n",
+              "            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \\\n            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \\\n",
+              'm4c allowed workflow',
+          )
+          source = replace_once(
+              source,
+              "            'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \\\n",
+              "            'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \\\n            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \\\n",
+              'm4c allowed docs',
+          )
+          source = replace_once(
+              source,
+              "            'server/mlb-p1-economic-review.ts' \\\n",
+              "            'server/mlb-p1-economic-review.ts' \\\n            'server/mlb-p1-real-cohort-activation.test.ts' \\\n            'server/mlb-p1-real-cohort-activation.ts' \\\n",
+              'm4c allowed activation',
+          )
+          source = replace_once(
+              source,
+              "            'tsconfig.p1-m3d-interactive-economic-review.json' | sort)\n",
+              "            'tsconfig.p1-m3d-interactive-economic-review.json' \\\n            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)\n",
+              'm4c allowed tsconfig',
+          )
+          m4c.write_text(source)
+          PY
+
+          git diff --check
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' | sort)
+          [[ "$changed" == "$expected" ]]
+          grep -F 'Diff hygiene and protected successor scope' .github/workflows/validate-p1-m3d-interactive-economic-review.yml
+          grep -F 'server/mlb-p1-real-cohort-activation.ts' .github/workflows/validate-p1-m4c-backend-economic-response.yml
+      - name: Commit inherited CI lineage
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/validate-p1-m3d-interactive-economic-review.yml .github/workflows/validate-p1-m4c-backend-economic-response.yml
+          git commit -m 'P1-M5A: protect activation successor lineage'
+          git push origin HEAD:agent/p1-m5a-real-cohort-activation-backend
