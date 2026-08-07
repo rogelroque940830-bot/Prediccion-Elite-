@@ -38,6 +38,8 @@ jobs:
             server/mlb-p1-economic-review.test.ts \
             server/mlb-p1-scientific-capture-contract.test.ts \
             server/mlb-p1-economic-decision-adapter.test.ts
+      - name: Build production backend required by S5A
+        run: npm run build:backend
       - name: Run S5A real-save regression
         run: npm run test:s5a-e2e
       - name: Run complete S5B shadow regression
