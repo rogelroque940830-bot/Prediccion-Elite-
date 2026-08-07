@@ -1,0 +1,114 @@
+name: Research P1-M3F2B Injury Partial Cause
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m3f2b-injury-partial-cause.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-injury-partial-cause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 0e3f39d790a6011f27e3384e74228b62fa9d7a0e
+      AUDIT_DATE: '2026-08-07'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for exact backend and isolate PARTIAL cause
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const base = process.env.BACKEND_URL;
+          const expected = process.env.EXPECTED_BACKEND_COMMIT;
+          const date = process.env.AUDIT_DATE;
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const request = async (path) => {
+            const response = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } });
+            const text = await response.text();
+            let data = null;
+            try { data = text ? JSON.parse(text) : null; } catch {}
+            return { status: response.status, ok: response.ok, data };
+          };
+          let health = null;
+          for (let attempt = 1; attempt <= 100; attempt += 1) {
+            const call = await request('/health');
+            health = call.data;
+            if (call.ok && health?.status === 'healthy' && health?.commit === expected) break;
+            if (attempt === 100) throw new Error(`P1_M3F2B_BACKEND_COMMIT_TIMEOUT:${health?.commit ?? call.status}`);
+            await sleep(10_000);
+          }
+          const slate = await request(`/api/mlb/p1/v1/slate?date=${date}`);
+          if (!slate.ok) throw new Error(`P1_M3F2B_SLATE_HTTP_${slate.status}`);
+          const games = slate.data?.data?.games ?? slate.data?.games ?? [];
+          if (!Array.isArray(games) || !games.length) throw new Error('P1_M3F2B_SLATE_EMPTY');
+          const preferred = games.find((game) => ['SCHEDULED','PREGAME'].includes(String(game.state || '').toUpperCase())) ?? games[0];
+          const gamePk = Number(preferred?.gamePk);
+          if (!Number.isInteger(gamePk) || gamePk <= 0) throw new Error('P1_M3F2B_GAME_PK_INVALID');
+          const aggregate = await request(`/api/mlb/all?date=${date}`);
+          if (!aggregate.ok) throw new Error(`P1_M3F2B_AGGREGATE_HTTP_${aggregate.status}`);
+          const aggregateGames = aggregate.data?.games ?? aggregate.data?.data?.games ?? [];
+          const match = Array.isArray(aggregateGames)
+            ? aggregateGames.find((game) => Number(game?.gameId ?? game?.gamePk) === gamePk)
+            : null;
+          if (!match) throw new Error('P1_M3F2B_GAME_NOT_FOUND');
+
+          const sides = ['home','away'].map((side) => {
+            const meta = match?.[`${side}InjuryData`] ?? {};
+            return {
+              side,
+              status: meta.status ?? null,
+              officialValidationStatus: meta.officialValidationStatus ?? null,
+              stale: meta.stale ?? null,
+              sourceErrorCount: Array.isArray(meta.sourceErrors) ? meta.sourceErrors.length : null,
+              rejectedCount: Number.isFinite(Number(meta.rejectedCount)) ? Number(meta.rejectedCount) : null,
+              officialOnly: Number.isFinite(Number(meta.shadowSummary?.officialOnly)) ? Number(meta.shadowSummary.officialOnly) : null,
+              phaseBCoverage: meta.phaseB?.coverage ?? null,
+              phaseBAutoApplyAllowed: meta.phaseB?.autoApplyAllowed ?? null,
+              phaseBCandidateCount: Number.isFinite(Number(meta.phaseB?.candidateCount)) ? Number(meta.phaseB.candidateCount) : null,
+              anomalous: Boolean(meta.anomalous),
+              count: Number.isFinite(Number(meta.count)) ? Number(meta.count) : null,
+            };
+          });
+
+          const result = {
+            schemaVersion: 'p1-m3f2b-injury-partial-cause.v1',
+            generatedAt: new Date().toISOString(),
+            backendCommit: health.commit,
+            environment: health.environment,
+            auditDate: date,
+            gameState: preferred?.state ?? null,
+            sides,
+            aggregateCause: {
+              anyRejectedIdentity: sides.some((side) => (side.rejectedCount ?? 0) > 0),
+              anyOfficialOnlyCoverageGap: sides.some((side) => (side.officialOnly ?? 0) > 0),
+              bothExternalAndOfficialVerified: sides.every((side) => side.officialValidationStatus === 'VERIFIED' && side.sourceErrorCount === 0 && side.stale === false),
+              allPartial: sides.every((side) => side.status === 'PARTIAL'),
+            },
+            interpretationBoundary: {
+              changesInjuryLogic: false,
+              changesReadinessPolicy: false,
+              changesModel: false,
+              authorizesPromotion: false,
+            },
+            safety: { publicReadOnly: true, predictionsCreated: 0, settlementsCreated: 0, betsPlaced: 0, realFinancialExposure: 0 },
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+      - name: Upload aggregate injury cause audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3f2b-injury-partial-cause
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
