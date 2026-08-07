@@ -27,19 +27,40 @@ type ServiceOptions = {
   cacheTtlMs?: number;
 };
 
+export interface MlbP1M6a2ProviderUsageSample {
+  eventId: string;
+  requestsLast: number | null;
+  requestsRemaining: number | null;
+  requestsUsed: number | null;
+}
+
 export interface MlbP1M6a2UniverseResponse {
   schemaVersion: typeof MLB_P1_M6A2_SCHEMA;
   generatedAt: string;
   date: string;
   games: MlbMarketOddsUniverseGame[];
+  coverage: {
+    eligibleEvents: number;
+    fetchedGames: number;
+    failedEvents: Array<{ eventId: string; code: string }>;
+    complete: boolean;
+  };
+  providerUsage: {
+    samples: MlbP1M6a2ProviderUsageSample[];
+    totalReportedCost: number | null;
+    minimumReportedRemaining: number | null;
+  };
   policy: {
     executionBooks: readonly string[];
     referenceBooks: readonly string[];
     providerMarkets: readonly string[];
     maxQuoteAgeMs: number;
+    bookmakerRegionEquivalents: 1;
+    providerCostModel: "unique_markets_returned_x_bookmaker_region_equivalents";
     referenceQuotesExecutable: false;
     undocumentedMarketsInvented: false;
     threeWayCoercedToTwoWay: false;
+    partialSlateCached: false;
   };
 }
 
@@ -102,6 +123,30 @@ async function readJson(response: Response): Promise<any> {
   return payload;
 }
 
+function numericHeader(response: Response, name: string): number | null {
+  const value = Number(response.headers.get(name));
+  return Number.isFinite(value) ? value : null;
+}
+
+function usageSample(eventId: string, response: Response): MlbP1M6a2ProviderUsageSample {
+  return {
+    eventId,
+    requestsLast: numericHeader(response, "x-requests-last"),
+    requestsRemaining: numericHeader(response, "x-requests-remaining"),
+    requestsUsed: numericHeader(response, "x-requests-used"),
+  };
+}
+
+function sumReported(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value != null && Number.isFinite(value));
+  return finite.length ? finite.reduce((sum, value) => sum + value, 0) : null;
+}
+
+function minimumReported(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value != null && Number.isFinite(value));
+  return finite.length ? Math.min(...finite) : null;
+}
+
 export class MlbP1M6a2MarketOddsService {
   private readonly fetchFn: FetchLike;
   private readonly now: () => Date;
@@ -131,15 +176,21 @@ export class MlbP1M6a2MarketOddsService {
     const queue = [...eligible];
     const games: MlbMarketOddsUniverseGame[] = [];
     const eventErrors: Array<{ eventId: string; code: string }> = [];
+    const providerUsageSamples: MlbP1M6a2ProviderUsageSample[] = [];
 
     const workers = Array.from({ length: Math.min(3, Math.max(1, queue.length)) }, async () => {
       while (queue.length > 0) {
         const event = queue.shift();
         if (!event) break;
         const eventId = String(event?.id ?? "").trim();
-        if (!eventId) continue;
+        if (!eventId) {
+          eventErrors.push({ eventId: "", code: "MISSING_EVENT_ID" });
+          continue;
+        }
         try {
-          const payload = await readJson(await this.fetchFn(buildMlbP1M6a2EventOddsUrl(eventId, apiKey)));
+          const response = await this.fetchFn(buildMlbP1M6a2EventOddsUrl(eventId, apiKey));
+          providerUsageSamples.push(usageSample(eventId, response));
+          const payload = await readJson(response);
           games.push(buildMlbMarketOddsUniverseGame(payload, capturedAt));
         } catch (error: any) {
           eventErrors.push({ eventId, code: String(error?.code ?? "EVENT_ODDS_UNAVAILABLE") });
@@ -151,32 +202,50 @@ export class MlbP1M6a2MarketOddsService {
     games.sort((left, right) =>
       Date.parse(left.commence) - Date.parse(right.commence)
       || left.gameKey.localeCompare(right.gameKey));
+    eventErrors.sort((left, right) => left.eventId.localeCompare(right.eventId) || left.code.localeCompare(right.code));
+    providerUsageSamples.sort((left, right) => left.eventId.localeCompare(right.eventId));
 
+    const complete = eventErrors.length === 0 && games.length === eligible.length;
     const data: MlbP1M6a2UniverseResponse = {
       schemaVersion: MLB_P1_M6A2_SCHEMA,
       generatedAt: capturedAt,
       date,
       games,
+      coverage: {
+        eligibleEvents: eligible.length,
+        fetchedGames: games.length,
+        failedEvents: eventErrors,
+        complete,
+      },
+      providerUsage: {
+        samples: providerUsageSamples,
+        totalReportedCost: sumReported(providerUsageSamples.map((sample) => sample.requestsLast)),
+        minimumReportedRemaining: minimumReported(providerUsageSamples.map((sample) => sample.requestsRemaining)),
+      },
       policy: {
         executionBooks: [...MLB_EXECUTION_BOOK_PRIORITY],
         referenceBooks: [...MLB_REFERENCE_BOOKS],
         providerMarkets: [...MLB_P1_M6A2_PROVIDER_MARKETS],
         maxQuoteAgeMs: MLB_P1_M6A2_MAX_QUOTE_AGE_MS,
+        bookmakerRegionEquivalents: 1,
+        providerCostModel: "unique_markets_returned_x_bookmaker_region_equivalents",
         referenceQuotesExecutable: false,
         undocumentedMarketsInvented: false,
         threeWayCoercedToTwoWay: false,
+        partialSlateCached: false,
       },
     };
 
-    // Do not cache a slate where every eligible event failed. That state is
-    // operationally retryable and must not masquerade as a naturally empty slate.
+    // Do not cache partial or fully failed coverage. Missing provider events are
+    // operationally retryable and must never masquerade as a complete daily universe.
     if (eligible.length > 0 && games.length === 0 && eventErrors.length === eligible.length) {
       const error = new Error("ALL_EVENT_ODDS_REQUESTS_FAILED") as Error & { details?: unknown };
       error.details = eventErrors;
       throw error;
     }
-
-    this.cache.set(date, { storedAtMs: now.getTime(), data });
+    if (complete) {
+      this.cache.set(date, { storedAtMs: now.getTime(), data });
+    }
     return data;
   }
 }
