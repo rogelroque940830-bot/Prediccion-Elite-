@@ -5,6 +5,7 @@ import { fetchMlbHistoricalOfficialGames } from "../server/mlb-market-historical
 import { buildMlbHistoricalDataset } from "../server/mlb-market-historical-dataset.ts";
 import { fetchMlbHistoricalStartingPitcherHistory } from "../server/mlb-market-starting-pitcher-history.ts";
 import { buildMlbStartingPitcherOosReport } from "../server/mlb-market-starting-pitcher-asof.ts";
+import { buildMlbStartingPitcherPairedInferenceReport } from "../server/mlb-market-starting-pitcher-inference.ts";
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -105,8 +106,14 @@ if (report.actionabilityAllowed || report.automaticModelSelectionAllowed || repo
 }
 const reportArtifact = await writeJson(path.join(outputRoot, "starting-pitcher-oos-report.json"), report);
 
+const inference = buildMlbStartingPitcherPairedInferenceReport(report, { generatedAt });
+if (inference.actionabilityAllowed || inference.automaticModelSelectionAllowed || inference.automaticPromotionAllowed) {
+  throw new Error("P1_M6A3B2B2B_RESEARCH_BOUNDARY_VIOLATION");
+}
+const inferenceArtifact = await writeJson(path.join(outputRoot, "starting-pitcher-paired-inference.json"), inference);
+
 const manifest = {
-  schemaVersion: "courtedge-p1-m6a3b2b2-starting-pitcher-oos-artifact-manifest.v1",
+  schemaVersion: "courtedge-p1-m6a3b2b2-starting-pitcher-oos-artifact-manifest.v2",
   generatedAt,
   sourceIntegrity: {
     frozenB1OutcomeDigest: expectedOutcomeDigest,
@@ -116,27 +123,35 @@ const manifest = {
   },
   games: expectedGames,
   starterLines: expectedStarterLines,
-  artifacts: [sourceIntegrityArtifact, reportArtifact],
-  horizons: report.horizons.map((entry) => ({
-    horizon: entry.horizon,
-    status: entry.status,
-    validationGames: entry.validationGames,
-    teamMinusPitcherCountNll: entry.teamMinusPitcherCountNll,
-    leagueMinusPitcherCountNll: entry.leagueMinusPitcherCountNll,
-    relativePitcherReductionVsTeamPct: entry.relativePitcherReductionVsTeamPct,
-    selectedPitcherEffectWeightByFold: entry.folds.map((fold) => fold.selectedPitcherEffectWeight),
-    selectedPitcherPriorBattersByFold: entry.folds.map((fold) => fold.selectedPitcherPriorBatters),
-    bothPitchersSeenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.bothPitchersSeenValidationGames, 0),
-    onePitcherUnseenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.onePitcherUnseenValidationGames, 0),
-    bothPitchersUnseenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.bothPitchersUnseenValidationGames, 0),
-  })),
+  artifacts: [sourceIntegrityArtifact, reportArtifact, inferenceArtifact],
+  horizons: report.horizons.map((entry) => {
+    const paired = inference.horizons.find((candidate) => candidate.horizon === entry.horizon);
+    if (!paired) throw new Error(`P1_M6A3B2B2B_INFERENCE_HORIZON_MISSING:${entry.horizon}`);
+    return {
+      horizon: entry.horizon,
+      pointStatus: entry.status,
+      overallEvidenceStatus: paired.overallEvidenceStatus,
+      validationGames: entry.validationGames,
+      dateClusters: paired.dateClusters,
+      teamMinusPitcherCountNll: entry.teamMinusPitcherCountNll,
+      leagueMinusPitcherCountNll: entry.leagueMinusPitcherCountNll,
+      relativePitcherReductionVsTeamPct: entry.relativePitcherReductionVsTeamPct,
+      teamComparison: paired.teamComparison,
+      leagueComparison: paired.leagueComparison,
+      selectedPitcherEffectWeightByFold: entry.folds.map((fold) => fold.selectedPitcherEffectWeight),
+      selectedPitcherPriorBattersByFold: entry.folds.map((fold) => fold.selectedPitcherPriorBatters),
+      bothPitchersSeenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.bothPitchersSeenValidationGames, 0),
+      onePitcherUnseenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.onePitcherUnseenValidationGames, 0),
+      bothPitchersUnseenValidationGames: entry.folds.reduce((sum, fold) => sum + fold.bothPitchersUnseenValidationGames, 0),
+    };
+  }),
   actionabilityAllowed: false,
   automaticModelSelectionAllowed: false,
   automaticPromotionAllowed: false,
   blockers: [
-    "P1_M6A3B2B2_STARTING_PITCHER_CHALLENGER_ONLY",
-    "P1_M6A3B2B2_PAIRED_INFERENCE_REQUIRED",
-    "P1_M6A3B_OUT_OF_SAMPLE_CERTIFICATION_INCOMPLETE"
+    "P1_M6A3B2B2B_PAIRED_DATE_INFERENCE_RESEARCH_ONLY",
+    "P1_M6A3B_FINAL_MODEL_CERTIFICATION_INCOMPLETE",
+    "NO_AUTOMATIC_PROMOTION"
   ]
 };
 await writeJson(path.join(outputRoot, "manifest.json"), manifest);

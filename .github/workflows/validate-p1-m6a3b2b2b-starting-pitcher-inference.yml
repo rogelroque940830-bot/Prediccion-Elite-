@@ -1,0 +1,103 @@
+name: Validate P1-M6A3B2B2B Starting Pitcher Paired Inference
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-starting-pitcher-inference.ts'
+      - 'server/mlb-market-starting-pitcher-inference.test.ts'
+      - 'scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs'
+      - 'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md'
+      - 'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json'
+      - '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b2b2b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned B2B2B inference surface
+        run: npx tsc -p tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json
+      - name: Run paired pitcher inference falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-starting-pitcher-inference.test.ts \
+            server/mlb-market-starting-pitcher-asof.test.ts
+      - name: Preserve B2A paired bootstrap and upstream statistical contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-team-strength-inference.test.ts \
+            server/mlb-market-team-strength.test.ts \
+            server/mlb-market-starting-pitcher-history.test.ts \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-fit.test.ts \
+            server/mlb-market-run-distribution.test.ts \
+            server/mlb-market-calibration.test.ts
+      - name: Preserve ledger, backend and scientific regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify paired-date, parity and no-promotion boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          inference='server/mlb-market-starting-pitcher-inference.ts'
+          script='scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs'
+          docs='docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md'
+          grep -F 'bootstrapMlbPairedDateClusters' "$inference"
+          grep -F 'TEAM_ONLY_MINUS_PITCHER' "$inference" "$docs"
+          grep -F 'LEAGUE_NB2_MINUS_PITCHER' "$inference" "$docs"
+          grep -F 'bonferroniFamilywise' "$inference" "$script"
+          grep -F 'familywiseHorizons: FAMILYWISE_HORIZONS' "$inference"
+          grep -F 'P1_M6A3B2B2B_ROW_POINT_PARITY_FAILURE' "$inference"
+          grep -F 'P1_M6A3B2B2B_DUPLICATE_VALIDATION_GAME' "$inference"
+          grep -F 'P1_M6A3B2B2B_UPSTREAM_LEAKAGE_DETECTED' "$inference"
+          grep -F 'starting-pitcher-paired-inference.json' "$script"
+          grep -F 'SUPPORTED_INCREMENTAL_IMPROVEMENT' "$inference" "$docs"
+          grep -Fi 'officialDate' "$docs"
+          grep -Fi '5,000' "$docs"
+          grep -Fi '98.75%' "$docs"
+          grep -F 'actionabilityAllowed: false' "$inference" "$script"
+          grep -F 'automaticModelSelectionAllowed: false' "$inference" "$script"
+          grep -F 'automaticPromotionAllowed: false' "$inference" "$script"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$inference" "$script"
+      - name: Verify exact B2B2B scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml' \
+            'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md' \
+            'scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs' \
+            'server/mlb-market-starting-pitcher-inference.test.ts' \
+            'server/mlb-market-starting-pitcher-inference.ts' \
+            'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json' | sort)
+          [[ "$changed" == "$expected" ]]
