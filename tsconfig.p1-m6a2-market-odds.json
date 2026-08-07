@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/american-odds.ts",
+    "server/mlb-market-contract.ts",
+    "server/mlb-market-odds-normalizer.ts",
+    "server/mlb-market-odds-normalizer.test.ts",
+    "server/mlb-market-universe-odds-routes.ts",
+    "server/mlb-market-universe-odds-routes.test.ts",
+    "server/route-runtime.ts",
+    "server/routes.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
