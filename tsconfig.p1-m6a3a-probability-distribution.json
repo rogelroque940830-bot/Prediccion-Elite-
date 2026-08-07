@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-market-contract.ts",
+    "server/mlb-market-probability-contract.ts",
+    "server/mlb-market-run-distribution.ts",
+    "server/mlb-market-run-distribution.test.ts",
+    "server/mlb-market-calibration.ts",
+    "server/mlb-market-calibration.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
