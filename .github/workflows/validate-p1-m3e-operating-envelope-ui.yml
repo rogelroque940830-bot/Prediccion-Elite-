@@ -1,0 +1,88 @@
+name: Validate P1-M3E Operating Envelope UI
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-operating-envelope.ts'
+      - 'frontend/client/src/lib/mlb-operating-envelope.test.ts'
+      - 'frontend/client/src/components/mlb-operating-envelope-card.tsx'
+      - 'frontend/client/src/pages/mlb-economic-review-activated.tsx'
+      - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_UI.md'
+      - '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3e-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run P1-M3E and inherited economic-review parsers
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-operating-envelope.test.ts \
+            client/src/lib/mlb-interactive-economic-review.test.ts \
+            client/src/lib/mlb-real-cohort-activation.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify authenticated read-only and scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper='frontend/client/src/lib/mlb-operating-envelope.ts'
+          component='frontend/client/src/components/mlb-operating-envelope-card.tsx'
+          wrapper='frontend/client/src/pages/mlb-economic-review-activated.tsx'
+          docs='docs/P1_M3E_MLB_OPERATING_ENVELOPE_UI.md'
+
+          grep -F '/api/mlb/p1/v1/operating-envelope' "$helper"
+          grep -F 'ELITE_MODEL_QUALITY_SUPPORTED' "$helper" "$component"
+          grep -F 'temporalSplit.leakageFree' "$helper"
+          grep -F 'unsafe_operationalGateAllowed' frontend/client/src/lib/mlb-operating-envelope.test.ts
+          grep -F 'MlbOperatingEnvelopeCard' "$wrapper"
+          grep -F '["p1-m3e-operating-envelope"]' "$wrapper"
+          grep -F 'fetchJson<unknown>(MLB_P1_M3E_ENDPOINT)' "$wrapper"
+          grep -F 'Condiciones Élite MLB · Operating Envelope' "$component"
+          grep -F 'No se muestra una condición élite' "$wrapper"
+          grep -F 'does not implement a second authentication path' "$docs"
+
+          ! grep -E '\bapiRequest\s*\(|\bfetch\s*\(' "$component" "$wrapper"
+          ! grep -E 'POST|PUT|PATCH|DELETE|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$component" "$wrapper" "$helper"
+          ! grep -E 'operationalGateAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$component" "$wrapper" "$helper"
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m3e-ui-bundle.js
+          grep -F '/api/mlb/p1/v1/operating-envelope' /tmp/p1-m3e-ui-bundle.js
+          grep -F 'Condiciones Élite MLB' /tmp/p1-m3e-ui-bundle.js
+          grep -F 'Muestra insuficiente' /tmp/p1-m3e-ui-bundle.js
+          grep -F 'Candidata no confirmada' /tmp/p1-m3e-ui-bundle.js
+          grep -F 'Calidad élite respaldada' /tmp/p1-m3e-ui-bundle.js
+      - name: Verify exact P1-M3E UI scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_UI.md' \
+            'frontend/client/src/components/mlb-operating-envelope-card.tsx' \
+            'frontend/client/src/lib/mlb-operating-envelope.test.ts' \
+            'frontend/client/src/lib/mlb-operating-envelope.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          [[ "$changed" == "$expected" ]]
