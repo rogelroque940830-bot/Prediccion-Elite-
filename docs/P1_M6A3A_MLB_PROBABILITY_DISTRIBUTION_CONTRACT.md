@@ -14,6 +14,14 @@ The Negative Binomial is chosen as an explicitly testable baseline rather than a
 - Bayesian comparison of Poisson, Negative Binomial and Normal point models across North American sports: https://pmc.ncbi.nlm.nih.gov/articles/PMC8282683/
 - Probability calibration guidance and reliability diagrams: https://scikit-learn.org/stable/modules/calibration.html
 
+## Finite-support numerical safety
+
+The run-count distribution is infinite, so numerical market evaluation requires finite support. A3A treats the caller's `maxRunsPerTeam` as a **minimum requested support**, not as permission to discard a material tail.
+
+The engine expands that support automatically until the omitted probability for each team is at most `1e-6`, subject to a hard ceiling of 60 runs per team. The effective support, requested support, tail target, actual home/away tail mass and whether expansion occurred are all returned in diagnostics.
+
+If the hard ceiling is reached and either omitted tail remains above `1e-6`, the full horizon distribution throws `P1_M6A3A_TAIL_MASS_TARGET_NOT_MET`. It does **not** silently renormalize a materially truncated distribution. Renormalization of the joint finite grid is allowed only after both team tails satisfy the strict target, and the residual omitted masses remain visible in diagnostics.
+
 ## Horizon separation
 
 Separate distributions are required for:
@@ -56,7 +64,7 @@ A3A evaluates full `WIN / PUSH / LOSS` probability vectors with:
 - Wilson 95% intervals for empirical bin frequencies;
 - sample count and observed push rate.
 
-Brier and log loss are proper scoring rules, but Brier alone does not isolate calibration from resolution. Reliability bins are therefore mandatory evidence alongside aggregate scores.
+Brier and log loss are proper scoring rules, but Brier alone does not isolate calibration from resolution. Reliability bins are therefore mandatory evidence alongside aggregate scores. Reported summary rates are rounded for stable transport, so verification uses explicit numerical tolerances rather than binary floating-point equality for non-terminating fractions such as `1/3`.
 
 ## Certification boundary
 
