@@ -7,8 +7,11 @@ on:
     paths:
       - 'server/mlb-market-team-strength.ts'
       - 'server/mlb-market-team-strength.test.ts'
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-historical-dataset.test.ts'
       - 'scripts/p1-m6a3b2a-team-strength-backtest.mjs'
       - 'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
+      - 'evidence/p1-m6a3b1/2025-outcome-integrity.json'
       - 'tsconfig.p1-m6a3b2a-team-strength.json'
       - '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml'
   workflow_dispatch:
@@ -55,20 +58,27 @@ jobs:
         run: |
           set -euo pipefail
           model='server/mlb-market-team-strength.ts'
+          dataset='server/mlb-market-historical-dataset.ts'
           script='scripts/p1-m6a3b2a-team-strength-backtest.mjs'
           docs='docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
-          evidence='evidence/p1-m6a3b1/2025-official-baseline.json'
+          baseline='evidence/p1-m6a3b1/2025-official-baseline.json'
+          integrity='evidence/p1-m6a3b1/2025-outcome-integrity.json'
           grep -F 'NB2_TEAM_ATTACK_DEFENSE_SHRINKAGE' "$model"
           grep -F 'P1_M6A3B2A_INNER_TIME_LEAKAGE_DETECTED' "$model"
           grep -F 'P1_M6A3B2A_OUTER_TIME_LEAKAGE_DETECTED' "$model"
           grep -F 'automaticModelSelectionAllowed: false' "$model"
           grep -F 'automaticPromotionAllowed: false' "$model"
           grep -F 'actionabilityAllowed: false' "$model"
-          grep -F 'P1_M6A3B2A_FROZEN_BASELINE_DATASET_DIGEST_MISMATCH' "$script"
-          grep -F '15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b' "$evidence"
+          grep -F 'digestMlbHistoricalOutcomeObservations' "$dataset"
+          grep -F 'digestMlbHistoricalSourceProvenance' "$dataset"
+          grep -F 'P1_M6A3B2A_FROZEN_BASELINE_OUTCOME_DIGEST_MISMATCH' "$script"
+          grep -F 'providerMetadataDriftObserved' "$script"
+          grep -F '15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b' "$baseline"
+          grep -F 'c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d' "$integrity"
+          grep -F '"gamesWithSportingFieldDifference": 0' "$integrity"
           grep -Fi 'outer validation block is never used to select the prior' "$docs"
-          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$script"
-      - name: Verify exact B2A scope from PR base to PR head
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$dataset" "$script"
+      - name: Verify bounded B2A maintenance scope from PR base to PR head
         shell: bash
         run: |
           set -euo pipefail
@@ -80,12 +90,30 @@ jobs:
             head='HEAD'
           fi
           git diff --check "$base...$head"
-          changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
-            '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml' \
-            'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md' \
-            'scripts/p1-m6a3b2a-team-strength-backtest.mjs' \
-            'server/mlb-market-team-strength.test.ts' \
-            'server/mlb-market-team-strength.ts' \
-            'tsconfig.p1-m6a3b2a-team-strength.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          mapfile -t changed < <(git diff --name-only "$base...$head" | sort)
+          allowed=(
+            '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml'
+            'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
+            'evidence/p1-m6a3b1/2025-outcome-integrity.json'
+            'scripts/p1-m6a3b2a-team-strength-backtest.mjs'
+            'server/mlb-market-historical-dataset.test.ts'
+            'server/mlb-market-historical-dataset.ts'
+            'server/mlb-market-team-strength.test.ts'
+            'server/mlb-market-team-strength.ts'
+            'tsconfig.p1-m6a3b2a-team-strength.json'
+          )
+          for file in "${changed[@]}"; do
+            printf '%s\n' "${allowed[@]}" | grep -Fx -- "$file" >/dev/null || {
+              echo "Unexpected P1-M6A3B2A maintenance file: $file" >&2
+              exit 1
+            }
+          done
+          changed_text=$(printf '%s\n' "${changed[@]}")
+          if grep -Eq '^server/mlb-market-historical-dataset(\.test)?\.ts$' <<<"$changed_text"; then
+            grep -Fx 'server/mlb-market-historical-dataset.ts' <<<"$changed_text" >/dev/null
+            grep -Fx 'server/mlb-market-historical-dataset.test.ts' <<<"$changed_text" >/dev/null
+          fi
+          if grep -Eq '^server/mlb-market-team-strength(\.test)?\.ts$' <<<"$changed_text"; then
+            grep -Fx 'server/mlb-market-team-strength.ts' <<<"$changed_text" >/dev/null
+            grep -Fx 'server/mlb-market-team-strength.test.ts' <<<"$changed_text" >/dev/null
+          fi
