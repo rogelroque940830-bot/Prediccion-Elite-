@@ -92,6 +92,7 @@ jobs:
           git diff --check "$base...$head"
           mapfile -t changed < <(git diff --name-only "$base...$head" | sort)
           allowed=(
+            '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml'
             '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml'
             'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
             'evidence/p1-m6a3b1/2025-outcome-integrity.json'
