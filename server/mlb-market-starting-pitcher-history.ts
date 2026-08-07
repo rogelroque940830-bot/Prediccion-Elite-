@@ -14,7 +14,10 @@ const MAX_CONCURRENCY = 6;
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-export type MlbStartingPitcherIdentityMethod = "GAME_STARTED_FLAG_AND_ORDER" | "PITCHING_ORDER_FIRST";
+export type MlbStartingPitcherIdentityMethod =
+  | "GAME_STARTED_FLAG_AND_ORDER"
+  | "GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER"
+  | "PITCHING_ORDER_FIRST";
 export type MlbPitcherSide = "home" | "away";
 
 export interface MlbHistoricalStartingPitcherLine {
@@ -127,6 +130,22 @@ function explicitStarterIds(players: Record<string, any>): number[] {
   return [...new Set(ids)].sort((a, b) => a - b);
 }
 
+function confirmedZeroPitchingParticipation(players: Record<string, any>, pitcherId: number): boolean {
+  const player = players?.[`ID${pitcherId}`];
+  const pitching = player?.stats?.pitching;
+  if (!pitching || typeof pitching !== "object") return false;
+  const gamesPitched = nonNegativeInteger(pitching.gamesPitched);
+  const battersFaced = nonNegativeInteger(pitching.battersFaced);
+  const inningsPitched = String(pitching.inningsPitched ?? "").trim();
+  let outsRecorded: number;
+  try {
+    outsRecorded = mlbInningsPitchedToOuts(inningsPitched);
+  } catch {
+    return false;
+  }
+  return gamesPitched === 0 && outsRecorded === 0 && battersFaced === 0;
+}
+
 function parseStarter(
   game: MlbHistoricalOfficialGame,
   boxscore: any,
@@ -150,9 +169,24 @@ function parseStarter(
   let identityMethod: MlbStartingPitcherIdentityMethod = "PITCHING_ORDER_FIRST";
   if (explicit.length > 1) throw new Error(`P1_M6A3B2B1_MULTIPLE_GAME_STARTED_FLAGS:${side}`);
   if (explicit.length === 1) {
-    if (explicit[0] !== firstPitcherId) throw new Error(`P1_M6A3B2B1_STARTER_ORDER_CONFLICT:${side}`);
-    pitcherId = explicit[0];
-    identityMethod = "GAME_STARTED_FLAG_AND_ORDER";
+    const explicitPitcherId = explicit[0];
+    const explicitOrderIndex = pitchingOrder.indexOf(explicitPitcherId);
+    if (explicitOrderIndex < 0) throw new Error(`P1_M6A3B2B1_STARTER_ORDER_CONFLICT:${side}`);
+    if (explicitPitcherId === firstPitcherId) {
+      pitcherId = explicitPitcherId;
+      identityMethod = "GAME_STARTED_FLAG_AND_ORDER";
+    } else {
+      const precedingPitchers = pitchingOrder.slice(0, explicitOrderIndex);
+      const allPrecedingConfirmedNonParticipants = precedingPitchers.length > 0
+        && precedingPitchers.every((id) => confirmedZeroPitchingParticipation(players, id));
+      if (!allPrecedingConfirmedNonParticipants) {
+        throw new Error(`P1_M6A3B2B1_STARTER_ORDER_CONFLICT:${side}`);
+      }
+      pitcherId = explicitPitcherId;
+      identityMethod = "GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER";
+    }
+  } else if (confirmedZeroPitchingParticipation(players, firstPitcherId)) {
+    throw new Error(`P1_M6A3B2B1_ZERO_PARTICIPATION_FIRST_WITHOUT_STARTER_FLAG:${side}`);
   }
 
   const player = players?.[`ID${pitcherId}`];
@@ -342,6 +376,7 @@ export async function fetchMlbHistoricalStartingPitcherHistory(options: {
     .sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.gamePk - b.gamePk);
   const identityMethodCounts: Record<MlbStartingPitcherIdentityMethod, number> = {
     GAME_STARTED_FLAG_AND_ORDER: 0,
+    GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER: 0,
     PITCHING_ORDER_FIRST: 0,
   };
   for (const game of games) {
