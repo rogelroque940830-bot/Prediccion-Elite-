@@ -3,6 +3,7 @@
   "include": [
     "server/mlb-p1-operating-envelope.ts",
     "server/mlb-p1-operating-envelope.test.ts",
+    "server/mlb-p1-operating-envelope-routes.ts",
     "server/mlb-p1-economic-review.ts",
     "server/mlb-shadow-evaluation.ts",
     "server/mlb-ledger-store.ts",
