@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b2c1-2025-evidence.v1",
+  "evidenceDate": "2026-08-07",
+  "stage": "P1-M6A3B2C1",
+  "subject": "historical MLB T-5 official batting-order source coverage certification",
+  "researchRun": {
+    "pullRequest": 333,
+    "workflowRunId": 31219968270,
+    "artifactId": 9010094577,
+    "validMergeRef": "3caf57d5cac7b4bdcf7af5e183c8d03bd70e5195",
+    "researchHead": "e21b3b5ef07601ce397dbc75ecc297e488acaf68",
+    "mergedB2C1Base": "00660f488261c7a8cc592f4e204dd612500b2813",
+    "artifactZipSha256": "ca09b7f2fc018c25fa8b4317685a04eb5152605f0a3cb07739b38fbab129a916",
+    "artifactFiles": 3
+  },
+  "frozenSportingIdentity": {
+    "regularSeasonFinalGames": 2430,
+    "outcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "outcomeDigestReproduced": true,
+    "gamePkSetMatchesFrozenB1": true,
+    "missingGamePks": [],
+    "extraGamePks": []
+  },
+  "sourceCertification": {
+    "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4",
+    "cutoffSecondsBeforeScheduledStart": 300,
+    "scheduleGames": 2430,
+    "snapshotsFetched": 2430,
+    "acquisitionFailures": 0,
+    "scheduleResolutionCounts": {
+      "DIRECT": 2396,
+      "RESCHEDULED_FINAL_SELECTED": 30,
+      "SUSPENDED_ORIGINAL_START_SELECTED": 4
+    },
+    "completeLineupGames": 2423,
+    "completeCoveragePct": 99.711934,
+    "availabilityCounts": {
+      "COMPLETE": 2423,
+      "HOME_INCOMPLETE": 0,
+      "AWAY_INCOMPLETE": 0,
+      "BOTH_INCOMPLETE": 0,
+      "NOT_PREGAME_AT_CUTOFF": 1,
+      "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF": 6,
+      "IDENTITY_CONFLICT": 0
+    },
+    "lineupHistoryDigest": "f19f28dfe283139aac7f1e1a4da0837a93b63265974deb17e4bd315da2f58e85",
+    "sourceProvenanceDigest": "d65ed173c68c38fedd468e3015e46843a2b1906b0c6cb59591fd12b0c96410e4",
+    "completeGamePksDigest": "19f38a6c2bfd8bc490142b7634b4769e40cf165c15f2150b5a2d92f756075775"
+  },
+  "excludedSnapshots": [
+    {
+      "gamePk": 778527,
+      "officialDate": "2025-03-30",
+      "scheduledStart": "2025-03-30T18:10:00.000Z",
+      "scheduleResolution": "DIRECT",
+      "cutoffAt": "2025-03-30T18:05:00.000Z",
+      "requestedTimecode": "20250330_180500",
+      "sourceMetadataTimecode": "20250330_130841",
+      "availability": "NOT_PREGAME_AT_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "I",
+        "detailedState": "In Progress"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 778195,
+      "officialDate": "2025-04-24",
+      "scheduledStart": "2025-04-24T18:15:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-04-24T18:10:00.000Z",
+      "requestedTimecode": "20250424_181000",
+      "sourceMetadataTimecode": "20250424_210946",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 778170,
+      "officialDate": "2025-04-27",
+      "scheduledStart": "2025-04-27T17:40:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-04-27T17:35:00.000Z",
+      "requestedTimecode": "20250427_173500",
+      "sourceMetadataTimecode": "20250427_205532",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 778046,
+      "officialDate": "2025-05-06",
+      "scheduledStart": "2025-05-06T19:40:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-05-06T19:35:00.000Z",
+      "requestedTimecode": "20250506_193500",
+      "sourceMetadataTimecode": "20250506_225236",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 778029,
+      "officialDate": "2025-05-08",
+      "scheduledStart": "2025-05-08T19:15:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-05-08T19:10:00.000Z",
+      "requestedTimecode": "20250508_191000",
+      "sourceMetadataTimecode": "20250508_215613",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 777938,
+      "officialDate": "2025-05-14",
+      "scheduledStart": "2025-05-14T16:10:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-05-14T16:05:00.000Z",
+      "requestedTimecode": "20250514_160500",
+      "sourceMetadataTimecode": "20250514_193735",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    },
+    {
+      "gamePk": 777458,
+      "officialDate": "2025-06-19",
+      "scheduledStart": "2025-06-19T18:15:00.000Z",
+      "scheduleResolution": "RESCHEDULED_FINAL_SELECTED",
+      "cutoffAt": "2025-06-19T18:10:00.000Z",
+      "requestedTimecode": "20250619_181000",
+      "sourceMetadataTimecode": "20250619_213330",
+      "availability": "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF",
+      "gameState": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "homeOrderCount": 9,
+      "awayOrderCount": 9
+    }
+  ],
+  "artifactIntegrity": {
+    "manifest.json": {
+      "sha256": "f0ae7350aaaba5fd7c5764ffc23fa8aca3b3cc4939829a7ab0f976278677949b",
+      "bytes": 1869,
+      "schemaVersion": "courtedge-p1-m6a3b2c1-2025-lineup-coverage-manifest.v4"
+    },
+    "source-integrity.json": {
+      "sha256": "42090cfd68c402e90775d6e94312265a17801c728248ec806fae45bb9974051f",
+      "bytes": 1570,
+      "schemaVersion": "courtedge-p1-m6a3b2c1-2025-source-integrity.v4"
+    },
+    "pregame-lineup-history.json": {
+      "sha256": "9633cd9d7a653e9cfe2ad6d4331cb1f74280c5ff72a37d304dbafd9f2a8ed74b",
+      "bytes": 2602863
+    },
+    "manifestHashesMatchFiles": true
+  },
+  "scientificConclusion": {
+    "result": "SOURCE_COVERAGE_CERTIFIED_FOR_RESEARCH",
+    "interpretation": "The official MLB historical timecode source provides strict T-5 two-lineup coverage for 2423 of 2430 frozen 2025 regular-season finals (99.711934%). The seven excluded snapshots are explicit fail-closed temporal/state exceptions, not acquisition failures or identity conflicts.",
+    "nextStageDecision": "PROCEED_TO_P1_M6A3B2C2_RESEARCH_ONLY",
+    "doesNotMean": "Coverage certification does not establish that batting-order information improves predictions. Incremental out-of-sample value must be tested separately in B2C2.",
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false
+  }
+}
