@@ -4,6 +4,8 @@ import {
   buildMlbHistoricalDataset,
   deriveMlbHistoricalHorizonObservation,
   digestMlbHistoricalObservations,
+  digestMlbHistoricalOutcomeObservations,
+  digestMlbHistoricalSourceProvenance,
   type MlbHistoricalOfficialGame,
 } from "./mlb-market-historical-dataset";
 
@@ -93,12 +95,46 @@ test("dataset excludes non-regular games and counts incomplete horizons", () => 
   assert.equal(report.actionabilityAllowed, false);
 });
 
-test("dataset digest is deterministic under input order", () => {
-  const left = buildMlbHistoricalDataset([game(), game({ gamePk: 1002, officialDate: "2025-06-02", sourceDigest: DIGEST_B })]);
-  const right = buildMlbHistoricalDataset([game({ gamePk: 1002, officialDate: "2025-06-02", sourceDigest: DIGEST_B }), game()]);
+test("dataset digests are deterministic under input order", () => {
+  const leftGames = [game(), game({ gamePk: 1002, officialDate: "2025-06-02", sourceDigest: DIGEST_B })];
+  const rightGames = [game({ gamePk: 1002, officialDate: "2025-06-02", sourceDigest: DIGEST_B }), game()];
+  const left = buildMlbHistoricalDataset(leftGames);
+  const right = buildMlbHistoricalDataset(rightGames);
   assert.equal(left.datasetDigest, right.datasetDigest);
+  assert.equal(left.outcomeDigest, right.outcomeDigest);
+  assert.equal(left.sourceProvenanceDigest, right.sourceProvenanceDigest);
   assert.equal(left.datasetDigest, digestMlbHistoricalObservations(left.observations));
+  assert.equal(left.outcomeDigest, digestMlbHistoricalOutcomeObservations(left.observations));
+  assert.equal(left.sourceProvenanceDigest, digestMlbHistoricalSourceProvenance(leftGames));
   assert.match(left.datasetDigest, /^[a-f0-9]{64}$/);
+  assert.match(left.outcomeDigest, /^[a-f0-9]{64}$/);
+  assert.match(left.sourceProvenanceDigest, /^[a-f0-9]{64}$/);
+});
+
+test("provider metadata drift changes provenance digests but not canonical outcome digest", () => {
+  const original = buildMlbHistoricalDataset([game()]);
+  const metadataDrift = buildMlbHistoricalDataset([game({ sourceDigest: DIGEST_B })]);
+
+  assert.equal(original.outcomeDigest, metadataDrift.outcomeDigest);
+  assert.notEqual(original.datasetDigest, metadataDrift.datasetDigest);
+  assert.notEqual(original.sourceProvenanceDigest, metadataDrift.sourceProvenanceDigest);
+});
+
+test("canonical outcome changes alter the outcome digest", () => {
+  const original = buildMlbHistoricalDataset([game()]);
+  const changedScore = buildMlbHistoricalDataset([game({
+    homeFinalRuns: 7,
+    innings: [
+      { num: 1, awayRuns: 0, homeRuns: 1 },
+      { num: 2, awayRuns: 1, homeRuns: 0 },
+      { num: 3, awayRuns: 0, homeRuns: 2 },
+      { num: 4, awayRuns: 1, homeRuns: 0 },
+      { num: 5, awayRuns: 0, homeRuns: 1 },
+      { num: 6, awayRuns: 2, homeRuns: 3 },
+    ],
+  })]);
+
+  assert.notEqual(original.outcomeDigest, changedScore.outcomeDigest);
 });
 
 test("malformed official provenance and score data fail closed", () => {
