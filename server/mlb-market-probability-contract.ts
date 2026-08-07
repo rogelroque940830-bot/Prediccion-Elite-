@@ -25,7 +25,10 @@ export interface MlbHorizonRunDistributionInput {
   horizon: MlbProbabilityHorizon;
   home: MlbTeamRunProcessInput;
   away: MlbTeamRunProcessInput;
-  /** Finite support used for numerical evaluation; omitted tail is reported. */
+  /**
+   * Minimum finite support requested for numerical evaluation. A3A may expand
+   * this support automatically until its strict omitted-tail target is met.
+   */
   maxRunsPerTeam?: number;
   fullGameTieHandling?: MlbFullGameTieHandling;
 }
@@ -55,6 +58,7 @@ export interface MlbHorizonRunDistribution {
   period: MlbMarketPeriod;
   homeInput: MlbTeamRunProcessInput;
   awayInput: MlbTeamRunProcessInput;
+  /** Effective support after any adaptive expansion. */
   maxRunsPerTeam: number;
   homeRuns: MlbRunPmfPoint[];
   awayRuns: MlbRunPmfPoint[];
@@ -71,6 +75,10 @@ export interface MlbHorizonRunDistribution {
     yrfi: number | null;
   };
   diagnostics: {
+    requestedMaxRunsPerTeam: number;
+    effectiveMaxRunsPerTeam: number;
+    tailMassTarget: number;
+    adaptiveSupportExpanded: boolean;
     homeTailMass: number;
     awayTailMass: number;
     rawJointMass: number;
