@@ -1,0 +1,99 @@
+name: Validate P1-M3F1 Bullpen Certifiable Evidence
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-bullpen.ts'
+      - 'server/mlb-bullpen.test.ts'
+      - 'server/mlb-p1-pregame-readiness-contract.ts'
+      - 'server/mlb-p1-bullpen-readiness-integration.test.ts'
+      - 'tsconfig.p1-m3f1-bullpen-evidence.json'
+      - 'docs/P1_M3F1_MLB_BULLPEN_CERTIFIABLE_EVIDENCE.md'
+      - '.github/workflows/validate-p1-m3f1-bullpen-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned P1-M3F1 surface
+        run: npx tsc -p tsconfig.p1-m3f1-bullpen-evidence.json
+      - name: Run bullpen source falsification tests
+        run: npx tsx --test server/mlb-bullpen.test.ts
+      - name: Prove ML FINAL is attainable only with certified timed bullpen evidence
+        run: npx tsx --test server/mlb-p1-bullpen-readiness-integration.test.ts
+      - name: Preserve P1-M2A and P1-M2B readiness regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-pregame-readiness-contract.test.ts \
+            server/mlb-p1-pregame-readiness.test.ts
+      - name: Verify modular routes and production backend build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Preserve S5A real-save behavior
+        run: npm run test:s5a-e2e
+      - name: Preserve S5B scientific shadow behavior
+        run: npm run test:s5b-shadow
+      - name: Verify fail-closed bullpen and unchanged readiness boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          bullpen='server/mlb-bullpen.ts'
+          contract='server/mlb-p1-pregame-readiness-contract.ts'
+          docs='docs/P1_M3F1_MLB_BULLPEN_CERTIFIABLE_EVIDENCE.md'
+
+          grep -F 'courtedge-mlb-bullpen-evidence.v1' "$bullpen"
+          grep -F 'sourceStatus: "CERTIFIED"' "$bullpen"
+          grep -F 'failureDisposition: "THROW_FAIL_CLOSED"' "$bullpen"
+          grep -F 'generatedAt,' "$bullpen"
+          grep -F 'BULLPEN_ROSTER_TTL_MS = 30 * 60 * 1000' "$bullpen"
+          grep -F 'BULLPEN_SOURCE_HTTP_' "$bullpen"
+          grep -F 'BULLPEN_SEASON_STATS_UNAVAILABLE' "$bullpen"
+          grep -F 'BULLPEN_BOXSCORE_PITCHERS_MISSING' "$bullpen"
+
+          node --import tsx --input-type=module <<'NODE'
+          import { MLB_P1_M2A_MARKET_REQUIREMENTS, MLB_P1_M2A_SOURCE_INVENTORY } from './server/mlb-p1-pregame-readiness-contract.ts';
+          const bullpen = MLB_P1_M2A_SOURCE_INVENTORY.find((source) => source.id === 'bullpen-availability');
+          if (!bullpen) throw new Error('bullpen source missing');
+          if (bullpen.timestampContract !== 'EXPLICIT') throw new Error(`timestamp=${bullpen.timestampContract}`);
+          if (bullpen.requiredMaxAgeSeconds !== 1800) throw new Error(`maxAge=${bullpen.requiredMaxAgeSeconds}`);
+          if (JSON.stringify(MLB_P1_M2A_MARKET_REQUIREMENTS.ML) !== JSON.stringify(['BULLPEN','ADVANCED_FACTORS'])) {
+            throw new Error(`ML requirements changed: ${JSON.stringify(MLB_P1_M2A_MARKET_REQUIREMENTS.ML)}`);
+          }
+          NODE
+
+          grep -F 'an untimed successful payload remains `DEGRADED`' "$docs"
+          grep -F 'does **not** imply that current live ML predictions will immediately become FINAL' "$docs"
+
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|appendPrediction\(|appendSettlement\(|sportsbook' "$bullpen" "$contract"
+      - name: Verify exact P1-M3F1 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f1-bullpen-evidence.yml' \
+            'docs/P1_M3F1_MLB_BULLPEN_CERTIFIABLE_EVIDENCE.md' \
+            'server/mlb-bullpen.test.ts' \
+            'server/mlb-bullpen.ts' \
+            'server/mlb-p1-bullpen-readiness-integration.test.ts' \
+            'server/mlb-p1-pregame-readiness-contract.ts' \
+            'tsconfig.p1-m3f1-bullpen-evidence.json' | sort)
+          [[ "$changed" == "$expected" ]]
