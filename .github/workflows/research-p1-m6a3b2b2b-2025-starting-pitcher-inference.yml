@@ -1,0 +1,42 @@
+name: Research P1-M6A3B2B2B 2025 Starting Pitcher Paired Inference
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m6a3b2b2b-2025-starting-pitcher-inference.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-2025-starting-pitcher-paired-inference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Reproduce frozen sporting cohorts and run B2B2B paired inference
+        run: |
+          node --import tsx scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs \
+            --start 2025-03-01 \
+            --end 2025-10-01 \
+            --concurrency 4 \
+            --out artifacts/p1-m6a3b2b2b-2025-starting-pitcher-inference
+      - name: Verify research run did not modify tracked source
+        run: git diff --exit-code
+      - name: Upload B2B2B official-history research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m6a3b2b2b-2025-starting-pitcher-inference
+          path: artifacts/p1-m6a3b2b2b-2025-starting-pitcher-inference/
+          if-no-files-found: warn
+          retention-days: 30
