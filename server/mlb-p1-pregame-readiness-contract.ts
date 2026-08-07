@@ -125,11 +125,11 @@ export const MLB_P1_M2A_SOURCE_INVENTORY: readonly MlbP1M2aSourceDefinition[] = 
     field: "BULLPEN",
     endpoint: "/api/mlb/bullpen-status/:gamePk",
     authority: "DERIVED",
-    timestampContract: "MISSING_UNIFORM_TIMESTAMP",
+    timestampContract: "EXPLICIT",
     currentCacheTtlSeconds: null,
     requiredMaxAgeSeconds: 1800,
     failureDisposition: "PROVISIONAL",
-    notes: "Required for full-game ML, run line and total; advisory for F5 markets.",
+    notes: "P1-M3F1 certifies generatedAt only after active roster, season-role evidence and every required recent final-game boxscore succeed; critical source failure is fail-closed instead of an empty rested-bullpen fallback.",
   },
   {
     id: "pitcher-form-and-recent",
