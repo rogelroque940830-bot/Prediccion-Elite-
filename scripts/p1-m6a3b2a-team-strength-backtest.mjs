@@ -14,6 +14,10 @@ function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/i.test(String(value ?? ""));
+}
+
 async function writeJson(file, value) {
   const text = `${JSON.stringify(value, null, 2)}\n`;
   await fs.writeFile(file, text, "utf8");
@@ -30,9 +34,27 @@ const generatedAt = new Date().toISOString();
 const baselineEvidence = JSON.parse(await fs.readFile(baselineEvidencePath, "utf8"));
 const expectedStart = baselineEvidence?.source?.startDate;
 const expectedEnd = baselineEvidence?.source?.endDate;
-const expectedDigest = baselineEvidence?.integrity?.datasetDigest;
-if (startDate !== expectedStart || endDate !== expectedEnd || !/^[a-f0-9]{64}$/.test(String(expectedDigest ?? ""))) {
-  throw new Error("P1_M6A3B2A_BASELINE_EVIDENCE_RANGE_OR_DIGEST_MISMATCH");
+const expectedSourceVersion = baselineEvidence?.source?.sourceVersion;
+const expectedOutcomeDigest = baselineEvidence?.integrity?.outcomeDigest;
+const frozenSourceProvenanceDigest = baselineEvidence?.integrity?.sourceProvenanceDigest;
+const frozenLegacyDatasetDigest = baselineEvidence?.integrity?.legacyDatasetDigest;
+const expectedScheduleGames = Number(baselineEvidence?.integrity?.scheduleGames);
+const expectedOfficialFinalGames = Number(baselineEvidence?.integrity?.officialFinalGames);
+const expectedRegularSeasonFinalGames = Number(baselineEvidence?.integrity?.regularSeasonFinalGames);
+const expectedObservations = baselineEvidence?.sample?.observationsByHorizon ?? {};
+
+if (
+  startDate !== expectedStart
+  || endDate !== expectedEnd
+  || !String(expectedSourceVersion ?? "").trim()
+  || !isSha256(expectedOutcomeDigest)
+  || !isSha256(frozenSourceProvenanceDigest)
+  || !isSha256(frozenLegacyDatasetDigest)
+  || !Number.isInteger(expectedScheduleGames)
+  || !Number.isInteger(expectedOfficialFinalGames)
+  || !Number.isInteger(expectedRegularSeasonFinalGames)
+) {
+  throw new Error("P1_M6A3B2A_BASELINE_EVIDENCE_CONTRACT_INVALID");
 }
 
 await fs.mkdir(outputRoot, { recursive: true });
@@ -41,23 +63,54 @@ const acquisitionArtifact = await writeJson(path.join(outputRoot, "acquisition.j
 if (acquisition.failures.length > 0) {
   throw new Error(`P1_M6A3B2A_ACQUISITION_INCOMPLETE:${acquisition.failures.length}`);
 }
+if (acquisition.sourceVersion !== expectedSourceVersion) {
+  throw new Error(`P1_M6A3B2A_SOURCE_VERSION_MISMATCH:${acquisition.sourceVersion}`);
+}
+if (acquisition.scheduleGames !== expectedScheduleGames || acquisition.officialFinalGames !== expectedOfficialFinalGames) {
+  throw new Error(`P1_M6A3B2A_FROZEN_BASELINE_ACQUISITION_COUNT_MISMATCH:${acquisition.scheduleGames}:${acquisition.officialFinalGames}`);
+}
 
 const dataset = buildMlbHistoricalDataset(acquisition.games, { generatedAt });
 const datasetArtifact = await writeJson(path.join(outputRoot, "dataset.json"), dataset);
-if (dataset.datasetDigest !== expectedDigest) {
-  throw new Error(`P1_M6A3B2A_FROZEN_BASELINE_DATASET_DIGEST_MISMATCH:${dataset.datasetDigest}`);
+if (dataset.regularSeasonFinalGames !== expectedRegularSeasonFinalGames) {
+  throw new Error(`P1_M6A3B2A_FROZEN_BASELINE_GAME_COUNT_MISMATCH:${dataset.regularSeasonFinalGames}`);
 }
+for (const [horizon, expected] of Object.entries(expectedObservations)) {
+  const actual = dataset.observationsByHorizon[horizon];
+  if (actual !== expected) {
+    throw new Error(`P1_M6A3B2A_FROZEN_BASELINE_OBSERVATION_COUNT_MISMATCH:${horizon}:${actual}`);
+  }
+}
+if (dataset.outcomeDigest !== expectedOutcomeDigest) {
+  throw new Error(`P1_M6A3B2A_FROZEN_BASELINE_OUTCOME_DIGEST_MISMATCH:${dataset.outcomeDigest}`);
+}
+
+const sourceProvenanceDrift = dataset.sourceProvenanceDigest !== frozenSourceProvenanceDigest;
+const legacyDatasetDigestDrift = dataset.datasetDigest !== frozenLegacyDatasetDigest;
 
 const report = buildMlbTeamStrengthOosReport(dataset.observations, { generatedAt });
 const reportArtifact = await writeJson(path.join(outputRoot, "team-strength-oos-report.json"), report);
 const manifest = {
-  schemaVersion: "courtedge-p1-m6a3b2a-team-strength-artifact-manifest.v1",
+  schemaVersion: "courtedge-p1-m6a3b2a-team-strength-artifact-manifest.v2",
   generatedAt,
   sourceVersion: acquisition.sourceVersion,
   range: { startDate, endDate },
-  frozenB1DatasetDigest: expectedDigest,
-  reproducedDatasetDigest: dataset.datasetDigest,
-  datasetDigestMatchesFrozenB1: dataset.datasetDigest === expectedDigest,
+  frozenB1: {
+    outcomeDigest: expectedOutcomeDigest,
+    sourceProvenanceDigest: frozenSourceProvenanceDigest,
+    legacyDatasetDigest: frozenLegacyDatasetDigest,
+  },
+  reproduced: {
+    outcomeDigest: dataset.outcomeDigest,
+    sourceProvenanceDigest: dataset.sourceProvenanceDigest,
+    legacyDatasetDigest: dataset.datasetDigest,
+  },
+  integrity: {
+    outcomeDigestMatchesFrozenB1: dataset.outcomeDigest === expectedOutcomeDigest,
+    sourceProvenanceDrift,
+    legacyDatasetDigestDrift,
+    providerFeedDriftObserved: sourceProvenanceDrift || legacyDatasetDigestDrift,
+  },
   games: {
     scheduled: acquisition.scheduleGames,
     officialFinal: acquisition.officialFinalGames,
@@ -78,8 +131,13 @@ await writeJson(path.join(outputRoot, "manifest.json"), manifest);
 
 console.log("P1_M6A3B2A_TEAM_STRENGTH_SCIENTIFIC_SUMMARY");
 console.log(JSON.stringify({
-  datasetDigest: dataset.datasetDigest,
-  datasetDigestMatchesFrozenB1: dataset.datasetDigest === expectedDigest,
+  outcomeDigest: dataset.outcomeDigest,
+  outcomeDigestMatchesFrozenB1: dataset.outcomeDigest === expectedOutcomeDigest,
+  sourceProvenanceDigest: dataset.sourceProvenanceDigest,
+  sourceProvenanceDrift,
+  legacyDatasetDigest: dataset.datasetDigest,
+  legacyDatasetDigestDrift,
+  providerFeedDriftObserved: sourceProvenanceDrift || legacyDatasetDigestDrift,
   games: dataset.regularSeasonFinalGames,
   observationsByHorizon: dataset.observationsByHorizon,
   allFoldsLeakageFree: report.allFoldsLeakageFree,
