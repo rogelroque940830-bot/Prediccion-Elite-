@@ -19,90 +19,6 @@ permissions:
   contents: read
 
 jobs:
-  apply-verified-florida-book-key:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-      - name: Apply exact Florida execution-book corrections idempotently
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          normalizer = Path('server/mlb-market-odds-normalizer.ts')
-          text = normalizer.read_text()
-          before = '''export const MLB_EXECUTION_BOOK_PRIORITY = [
-            "hardrockbet_fl",
-            "hardrockbet",
-            "hardrockbet_az",
-          ] as const;'''.replace('          ', '')
-          after = '''export const MLB_EXECUTION_BOOK_PRIORITY = [
-            "hardrockbet_fl",
-          ] as const;'''.replace('          ', '')
-          if before in text:
-              text = text.replace(before, after)
-          elif after not in text:
-              raise SystemExit('unexpected execution-book block')
-          normalizer.write_text(text)
-
-          tests = Path('server/mlb-market-odds-normalizer.test.ts')
-          text = tests.read_text().replace('book("hardrockbet",', 'book("hardrockbet_fl",')
-          tests.write_text(text)
-
-          route_tests = Path('server/mlb-market-universe-odds-routes.test.ts')
-          text = route_tests.read_text()
-          marker = '  assert.equal(url.searchParams.get("bookmakers"), MLB_P1_M6A2_BOOKMAKERS.join(","));\n'
-          addition = '  assert.deepEqual([...MLB_P1_M6A2_BOOKMAKERS], ["hardrockbet_fl", "draftkings", "fanduel", "betmgm"]);\n  assert.equal(MLB_P1_M6A2_BOOKMAKERS.includes("hardrockbet" as any), false);\n  assert.equal(MLB_P1_M6A2_BOOKMAKERS.includes("hardrockbet_az" as any), false);\n'
-          if addition not in text:
-              if text.count(marker) != 1:
-                  raise SystemExit('bookmaker assertion marker missing')
-              text = text.replace(marker, marker + addition)
-          route_tests.write_text(text)
-
-          docs = Path('docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md')
-          text = docs.read_text()
-          before_docs = '''Execution-book priority:
-
-1. `hardrockbet_fl`
-2. `hardrockbet`
-3. `hardrockbet_az`
-'''
-          after_docs = '''Execution book:
-
-- `hardrockbet_fl` — the verified Florida-specific Hard Rock Bet bookmaker key.
-
-Arizona and Ohio Hard Rock books are different jurisdiction-specific execution venues and are not substitutes for the Florida price. No generic `hardrockbet` key is requested because it is not part of the verified provider bookmaker catalog used by this phase.
-'''
-          if before_docs in text:
-              text = text.replace(before_docs, after_docs)
-          elif after_docs not in text:
-              raise SystemExit('unexpected docs execution-book block')
-          text = text.replace('P1-M6A2 requests six explicit bookmakers.', 'P1-M6A2 requests four explicit bookmakers.')
-          docs.write_text(text)
-          PY
-          git diff --check
-      - name: Push source-only correction when needed
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'rogelroque940830-bot'
-          git config user.email '272644701+rogelroque940830-bot@users.noreply.github.com'
-          git add server/mlb-market-odds-normalizer.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-universe-odds-routes.test.ts docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'Florida bookmaker key already verified on branch.'
-            exit 0
-          fi
-          git commit -m 'P1-M6A2: restrict executable odds to verified Hard Rock Florida key'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   validate-p1-m6a2:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -143,7 +59,10 @@ Arizona and Ohio Hard Rock books are different jurisdiction-specific execution v
           route='server/mlb-market-universe-odds-routes.ts'
           docs='docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
           grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' "$normalizer"
-          grep -F 'hardrockbet_fl' "$normalizer"
+          grep -F 'MLB_EXECUTION_BOOK_PRIORITY' "$normalizer"
+          grep -F '"hardrockbet_fl"' "$normalizer"
+          ! grep -F '"hardrockbet",' "$normalizer"
+          ! grep -F '"hardrockbet_az",' "$normalizer"
           grep -F 'reference_consensus' "$normalizer"
           grep -F 'F5_TEAM_TOTAL_NOT_DOCUMENTED_BY_PROVIDER' "$normalizer"
           grep -F 'F3_TEAM_TOTAL_NOT_DOCUMENTED_BY_PROVIDER' "$normalizer"
@@ -158,6 +77,7 @@ Arizona and Ohio Hard Rock books are different jurisdiction-specific execution v
           grep -F 'if (complete)' "$route"
           grep -Fi 'reference consensus is analytical price evidence only' "$docs"
           grep -Fi 'never caches partial coverage' "$docs"
+          grep -Fi 'verified Florida-specific Hard Rock Bet bookmaker key' "$docs"
           grep -F 'registerMlbP1M6a2MarketUniverseOddsRoutes(app)' server/routes.ts
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$normalizer" "$route"
       - name: Verify P1-M6A2 route precedes legacy market support
