@@ -7,6 +7,9 @@ const MAX_RANGE_DAYS = 370;
 const DEFAULT_CONCURRENCY = 4;
 const MAX_CONCURRENCY = 6;
 const REQUEST_TIMEOUT_MS = 20_000;
+const MAX_FETCH_ATTEMPTS = 3;
+const DEFAULT_RETRY_BASE_DELAY_MS = 250;
+const MAX_RETRY_BASE_DELAY_MS = 10_000;
 
 export interface MlbHistoricalFetchFailure {
   gamePk: number | null;
@@ -45,16 +48,55 @@ function validateRange(startDate: string, endDate: string): void {
   if (days > MAX_RANGE_DAYS) throw new Error("P1_M6A3B1_DATE_RANGE_TOO_LARGE");
 }
 
-async function fetchJson(fetchImpl: FetchLike, url: string): Promise<any> {
-  const response = await fetchImpl(url, {
-    headers: {
-      "User-Agent": "CourtEdge-P1-M6A3B1/1.0",
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`MLB_STATS_API_HTTP_${response.status}`);
-  return response.json();
+function transientHttpStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers.get("retry-after");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(30_000, Math.round(seconds * 1000));
+  const absolute = Date.parse(raw);
+  if (Number.isFinite(absolute)) return Math.max(0, Math.min(30_000, absolute - Date.now()));
+  return null;
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return;
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJson(fetchImpl: FetchLike, url: string, retryBaseDelayMs: number): Promise<any> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, {
+        headers: {
+          "User-Agent": "CourtEdge-P1-M6A3B1/1.0",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (response.ok) return response.json();
+
+      const error = new Error(`MLB_STATS_API_HTTP_${response.status}`);
+      if (!transientHttpStatus(response.status) || attempt === MAX_FETCH_ATTEMPTS) throw error;
+      lastError = error;
+      const delay = retryAfterMs(response) ?? retryBaseDelayMs * 2 ** (attempt - 1);
+      await sleep(delay);
+    } catch (error) {
+      if (error instanceof Error && /^MLB_STATS_API_HTTP_\d+$/.test(error.message)) {
+        const status = Number(error.message.split("_").at(-1));
+        if (!transientHttpStatus(status) || attempt === MAX_FETCH_ATTEMPTS) throw error;
+      } else if (attempt === MAX_FETCH_ATTEMPTS) {
+        throw error;
+      }
+      lastError = error;
+      await sleep(retryBaseDelayMs * 2 ** (attempt - 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("P1_M6A3B1_FETCH_RETRY_EXHAUSTED");
 }
 
 function digestPayload(payload: unknown): string {
@@ -159,6 +201,7 @@ export async function fetchMlbHistoricalOfficialGames(options: {
   startDate: string;
   endDate: string;
   concurrency?: number;
+  retryBaseDelayMs?: number;
   fetchImpl?: FetchLike;
 }): Promise<MlbHistoricalFetchReport> {
   validateRange(options.startDate, options.endDate);
@@ -166,9 +209,14 @@ export async function fetchMlbHistoricalOfficialGames(options: {
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > MAX_CONCURRENCY) {
     throw new Error("P1_M6A3B1_INVALID_CONCURRENCY");
   }
+  const retryBaseDelayMs = options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
+  if (!Number.isFinite(retryBaseDelayMs) || retryBaseDelayMs < 0 || retryBaseDelayMs > MAX_RETRY_BASE_DELAY_MS) {
+    throw new Error("P1_M6A3B1_INVALID_RETRY_DELAY");
+  }
+
   const fetchImpl = options.fetchImpl ?? fetch;
   const scheduleUrl = `${MLB_API}/v1/schedule?sportId=1&gameTypes=R&startDate=${encodeURIComponent(options.startDate)}&endDate=${encodeURIComponent(options.endDate)}`;
-  const schedulePayload = await fetchJson(fetchImpl, scheduleUrl);
+  const schedulePayload = await fetchJson(fetchImpl, scheduleUrl, retryBaseDelayMs);
   const gamePks = extractMlbScheduleGamePks(schedulePayload);
   const failures: MlbHistoricalFetchFailure[] = [];
   const excluded: Record<string, number> = {};
@@ -176,7 +224,7 @@ export async function fetchMlbHistoricalOfficialGames(options: {
   const results = await mapWithConcurrency(gamePks, concurrency, async (gamePk) => {
     const url = `${MLB_API}/v1.1/game/${gamePk}/feed/live`;
     try {
-      const payload = await fetchJson(fetchImpl, url);
+      const payload = await fetchJson(fetchImpl, url, retryBaseDelayMs);
       const game = parseMlbHistoricalOfficialFeed(gamePk, payload);
       if (!game) {
         excluded.NOT_OFFICIAL_FINAL = (excluded.NOT_OFFICIAL_FINAL ?? 0) + 1;
