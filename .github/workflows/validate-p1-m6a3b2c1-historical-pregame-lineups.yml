@@ -47,7 +47,7 @@ jobs:
           npm run build:backend
           npm run test:s5a-e2e
           npm run test:s5b-shadow
-      - name: Verify no-lookahead and rescheduled-identity boundaries
+      - name: Verify no-lookahead, rescheduled and suspended identity boundaries
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,12 @@ jobs:
           grep -F 'Date.parse(cutoffAt) < startMs' "$source"
           grep -F 'order.length === 9' "$source"
           grep -F 'RESCHEDULED_FINAL_SELECTED' "$source" "$docs"
+          grep -F 'SUSPENDED_ORIGINAL_START_SELECTED' "$source" "$docs"
+          grep -F 'resolveSuspendedOriginalCandidate' "$source"
+          grep -F 'original.resumeDate !== continuation.scheduledStart' "$source"
+          grep -F 'continuation.resumedFrom !== original.scheduledStart' "$source"
+          grep -F 'resumeDate: validIsoInstant(game?.resumeDate)' "$source"
+          grep -F 'resumedFrom: validIsoInstant(game?.resumedFrom)' "$source"
           grep -F 'isPlayedFinalScheduleCandidate' "$source"
           grep -F 'isExplicitlyObsoleteScheduleCandidate' "$source"
           grep -F 'P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT' "$source" "$docs"
@@ -67,6 +73,7 @@ jobs:
           grep -F 'lineupHistoryDigest' "$source"
           grep -F 'sourceProvenanceDigest' "$source"
           grep -Fi 'never replaced with a final lineup' "$docs"
+          grep -Fi 'original first-pitch start' "$docs"
           grep -F 'actionabilityAllowed: false' "$source"
           grep -F 'automaticModelSelectionAllowed: false' "$source"
           grep -F 'automaticPromotionAllowed: false' "$source"
