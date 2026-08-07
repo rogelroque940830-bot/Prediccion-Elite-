@@ -20,11 +20,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24.18.0'
-      - name: Diagnose full official schedule metadata for gamePk 777861
+      - name: Confirm bidirectional resume metadata for gamePk 777861
         run: |
           node --input-type=module <<'NODE'
           const url = 'https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameTypes=R&startDate=2025-03-01&endDate=2025-10-01';
-          const response = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'CourtEdge-P1-M6A3B2C1-Diagnostic/2.0' } });
+          const response = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'CourtEdge-P1-M6A3B2C1-Diagnostic/3.0' } });
           if (!response.ok) throw new Error(`schedule HTTP ${response.status}`);
           const payload = await response.json();
           const found = [];
@@ -33,26 +33,19 @@ jobs:
               if (Number(game?.gamePk) !== 777861) continue;
               found.push({
                 dateEntry: dateEntry?.date ?? null,
-                topLevelKeys: Object.keys(game).sort(),
                 gamePk: game?.gamePk ?? null,
-                gameType: game?.gameType ?? null,
                 officialDate: game?.officialDate ?? null,
                 gameDate: game?.gameDate ?? null,
-                rescheduleDate: game?.rescheduleDate ?? null,
-                rescheduleGameDate: game?.rescheduleGameDate ?? null,
-                rescheduledFrom: game?.rescheduledFrom ?? null,
-                rescheduledFromDate: game?.rescheduledFromDate ?? null,
                 resumeDate: game?.resumeDate ?? null,
                 resumeGameDate: game?.resumeGameDate ?? null,
+                resumedFrom: game?.resumedFrom ?? null,
+                resumedFromDate: game?.resumedFromDate ?? null,
                 status: game?.status ?? null,
-                doubleHeader: game?.doubleHeader ?? null,
-                gameNumber: game?.gameNumber ?? null,
-                description: game?.description ?? null,
                 homeTeamId: game?.teams?.home?.team?.id ?? null,
                 awayTeamId: game?.teams?.away?.team?.id ?? null,
               });
             }
           }
-          console.log('P1_M6A3B2C1_FULL_SCHEDULE_DIAGNOSTIC_777861');
+          console.log('P1_M6A3B2C1_RESUME_LINK_DIAGNOSTIC_777861');
           console.log(JSON.stringify(found, null, 2));
           NODE
