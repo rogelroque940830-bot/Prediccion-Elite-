@@ -18,7 +18,8 @@ import {
 const EPS = 1e-12;
 const DEFAULT_MAX_RUNS = 20;
 const MIN_MAX_RUNS = 8;
-const MAX_MAX_RUNS = 40;
+const MAX_MAX_RUNS = 60;
+export const MLB_P1_M6A3A_TAIL_MASS_TARGET = 1e-6;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -35,26 +36,38 @@ function sum(values: number[]): number {
 export function negativeBinomialRunPmf(
   input: MlbTeamRunProcessInput,
   maxRuns = DEFAULT_MAX_RUNS,
-): { pmf: MlbRunPmfPoint[]; tailMass: number } {
+): { pmf: MlbRunPmfPoint[]; tailMass: number; maxRunsUsed: number; supportExpanded: boolean } {
   validateRunProcessInput(input);
   if (!Number.isInteger(maxRuns) || maxRuns < MIN_MAX_RUNS || maxRuns > MAX_MAX_RUNS) {
     throw new Error("P1_M6A3A_INVALID_MAX_RUNS");
   }
 
+  const requestedMaxRuns = maxRuns;
   const mu = input.meanRuns;
   const k = input.dispersionK;
   const zeroInflation = input.zeroInflation ?? 0;
-  const values: number[] = new Array(maxRuns + 1).fill(0);
+  const values: number[] = [];
 
   if (mu === 0) {
-    values[0] = 1;
+    values.push(1);
+    while (values.length <= requestedMaxRuns) values.push(0);
   } else {
     const q = mu / (k + mu);
-    let p = Math.exp(k * Math.log(k / (k + mu)));
-    values[0] = zeroInflation + (1 - zeroInflation) * p;
-    for (let runs = 0; runs < maxRuns; runs += 1) {
-      p *= ((runs + k) / (runs + 1)) * q;
-      values[runs + 1] = (1 - zeroInflation) * p;
+    let nbProbability = Math.exp(k * Math.log(k / (k + mu)));
+    values.push(zeroInflation + (1 - zeroInflation) * nbProbability);
+
+    const appendNext = (): void => {
+      const previousRuns = values.length - 1;
+      nbProbability *= ((previousRuns + k) / (previousRuns + 1)) * q;
+      values.push((1 - zeroInflation) * nbProbability);
+    };
+
+    while (values.length <= requestedMaxRuns) appendNext();
+
+    let tailMass = clamp01(1 - sum(values));
+    while (tailMass > MLB_P1_M6A3A_TAIL_MASS_TARGET && values.length - 1 < MAX_MAX_RUNS) {
+      appendNext();
+      tailMass = clamp01(1 - sum(values));
     }
   }
 
@@ -63,6 +76,8 @@ export function negativeBinomialRunPmf(
   return {
     pmf: values.map((probability, runs) => ({ runs, probability: roundProbability(probability) })),
     tailMass: roundProbability(tailMass),
+    maxRunsUsed: values.length - 1,
+    supportExpanded: values.length - 1 > requestedMaxRuns,
   };
 }
 
@@ -121,9 +136,24 @@ export function buildMlbHorizonRunDistribution(
 ): MlbHorizonRunDistribution {
   validateRunProcessInput(input.home);
   validateRunProcessInput(input.away);
-  const maxRunsPerTeam = input.maxRunsPerTeam ?? DEFAULT_MAX_RUNS;
-  const home = negativeBinomialRunPmf(input.home, maxRunsPerTeam);
-  const away = negativeBinomialRunPmf(input.away, maxRunsPerTeam);
+  const requestedMaxRunsPerTeam = input.maxRunsPerTeam ?? DEFAULT_MAX_RUNS;
+
+  const homeInitial = negativeBinomialRunPmf(input.home, requestedMaxRunsPerTeam);
+  const awayInitial = negativeBinomialRunPmf(input.away, requestedMaxRunsPerTeam);
+  const effectiveMaxRunsPerTeam = Math.max(homeInitial.maxRunsUsed, awayInitial.maxRunsUsed);
+  const home = homeInitial.maxRunsUsed === effectiveMaxRunsPerTeam
+    ? homeInitial
+    : negativeBinomialRunPmf(input.home, effectiveMaxRunsPerTeam);
+  const away = awayInitial.maxRunsUsed === effectiveMaxRunsPerTeam
+    ? awayInitial
+    : negativeBinomialRunPmf(input.away, effectiveMaxRunsPerTeam);
+
+  if (
+    home.tailMass > MLB_P1_M6A3A_TAIL_MASS_TARGET
+    || away.tailMass > MLB_P1_M6A3A_TAIL_MASS_TARGET
+  ) {
+    throw new Error("P1_M6A3A_TAIL_MASS_TARGET_NOT_MET");
+  }
 
   const raw: MlbJointRunPoint[] = [];
   let fullGameTieMassRemoved = 0;
@@ -158,7 +188,7 @@ export function buildMlbHorizonRunDistribution(
     period: horizonToPeriod(input.horizon),
     homeInput: input.home,
     awayInput: input.away,
-    maxRunsPerTeam,
+    maxRunsPerTeam: effectiveMaxRunsPerTeam,
     homeRuns: home.pmf,
     awayRuns: away.pmf,
     jointRuns,
@@ -170,6 +200,10 @@ export function buildMlbHorizonRunDistribution(
       yrfi: nrfi == null ? null : roundProbability(1 - nrfi),
     },
     diagnostics: {
+      requestedMaxRunsPerTeam,
+      effectiveMaxRunsPerTeam,
+      tailMassTarget: MLB_P1_M6A3A_TAIL_MASS_TARGET,
+      adaptiveSupportExpanded: effectiveMaxRunsPerTeam > requestedMaxRunsPerTeam,
       homeTailMass: home.tailMass,
       awayTailMass: away.tailMass,
       rawJointMass: Math.round(rawJointMass * 1e12) / 1e12,
