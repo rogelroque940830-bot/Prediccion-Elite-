@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b2c2b-2025-evidence.v1",
+  "evidenceDate": "2026-08-07",
+  "stage": "P1-M6A3B2C2B",
+  "subject": "T-5 lineup incremental paired official-date cluster inference",
+  "researchRun": {
+    "pullRequest": 336,
+    "workflowRunId": 31221724211,
+    "artifactId": 9010790516,
+    "validMergeRef": "3b1bef1341c2bcc55d7419a1d8ea1fab9e2213c6",
+    "researchHead": "459cd97f2894f45b63faca7c0b3f739447c0152f",
+    "mergedB2C2Base": "42156d1670e164efc2e029b6c62fdec765c592a7",
+    "artifactZipSha256": "ed5e8f8d3c71a49d950d414c4611058eb282c93e3be6915cf680ba65a7aa86f2",
+    "artifactFiles": 4
+  },
+  "frozenSportingIdentity": {
+    "regularSeasonFinalGames": 2430,
+    "certifiedLineupGames": 2423,
+    "outcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "outcomeDigestReproduced": true,
+    "lineupHistoryDigest": "f19f28dfe283139aac7f1e1a4da0837a93b63265974deb17e4bd315da2f58e85",
+    "lineupHistoryDigestReproduced": true,
+    "completeGamePksDigest": "19f38a6c2bfd8bc490142b7634b4769e40cf165c15f2150b5a2d92f756075775",
+    "completeGamePksDigestReproduced": true,
+    "allFoldsLeakageFree": true
+  },
+  "sourceIntegrity": {
+    "lineupSourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4",
+    "lineupSnapshotsFetched": 2430,
+    "availabilityCounts": {
+      "COMPLETE": 2423,
+      "HOME_INCOMPLETE": 0,
+      "AWAY_INCOMPLETE": 0,
+      "BOTH_INCOMPLETE": 0,
+      "NOT_PREGAME_AT_CUTOFF": 1,
+      "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF": 6,
+      "IDENTITY_CONFLICT": 0
+    },
+    "scheduleResolutionCounts": {
+      "DIRECT": 2396,
+      "RESCHEDULED_FINAL_SELECTED": 30,
+      "SUSPENDED_ORIGINAL_START_SELECTED": 4
+    }
+  },
+  "artifactIntegrity": {
+    "manifest.json": {"sha256": "013eb0e6c6540e4e60acd6549a7d1ab78963c2ff3c1604e9b6f824c7e2c78fb9", "bytes": 8229},
+    "source-integrity.json": {"sha256": "27261a9d757f8a0359e58b8dd76d8e3b96e932a0fa29a2d8549a8afddd50f5b9", "bytes": 1770},
+    "lineup-oos-report.json": {"sha256": "028a24e7ce30ebbe4bb243b9439d8130995674a6a9155c0bc8d80de19faac21f", "bytes": 3327229},
+    "lineup-paired-inference.json": {"sha256": "57528e87a9d17707db42b42da534271f59d1093b7ba052fe7995005adc77bb16", "bytes": 5933},
+    "manifestHashesMatchFiles": true
+  },
+  "inferenceConfiguration": {
+    "validationGamesPerHorizon": 1506,
+    "validationGamesExcludedForLineupPerHorizon": 1,
+    "dateClustersPerHorizon": 112,
+    "countObservationsPerHorizon": 3012,
+    "bootstrapReplicates": 5000,
+    "familywiseHorizons": 4,
+    "bonferroniFamilywiseConfidenceLevel": 0.9875
+  },
+  "horizons": [
+    {
+      "horizon": "FIRST_INNING",
+      "teamMinusLineupCountNll": -0.00025798,
+      "familywiseInterval": [-0.00065770, 0.00005789],
+      "evidenceStatus": "INCONCLUSIVE",
+      "overallEvidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FIRST_3",
+      "teamMinusLineupCountNll": -0.00060097,
+      "familywiseInterval": [-0.00127915, -0.00006278],
+      "evidenceStatus": "SUPPORTED_REGRESSION",
+      "overallEvidenceStatus": "SUPPORTED_REGRESSION"
+    },
+    {
+      "horizon": "FIRST_5",
+      "teamMinusLineupCountNll": -0.00094025,
+      "familywiseInterval": [-0.00169574, -0.00024158],
+      "evidenceStatus": "SUPPORTED_REGRESSION",
+      "overallEvidenceStatus": "SUPPORTED_REGRESSION"
+    },
+    {
+      "horizon": "FULL_GAME",
+      "teamMinusLineupCountNll": -0.00224493,
+      "familywiseInterval": [-0.00378403, -0.00094269],
+      "evidenceStatus": "SUPPORTED_REGRESSION",
+      "overallEvidenceStatus": "SUPPORTED_REGRESSION"
+    }
+  ],
+  "scientificConclusion": {
+    "result": "DO_NOT_PROMOTE_LINEUP_FEATURE",
+    "interpretation": "The specific B2C2 T-5 lineup representation did not demonstrate incremental out-of-sample improvement over team-only NB2. FIRST_INNING was inconclusive with a slightly unfavorable point estimate; FIRST_3, FIRST_5 and FULL_GAME showed family-wise supported regression versus team-only.",
+    "doesNotMean": "This does not establish that confirmed lineups are generally unimportant; it evaluates only the B2C2 geometric-mean aggregation of nine shrunk batter residual run factors.",
+    "promotionDecision": "DO_NOT_PROMOTE",
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false
+  }
+}
