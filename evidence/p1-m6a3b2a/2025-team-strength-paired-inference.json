@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b2a-2025-paired-evidence.v1",
+  "evidenceStatus": "RESEARCH_ONLY_INCONCLUSIVE",
+  "source": {
+    "githubActionsRunId": 31199847411,
+    "artifactId": 9002447676,
+    "artifactName": "p1-m6a3b2a-2025-team-strength",
+    "artifactZipSha256": "202bb1749484497e1a8ff0f89199d324edb2abc29c9762602ff344640ba5da51",
+    "sourceVersion": "statsapi.mlb.com-v1.1",
+    "startDate": "2025-03-01",
+    "endDate": "2025-10-01"
+  },
+  "integrity": {
+    "frozenB1OutcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "reproducedOutcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "outcomeDigestMatchesFrozenB1": true,
+    "providerFeedDriftObserved": true,
+    "regularSeasonFinalGames": 2430,
+    "observationsPerHorizon": 2430,
+    "allFoldsLeakageFree": true,
+    "oosValidationGamesPerHorizon": 1507,
+    "dateClustersPerHorizon": 112,
+    "bootstrapReplicates": 5000,
+    "familywiseHorizons": 4,
+    "bonferroniConfidenceLevel": 0.9875
+  },
+  "artifactFiles": {
+    "acquisition.json": "8e60ebcfbb01c144e156c4255786f6e164658d93933577ee36108efa0576834d",
+    "dataset.json": "d25dc768d16e339f62fa9b3fad1f9991f50ab3a50ff6a0f48957345eba057507",
+    "team-strength-oos-report.json": "3f8ab7e8ec8950790b62bea3e51c6e8a69c61eb9762c3c06184797373a0caca9",
+    "paired-date-inference.json": "43f32d70ff42bf4f907e29cdeb39031e6497157268547757349dad66d9a1abc1",
+    "manifest.json": "5ce5c6a2606e3fb7e5df618a20bb2020a741b2065c4dc27567b91d001b9e23df"
+  },
+  "horizons": [
+    {
+      "horizon": "FIRST_INNING",
+      "pointEstimateBaselineMinusChallengerCountNll": -0.00160892,
+      "relativeCountNllReductionPct": -0.164112,
+      "unadjusted95": [-0.00509418, 0.00194785],
+      "bonferroniFamilywise9875": [-0.00593715, 0.00310841],
+      "evidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FIRST_3",
+      "pointEstimateBaselineMinusChallengerCountNll": 0.00188046,
+      "relativeCountNllReductionPct": 0.110957,
+      "unadjusted95": [-0.0022193, 0.00580761],
+      "bonferroniFamilywise9875": [-0.0032137, 0.00691073],
+      "evidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FIRST_5",
+      "pointEstimateBaselineMinusChallengerCountNll": 0.00466759,
+      "relativeCountNllReductionPct": 0.223201,
+      "unadjusted95": [-0.00008491, 0.009302],
+      "bonferroniFamilywise9875": [-0.00138753, 0.01054747],
+      "evidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FULL_GAME",
+      "pointEstimateBaselineMinusChallengerCountNll": 0.00329231,
+      "relativeCountNllReductionPct": 0.132462,
+      "unadjusted95": [-0.00134313, 0.00784782],
+      "bonferroniFamilywise9875": [-0.00261516, 0.00910429],
+      "evidenceStatus": "INCONCLUSIVE"
+    }
+  ],
+  "scientificConclusion": {
+    "teamStrengthAloneSupportedForPromotion": false,
+    "reason": "All four family-wise paired intervals include zero; no horizon demonstrates supported improvement or supported regression.",
+    "nextRequiredChallenger": "P1_M6A3B2B_STARTING_PITCHER_INCREMENTAL_TEST"
+  },
+  "safety": {
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false
+  }
+}
