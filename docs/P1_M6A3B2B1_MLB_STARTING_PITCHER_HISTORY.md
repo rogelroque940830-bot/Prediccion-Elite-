@@ -8,9 +8,15 @@ The source exists so B2B2 can later estimate a pitcher's pregame strength using 
 
 ## Official identity contract
 
-For each side, the parser reads the official MLB boxscore pitching order. The first pitcher in that order is the starter candidate. When the game-level `gamesStarted=1` flag is available, it must identify the same pitcher; disagreement fails closed. If the explicit game-started flag is absent, the source may use the first official pitching-order entry but records the weaker identity method separately.
+For each side, the parser reads the official MLB boxscore pitching order and the game-level `gamesStarted=1` flag when available.
 
-This explicitly supports openers: an opener is still the official starting pitcher for the game's starter identity even if he records few outs.
+The ordinary case requires the unique `gamesStarted=1` pitcher to be the first pitcher in official pitching order. There is one evidence-backed exception for late starter changes: MLB may retain a scheduled pitcher at the front of `pitchers[]` even though that pitcher never entered the game. A unique explicit starter may supersede one or more preceding pitching-order entries only when every preceding entry is positively confirmed as a non-participant with `gamesPitched=0`, `inningsPitched=0.0`, and `battersFaced=0`. That case is recorded separately as `GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER`.
+
+This rule was required by official game 777342 (Philadelphia at Atlanta, 2025-06-27): Mick Abel remained first in MLB's `pitchers[]` after a long rain delay but had zero pitching participation, while Tanner Banks was marked `gamesStarted=1` and actually started the game. The parser must identify Banks without weakening conflict detection for games in which the earlier pitcher actually participated.
+
+If an explicit starter is not present in pitching order, if more than one pitcher has `gamesStarted=1`, or if any pitcher preceding the explicit starter has real pitching participation, identity disagreement still fails closed. If no explicit starter flag exists, the first pitching-order entry may be used only when it is not a confirmed zero-participation placeholder.
+
+This explicitly supports openers: an opener is still the official starting pitcher for the game's starter identity even if he records few or zero outs, provided he actually participates. A pitcher who faces batters but records zero outs is therefore **not** treated as a non-participant.
 
 ## Baseball-stat contract
 
@@ -20,7 +26,7 @@ The stored game line includes outs recorded, batters faced when supplied, runs, 
 
 ## Cohort integrity
 
-The real 2025 backfill must first reproduce the frozen P1-M6A3B1 canonical outcome digest and official-game count. The starter cohort is then required to contain both official starters for every game in that same sample. Any official-history acquisition failure, boxscore failure, identity conflict, malformed innings notation, team mismatch, missing required pitching stats, or incomplete two-starter coverage fails the research run.
+The real 2025 backfill must first reproduce the frozen P1-M6A3B1 canonical outcome digest and official-game count. The starter cohort is then required to contain both official starters for every game in that same sample. Any official-history acquisition failure, boxscore failure, unresolved identity conflict, malformed innings notation, team mismatch, missing required pitching stats, or incomplete two-starter coverage fails the research run.
 
 ## Future B2B2 as-of rule
 
