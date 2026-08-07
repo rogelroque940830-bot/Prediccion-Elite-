@@ -1,0 +1,42 @@
+name: Research P1-M6A3B2C2 2025 Lineup OOS
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m6a3b2c2-2025-lineup-oos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-2025-lineup-oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Reproduce frozen sources and run B2C2 lineup OOS paired research
+        run: |
+          node --import tsx scripts/p1-m6a3b2c2-lineup-oos.mjs \
+            --start 2025-03-01 \
+            --end 2025-10-01 \
+            --concurrency 4 \
+            --out artifacts/p1-m6a3b2c2-2025-lineup-oos
+      - name: Verify research run did not modify tracked source
+        run: git diff --exit-code
+      - name: Upload B2C2 2025 lineup OOS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m6a3b2c2-2025-lineup-oos
+          path: artifacts/p1-m6a3b2c2-2025-lineup-oos/
+          if-no-files-found: warn
+          retention-days: 30
