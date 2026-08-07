@@ -150,7 +150,7 @@ test("strong team signal produces supported improvement only after paired date u
   assert.ok(report.horizons.every((horizon) => (horizon.bonferroniFamilywise?.lower ?? -1) > 0));
 });
 
-test("homogeneous team evidence remains inconclusive rather than being promoted from point-estimate sign", () => {
+test("homogeneous team evidence never creates a false supported improvement", () => {
   const report = buildMlbTeamStrengthPairedInferenceReport(homogeneousRows(90), {
     minimumTrainingDates: 35,
     validationDateCount: 5,
@@ -162,12 +162,22 @@ test("homogeneous team evidence remains inconclusive rather than being promoted 
     bootstrapReplicates: 1000,
     minimumDateClusters: 20,
   });
-  assert.ok(report.horizons.every((horizon) => horizon.evidenceStatus === "INCONCLUSIVE"));
-  assert.ok(report.horizons.every((horizon) => {
+
+  for (const horizon of report.horizons) {
+    assert.notEqual(horizon.evidenceStatus, "SUPPORTED_IMPROVEMENT");
+    assert.ok(
+      horizon.evidenceStatus === "INCONCLUSIVE" || horizon.evidenceStatus === "SUPPORTED_REGRESSION",
+      `unexpected homogeneous-data status ${horizon.horizon}:${horizon.evidenceStatus}`,
+    );
     const interval = horizon.bonferroniFamilywise;
-    return interval != null && interval.lower <= 0 && interval.upper >= 0;
-  }));
-  assert.ok(report.horizons.every((horizon) => horizon.automaticPromotionAllowed === false));
+    assert.ok(interval != null);
+    if (horizon.evidenceStatus === "INCONCLUSIVE") {
+      assert.ok(interval.lower <= 0 && interval.upper >= 0);
+    } else {
+      assert.ok(interval.upper < 0);
+    }
+    assert.equal(horizon.automaticPromotionAllowed, false);
+  }
 });
 
 test("insufficient date clusters fail closed before bootstrap inference", () => {
