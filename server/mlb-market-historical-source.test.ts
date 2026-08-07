@@ -84,6 +84,7 @@ test("fetch report uses schedule then official feeds with bounded concurrency", 
     startDate: "2025-06-01",
     endDate: "2025-06-02",
     concurrency: 2,
+    retryBaseDelayMs: 0,
     fetchImpl,
   });
   assert.equal(report.scheduleGames, 2);
@@ -94,7 +95,73 @@ test("fetch report uses schedule then official feeds with bounded concurrency", 
   assert.equal(report.actionabilityAllowed, false);
 });
 
-test("range and concurrency guards fail before research acquisition", async () => {
+test("transient schedule and feed failures are retried but still use official final evidence only", async () => {
+  let scheduleCalls = 0;
+  let feedCalls = 0;
+  const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/schedule?")) {
+      scheduleCalls += 1;
+      if (scheduleCalls === 1) return new Response("temporary", { status: 503 });
+      return new Response(JSON.stringify({ dates: [{ games: [{ gamePk: 201 }] }] }), { status: 200 });
+    }
+    feedCalls += 1;
+    if (feedCalls === 1) return new Response("slow down", { status: 429, headers: { "retry-after": "0" } });
+    return new Response(JSON.stringify(feed()), { status: 200 });
+  };
+
+  const report = await fetchMlbHistoricalOfficialGames({
+    startDate: "2025-06-01",
+    endDate: "2025-06-01",
+    retryBaseDelayMs: 0,
+    fetchImpl,
+  });
+  assert.equal(scheduleCalls, 2);
+  assert.equal(feedCalls, 2);
+  assert.equal(report.officialFinalGames, 1);
+  assert.equal(report.failures.length, 0);
+});
+
+test("persistent transient feed failure is recorded after bounded retries instead of becoming partial evidence", async () => {
+  let feedCalls = 0;
+  const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/schedule?")) {
+      return new Response(JSON.stringify({ dates: [{ games: [{ gamePk: 301 }] }] }), { status: 200 });
+    }
+    feedCalls += 1;
+    return new Response("unavailable", { status: 503 });
+  };
+
+  const report = await fetchMlbHistoricalOfficialGames({
+    startDate: "2025-06-01",
+    endDate: "2025-06-01",
+    retryBaseDelayMs: 0,
+    fetchImpl,
+  });
+  assert.equal(feedCalls, 3);
+  assert.equal(report.officialFinalGames, 0);
+  assert.equal(report.failures.length, 1);
+  assert.equal(report.failures[0].gamePk, 301);
+  assert.equal(report.failures[0].error, "MLB_STATS_API_HTTP_503");
+});
+
+test("non-transient HTTP failure is not retried", async () => {
+  let scheduleCalls = 0;
+  const fetchImpl = async (): Promise<Response> => {
+    scheduleCalls += 1;
+    return new Response("not found", { status: 404 });
+  };
+  await assert.rejects(() => fetchMlbHistoricalOfficialGames({
+    startDate: "2025-06-01",
+    endDate: "2025-06-01",
+    retryBaseDelayMs: 0,
+    fetchImpl,
+  }), /MLB_STATS_API_HTTP_404/);
+  assert.equal(scheduleCalls, 1);
+});
+
+test("range, concurrency and retry-delay guards fail before research acquisition", async () => {
   await assert.rejects(() => fetchMlbHistoricalOfficialGames({
     startDate: "2024-01-01",
     endDate: "2025-12-31",
@@ -107,4 +174,11 @@ test("range and concurrency guards fail before research acquisition", async () =
     concurrency: 20,
     fetchImpl: async () => new Response("{}", { status: 200 }),
   }), /P1_M6A3B1_INVALID_CONCURRENCY/);
+
+  await assert.rejects(() => fetchMlbHistoricalOfficialGames({
+    startDate: "2025-06-01",
+    endDate: "2025-06-02",
+    retryBaseDelayMs: 20_000,
+    fetchImpl: async () => new Response("{}", { status: 200 }),
+  }), /P1_M6A3B1_INVALID_RETRY_DELAY/);
 });
