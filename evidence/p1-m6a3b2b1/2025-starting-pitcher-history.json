@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b2b1-2025-starting-pitcher-evidence.v1",
+  "researchRun": {
+    "githubActionsRunId": 31203202561,
+    "artifactId": 9003841757,
+    "artifactZipSha256": "7bffa93697678b62bcd768de2278bf5f4d92b78af9a05ed8db1452ed345e29d4",
+    "artifactFiles": 3,
+    "artifactBytes": 343701
+  },
+  "cohort": {
+    "startDate": "2025-03-01",
+    "endDate": "2025-10-01",
+    "scheduledGames": 2430,
+    "officialFinalGames": 2430,
+    "regularSeasonFinalGames": 2430,
+    "gamesWithBothStarters": 2430,
+    "starterLines": 4860,
+    "failures": 0
+  },
+  "integrity": {
+    "frozenB1OutcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "outcomeDigestMatchesFrozenB1": true,
+    "starterHistoryDigest": "2ae7b52b671f84fdecbc802b7891a03b66e768178bc6add177be5116c9426efa",
+    "boxscoreProvenanceDigest": "16893b5346b94971c2eb58e4b1345a85ce3dea3de0ce9b10de5c22a918969bd1",
+    "officialIntegrityArtifactSha256": "3b4d2d49dadb2042477263dcc4262411f5ee8c466fc87891e1923466292d7e03",
+    "startingPitcherHistoryArtifactSha256": "07413bd341857dce2b3377f2a06d71e567babacd3b8e591fabf0ecb840eee08e",
+    "manifestArtifactSha256": "3fe011692e18ece3e9059183e069992585e11878bdfb76c55f6a8b8b52a7a669"
+  },
+  "identityMethodCounts": {
+    "GAME_STARTED_FLAG_AND_ORDER": 4859,
+    "GAME_STARTED_FLAG_AFTER_ZERO_APPEARANCE_LISTING": 1,
+    "PITCHING_ORDER_FIRST": 0
+  },
+  "specialCases": [
+    {
+      "gamePk": 777342,
+      "officialDate": "2025-06-27",
+      "awayTeamId": 143,
+      "homeTeamId": 144,
+      "plannedPitcherIdRetainedFirstInOrder": 690953,
+      "effectiveStarterId": 621383,
+      "reason": "MLB boxscore retained a zero-appearance planned pitcher before the unique gamesStarted=1 effective starter; merged PR #316 handles only this evidence-backed zero-appearance case."
+    }
+  ],
+  "scientificBoundary": {
+    "whatThisProves": "The official 2025 starting-pitcher source is complete and auditable for the frozen B1 cohort.",
+    "whatThisDoesNotProve": "It does not prove that starting-pitcher history improves out-of-sample prediction.",
+    "nextStep": "P1-M6A3B2B2 strict as-of starting-pitcher incremental OOS model",
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false
+  }
+}
