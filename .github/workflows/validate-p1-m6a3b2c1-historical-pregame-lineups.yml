@@ -1,0 +1,88 @@
+name: Validate P1-M6A3B2C1 Historical Pregame Lineups
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-pregame-lineup-history.ts'
+      - 'server/mlb-market-pregame-lineup-history.test.ts'
+      - 'docs/P1_M6A3B2C1_MLB_HISTORICAL_PREGAME_LINEUPS.md'
+      - 'tsconfig.p1-m6a3b2c1-pregame-lineups.json'
+      - '.github/workflows/validate-p1-m6a3b2c1-historical-pregame-lineups.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b2c1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned B2C1 source surface
+        run: npx tsc -p tsconfig.p1-m6a3b2c1-pregame-lineups.json
+      - name: Run historical pregame lineup falsification tests
+        run: npx tsx --test server/mlb-market-pregame-lineup-history.test.ts
+      - name: Preserve upstream historical and readiness contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-p1-pregame-readiness.test.ts
+      - name: Preserve ledger, backend and shadow regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify no-lookahead lineup-source boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-market-pregame-lineup-history.ts'
+          docs='docs/P1_M6A3B2C1_MLB_HISTORICAL_PREGAME_LINEUPS.md'
+          grep -F 'MLB_P1_M6A3B2C1_DEFAULT_CUTOFF_SECONDS = 300' "$source"
+          grep -F 'feed/live?timecode=' "$source"
+          grep -F 'Date.parse(cutoffAt) < startMs' "$source"
+          grep -F 'order.length === 9' "$source"
+          grep -F 'IDENTITY_CONFLICT' "$source"
+          grep -F 'NOT_PREGAME_AT_CUTOFF' "$source"
+          grep -F 'lineupHistoryDigest' "$source"
+          grep -F 'sourceProvenanceDigest' "$source"
+          grep -Fi 'never replaced with a final lineup' "$docs"
+          grep -F 'actionabilityAllowed: false' "$source"
+          grep -F 'automaticModelSelectionAllowed: false' "$source"
+          grep -F 'automaticPromotionAllowed: false' "$source"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|register[A-Za-z]*Routes\(' "$source"
+      - name: Verify exact B2C1 scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3b2c1-historical-pregame-lineups.yml' \
+            'docs/P1_M6A3B2C1_MLB_HISTORICAL_PREGAME_LINEUPS.md' \
+            'server/mlb-market-pregame-lineup-history.test.ts' \
+            'server/mlb-market-pregame-lineup-history.ts' \
+            'tsconfig.p1-m6a3b2c1-pregame-lineups.json' | sort)
+          [[ "$changed" == "$expected" ]]
