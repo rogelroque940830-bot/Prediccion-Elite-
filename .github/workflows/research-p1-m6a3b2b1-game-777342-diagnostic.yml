@@ -1,0 +1,58 @@
+name: Research P1-M6A3B2B1 Game 777342 Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m6a3b2b1-game-777342-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-game-777342:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+      - name: Print official MLB starter-relevant fields only
+        shell: bash
+        run: |
+          node <<'NODE'
+          const gamePk = 777342;
+          const box = await (await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`)).json();
+          const feed = await (await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`)).json();
+          const side = box?.teams?.away;
+          const rows = (side?.pitchers ?? []).map((id) => {
+            const player = side?.players?.[`ID${id}`] ?? {};
+            const p = player?.stats?.pitching ?? {};
+            return {
+              id,
+              name: player?.person?.fullName ?? null,
+              gamesStarted: p?.gamesStarted ?? null,
+              inningsPitched: p?.inningsPitched ?? null,
+              battersFaced: p?.battersFaced ?? null,
+              numberOfPitches: p?.numberOfPitches ?? null,
+              strikes: p?.strikes ?? null,
+            };
+          });
+          const firstBottom = (feed?.liveData?.plays?.allPlays ?? []).find((play) => play?.about?.halfInning === 'bottom');
+          console.log(JSON.stringify({
+            gamePk,
+            awayTeam: side?.team ?? null,
+            pitchingOrder: side?.pitchers ?? [],
+            pitcherRows: rows,
+            probablePitcherAway: feed?.gameData?.probablePitchers?.away ?? null,
+            firstBottomPlay: firstBottom ? {
+              inning: firstBottom?.about?.inning,
+              batter: firstBottom?.matchup?.batter ?? null,
+              pitcher: firstBottom?.matchup?.pitcher ?? null,
+              event: firstBottom?.result?.event ?? null,
+              description: firstBottom?.result?.description ?? null,
+            } : null,
+          }, null, 2));
+          NODE
