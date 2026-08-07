@@ -134,6 +134,36 @@ test("starter identity disagreement fails closed", () => {
   );
 });
 
+test("gamesStarted may override only a prior zero-appearance administrative listing", () => {
+  const delayed = boxscore({ explicitStarterFlags: false });
+  delayed.teams.away.pitchers = [101, 102, 103];
+  delayed.teams.away.players.ID101.stats.pitching = pitchingLine({
+    gamesStarted: 0, inningsPitched: "0.0", battersFaced: 0, numberOfPitches: 0, strikes: 0,
+    runs: 0, earnedRuns: 0, hits: 0, baseOnBalls: 0, strikeOuts: 0, homeRuns: 0, hitByPitch: 0,
+  });
+  delayed.teams.away.players.ID102.stats.pitching = pitchingLine({
+    gamesStarted: 1, inningsPitched: "2.0", battersFaced: 8, numberOfPitches: 33, strikes: 22,
+    runs: 0, earnedRuns: 0, hits: 2, baseOnBalls: 0, strikeOuts: 2, homeRuns: 0, hitByPitch: 0,
+  });
+  const parsed = parseMlbHistoricalStartingPitcherBoxscore(officialGame(), delayed);
+  assert.equal(parsed.awayStarter.pitcherId, 102);
+  assert.equal(parsed.awayStarter.identityMethod, "GAME_STARTED_FLAG_AFTER_ZERO_APPEARANCE_LISTING");
+  assert.equal(parsed.awayStarter.outsRecorded, 6);
+});
+
+test("zero-appearance exception fails closed when any preceding listed pitcher actually appeared", () => {
+  const invalid = boxscore({ explicitStarterFlags: false });
+  invalid.teams.away.pitchers = [101, 102, 103];
+  invalid.teams.away.players.ID101.stats.pitching = pitchingLine({
+    gamesStarted: 0, inningsPitched: "0.1", battersFaced: 1, numberOfPitches: 4, strikes: 2,
+  });
+  invalid.teams.away.players.ID102.stats.pitching = pitchingLine({ gamesStarted: 1, inningsPitched: "2.0" });
+  assert.throws(
+    () => parseMlbHistoricalStartingPitcherBoxscore(officialGame(), invalid),
+    /STARTER_ORDER_CONFLICT:away/,
+  );
+});
+
 test("team identity mismatch and malformed starter line fail closed", () => {
   const wrongTeam = boxscore();
   wrongTeam.teams.home.team.id = 999;
