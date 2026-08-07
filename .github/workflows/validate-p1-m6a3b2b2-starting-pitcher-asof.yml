@@ -11,6 +11,11 @@ on:
       - 'docs/P1_M6A3B2B2_MLB_STARTING_PITCHER_ASOF.md'
       - 'tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json'
       - '.github/workflows/validate-p1-m6a3b2b2-starting-pitcher-asof.yml'
+      - 'server/mlb-market-starting-pitcher-inference.ts'
+      - 'server/mlb-market-starting-pitcher-inference.test.ts'
+      - 'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md'
+      - 'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json'
+      - '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml'
   workflow_dispatch:
 
 permissions:
@@ -69,7 +74,7 @@ jobs:
           grep -F 'DEFAULT_PITCHER_EFFECT_GRID = [0, 0.25, 0.5, 0.75, 1]' "$model"
           grep -F 'teamMinusPitcherCountNll' "$model" "$script"
           grep -F 'leagueMinusPitcherCountNll' "$model" "$script"
-          grep -F 'P1_M6A3B2B2_PAIRED_INFERENCE_REQUIRED' "$model" "$script" "$docs"
+          grep -F 'P1_M6A3B2B2_PAIRED_INFERENCE_REQUIRED' "$model" "$docs"
           grep -F 'P1_M6A3B2B2_FROZEN_OUTCOME_DIGEST_MISMATCH' "$script"
           grep -F 'P1_M6A3B2B2_FROZEN_STARTER_HISTORY_DIGEST_MISMATCH' "$script"
           grep -F '"starterHistoryDigest": "2ae7b52b671f84fdecbc802b7891a03b66e768178bc6add177be5116c9426efa"' "$evidence"
@@ -78,7 +83,7 @@ jobs:
           grep -F 'automaticModelSelectionAllowed: false' "$model" "$script"
           grep -F 'automaticPromotionAllowed: false' "$model" "$script"
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$script"
-      - name: Verify exact B2B2A scope from PR base to PR head
+      - name: Verify bounded B2B2A and paired-inference successor scope
         shell: bash
         run: |
           set -euo pipefail
@@ -91,11 +96,34 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          [[ -n "$changed" ]]
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b2b2-starting-pitcher-asof.yml' \
+            '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml' \
             'docs/P1_M6A3B2B2_MLB_STARTING_PITCHER_ASOF.md' \
+            'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md' \
             'scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs' \
             'server/mlb-market-starting-pitcher-asof.test.ts' \
             'server/mlb-market-starting-pitcher-asof.ts' \
-            'tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json' | sort)
-          [[ "$changed" == "$expected" ]]
+            'server/mlb-market-starting-pitcher-inference.test.ts' \
+            'server/mlb-market-starting-pitcher-inference.ts' \
+            'tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json' \
+            'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json' | sort)
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            grep -Fxq "$file" <<< "$allowed"
+          done <<< "$changed"
+
+          asof_source=$(grep -Fx 'server/mlb-market-starting-pitcher-asof.ts' <<< "$changed" || true)
+          asof_test=$(grep -Fx 'server/mlb-market-starting-pitcher-asof.test.ts' <<< "$changed" || true)
+          if [[ -n "$asof_source" && -z "$asof_test" ]] || [[ -z "$asof_source" && -n "$asof_test" ]]; then
+            echo 'B2B2A source and falsification test must change together' >&2
+            exit 1
+          fi
+
+          inference_source=$(grep -Fx 'server/mlb-market-starting-pitcher-inference.ts' <<< "$changed" || true)
+          inference_test=$(grep -Fx 'server/mlb-market-starting-pitcher-inference.test.ts' <<< "$changed" || true)
+          if [[ -n "$inference_source" && -z "$inference_test" ]] || [[ -z "$inference_source" && -n "$inference_test" ]]; then
+            echo 'B2B2B inference source and falsification test must change together' >&2
+            exit 1
+          fi
