@@ -15,6 +15,9 @@ on:
       - 'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
       - 'tsconfig.p1-m6a3b1-historical-oos.json'
       - '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml'
+      - 'scripts/p1-m6a3b2a-team-strength-backtest.mjs'
+      - 'evidence/p1-m6a3b1/2025-outcome-integrity.json'
+      - '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml'
   workflow_dispatch:
 
 permissions:
@@ -63,15 +66,21 @@ jobs:
           source='server/mlb-market-historical-source.ts'
           fit='server/mlb-market-historical-fit.ts'
           script='scripts/p1-m6a3b1-historical-backfill.mjs'
+          successor_script='scripts/p1-m6a3b2a-team-strength-backtest.mjs'
+          integrity='evidence/p1-m6a3b1/2025-outcome-integrity.json'
           docs='docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
           grep -F 'MLB_STATS_API_OFFICIAL' "$dataset"
+          grep -F 'digestMlbHistoricalOutcomeObservations' "$dataset"
+          grep -F 'digestMlbHistoricalSourceProvenance' "$dataset"
           grep -F 'statsapi.mlb.com/api' "$source"
           grep -F 'P1_M6A3B1_TIME_LEAKAGE_DETECTED' "$fit"
           grep -F 'automaticModelSelectionAllowed: false' "$fit"
           grep -F 'actionabilityAllowed: false' "$dataset" "$source" "$fit"
           grep -F 'P1_M6A3B1_ACQUISITION_INCOMPLETE' "$script"
+          grep -F 'P1_M6A3B2A_FROZEN_BASELINE_OUTCOME_DIGEST_MISMATCH' "$successor_script"
+          grep -F '"canonicalOutcomesIdentical": true' "$integrity"
           grep -Fi 'does not read sportsbook prices' "$docs"
-          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$dataset" "$source" "$fit" "$script"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$dataset" "$source" "$fit" "$script" "$successor_script"
       - name: Verify owned B1 maintenance scope from PR base to PR head
         shell: bash
         run: |
@@ -87,8 +96,11 @@ jobs:
           changed=$(git diff --name-only "$base...$head" | sort)
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml' \
+            '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml' \
             'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md' \
+            'evidence/p1-m6a3b1/2025-outcome-integrity.json' \
             'scripts/p1-m6a3b1-historical-backfill.mjs' \
+            'scripts/p1-m6a3b2a-team-strength-backtest.mjs' \
             'server/mlb-market-historical-dataset.test.ts' \
             'server/mlb-market-historical-dataset.ts' \
             'server/mlb-market-historical-fit.test.ts' \
