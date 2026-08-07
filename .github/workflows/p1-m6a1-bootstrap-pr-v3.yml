@@ -1,0 +1,63 @@
+name: Run P1-M6A1 Source Bootstrap v3
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/p1-m6a1-bootstrap-pr-v3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Execute audited source patch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '
+            /node <<'"'"'NODE'"'"'/ { capture=1; next }
+            capture && /^          NODE$/ { capture=0; exit }
+            capture { sub(/^          /, ""); print }
+          ' .github/workflows/p1-m6a1-bootstrap.yml > /tmp/p1-m6a1-bootstrap.js
+          test -s /tmp/p1-m6a1-bootstrap.js
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/p1-m6a1-bootstrap.js')
+          text = path.read_text()
+          text = text.replace('`OTHER`', 'OTHER')
+          marker = "fs.writeFileSync('.github/workflows/validate-p1-m6a1-mlb-market-contract-settlement.yml'"
+          index = text.find(marker)
+          if index < 0:
+              raise SystemExit('Permanent workflow marker not found in bootstrap payload')
+          text = text[:index]
+          path.write_text(text)
+          PY
+          node --check /tmp/p1-m6a1-bootstrap.js
+          node /tmp/p1-m6a1-bootstrap.js
+      - name: Remove all temporary bootstrap workflows and push source feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/p1-m6a1-bootstrap.yml \
+            .github/workflows/p1-m6a1-bootstrap-pr.yml \
+            .github/workflows/p1-m6a1-bootstrap-pr-v2.yml \
+            .github/workflows/p1-m6a1-bootstrap-pr-v3.yml
+          git config user.name 'rogelroque940830-bot'
+          git config user.email '272644701+rogelroque940830-bot@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'P1-M6A1: establish canonical MLB market contract and settlement'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
