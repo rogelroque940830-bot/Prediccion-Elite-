@@ -16,8 +16,6 @@ export const MLB_P1_M6A2_MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
 
 export const MLB_EXECUTION_BOOK_PRIORITY = [
   "hardrockbet_fl",
-  "hardrockbet",
-  "hardrockbet_az",
 ] as const;
 
 export const MLB_REFERENCE_BOOKS = ["draftkings", "fanduel", "betmgm"] as const;
