@@ -72,7 +72,7 @@ jobs:
           grep -F 'P1_M6A3B1_ACQUISITION_INCOMPLETE' "$script"
           grep -Fi 'does not read sportsbook prices' "$docs"
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$dataset" "$source" "$fit" "$script"
-      - name: Verify exact B1 scope from PR base to PR head
+      - name: Verify owned B1 maintenance scope from PR base to PR head
         shell: bash
         run: |
           set -euo pipefail
@@ -85,7 +85,7 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml' \
             'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md' \
             'scripts/p1-m6a3b1-historical-backfill.mjs' \
@@ -96,4 +96,16 @@ jobs:
             'server/mlb-market-historical-source.test.ts' \
             'server/mlb-market-historical-source.ts' \
             'tsconfig.p1-m6a3b1-historical-oos.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          require_test_pair() {
+            local source_file="$1"
+            local test_file="$2"
+            if grep -Fxq "$source_file" <<<"$changed"; then
+              grep -Fxq "$test_file" <<<"$changed"
+            fi
+          }
+          require_test_pair 'server/mlb-market-historical-dataset.ts' 'server/mlb-market-historical-dataset.test.ts'
+          require_test_pair 'server/mlb-market-historical-source.ts' 'server/mlb-market-historical-source.test.ts'
+          require_test_pair 'server/mlb-market-historical-fit.ts' 'server/mlb-market-historical-fit.test.ts'
