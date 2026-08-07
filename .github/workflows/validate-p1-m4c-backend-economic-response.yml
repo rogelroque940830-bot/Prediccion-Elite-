@@ -12,17 +12,24 @@ on:
       - 'server/mlb-p1-economic-review.test.ts'
       - 'server/mlb-p1-real-cohort-activation.ts'
       - 'server/mlb-p1-real-cohort-activation.test.ts'
+      - 'server/mlb-market-odds-normalizer.ts'
+      - 'server/mlb-market-odds-normalizer.test.ts'
+      - 'server/mlb-market-universe-odds-routes.ts'
+      - 'server/mlb-market-universe-odds-routes.test.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
       - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
       - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
+      - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
       - 'tsconfig.p1-m3d-interactive-economic-review.json'
       - 'tsconfig.p1-m5a-real-cohort-activation.json'
+      - 'tsconfig.p1-m6a2-market-odds.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
 
 permissions:
   contents: read
@@ -105,14 +112,23 @@ jobs:
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
 
+          # P1-M6A2 is a read-only successor surface. It may extend route
+          # composition and market evidence without changing M4C's economic
+          # write boundary, decision formulas or sportsbook-exposure policy.
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
             'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
+            'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
+            'server/mlb-market-odds-normalizer.test.ts' \
+            'server/mlb-market-odds-normalizer.ts' \
+            'server/mlb-market-universe-odds-routes.test.ts' \
+            'server/mlb-market-universe-odds-routes.ts' \
             'server/mlb-p1-economic-review-routes.ts' \
             'server/mlb-p1-economic-review.test.ts' \
             'server/mlb-p1-economic-review.ts' \
@@ -123,7 +139,8 @@ jobs:
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
             'tsconfig.p1-m3d-interactive-economic-review.json' \
-            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
+            'tsconfig.p1-m5a-real-cohort-activation.json' \
+            'tsconfig.p1-m6a2-market-odds.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
 
