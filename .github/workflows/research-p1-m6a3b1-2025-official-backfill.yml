@@ -1,0 +1,92 @@
+name: Research P1-M6A3B1 2025 Official Backfill
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m6a3b1-2025-official-backfill.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research-2025-official-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Acquire full 2025 regular-season official history and run OOS baseline
+        run: |
+          node --import tsx scripts/p1-m6a3b1-historical-backfill.mjs \
+            --start 2025-03-01 \
+            --end 2025-10-01 \
+            --concurrency 4 \
+            --out artifacts/p1-m6a3b1-2025-official
+      - name: Print compact scientific evidence summary
+        if: success()
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = 'artifacts/p1-m6a3b1-2025-official';
+          const dataset = JSON.parse(fs.readFileSync(`${root}/dataset.json`, 'utf8'));
+          const oos = JSON.parse(fs.readFileSync(`${root}/oos-report.json`, 'utf8'));
+          const summary = {
+            datasetDigest: dataset.datasetDigest,
+            gamesReceived: dataset.gamesReceived,
+            regularSeasonFinalGames: dataset.regularSeasonFinalGames,
+            observationsByHorizon: dataset.observationsByHorizon,
+            exclusionCounts: dataset.exclusionCounts,
+            allFoldsLeakageFree: oos.allFoldsLeakageFree,
+            actionabilityAllowed: oos.actionabilityAllowed,
+            automaticModelSelectionAllowed: oos.automaticModelSelectionAllowed,
+            horizons: oos.horizons.map((h) => ({
+              horizon: h.horizon,
+              observations: h.observations,
+              uniqueDates: h.uniqueDates,
+              status: h.status,
+              preferredFamilyByCountNll: h.preferredFamilyByCountNll,
+              countNllDeltaPoissonMinusNb2: h.countNllDeltaPoissonMinusNb2,
+              candidates: Object.fromEntries(Object.entries(h.candidates).map(([family, candidate]) => [family, {
+                validationGames: candidate.validationGames,
+                countObservations: candidate.countObservations,
+                meanCountNegativeLogLikelihood: candidate.meanCountNegativeLogLikelihood,
+                homeMoneyline: candidate.homeMoneylineCalibration ? {
+                  n: candidate.homeMoneylineCalibration.n,
+                  multiclassBrier: candidate.homeMoneylineCalibration.multiclassBrier,
+                  logLoss: candidate.homeMoneylineCalibration.logLoss,
+                  macroEce: candidate.homeMoneylineCalibration.macroEce,
+                } : null,
+                nrfi: candidate.nrfiCalibration ? {
+                  n: candidate.nrfiCalibration.n,
+                  multiclassBrier: candidate.nrfiCalibration.multiclassBrier,
+                  logLoss: candidate.nrfiCalibration.logLoss,
+                  macroEce: candidate.nrfiCalibration.macroEce,
+                } : null,
+              }]))
+            })),
+          };
+          console.log('P1_M6A3B1_2025_SCIENTIFIC_SUMMARY');
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+      - name: Verify research run did not modify tracked source
+        if: success()
+        run: git diff --exit-code
+      - name: Upload official-history research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m6a3b1-2025-official-history
+          path: artifacts/p1-m6a3b1-2025-official/
+          if-no-files-found: warn
+          retention-days: 30
