@@ -1,0 +1,372 @@
+name: Research P1-M3E Provisional Maturity Audit
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m3e-provisional-maturity-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-provisional-maturity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Fetch private owner ledger and aggregate FINAL maturity blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          trap 'rm -rf private' EXIT
+
+          if [[ -z "${COURTEDGE_WRITE_TOKEN:-}" ]]; then
+            echo 'P1_M3E_SERVICE_TOKEN_UNAVAILABLE' >&2
+            exit 42
+          fi
+
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health")
+          status_code=$(curl -sS -o private/ledger-status.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status")
+          export_code=$(curl -sS -o private/owner-ledger.jsonl -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${COURTEDGE_WRITE_TOKEN}" \
+            "${BACKEND_URL}/api/mlb/ledger/v1/export?format=jsonl&limit=10000")
+
+          [[ "${health_code}" == "200" ]]
+          [[ "${status_code}" == "200" ]]
+          [[ "${export_code}" == "200" ]]
+          test -s private/owner-ledger.jsonl
+          chmod 600 private/owner-ledger.jsonl
+
+          node --import tsx --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import { buildMlbP1M3dEconomicReview } from './server/mlb-p1-economic-review.ts';
+
+          const health = JSON.parse(fs.readFileSync('private/health.json', 'utf8'));
+          const status = JSON.parse(fs.readFileSync('private/ledger-status.json', 'utf8'));
+          const raw = fs.readFileSync('private/owner-ledger.jsonl', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const object = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+          const increment = (counts, key, amount = 1) => { counts[key] = (counts[key] ?? 0) + amount; };
+          const recordedAtMs = (record) => {
+            const direct = Number(record?.prediction?.recordedAtMs);
+            if (Number.isFinite(direct)) return direct;
+            const parsed = Date.parse(String(record?.prediction?.recordedAt ?? ''));
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+
+          assert(health.status === 'healthy', `health=${health.status}`);
+          assert(typeof health.commit === 'string' && health.commit.length >= 7, 'health commit unavailable');
+          assert(status.success === true, 'ledger status success=false');
+          assert(status.data?.schemaVersion === 'mlb-ledger.v1', `schema=${status.data?.schemaVersion}`);
+          assert(status.data?.immutable === true, 'ledger immutable=false');
+          assert(status.data?.ownership?.owners === 1, `owners=${status.data?.ownership?.owners}`);
+          assert(status.data?.ownership?.unownedPredictions === 0, `unowned=${status.data?.ownership?.unownedPredictions}`);
+
+          const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+          const records = lines.map((line, index) => {
+            try { return JSON.parse(line); }
+            catch { throw new Error(`P1_M3E_MATURITY_OWNER_EXPORT_JSON_INVALID:${index + 1}`); }
+          });
+          assert(records.length === status.data.predictions,
+            `P1_M3E_MATURITY_OWNER_EXPORT_INCOMPLETE:${records.length}/${status.data.predictions}`);
+
+          const review = buildMlbP1M3dEconomicReview(records, { generatedAt: new Date().toISOString() });
+          assert(review.sample.uniqueAnalyticalDecisions <= review.rows.length,
+            `P1_M3E_MATURITY_SOURCE_WINDOW_TRUNCATED:${review.sample.uniqueAnalyticalDecisions}/${review.rows.length}`);
+
+          const interactive = [];
+          let malformed = 0;
+          for (const record of records) {
+            const payload = object(record?.prediction?.payload);
+            const analysis = object(payload?.analysis);
+            const layers = object(analysis?.layers);
+            if (!layers?.p1M3aCapture) continue;
+            const layer = object(layers.p1M3aCapture);
+            const origin = object(layer?.origin);
+            const identity = object(layer?.identity);
+            const lifecycleKey = typeof identity?.lifecycleKey === 'string' ? identity.lifecycleKey.trim() : '';
+            if (
+              layer?.schemaVersion !== 'courtedge-p1-m3a-scientific-capture-contract.v1'
+              || origin?.channel !== 'INTERACTIVE_MLB_PREDICTOR'
+              || !lifecycleKey
+            ) {
+              malformed += 1;
+              continue;
+            }
+            interactive.push({ record, layer, lifecycleKey });
+          }
+
+          const groups = new Map();
+          for (const entry of interactive) {
+            const values = groups.get(entry.lifecycleKey) ?? [];
+            values.push(entry);
+            groups.set(entry.lifecycleKey, values);
+          }
+
+          const terminals = [];
+          let branches = 0;
+          let provisionalToFinal = 0;
+          let finalOnly = 0;
+          let provisionalOnly = 0;
+          for (const values of groups.values()) {
+            values.sort((a, b) => recordedAtMs(a.record) - recordedAtMs(b.record)
+              || String(a.record?.prediction?.id ?? '').localeCompare(String(b.record?.prediction?.id ?? '')));
+            const ids = new Set(values.map((entry) => entry.record?.prediction?.id));
+            const parentIds = new Set(values
+              .map((entry) => entry.record?.prediction?.supersedesId)
+              .filter((id) => id && ids.has(id)));
+            const leaves = values.filter((entry) => !parentIds.has(entry.record?.prediction?.id));
+            if (leaves.length !== 1) {
+              branches += 1;
+              continue;
+            }
+            const hasProvisional = values.some((entry) => entry.record?.prediction?.analysisStage === 'PROVISIONAL');
+            const hasFinal = values.some((entry) => entry.record?.prediction?.analysisStage === 'FINAL');
+            if (hasProvisional && hasFinal) provisionalToFinal += 1;
+            else if (hasFinal) finalOnly += 1;
+            else provisionalOnly += 1;
+            terminals.push(leaves[0]);
+          }
+
+          assert(malformed === review.sample.malformedInteractiveRecordsExcluded,
+            `P1_M3E_MATURITY_MALFORMED_PARITY:${malformed}/${review.sample.malformedInteractiveRecordsExcluded}`);
+          assert(branches === review.sample.lifecycleBranchesExcluded,
+            `P1_M3E_MATURITY_BRANCH_PARITY:${branches}/${review.sample.lifecycleBranchesExcluded}`);
+          assert(groups.size === review.sample.lifecycleChains,
+            `P1_M3E_MATURITY_CHAIN_PARITY:${groups.size}/${review.sample.lifecycleChains}`);
+          assert(terminals.length === review.sample.terminalLeaves,
+            `P1_M3E_MATURITY_TERMINAL_PARITY:${terminals.length}/${review.sample.terminalLeaves}`);
+          assert(provisionalToFinal === review.lifecycle.provisionalToFinalChains,
+            `P1_M3E_MATURITY_P2F_PARITY:${provisionalToFinal}/${review.lifecycle.provisionalToFinalChains}`);
+          assert(finalOnly === review.lifecycle.finalOnlyChains,
+            `P1_M3E_MATURITY_FINAL_PARITY:${finalOnly}/${review.lifecycle.finalOnlyChains}`);
+          assert(provisionalOnly === review.lifecycle.provisionalOnlyChains,
+            `P1_M3E_MATURITY_PROVISIONAL_PARITY:${provisionalOnly}/${review.lifecycle.provisionalOnlyChains}`);
+
+          const FIELD_NAMES = [
+            'GAME_IDENTITY',
+            'PITCHERS',
+            'LINEUPS',
+            'INJURIES',
+            'MARKET_ODDS',
+            'BULLPEN',
+            'PITCHER_FORM',
+            'LINEUP_MATCHUP',
+            'ENVIRONMENT',
+            'UMPIRE',
+            'ADVANCED_FACTORS',
+          ].sort((a, b) => b.length - a.length);
+
+          const gateStatusCounts = {};
+          const analysisStageCounts = {};
+          const marketCounts = {};
+          const marketStageCounts = {};
+          const warningCodeCounts = {};
+          const warningFieldCounts = {};
+          const warningStateCounts = {};
+          const fieldStateCounts = {};
+          const unclassifiedWarningCounts = {};
+          const warningsPerTerminal = {};
+          const evidenceSummaryTotals = {
+            fresh: 0,
+            stale: 0,
+            degraded: 0,
+            missing: 0,
+            conflict: 0,
+            unknown: 0,
+          };
+          let terminalWithNoWarnings = 0;
+          let terminalWithBlockers = 0;
+          let readinessStageMismatch = 0;
+          let requiredFieldSlots = 0;
+
+          for (const terminal of terminals) {
+            const readiness = object(terminal.layer?.readiness);
+            assert(readiness, 'P1_M3E_MATURITY_READINESS_MISSING');
+            const stage = String(terminal.record?.prediction?.analysisStage ?? 'UNKNOWN');
+            const gate = String(readiness.gateStatus ?? 'UNKNOWN');
+            const readinessStage = String(readiness.analysisStage ?? 'UNKNOWN');
+            const market = String(readiness.market ?? terminal.record?.prediction?.market?.type ?? 'UNKNOWN');
+            const blockers = Array.isArray(readiness.blockers) ? readiness.blockers.map(String) : [];
+            const warnings = Array.isArray(readiness.warnings) ? readiness.warnings.map(String) : [];
+            const summary = object(readiness.evidenceSummary) ?? {};
+
+            increment(gateStatusCounts, gate);
+            increment(analysisStageCounts, stage);
+            increment(marketCounts, market);
+            increment(marketStageCounts, `${market}:${stage}`);
+            increment(warningsPerTerminal, String(warnings.length));
+            if (warnings.length === 0) terminalWithNoWarnings += 1;
+            if (blockers.length > 0) terminalWithBlockers += 1;
+            if (readinessStage !== stage) readinessStageMismatch += 1;
+
+            for (const key of Object.keys(evidenceSummaryTotals)) {
+              const value = Number(summary[key] ?? 0);
+              assert(Number.isInteger(value) && value >= 0, `P1_M3E_MATURITY_EVIDENCE_SUMMARY_INVALID:${key}`);
+              evidenceSummaryTotals[key] += value;
+            }
+            const requiredFields = Array.isArray(summary.requiredFields) ? summary.requiredFields.map(String) : [];
+            requiredFieldSlots += requiredFields.length;
+
+            for (const warning of warnings) {
+              increment(warningCodeCounts, warning);
+              const field = FIELD_NAMES.find((candidate) => warning.startsWith(`${candidate}_`));
+              if (!field) {
+                increment(unclassifiedWarningCounts, warning);
+                continue;
+              }
+              const state = warning.slice(field.length + 1) || 'UNKNOWN';
+              increment(warningFieldCounts, field);
+              increment(warningStateCounts, state);
+              fieldStateCounts[field] ??= {};
+              increment(fieldStateCounts[field], state);
+            }
+          }
+
+          assert(terminalWithBlockers === 0,
+            `P1_M3E_MATURITY_CAPTURED_TERMINAL_HAS_BLOCKERS:${terminalWithBlockers}`);
+          assert(readinessStageMismatch === 0,
+            `P1_M3E_MATURITY_READINESS_STAGE_MISMATCH:${readinessStageMismatch}`);
+          assert((gateStatusCounts.READY_FINAL ?? 0) === (analysisStageCounts.FINAL ?? 0),
+            `P1_M3E_MATURITY_FINAL_GATE_PARITY:${gateStatusCounts.READY_FINAL ?? 0}/${analysisStageCounts.FINAL ?? 0}`);
+          assert((gateStatusCounts.READY_PROVISIONAL ?? 0) === (analysisStageCounts.PROVISIONAL ?? 0),
+            `P1_M3E_MATURITY_PROVISIONAL_GATE_PARITY:${gateStatusCounts.READY_PROVISIONAL ?? 0}/${analysisStageCounts.PROVISIONAL ?? 0}`);
+
+          const rankedBlockingFields = Object.entries(warningFieldCounts)
+            .map(([field, count]) => ({ field, terminalWarnings: count, pctOfTerminalLifecycles: terminals.length ? Number(((count / terminals.length) * 100).toFixed(2)) : 0 }))
+            .sort((a, b) => b.terminalWarnings - a.terminalWarnings || a.field.localeCompare(b.field));
+
+          const totalEvidenceSlots = Object.values(evidenceSummaryTotals).reduce((sum, value) => sum + value, 0);
+          const result = {
+            schemaVersion: 'p1-m3e-provisional-maturity-audit.v1',
+            generatedAt: new Date().toISOString(),
+            backend: {
+              healthStatus: health.status,
+              commit: health.commit,
+              environment: health.environment,
+            },
+            source: {
+              endpoint: '/api/mlb/ledger/v1/export?format=jsonl&limit=10000',
+              ownerScoped: true,
+              serviceTokenReadOnlyForThisRun: true,
+              rawExportUploaded: false,
+              rawExportSha256: crypto.createHash('sha256').update(raw).digest('hex'),
+              exportedRecords: records.length,
+              publicLedgerPredictions: status.data.predictions,
+              completeAgainstPublicLedger: records.length === status.data.predictions,
+              ownershipOwners: status.data.ownership.owners,
+              unownedPredictions: status.data.ownership.unownedPredictions,
+            },
+            parityWithP1M3d: {
+              lifecycleChains: groups.size,
+              terminalLeaves: terminals.length,
+              malformedInteractiveRecordsExcluded: malformed,
+              lifecycleBranchesExcluded: branches,
+              provisionalToFinalChains: provisionalToFinal,
+              finalOnlyChains: finalOnly,
+              provisionalOnlyChains: provisionalOnly,
+              p1M3dUniqueAnalyticalDecisions: review.sample.uniqueAnalyticalDecisions,
+              p1M3dRows: review.rows.length,
+              sourceWindowComplete: review.sample.uniqueAnalyticalDecisions <= review.rows.length,
+            },
+            maturity: {
+              gateStatusCounts,
+              analysisStageCounts,
+              marketCounts,
+              marketStageCounts,
+              terminalWithNoWarnings,
+              terminalWithBlockers,
+              readinessStageMismatch,
+              warningsPerTerminal,
+            },
+            blockersForFinal: {
+              warningCodeCounts,
+              warningFieldCounts,
+              warningStateCounts,
+              fieldStateCounts,
+              unclassifiedWarningCounts,
+              rankedBlockingFields,
+            },
+            evidenceFreshness: {
+              summaryTotals: evidenceSummaryTotals,
+              totalEvidenceSlots,
+              requiredFieldSlots,
+              freshPctOfAllEvidenceSlots: totalEvidenceSlots
+                ? Number(((evidenceSummaryTotals.fresh / totalEvidenceSlots) * 100).toFixed(2))
+                : null,
+            },
+            interpretationBoundary: {
+              resultsOrSettlementsUsedToClassifyMaturity: false,
+              individualPredictionsPersistedInArtifact: false,
+              gameIdentityPersistedInArtifact: false,
+              teamsPersistedInArtifact: false,
+              selectionsPersistedInArtifact: false,
+              oddsPersistedInArtifact: false,
+              probabilitiesPersistedInArtifact: false,
+              automaticFinalPromotionAllowed: false,
+              readinessThresholdChangesAllowed: false,
+              modelChangesAllowed: false,
+            },
+            safety: {
+              predictionsCreated: 0,
+              settlementsCreated: 0,
+              betsPlaced: 0,
+              realFinancialExposure: 0,
+            },
+          };
+
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({
+            backendCommit: result.backend.commit,
+            exportedRecords: result.source.exportedRecords,
+            lifecycle: result.parityWithP1M3d,
+            maturity: result.maturity,
+            rankedBlockingFields: result.blockersForFinal.rankedBlockingFields,
+            warningStateCounts: result.blockersForFinal.warningStateCounts,
+            evidenceFreshness: result.evidenceFreshness,
+          }, null, 2));
+          NODE
+
+          rm -rf private
+          trap - EXIT
+          test -f audit/result.json
+          ! find audit -type f \( -name '*.jsonl' -o -name '*.ndjson' \) | grep -q .
+      - name: Prove raw private owner data is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! find audit -type f \( -name '*.jsonl' -o -name '*.ndjson' \) | grep -q .
+          ! grep -E '"(predictionId|gamePk|homeTeam|awayTeam|selection|oddsAmerican|modelProbability|edgePp)"[[:space:]]*:' audit/result.json
+      - name: Verify research-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected='.github/workflows/research-p1-m3e-provisional-maturity-audit.yml'
+          [[ "$changed" == "$expected" ]]
+      - name: Upload aggregate maturity evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3e-provisional-maturity-aggregate
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
