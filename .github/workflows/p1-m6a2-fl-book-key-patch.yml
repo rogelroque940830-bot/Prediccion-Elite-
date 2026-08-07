@@ -1,0 +1,86 @@
+name: Apply P1-M6A2 Hard Rock Florida Key Patch
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/p1-m6a2-fl-book-key-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Apply exact Florida execution-book corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          normalizer = Path('server/mlb-market-odds-normalizer.ts')
+          text = normalizer.read_text()
+          before = '''export const MLB_EXECUTION_BOOK_PRIORITY = [
+            "hardrockbet_fl",
+            "hardrockbet",
+            "hardrockbet_az",
+          ] as const;'''.replace('          ', '')
+          after = '''export const MLB_EXECUTION_BOOK_PRIORITY = [
+            "hardrockbet_fl",
+          ] as const;'''.replace('          ', '')
+          if text.count(before) != 1:
+              raise SystemExit('expected execution-book block exactly once')
+          normalizer.write_text(text.replace(before, after))
+
+          tests = Path('server/mlb-market-odds-normalizer.test.ts')
+          text = tests.read_text()
+          text = text.replace('book("hardrockbet",', 'book("hardrockbet_fl",')
+          tests.write_text(text)
+
+          route_tests = Path('server/mlb-market-universe-odds-routes.test.ts')
+          text = route_tests.read_text()
+          marker = '  assert.equal(url.searchParams.get("bookmakers"), MLB_P1_M6A2_BOOKMAKERS.join(","));\n'
+          insertion = marker + '  assert.deepEqual([...MLB_P1_M6A2_BOOKMAKERS], ["hardrockbet_fl", "draftkings", "fanduel", "betmgm"]);\n  assert.equal(MLB_P1_M6A2_BOOKMAKERS.includes("hardrockbet" as any), false);\n  assert.equal(MLB_P1_M6A2_BOOKMAKERS.includes("hardrockbet_az" as any), false);\n'
+          if text.count(marker) != 1:
+              raise SystemExit('bookmaker assertion marker missing')
+          route_tests.write_text(text.replace(marker, insertion))
+
+          docs = Path('docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md')
+          text = docs.read_text()
+          before = '''Execution-book priority:
+
+1. `hardrockbet_fl`
+2. `hardrockbet`
+3. `hardrockbet_az`
+'''
+          after = '''Execution book:
+
+- `hardrockbet_fl` — the verified Florida-specific Hard Rock Bet bookmaker key.
+
+Arizona and Ohio Hard Rock books are different jurisdiction-specific execution venues and are not substitutes for the Florida price. No generic `hardrockbet` key is requested because it is not part of the verified provider bookmaker catalog used by this phase.
+'''
+          if text.count(before) != 1:
+              raise SystemExit('docs execution-book block missing')
+          text = text.replace(before, after)
+          text = text.replace('P1-M6A2 requests six explicit bookmakers.', 'P1-M6A2 requests four explicit bookmakers.')
+          docs.write_text(text)
+          PY
+          git diff --check
+      - name: Commit source-only patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'rogelroque940830-bot'
+          git config user.email '272644701+rogelroque940830-bot@users.noreply.github.com'
+          git add server/mlb-market-odds-normalizer.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-universe-odds-routes.test.ts docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md
+          git diff --cached --check
+          git commit -m 'P1-M6A2: restrict executable odds to verified Hard Rock Florida key'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
