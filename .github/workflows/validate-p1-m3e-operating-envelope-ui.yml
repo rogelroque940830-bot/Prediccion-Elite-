@@ -52,7 +52,7 @@ jobs:
 
           grep -F '/api/mlb/p1/v1/operating-envelope' "$helper"
           grep -F 'ELITE_MODEL_QUALITY_SUPPORTED' "$helper" "$component"
-          grep -F 'temporalSplit.leakageFree' "$helper"
+          grep -F 'temporal?.leakageFree !== true' "$helper"
           grep -F 'unsafe_operationalGateAllowed' frontend/client/src/lib/mlb-operating-envelope.test.ts
           grep -F 'MlbOperatingEnvelopeCard' "$wrapper"
           grep -F '["p1-m3e-operating-envelope"]' "$wrapper"
