@@ -47,7 +47,7 @@ jobs:
           npm run build:backend
           npm run test:s5a-e2e
           npm run test:s5b-shadow
-      - name: Verify no-lookahead lineup-source boundaries
+      - name: Verify no-lookahead and rescheduled-identity boundaries
         shell: bash
         run: |
           set -euo pipefail
@@ -57,6 +57,11 @@ jobs:
           grep -F 'feed/live?timecode=' "$source"
           grep -F 'Date.parse(cutoffAt) < startMs' "$source"
           grep -F 'order.length === 9' "$source"
+          grep -F 'RESCHEDULED_FINAL_SELECTED' "$source" "$docs"
+          grep -F 'isPlayedFinalScheduleCandidate' "$source"
+          grep -F 'isExplicitlyObsoleteScheduleCandidate' "$source"
+          grep -F 'P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT' "$source" "$docs"
+          grep -F 'scheduleResolutionCounts' "$source"
           grep -F 'IDENTITY_CONFLICT' "$source"
           grep -F 'NOT_PREGAME_AT_CUTOFF' "$source"
           grep -F 'lineupHistoryDigest' "$source"
@@ -66,7 +71,7 @@ jobs:
           grep -F 'automaticModelSelectionAllowed: false' "$source"
           grep -F 'automaticPromotionAllowed: false' "$source"
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|register[A-Za-z]*Routes\(' "$source"
-      - name: Verify exact B2C1 scope from PR base to PR head
+      - name: Verify bounded B2C1 maintenance scope from PR base to PR head
         shell: bash
         run: |
           set -euo pipefail
@@ -79,10 +84,20 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          [[ -n "$changed" ]]
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b2c1-historical-pregame-lineups.yml' \
             'docs/P1_M6A3B2C1_MLB_HISTORICAL_PREGAME_LINEUPS.md' \
             'server/mlb-market-pregame-lineup-history.test.ts' \
             'server/mlb-market-pregame-lineup-history.ts' \
             'tsconfig.p1-m6a3b2c1-pregame-lineups.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            grep -Fxq "$file" <<< "$allowed"
+          done <<< "$changed"
+          source_changed=$(grep -Fx 'server/mlb-market-pregame-lineup-history.ts' <<< "$changed" || true)
+          test_changed=$(grep -Fx 'server/mlb-market-pregame-lineup-history.test.ts' <<< "$changed" || true)
+          if [[ -n "$source_changed" && -z "$test_changed" ]] || [[ -z "$source_changed" && -n "$test_changed" ]]; then
+            echo 'B2C1 source and falsification test must change together' >&2
+            exit 1
+          fi

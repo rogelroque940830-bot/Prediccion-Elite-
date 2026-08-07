@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v1" as const;
+export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v2" as const;
 export const MLB_P1_M6A3B2C1_DEFAULT_CUTOFF_SECONDS = 300;
 
 const MLB_API = "https://statsapi.mlb.com/api";
@@ -20,12 +20,17 @@ export type MlbPregameLineupAvailability =
   | "NOT_PREGAME_AT_CUTOFF"
   | "IDENTITY_CONFLICT";
 
+export type MlbHistoricalPregameScheduleResolution =
+  | "DIRECT"
+  | "RESCHEDULED_FINAL_SELECTED";
+
 export interface MlbHistoricalPregameScheduleGame {
   gamePk: number;
   officialDate: string;
   scheduledStart: string;
   homeTeamId: number;
   awayTeamId: number;
+  scheduleResolution: MlbHistoricalPregameScheduleResolution;
 }
 
 export interface MlbHistoricalPregameLineupSnapshot {
@@ -33,6 +38,7 @@ export interface MlbHistoricalPregameLineupSnapshot {
   gamePk: number;
   officialDate: string;
   scheduledStart: string;
+  scheduleResolution: MlbHistoricalPregameScheduleResolution;
   cutoffAt: string;
   requestedTimecode: string;
   sourceMetadataTimecode: string | null;
@@ -62,6 +68,7 @@ export interface MlbHistoricalPregameLineupReport {
   endDate: string;
   cutoffSecondsBeforeScheduledStart: number;
   scheduleGames: number;
+  scheduleResolutionCounts: Record<MlbHistoricalPregameScheduleResolution, number>;
   snapshotsFetched: number;
   completeLineupGames: number;
   availabilityCounts: Record<MlbPregameLineupAvailability, number>;
@@ -75,6 +82,11 @@ export interface MlbHistoricalPregameLineupReport {
 }
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+type ScheduleCandidate = Omit<MlbHistoricalPregameScheduleGame, "scheduleResolution"> & {
+  codedGameState: string;
+  detailedState: string;
+};
 
 function sha256(value: unknown): string {
   return crypto.createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
@@ -189,8 +201,53 @@ function pregameState(payload: any): boolean {
   return /^(Scheduled|Pre-Game|Warmup|Delayed Start)$/i.test(detailed);
 }
 
+function scheduleCandidateKey(candidate: ScheduleCandidate): string {
+  return JSON.stringify(candidate);
+}
+
+function sameScheduleTeams(a: ScheduleCandidate, b: ScheduleCandidate): boolean {
+  return a.homeTeamId === b.homeTeamId && a.awayTeamId === b.awayTeamId;
+}
+
+function isPlayedFinalScheduleCandidate(candidate: ScheduleCandidate): boolean {
+  return candidate.codedGameState.toUpperCase() === "F";
+}
+
+function isExplicitlyObsoleteScheduleCandidate(candidate: ScheduleCandidate): boolean {
+  const coded = candidate.codedGameState.toUpperCase();
+  const detailed = candidate.detailedState.trim();
+  return coded === "D" || /^(Postponed|Canceled|Cancelled|Suspended)$/i.test(detailed);
+}
+
+function resolveScheduleCandidateGroup(gamePk: number, rawCandidates: ScheduleCandidate[]): MlbHistoricalPregameScheduleGame {
+  const candidates = [...new Map(rawCandidates.map((candidate) => [scheduleCandidateKey(candidate), candidate])).values()];
+  if (!candidates.length) throw new Error(`P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:${gamePk}`);
+
+  const first = candidates[0];
+  if (candidates.some((candidate) => !sameScheduleTeams(first, candidate))) {
+    throw new Error(`P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:${gamePk}`);
+  }
+
+  if (candidates.length === 1) {
+    const { codedGameState: _coded, detailedState: _detailed, ...game } = first;
+    return { ...game, scheduleResolution: "DIRECT" };
+  }
+
+  const playedFinals = candidates.filter(isPlayedFinalScheduleCandidate);
+  if (playedFinals.length === 1) {
+    const selected = playedFinals[0];
+    const others = candidates.filter((candidate) => candidate !== selected);
+    if (others.length > 0 && others.every(isExplicitlyObsoleteScheduleCandidate)) {
+      const { codedGameState: _coded, detailedState: _detailed, ...game } = selected;
+      return { ...game, scheduleResolution: "RESCHEDULED_FINAL_SELECTED" };
+    }
+  }
+
+  throw new Error(`P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:${gamePk}`);
+}
+
 export function extractMlbHistoricalPregameScheduleGames(payload: any): MlbHistoricalPregameScheduleGame[] {
-  const games: MlbHistoricalPregameScheduleGame[] = [];
+  const grouped = new Map<number, ScheduleCandidate[]>();
   for (const dateEntry of Array.isArray(payload?.dates) ? payload.dates : []) {
     for (const game of Array.isArray(dateEntry?.games) ? dateEntry.games : []) {
       const gamePk = positiveInteger(game?.gamePk);
@@ -201,18 +258,24 @@ export function extractMlbHistoricalPregameScheduleGames(payload: any): MlbHisto
       const awayTeamId = positiveInteger(game?.teams?.away?.team?.id);
       if (gameType && gameType !== "R") continue;
       if (!gamePk || !scheduledStart || !/^\d{4}-\d{2}-\d{2}$/.test(officialDate) || !homeTeamId || !awayTeamId) continue;
-      games.push({ gamePk, officialDate, scheduledStart, homeTeamId, awayTeamId });
+      const candidate: ScheduleCandidate = {
+        gamePk,
+        officialDate,
+        scheduledStart,
+        homeTeamId,
+        awayTeamId,
+        codedGameState: String(game?.status?.codedGameState ?? "").trim(),
+        detailedState: String(game?.status?.detailedState ?? "").trim(),
+      };
+      const group = grouped.get(gamePk) ?? [];
+      group.push(candidate);
+      grouped.set(gamePk, group);
     }
   }
-  const unique = new Map<number, MlbHistoricalPregameScheduleGame>();
-  for (const game of games) {
-    const previous = unique.get(game.gamePk);
-    if (previous && JSON.stringify(previous) !== JSON.stringify(game)) {
-      throw new Error(`P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:${game.gamePk}`);
-    }
-    unique.set(game.gamePk, game);
-  }
-  return [...unique.values()].sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.scheduledStart.localeCompare(b.scheduledStart) || a.gamePk - b.gamePk);
+
+  return [...grouped.entries()]
+    .map(([gamePk, candidates]) => resolveScheduleCandidateGroup(gamePk, candidates))
+    .sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.scheduledStart.localeCompare(b.scheduledStart) || a.gamePk - b.gamePk);
 }
 
 function availabilityFor(home: number[], away: number[], isPregame: boolean, identityMatches: boolean): MlbPregameLineupAvailability {
@@ -256,6 +319,7 @@ export function parseMlbHistoricalPregameLineupSnapshot(input: {
     gamePk: input.scheduleGame.gamePk,
     officialDate: input.scheduleGame.officialDate,
     scheduledStart: input.scheduleGame.scheduledStart,
+    scheduleResolution: input.scheduleGame.scheduleResolution,
     cutoffAt,
     requestedTimecode,
     sourceMetadataTimecode: parseMlbMetadataTimecode(input.payload?.metaData?.timeStamp),
@@ -279,6 +343,7 @@ function canonicalLineupIdentity(snapshot: MlbHistoricalPregameLineupSnapshot): 
     gamePk: snapshot.gamePk,
     officialDate: snapshot.officialDate,
     scheduledStart: snapshot.scheduledStart,
+    scheduleResolution: snapshot.scheduleResolution,
     cutoffAt: snapshot.cutoffAt,
     requestedTimecode: snapshot.requestedTimecode,
     homeTeamId: snapshot.homeTeamId,
@@ -335,6 +400,13 @@ function emptyAvailabilityCounts(): Record<MlbPregameLineupAvailability, number>
   };
 }
 
+function emptyScheduleResolutionCounts(): Record<MlbHistoricalPregameScheduleResolution, number> {
+  return {
+    DIRECT: 0,
+    RESCHEDULED_FINAL_SELECTED: 0,
+  };
+}
+
 export async function fetchMlbHistoricalPregameLineups(options: {
   startDate: string;
   endDate: string;
@@ -387,6 +459,8 @@ export async function fetchMlbHistoricalPregameLineups(options: {
     .sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.gamePk - b.gamePk);
   const availabilityCounts = emptyAvailabilityCounts();
   for (const snapshot of snapshots) availabilityCounts[snapshot.availability] += 1;
+  const scheduleResolutionCounts = emptyScheduleResolutionCounts();
+  for (const game of games) scheduleResolutionCounts[game.scheduleResolution] += 1;
 
   return {
     sourceVersion: MLB_P1_M6A3B2C1_SOURCE_VERSION,
@@ -394,6 +468,7 @@ export async function fetchMlbHistoricalPregameLineups(options: {
     endDate: options.endDate,
     cutoffSecondsBeforeScheduledStart: cutoffSeconds,
     scheduleGames: games.length,
+    scheduleResolutionCounts,
     snapshotsFetched: snapshots.length,
     completeLineupGames: availabilityCounts.COMPLETE,
     availabilityCounts,

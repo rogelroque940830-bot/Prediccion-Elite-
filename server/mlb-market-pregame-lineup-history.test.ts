@@ -16,6 +16,7 @@ const scheduleGame: MlbHistoricalPregameScheduleGame = {
   scheduledStart: "2025-06-15T17:05:00.000Z",
   homeTeamId: 147,
   awayTeamId: 111,
+  scheduleResolution: "DIRECT",
 };
 
 function feed(options: {
@@ -65,6 +66,7 @@ function schedulePayload() {
             gameType: "R",
             officialDate: "2025-06-15",
             gameDate: "2025-06-15T17:05:00Z",
+            status: { codedGameState: "F", detailedState: "Final" },
             teams: { home: { team: { id: 147 } }, away: { team: { id: 111 } } },
           },
           {
@@ -72,6 +74,7 @@ function schedulePayload() {
             gameType: "R",
             officialDate: "2025-06-15",
             gameDate: "2025-06-15T23:05:00Z",
+            status: { codedGameState: "F", detailedState: "Final" },
             teams: { home: { team: { id: 147 } }, away: { team: { id: 111 } } },
           },
         ],
@@ -80,11 +83,57 @@ function schedulePayload() {
   };
 }
 
+function rescheduledPayload(options: {
+  postponedHomeTeamId?: number;
+  postponedCodedState?: string;
+  postponedDetailedState?: string;
+  addSecondFinal?: boolean;
+} = {}) {
+  const finalEntry = {
+    gamePk: 778443,
+    gameType: "R",
+    officialDate: "2025-04-06",
+    gameDate: "2025-04-06T17:35:00Z",
+    status: { codedGameState: "F", detailedState: "Final" },
+    teams: { home: { team: { id: 111 } }, away: { team: { id: 138 } } },
+  };
+  const dates: any[] = [
+    {
+      date: "2025-04-05",
+      games: [
+        {
+          gamePk: 778443,
+          gameType: "R",
+          officialDate: "2025-04-06",
+          gameDate: "2025-04-05T20:10:00Z",
+          status: {
+            codedGameState: options.postponedCodedState ?? "D",
+            detailedState: options.postponedDetailedState ?? "Postponed",
+          },
+          teams: {
+            home: { team: { id: options.postponedHomeTeamId ?? 111 } },
+            away: { team: { id: 138 } },
+          },
+        },
+      ],
+    },
+    { date: "2025-04-06", games: [finalEntry] },
+  ];
+  if (options.addSecondFinal) {
+    dates.push({
+      date: "2025-04-07",
+      games: [{ ...finalEntry, gameDate: "2025-04-07T17:35:00Z" }],
+    });
+  }
+  return { dates };
+}
+
 test("formats MLB historical timecode in UTC and derives a strict T-5 cutoff", () => {
   assert.equal(formatMlbHistoricalTimecode("2025-06-15T17:00:00.000Z"), "20250615_170000");
   const snapshot = parseMlbHistoricalPregameLineupSnapshot({ scheduleGame, payload: feed() });
   assert.equal(snapshot.cutoffAt, "2025-06-15T17:00:00.000Z");
   assert.equal(snapshot.requestedTimecode, "20250615_170000");
+  assert.equal(snapshot.scheduleResolution, "DIRECT");
   assert.equal(Date.parse(snapshot.cutoffAt) < Date.parse(snapshot.scheduledStart), true);
 });
 
@@ -93,6 +142,42 @@ test("schedule parser preserves gamePk, scheduled start and doubleheader identit
   assert.equal(games.length, 2);
   assert.deepEqual(games.map((game) => game.gamePk), [777001, 777002]);
   assert.notEqual(games[0].scheduledStart, games[1].scheduledStart);
+  assert.deepEqual(games.map((game) => game.scheduleResolution), ["DIRECT", "DIRECT"]);
+});
+
+test("postponed listing may be superseded only by one played final with the same team identity", () => {
+  const games = extractMlbHistoricalPregameScheduleGames(rescheduledPayload());
+  assert.equal(games.length, 1);
+  assert.equal(games[0].gamePk, 778443);
+  assert.equal(games[0].officialDate, "2025-04-06");
+  assert.equal(games[0].scheduledStart, "2025-04-06T17:35:00.000Z");
+  assert.equal(games[0].homeTeamId, 111);
+  assert.equal(games[0].awayTeamId, 138);
+  assert.equal(games[0].scheduleResolution, "RESCHEDULED_FINAL_SELECTED");
+});
+
+test("rescheduled duplicate with team identity drift fails closed", () => {
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(rescheduledPayload({ postponedHomeTeamId: 999 })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:778443/,
+  );
+});
+
+test("final plus a non-obsolete active schedule listing remains an identity conflict", () => {
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(rescheduledPayload({
+      postponedCodedState: "P",
+      postponedDetailedState: "Pre-Game",
+    })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:778443/,
+  );
+});
+
+test("two distinct played finals for one gamePk remain an identity conflict", () => {
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(rescheduledPayload({ addSecondFinal: true })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:778443/,
+  );
 });
 
 test("two official nine-player batting orders at a pregame snapshot are complete", () => {
@@ -158,7 +243,7 @@ test("a real batting-order change changes canonical lineup identity", () => {
   assert.notEqual(digestMlbHistoricalPregameLineupHistory([a]), digestMlbHistoricalPregameLineupHistory([b]));
 });
 
-test("fetch report requests exactly one historical T-5 snapshot per scheduled game", async () => {
+test("fetch report requests exactly one historical T-5 snapshot per resolved scheduled game", async () => {
   const calls: string[] = [];
   const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -186,6 +271,7 @@ test("fetch report requests exactly one historical T-5 snapshot per scheduled ga
     fetchImpl,
   });
   assert.equal(report.scheduleGames, 2);
+  assert.deepEqual(report.scheduleResolutionCounts, { DIRECT: 2, RESCHEDULED_FINAL_SELECTED: 0 });
   assert.equal(report.snapshotsFetched, 2);
   assert.equal(report.completeLineupGames, 2);
   assert.equal(report.failures.length, 0);
@@ -193,6 +279,30 @@ test("fetch report requests exactly one historical T-5 snapshot per scheduled ga
   assert.equal(report.actionabilityAllowed, false);
   assert.equal(report.automaticModelSelectionAllowed, false);
   assert.equal(report.automaticPromotionAllowed, false);
+});
+
+test("resolved reschedule uses only the final played start for the historical cutoff", async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("/v1/schedule?")) return new Response(JSON.stringify(rescheduledPayload()), { status: 200 });
+    assert.match(url, /\/game\/778443\/feed\/live\?timecode=20250406_173000$/);
+    return new Response(JSON.stringify(feed({ gamePk: 778443, homeTeamId: 111, awayTeamId: 138 })), { status: 200 });
+  };
+  const report = await fetchMlbHistoricalPregameLineups({
+    startDate: "2025-04-05",
+    endDate: "2025-04-06",
+    concurrency: 1,
+    retryBaseDelayMs: 0,
+    fetchImpl,
+  });
+  assert.equal(report.scheduleGames, 1);
+  assert.deepEqual(report.scheduleResolutionCounts, { DIRECT: 0, RESCHEDULED_FINAL_SELECTED: 1 });
+  assert.equal(report.snapshotsFetched, 1);
+  assert.equal(report.snapshots[0].scheduleResolution, "RESCHEDULED_FINAL_SELECTED");
+  assert.equal(report.snapshots[0].scheduledStart, "2025-04-06T17:35:00.000Z");
+  assert.equal(calls.length, 2);
 });
 
 test("persistent acquisition failure is recorded and never converted into lineup evidence", async () => {
