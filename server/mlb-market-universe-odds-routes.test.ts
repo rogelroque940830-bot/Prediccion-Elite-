@@ -12,10 +12,10 @@ import { MLB_P1_M6A2_PROVIDER_MARKETS } from "./mlb-market-odds-normalizer";
 
 const NOW = new Date("2026-08-07T13:30:00.000Z");
 
-function response(payload: unknown, status = 200): Response {
+function response(payload: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
@@ -41,7 +41,7 @@ test("Florida date normalization is deterministic and rejects impossible dates",
   assert.equal(eventFloridaDate("2026-08-08T02:30:00Z"), "2026-08-07");
 });
 
-test("service fetches only the requested Florida slate and caches it for one minute", async () => {
+test("service fetches only the requested Florida slate, reports complete coverage and caches it for one minute", async () => {
   const calls: string[] = [];
   const fetchFn = async (input: string | URL | Request): Promise<Response> => {
     const url = String(input);
@@ -59,6 +59,10 @@ test("service fetches only the requested Florida slate and caches it for one min
         away_team: "Away Club",
         commence_time: "2026-08-07T23:10:00Z",
         bookmakers: [],
+      }, 200, {
+        "x-requests-last": "8",
+        "x-requests-remaining": "992",
+        "x-requests-used": "108",
       });
     }
     throw new Error(`unexpected URL ${url}`);
@@ -73,13 +77,68 @@ test("service fetches only the requested Florida slate and caches it for one min
   const second = await service.load("2026-08-07", "key");
   assert.equal(first.games.length, 1);
   assert.equal(first.games[0].eventId, "today");
+  assert.deepEqual(first.coverage, {
+    eligibleEvents: 1,
+    fetchedGames: 1,
+    failedEvents: [],
+    complete: true,
+  });
+  assert.equal(first.providerUsage.totalReportedCost, 8);
+  assert.equal(first.providerUsage.minimumReportedRemaining, 992);
+  assert.deepEqual(first.providerUsage.samples, [{
+    eventId: "today",
+    requestsLast: 8,
+    requestsRemaining: 992,
+    requestsUsed: 108,
+  }]);
+  assert.equal(first.policy.bookmakerRegionEquivalents, 1);
   assert.equal(first.policy.referenceQuotesExecutable, false);
   assert.equal(first.policy.undocumentedMarketsInvented, false);
   assert.equal(first.policy.threeWayCoercedToTwoWay, false);
+  assert.equal(first.policy.partialSlateCached, false);
   assert.deepEqual(second, first);
   assert.equal(calls.length, 2);
   assert.ok(calls.some((url) => url.includes("/events/today/odds/")));
   assert.equal(calls.some((url) => url.includes("/events/tomorrow/odds/")), false);
+});
+
+test("partial provider coverage is visible and never cached as a complete daily universe", async () => {
+  let eventsCalls = 0;
+  let goodEventCalls = 0;
+  let failedEventCalls = 0;
+  const fetchFn = async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/events/?")) {
+      eventsCalls += 1;
+      return response([
+        { id: "good", commence_time: "2026-08-07T22:10:00Z" },
+        { id: "bad", commence_time: "2026-08-07T23:10:00Z" },
+      ]);
+    }
+    if (url.includes("/events/good/odds/")) {
+      goodEventCalls += 1;
+      return response({
+        id: "good",
+        home_team: "Home Club",
+        away_team: "Away Club",
+        commence_time: "2026-08-07T22:10:00Z",
+        bookmakers: [],
+      });
+    }
+    failedEventCalls += 1;
+    return response({ message: "temporary", error_code: "TEMP" }, 503);
+  };
+  const service = new MlbP1M6a2MarketOddsService({ fetchFn, now: () => NOW });
+  const first = await service.load("2026-08-07", "key");
+  const second = await service.load("2026-08-07", "key");
+  assert.equal(first.coverage.complete, false);
+  assert.equal(first.coverage.eligibleEvents, 2);
+  assert.equal(first.coverage.fetchedGames, 1);
+  assert.deepEqual(first.coverage.failedEvents, [{ eventId: "bad", code: "TEMP" }]);
+  assert.equal(second.coverage.complete, false);
+  assert.equal(eventsCalls, 2);
+  assert.equal(goodEventCalls, 2);
+  assert.equal(failedEventCalls, 2);
 });
 
 test("all event-provider failures remain retryable and are never cached as an empty slate", async () => {
