@@ -10,11 +10,17 @@ B2A does not yet include starting pitchers, confirmed lineups, bullpen availabil
 
 ## Frozen comparison baseline
 
-B2A must compare against the exact B1 Negative Binomial NB2 family that won the 2025 Poisson-vs-NB2 baseline study. The real B2A research runner must reproduce the frozen B1 dataset digest before evaluating the challenger:
+B2A must compare against the exact B1 Negative Binomial NB2 family that won the 2025 Poisson-vs-NB2 baseline study, on the exact same **canonical outcome sample**.
 
-`15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b`
+The frozen B1 `outcomeDigest` is:
 
-If official-source reconstruction produces a different digest, B2A fails closed. It does not compare models across different samples.
+`c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d`
+
+The research runner re-downloads official MLB history and must reproduce this `outcomeDigest` before evaluating the challenger. It also checks the frozen observation count for every horizon.
+
+Raw MLB payload provenance is audited separately through `sourceProvenanceDigest` and the legacy acquisition-snapshot `datasetDigest`. Those provider fingerprints are allowed to change when MLB revises non-outcome metadata; they cannot substitute for outcome identity.
+
+This distinction was forced by an observed real-world provider-drift event: two independent 2025 acquisitions had 0 differences across 2,430 final scores and inning-by-inning results, while raw feed digests changed for 1,048 games. The B1 evidence record preserves that audit.
 
 ## Canonical identity
 
@@ -83,13 +89,34 @@ The team-strength snapshot for an outer fold is frozen using only the outer trai
 
 Same-day games cannot leak into one another because split membership is by unique official date.
 
-## Metrics
+## Point metric and paired uncertainty
 
-Primary metric:
+The primary point metric remains held-out team-run count negative log likelihood. Positive `baseline - challenger` means the challenger has lower NLL.
 
-- held-out team-run count negative log likelihood.
+A positive point estimate alone is **not** sufficient evidence of improvement. MLB games from the same calendar date share league environment and other common context, so treating every team-run observation as independent would understate uncertainty.
 
-Reported probability diagnostics:
+B2A therefore performs a second, mandatory paired inference layer:
+
+1. for each held-out game, baseline and challenger are evaluated on the same observation;
+2. their count-NLL difference is aggregated by `officialDate`;
+3. complete dates are the bootstrap clusters;
+4. dates are sampled with replacement using a deterministic seed derived from the exact horizon evidence;
+5. the default run uses 5,000 bootstrap replicates;
+6. an ordinary paired 95% percentile interval is reported;
+7. a Bonferroni family-wise interval is also reported across the four simultaneously tested horizons. With family alpha `0.05`, each horizon uses alpha `0.0125`, producing a **98.75%** two-sided interval.
+
+The adjusted interval controls the research evidence label:
+
+- `SUPPORTED_IMPROVEMENT` only if the 98.75% lower bound is strictly above zero;
+- `SUPPORTED_REGRESSION` only if the 98.75% upper bound is strictly below zero;
+- `INCONCLUSIVE` if the adjusted interval contains zero;
+- `INSUFFICIENT_OOS_SAMPLE` before inference when validation-game or date-cluster floors are not met.
+
+The original B2A point-status field is retained only for backward audit continuity and is printed as `legacyPointStatus` by the research runner. Scientific interpretation must use `pairedEvidenceStatus`.
+
+## Probability diagnostics
+
+Reported probability diagnostics remain:
 
 - Home ML multiclass Brier;
 - Home ML log loss;
@@ -98,15 +125,16 @@ Reported probability diagnostics:
 
 These market-probability diagnostics use the A3A exact discrete run-distribution engine. They do not use sportsbook prices.
 
-A horizon is labeled `OOS_IMPROVEMENT` only when the accumulated outer validation sample floor is met and challenger count NLL is lower than the same-fold B1 NB2 baseline.
-
-That label is a research statement, not promotion.
+They are secondary diagnostics. B2A does not infer sportsbook edge from them.
 
 ## Falsification requirements
 
 The B2A test suite must prove that:
 
-- a synthetic population with real team attack/defense differences can beat the league-only baseline out of sample;
+- a synthetic population with strong team attack/defense differences can clear the **family-wise paired interval**, not merely produce a positive point estimate;
+- homogeneous team evidence can never become `SUPPORTED_IMPROVEMENT`; if estimating team factors adds stable noise it may correctly become `SUPPORTED_REGRESSION`, otherwise it remains `INCONCLUSIVE`;
+- the paired bootstrap is deterministic for identical evidence;
+- the Bonferroni interval is never narrower than the unadjusted 95% interval;
 - an unseen team falls back to neutral factors rather than fabricated history;
 - nested prior selection uses only inner training evidence;
 - NB2 probability math matches A3A;
@@ -116,7 +144,7 @@ The B2A test suite must prove that:
 
 ## Real 2025 research execution
 
-The explicit research script re-downloads the official 2025 regular season, rebuilds B1, and first verifies the frozen B1 dataset digest. Only then does it execute B2A:
+The explicit research script re-downloads the official 2025 regular season, rebuilds B1, and first verifies the frozen B1 `outcomeDigest`. Only then does it execute B2A and the paired date-cluster inference:
 
 ```bash
 node --import tsx scripts/p1-m6a3b2a-team-strength-backtest.mjs \
@@ -124,6 +152,8 @@ node --import tsx scripts/p1-m6a3b2a-team-strength-backtest.mjs \
   --end 2025-10-01 \
   --out artifacts/p1-m6a3b2a-2025-team-strength
 ```
+
+The output preserves both provider-provenance fingerprints and the stable outcome identity. A provenance-only drift does not invalidate an outcome-identical sample; a changed `outcomeDigest` does.
 
 No normal application startup invokes this script.
 
@@ -137,11 +167,11 @@ P1-M6A3B2A has no live route and no automatic acquisition worker. It does not re
 
 `automaticPromotionAllowed = false`.
 
-Even a clean OOS improvement only justifies proceeding to the next controlled challenger.
+Even `SUPPORTED_IMPROVEMENT` only justifies proceeding to the next controlled challenger.
 
 ## Next phase — P1-M6A3B2B
 
-B2B will add **starting-pitcher information** with historical `asOf` boundaries and must prove incremental held-out value above B2A, not merely above the old league baseline.
+B2B will add **starting-pitcher information** with historical `asOf` boundaries and must prove incremental held-out value above the strongest justified B2A comparator, not merely above the old league baseline.
 
 Pitcher identity must remain MLB-ID based. Pitcher features must be constructed only from appearances/statistics that would have existed before the target game's start. Season-end pitching lines, later starts and postgame information are prohibited from historical feature construction.
 
