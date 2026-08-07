@@ -56,7 +56,12 @@ export interface MlbHistoricalDatasetBuildReport {
   observations: MlbHistoricalHorizonObservation[];
   observationsByHorizon: Record<MlbProbabilityHorizon, number>;
   exclusionCounts: Record<string, number>;
+  /** Archival digest: includes raw-feed sourceDigest and therefore detects provider metadata drift. */
   datasetDigest: string;
+  /** Statistical-equivalence digest: only canonical game identity and observed outcomes. */
+  outcomeDigest: string;
+  /** Raw-provider provenance digest over acquired games. */
+  sourceProvenanceDigest: string;
   actionabilityAllowed: false;
   blockers: ["P1_M6A3B1_RESEARCH_ONLY", "P1_M6A3B2_COVARIATE_MODEL_REQUIRED", "P1_M6A3B_OUT_OF_SAMPLE_CERTIFICATION_INCOMPLETE"];
 }
@@ -159,6 +164,12 @@ export function deriveMlbHistoricalHorizonObservation(
   };
 }
 
+function sortObservations(observations: MlbHistoricalHorizonObservation[]): MlbHistoricalHorizonObservation[] {
+  return [...observations].sort((a, b) => a.officialDate.localeCompare(b.officialDate)
+    || a.gamePk - b.gamePk
+    || HORIZONS.indexOf(a.horizon) - HORIZONS.indexOf(b.horizon));
+}
+
 function canonicalObservation(observation: MlbHistoricalHorizonObservation): string {
   return JSON.stringify({
     gamePk: observation.gamePk,
@@ -173,12 +184,38 @@ function canonicalObservation(observation: MlbHistoricalHorizonObservation): str
   });
 }
 
+function canonicalOutcomeObservation(observation: MlbHistoricalHorizonObservation): string {
+  return JSON.stringify({
+    gamePk: observation.gamePk,
+    officialDate: observation.officialDate,
+    season: observation.season,
+    horizon: observation.horizon,
+    homeTeamId: observation.homeTeamId,
+    awayTeamId: observation.awayTeamId,
+    homeRuns: observation.homeRuns,
+    awayRuns: observation.awayRuns,
+  });
+}
+
 export function digestMlbHistoricalObservations(observations: MlbHistoricalHorizonObservation[]): string {
-  const canonical = [...observations]
-    .sort((a, b) => a.officialDate.localeCompare(b.officialDate)
-      || a.gamePk - b.gamePk
-      || HORIZONS.indexOf(a.horizon) - HORIZONS.indexOf(b.horizon))
-    .map(canonicalObservation)
+  const canonical = sortObservations(observations).map(canonicalObservation).join("\n");
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+export function digestMlbHistoricalOutcomeObservations(observations: MlbHistoricalHorizonObservation[]): string {
+  const canonical = sortObservations(observations).map(canonicalOutcomeObservation).join("\n");
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+export function digestMlbHistoricalSourceProvenance(games: MlbHistoricalOfficialGame[]): string {
+  const canonical = [...games]
+    .sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.gamePk - b.gamePk)
+    .map((game) => JSON.stringify({
+      gamePk: game.gamePk,
+      officialDate: game.officialDate,
+      sourceVersion: game.sourceVersion,
+      sourceDigest: game.sourceDigest,
+    }))
     .join("\n");
   return crypto.createHash("sha256").update(canonical).digest("hex");
 }
@@ -231,6 +268,8 @@ export function buildMlbHistoricalDataset(
     observationsByHorizon,
     exclusionCounts,
     datasetDigest: digestMlbHistoricalObservations(observations),
+    outcomeDigest: digestMlbHistoricalOutcomeObservations(observations),
+    sourceProvenanceDigest: digestMlbHistoricalSourceProvenance(games),
     actionabilityAllowed: false,
     blockers: [
       "P1_M6A3B1_RESEARCH_ONLY",
