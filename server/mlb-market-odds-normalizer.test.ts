@@ -139,7 +139,7 @@ test("builds the complete canonical MLB quote universe without inventing undocum
 
 test("maps NRFI and YRFI only from an exact first-inning total of 0.5", () => {
   const exact = buildMlbMarketOddsUniverseGame(event([
-    book("hardrockbet", [market("totals_1st_1_innings", totalPrices(0.5, -115, -105))]),
+    book("hardrockbet_fl", [market("totals_1st_1_innings", totalPrices(0.5, -115, -105))]),
   ]), CAPTURED_AT);
 
   const nrfi = findMarket(exact, "NRFI:NRFI");
@@ -152,7 +152,7 @@ test("maps NRFI and YRFI only from an exact first-inning total of 0.5", () => {
   assert.equal(yrfi.execution.quote?.selections[0].oddsAmerican, -115);
 
   const wrongLine = buildMlbMarketOddsUniverseGame(event([
-    book("hardrockbet", [market("totals_1st_1_innings", totalPrices(1.5, -110, -110))]),
+    book("hardrockbet_fl", [market("totals_1st_1_innings", totalPrices(1.5, -110, -110))]),
   ]), CAPTURED_AT);
   assert.equal(findMarket(wrongLine, "NRFI:NRFI").availability, "CONTRACT_MISMATCH");
   assert.ok(findMarket(wrongLine, "NRFI:NRFI").blockers.includes("QUOTE_CONTRACT_MISMATCH"));
@@ -176,7 +176,7 @@ test("fails closed when only a three-way F3 moneyline contract is present", () =
   assert.equal(f3Ml.reference.quote, null);
 });
 
-test("a fresh reference price never upgrades a stale Hard Rock quote to executable", () => {
+test("a fresh reference price never upgrades a stale Hard Rock Florida quote to executable", () => {
   const game = buildMlbMarketOddsUniverseGame(event([
     book("hardrockbet_fl", [market("h2h", teamPrices(-130, 110), STALE_AT)], STALE_AT),
     book("draftkings", [market("h2h", teamPrices(-125, 105))]),
@@ -190,9 +190,20 @@ test("a fresh reference price never upgrades a stale Hard Rock quote to executab
   assert.ok(fullMl.blockers.includes("NOT_EXECUTABLE_AT_CURRENT_HARD_ROCK_PRICE"));
 });
 
+test("Hard Rock prices from another jurisdiction never become executable Florida prices", () => {
+  const game = buildMlbMarketOddsUniverseGame(event([
+    book("hardrockbet_az", [market("h2h", teamPrices(-125, 105))]),
+  ]), CAPTURED_AT);
+  const fullMl = findMarket(game, "ML:DEFAULT");
+  assert.equal(fullMl.execution.status, "MISSING");
+  assert.equal(fullMl.execution.quote, null);
+  assert.notEqual(fullMl.availability, "EXECUTABLE");
+  assert.ok(fullMl.blockers.includes("NOT_EXECUTABLE_AT_CURRENT_HARD_ROCK_PRICE"));
+});
+
 test("rejects malformed paired structures instead of averaging mismatched lines", () => {
   const game = buildMlbMarketOddsUniverseGame(event([
-    book("hardrockbet", [
+    book("hardrockbet_fl", [
       market("spreads_1st_3_innings", [
         { name: HOME, point: -0.5, price: -110 },
         { name: AWAY, point: 1.5, price: -110 },
