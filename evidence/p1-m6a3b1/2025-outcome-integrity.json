@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b1-outcome-integrity.v1",
+  "evidenceStatus": "RESEARCH_INTEGRITY_SUPPLEMENT",
+  "baseline": {
+    "artifactId": 9000160287,
+    "githubActionsRunId": 31194164106,
+    "archivedDatasetDigest": "15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b",
+    "outcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "sourceProvenanceDigestAtFreeze": "8a0bc70892a9afe16c06dbeb3e7386a88ca0b56f74d69152087660c7a08586f1"
+  },
+  "comparisonAudit": {
+    "artifactId": 9000943458,
+    "githubActionsRunId": 31196129039,
+    "reacquiredDatasetDigest": "97ba858f6c38d0578f24d4d7563ed94a4fc5b3b940bc1251fe158be223c8df70",
+    "reacquiredOutcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "reacquiredSourceProvenanceDigest": "43495331a1703d9941008c16295c360e847bebf4fe68ce01620072dc561a5338",
+    "gamesBaseline": 2430,
+    "gamesReacquired": 2430,
+    "sameGamePkSet": true,
+    "gamesWithAnyDifference": 1048,
+    "gamesWithSourceDigestOnlyDifference": 1048,
+    "gamesWithSportingFieldDifference": 0,
+    "observationsBaseline": 9720,
+    "observationsReacquired": 9720,
+    "observationsWithAnyDifference": 4192,
+    "observationsWithSourceDigestOnlyDifference": 4192,
+    "observationsWithSportingFieldDifference": 0,
+    "canonicalOutcomesIdentical": true,
+    "providerMetadataDriftObserved": true
+  },
+  "canonicalOutcomeDigestDefinition": {
+    "sort": ["officialDate", "gamePk", "horizon"],
+    "fields": [
+      "gamePk",
+      "officialDate",
+      "season",
+      "horizon",
+      "homeTeamId",
+      "awayTeamId",
+      "homeRuns",
+      "awayRuns"
+    ],
+    "excludedFromOutcomeEquivalence": [
+      "sourceDigest",
+      "sourceVersion",
+      "teamDisplayNames",
+      "generatedAt"
+    ],
+    "note": "Excluded fields remain preserved and audited separately; they are not allowed to redefine statistical outcome equivalence when canonical sporting outcomes are unchanged."
+  },
+  "provenanceDigestDefinition": {
+    "sort": ["officialDate", "gamePk"],
+    "fields": ["gamePk", "officialDate", "sourceVersion", "sourceDigest"]
+  },
+  "safety": {
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false,
+    "providerMetadataDriftMustRemainVisible": true,
+    "canonicalOutcomeMismatchMustFailClosed": true
+  }
+}
