@@ -23,6 +23,47 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies reproducibly
         run: npm ci
+      - name: Diagnose official starter identity conflict for game 777342
+        run: |
+          node <<'NODE'
+          const gamePk = 777342;
+          const response = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, {
+            headers: { Accept: 'application/json', 'User-Agent': 'CourtEdge-P1-M6A3B2B1-Diagnostic/1.0' },
+          });
+          if (!response.ok) throw new Error(`MLB_BOXSCORE_HTTP_${response.status}`);
+          const boxscore = await response.json();
+          const output = { gamePk, sides: {} };
+          for (const side of ['away', 'home']) {
+            const team = boxscore?.teams?.[side] ?? {};
+            const pitchingOrder = Array.isArray(team.pitchers) ? team.pitchers.map(Number) : [];
+            const firstPitcherId = pitchingOrder[0] ?? null;
+            const pitcherRows = [];
+            for (const player of Object.values(team.players ?? {})) {
+              const id = Number(player?.person?.id);
+              const pitching = player?.stats?.pitching;
+              if (!Number.isInteger(id) || !pitching) continue;
+              if (!pitchingOrder.includes(id) && Number(pitching.gamesStarted) !== 1) continue;
+              pitcherRows.push({
+                id,
+                name: String(player?.person?.fullName ?? ''),
+                pitchingOrderIndex: pitchingOrder.indexOf(id),
+                gamesStarted: pitching.gamesStarted ?? null,
+                gamesPitched: pitching.gamesPitched ?? null,
+                inningsPitched: pitching.inningsPitched ?? null,
+                battersFaced: pitching.battersFaced ?? null,
+              });
+            }
+            output.sides[side] = {
+              teamId: Number(team?.team?.id ?? 0),
+              firstPitcherId,
+              pitchingOrder,
+              explicitGamesStartedIds: pitcherRows.filter((row) => Number(row.gamesStarted) === 1).map((row) => row.id),
+              pitcherRows,
+            };
+          }
+          console.log('P1_M6A3B2B1_GAME_777342_IDENTITY_DIAGNOSTIC');
+          console.log(JSON.stringify(output, null, 2));
+          NODE
       - name: Reproduce B1 cohort and acquire official 2025 starting-pitcher history
         run: |
           node --import tsx scripts/p1-m6a3b2b1-starting-pitcher-backfill.mjs \
