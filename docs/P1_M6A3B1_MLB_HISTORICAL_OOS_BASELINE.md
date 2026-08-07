@@ -12,6 +12,20 @@ The research dataset does not derive historical outcomes from the betting ledger
 
 Each official game stores a SHA-256 digest of its source payload and a source-version identifier. Dataset rows retain that provenance.
 
+## Outcome identity versus provider-payload provenance
+
+A provider feed is not itself the scientific identity of an observed baseball result. MLB can revise non-outcome metadata in an old `feed/live` payload after a game while leaving the official teams, date, final score and inning-by-inning run results unchanged.
+
+B1 therefore exposes three distinct digests:
+
+- `outcomeDigest`: the **canonical sample identity**. It hashes only immutable analysis-relevant outcome fields: `gamePk`, official date, season, horizon, home/away MLB team IDs and the observed home/away runs for that horizon.
+- `sourceProvenanceDigest`: a separate fingerprint of `sourceVersion` and raw `sourceDigest`, used to detect provider-payload drift without pretending that metadata drift changed the baseball result.
+- `datasetDigest`: the original/legacy acquisition-snapshot digest retained for backward audit compatibility. It includes `sourceDigest`, so it can legitimately change when MLB changes non-outcome feed metadata. It must **not** be used to decide whether two reconstructed research samples contain the same outcomes.
+
+A canonical outcome correction changes `outcomeDigest`. A raw-provider metadata revision with identical outcomes changes provenance fingerprints but leaves `outcomeDigest` unchanged.
+
+This separation is a safety boundary: future model comparisons must freeze and compare `outcomeDigest`, while still retaining the provider-provenance fingerprints for audit.
+
 ## Inclusion and exclusion rules
 
 Only MLB regular-season (`gameType = R`) official finals are eligible.
@@ -94,7 +108,7 @@ The output directory contains:
 - `acquisition.json`;
 - `dataset.json`;
 - `oos-report.json`;
-- `manifest.json` with SHA-256 artifact digests.
+- `manifest.json` with SHA-256 artifact digests and the three dataset-identity/provenance digests.
 
 The artifacts are research evidence; they are not ledger records.
 

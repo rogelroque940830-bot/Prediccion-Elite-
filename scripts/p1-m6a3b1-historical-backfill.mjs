@@ -48,7 +48,7 @@ const oos = buildMlbHistoricalOutOfSampleReport(dataset.observations, { generate
 const oosArtifact = await writeJson(path.join(outputRoot, "oos-report.json"), oos);
 
 const manifest = {
-  schemaVersion: "courtedge-p1-m6a3b1-historical-artifact-manifest.v1",
+  schemaVersion: "courtedge-p1-m6a3b1-historical-artifact-manifest.v2",
   generatedAt,
   source: acquisition.sourceVersion,
   range: { startDate, endDate },
@@ -58,7 +58,14 @@ const manifest = {
     regularSeasonFinal: dataset.regularSeasonFinalGames,
   },
   observationsByHorizon: dataset.observationsByHorizon,
-  datasetDigest: dataset.datasetDigest,
+  outcomeDigest: dataset.outcomeDigest,
+  sourceProvenanceDigest: dataset.sourceProvenanceDigest,
+  legacyDatasetDigest: dataset.datasetDigest,
+  digestSemantics: {
+    canonicalSampleIdentity: "outcomeDigest",
+    providerPayloadAudit: "sourceProvenanceDigest",
+    legacyAcquisitionSnapshot: "legacyDatasetDigest",
+  },
   artifacts: [acquisitionArtifact, datasetArtifact, oosArtifact],
   researchOnly: true,
   actionabilityAllowed: false,
@@ -76,7 +83,9 @@ console.log(JSON.stringify({
   outputRoot,
   games: dataset.regularSeasonFinalGames,
   observationsByHorizon: dataset.observationsByHorizon,
-  datasetDigest: dataset.datasetDigest,
+  outcomeDigest: dataset.outcomeDigest,
+  sourceProvenanceDigest: dataset.sourceProvenanceDigest,
+  legacyDatasetDigest: dataset.datasetDigest,
   horizonResearchStatus: oos.horizons.map((entry) => ({
     horizon: entry.horizon,
     status: entry.status,

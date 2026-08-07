@@ -56,7 +56,16 @@ export interface MlbHistoricalDatasetBuildReport {
   observations: MlbHistoricalHorizonObservation[];
   observationsByHorizon: Record<MlbProbabilityHorizon, number>;
   exclusionCounts: Record<string, number>;
+  /**
+   * Legacy acquisition-snapshot digest. It intentionally includes sourceDigest and therefore
+   * can change when MLB mutates non-outcome metadata in an otherwise identical official feed.
+   * Do not use this field as the canonical identity of an outcome sample.
+   */
   datasetDigest: string;
+  /** Stable identity of the canonical observed baseball outcomes only. */
+  outcomeDigest: string;
+  /** Fingerprint of sourceVersion/sourceDigest provenance for drift auditing. */
+  sourceProvenanceDigest: string;
   actionabilityAllowed: false;
   blockers: ["P1_M6A3B1_RESEARCH_ONLY", "P1_M6A3B2_COVARIATE_MODEL_REQUIRED", "P1_M6A3B_OUT_OF_SAMPLE_CERTIFICATION_INCOMPLETE"];
 }
@@ -159,7 +168,17 @@ export function deriveMlbHistoricalHorizonObservation(
   };
 }
 
-function canonicalObservation(observation: MlbHistoricalHorizonObservation): string {
+function sortedObservations(observations: MlbHistoricalHorizonObservation[]): MlbHistoricalHorizonObservation[] {
+  return [...observations].sort((a, b) => a.officialDate.localeCompare(b.officialDate)
+    || a.gamePk - b.gamePk
+    || HORIZONS.indexOf(a.horizon) - HORIZONS.indexOf(b.horizon));
+}
+
+function hashCanonical(lines: string[]): string {
+  return crypto.createHash("sha256").update(lines.join("\n")).digest("hex");
+}
+
+function canonicalObservationWithProvenance(observation: MlbHistoricalHorizonObservation): string {
   return JSON.stringify({
     gamePk: observation.gamePk,
     officialDate: observation.officialDate,
@@ -173,14 +192,44 @@ function canonicalObservation(observation: MlbHistoricalHorizonObservation): str
   });
 }
 
+function canonicalOutcomeObservation(observation: MlbHistoricalHorizonObservation): string {
+  return JSON.stringify({
+    gamePk: observation.gamePk,
+    officialDate: observation.officialDate,
+    season: observation.season,
+    horizon: observation.horizon,
+    homeTeamId: observation.homeTeamId,
+    awayTeamId: observation.awayTeamId,
+    homeRuns: observation.homeRuns,
+    awayRuns: observation.awayRuns,
+  });
+}
+
+function canonicalSourceProvenance(observation: MlbHistoricalHorizonObservation): string {
+  return JSON.stringify({
+    gamePk: observation.gamePk,
+    horizon: observation.horizon,
+    sourceVersion: observation.sourceVersion,
+    sourceDigest: observation.sourceDigest,
+  });
+}
+
+/**
+ * Legacy acquisition-snapshot digest retained for backward audit compatibility.
+ * It includes sourceDigest and can therefore drift when provider metadata changes.
+ */
 export function digestMlbHistoricalObservations(observations: MlbHistoricalHorizonObservation[]): string {
-  const canonical = [...observations]
-    .sort((a, b) => a.officialDate.localeCompare(b.officialDate)
-      || a.gamePk - b.gamePk
-      || HORIZONS.indexOf(a.horizon) - HORIZONS.indexOf(b.horizon))
-    .map(canonicalObservation)
-    .join("\n");
-  return crypto.createHash("sha256").update(canonical).digest("hex");
+  return hashCanonical(sortedObservations(observations).map(canonicalObservationWithProvenance));
+}
+
+/** Stable canonical identity for the observed outcome sample. */
+export function digestMlbHistoricalOutcomes(observations: MlbHistoricalHorizonObservation[]): string {
+  return hashCanonical(sortedObservations(observations).map(canonicalOutcomeObservation));
+}
+
+/** Separate provider-provenance fingerprint; expected to change when raw feeds change. */
+export function digestMlbHistoricalSourceProvenance(observations: MlbHistoricalHorizonObservation[]): string {
+  return hashCanonical(sortedObservations(observations).map(canonicalSourceProvenance));
 }
 
 export function buildMlbHistoricalDataset(
@@ -231,6 +280,8 @@ export function buildMlbHistoricalDataset(
     observationsByHorizon,
     exclusionCounts,
     datasetDigest: digestMlbHistoricalObservations(observations),
+    outcomeDigest: digestMlbHistoricalOutcomes(observations),
+    sourceProvenanceDigest: digestMlbHistoricalSourceProvenance(observations),
     actionabilityAllowed: false,
     blockers: [
       "P1_M6A3B1_RESEARCH_ONLY",
