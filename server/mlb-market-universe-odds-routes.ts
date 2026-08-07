@@ -124,7 +124,9 @@ async function readJson(response: Response): Promise<any> {
 }
 
 function numericHeader(response: Response, name: string): number | null {
-  const value = Number(response.headers.get(name));
+  const raw = response.headers.get(name);
+  if (raw == null || !raw.trim()) return null;
+  const value = Number(raw);
   return Number.isFinite(value) ? value : null;
 }
 
