@@ -115,7 +115,7 @@ test("certified timed bullpen evidence removes the structural ML FINAL blocker",
   const bullpen = report.evidence.find((item) => item.field === "BULLPEN");
   assert.equal(bullpen?.state, "FRESH");
   assert.equal(bullpen?.observedAt, NOW.toISOString());
-  assert.equal(bullpen?.quality, "DERIVED_EXPLICIT_TIMESTAMP");
+  assert.equal(bullpen?.quality, "DERIVED_WITH_EXPLICIT_TIMESTAMP");
   assert.equal(report.gate.status, "READY_FINAL");
   assert.equal(report.gate.analysisStage, "FINAL");
   assert.equal(report.warnings.includes("BULLPEN_DEGRADED"), false);
