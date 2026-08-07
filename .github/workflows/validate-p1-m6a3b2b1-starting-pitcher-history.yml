@@ -60,6 +60,9 @@ jobs:
           grep -F '/v1/game/${game.gamePk}/boxscore' "$source"
           grep -F 'gamesStarted' "$source"
           grep -F 'GAME_STARTED_FLAG_AND_ORDER' "$source"
+          grep -F 'GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER' "$source" "$docs"
+          grep -F 'confirmedZeroPitchingParticipation' "$source"
+          grep -F 'ZERO_PARTICIPATION_FIRST_WITHOUT_STARTER_FLAG' "$source"
           grep -F 'PITCHING_ORDER_FIRST' "$source"
           grep -F 'mlbInningsPitchedToOuts' "$source"
           grep -F 'starterHistoryDigest' "$source" "$script"
@@ -71,7 +74,7 @@ jobs:
           grep -F 'automaticModelSelectionAllowed: false' "$source" "$script"
           grep -F 'automaticPromotionAllowed: false' "$source" "$script"
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$source" "$script"
-      - name: Verify exact B2B1 scope from PR base to PR head
+      - name: Verify bounded B2B1 maintenance scope from PR base to PR head
         shell: bash
         run: |
           set -euo pipefail
@@ -84,11 +87,17 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b2b1-starting-pitcher-history.yml' \
             'docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md' \
             'scripts/p1-m6a3b2b1-starting-pitcher-backfill.mjs' \
             'server/mlb-market-starting-pitcher-history.test.ts' \
             'server/mlb-market-starting-pitcher-history.ts' \
             'tsconfig.p1-m6a3b2b1-starting-pitcher-history.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            grep -Fxq "$file" <<< "$allowed"
+          done <<< "$changed"
+          source_changed=$(grep -Fx 'server/mlb-market-starting-pitcher-history.ts' <<< "$changed" || true)
+          test_changed=$(grep -Fx 'server/mlb-market-starting-pitcher-history.test.ts' <<< "$changed" || true)
+          [[ -n "$source_changed" ]] == [[ -n "$test_changed" ]]
