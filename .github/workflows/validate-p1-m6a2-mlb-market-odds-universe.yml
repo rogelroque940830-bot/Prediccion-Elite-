@@ -69,7 +69,11 @@ jobs:
           grep -F 'referenceQuotesExecutable: false' "$route"
           grep -F 'undocumentedMarketsInvented: false' "$route"
           grep -F 'threeWayCoercedToTwoWay: false' "$route"
-          grep -F 'reference consensus is analytical price evidence only' "$docs" -i
+          grep -F 'partialSlateCached: false' "$route"
+          grep -F 'x-requests-last' "$route"
+          grep -F 'if (complete)' "$route"
+          grep -Fi 'reference consensus is analytical price evidence only' "$docs"
+          grep -Fi 'never caches partial coverage' "$docs"
           grep -F 'registerMlbP1M6a2MarketUniverseOddsRoutes(app)' server/routes.ts
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$normalizer" "$route"
       - name: Verify P1-M6A2 route precedes legacy market support
