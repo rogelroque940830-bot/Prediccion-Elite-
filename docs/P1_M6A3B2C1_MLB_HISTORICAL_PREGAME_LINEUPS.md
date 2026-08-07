@@ -24,15 +24,37 @@ The scheduled start comes from the official MLB schedule response and is tied to
 
 A full-range MLB schedule response can contain more than one historical listing for the **same `gamePk`**. This was observed directly for `gamePk 778443`: MLB retained a rain-postponed April 5 listing and the played April 6 listing under the same game identity.
 
-B2C1 v2 resolves that situation narrowly instead of taking the first or last row arbitrarily:
+B2C1 resolves that situation narrowly instead of taking the first or last row arbitrarily:
 
 1. every listing for the duplicated `gamePk` must have identical home and away team IDs;
 2. after exact duplicate rows are collapsed, there must be exactly one played-final listing with `codedGameState=F`;
 3. every other distinct listing must be explicitly obsolete because it is `codedGameState=D` or has a detailed state of `Postponed`, `Canceled`, `Cancelled`, or `Suspended`;
 4. only then is the played-final listing selected, with `scheduleResolution=RESCHEDULED_FINAL_SELECTED`;
-5. any team drift, two distinct finals, or final-plus-active/non-obsolete listing remains `P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT`.
+5. any team drift, two unrelated distinct finals, or final-plus-active/non-obsolete listing remains `P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT`.
 
-A unique schedule listing, including an exact duplicate that collapses to one identical row, is labeled `DIRECT`. The report publishes counts for both resolution methods. This resolution chooses the official scheduled start of the game that was actually played; it does **not** supply lineup data and does not relax the subsequent historical pregame checks.
+## Suspended and resumed game identity
+
+B2C1 v3 adds a second, separate resolution for a game that **actually started, was suspended, and later resumed under the same `gamePk`**. This pattern was observed directly for `gamePk 777861` (Guardians at Twins): the MLB schedule retains the May 19 original start and the May 21 continuation as two Final listings.
+
+The source does not infer this relationship from dates. It requires explicit, bidirectional MLB resume metadata:
+
+1. exactly two distinct schedule candidates remain after exact duplicate collapse;
+2. home and away team IDs are identical on both candidates;
+3. both candidates preserve the same `officialDate`;
+4. the original candidate contains `resumeDate` and `resumeGameDate`, with no `resumedFrom`;
+5. the continuation contains `resumedFrom` and `resumedFromDate`, with no `resumeDate`;
+6. `original.resumeDate` must equal the continuation's exact scheduled-start timestamp;
+7. `continuation.resumedFrom` must equal the original exact scheduled-start timestamp;
+8. `continuation.resumedFromDate` must equal the original official date;
+9. both current schedule candidates must be played-final records.
+
+Only when all of those conditions hold does B2C1 select the **original first-pitch start** and label it `SUSPENDED_ORIGINAL_START_SELECTED`.
+
+That choice is essential for historical lineup research: the batting order being reconstructed must be the information available before the game's first pitch, not the state before a later continuation. The continuation timestamp cannot rewrite the original pregame information retrospectively.
+
+One-way resume metadata, timestamp mismatch, team drift, more than two distinct candidates, or unrelated multiple Finals remain `P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT`.
+
+A unique schedule listing, including an exact duplicate that collapses to one identical row, is labeled `DIRECT`. The report publishes counts for `DIRECT`, `RESCHEDULED_FINAL_SELECTED`, and `SUSPENDED_ORIGINAL_START_SELECTED`. Schedule resolution chooses the correct historical start; it does **not** supply lineup data and never relaxes the subsequent pregame snapshot checks.
 
 ## Fail-closed lineup definition
 
