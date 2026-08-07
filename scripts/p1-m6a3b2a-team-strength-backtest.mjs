@@ -28,24 +28,28 @@ const startDate = arg("--start") ?? "2025-03-01";
 const endDate = arg("--end") ?? "2025-10-01";
 const outputRoot = arg("--out") ?? "artifacts/p1-m6a3b2a-team-strength";
 const baselineEvidencePath = arg("--baseline") ?? "evidence/p1-m6a3b1/2025-official-baseline.json";
+const outcomeIntegrityPath = arg("--outcome-integrity") ?? "evidence/p1-m6a3b1/2025-outcome-integrity.json";
 const concurrency = Number(arg("--concurrency") ?? 4);
 const generatedAt = new Date().toISOString();
 
 const baselineEvidence = JSON.parse(await fs.readFile(baselineEvidencePath, "utf8"));
+const outcomeIntegrity = JSON.parse(await fs.readFile(outcomeIntegrityPath, "utf8"));
 const expectedStart = baselineEvidence?.source?.startDate;
 const expectedEnd = baselineEvidence?.source?.endDate;
 const expectedSourceVersion = baselineEvidence?.source?.sourceVersion;
-const expectedOutcomeDigest = baselineEvidence?.integrity?.outcomeDigest;
 const expectedArchivedDatasetDigest = baselineEvidence?.integrity?.datasetDigest;
-const expectedSourceProvenanceDigest = baselineEvidence?.integrity?.sourceProvenanceDigestAtFreeze;
+const integrityArchivedDatasetDigest = outcomeIntegrity?.baseline?.archivedDatasetDigest;
+const expectedOutcomeDigest = outcomeIntegrity?.baseline?.outcomeDigest;
+const expectedSourceProvenanceDigest = outcomeIntegrity?.baseline?.sourceProvenanceDigestAtFreeze;
 const expectedGames = Number(baselineEvidence?.integrity?.regularSeasonFinalGames);
 const expectedObservations = baselineEvidence?.sample?.observationsByHorizon ?? {};
 if (
   startDate !== expectedStart
   || endDate !== expectedEnd
   || !String(expectedSourceVersion ?? "").trim()
-  || !validSha(expectedOutcomeDigest)
   || !validSha(expectedArchivedDatasetDigest)
+  || expectedArchivedDatasetDigest !== integrityArchivedDatasetDigest
+  || !validSha(expectedOutcomeDigest)
   || !validSha(expectedSourceProvenanceDigest)
   || !Number.isInteger(expectedGames)
   || expectedGames <= 0
