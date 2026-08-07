@@ -100,4 +100,7 @@ jobs:
           done <<< "$changed"
           source_changed=$(grep -Fx 'server/mlb-market-starting-pitcher-history.ts' <<< "$changed" || true)
           test_changed=$(grep -Fx 'server/mlb-market-starting-pitcher-history.test.ts' <<< "$changed" || true)
-          [[ -n "$source_changed" ]] == [[ -n "$test_changed" ]]
+          if [[ -n "$source_changed" && -z "$test_changed" ]] || [[ -z "$source_changed" && -n "$test_changed" ]]; then
+            echo 'B2B1 source and falsification test must change together' >&2
+            exit 1
+          fi
