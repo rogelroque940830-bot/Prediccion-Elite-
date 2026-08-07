@@ -38,6 +38,7 @@ function officialGame(overrides: Partial<MlbHistoricalOfficialGame> = {}): MlbHi
 function pitchingLine(overrides: Record<string, unknown> = {}) {
   return {
     gamesStarted: 1,
+    gamesPitched: 1,
     inningsPitched: "5.2",
     battersFaced: 23,
     runs: 2,
@@ -53,24 +54,75 @@ function pitchingLine(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function boxscore(options: { explicitStarterFlags?: boolean; conflict?: boolean } = {}) {
+function zeroParticipationLine(overrides: Record<string, unknown> = {}) {
+  return pitchingLine({
+    gamesStarted: 0,
+    gamesPitched: 0,
+    inningsPitched: "0.0",
+    battersFaced: 0,
+    runs: 0,
+    earnedRuns: 0,
+    hits: 0,
+    baseOnBalls: 0,
+    strikeOuts: 0,
+    homeRuns: 0,
+    hitByPitch: 0,
+    numberOfPitches: 0,
+    strikes: 0,
+    ...overrides,
+  });
+}
+
+function boxscore(options: {
+  explicitStarterFlags?: boolean;
+  conflict?: boolean;
+  zeroParticipationPlaceholder?: boolean;
+  zeroPlaceholderWithoutExplicitFlag?: boolean;
+} = {}) {
   const explicit = options.explicitStarterFlags ?? true;
   const awayStarterId = 101;
+  const explicitReplacementId = 102;
   const homeStarterId = 201;
-  const awayFlagId = options.conflict ? 102 : awayStarterId;
+  const replacementScenario = options.zeroParticipationPlaceholder || options.zeroPlaceholderWithoutExplicitFlag;
+  const conflictScenario = options.conflict ?? false;
+  const awayPitchingOrder = replacementScenario || conflictScenario
+    ? [awayStarterId, explicitReplacementId, 103]
+    : [awayStarterId, 103];
+
+  const firstAwayLine = replacementScenario
+    ? zeroParticipationLine()
+    : pitchingLine({ gamesStarted: explicit && !conflictScenario ? 1 : 0 });
+  const replacementGamesStarted = options.zeroPlaceholderWithoutExplicitFlag
+    ? 0
+    : explicit && (replacementScenario || conflictScenario) ? 1 : 0;
+
   return {
     teams: {
       away: {
         team: { id: 20, name: "Away" },
-        pitchers: [awayStarterId, 103],
+        pitchers: awayPitchingOrder,
         players: {
           [`ID${awayStarterId}`]: {
             person: { id: awayStarterId, fullName: "Away Starter" },
-            stats: { pitching: pitchingLine({ gamesStarted: explicit && awayFlagId === awayStarterId ? 1 : 0 }) },
+            stats: { pitching: firstAwayLine },
           },
           ID102: {
-            person: { id: 102, fullName: "Conflict Starter" },
-            stats: { pitching: pitchingLine({ gamesStarted: explicit && awayFlagId === 102 ? 1 : 0, inningsPitched: "0.1" }) },
+            person: { id: explicitReplacementId, fullName: "Replacement Starter" },
+            stats: {
+              pitching: pitchingLine({
+                gamesStarted: replacementGamesStarted,
+                inningsPitched: "2.0",
+                battersFaced: 8,
+                runs: 0,
+                earnedRuns: 0,
+                hits: 2,
+                baseOnBalls: 0,
+                strikeOuts: 2,
+                homeRuns: 0,
+                numberOfPitches: 31,
+                strikes: 21,
+              }),
+            },
           },
           ID103: {
             person: { id: 103, fullName: "Away Reliever" },
@@ -104,7 +156,7 @@ test("baseball innings-pitched notation converts to outs without decimal error",
   assert.throws(() => mlbInningsPitchedToOuts("5.67"), /INVALID_INNINGS_PITCHED/);
 });
 
-test("explicit gamesStarted flag must agree with first pitcher in official pitching order", () => {
+test("explicit gamesStarted flag agrees with first participating pitcher in ordinary boxscore order", () => {
   const parsed = parseMlbHistoricalStartingPitcherBoxscore(officialGame(), boxscore());
   assert.equal(parsed.awayStarter.pitcherId, 101);
   assert.equal(parsed.homeStarter.pitcherId, 201);
@@ -116,7 +168,19 @@ test("explicit gamesStarted flag must agree with first pitcher in official pitch
   assert.match(parsed.boxscoreSourceDigest, /^[a-f0-9]{64}$/);
 });
 
-test("falls back to official pitching order only when game-started flag is absent", () => {
+test("unique gamesStarted flag may supersede earlier pitching-order placeholder only after confirmed zero participation", () => {
+  const parsed = parseMlbHistoricalStartingPitcherBoxscore(
+    officialGame({ gamePk: 777342, officialDate: "2025-06-27" }),
+    boxscore({ zeroParticipationPlaceholder: true }),
+  );
+  assert.equal(parsed.awayStarter.pitcherId, 102);
+  assert.equal(parsed.awayStarter.pitcherName, "Replacement Starter");
+  assert.equal(parsed.awayStarter.outsRecorded, 6);
+  assert.equal(parsed.awayStarter.battersFaced, 8);
+  assert.equal(parsed.awayStarter.identityMethod, "GAME_STARTED_FLAG_AFTER_ZERO_PARTICIPATION_PLACEHOLDER");
+});
+
+test("falls back to official pitching order only when game-started flag is absent and first pitcher participated", () => {
   const parsed = parseMlbHistoricalStartingPitcherBoxscore(
     officialGame(),
     boxscore({ explicitStarterFlags: false }),
@@ -127,10 +191,20 @@ test("falls back to official pitching order only when game-started flag is absen
   assert.equal(parsed.homeStarter.identityMethod, "PITCHING_ORDER_FIRST");
 });
 
-test("starter identity disagreement fails closed", () => {
+test("starter disagreement still fails closed when pitcher before explicit starter actually participated", () => {
   assert.throws(
     () => parseMlbHistoricalStartingPitcherBoxscore(officialGame(), boxscore({ conflict: true })),
     /STARTER_ORDER_CONFLICT:away/,
+  );
+});
+
+test("zero-participation first pitcher without a unique explicit starter fails closed", () => {
+  assert.throws(
+    () => parseMlbHistoricalStartingPitcherBoxscore(
+      officialGame(),
+      boxscore({ explicitStarterFlags: false, zeroPlaceholderWithoutExplicitFlag: true }),
+    ),
+    /ZERO_PARTICIPATION_FIRST_WITHOUT_STARTER_FLAG:away/,
   );
 });
 
