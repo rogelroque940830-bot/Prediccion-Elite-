@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v2" as const;
+export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v3" as const;
 export const MLB_P1_M6A3B2C1_DEFAULT_CUTOFF_SECONDS = 300;
 
 const MLB_API = "https://statsapi.mlb.com/api";
@@ -22,7 +22,8 @@ export type MlbPregameLineupAvailability =
 
 export type MlbHistoricalPregameScheduleResolution =
   | "DIRECT"
-  | "RESCHEDULED_FINAL_SELECTED";
+  | "RESCHEDULED_FINAL_SELECTED"
+  | "SUSPENDED_ORIGINAL_START_SELECTED";
 
 export interface MlbHistoricalPregameScheduleGame {
   gamePk: number;
@@ -86,6 +87,10 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 type ScheduleCandidate = Omit<MlbHistoricalPregameScheduleGame, "scheduleResolution"> & {
   codedGameState: string;
   detailedState: string;
+  resumeDate: string | null;
+  resumeGameDate: string | null;
+  resumedFrom: string | null;
+  resumedFromDate: string | null;
 };
 
 function sha256(value: unknown): string {
@@ -99,6 +104,16 @@ function isoDate(value: string): string {
     throw new Error("P1_M6A3B2C1_INVALID_DATE_RANGE");
   }
   return value;
+}
+
+function optionalIsoDate(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  try {
+    return isoDate(text);
+  } catch {
+    return null;
+  }
 }
 
 function validateRange(startDate: string, endDate: string): void {
@@ -165,6 +180,7 @@ function positiveInteger(value: unknown): number | null {
 
 function validIsoInstant(value: unknown): string | null {
   const text = String(value ?? "").trim();
+  if (!text) return null;
   const parsed = Date.parse(text);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
@@ -219,6 +235,36 @@ function isExplicitlyObsoleteScheduleCandidate(candidate: ScheduleCandidate): bo
   return coded === "D" || /^(Postponed|Canceled|Cancelled|Suspended)$/i.test(detailed);
 }
 
+function stripScheduleMetadata(candidate: ScheduleCandidate): Omit<MlbHistoricalPregameScheduleGame, "scheduleResolution"> {
+  const {
+    codedGameState: _coded,
+    detailedState: _detailed,
+    resumeDate: _resumeDate,
+    resumeGameDate: _resumeGameDate,
+    resumedFrom: _resumedFrom,
+    resumedFromDate: _resumedFromDate,
+    ...game
+  } = candidate;
+  return game;
+}
+
+function resolveSuspendedOriginalCandidate(candidates: ScheduleCandidate[]): ScheduleCandidate | null {
+  if (candidates.length !== 2) return null;
+  const originals = candidates.filter((candidate) => candidate.resumeDate != null && candidate.resumedFrom == null);
+  const resumed = candidates.filter((candidate) => candidate.resumedFrom != null && candidate.resumeDate == null);
+  if (originals.length !== 1 || resumed.length !== 1) return null;
+
+  const original = originals[0];
+  const continuation = resumed[0];
+  if (original.officialDate !== continuation.officialDate) return null;
+  if (original.resumeDate !== continuation.scheduledStart) return null;
+  if (continuation.resumedFrom !== original.scheduledStart) return null;
+  if (original.resumeGameDate == null || continuation.resumedFromDate == null) return null;
+  if (continuation.resumedFromDate !== original.officialDate) return null;
+  if (!isPlayedFinalScheduleCandidate(original) || !isPlayedFinalScheduleCandidate(continuation)) return null;
+  return original;
+}
+
 function resolveScheduleCandidateGroup(gamePk: number, rawCandidates: ScheduleCandidate[]): MlbHistoricalPregameScheduleGame {
   const candidates = [...new Map(rawCandidates.map((candidate) => [scheduleCandidateKey(candidate), candidate])).values()];
   if (!candidates.length) throw new Error(`P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:${gamePk}`);
@@ -229,8 +275,12 @@ function resolveScheduleCandidateGroup(gamePk: number, rawCandidates: ScheduleCa
   }
 
   if (candidates.length === 1) {
-    const { codedGameState: _coded, detailedState: _detailed, ...game } = first;
-    return { ...game, scheduleResolution: "DIRECT" };
+    return { ...stripScheduleMetadata(first), scheduleResolution: "DIRECT" };
+  }
+
+  const suspendedOriginal = resolveSuspendedOriginalCandidate(candidates);
+  if (suspendedOriginal) {
+    return { ...stripScheduleMetadata(suspendedOriginal), scheduleResolution: "SUSPENDED_ORIGINAL_START_SELECTED" };
   }
 
   const playedFinals = candidates.filter(isPlayedFinalScheduleCandidate);
@@ -238,8 +288,7 @@ function resolveScheduleCandidateGroup(gamePk: number, rawCandidates: ScheduleCa
     const selected = playedFinals[0];
     const others = candidates.filter((candidate) => candidate !== selected);
     if (others.length > 0 && others.every(isExplicitlyObsoleteScheduleCandidate)) {
-      const { codedGameState: _coded, detailedState: _detailed, ...game } = selected;
-      return { ...game, scheduleResolution: "RESCHEDULED_FINAL_SELECTED" };
+      return { ...stripScheduleMetadata(selected), scheduleResolution: "RESCHEDULED_FINAL_SELECTED" };
     }
   }
 
@@ -266,6 +315,10 @@ export function extractMlbHistoricalPregameScheduleGames(payload: any): MlbHisto
         awayTeamId,
         codedGameState: String(game?.status?.codedGameState ?? "").trim(),
         detailedState: String(game?.status?.detailedState ?? "").trim(),
+        resumeDate: validIsoInstant(game?.resumeDate),
+        resumeGameDate: optionalIsoDate(game?.resumeGameDate),
+        resumedFrom: validIsoInstant(game?.resumedFrom),
+        resumedFromDate: optionalIsoDate(game?.resumedFromDate),
       };
       const group = grouped.get(gamePk) ?? [];
       group.push(candidate);
@@ -404,6 +457,7 @@ function emptyScheduleResolutionCounts(): Record<MlbHistoricalPregameScheduleRes
   return {
     DIRECT: 0,
     RESCHEDULED_FINAL_SELECTED: 0,
+    SUSPENDED_ORIGINAL_START_SELECTED: 0,
   };
 }
 

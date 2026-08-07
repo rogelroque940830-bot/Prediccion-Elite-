@@ -128,6 +128,49 @@ function rescheduledPayload(options: {
   return { dates };
 }
 
+function suspendedPayload(options: {
+  originalResumeDate?: string | null;
+  resumedFrom?: string | null;
+  resumedHomeTeamId?: number;
+  addThirdFinal?: boolean;
+} = {}) {
+  const original = {
+    gamePk: 777861,
+    gameType: "R",
+    officialDate: "2025-05-19",
+    gameDate: "2025-05-19T23:40:00Z",
+    resumeDate: options.originalResumeDate === undefined ? "2025-05-21T17:10:00Z" : options.originalResumeDate,
+    resumeGameDate: "2025-05-21",
+    status: { codedGameState: "F", detailedState: "Final" },
+    teams: { home: { team: { id: 142 } }, away: { team: { id: 114 } } },
+  };
+  const resumed = {
+    gamePk: 777861,
+    gameType: "R",
+    officialDate: "2025-05-19",
+    gameDate: "2025-05-21T17:10:00Z",
+    resumedFrom: options.resumedFrom === undefined ? "2025-05-19T23:40:00Z" : options.resumedFrom,
+    resumedFromDate: "2025-05-19",
+    status: { codedGameState: "F", detailedState: "Final" },
+    teams: { home: { team: { id: options.resumedHomeTeamId ?? 142 } }, away: { team: { id: 114 } } },
+  };
+  const dates: any[] = [
+    { date: "2025-05-19", games: [original] },
+    { date: "2025-05-21", games: [resumed] },
+  ];
+  if (options.addThirdFinal) {
+    dates.push({
+      date: "2025-05-22",
+      games: [{
+        ...resumed,
+        gameDate: "2025-05-22T17:10:00Z",
+        resumedFrom: "2025-05-21T17:10:00Z",
+      }],
+    });
+  }
+  return { dates };
+}
+
 test("formats MLB historical timecode in UTC and derives a strict T-5 cutoff", () => {
   assert.equal(formatMlbHistoricalTimecode("2025-06-15T17:00:00.000Z"), "20250615_170000");
   const snapshot = parseMlbHistoricalPregameLineupSnapshot({ scheduleGame, payload: feed() });
@@ -156,6 +199,39 @@ test("postponed listing may be superseded only by one played final with the same
   assert.equal(games[0].scheduleResolution, "RESCHEDULED_FINAL_SELECTED");
 });
 
+test("explicit bidirectional resume metadata selects the original first-pitch start", () => {
+  const games = extractMlbHistoricalPregameScheduleGames(suspendedPayload());
+  assert.equal(games.length, 1);
+  assert.equal(games[0].gamePk, 777861);
+  assert.equal(games[0].officialDate, "2025-05-19");
+  assert.equal(games[0].scheduledStart, "2025-05-19T23:40:00.000Z");
+  assert.equal(games[0].homeTeamId, 142);
+  assert.equal(games[0].awayTeamId, 114);
+  assert.equal(games[0].scheduleResolution, "SUSPENDED_ORIGINAL_START_SELECTED");
+});
+
+test("one-way or mismatched resume metadata cannot resolve two final listings", () => {
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(suspendedPayload({ originalResumeDate: null })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:777861/,
+  );
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(suspendedPayload({ resumedFrom: "2025-05-19T23:41:00Z" })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:777861/,
+  );
+});
+
+test("suspended chain with team drift or more than two final listings fails closed", () => {
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(suspendedPayload({ resumedHomeTeamId: 999 })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:777861/,
+  );
+  assert.throws(
+    () => extractMlbHistoricalPregameScheduleGames(suspendedPayload({ addThirdFinal: true })),
+    /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:777861/,
+  );
+});
+
 test("rescheduled duplicate with team identity drift fails closed", () => {
   assert.throws(
     () => extractMlbHistoricalPregameScheduleGames(rescheduledPayload({ postponedHomeTeamId: 999 })),
@@ -173,7 +249,7 @@ test("final plus a non-obsolete active schedule listing remains an identity conf
   );
 });
 
-test("two distinct played finals for one gamePk remain an identity conflict", () => {
+test("two unrelated distinct played finals for one gamePk remain an identity conflict", () => {
   assert.throws(
     () => extractMlbHistoricalPregameScheduleGames(rescheduledPayload({ addSecondFinal: true })),
     /P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT:778443/,
@@ -271,7 +347,11 @@ test("fetch report requests exactly one historical T-5 snapshot per resolved sch
     fetchImpl,
   });
   assert.equal(report.scheduleGames, 2);
-  assert.deepEqual(report.scheduleResolutionCounts, { DIRECT: 2, RESCHEDULED_FINAL_SELECTED: 0 });
+  assert.deepEqual(report.scheduleResolutionCounts, {
+    DIRECT: 2,
+    RESCHEDULED_FINAL_SELECTED: 0,
+    SUSPENDED_ORIGINAL_START_SELECTED: 0,
+  });
   assert.equal(report.snapshotsFetched, 2);
   assert.equal(report.completeLineupGames, 2);
   assert.equal(report.failures.length, 0);
@@ -298,10 +378,43 @@ test("resolved reschedule uses only the final played start for the historical cu
     fetchImpl,
   });
   assert.equal(report.scheduleGames, 1);
-  assert.deepEqual(report.scheduleResolutionCounts, { DIRECT: 0, RESCHEDULED_FINAL_SELECTED: 1 });
+  assert.deepEqual(report.scheduleResolutionCounts, {
+    DIRECT: 0,
+    RESCHEDULED_FINAL_SELECTED: 1,
+    SUSPENDED_ORIGINAL_START_SELECTED: 0,
+  });
   assert.equal(report.snapshotsFetched, 1);
   assert.equal(report.snapshots[0].scheduleResolution, "RESCHEDULED_FINAL_SELECTED");
   assert.equal(report.snapshots[0].scheduledStart, "2025-04-06T17:35:00.000Z");
+  assert.equal(calls.length, 2);
+});
+
+test("suspended/resumed chain uses original first pitch, not the resume time, for T-5 lineup evidence", async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("/v1/schedule?")) return new Response(JSON.stringify(suspendedPayload()), { status: 200 });
+    assert.match(url, /\/game\/777861\/feed\/live\?timecode=20250519_233500$/);
+    return new Response(JSON.stringify(feed({ gamePk: 777861, homeTeamId: 142, awayTeamId: 114 })), { status: 200 });
+  };
+  const report = await fetchMlbHistoricalPregameLineups({
+    startDate: "2025-05-19",
+    endDate: "2025-05-21",
+    concurrency: 1,
+    retryBaseDelayMs: 0,
+    fetchImpl,
+  });
+  assert.equal(report.scheduleGames, 1);
+  assert.deepEqual(report.scheduleResolutionCounts, {
+    DIRECT: 0,
+    RESCHEDULED_FINAL_SELECTED: 0,
+    SUSPENDED_ORIGINAL_START_SELECTED: 1,
+  });
+  assert.equal(report.snapshotsFetched, 1);
+  assert.equal(report.snapshots[0].scheduleResolution, "SUSPENDED_ORIGINAL_START_SELECTED");
+  assert.equal(report.snapshots[0].scheduledStart, "2025-05-19T23:40:00.000Z");
+  assert.equal(report.snapshots[0].requestedTimecode, "20250519_233500");
   assert.equal(calls.length, 2);
 });
 
