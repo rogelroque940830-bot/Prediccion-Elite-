@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "p1-m3f-provisional-maturity-audit.v1",
+  "generatedAt": "2026-08-07T23:21:41.436Z",
+  "backendCommit": "9b632b344d9b0eb7aced57691428f4310ccd92a9",
+  "source": {
+    "ownerScoped": true,
+    "exportedRecords": 2501,
+    "publicLedgerPredictions": 2501,
+    "completeAgainstPublicLedger": true,
+    "rawExportSha256": "272bd12b8796721a72904f3e31ff468f855fe61c346a34b11af24a8ca41d288c",
+    "rawExportUploaded": false
+  },
+  "terminalInteractiveCohort": {
+    "uniqueAnalyticalDecisions": 9,
+    "settledDecisions": 2,
+    "pendingDecisions": 7,
+    "lifecycle": {
+      "provisionalToFinalChains": 0,
+      "finalOnlyChains": 0,
+      "provisionalOnlyChains": 9
+    },
+    "stageCounts": {
+      "PROVISIONAL": 9
+    },
+    "readinessGateStatusCounts": {
+      "READY_PROVISIONAL": 9
+    },
+    "readinessLayerMissing": 0,
+    "marketCounts": {
+      "ML": 9
+    },
+    "sourceSignalCounts": {
+      "PASS": 6,
+      "LEAN": 3
+    },
+    "sourceCategoryCounts": {
+      "PASS": 6,
+      "LEAN": 3
+    },
+    "actionabilityCounts": {
+      "OBSERVE_ONLY": 6,
+      "WAIT_FOR_FINAL": 3
+    },
+    "dataQualityMissingCounts": {
+      "finalScientificSnapshot": 9
+    },
+    "readinessWarningCounts": {
+      "ADVANCED_FACTORS_DEGRADED": 9,
+      "BULLPEN_DEGRADED": 9,
+      "INJURIES_DEGRADED": 9,
+      "LINEUPS_MISSING": 2
+    },
+    "requiredFieldCounts": {
+      "ADVANCED_FACTORS": 9,
+      "BULLPEN": 9,
+      "GAME_IDENTITY": 9,
+      "INJURIES": 9,
+      "LINEUPS": 9,
+      "MARKET_ODDS": 9,
+      "PITCHERS": 9
+    },
+    "evidenceSummaryTotals": {
+      "fresh": 34,
+      "stale": 0,
+      "degraded": 27,
+      "missing": 2,
+      "conflict": 0,
+      "unknown": 0
+    },
+    "timing": {
+      "observations": 9,
+      "minMinutesBeforeFirstPitch": 148.32,
+      "medianMinutesBeforeFirstPitch": 176.74,
+      "maxMinutesBeforeFirstPitch": 708.68,
+      "buckets": {
+        "60_TO_180_MIN": 5,
+        "GE_180_MIN": 4
+      }
+    }
+  },
+  "interpretationBoundary": {
+    "diagnosesWhyProvisional": true,
+    "changesReadinessPolicy": false,
+    "createsFinalCaptures": false,
+    "createsUserActions": false,
+    "changesModel": false,
+    "changesThresholds": false,
+    "authorizesPromotion": false
+  },
+  "safety": {
+    "privateRawLedgerPersistedInArtifact": false,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "realFinancialExposure": 0
+  }
+}
