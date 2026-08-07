@@ -91,6 +91,18 @@ Statuses are separated into:
 - reference source: same status vocabulary
 - canonical availability: `EXECUTABLE`, `REFERENCE_ONLY`, `STALE_ONLY`, `CONTRACT_MISMATCH`, `INVALID_PRICE_OR_STRUCTURE`, `UNAVAILABLE_FROM_PROVIDER`
 
+## Provider quota accounting
+
+P1-M6A2 requests six explicit bookmakers. Under the provider's documented billing model, a group of up to ten explicitly requested bookmakers counts as one bookmaker-region equivalent. For the event-odds endpoint, request cost is based on the unique markets actually returned multiplied by the bookmaker-region equivalents.
+
+The route therefore exposes the provider's response headers per successful event when present:
+
+- `x-requests-last`
+- `x-requests-remaining`
+- `x-requests-used`
+
+It also returns `totalReportedCost` and `minimumReportedRemaining`. Missing quota headers remain `null`; they are never converted to zero.
+
 ## Endpoint
 
 `GET /api/mlb/p1/v1/market-universe-odds?date=YYYY-MM-DD`
@@ -103,9 +115,11 @@ The route:
 - filters to the requested Florida date before any event-odds calls;
 - caps one request at 20 events;
 - fetches at most 3 event-odds responses concurrently;
-- caches a successful slate for 60 seconds;
+- caches only a complete successful slate for 60 seconds;
+- exposes `eligibleEvents`, `fetchedGames`, exact failed event ids/codes and a `complete` flag;
+- never caches partial coverage;
 - does not cache a state where every eligible event request failed;
-- returns provider failures instead of converting them into a naturally empty slate.
+- returns provider failures instead of converting them into a naturally empty or apparently complete slate.
 
 ## Scientific invariants
 
@@ -115,5 +129,7 @@ The route:
 4. No three-way market is coerced to two-way.
 5. No F3/F5 Team Total is invented from a provider key that is not documented.
 6. NRFI/YRFI require the exact first-inning 0.5 total contract.
-7. Market support is not model support. P1-M6A3 must still build and validate horizon-specific probability engines.
-8. This layer remains read-only with zero financial exposure.
+7. Partial provider coverage is explicitly marked incomplete and is never cached as a complete daily universe.
+8. Provider quota evidence is reported from headers when available; missing headers remain unknown rather than zero.
+9. Market support is not model support. P1-M6A3 must still build and validate horizon-specific probability engines.
+10. This layer remains read-only with zero financial exposure.
