@@ -1,0 +1,82 @@
+name: Validate P1-M3E MLB Operating Envelope
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-operating-envelope.ts'
+      - 'server/mlb-p1-operating-envelope.test.ts'
+      - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE.md'
+      - 'tsconfig.p1-m3e-operating-envelope.json'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned P1-M3E surface
+        run: npx tsc -p tsconfig.p1-m3e-operating-envelope.json
+      - name: Run operating-envelope falsification tests
+        run: npx tsx --test server/mlb-p1-operating-envelope.test.ts
+      - name: Preserve P1-M3D and capture/economic contracts
+        run: |
+          npx tsx --test \
+            server/mlb-p1-economic-review.test.ts \
+            server/mlb-p1-scientific-capture-contract.test.ts \
+            server/mlb-p1-economic-decision-adapter.test.ts
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify no-outcome selector and research-only boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-p1-operating-envelope.ts'
+          docs='docs/P1_M3E_MLB_OPERATING_ENVELOPE.md'
+
+          grep -F 'courtedge-p1-m3e-operating-envelope.v1' "$source"
+          grep -F 'ELITE_MODEL_QUALITY_SUPPORTED' "$source"
+          grep -F 'bootstrapReplicates: 5000' "$source"
+          grep -F 'maximumRuleAtoms: 2' "$source"
+          grep -F 'economicProfitabilityCertified: false' "$source"
+          grep -F 'operationalGateAllowed: false' "$source"
+          grep -F 'modelProbabilityChanged: false' "$source"
+          grep -F 'existingEconomicThresholdsChanged: false' "$source"
+          grep -F 'automaticModelChangesAllowed: false' "$source"
+          grep -F 'automaticPromotionAllowed: false' "$source"
+          grep -F 'Forbidden selector inputs' "$docs"
+
+          matcher=$(sed -n '/export function matchesMlbP1M3eAtom/,/^}/p' "$source")
+          ! grep -E 'result|settledAt|brierScore|logLoss|flatProfitUnits|policyProfitUnits|clvPp|closingOddsAmerican' <<< "$matcher"
+
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement|app\.(post|put|patch|delete|get)\(' "$source"
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source"
+      - name: Verify exact P1-M3E scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope.test.ts' \
+            'server/mlb-p1-operating-envelope.ts' \
+            'tsconfig.p1-m3e-operating-envelope.json' | sort)
+          [[ "$changed" == "$expected" ]]
