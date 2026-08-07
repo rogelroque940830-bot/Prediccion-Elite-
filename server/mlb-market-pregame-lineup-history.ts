@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v3" as const;
+export const MLB_P1_M6A3B2C1_SOURCE_VERSION = "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4" as const;
 export const MLB_P1_M6A3B2C1_DEFAULT_CUTOFF_SECONDS = 300;
 
 const MLB_API = "https://statsapi.mlb.com/api";
@@ -18,6 +18,7 @@ export type MlbPregameLineupAvailability =
   | "AWAY_INCOMPLETE"
   | "BOTH_INCOMPLETE"
   | "NOT_PREGAME_AT_CUTOFF"
+  | "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF"
   | "IDENTITY_CONFLICT";
 
 export type MlbHistoricalPregameScheduleResolution =
@@ -197,6 +198,10 @@ function parseMlbMetadataTimecode(value: unknown): string | null {
   return /^\d{8}_\d{6}$/.test(text) ? text : null;
 }
 
+function sourceTimecodeAtOrBeforeRequested(sourceMetadataTimecode: string | null, requestedTimecode: string): boolean {
+  return sourceMetadataTimecode != null && sourceMetadataTimecode <= requestedTimecode;
+}
+
 function normalizeBattingOrder(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   const ids = value.map(positiveInteger);
@@ -212,9 +217,11 @@ function pregameState(payload: any): boolean {
   const abstract = String(payload?.gameData?.status?.abstractGameState ?? "").trim();
   const coded = String(payload?.gameData?.status?.codedGameState ?? "").trim().toUpperCase();
   const detailed = String(payload?.gameData?.status?.detailedState ?? "").trim();
-  if (["Live", "Final"].includes(abstract) || ["I", "F", "O"].includes(coded)) return false;
-  if (abstract === "Preview" || ["S", "P"].includes(coded)) return true;
-  return /^(Scheduled|Pre-Game|Warmup|Delayed Start)$/i.test(detailed);
+  if (["I", "F", "O"].includes(coded)) return false;
+  if (/^(In Progress|Final|Game Over|Completed Early)$/i.test(detailed)) return false;
+  if (["S", "P"].includes(coded)) return true;
+  if (/^(Scheduled|Pre-Game|Warmup|Delayed Start)$/i.test(detailed)) return true;
+  return abstract === "Preview";
 }
 
 function scheduleCandidateKey(candidate: ScheduleCandidate): string {
@@ -331,8 +338,15 @@ export function extractMlbHistoricalPregameScheduleGames(payload: any): MlbHisto
     .sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.scheduledStart.localeCompare(b.scheduledStart) || a.gamePk - b.gamePk);
 }
 
-function availabilityFor(home: number[], away: number[], isPregame: boolean, identityMatches: boolean): MlbPregameLineupAvailability {
+function availabilityFor(
+  home: number[],
+  away: number[],
+  sourceTimecodeIsHistorical: boolean,
+  isPregame: boolean,
+  identityMatches: boolean,
+): MlbPregameLineupAvailability {
   if (!identityMatches) return "IDENTITY_CONFLICT";
+  if (!sourceTimecodeIsHistorical) return "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF";
   if (!isPregame) return "NOT_PREGAME_AT_CUTOFF";
   const homeComplete = completeBattingOrder(home);
   const awayComplete = completeBattingOrder(away);
@@ -364,8 +378,16 @@ export function parseMlbHistoricalPregameLineupSnapshot(input: {
     && awayTeamId === input.scheduleGame.awayTeamId;
   const homeBattingOrder = normalizeBattingOrder(input.payload?.liveData?.boxscore?.teams?.home?.battingOrder);
   const awayBattingOrder = normalizeBattingOrder(input.payload?.liveData?.boxscore?.teams?.away?.battingOrder);
+  const sourceMetadataTimecode = parseMlbMetadataTimecode(input.payload?.metaData?.timeStamp);
+  const sourceTimecodeIsHistorical = sourceTimecodeAtOrBeforeRequested(sourceMetadataTimecode, requestedTimecode);
   const isPregame = pregameState(input.payload);
-  const availability = availabilityFor(homeBattingOrder, awayBattingOrder, isPregame, identityMatches);
+  const availability = availabilityFor(
+    homeBattingOrder,
+    awayBattingOrder,
+    sourceTimecodeIsHistorical,
+    isPregame,
+    identityMatches,
+  );
 
   return {
     sourceVersion: MLB_P1_M6A3B2C1_SOURCE_VERSION,
@@ -375,7 +397,7 @@ export function parseMlbHistoricalPregameLineupSnapshot(input: {
     scheduleResolution: input.scheduleGame.scheduleResolution,
     cutoffAt,
     requestedTimecode,
-    sourceMetadataTimecode: parseMlbMetadataTimecode(input.payload?.metaData?.timeStamp),
+    sourceMetadataTimecode,
     homeTeamId: input.scheduleGame.homeTeamId,
     awayTeamId: input.scheduleGame.awayTeamId,
     gameState: {
@@ -449,6 +471,7 @@ function emptyAvailabilityCounts(): Record<MlbPregameLineupAvailability, number>
     AWAY_INCOMPLETE: 0,
     BOTH_INCOMPLETE: 0,
     NOT_PREGAME_AT_CUTOFF: 0,
+    TIMECODE_NOT_AT_OR_BEFORE_CUTOFF: 0,
     IDENTITY_CONFLICT: 0,
   };
 }

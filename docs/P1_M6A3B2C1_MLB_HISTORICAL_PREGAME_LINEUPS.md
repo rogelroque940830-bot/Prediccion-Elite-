@@ -34,7 +34,7 @@ B2C1 resolves that situation narrowly instead of taking the first or last row ar
 
 ## Suspended and resumed game identity
 
-B2C1 v3 adds a second, separate resolution for a game that **actually started, was suspended, and later resumed under the same `gamePk`**. This pattern was observed directly for `gamePk 777861` (Guardians at Twins): the MLB schedule retains the May 19 original start and the May 21 continuation as two Final listings.
+B2C1 v3 added a second, separate resolution for a game that **actually started, was suspended, and later resumed under the same `gamePk`**. This pattern was observed directly for `gamePk 777861` (Guardians at Twins): the MLB schedule retains the May 19 original start and the May 21 continuation as two Final listings.
 
 The source does not infer this relationship from dates. It requires explicit, bidirectional MLB resume metadata:
 
@@ -56,14 +56,31 @@ One-way resume metadata, timestamp mismatch, team drift, more than two distinct 
 
 A unique schedule listing, including an exact duplicate that collapses to one identical row, is labeled `DIRECT`. The report publishes counts for `DIRECT`, `RESCHEDULED_FINAL_SELECTED`, and `SUSPENDED_ORIGINAL_START_SELECTED`. Schedule resolution chooses the correct historical start; it does **not** supply lineup data and never relaxes the subsequent pregame snapshot checks.
 
+## B2C1 v4: coded-state and historical-timecode integrity
+
+The first clean v3 full-season research run exposed an important provider-state behavior. All 2,430 requested T-5 payloads contained two valid nine-player batting orders, but 2,330 payloads reported the combination `abstractGameState=Live`, `codedGameState=P`, `detailedState=Warmup`. Treating the broad abstract label `Live` as dispositive therefore misclassified valid coded pregame payloads as post-start evidence.
+
+B2C1 v4 gives the more specific coded/detailed state precedence:
+
+- `codedGameState=I`, `F`, or `O` is always non-pregame;
+- detailed states such as `In Progress`, `Final`, `Game Over`, or `Completed Early` are non-pregame;
+- `codedGameState=S` or `P` is pregame evidence, including `Live / P / Warmup`;
+- otherwise explicit detailed states `Scheduled`, `Pre-Game`, `Warmup`, or `Delayed Start` may certify pregame status;
+- `abstractGameState=Preview` is only a final fallback, not an override of explicit in-progress/final coded states.
+
+The same v3 run also exposed a separate temporal-integrity problem: a small set of requested snapshots returned a provider `metaData.timeStamp` later than the requested T-5 `timecode`. B2C1 v4 therefore requires the returned provider metadata timecode to be present and lexically at or before the requested timecode. Both fields use the same fixed `YYYYMMDD_HHMMSS` format. Missing or later provider timecodes are retained as `TIMECODE_NOT_AT_OR_BEFORE_CUTOFF` and cannot be marked complete.
+
+This guard deliberately fails closed. It does not infer that a lineup was available merely because the returned batting order looks plausible.
+
 ## Fail-closed lineup definition
 
-A B2C1 snapshot is `COMPLETE` only when all of the following hold:
+A B2C1 v4 snapshot is `COMPLETE` only when all of the following hold:
 
 1. the returned `gamePk`, home team ID and away team ID match the resolved scheduled game;
-2. the historical snapshot is still pregame, not Live or Final;
-3. the home batting order contains exactly nine valid, unique MLB player IDs;
-4. the away batting order contains exactly nine valid, unique MLB player IDs.
+2. the provider `metaData.timeStamp` is present and is not later than the requested T-5 timecode;
+3. the coded/detailed historical snapshot state is still pregame under the v4 rule above;
+4. the home batting order contains exactly nine valid, unique MLB player IDs;
+5. the away batting order contains exactly nine valid, unique MLB player IDs.
 
 Otherwise the snapshot is retained with an explicit state:
 
@@ -71,6 +88,7 @@ Otherwise the snapshot is retained with an explicit state:
 - `AWAY_INCOMPLETE`
 - `BOTH_INCOMPLETE`
 - `NOT_PREGAME_AT_CUTOFF`
+- `TIMECODE_NOT_AT_OR_BEFORE_CUTOFF`
 - `IDENTITY_CONFLICT`
 
 Missing evidence is never replaced with a final lineup, a projected lineup, a name-based guess or a previous game's order.
@@ -90,11 +108,11 @@ B2C1 deliberately maintains two digests:
 - `lineupHistoryDigest` — canonical sporting identity based on game identity, resolved scheduled start, schedule-resolution method, cutoff, batting-order player IDs and availability classification;
 - `sourceProvenanceDigest` — archival provenance that also reflects the raw provider payload and metadata timestamp.
 
-A provider metadata correction must not redefine the historical batting order if the sporting fields are unchanged. A real batting-order change, a different resolved start, or a different resolution path must change the canonical lineup-history digest.
+A provider metadata correction that remains on the same valid side of the historical cutoff must not redefine the historical batting order if the sporting fields are unchanged. A provider timestamp that crosses the requested cutoff changes availability and therefore changes canonical lineup identity. A real batting-order change, a different resolved start, or a different resolution path must also change the canonical lineup-history digest.
 
 ## Relationship to B1 and later research
 
-The first full-season B2C1 research run must be compared against the already frozen B1 2025 official cohort so that the lineup cohort cannot silently gain or lose games. Coverage must be reported before any lineup-effect model is built.
+The full-season B2C1 research run must be compared against the already frozen B1 2025 official cohort so that the lineup cohort cannot silently gain or lose games. Coverage must be reported before any lineup-effect model is built.
 
 Only after source coverage and chain of custody are certified should B2C2 ask whether lineup information adds out-of-sample predictive value. B2C2 must remain free to conclude that the lineup feature is inconclusive or harmful.
 

@@ -53,9 +53,14 @@ jobs:
           set -euo pipefail
           source='server/mlb-market-pregame-lineup-history.ts'
           docs='docs/P1_M6A3B2C1_MLB_HISTORICAL_PREGAME_LINEUPS.md'
+          grep -F 'statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4' "$source"
           grep -F 'MLB_P1_M6A3B2C1_DEFAULT_CUTOFF_SECONDS = 300' "$source"
           grep -F 'feed/live?timecode=' "$source"
           grep -F 'Date.parse(cutoffAt) < startMs' "$source"
+          grep -F 'sourceTimecodeAtOrBeforeRequested' "$source"
+          grep -F 'sourceMetadataTimecode <= requestedTimecode' "$source"
+          grep -F 'TIMECODE_NOT_AT_OR_BEFORE_CUTOFF' "$source" "$docs"
+          grep -F '["I", "F", "O"].includes(coded)' "$source"
           grep -F 'order.length === 9' "$source"
           grep -F 'RESCHEDULED_FINAL_SELECTED' "$source" "$docs"
           grep -F 'SUSPENDED_ORIGINAL_START_SELECTED' "$source" "$docs"

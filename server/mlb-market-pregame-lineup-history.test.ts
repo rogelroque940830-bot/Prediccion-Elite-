@@ -25,14 +25,14 @@ function feed(options: {
   abstractGameState?: string;
   codedGameState?: string;
   detailedState?: string;
-  metadata?: string;
+  metadata?: string | null;
   gamePk?: number;
   homeTeamId?: number;
   awayTeamId?: number;
 } = {}) {
   return {
     gamePk: options.gamePk ?? scheduleGame.gamePk,
-    metaData: { timeStamp: options.metadata ?? "20250615_165950" },
+    metaData: { timeStamp: options.metadata === undefined ? "20250615_165950" : options.metadata },
     gameData: {
       status: {
         abstractGameState: options.abstractGameState ?? "Preview",
@@ -265,6 +265,15 @@ test("two official nine-player batting orders at a pregame snapshot are complete
   assert.equal(new Set(snapshot.homeBattingOrder).size, 9);
 });
 
+test("coded pregame Warmup remains valid when MLB abstract state is already Live", () => {
+  const snapshot = parseMlbHistoricalPregameLineupSnapshot({
+    scheduleGame,
+    payload: feed({ abstractGameState: "Live", codedGameState: "P", detailedState: "Warmup" }),
+  });
+  assert.equal(snapshot.complete, true);
+  assert.equal(snapshot.availability, "COMPLETE");
+});
+
 test("incomplete or duplicated batting orders fail closed instead of being fabricated", () => {
   const homeIncomplete = parseMlbHistoricalPregameLineupSnapshot({
     scheduleGame,
@@ -281,13 +290,36 @@ test("incomplete or duplicated batting orders fail closed instead of being fabri
   assert.equal(duplicated.availability, "AWAY_INCOMPLETE");
 });
 
-test("a live or final payload at the requested cutoff is rejected as non-pregame evidence", () => {
+test("explicit in-progress or final coded payload is rejected as non-pregame evidence", () => {
   const live = parseMlbHistoricalPregameLineupSnapshot({
     scheduleGame,
     payload: feed({ abstractGameState: "Live", codedGameState: "I", detailedState: "In Progress" }),
   });
   assert.equal(live.complete, false);
   assert.equal(live.availability, "NOT_PREGAME_AT_CUTOFF");
+
+  const final = parseMlbHistoricalPregameLineupSnapshot({
+    scheduleGame,
+    payload: feed({ abstractGameState: "Final", codedGameState: "F", detailedState: "Final" }),
+  });
+  assert.equal(final.complete, false);
+  assert.equal(final.availability, "NOT_PREGAME_AT_CUTOFF");
+});
+
+test("missing or post-cutoff provider timecode cannot certify historical T-5 evidence", () => {
+  const after = parseMlbHistoricalPregameLineupSnapshot({
+    scheduleGame,
+    payload: feed({ metadata: "20250615_170001" }),
+  });
+  assert.equal(after.complete, false);
+  assert.equal(after.availability, "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF");
+
+  const missing = parseMlbHistoricalPregameLineupSnapshot({
+    scheduleGame,
+    payload: feed({ metadata: null }),
+  });
+  assert.equal(missing.complete, false);
+  assert.equal(missing.availability, "TIMECODE_NOT_AT_OR_BEFORE_CUTOFF");
 });
 
 test("official team or game identity drift is a conflict even if batting orders are populated", () => {
@@ -336,7 +368,7 @@ test("fetch report requests exactly one historical T-5 snapshot per resolved sch
     }
     assert.equal(gamePk, 777002);
     assert.equal(match[2], "20250615_230000");
-    return new Response(JSON.stringify(feed({ gamePk: 777002 })), { status: 200 });
+    return new Response(JSON.stringify(feed({ gamePk: 777002, metadata: "20250615_225950" })), { status: 200 });
   };
 
   const report = await fetchMlbHistoricalPregameLineups({
@@ -368,7 +400,12 @@ test("resolved reschedule uses only the final played start for the historical cu
     calls.push(url);
     if (url.includes("/v1/schedule?")) return new Response(JSON.stringify(rescheduledPayload()), { status: 200 });
     assert.match(url, /\/game\/778443\/feed\/live\?timecode=20250406_173000$/);
-    return new Response(JSON.stringify(feed({ gamePk: 778443, homeTeamId: 111, awayTeamId: 138 })), { status: 200 });
+    return new Response(JSON.stringify(feed({
+      gamePk: 778443,
+      homeTeamId: 111,
+      awayTeamId: 138,
+      metadata: "20250406_172950",
+    })), { status: 200 });
   };
   const report = await fetchMlbHistoricalPregameLineups({
     startDate: "2025-04-05",
@@ -396,7 +433,12 @@ test("suspended/resumed chain uses original first pitch, not the resume time, fo
     calls.push(url);
     if (url.includes("/v1/schedule?")) return new Response(JSON.stringify(suspendedPayload()), { status: 200 });
     assert.match(url, /\/game\/777861\/feed\/live\?timecode=20250519_233500$/);
-    return new Response(JSON.stringify(feed({ gamePk: 777861, homeTeamId: 142, awayTeamId: 114 })), { status: 200 });
+    return new Response(JSON.stringify(feed({
+      gamePk: 777861,
+      homeTeamId: 142,
+      awayTeamId: 114,
+      metadata: "20250519_233450",
+    })), { status: 200 });
   };
   const report = await fetchMlbHistoricalPregameLineups({
     startDate: "2025-05-19",
