@@ -95,7 +95,7 @@ jobs:
           NODE
           grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' dist/index.cjs
           grep -F '/api/mlb/p1/v1/market-universe-odds' dist/index.cjs
-      - name: Verify protected P1-M6A2 and read-only successor scope
+      - name: Verify exact P1-M6A2 scope
         shell: bash
         run: |
           set -euo pipefail
@@ -108,42 +108,13 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-
-          # P1-M6A2 retains ownership of the market/odds implementation. A
-          # read-only successor such as P1-M3E may extend authenticated route
-          # composition and its own analytical surface, but it may not modify
-          # M6A2-owned normalization or provider-request code.
-          allowed=$(printf '%s\n' \
-            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
-            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
-            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
-            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
-            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+          expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
-            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
             'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
             'server/mlb-market-odds-normalizer.test.ts' \
             'server/mlb-market-odds-normalizer.ts' \
             'server/mlb-market-universe-odds-routes.test.ts' \
             'server/mlb-market-universe-odds-routes.ts' \
-            'server/mlb-p1-operating-envelope-routes.ts' \
-            'server/route-contract.extensions.json' \
             'server/routes.ts' \
-            'tsconfig.p1-m3e-operating-envelope.json' \
             'tsconfig.p1-m6a2-market-odds.json' | sort)
-          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
-          [[ -z "$unexpected" ]]
-
-          if grep -Eq '^(docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE\.md|server/mlb-market-odds-normalizer(\.test)?\.ts|server/mlb-market-universe-odds-routes(\.test)?\.ts|tsconfig\.p1-m6a2-market-odds\.json)$' <<< "$changed"; then
-            required=$(printf '%s\n' \
-              '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
-              'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
-              'server/mlb-market-odds-normalizer.test.ts' \
-              'server/mlb-market-odds-normalizer.ts' \
-              'server/mlb-market-universe-odds-routes.test.ts' \
-              'server/mlb-market-universe-odds-routes.ts' \
-              'server/routes.ts' \
-              'tsconfig.p1-m6a2-market-odds.json' | sort)
-            missing=$(comm -23 <(printf '%s\n' "$required") <(printf '%s\n' "$changed"))
-            [[ -z "$missing" ]]
-          fi
+          [[ "$changed" == "$expected" ]]
