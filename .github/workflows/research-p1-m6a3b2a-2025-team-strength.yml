@@ -1,0 +1,46 @@
+name: Research P1-M6A3B2A 2025 Team Strength
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m6a3b2a-2025-team-strength.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research-2025-team-strength:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Reproduce frozen B1 dataset and run B2A team-strength OOS challenger
+        run: |
+          node --import tsx scripts/p1-m6a3b2a-team-strength-backtest.mjs \
+            --start 2025-03-01 \
+            --end 2025-10-01 \
+            --concurrency 4 \
+            --out artifacts/p1-m6a3b2a-2025-team-strength
+      - name: Verify research run did not modify tracked source
+        if: success()
+        run: git diff --exit-code
+      - name: Upload B2A official-history research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m6a3b2a-2025-team-strength
+          path: artifacts/p1-m6a3b2a-2025-team-strength/
+          if-no-files-found: warn
+          retention-days: 30
