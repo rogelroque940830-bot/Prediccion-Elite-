@@ -54,7 +54,7 @@ test("marginal NB2 fitting estimates finite positive dispersion on overdispersed
   const nb = fitMlbMarginalRunModel(values, "NEGATIVE_BINOMIAL_NB2");
   assert.equal(poisson.dispersionK, null);
   assert.ok((nb.dispersionK ?? 0) > 0);
-  assert.ok(Number.isFinite(nb.dispersionK));
+  assert.ok(Number.isFinite(nb.dispersionK ?? Number.NaN));
   assert.ok(nb.varianceRuns > nb.meanRuns);
   assert.ok(nb.inSampleMeanNegativeLogLikelihood < poisson.inSampleMeanNegativeLogLikelihood);
 });
