@@ -13,6 +13,8 @@ on:
       - 'server/mlb-market-historical-fit.test.ts'
       - 'scripts/p1-m6a3b1-historical-backfill.mjs'
       - 'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
+      - 'docs/P1_M6A3B1_2025_OFFICIAL_BASELINE_EVIDENCE.md'
+      - 'evidence/p1-m6a3b1/2025-official-baseline.json'
       - 'tsconfig.p1-m6a3b1-historical-oos.json'
       - '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml'
   workflow_dispatch:
@@ -55,7 +57,7 @@ jobs:
           npm run build:backend
           npm run test:s5a-e2e
           npm run test:s5b-shadow
-      - name: Verify research-only and no-leakage boundaries
+      - name: Verify research-only, stable identity and no-leakage boundaries
         shell: bash
         run: |
           set -euo pipefail
@@ -64,12 +66,22 @@ jobs:
           fit='server/mlb-market-historical-fit.ts'
           script='scripts/p1-m6a3b1-historical-backfill.mjs'
           docs='docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
+          evidence='evidence/p1-m6a3b1/2025-official-baseline.json'
+          evidence_docs='docs/P1_M6A3B1_2025_OFFICIAL_BASELINE_EVIDENCE.md'
           grep -F 'MLB_STATS_API_OFFICIAL' "$dataset"
           grep -F 'statsapi.mlb.com/api' "$source"
           grep -F 'P1_M6A3B1_TIME_LEAKAGE_DETECTED' "$fit"
           grep -F 'automaticModelSelectionAllowed: false' "$fit"
           grep -F 'actionabilityAllowed: false' "$dataset" "$source" "$fit"
           grep -F 'P1_M6A3B1_ACQUISITION_INCOMPLETE' "$script"
+          grep -F 'digestMlbHistoricalOutcomes' "$dataset"
+          grep -F 'digestMlbHistoricalSourceProvenance' "$dataset"
+          grep -F 'outcomeDigest: dataset.outcomeDigest' "$script"
+          grep -F 'sourceProvenanceDigest: dataset.sourceProvenanceDigest' "$script"
+          grep -F 'c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d' "$evidence" "$evidence_docs"
+          grep -F '1048' "$evidence"
+          grep -F '4192' "$evidence"
+          grep -Fi 'canonical sample identity' "$docs"
           grep -Fi 'does not read sportsbook prices' "$docs"
           ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$dataset" "$source" "$fit" "$script"
       - name: Verify owned B1 maintenance scope from PR base to PR head
@@ -87,7 +99,9 @@ jobs:
           changed=$(git diff --name-only "$base...$head" | sort)
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml' \
+            'docs/P1_M6A3B1_2025_OFFICIAL_BASELINE_EVIDENCE.md' \
             'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md' \
+            'evidence/p1-m6a3b1/2025-official-baseline.json' \
             'scripts/p1-m6a3b1-historical-backfill.mjs' \
             'server/mlb-market-historical-dataset.test.ts' \
             'server/mlb-market-historical-dataset.ts' \
