@@ -4,6 +4,7 @@ import path from "path";
 import Database from "better-sqlite3";
 import { z } from "zod";
 import { mlbInjuryAuditSchema } from "./mlb-injury-audit";
+import { mlbMarketTypeSchema } from "./mlb-market-contract";
 
 export const MLB_LEDGER_SCHEMA_VERSION = "mlb-ledger.v1" as const;
 const DEFAULT_DB_PATH = path.join(process.cwd(), "data", "mlb-ledger-v1.sqlite");
@@ -49,7 +50,7 @@ export const mlbPredictionInputSchema = z.object({
     venue: z.string().max(160).optional(),
   }).strict(),
   market: z.object({
-    type: z.enum(["ML", "F5_ML", "RUN_LINE", "TOTAL", "F5_TOTAL", "TEAM_TOTAL", "TT_OVER_15_F5", "TT_UNDER_25_F5", "INNING_1_ML", "NRFI", "YRFI", "OTHER"]),
+    type: mlbMarketTypeSchema,
     selection: z.string().trim().min(1).max(200),
     line: z.number().finite().optional(),
     oddsAmerican: z.number().int().min(-100000).max(100000).refine((value) => value !== 0, "Odds cannot be zero"),

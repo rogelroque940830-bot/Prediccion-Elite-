@@ -104,6 +104,27 @@ test("grades F5 markets independently from full-game result", () => {
   assert.equal(gradeMlbPrediction(prediction("TT_UNDER_25_F5", "Home Club F5 Under 2.5"), officialGame)?.result, "WIN");
 });
 
+test("grades canonical F3/F5 period markets independently", () => {
+  assert.equal(gradeMlbPrediction(prediction("F3_ML", "Away Club F3 ML"), officialGame)?.result, "WIN");
+  assert.equal(gradeMlbPrediction(prediction("F3_ML", "Home Club F3 ML"), officialGame)?.result, "LOSS");
+  assert.equal(gradeMlbPrediction(prediction("F3_RUN_LINE", "Away Club -0.5 F3", -0.5), officialGame)?.result, "WIN");
+  assert.equal(gradeMlbPrediction(prediction("F3_RUN_LINE", "Home Club +1 F3", 1), officialGame)?.result, "PUSH");
+  assert.equal(gradeMlbPrediction(prediction("F5_RUN_LINE", "Home Club +0.5 F5", 0.5), officialGame)?.result, "WIN");
+  assert.equal(gradeMlbPrediction(prediction("F5_RUN_LINE", "Home Club -0.5 F5", -0.5), officialGame)?.result, "LOSS");
+  assert.equal(gradeMlbPrediction(prediction("F3_TOTAL", "Over 2.5 F3", 2.5), officialGame)?.result, "WIN");
+  assert.equal(gradeMlbPrediction(prediction("F3_TOTAL", "Under 3 F3", 3), officialGame)?.result, "PUSH");
+  assert.equal(gradeMlbPrediction(prediction("F3_TEAM_TOTAL", "Away Club F3 Over 1.5", 1.5), officialGame)?.result, "WIN");
+  assert.equal(gradeMlbPrediction(prediction("F5_TEAM_TOTAL", "Home Club F5 Over 1.5", 1.5), officialGame)?.result, "WIN");
+
+  const f3Tie = {
+    ...officialGame,
+    innings: officialGame.innings.map((inning) =>
+      inning.num <= 3 ? { ...inning, home: 0, away: 0 } : inning,
+    ),
+  };
+  assert.equal(gradeMlbPrediction(prediction("F3_ML", "Home Club F3 ML"), f3Tie)?.result, "PUSH");
+});
+
 test("grades totals and first-inning run markets", () => {
   assert.equal(gradeMlbPrediction(prediction("TOTAL", "Under 8.5", 8.5), officialGame)?.result, "WIN");
   assert.equal(gradeMlbPrediction(prediction("TOTAL", "Over 8", 8), officialGame)?.result, "PUSH");
@@ -116,4 +137,8 @@ test("does not grade unsupported or incomplete markets", () => {
   assert.equal(gradeMlbPrediction(prediction("OTHER", "Unknown market"), officialGame), null);
   const incomplete = { ...officialGame, innings: officialGame.innings.slice(0, 4) };
   assert.equal(gradeMlbPrediction(prediction("F5_TOTAL", "Over 3.5 F5", 3.5), incomplete), null);
+  const incompleteF3 = { ...officialGame, innings: officialGame.innings.slice(0, 2) };
+  assert.equal(gradeMlbPrediction(prediction("F3_ML", "Home Club F3 ML"), incompleteF3), null);
+  assert.equal(gradeMlbPrediction(prediction("F3_RUN_LINE", "Home Club -0.5 F3", -0.5), incompleteF3), null);
+  assert.equal(gradeMlbPrediction(prediction("F3_TOTAL", "Over 2.5 F3", 2.5), incompleteF3), null);
 });
