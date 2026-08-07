@@ -163,6 +163,21 @@ export function gradeMlbPrediction(
     };
   }
 
+  if (market === "F3_ML") {
+    if (!selectionTeam) return null;
+    const f3 = firstN(game, 3);
+    if (!f3.complete) return null;
+    if (f3.home === f3.away) {
+      return { result: "PUSH", outcomeValue: 0, notes: `Official F3 tie ${f3.away}-${f3.home}` };
+    }
+    const winner = f3.home > f3.away ? "HOME" : "AWAY";
+    return {
+      result: winner === selectionTeam ? "WIN" : "LOSS",
+      outcomeValue: selectionTeam === "HOME" ? f3.home - f3.away : f3.away - f3.home,
+      notes: `Official F3 score ${game.awayTeam} ${f3.away}-${f3.home} ${game.homeTeam}`,
+    };
+  }
+
   if (market === "RUN_LINE") {
     if (!selectionTeam || line == null) return null;
     const selectedScore = selectionTeam === "HOME" ? game.homeScore : game.awayScore;
@@ -173,6 +188,22 @@ export function gradeMlbPrediction(
       result,
       outcomeValue: adjusted - rivalScore,
       notes: `Official run line settlement: selected score ${selectedScore} ${line >= 0 ? "+" : ""}${line} vs rival ${rivalScore}`,
+    };
+  }
+
+  if (market === "F5_RUN_LINE" || market === "F3_RUN_LINE") {
+    if (!selectionTeam || line == null) return null;
+    const innings = market === "F5_RUN_LINE" ? 5 : 3;
+    const period = firstN(game, innings);
+    if (!period.complete) return null;
+    const selectedScore = selectionTeam === "HOME" ? period.home : period.away;
+    const rivalScore = selectionTeam === "HOME" ? period.away : period.home;
+    const adjusted = selectedScore + line;
+    const result = adjusted === rivalScore ? "PUSH" : adjusted > rivalScore ? "WIN" : "LOSS";
+    return {
+      result,
+      outcomeValue: adjusted - rivalScore,
+      notes: `Official F${innings} run line settlement: selected score ${selectedScore} ${line >= 0 ? "+" : ""}${line} vs rival ${rivalScore}`,
     };
   }
 
@@ -198,16 +229,34 @@ export function gradeMlbPrediction(
     };
   }
 
+  if (market === "F3_TOTAL") {
+    if (!direction || line == null) return null;
+    const f3 = firstN(game, 3);
+    if (!f3.complete) return null;
+    const total = f3.home + f3.away;
+    return {
+      result: compare(total, line, direction),
+      outcomeValue: total,
+      notes: `Official F3 total ${total} vs ${direction} ${line}`,
+    };
+  }
+
   if (
     market === "TEAM_TOTAL" ||
+    market === "F5_TEAM_TOTAL" ||
+    market === "F3_TEAM_TOTAL" ||
     market === "TT_OVER_15_F5" ||
     market === "TT_UNDER_25_F5"
   ) {
     if (!selectionTeam) return null;
-    const useF5 =
-      market === "TT_OVER_15_F5" ||
-      market === "TT_UNDER_25_F5" ||
-      prediction.market.selection.toLowerCase().includes("f5");
+    const canonicalPeriodInnings = market === "F5_TEAM_TOTAL"
+      ? 5
+      : market === "F3_TEAM_TOTAL"
+        ? 3
+        : null;
+    const legacyF5 = market === "TT_OVER_15_F5" || market === "TT_UNDER_25_F5";
+    const inferredLegacyF5 = market === "TEAM_TOTAL" && prediction.market.selection.toLowerCase().includes("f5");
+    const periodInnings = canonicalPeriodInnings ?? (legacyF5 || inferredLegacyF5 ? 5 : null);
     const teamDirection = market === "TT_OVER_15_F5"
       ? "OVER"
       : market === "TT_UNDER_25_F5"
@@ -219,17 +268,17 @@ export function gradeMlbPrediction(
     if (!teamDirection || teamLine == null) return null;
 
     let runs: number;
-    if (useF5) {
-      const f5 = firstN(game, 5);
-      if (!f5.complete) return null;
-      runs = selectionTeam === "HOME" ? f5.home : f5.away;
+    if (periodInnings != null) {
+      const period = firstN(game, periodInnings);
+      if (!period.complete) return null;
+      runs = selectionTeam === "HOME" ? period.home : period.away;
     } else {
       runs = selectionTeam === "HOME" ? game.homeScore : game.awayScore;
     }
     return {
       result: compare(runs, teamLine, teamDirection),
       outcomeValue: runs,
-      notes: `Official ${useF5 ? "F5 " : ""}team total ${runs} vs ${teamDirection} ${teamLine}`,
+      notes: `Official ${periodInnings != null ? `F${periodInnings} ` : ""}team total ${runs} vs ${teamDirection} ${teamLine}`,
     };
   }
 

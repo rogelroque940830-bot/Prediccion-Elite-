@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { buildMlbBacktestReport, MlbLedgerStore } from "./mlb-ledger";
+import { getMlbMarketContract, MLB_MARKET_CONTRACT_VERSION } from "./mlb-market-contract";
 
 function injuryAuditPayload() {
   const team = (side: "HOME" | "AWAY", teamName: string) => ({
@@ -179,6 +180,52 @@ test("prediction writes are idempotent and immutable", () => {
   });
 });
 
+
+test("P1-M6A1 canonical market contract accepts expanded periods and fails closed", () => {
+  assert.equal(MLB_MARKET_CONTRACT_VERSION, "courtedge-p1-m6a1-mlb-market-contract.v1");
+  assert.equal(getMlbMarketContract("F3_ML").period, "FIRST_3");
+  assert.equal(getMlbMarketContract("F3_ML").quoteContract, "TWO_WAY_PUSH_ON_TIE");
+  assert.equal(getMlbMarketContract("F5_RUN_LINE").settlementRule, "RUN_LINE");
+  assert.equal(getMlbMarketContract("F3_TOTAL").regulationInnings, 3);
+  assert.equal(getMlbMarketContract("NRFI").settlementRule, "BINARY_FIRST_INNING_RUNS");
+  assert.equal(getMlbMarketContract("OTHER").productionEligible, false);
+
+  withStore((store) => {
+    const markets = [
+      ["F3_ML", "Home Club F3 ML", undefined],
+      ["F5_RUN_LINE", "Home Club -0.5 F5", -0.5],
+      ["F3_RUN_LINE", "Away Club +0.5 F3", 0.5],
+      ["F3_TOTAL", "Under 3.5 F3", 3.5],
+      ["F5_TEAM_TOTAL", "Home Club F5 Over 1.5", 1.5],
+      ["F3_TEAM_TOTAL", "Away Club F3 Under 1.5", 1.5],
+    ] as const;
+
+    markets.forEach(([type, selection, line], index) => {
+      const data = store.appendPrediction(predictionPayload({
+        clientRequestId: `req-p1-m6a1-${index}`,
+        market: {
+type,
+selection,
+...(line == null ? {} : { line }),
+oddsAmerican: -110,
+book: "Hard Rock",
+        },
+      })).data;
+      assert.equal(data.market.type, type);
+    });
+
+    assert.throws(() => store.appendPrediction(predictionPayload({
+      clientRequestId: "req-p1-m6a1-invalid",
+      market: {
+        type: "F7_TOTAL",
+        selection: "Under 6.5 F7",
+        line: 6.5,
+        oddsAmerican: -110,
+        book: "Hard Rock",
+      },
+    })));
+  });
+});
 
 test("injury audit is hashed into the immutable payload and malformed evidence is rejected", () => {
   withStore((store) => {

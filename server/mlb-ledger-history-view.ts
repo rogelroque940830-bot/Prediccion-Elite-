@@ -5,11 +5,17 @@ export const MLB_LEDGER_HISTORY_VIEW_VERSION = "mlb-ledger-history-view.v1" as c
 
 const MARKET_LABELS: Record<string, string> = {
   ML: "ML",
-  F5_ML: "F5",
+  F5_ML: "F5 ML",
+  F3_ML: "F3 ML",
   RUN_LINE: "Run Line",
+  F5_RUN_LINE: "F5 Run Line",
+  F3_RUN_LINE: "F3 Run Line",
   TOTAL: "O/U",
   F5_TOTAL: "F5 O/U",
+  F3_TOTAL: "F3 O/U",
   TEAM_TOTAL: "Team Total",
+  F5_TEAM_TOTAL: "F5 Team Total",
+  F3_TEAM_TOTAL: "F3 Team Total",
   TT_OVER_15_F5: "F5 TT Over 1.5",
   TT_UNDER_25_F5: "F5 TT Under 2.5",
   INNING_1_ML: "1st Inning ML",
