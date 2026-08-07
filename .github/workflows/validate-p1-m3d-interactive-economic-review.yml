@@ -8,6 +8,7 @@ on:
       - 'server/mlb-p1-economic-review.ts'
       - 'server/mlb-p1-economic-review-routes.ts'
       - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/mlb-p1-operating-envelope-routes.ts'
       - 'server/mlb-p1-real-cohort-activation.ts'
       - 'server/mlb-p1-real-cohort-activation.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
@@ -17,13 +18,16 @@ on:
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
+      - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md'
       - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
       - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
       - 'tsconfig.p1-m3d-interactive-economic-review.json'
+      - 'tsconfig.p1-m3e-operating-envelope.json'
       - 'tsconfig.p1-m5a-real-cohort-activation.json'
       - 'tsconfig.p1-m6a2-market-odds.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
@@ -107,16 +111,19 @@ jobs:
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
 
-          # P1-M3D owns the read-only economic-review boundary. P1-M6A2 is a
-          # later read-only market-evidence surface and may extend route
-          # composition without mutating the M3D report or write boundaries.
+          # P1-M3D owns the read-only economic-review boundary. P1-M3E may
+          # consume that immutable terminal review as a read-only analytical
+          # successor. P1-M6A2 remains read-only market evidence. Neither may
+          # mutate the M3D report or write boundaries.
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
             'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
             'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
             'server/mlb-market-odds-normalizer.test.ts' \
@@ -126,11 +133,13 @@ jobs:
             'server/mlb-p1-economic-review-routes.ts' \
             'server/mlb-p1-economic-review.test.ts' \
             'server/mlb-p1-economic-review.ts' \
+            'server/mlb-p1-operating-envelope-routes.ts' \
             'server/mlb-p1-real-cohort-activation.test.ts' \
             'server/mlb-p1-real-cohort-activation.ts' \
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
             'tsconfig.p1-m3d-interactive-economic-review.json' \
+            'tsconfig.p1-m3e-operating-envelope.json' \
             'tsconfig.p1-m5a-real-cohort-activation.json' \
             'tsconfig.p1-m6a2-market-odds.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
