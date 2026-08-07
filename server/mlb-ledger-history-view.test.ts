@@ -180,3 +180,40 @@ test("exposes compact price provenance without expanding raw quote arrays", () =
   assert.equal(pick.standardAmericanOddsValidated, true);
   assert.equal("rawQuotes" in pick, false);
 });
+
+test("exposes only compact P1-M4 effective actionability fields", () => {
+  const actionable = record({
+    id: "actionable-p1m4",
+    recordedAtMs: 5000,
+    marketType: "ML",
+    selection: "Detroit Tigers",
+    odds: -118,
+    stake: 0,
+  });
+  actionable.prediction.payload.analysis.layers = {
+    p1M4bEconomicDecision: {
+      schemaVersion: "courtedge-p1-m4b-economic-decision-adapter.v1",
+      status: "ADAPTED",
+      source: { sourceSignal: "BET_FUERTE" },
+      effectiveDecision: {
+        decision: "BET",
+        actionability: "ACTIONABLE_FINAL",
+        analyticalUnits: 0.625,
+        reasons: ["POSITIVE_EXPECTED_VALUE", "PRICE_ACCEPTABLE"],
+      },
+      economicDecision: { internalDiagnostics: { shouldNotLeak: true } },
+    },
+  };
+
+  const view = buildMlbLedgerHistoryView([actionable]);
+  const pick = view.picks[0];
+  assert.equal(pick.economicLayerSchemaVersion, "courtedge-p1-m4b-economic-decision-adapter.v1");
+  assert.equal(pick.economicLayerStatus, "ADAPTED");
+  assert.equal(pick.economicSourceSignal, "BET_FUERTE");
+  assert.equal(pick.economicEffectiveDecision, "BET");
+  assert.equal(pick.economicActionability, "ACTIONABLE_FINAL");
+  assert.equal(pick.economicAnalyticalUnits, 0.625);
+  assert.deepEqual(pick.economicReasons, ["POSITIVE_EXPECTED_VALUE", "PRICE_ACCEPTABLE"]);
+  assert.equal("economicDecision" in pick, false);
+  assert.equal("internalDiagnostics" in pick, false);
+});
