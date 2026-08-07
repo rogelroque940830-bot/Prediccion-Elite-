@@ -1,0 +1,94 @@
+name: Validate P1-M6A3A MLB Probability Distribution
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-probability-contract.ts'
+      - 'server/mlb-market-run-distribution.ts'
+      - 'server/mlb-market-run-distribution.test.ts'
+      - 'server/mlb-market-calibration.ts'
+      - 'server/mlb-market-calibration.test.ts'
+      - 'docs/P1_M6A3A_MLB_PROBABILITY_DISTRIBUTION_CONTRACT.md'
+      - 'tsconfig.p1-m6a3a-probability-distribution.json'
+      - '.github/workflows/validate-p1-m6a3a-mlb-probability-distribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned probability surface
+        run: npx tsc -p tsconfig.p1-m6a3a-probability-distribution.json
+      - name: Run distribution and calibration falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-run-distribution.test.ts \
+            server/mlb-market-calibration.test.ts
+      - name: Preserve P1-M6A1 ledger and settlement contracts
+        run: npm run test:mlb-ledger
+      - name: Preserve production backend and scientific regressions
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify A3A cannot become actionable
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='server/mlb-market-probability-contract.ts'
+          distribution='server/mlb-market-run-distribution.ts'
+          calibration='server/mlb-market-calibration.ts'
+          docs='docs/P1_M6A3A_MLB_PROBABILITY_DISTRIBUTION_CONTRACT.md'
+          grep -F 'courtedge-p1-m6a3a-probability-distribution-contract.v1' "$contract"
+          grep -F 'NEGATIVE_BINOMIAL_INDEPENDENT_BASELINE' "$contract"
+          grep -F 'EXPERIMENTAL_SHADOW' "$contract"
+          grep -F 'actionabilityAllowed: false' "$contract"
+          grep -F 'fullGameTieMassRemoved' "$distribution"
+          grep -F 'P1_M6A3A_EXPERIMENTAL_SHADOW_ONLY' "$distribution"
+          grep -F 'multiclassBrier' "$calibration"
+          grep -F 'logLoss' "$calibration"
+          grep -F 'macroEce' "$calibration"
+          grep -F 'P1_M6A3B_VERSIONED_CALIBRATION_POLICY_REQUIRED' "$calibration"
+          grep -F 'A3B_OUT_OF_SAMPLE_CERTIFICATION_REQUIRED' "$calibration"
+          grep -Fi 'cannot create `BET`, `ACTIONABLE_FINAL`' "$docs"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$contract" "$distribution" "$calibration"
+      - name: Verify exact A3A scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3a-mlb-probability-distribution.yml' \
+            'docs/P1_M6A3A_MLB_PROBABILITY_DISTRIBUTION_CONTRACT.md' \
+            'server/mlb-market-calibration.test.ts' \
+            'server/mlb-market-calibration.ts' \
+            'server/mlb-market-probability-contract.ts' \
+            'server/mlb-market-run-distribution.test.ts' \
+            'server/mlb-market-run-distribution.ts' \
+            'tsconfig.p1-m6a3a-probability-distribution.json' | sort)
+          [[ "$changed" == "$expected" ]]
