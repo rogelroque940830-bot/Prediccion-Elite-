@@ -1,0 +1,214 @@
+name: Research P1-M3F Provisional Maturity Audit
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m3f-provisional-maturity-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-provisional-maturity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 9b632b344d9b0eb7aced57691428f4310ccd92a9
+      COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Aggregate terminal interactive maturity blockers privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          if [[ -z "${COURTEDGE_WRITE_TOKEN:-}" ]]; then
+            echo 'P1_M3F_SERVICE_TOKEN_UNAVAILABLE' >&2
+            exit 42
+          fi
+
+          health_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health")
+          status_code=$(curl -sS -o audit/ledger-status.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status")
+          export_code=$(curl -sS -o private/owner-ledger.jsonl -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${COURTEDGE_WRITE_TOKEN}" \
+            "${BACKEND_URL}/api/mlb/ledger/v1/export?format=jsonl&limit=10000")
+          [[ "${health_code}" == "200" && "${status_code}" == "200" && "${export_code}" == "200" ]]
+          test -s private/owner-ledger.jsonl
+          chmod 600 private/owner-ledger.jsonl
+
+          EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" node --import tsx --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import { buildMlbP1M3dEconomicReview } from './server/mlb-p1-economic-review.ts';
+
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const status = JSON.parse(fs.readFileSync('audit/ledger-status.json', 'utf8'));
+          const raw = fs.readFileSync('private/owner-ledger.jsonl', 'utf8');
+          const records = raw.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const count = (target, key) => { const k = String(key || 'UNKNOWN'); target[k] = (target[k] || 0) + 1; };
+          const sortedCounts = (value) => Object.fromEntries(Object.entries(value).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0])));
+          const median = (values) => {
+            if (!values.length) return null;
+            const sorted = [...values].sort((a,b)=>a-b);
+            const m = Math.floor(sorted.length/2);
+            return sorted.length % 2 ? sorted[m] : (sorted[m-1]+sorted[m])/2;
+          };
+
+          assert(health.status === 'healthy', `health=${health.status}`);
+          assert(health.commit === process.env.EXPECTED_BACKEND_COMMIT, `commit=${health.commit}`);
+          assert(status.success === true && status.data?.immutable === true, 'ledger status invalid');
+          assert(status.data?.ownership?.owners === 1, `owners=${status.data?.ownership?.owners}`);
+          assert(status.data?.ownership?.unownedPredictions === 0, `unowned=${status.data?.ownership?.unownedPredictions}`);
+          assert(records.length === status.data.predictions, `owner export incomplete ${records.length}/${status.data.predictions}`);
+
+          const review = buildMlbP1M3dEconomicReview(records, { generatedAt: new Date().toISOString() });
+          assert(review.sample.uniqueAnalyticalDecisions === review.rows.length,
+            `P1_M3F_SOURCE_WINDOW_TRUNCATED:${review.sample.uniqueAnalyticalDecisions}/${review.rows.length}`);
+
+          const byId = new Map(records.map((record) => [record.prediction.id, record]));
+          const stageCounts = {};
+          const gateStatusCounts = {};
+          const warningCounts = {};
+          const requiredFieldCounts = {};
+          const marketCounts = {};
+          const signalCounts = {};
+          const categoryCounts = {};
+          const actionabilityCounts = {};
+          const dataQualityMissingCounts = {};
+          const timingBuckets = {};
+          const evidenceSummaryTotals = { fresh:0, stale:0, degraded:0, missing:0, conflict:0, unknown:0 };
+          const minutesBeforeFirstPitch = [];
+          let readinessLayerMissing = 0;
+
+          for (const row of review.rows) {
+            const record = byId.get(row.predictionId);
+            assert(record, `terminal record missing:${row.predictionId}`);
+            const layer = record.prediction?.payload?.analysis?.layers?.p1M3aCapture;
+            const readiness = layer?.readiness;
+            count(stageCounts, row.stage);
+            count(marketCounts, row.market);
+            count(signalCounts, row.sourceSignal);
+            count(categoryCounts, row.sourceCategory);
+            count(actionabilityCounts, row.actionability ?? 'NULL');
+            for (const missing of row.dataQualityMissing || []) count(dataQualityMissingCounts, missing);
+
+            if (!readiness) {
+              readinessLayerMissing += 1;
+            } else {
+              count(gateStatusCounts, readiness.gateStatus ?? 'UNKNOWN');
+              for (const warning of readiness.warnings || []) count(warningCounts, warning);
+              for (const field of readiness.evidenceSummary?.requiredFields || []) count(requiredFieldCounts, field);
+              for (const key of Object.keys(evidenceSummaryTotals)) {
+                const value = Number(readiness.evidenceSummary?.[key]);
+                if (Number.isFinite(value)) evidenceSummaryTotals[key] += value;
+              }
+            }
+
+            const recordedMs = Date.parse(record.prediction.recordedAt);
+            const commenceMs = Date.parse(record.prediction.game?.commenceTime);
+            if (Number.isFinite(recordedMs) && Number.isFinite(commenceMs)) {
+              const minutes = (commenceMs - recordedMs) / 60000;
+              minutesBeforeFirstPitch.push(minutes);
+              if (minutes < 0) count(timingBuckets, 'AFTER_SCHEDULED_FIRST_PITCH');
+              else if (minutes < 10) count(timingBuckets, 'LT_10_MIN');
+              else if (minutes < 30) count(timingBuckets, '10_TO_30_MIN');
+              else if (minutes < 60) count(timingBuckets, '30_TO_60_MIN');
+              else if (minutes < 180) count(timingBuckets, '60_TO_180_MIN');
+              else count(timingBuckets, 'GE_180_MIN');
+            }
+          }
+
+          const timing = minutesBeforeFirstPitch.length ? {
+            observations: minutesBeforeFirstPitch.length,
+            minMinutesBeforeFirstPitch: Math.round(Math.min(...minutesBeforeFirstPitch)*100)/100,
+            medianMinutesBeforeFirstPitch: Math.round(median(minutesBeforeFirstPitch)*100)/100,
+            maxMinutesBeforeFirstPitch: Math.round(Math.max(...minutesBeforeFirstPitch)*100)/100,
+            buckets: sortedCounts(timingBuckets),
+          } : { observations:0, minMinutesBeforeFirstPitch:null, medianMinutesBeforeFirstPitch:null, maxMinutesBeforeFirstPitch:null, buckets:{} };
+
+          const result = {
+            schemaVersion: 'p1-m3f-provisional-maturity-audit.v1',
+            generatedAt: new Date().toISOString(),
+            backendCommit: health.commit,
+            source: {
+              ownerScoped: true,
+              exportedRecords: records.length,
+              publicLedgerPredictions: status.data.predictions,
+              completeAgainstPublicLedger: records.length === status.data.predictions,
+              rawExportSha256: crypto.createHash('sha256').update(raw).digest('hex'),
+              rawExportUploaded: false,
+            },
+            terminalInteractiveCohort: {
+              uniqueAnalyticalDecisions: review.sample.uniqueAnalyticalDecisions,
+              settledDecisions: review.sample.settledDecisions,
+              pendingDecisions: review.sample.pendingDecisions,
+              lifecycle: review.lifecycle,
+              stageCounts: sortedCounts(stageCounts),
+              readinessGateStatusCounts: sortedCounts(gateStatusCounts),
+              readinessLayerMissing,
+              marketCounts: sortedCounts(marketCounts),
+              sourceSignalCounts: sortedCounts(signalCounts),
+              sourceCategoryCounts: sortedCounts(categoryCounts),
+              actionabilityCounts: sortedCounts(actionabilityCounts),
+              dataQualityMissingCounts: sortedCounts(dataQualityMissingCounts),
+              readinessWarningCounts: sortedCounts(warningCounts),
+              requiredFieldCounts: sortedCounts(requiredFieldCounts),
+              evidenceSummaryTotals,
+              timing,
+            },
+            interpretationBoundary: {
+              diagnosesWhyProvisional: true,
+              changesReadinessPolicy: false,
+              createsFinalCaptures: false,
+              createsUserActions: false,
+              changesModel: false,
+              changesThresholds: false,
+              authorizesPromotion: false,
+            },
+            safety: {
+              privateRawLedgerPersistedInArtifact: false,
+              predictionsCreated: 0,
+              settlementsCreated: 0,
+              betsPlaced: 0,
+              realFinancialExposure: 0,
+            },
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({
+            uniqueAnalyticalDecisions: result.terminalInteractiveCohort.uniqueAnalyticalDecisions,
+            stageCounts: result.terminalInteractiveCohort.stageCounts,
+            readinessGateStatusCounts: result.terminalInteractiveCohort.readinessGateStatusCounts,
+            readinessWarningCounts: result.terminalInteractiveCohort.readinessWarningCounts,
+            timing: result.terminalInteractiveCohort.timing,
+          }, null, 2));
+          NODE
+
+          rm -f private/owner-ledger.jsonl
+          rmdir private
+          test -f audit/result.json
+      - name: Prove raw private data is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d private
+          test -f audit/result.json
+          ! find audit -type f \( -name '*.jsonl' -o -name '*.ndjson' \) | grep -q .
+      - name: Upload aggregate maturity audit only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3f-provisional-maturity-aggregate
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
