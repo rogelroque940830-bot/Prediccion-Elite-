@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  MLB_P1_M6A3A_TAIL_MASS_TARGET,
   buildMlbHorizonRunDistribution,
   evaluateMlbExactMarketProbability,
   negativeBinomialRunPmf,
@@ -23,14 +24,28 @@ function probabilitySum(values: Array<{ probability: number }>): number {
   return values.reduce((sum, point) => sum + point.probability, 0);
 }
 
-test("negative-binomial baseline is finite, overdispersed-capable and exposes omitted tail mass", () => {
+test("negative-binomial baseline expands finite support until strict omitted-tail target is met", () => {
   const result = negativeBinomialRunPmf({ ...HOME, meanRuns: 4.5, dispersionK: 2.0 }, 20);
   const represented = probabilitySum(result.pmf);
-  assert.ok(represented > 0.999 && represented <= 1);
-  assert.ok(result.tailMass >= 0 && result.tailMass < 0.001);
+  assert.ok(result.supportExpanded);
+  assert.ok(result.maxRunsUsed > 20);
+  assert.ok(result.maxRunsUsed <= 60);
+  assert.ok(result.tailMass >= 0 && result.tailMass <= MLB_P1_M6A3A_TAIL_MASS_TARGET);
+  assert.ok(represented >= 1 - MLB_P1_M6A3A_TAIL_MASS_TARGET - 1e-9 && represented <= 1 + 1e-9);
   assert.ok(Math.abs(represented + result.tailMass - 1) < 1e-8);
   assert.ok(result.pmf[0].probability > 0);
   assert.ok(result.pmf.some((point) => point.runs >= 10 && point.probability > 0));
+});
+
+test("distribution fails closed when the hard support ceiling cannot meet the tail target", () => {
+  assert.throws(
+    () => buildMlbHorizonRunDistribution({
+      horizon: "FULL_GAME",
+      home: { ...HOME, meanRuns: 20, dispersionK: 0.5 },
+      away: AWAY,
+    }),
+    /P1_M6A3A_TAIL_MASS_TARGET_NOT_MET/,
+  );
 });
 
 test("invalid means, dispersion, zero inflation and provenance fail closed", () => {
@@ -61,6 +76,9 @@ test("F3/F5 distributions preserve tie mass because canonical moneylines push on
   assert.ok(f5.moneyline.draw > 0);
   assert.equal(f3.diagnostics.fullGameTieMassRemoved, 0);
   assert.equal(f3.diagnostics.conditionedOnNonTie, false);
+  assert.equal(f3.diagnostics.tailMassTarget, MLB_P1_M6A3A_TAIL_MASS_TARGET);
+  assert.ok(f3.diagnostics.homeTailMass <= MLB_P1_M6A3A_TAIL_MASS_TARGET);
+  assert.ok(f3.diagnostics.awayTailMass <= MLB_P1_M6A3A_TAIL_MASS_TARGET);
   assert.ok(Math.abs(probabilitySum(f3.jointRuns) - 1) < 1e-8);
 });
 
