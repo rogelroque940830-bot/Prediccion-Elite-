@@ -1,0 +1,119 @@
+name: Validate P1-M6A3B2C2 Lineup As-Of
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-lineup-asof.ts'
+      - 'server/mlb-market-lineup-asof.test.ts'
+      - 'server/mlb-market-lineup-inference.ts'
+      - 'server/mlb-market-lineup-inference.test.ts'
+      - 'scripts/p1-m6a3b2c2-lineup-oos.mjs'
+      - 'docs/P1_M6A3B2C2_MLB_LINEUP_ASOF.md'
+      - 'tsconfig.p1-m6a3b2c2-lineup-asof.json'
+      - '.github/workflows/validate-p1-m6a3b2c2-lineup-asof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b2c2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned B2C2 surface
+        run: npx tsc -p tsconfig.p1-m6a3b2c2-lineup-asof.json
+      - name: Run lineup as-of and paired inference falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-lineup-asof.test.ts \
+            server/mlb-market-lineup-inference.test.ts
+      - name: Preserve certified upstream modeling contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-pregame-lineup-history.test.ts \
+            server/mlb-market-team-strength.test.ts \
+            server/mlb-market-team-strength-inference.test.ts \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-p1-pregame-readiness.test.ts
+      - name: Preserve ledger backend and shadow regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify B2C2 no-lookahead and research-only boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-market-lineup-asof.ts'
+          inference='server/mlb-market-lineup-inference.ts'
+          script='scripts/p1-m6a3b2c2-lineup-oos.mjs'
+          docs='docs/P1_M6A3B2C2_MLB_LINEUP_ASOF.md'
+          grep -F 'row.officialDate < cutoffDateExclusive' "$source"
+          grep -F 'historyMaxDate < cutoffDateExclusive' "$source"
+          grep -F 'fold.trainingMaxDate < fold.validationMinDate' "$source"
+          grep -F 'lineupSnapshot.historyMaxDate < fold.validationMinDate' "$source"
+          grep -F 'selectedLineupEffectWeight' "$source" "$script"
+          grep -F 'DEFAULT_LINEUP_EFFECT_GRID = [0, 0.25, 0.5, 0.75, 1]' "$source"
+          grep -F 'snapshot.complete === true' "$source"
+          grep -F 'snapshot.availability === "COMPLETE"' "$source"
+          grep -F 'TEAM_ONLY_MINUS_LINEUP' "$inference"
+          grep -F 'bootstrapReplicates = options.bootstrapReplicates ?? DEFAULT_BOOTSTRAP_REPLICATES' "$inference"
+          grep -F 'FAMILYWISE_HORIZONS = 4' "$inference"
+          grep -F 'statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4' "$script"
+          grep -F 'expectedCompleteLineupGames !== 2423' "$script"
+          grep -F 'FROZEN_LINEUP_HISTORY_DIGEST_MISMATCH' "$script"
+          grep -Fi 'never imputed' "$docs"
+          grep -F 'actionabilityAllowed: false' "$source" "$inference"
+          grep -F 'automaticModelSelectionAllowed: false' "$source" "$inference"
+          grep -F 'automaticPromotionAllowed: false' "$source" "$inference"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|register[A-Za-z]*Routes\(' "$source" "$inference" "$script"
+      - name: Verify bounded B2C2 scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ -n "$changed" ]]
+          allowed=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3b2c2-lineup-asof.yml' \
+            'docs/P1_M6A3B2C2_MLB_LINEUP_ASOF.md' \
+            'scripts/p1-m6a3b2c2-lineup-oos.mjs' \
+            'server/mlb-market-lineup-asof.test.ts' \
+            'server/mlb-market-lineup-asof.ts' \
+            'server/mlb-market-lineup-inference.test.ts' \
+            'server/mlb-market-lineup-inference.ts' \
+            'tsconfig.p1-m6a3b2c2-lineup-asof.json' | sort)
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            grep -Fxq "$file" <<< "$allowed"
+          done <<< "$changed"
+          for required in \
+            'server/mlb-market-lineup-asof.ts' \
+            'server/mlb-market-lineup-asof.test.ts' \
+            'server/mlb-market-lineup-inference.ts' \
+            'server/mlb-market-lineup-inference.test.ts'; do
+            grep -Fxq "$required" <<< "$changed"
+          done
