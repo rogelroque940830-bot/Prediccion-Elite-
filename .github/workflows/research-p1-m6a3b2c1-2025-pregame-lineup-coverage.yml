@@ -24,6 +24,34 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies reproducibly
         run: npm ci
+      - name: Diagnose duplicate official schedule identity if present
+        run: |
+          node --input-type=module <<'NODE'
+          const url = 'https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameTypes=R&startDate=2025-03-01&endDate=2025-10-01';
+          const response = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'CourtEdge-P1-M6A3B2C1-Diagnostic/1.0' } });
+          if (!response.ok) throw new Error(`schedule HTTP ${response.status}`);
+          const payload = await response.json();
+          const found = [];
+          for (const dateEntry of Array.isArray(payload?.dates) ? payload.dates : []) {
+            for (const game of Array.isArray(dateEntry?.games) ? dateEntry.games : []) {
+              if (Number(game?.gamePk) !== 778443) continue;
+              found.push({
+                dateEntry: dateEntry?.date ?? null,
+                gamePk: game?.gamePk ?? null,
+                gameType: game?.gameType ?? null,
+                officialDate: game?.officialDate ?? null,
+                gameDate: game?.gameDate ?? null,
+                status: game?.status ?? null,
+                doubleHeader: game?.doubleHeader ?? null,
+                gameNumber: game?.gameNumber ?? null,
+                homeTeamId: game?.teams?.home?.team?.id ?? null,
+                awayTeamId: game?.teams?.away?.team?.id ?? null,
+              });
+            }
+          }
+          console.log('P1_M6A3B2C1_SCHEDULE_DIAGNOSTIC_778443');
+          console.log(JSON.stringify(found, null, 2));
+          NODE
       - name: Reproduce frozen B1 cohort and measure T-5 official lineup coverage
         run: |
           node --import tsx scripts/p1-m6a3b2c1-2025-pregame-lineup-coverage.mjs \
