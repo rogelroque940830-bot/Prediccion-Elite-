@@ -14,6 +14,7 @@ Provider documentation used for this contract:
 
 - https://the-odds-api.com/liveapi/guides/v4/
 - https://the-odds-api.com/sports-odds-data/betting-markets.html
+- https://the-odds-api.com/sports-odds-data/bookmaker-apis.html
 - https://the-odds-api.com/liveapi/guides/v4/api-error-codes.html
 
 ## Requested provider markets
@@ -55,11 +56,11 @@ A three-way period moneyline is not a two-way push-on-tie moneyline and is never
 
 ## Execution versus reference books
 
-Execution-book priority:
+Execution book:
 
-1. `hardrockbet_fl`
-2. `hardrockbet`
-3. `hardrockbet_az`
+- `hardrockbet_fl` — the verified Florida-specific Hard Rock Bet bookmaker key.
+
+Arizona and Ohio Hard Rock books are different jurisdiction-specific execution venues and are not substitutes for the Florida price. No generic `hardrockbet` key is requested because it is not part of the verified provider bookmaker catalog used by this phase.
 
 Reference-only books:
 
@@ -93,7 +94,7 @@ Statuses are separated into:
 
 ## Provider quota accounting
 
-P1-M6A2 requests six explicit bookmakers. Under the provider's documented billing model, a group of up to ten explicitly requested bookmakers counts as one bookmaker-region equivalent. For the event-odds endpoint, request cost is based on the unique markets actually returned multiplied by the bookmaker-region equivalents.
+P1-M6A2 requests four explicit bookmakers. Under the provider's documented billing model, a group of up to ten explicitly requested bookmakers counts as one bookmaker-region equivalent. For the event-odds endpoint, request cost is based on the unique markets actually returned multiplied by the bookmaker-region equivalents.
 
 The route therefore exposes the provider's response headers per successful event when present:
 
@@ -129,7 +130,8 @@ The route:
 4. No three-way market is coerced to two-way.
 5. No F3/F5 Team Total is invented from a provider key that is not documented.
 6. NRFI/YRFI require the exact first-inning 0.5 total contract.
-7. Partial provider coverage is explicitly marked incomplete and is never cached as a complete daily universe.
-8. Provider quota evidence is reported from headers when available; missing headers remain unknown rather than zero.
-9. Market support is not model support. P1-M6A3 must still build and validate horizon-specific probability engines.
-10. This layer remains read-only with zero financial exposure.
+7. A Hard Rock price from another jurisdiction is not a Florida execution price.
+8. Partial provider coverage is explicitly marked incomplete and is never cached as a complete daily universe.
+9. Provider quota evidence is reported from headers when available; missing headers remain unknown rather than zero.
+10. Market support is not model support. P1-M6A3 must still build and validate horizon-specific probability engines.
+11. This layer remains read-only with zero financial exposure.
