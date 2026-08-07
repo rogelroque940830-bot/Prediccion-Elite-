@@ -90,14 +90,14 @@ jobs:
           assert(!/app\.(post|put|patch|delete)\(/.test(activation + review), 'write route introduced');
           assert(!/sportsbookIntegration:\s*true|automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]|productionWrites:\s*true|settlementWrites:\s*true|historicalLedgerMutation:\s*true|syntheticCaptureCreation:\s*true/.test(activation + review), 'unsafe activation setting');
           NODE
-      - name: Diff hygiene and exact scope
+      - name: Diff hygiene and protected extension scope
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin integration/p0-staging-secure --depth=1
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          expected=$(printf '%s\n' \
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
@@ -108,7 +108,23 @@ jobs:
             'server/mlb-p1-real-cohort-activation.test.ts' \
             'server/mlb-p1-real-cohort-activation.ts' \
             'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          # Preserve the M5A implementation as one atomic review unit whenever
+          # any of its owned service/review/docs/typecheck files are changed.
+          owned=$(printf '%s\n' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
+            'server/mlb-p1-real-cohort-activation.test.ts' \
+            'server/mlb-p1-real-cohort-activation.ts' \
+            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
+          touched_owned=$(comm -12 <(printf '%s\n' "$changed") <(printf '%s\n' "$owned"))
+          if [[ -n "$touched_owned" ]]; then
+            missing_owned=$(comm -23 <(printf '%s\n' "$owned") <(printf '%s\n' "$changed"))
+            [[ -z "$missing_owned" ]]
+          fi
 
           ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|productionWrites:[[:space:]]*true|settlementWrites:[[:space:]]*true|historicalLedgerMutation:[[:space:]]*true|syntheticCaptureCreation:[[:space:]]*true' \
             server/mlb-p1-real-cohort-activation.ts \
