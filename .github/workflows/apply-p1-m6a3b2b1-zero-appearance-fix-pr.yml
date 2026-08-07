@@ -24,11 +24,11 @@ jobs:
         shell: bash
         run: |
           git diff --check
+          git checkout -- .github/workflows/validate-p1-m6a3b2b1-starting-pitcher-history.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add server/mlb-market-starting-pitcher-history.ts \
                   server/mlb-market-starting-pitcher-history.test.ts \
-                  docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md \
-                  .github/workflows/validate-p1-m6a3b2b1-starting-pitcher-history.yml
+                  docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md
           git commit -m 'P1-M6A3B2B1: handle zero-appearance pre-starter listing'
           git push origin HEAD:fix/p1-m6a3b2b1-zero-appearance-starter-order
