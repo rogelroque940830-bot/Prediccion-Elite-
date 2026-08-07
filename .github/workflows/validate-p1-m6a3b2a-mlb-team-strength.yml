@@ -7,6 +7,8 @@ on:
     paths:
       - 'server/mlb-market-team-strength.ts'
       - 'server/mlb-market-team-strength.test.ts'
+      - 'server/mlb-market-team-strength-inference.ts'
+      - 'server/mlb-market-team-strength-inference.test.ts'
       - 'scripts/p1-m6a3b2a-team-strength-backtest.mjs'
       - 'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
       - 'tsconfig.p1-m6a3b2a-team-strength.json'
@@ -33,8 +35,11 @@ jobs:
         run: npm ci
       - name: Typecheck owned B2A surface
         run: npx tsc -p tsconfig.p1-m6a3b2a-team-strength.json
-      - name: Run team-strength falsification tests
-        run: npx tsx --test server/mlb-market-team-strength.test.ts
+      - name: Run team-strength and paired-inference falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-team-strength.test.ts \
+            server/mlb-market-team-strength-inference.test.ts
       - name: Preserve A3A and B1 statistical contracts
         run: |
           npx tsx --test \
@@ -50,25 +55,33 @@ jobs:
           npm run build:backend
           npm run test:s5a-e2e
           npm run test:s5b-shadow
-      - name: Verify B2A research and no-promotion boundaries
+      - name: Verify B2A stable-sample, paired-inference and no-promotion boundaries
         shell: bash
         run: |
           set -euo pipefail
           model='server/mlb-market-team-strength.ts'
+          inference='server/mlb-market-team-strength-inference.ts'
           script='scripts/p1-m6a3b2a-team-strength-backtest.mjs'
           docs='docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md'
           evidence='evidence/p1-m6a3b1/2025-official-baseline.json'
           grep -F 'NB2_TEAM_ATTACK_DEFENSE_SHRINKAGE' "$model"
           grep -F 'P1_M6A3B2A_INNER_TIME_LEAKAGE_DETECTED' "$model"
           grep -F 'P1_M6A3B2A_OUTER_TIME_LEAKAGE_DETECTED' "$model"
-          grep -F 'automaticModelSelectionAllowed: false' "$model"
-          grep -F 'automaticPromotionAllowed: false' "$model"
-          grep -F 'actionabilityAllowed: false' "$model"
-          grep -F 'P1_M6A3B2A_FROZEN_BASELINE_DATASET_DIGEST_MISMATCH' "$script"
-          grep -F '15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b' "$evidence"
+          grep -F 'PAIRED_DATE_INFERENCE' "$inference"
+          grep -F 'SUPPORTED_IMPROVEMENT' "$inference"
+          grep -F 'SUPPORTED_REGRESSION' "$inference"
+          grep -F 'INCONCLUSIVE' "$inference"
+          grep -F 'familywiseAlpha = 0.05 / familywiseHorizons' "$inference"
+          grep -F 'automaticModelSelectionAllowed: false' "$model" "$inference"
+          grep -F 'automaticPromotionAllowed: false' "$model" "$inference"
+          grep -F 'actionabilityAllowed: false' "$model" "$inference"
+          grep -F 'P1_M6A3B2A_FROZEN_BASELINE_OUTCOME_DIGEST_MISMATCH' "$script"
+          grep -F 'outcomeDigestMatchesFrozenB1' "$script"
+          grep -F 'c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d' "$evidence"
           grep -Fi 'outer validation block is never used to select the prior' "$docs"
-          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$script"
-      - name: Verify exact B2A scope from PR base to PR head
+          grep -Fi '98.75%' "$docs"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$inference" "$script"
+      - name: Verify owned B2A maintenance scope from PR base to PR head
         shell: bash
         run: |
           set -euo pipefail
@@ -81,11 +94,24 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a3b2a-mlb-team-strength.yml' \
             'docs/P1_M6A3B2A_MLB_TEAM_STRENGTH_CHALLENGER.md' \
             'scripts/p1-m6a3b2a-team-strength-backtest.mjs' \
             'server/mlb-market-team-strength.test.ts' \
             'server/mlb-market-team-strength.ts' \
+            'server/mlb-market-team-strength-inference.test.ts' \
+            'server/mlb-market-team-strength-inference.ts' \
             'tsconfig.p1-m6a3b2a-team-strength.json' | sort)
-          [[ "$changed" == "$expected" ]]
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          require_test_pair() {
+            local source_file="$1"
+            local test_file="$2"
+            if grep -Fxq "$source_file" <<<"$changed"; then
+              grep -Fxq "$test_file" <<<"$changed"
+            fi
+          }
+          require_test_pair 'server/mlb-market-team-strength.ts' 'server/mlb-market-team-strength.test.ts'
+          require_test_pair 'server/mlb-market-team-strength-inference.ts' 'server/mlb-market-team-strength-inference.test.ts'
