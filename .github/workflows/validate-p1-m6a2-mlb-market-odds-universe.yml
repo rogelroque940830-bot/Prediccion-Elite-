@@ -99,9 +99,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin integration/p0-staging-secure --depth=1
-          git diff --check origin/integration/p0-staging-secure...HEAD
-          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
