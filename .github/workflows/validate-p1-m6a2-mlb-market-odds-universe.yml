@@ -95,7 +95,7 @@ jobs:
           NODE
           grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' dist/index.cjs
           grep -F '/api/mlb/p1/v1/market-universe-odds' dist/index.cjs
-      - name: Verify exact P1-M6A2 scope
+      - name: Verify exact protected P1-M6A2 or P1-M3E successor scope
         shell: bash
         run: |
           set -euo pipefail
@@ -108,7 +108,11 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+
+          workflow_only=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+
+          m6a2_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
             'server/mlb-market-odds-normalizer.test.ts' \
@@ -117,4 +121,19 @@ jobs:
             'server/mlb-market-universe-odds-routes.ts' \
             'server/routes.ts' \
             'tsconfig.p1-m6a2-market-odds.json' | sort)
-          [[ "$changed" == "$expected" ]]
+
+          m3e_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
+            'server/mlb-p1-operating-envelope-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e-operating-envelope.json' | sort)
+
+          if [[ "$changed" != "$workflow_only" \
+            && "$changed" != "$m6a2_package" \
+            && "$changed" != "$m3e_successor" ]]; then
+            echo 'P1-M6A2 scope rejected. Diff must be exactly the M6A2 package, the P1-M3E read-only successor package, or this one-file workflow compatibility update.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
