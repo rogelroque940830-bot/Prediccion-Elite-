@@ -1,0 +1,164 @@
+name: Diagnostic P1-M3E Live Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/diagnostic-p1-m3e-live-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-p1-m3e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FRONTEND_URL: https://prediccion-elite-p0-integration.up.railway.app
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for M3E frontend bundle and verify read-only safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+
+          for attempt in $(seq 1 100); do
+            index_code=$(curl -sS -L -o audit/index.html -w '%{http_code}' --max-time 25 "${FRONTEND_URL}/" || true)
+            health_code=$(curl -sS -o audit/backend-health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            ledger_before_code=$(curl -sS -o audit/ledger-before.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status" || true)
+            envelope_code=$(curl -sS -o audit/anonymous-envelope.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/p1/v1/operating-envelope" || true)
+            ledger_after_code=$(curl -sS -o audit/ledger-after.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status" || true)
+
+            rm -f audit/bundle.js audit/script-sources.txt
+            if [[ "${index_code}" == "200" ]]; then
+              node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('audit/index.html', 'utf8');
+          const sources = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((match) => match[1]);
+          fs.writeFileSync('audit/script-sources.txt', `${sources.join('\n')}\n`);
+          NODE
+              : > audit/bundle.js
+              while IFS= read -r source || [[ -n "${source}" ]]; do
+                [[ -n "${source}" ]] || continue
+                if [[ "${source}" =~ ^https?:// ]]; then
+                  asset_url="${source}"
+                else
+                  clean="${source#./}"
+                  clean="${clean#/}"
+                  asset_url="${FRONTEND_URL}/${clean}"
+                fi
+                curl -sS -L --max-time 30 "${asset_url}" >> audit/bundle.js || true
+                printf '\n' >> audit/bundle.js
+              done < audit/script-sources.txt
+            fi
+
+            markers_ok=false
+            backend_ok=false
+            if [[ -s audit/bundle.js ]] \
+              && grep -Fq '/api/mlb/p1/v1/operating-envelope' audit/bundle.js \
+              && grep -Fq 'Condiciones Élite MLB' audit/bundle.js \
+              && grep -Fq 'Muestra insuficiente' audit/bundle.js \
+              && grep -Fq 'Sin regla candidata' audit/bundle.js \
+              && grep -Fq 'Candidata no confirmada' audit/bundle.js \
+              && grep -Fq 'Calidad élite respaldada' audit/bundle.js \
+              && grep -Fq 'No se muestra una condición élite' audit/bundle.js; then
+              markers_ok=true
+            fi
+            if [[ "${health_code}" == "200" ]] && node -e '
+              const fs=require("fs");
+              const h=JSON.parse(fs.readFileSync("audit/backend-health.json","utf8"));
+              process.exit(h.status === "healthy" && typeof h.commit === "string" && h.commit.length >= 7 ? 0 : 1);
+            '; then
+              backend_ok=true
+            fi
+
+            echo "Attempt ${attempt}/100: index=${index_code} health=${health_code} ledgerBefore=${ledger_before_code} envelope=${envelope_code} ledgerAfter=${ledger_after_code} markers=${markers_ok} backend=${backend_ok}"
+
+            if [[ "${index_code}" == "200" \
+              && "${health_code}" == "200" \
+              && "${ledger_before_code}" == "200" \
+              && "${envelope_code}" == "401" \
+              && "${ledger_after_code}" == "200" \
+              && "${markers_ok}" == "true" \
+              && "${backend_ok}" == "true" ]]; then
+              node <<'NODE'
+          const fs = require('node:fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('audit/backend-health.json');
+          const before = read('audit/ledger-before.json');
+          const after = read('audit/ledger-after.json');
+          const anonymous = read('audit/anonymous-envelope.json');
+          const bundle = fs.readFileSync('audit/bundle.js', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const markers = [
+            '/api/mlb/p1/v1/operating-envelope',
+            'Condiciones Élite MLB',
+            'Muestra insuficiente',
+            'Sin regla candidata',
+            'Candidata no confirmada',
+            'Calidad élite respaldada',
+            'No se muestra una condición élite',
+          ];
+
+          assert(health.status === 'healthy', `backend health=${health.status}`);
+          assert(before.success === true && after.success === true, 'ledger status failed');
+          assert(before.data?.schemaVersion === 'mlb-ledger.v1', `ledger schema=${before.data?.schemaVersion}`);
+          assert(before.data?.immutable === true && after.data?.immutable === true, 'ledger immutable=false');
+          assert(JSON.stringify(before.data) === JSON.stringify(after.data), 'ledger status changed after anonymous M3E GET');
+          assert(anonymous.success === false, 'anonymous operating envelope unexpectedly succeeded');
+          assert(/Authentication|session required/i.test(String(anonymous.error || '')), `envelope error=${anonymous.error}`);
+          for (const marker of markers) assert(bundle.includes(marker), `missing bundle marker: ${marker}`);
+
+          const evidence = {
+            schemaVersion: 'p1-m3e-live-frontend-diagnostic.v1',
+            frontendMarkersVerified: markers,
+            backendCommit: health.commit,
+            environment: health.environment,
+            endpoint: '/api/mlb/p1/v1/operating-envelope',
+            anonymousGetStatus: 401,
+            anonymousReadProtected: true,
+            ledger: {
+              schemaVersion: before.data.schemaVersion,
+              immutable: before.data.immutable,
+              predictions: before.data.predictions,
+              settlementEvents: before.data.settlementEvents,
+              unchangedAfterRequest: true,
+            },
+            syntheticCapturesCreatedByDiagnostic: 0,
+            picksCreatedByDiagnostic: 0,
+            settlementWritesByDiagnostic: 0,
+            betsPlaced: 0,
+            realFinancialExposure: 0,
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(evidence, null, 2));
+          console.log(JSON.stringify(evidence, null, 2));
+          NODE
+              rm -f audit/bundle.js audit/index.html audit/script-sources.txt audit/backend-health.json audit/ledger-before.json audit/ledger-after.json audit/anonymous-envelope.json
+              exit 0
+            fi
+
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for exact P1-M3E live frontend markers' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Verify diagnostic-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          [[ "$changed" == '.github/workflows/diagnostic-p1-m3e-live-frontend.yml' ]]
+      - name: Upload aggregate read-only diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3e-live-frontend-evidence
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
