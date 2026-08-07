@@ -1,0 +1,44 @@
+name: Research P1-M6A3B2C1 2025 Pregame Lineup Coverage
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p1-m6a3b2c1-2025-pregame-lineup-coverage.mjs'
+      - '.github/workflows/research-p1-m6a3b2c1-2025-pregame-lineup-coverage.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-2025-pregame-lineup-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Reproduce frozen B1 cohort and measure T-5 official lineup coverage
+        run: |
+          node --import tsx scripts/p1-m6a3b2c1-2025-pregame-lineup-coverage.mjs \
+            --start 2025-03-01 \
+            --end 2025-10-01 \
+            --cutoff-seconds 300 \
+            --concurrency 4 \
+            --out artifacts/p1-m6a3b2c1-2025-pregame-lineup-coverage
+      - name: Verify research run did not modify tracked source
+        run: git diff --exit-code
+      - name: Upload B2C1 2025 lineup coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m6a3b2c1-2025-pregame-lineup-coverage
+          path: artifacts/p1-m6a3b2c1-2025-pregame-lineup-coverage/
+          if-no-files-found: warn
+          retention-days: 30
