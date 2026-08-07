@@ -132,7 +132,7 @@ They are secondary diagnostics. B2A does not infer sportsbook edge from them.
 The B2A test suite must prove that:
 
 - a synthetic population with strong team attack/defense differences can clear the **family-wise paired interval**, not merely produce a positive point estimate;
-- homogeneous team evidence remains inconclusive rather than being promoted from point-estimate sign;
+- homogeneous team evidence can never become `SUPPORTED_IMPROVEMENT`; if estimating team factors adds stable noise it may correctly become `SUPPORTED_REGRESSION`, otherwise it remains `INCONCLUSIVE`;
 - the paired bootstrap is deterministic for identical evidence;
 - the Bonferroni interval is never narrower than the unadjusted 95% interval;
 - an unseen team falls back to neutral factors rather than fabricated history;
