@@ -15,7 +15,7 @@ test("perfect multiclass forecasts have zero proper-score loss and zero calibrat
   assert.equal(report.logLoss, 0);
   assert.equal(report.macroEce, 0);
   assert.deepEqual(report.classCounts, { WIN: 1, PUSH: 1, LOSS: 1 });
-  assert.equal(report.pushRate, 1 / 3);
+  assert.ok(report.pushRate != null && Math.abs(report.pushRate - (1 / 3)) < 1e-8);
   assert.ok(report.reliabilityBins.length > 0);
   assert.ok(report.reliabilityBins.every((bin) => bin.empiricalWilson95.lower >= 0 && bin.empiricalWilson95.upper <= 1));
 });
