@@ -1,0 +1,99 @@
+name: Validate P1-M6A3B1 MLB Historical OOS Baseline
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-historical-dataset.test.ts'
+      - 'server/mlb-market-historical-source.ts'
+      - 'server/mlb-market-historical-source.test.ts'
+      - 'server/mlb-market-historical-fit.ts'
+      - 'server/mlb-market-historical-fit.test.ts'
+      - 'scripts/p1-m6a3b1-historical-backfill.mjs'
+      - 'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
+      - 'tsconfig.p1-m6a3b1-historical-oos.json'
+      - '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned historical OOS surface
+        run: npx tsc -p tsconfig.p1-m6a3b1-historical-oos.json
+      - name: Run historical source, dataset and rolling-origin falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-fit.test.ts
+      - name: Preserve A3A distribution and calibration contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-run-distribution.test.ts \
+            server/mlb-market-calibration.test.ts
+      - name: Preserve ledger, backend and scientific regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify research-only and no-leakage boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          dataset='server/mlb-market-historical-dataset.ts'
+          source='server/mlb-market-historical-source.ts'
+          fit='server/mlb-market-historical-fit.ts'
+          script='scripts/p1-m6a3b1-historical-backfill.mjs'
+          docs='docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md'
+          grep -F 'MLB_STATS_API_OFFICIAL' "$dataset"
+          grep -F 'statsapi.mlb.com/api' "$source"
+          grep -F 'P1_M6A3B1_TIME_LEAKAGE_DETECTED' "$fit"
+          grep -F 'automaticModelSelectionAllowed: false' "$fit"
+          grep -F 'actionabilityAllowed: false' "$dataset" "$source" "$fit"
+          grep -F 'P1_M6A3B1_ACQUISITION_INCOMPLETE' "$script"
+          grep -Fi 'does not read sportsbook prices' "$docs"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$dataset" "$source" "$fit" "$script"
+      - name: Verify exact B1 scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3b1-mlb-historical-oos.yml' \
+            'docs/P1_M6A3B1_MLB_HISTORICAL_OOS_BASELINE.md' \
+            'scripts/p1-m6a3b1-historical-backfill.mjs' \
+            'server/mlb-market-historical-dataset.test.ts' \
+            'server/mlb-market-historical-dataset.ts' \
+            'server/mlb-market-historical-fit.test.ts' \
+            'server/mlb-market-historical-fit.ts' \
+            'server/mlb-market-historical-source.test.ts' \
+            'server/mlb-market-historical-source.ts' \
+            'tsconfig.p1-m6a3b1-historical-oos.json' | sort)
+          [[ "$changed" == "$expected" ]]
