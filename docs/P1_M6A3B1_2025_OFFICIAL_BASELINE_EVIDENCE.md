@@ -24,15 +24,53 @@ The temporary research runner queried MLB Stats API for regular-season games acr
 - Unique game dates: **184**
 - Rolling-origin leakage audit: **PASS**
 
-Dataset SHA-256:
+Stable canonical **outcome sample SHA-256**:
+
+`c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d`
+
+Original/legacy acquisition-snapshot dataset digest:
 
 `15827a9172824bb0863ab8c3ecd086184ada6a18fa99bbdee526a58f91aa8a4b`
+
+Original source-provenance fingerprint, recomputed from the preserved B1 artifact:
+
+`e0177d24ca14004b18ba8e65436c5ed50c5563a6a3e401d56ef909dbdb78e553`
 
 Research ZIP SHA-256:
 
 `3133365b4def2363a4b8b32e0640a7589ef796255a43f8aa9a2941b446baaddc`
 
 The downloaded ZIP and the three evidence files were independently re-hashed after the GitHub run. Their hashes matched both GitHub's artifact digest and the B1 manifest.
+
+## Provider-drift audit discovered during B2A
+
+The first real P1-M6A3B2A research attempt (Actions run `31196129039`) correctly stopped before model comparison because a fresh acquisition produced legacy `datasetDigest`:
+
+`97ba858f6c38d0578f24d4d7563ed94a4fc5b3b940bc1251fe158be223c8df70`
+
+instead of the original `15827a...` snapshot digest.
+
+That mismatch was investigated by downloading both research artifacts and comparing the two acquisitions directly, game by game and inning by inning. The audit found:
+
+- games compared: **2,430**;
+- canonical outcome differences: **0**;
+- inning-by-inning differences: **0**;
+- final-score differences: **0**;
+- raw MLB `sourceDigest` changed for **1,048 games**;
+- those provider-payload revisions propagated to **4,192 horizon rows** because every game has four horizon observations;
+- the stable outcome digest was identical in both downloads: `c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d`;
+- the fresh provider-provenance fingerprint was `61c3c66f98d7800501964fadb862d434bad8ebcbbdef12d053c3c546ed761f9d`.
+
+Therefore the old digest mismatch was caused by **mutable non-outcome provider metadata**, not by a change in the observed baseball results.
+
+This exposed a scientific identity defect in the original B1 digest design: `datasetDigest` mixed sample identity with raw-provider provenance. The design was corrected so that future model comparisons freeze `outcomeDigest` as the canonical sample identity while retaining provider drift in a separate `sourceProvenanceDigest`. The legacy digest remains recorded for backward audit continuity.
+
+The failed B2A research artifact is retained as diagnostic evidence only:
+
+- artifact ID: `9000943458`;
+- ZIP SHA-256: `ccca60dd57fe871cc7612db8a005c77f5843042126ebcfe7a59bf2a457341ac0`.
+
+No B2A model conclusion is taken from that failed run.
 
 ## Held-out design
 
@@ -93,6 +131,8 @@ The NB2 NRFI calibration result is strong evidence that Poisson's equidispersion
 
 P1-M6A3B1 supports keeping Negative Binomial NB2 as the distribution-family benchmark entering B2. It also confirms that the official historical acquisition and rolling-origin evaluation pipeline can process a complete 2,430-game MLB regular season without outcome leakage.
 
+The provider-drift audit additionally supports using canonical outcome identity rather than raw feed JSON identity for reproducible model comparisons.
+
 ## What this evidence does not support
 
 No team-specific prediction is certified by B1. B1 has no information about the teams' actual offensive/defensive strength, starting pitchers, confirmed lineups, bullpen condition, park, weather, injuries or current market price. It therefore cannot determine whether any side, total, run line, F3/F5 market or NRFI/YRFI price is a bet.
@@ -101,4 +141,4 @@ No team-specific prediction is certified by B1. B1 has no information about the 
 
 ## Required next phase
 
-P1-M6A3B2 must add pregame covariates with explicit historical `asOf` boundaries and compare every feature family against this frozen B1 baseline under the same rolling-origin design. A feature group is useful only if it improves held-out evidence; intuitive baseball relevance alone is not sufficient.
+P1-M6A3B2 must add pregame covariates with explicit historical `asOf` boundaries and compare every feature family against this frozen B1 **outcome sample** under the same rolling-origin design. A feature group is useful only if it improves held-out evidence; intuitive baseball relevance alone is not sufficient.
