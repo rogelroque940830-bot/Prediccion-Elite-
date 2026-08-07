@@ -20,11 +20,25 @@ This is aligned with the existing P1-M2A readiness contract, where official line
 
 The scheduled start comes from the official MLB schedule response and is tied to `gamePk`, home team ID and away team ID. Doubleheaders remain separate by official game identity and scheduled time.
 
+## Postponed and rescheduled schedule identity
+
+A full-range MLB schedule response can contain more than one historical listing for the **same `gamePk`**. This was observed directly for `gamePk 778443`: MLB retained a rain-postponed April 5 listing and the played April 6 listing under the same game identity.
+
+B2C1 v2 resolves that situation narrowly instead of taking the first or last row arbitrarily:
+
+1. every listing for the duplicated `gamePk` must have identical home and away team IDs;
+2. after exact duplicate rows are collapsed, there must be exactly one played-final listing with `codedGameState=F`;
+3. every other distinct listing must be explicitly obsolete because it is `codedGameState=D` or has a detailed state of `Postponed`, `Canceled`, `Cancelled`, or `Suspended`;
+4. only then is the played-final listing selected, with `scheduleResolution=RESCHEDULED_FINAL_SELECTED`;
+5. any team drift, two distinct finals, or final-plus-active/non-obsolete listing remains `P1_M6A3B2C1_SCHEDULE_IDENTITY_CONFLICT`.
+
+A unique schedule listing, including an exact duplicate that collapses to one identical row, is labeled `DIRECT`. The report publishes counts for both resolution methods. This resolution chooses the official scheduled start of the game that was actually played; it does **not** supply lineup data and does not relax the subsequent historical pregame checks.
+
 ## Fail-closed lineup definition
 
 A B2C1 snapshot is `COMPLETE` only when all of the following hold:
 
-1. the returned `gamePk`, home team ID and away team ID match the scheduled game;
+1. the returned `gamePk`, home team ID and away team ID match the resolved scheduled game;
 2. the historical snapshot is still pregame, not Live or Final;
 3. the home batting order contains exactly nine valid, unique MLB player IDs;
 4. the away batting order contains exactly nine valid, unique MLB player IDs.
@@ -39,9 +53,9 @@ Otherwise the snapshot is retained with an explicit state:
 
 Missing evidence is never replaced with a final lineup, a projected lineup, a name-based guess or a previous game's order.
 
-## One request per game at the research cutoff
+## One request per resolved game at the research cutoff
 
-For each scheduled regular-season game, B2C1 derives the UTC cutoff and requests exactly one:
+For each resolved regular-season `gamePk`, B2C1 derives the UTC cutoff from the selected official scheduled start and requests exactly one:
 
 `/api/v1.1/game/{gamePk}/feed/live?timecode=YYYYMMDD_HHMMSS`
 
@@ -51,10 +65,10 @@ The source uses bounded concurrency, bounded transient retries and a request tim
 
 B2C1 deliberately maintains two digests:
 
-- `lineupHistoryDigest` — canonical sporting identity based on game identity, scheduled start, cutoff, batting-order player IDs and availability classification;
+- `lineupHistoryDigest` — canonical sporting identity based on game identity, resolved scheduled start, schedule-resolution method, cutoff, batting-order player IDs and availability classification;
 - `sourceProvenanceDigest` — archival provenance that also reflects the raw provider payload and metadata timestamp.
 
-A provider metadata correction must not redefine the historical batting order if the sporting fields are unchanged. A real batting-order change must change the canonical lineup-history digest.
+A provider metadata correction must not redefine the historical batting order if the sporting fields are unchanged. A real batting-order change, a different resolved start, or a different resolution path must change the canonical lineup-history digest.
 
 ## Relationship to B1 and later research
 
