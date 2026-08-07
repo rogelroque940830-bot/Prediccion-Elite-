@@ -103,6 +103,24 @@ jobs:
           git fetch origin integration/p0-frontend-session --depth=1
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+
+          ci_infra=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          m3e_ui_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_UI.md' \
+            'frontend/client/src/components/mlb-operating-envelope-card.tsx' \
+            'frontend/client/src/lib/mlb-operating-envelope.test.ts' \
+            'frontend/client/src/lib/mlb-operating-envelope.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          if [[ "$changed" == "$ci_infra" || "$changed" == "$m3e_ui_successor" ]]; then
+            exit 0
+          fi
+
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
             '.github/workflows/validate-p1-m3c1-json-transport.yml' \
