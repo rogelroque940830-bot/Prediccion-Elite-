@@ -8,7 +8,9 @@
     "server/mlb-market-historical-dataset.ts",
     "server/mlb-market-historical-fit.ts",
     "server/mlb-market-team-strength.ts",
-    "server/mlb-market-team-strength.test.ts"
+    "server/mlb-market-team-strength.test.ts",
+    "server/mlb-market-team-strength-inference.ts",
+    "server/mlb-market-team-strength-inference.test.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
