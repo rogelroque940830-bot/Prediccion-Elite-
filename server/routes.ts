@@ -13,6 +13,7 @@ import { registerMlbP1ScientificCaptureRoutes } from "./mlb-p1-scientific-captur
 import { registerMlbP1EconomicReviewRoutes } from "./mlb-p1-economic-review-routes";
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
 import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
+import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe-odds-routes";
 import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
 import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
@@ -37,6 +38,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbP1EconomicReviewRoutes(app);
   registerMlbCoreRoutes(app);
   registerMlbF5OddsProtectionRoutes(app);
+  registerMlbP1M6a2MarketUniverseOddsRoutes(app);
   // S6B registers the resilient versions first; legacy duplicates remain only
   // for source compatibility and are not reached once S6B sends a response.
   registerWnbaS6bRoutes(app);
