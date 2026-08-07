@@ -68,7 +68,8 @@ export interface MlbHistoricalOosReport {
 }
 
 const LOG_EPS = 1e-15;
-const SUPPORT_TAIL_TARGET = 1e-8;
+// Must stay aligned with the A3A live-distribution numerical contract.
+const SUPPORT_TAIL_TARGET = 1e-6;
 const MAX_SUPPORT_RUNS = 60;
 const FAMILIES: MlbHistoricalModelFamily[] = ["POISSON", "NEGATIVE_BINOMIAL_NB2"];
 const HORIZONS: MlbProbabilityHorizon[] = ["FIRST_INNING", "FIRST_3", "FIRST_5", "FULL_GAME"];
