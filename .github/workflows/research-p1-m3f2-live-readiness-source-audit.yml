@@ -1,0 +1,225 @@
+name: Research P1-M3F2 Live Readiness Source Audit
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m3f2-live-readiness-source-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-live-readiness-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 66ce753a12ca5e80f4b9eafe597f2ff24919ce43
+      AUDIT_DATE: '2026-08-07'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for exact backend and inspect source envelopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const base = process.env.BACKEND_URL;
+          const expectedCommit = process.env.EXPECTED_BACKEND_COMMIT;
+          const date = process.env.AUDIT_DATE;
+          const timestampKeys = new Set([
+            'observedAt', 'generatedAt', 'fetchedAt', 'capturedAt',
+            'providerLastUpdate', 'updatedAt', 'lastUpdate', 'lastUpdated',
+          ]);
+
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const iso = (value) => {
+            const parsed = typeof value === 'string' ? Date.parse(value) : NaN;
+            return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+          };
+          const collectTimes = (value, depth = 0, seen = new Set()) => {
+            if (depth > 4 || !value || typeof value !== 'object' || seen.has(value)) return [];
+            seen.add(value);
+            const result = [];
+            for (const [key, child] of Object.entries(value)) {
+              if (timestampKeys.has(key)) {
+                const parsed = iso(child);
+                if (parsed) result.push({ key, value: parsed });
+              }
+              if (child && typeof child === 'object') result.push(...collectTimes(child, depth + 1, seen));
+            }
+            return result;
+          };
+          const request = async (path) => {
+            const started = Date.now();
+            try {
+              const response = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } });
+              const text = await response.text();
+              let data = null;
+              try { data = text ? JSON.parse(text) : null; } catch {}
+              return { path, status: response.status, ok: response.ok, durationMs: Date.now() - started, data };
+            } catch (error) {
+              return { path, status: 0, ok: false, durationMs: Date.now() - started, data: null, error: String(error?.message || error) };
+            }
+          };
+
+          let health = null;
+          for (let attempt = 1; attempt <= 100; attempt += 1) {
+            const call = await request('/health');
+            health = call.data;
+            if (call.ok && health?.status === 'healthy' && health?.commit === expectedCommit) break;
+            if (attempt === 100) throw new Error(`P1_M3F2_BACKEND_COMMIT_TIMEOUT:${health?.commit ?? call.status}`);
+            await sleep(10_000);
+          }
+
+          const slateCall = await request(`/api/mlb/p1/v1/slate?date=${date}`);
+          if (!slateCall.ok) throw new Error(`P1_M3F2_SLATE_HTTP_${slateCall.status}`);
+          const games = slateCall.data?.data?.games ?? slateCall.data?.games ?? [];
+          if (!Array.isArray(games) || !games.length) throw new Error('P1_M3F2_SLATE_EMPTY');
+          const preferred = games.find((game) => ['SCHEDULED','PREGAME'].includes(String(game.state || '').toUpperCase())) ?? games[0];
+          const gamePk = Number(preferred?.gamePk);
+          if (!Number.isInteger(gamePk) || gamePk <= 0) throw new Error('P1_M3F2_GAME_PK_INVALID');
+
+          const advancedPaths = [
+            `/api/mlb/quality/${gamePk}`,
+            `/api/mlb/statcast-matchup/${gamePk}`,
+            `/api/mlb/discipline-speed/${gamePk}`,
+            `/api/mlb/sos/${gamePk}`,
+            `/api/mlb/advanced/${gamePk}`,
+          ];
+          const advancedCalls = await Promise.all(advancedPaths.map(request));
+          const bullpenCall = await request(`/api/mlb/bullpen-status/${gamePk}`);
+          const aggregateCall = await request(`/api/mlb/all?date=${date}`);
+
+          const summarizeCall = (call) => {
+            const times = collectTimes(call.data);
+            return {
+              endpoint: call.path.replace(String(gamePk), ':gamePk'),
+              httpStatus: call.status,
+              ok: call.ok,
+              durationMs: call.durationMs,
+              recognizedTimestampCount: times.length,
+              recognizedTimestampKeys: [...new Set(times.map((item) => item.key))].sort(),
+              latestRecognizedTimestamp: times.map((item) => item.value).sort().at(-1) ?? null,
+              topLevelSchemaVersion: call.data?.schemaVersion ?? call.data?.data?.schemaVersion ?? null,
+              topLevelSourceStatus: call.data?.sourceStatus ?? call.data?.status ?? null,
+              errorCode: call.data?.code ?? null,
+            };
+          };
+
+          const advanced = advancedCalls.map(summarizeCall);
+          const allAdvancedSuccessful = advanced.every((item) => item.ok);
+          const allAdvancedUntimed = advanced.every((item) => item.recognizedTimestampCount === 0);
+          const anyAdvancedTimed = advanced.some((item) => item.recognizedTimestampCount > 0);
+
+          const bullpenSummary = summarizeCall(bullpenCall);
+          const bullpenSides = bullpenCall.ok ? ['home','away'].map((side) => ({
+            side,
+            sourceStatus: bullpenCall.data?.[side]?.sourceStatus ?? null,
+            generatedAt: iso(bullpenCall.data?.[side]?.generatedAt),
+            provenanceSchemaVersion: bullpenCall.data?.[side]?.provenance?.schemaVersion ?? null,
+            provenanceStatus: bullpenCall.data?.[side]?.provenance?.status ?? null,
+            failureDisposition: bullpenCall.data?.[side]?.provenance?.failureDisposition ?? null,
+          })) : [];
+
+          let injury = {
+            aggregateHttpStatus: aggregateCall.status,
+            aggregateOk: aggregateCall.ok,
+            matchingGameFound: false,
+            sideStatuses: [],
+          };
+          if (aggregateCall.ok) {
+            const aggregateGames = aggregateCall.data?.games ?? aggregateCall.data?.data?.games ?? [];
+            const match = Array.isArray(aggregateGames)
+              ? aggregateGames.find((game) => Number(game?.gameId ?? game?.gamePk) === gamePk)
+              : null;
+            if (match) {
+              injury.matchingGameFound = true;
+              injury.sideStatuses = ['home','away'].map((side) => {
+                const data = match?.[`${side}InjuryData`] ?? null;
+                return {
+                  side,
+                  status: data?.status ?? null,
+                  officialValidationStatus: data?.officialValidationStatus ?? null,
+                  stale: data?.stale ?? null,
+                  fetchedAt: iso(data?.fetchedAt),
+                  sourceErrorCount: Array.isArray(data?.sourceErrors) ? data.sourceErrors.length : null,
+                  injuryCount: Array.isArray(match?.[`${side}Injuries`]) ? match[`${side}Injuries`].length : null,
+                };
+              });
+            }
+          }
+
+          const result = {
+            schemaVersion: 'p1-m3f2-live-readiness-source-audit.v1',
+            generatedAt: new Date().toISOString(),
+            backendCommit: health.commit,
+            environment: health.environment,
+            auditDate: date,
+            selectedGame: {
+              gamePkSha256: await (async () => {
+                const bytes = new TextEncoder().encode(String(gamePk));
+                const digest = await crypto.subtle.digest('SHA-256', bytes);
+                return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2,'0')).join('');
+              })(),
+              state: preferred?.state ?? null,
+            },
+            advancedFactors: {
+              requiredEndpointCount: advanced.length,
+              successfulEndpointCount: advanced.filter((item) => item.ok).length,
+              allSuccessful: allAdvancedSuccessful,
+              anyRecognizedTimestamp: anyAdvancedTimed,
+              allSuccessfulButUntimed: allAdvancedSuccessful && allAdvancedUntimed,
+              endpoints: advanced,
+            },
+            bullpen: {
+              ...bullpenSummary,
+              sides: bullpenSides,
+              bothSidesCertified: bullpenSides.length === 2 && bullpenSides.every((side) =>
+                side.sourceStatus === 'CERTIFIED'
+                && side.provenanceStatus === 'CERTIFIED'
+                && side.provenanceSchemaVersion === 'courtedge-mlb-bullpen-evidence.v1'
+                && side.generatedAt != null
+                && side.failureDisposition === 'THROW_FAIL_CLOSED'),
+            },
+            injuries: injury,
+            interpretationBoundary: {
+              changesSources: false,
+              changesReadinessPolicy: false,
+              changesModel: false,
+              changesThresholds: false,
+              authorizesPromotion: false,
+            },
+            safety: {
+              publicReadOnlyEndpointsOnly: true,
+              predictionsCreated: 0,
+              settlementsCreated: 0,
+              betsPlaced: 0,
+              realFinancialExposure: 0,
+            },
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({
+            backendCommit: result.backendCommit,
+            advancedFactors: result.advancedFactors,
+            bullpen: {
+              httpStatus: result.bullpen.httpStatus,
+              recognizedTimestampKeys: result.bullpen.recognizedTimestampKeys,
+              bothSidesCertified: result.bullpen.bothSidesCertified,
+              sides: result.bullpen.sides,
+            },
+            injuries: result.injuries,
+          }, null, 2));
+          NODE
+      - name: Upload aggregate source audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3f2-live-readiness-source-audit
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
