@@ -8,7 +8,7 @@ The source exists so B2B2 can later estimate a pitcher's pregame strength using 
 
 ## Official identity contract
 
-For each side, the parser reads the official MLB boxscore pitching order. The first pitcher in that order is the starter candidate. When the game-level `gamesStarted=1` flag is available, it must identify the same pitcher; disagreement fails closed. If the explicit game-started flag is absent, the source may use the first official pitching-order entry but records the weaker identity method separately.
+For each side, the parser reads the official MLB boxscore pitching order and the game-level `gamesStarted=1` flag. Normally both identify the first pitcher. A narrow official exception is allowed when MLB leaves a planned pitcher ahead of the actual starter in the pitching list even though that planned pitcher recorded exactly `0.0 IP`, `0 battersFaced`, and `0 numberOfPitches`: in that case the unique `gamesStarted=1` pitcher later in the order is the effective starter and the identity method is recorded as `GAME_STARTED_FLAG_AFTER_ZERO_APPEARANCE_LISTING`. If any preceding listed pitcher recorded an out, faced a batter, or threw a pitch, disagreement still fails closed. If the explicit game-started flag is absent, the source may use the first official pitching-order entry but records the weaker identity method separately.
 
 This explicitly supports openers: an opener is still the official starting pitcher for the game's starter identity even if he records few outs.
 
