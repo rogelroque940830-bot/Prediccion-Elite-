@@ -14,19 +14,12 @@ function metrics(m: MlbPremiumNoUltraMetricSummary, calibration = false): string
   return `n=${m.settled} · ${m.wins}-${m.losses} · Hit ${fmt(m.hitRatePct, 1, "%")} · ROI ${fmt(m.flatStakeRoiPct, 1, "%")} · P/L ${profit} · CLV ${fmt(m.meanClvPp, 2, " pp")} · Brier ${fmt(m.brierScore, 4)} · Log ${fmt(m.logLoss, 4)}${cal}`;
 }
 
-export function MlbPremiumNoUltraCard({ report, isFetching, onRefresh }: {
-  report: MlbPremiumNoUltraReport;
-  isFetching?: boolean;
-  onRefresh?: () => void;
-}) {
+export function MlbPremiumNoUltraCard({ report }: { report: MlbPremiumNoUltraReport }) {
   const p = report.preregistration;
   const roi = report.inference.candidateRoiPct;
   const delta = report.inference.candidateMinusControlRoiPp;
   return <section className="mt-4 space-y-2 rounded-xl border p-3">
-    <div className="flex justify-between gap-2">
-      <div><strong>Edge Prospectivo F5 · PREMIUM sin ULTRA</strong><p className="text-sm">{STATES[report.state]}</p></div>
-      {onRefresh && <button type="button" className="border px-2 text-xs" onClick={onRefresh} disabled={isFetching}>Actualizar</button>}
-    </div>
+    <div><strong>Edge Prospectivo F5 · PREMIUM sin ULTRA</strong><p className="text-sm">{STATES[report.state]}</p></div>
     <p className={BOX}>
       FINAL · 1 juego=1 obs · corte 08/08/2026 · 13-4 excluido.<br />
       Cand. {report.cohort.candidateSettled}/{p.minimumCandidateSettled} settled, {report.cohort.candidateDates}/{p.minimumCandidateDates} fechas · Control {report.cohort.controlSettled}/{p.minimumControlSettled} settled, {report.cohort.controlDates}/{p.minimumControlDates} fechas
