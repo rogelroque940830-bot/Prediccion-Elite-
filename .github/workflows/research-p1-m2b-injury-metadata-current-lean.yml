@@ -1,0 +1,155 @@
+name: Research P1-M2B Current Injury Metadata Lean
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-injury-metadata-current-lean.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-current-injury-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-injury-metadata-current-lean.yml' ]]
+
+      - name: Audit anonymous injury metadata causes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const env=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if(env?.success!==true||!Array.isArray(env?.data?.games))throw new Error('INJURY_META_SLATE_INVALID');
+          const slate=env.data,now=Date.now();
+          const candidates=slate.games
+            .filter(g=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
+            .sort((a,b)=>{
+              const ac=String(a.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              const bc=String(b.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              if(ac!==bc)return ac-bc;
+              const ams=a.startTime?Date.parse(a.startTime):Infinity,bms=b.startTime?Date.parse(b.startTime):Infinity;
+              return Math.abs(ams-now)-Math.abs(bms-now);
+            }).slice(0,4);
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          const clean=v=>String(v??'').trim().toUpperCase();
+          const result={
+            schemaVersion:'p1-m2b-current-injury-metadata-lean.v1',
+            generatedAt:new Date().toISOString(),
+            samples:[],
+            aggregate:{
+              measuredGames:0,measuredSides:0,statusCounts:{},phaseBCoverageCounts:{},
+              alreadyVerifiedSides:0,partialSides:0,
+              partialOnlyOfficialGapNoRejects:0,partialWithRejectedIdentity:0,partialWithSourceHealthProblem:0,
+              partialWithBothOfficialGapAndRejected:0,partialOther:0,
+              officialOnlyTotal:0,rejectedIdentityTotal:0,sourceErrorTotal:0,
+              freshOfficialVerifiedSides:0
+            },
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false}
+          };
+          const cache=new Map();
+          const fetchAggregate=date=>{
+            if(cache.has(date))return cache.get(date);
+            const path=`private/all-${date}.json`;
+            const code=execFileSync('curl',['-sS','-o',path,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/all?date=${encodeURIComponent(date)}`],{encoding:'utf8'}).trim();
+            if(code!=='200')throw new Error(`INJURY_META_ALL_HTTP_${code}`);
+            const body=JSON.parse(fs.readFileSync(path,'utf8'));
+            cache.set(date,body);return body;
+          };
+          const findGame=(payload,gamePk)=>{
+            const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
+            return games.find(g=>Number(g?.gamePk??g?.gameId??g?.id)===Number(gamePk))||null;
+          };
+          for(let i=0;i<candidates.length;i++){
+            const c=candidates[i];
+            const date=String(c.officialDate||slate.date||'').slice(0,10);
+            let ag;
+            try{ag=findGame(fetchAggregate(date),c.gamePk);}catch{result.samples.push({gameOrdinal:i+1,requestStatus:'FETCH_FAILED'});continue;}
+            if(!ag){result.samples.push({gameOrdinal:i+1,requestStatus:'GAME_MISSING'});continue;}
+            const sample={gameOrdinal:i+1,requestStatus:'OK',sides:{}};
+            for(const side of ['home','away']){
+              const meta=ag?.[`${side}InjuryData`]||{};
+              const status=clean(meta.status)||'MISSING';
+              const officialValidationStatus=clean(meta.officialValidationStatus)||'MISSING';
+              const stale=meta.stale===true;
+              const sourceErrorCount=Array.isArray(meta.sourceErrors)?meta.sourceErrors.length:0;
+              const rejectedCount=Math.max(0,Number(meta.rejectedCount)||0);
+              const officialOnly=Math.max(0,Number(meta?.shadowSummary?.officialOnly)||0);
+              const phaseBCoverage=clean(meta?.phaseB?.coverage)||'MISSING';
+              const sourceHealthy=!stale&&officialValidationStatus==='VERIFIED'&&sourceErrorCount===0;
+              let cause='NONE';
+              if(status==='PARTIAL'){
+                result.aggregate.partialSides++;
+                if(!sourceHealthy){cause='SOURCE_HEALTH';result.aggregate.partialWithSourceHealthProblem++;}
+                else if(rejectedCount>0&&officialOnly>0){cause='OFFICIAL_GAP_AND_REJECTED';result.aggregate.partialWithBothOfficialGapAndRejected++;}
+                else if(rejectedCount>0){cause='REJECTED_IDENTITY';result.aggregate.partialWithRejectedIdentity++;}
+                else if(officialOnly>0){cause='OFFICIAL_ONLY_GAP';result.aggregate.partialOnlyOfficialGapNoRejects++;}
+                else{cause='OTHER';result.aggregate.partialOther++;}
+              }
+              bump(result.aggregate.statusCounts,status);
+              bump(result.aggregate.phaseBCoverageCounts,phaseBCoverage);
+              result.aggregate.measuredSides++;
+              if(status==='VERIFIED')result.aggregate.alreadyVerifiedSides++;
+              if(sourceHealthy)result.aggregate.freshOfficialVerifiedSides++;
+              result.aggregate.officialOnlyTotal+=officialOnly;
+              result.aggregate.rejectedIdentityTotal+=rejectedCount;
+              result.aggregate.sourceErrorTotal+=sourceErrorCount;
+              sample.sides[side]={status,officialValidationStatus,stale,sourceErrorCount,rejectedCount,officialOnly,phaseBCoverage,cause,sourceHealthy};
+            }
+            result.aggregate.measuredGames++;
+            result.samples.push(sample);
+          }
+          result.conclusion={
+            measured:result.aggregate.measuredGames>0,
+            sampledGames:result.aggregate.measuredGames,
+            anyRecoverableOfficialOnlySides:result.aggregate.partialOnlyOfficialGapNoRejects>0,
+            recoverableOfficialOnlySideCount:result.aggregate.partialOnlyOfficialGapNoRejects,
+            anyRejectedIdentitySides:(result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0,
+            anySourceHealthProblems:result.aggregate.partialWithSourceHealthProblem>0,
+            safeToTreatAllPartialAsFresh:false,
+            safeToIgnoreRejectedExternalRecords:false,
+            nextStep:result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':'INVESTIGATE_REJECTED_IDENTITIES_OR_SOURCE_HEALTH'
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"teamId"|"playerId"|"name"|"homeTeam"|"awayTeam"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized injury metadata evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-current-injury-metadata-lean
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
