@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "p1-m2b-statcast-direct-gap-evidence.v1",
+  "generatedAt": "2026-08-08T20:16:12.774Z",
+  "deployedCommit": "97b4a9936df0dd735bea991a3018e52e32e974a5",
+  "sourceResearch": {
+    "pullRequest": 423,
+    "workflowRun": 31276486845,
+    "artifact": 9027145594
+  },
+  "rulesPreserved": {
+    "minPitchesPerPitchType": 30,
+    "requiredArsenalCoveragePct": 60,
+    "certificationRequiresNineDirect": true
+  },
+  "sample": {
+    "games": 4,
+    "lineupSides": 8,
+    "confirmedLineupSides": 8,
+    "engineNineDirectSides": 3
+  },
+  "directCoverageDiagnosis": {
+    "decomposableNonDirectBatters": 5,
+    "pitchTypeShortfallHistogram": {
+      "2": 2,
+      "3": 3
+    },
+    "onePitchTypeShortBatters": 0,
+    "priorSeasonWouldUpgradeBatters": 0,
+    "projectedNineDirectSidesWithPriorSeasonFallback": 3,
+    "projectedBothSidesNineDirectGamesWithPriorSeasonFallback": 0,
+    "separateZeroArsenalSides": 1
+  },
+  "interpretation": {
+    "missingDirectMostlyNearThreshold": false,
+    "priorSeasonFallbackAddsCoverage": false,
+    "zeroDirectCaseCanBeExplainedByBatterCoverage": false,
+    "zeroDirectCaseHasSeparateStarterArsenalAvailabilityBlocker": true,
+    "supportsLoweringThirtyPitchMinimum": false,
+    "supportsLoweringSixtyPctArsenalRequirement": false,
+    "supportsLoweringNineDirectCertificationRequirement": false,
+    "supportsRuntimeChangeFromThisEvidence": false
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "rawIdentityPersisted": false,
+    "modelFormulaChanged": false,
+    "thresholdChanged": false
+  }
+}
