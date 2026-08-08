@@ -1,0 +1,88 @@
+name: Research P0 Railway CLI Availability
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p0-railway-cli-availability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  railway-cli-availability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p0-railway-cli-availability.yml' ]]
+
+      - name: Inspect secret availability and Railway CLI help without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          has_token=false
+          has_api_token=false
+          [[ -n "${RAILWAY_TOKEN:-}" ]] && has_token=true
+          [[ -n "${RAILWAY_API_TOKEN:-}" ]] && has_api_token=true
+
+          cli_ok=false
+          cli_version='unavailable'
+          if cli_version=$(npx -y @railway/cli@latest --version 2>/dev/null); then
+            cli_ok=true
+            npx -y @railway/cli@latest --help > audit/cli-help.txt 2>&1 || true
+            npx -y @railway/cli@latest link --help > audit/link-help.txt 2>&1 || true
+            npx -y @railway/cli@latest redeploy --help > audit/redeploy-help.txt 2>&1 || true
+            npx -y @railway/cli@latest status --help > audit/status-help.txt 2>&1 || true
+          else
+            printf '%s\n' 'Railway CLI unavailable' > audit/cli-help.txt
+            : > audit/link-help.txt
+            : > audit/redeploy-help.txt
+            : > audit/status-help.txt
+          fi
+
+          HAS_TOKEN="$has_token" HAS_API_TOKEN="$has_api_token" CLI_OK="$cli_ok" CLI_VERSION="$cli_version" node <<'NODE'
+          const fs=require('fs');
+          const result={
+            schemaVersion:'p0-railway-cli-availability.v1',
+            generatedAt:new Date().toISOString(),
+            hasRailwayToken:process.env.HAS_TOKEN==='true',
+            hasRailwayApiToken:process.env.HAS_API_TOKEN==='true',
+            railwayCliAvailable:process.env.CLI_OK==='true',
+            railwayCliVersion:String(process.env.CLI_VERSION||'unavailable').trim(),
+            credentialsExposed:false,
+            recoveryCanPotentiallyProceedFromGithubActions:(process.env.HAS_TOKEN==='true'||process.env.HAS_API_TOKEN==='true')&&process.env.CLI_OK==='true'
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          NODE
+
+      - name: Assert no secret material leaked
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -F "${RAILWAY_TOKEN:-__NO_TOKEN__}" audit >/dev/null 2>&1 || [[ -z "${RAILWAY_TOKEN:-}" ]]
+          ! grep -R -F "${RAILWAY_API_TOKEN:-__NO_API_TOKEN__}" audit >/dev/null 2>&1 || [[ -z "${RAILWAY_API_TOKEN:-}" ]]
+
+      - name: Upload sanitized Railway capability evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-railway-cli-availability
+          path: audit/
+          if-no-files-found: error
+          retention-days: 7
