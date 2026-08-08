@@ -21,6 +21,17 @@ This package restores exactly those runtime dependencies inside the extracted ma
 
 No advanced-factor formula, park factor, weather adjustment, opener adjustment, probability, recommendation threshold or betting behavior changes.
 
+## Typecheck debt exposed by the repair
+
+The new focused TypeScript gate initially failed on two pre-existing `TS1117` duplicate-object-key errors in `PARK_FACTORS`: numeric keys `32` and `19` each appeared twice in the same object literal.
+
+Those earlier entries were already unreachable at runtime because JavaScript object-literal semantics keep the later property for the same key. The cleanup therefore removes only the two shadowed earlier entries and preserves the exact effective values that existed before this PR:
+
+- key `19` remains `Coors Field` with run factor `115`;
+- key `32` remains `American Family Fld` with run factor `100`.
+
+The regression test asserts those effective values explicitly. This is compiler hygiene only; it does not reinterpret venue identities or change any park-factor value that the running application could previously observe.
+
 ## Regression protection
 
 The focused runtime test registers the actual market-support route and invokes `/api/mlb/advanced/:gamePk` with deterministic mocked MLB responses. It proves the route reaches all of the formerly broken dependencies:
@@ -29,6 +40,8 @@ The focused runtime test registers the actual market-support route and invokes `
 2. venue roof metadata;
 3. both probable-pitcher season-stat requests using the dynamic current season;
 4. successful advanced response generation without either missing-identifier error.
+
+The same test also proves the duplicate-key cleanup preserves the effective park-factor values for keys `19` and `32`.
 
 A dedicated TypeScript configuration now includes `market-support-routes.ts`. This closes the prior S3 verification gap where the production bundle could contain an unresolved identifier because the route module was not part of the focused typecheck.
 
