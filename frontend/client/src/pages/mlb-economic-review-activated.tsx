@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MlbOperatingEnvelopeCard } from "@/components/mlb-operating-envelope-card";
+import { MlbPremiumNoUltraCard } from "@/components/mlb-premium-no-ultra-card";
 import { MlbRealCohortActivationCard } from "@/components/mlb-real-cohort-activation-card";
 import { fetchJson } from "@/lib/queryClient";
 import {
@@ -14,6 +15,10 @@ import {
   MLB_P1_M3E_ENDPOINT,
   parseMlbP1M3eEnvelope,
 } from "@/lib/mlb-operating-envelope";
+import {
+  MLB_PREMIUM_NO_ULTRA_ENDPOINT,
+  parseMlbPremiumNoUltraEnvelope,
+} from "@/lib/mlb-premium-no-ultra-prospective";
 import { parseMlbP1M5aActivation } from "@/lib/mlb-real-cohort-activation";
 import MlbEconomicReview from "@/pages/mlb-economic-review";
 
@@ -45,6 +50,15 @@ export default function MlbEconomicReviewActivated() {
       const raw = await fetchJson<unknown>(MLB_P1_M3E_ENDPOINT);
       return parseMlbP1M3eEnvelope(raw).data;
     },
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+
+  const premiumNoUltraQuery = useQuery({
+    queryKey: ["p1-premium-no-ultra-prospective"],
+    queryFn: async () => parseMlbPremiumNoUltraEnvelope(
+      await fetchJson<unknown>(MLB_PREMIUM_NO_ULTRA_ENDPOINT),
+    ).data,
     staleTime: 30_000,
     refetchOnMount: "always",
   });
@@ -146,6 +160,10 @@ export default function MlbEconomicReviewActivated() {
             </CardContent>
           </Card>
         )}
+
+        {premiumNoUltraQuery.isLoading && <p className="mt-4 text-xs text-muted-foreground">Actualizando edge prospectivo F5…</p>}
+        {premiumNoUltraQuery.data && <MlbPremiumNoUltraCard report={premiumNoUltraQuery.data} />}
+        {premiumNoUltraQuery.isError && <p className="mt-4 border p-2 text-xs text-red-100">Edge F5 no disponible · {premiumNoUltraQuery.error instanceof Error ? premiumNoUltraQuery.error.message : "respuesta inválida"}.</p>}
       </div>
       <MlbEconomicReview />
     </>
