@@ -55,12 +55,20 @@ jobs:
           testfile='server/mlb-statcast-certifier-source-alignment-routes.test.ts'
           docs='docs/P1_M2B_STATCAST_CERTIFIER_SOURCE_ALIGNMENT.md'
 
-          grep -F 'coverage: role === "batter" ? "INCLUSIVE" : "QUALIFIED"' "$module"
           grep -F 'createStatcastIdentityRouteService' "$module"
           grep -F 'registerMlbStatcastCertifierSourceAlignmentMiddleware(app);' "$readiness"
-          grep -F 'source alignment must not mutate engine numbers' "$testfile"
           grep -F '9/9 DIRECT batter coverage' "$docs"
           grep -F 'exact reproduction' "$docs"
+
+          if grep -Fq 'maskInclusiveBatterCsvForQualifiedTeamProxy' "$module"; then
+            grep -F 'coverage: role === "batter" ? batterCoverage : "QUALIFIED"' "$module"
+            grep -F 'maskInclusiveBatterCsvForQualifiedTeamProxy' "$module"
+            grep -F 'Inclusive-only batter rows remain available for DIRECT but lose TEAM_PROXY eligibility' "$testfile"
+            grep -F 'Qualified batter source failure fails closed' "$testfile"
+          else
+            grep -F 'coverage: role === "batter" ? "INCLUSIVE" : "QUALIFIED"' "$module"
+            grep -F 'source alignment must not mutate engine numbers' "$testfile"
+          fi
 
           ! grep -Ei 'appendPrediction|appendSettlement|placeBet|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticPromotionAllowed:[[:space:]]*true' "$module" "$readiness"
       - name: Verify exact protected successor scope
