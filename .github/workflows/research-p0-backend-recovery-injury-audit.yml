@@ -13,7 +13,7 @@ permissions:
 jobs:
   verify-recovery-and-injuries:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       BACKEND_URL: https://web-p0-integration.up.railway.app
       EXPECTED_BACKEND_COMMIT: b9c403f5682792f397d814451a94b1467c8253ef
@@ -33,27 +33,22 @@ jobs:
           changed=$(git diff --name-only "$base...$head" | sort)
           [[ "$changed" == '.github/workflows/research-p0-backend-recovery-injury-audit.yml' ]]
 
-      - name: Wait for recovered exact backend and audit injury metadata
+      - name: Check recovered backend once and audit injury metadata if available
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p audit private
           chmod 700 private
 
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          health_code=${health_code:-000}
           observed=''
-          health_code='000'
-          for attempt in $(seq 1 30); do
-            health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 30 "${BACKEND_URL}/health" || true)
-            health_code=${health_code:-000}
-            if [[ "$health_code" == '200' ]]; then
-              observed=$(node -e "const fs=require('fs');try{const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));}catch{}")
-              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
-            fi
-            sleep 10
-          done
+          if [[ "$health_code" == '200' ]]; then
+            observed=$(node -e "const fs=require('fs');try{const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));}catch{}")
+          fi
 
-          all_code='000'
           slate_code='000'
+          all_code='000'
           if [[ "$health_code" == '200' && "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then
             slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 60 "${BACKEND_URL}/api/mlb/p1/v1/slate" || true)
             all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 180 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}" || true)
@@ -70,7 +65,7 @@ jobs:
           const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
           const clean=v=>String(v??'').trim().toUpperCase();
           const result={
-            schemaVersion:'p0-backend-recovery-injury-audit.v1',
+            schemaVersion:'p0-backend-recovery-injury-audit.v2',
             generatedAt:new Date().toISOString(),
             auditDate:process.env.AUDIT_DATE,
             expectedCommit:expected,
@@ -87,7 +82,6 @@ jobs:
             },
             safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false}
           };
-
           if(result.exactCommitDeployed&&endpointStatus.all==='200'){
             let payload=null;
             try{payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
@@ -130,8 +124,7 @@ jobs:
               if(validSideCount>0){result.aggregate.measuredGames++;result.samples.push(sample);}
             }
           }
-
-          const backendRecovered=result.exactCommitDeployed&&endpointStatus.health==='200';
+          const backendRecovered=result.exactCommitDeployed;
           const auditUsable=backendRecovered&&endpointStatus.all==='200'&&result.aggregate.measuredGames>0;
           result.conclusion={
             backendRecovered,
@@ -144,7 +137,7 @@ jobs:
             anySourceHealthProblems:auditUsable&&result.aggregate.partialWithSourceHealthProblem>0,
             safeToTreatAllPartialAsFresh:false,
             safeToIgnoreRejectedExternalRecords:false,
-            nextStep:!backendRecovered?'BACKEND_RECOVERY_FAILED':(!auditUsable?'RESTORE_MLB_ALL_ENDPOINT':(result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':((result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER')))
+            nextStep:!backendRecovered?'RAILWAY_SERVICE_STILL_UNAVAILABLE':(!auditUsable?'MLB_ALL_NOT_AVAILABLE':(result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':((result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER')))
           };
           fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
           console.log(JSON.stringify({endpointStatus:result.endpointStatus,exactCommitDeployed:result.exactCommitDeployed,aggregate:result.aggregate,conclusion:result.conclusion},null,2));
