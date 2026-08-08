@@ -1,0 +1,87 @@
+name: Validate P1-M2B Statcast Split Source Provider
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-statcast-certifier-source-alignment-routes.ts'
+      - 'server/mlb-statcast-certifier-source-alignment-routes.test.ts'
+      - 'docs/P1_M2B_STATCAST_SPLIT_SOURCE_PROVIDER.md'
+      - '.github/workflows/validate-p1-m2b-statcast-split-source-provider.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-statcast-split-source-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck split-source successor
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --esModuleInterop --skipLibCheck --types node server/mlb-statcast-certifier-source-alignment-routes.ts server/mlb-statcast-certifier-source-alignment-routes.test.ts
+      - name: Run split-source falsifications
+        run: |
+          npx tsx --test server/mlb-statcast-certifier-source-alignment-routes.test.ts
+          npx tsx --test server/mlb-statcast-savant-source.test.ts
+          npx tsx --test server/mlb-statcast-matchup-certifier.test.ts
+          npx tsx --test server/mlb-statcast-matchup-identity-routes.test.ts
+          npx tsx --test server/mlb-statcast-matchup-coverage.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Verify modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify exact split-source and fail-closed boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='server/mlb-statcast-certifier-source-alignment-routes.ts'
+          testfile='server/mlb-statcast-certifier-source-alignment-routes.test.ts'
+          docs='docs/P1_M2B_STATCAST_SPLIT_SOURCE_PROVIDER.md'
+
+          grep -F 'maskInclusiveBatterCsvForQualifiedTeamProxy' "$module"
+          grep -F 'values[inclusiveIndex.team_name_alt] = ""' "$module"
+          grep -F 'rewriteStatcastCertifierSavantUrl(rawUrl, "INCLUSIVE")' "$module"
+          grep -F 'rewriteStatcastCertifierSavantUrl(rawUrl, "QUALIFIED")' "$module"
+          grep -F 'if (!qualifiedResponse.ok) return qualifiedResponse' "$module"
+          grep -F 'masking eligibility must not mutate xwOBA' "$testfile"
+          grep -F 'certifier itself is not replaced and its existing certification cache remains active' "$docs"
+          grep -F '9/9 DIRECT requirement' "$docs"
+
+          ! grep -Ei 'appendPrediction|appendSettlement|placeBet|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticPromotionAllowed:[[:space:]]*true' "$module"
+      - name: Verify exact four-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-statcast-split-source-provider.yml' \
+            'docs/P1_M2B_STATCAST_SPLIT_SOURCE_PROVIDER.md' \
+            'server/mlb-statcast-certifier-source-alignment-routes.test.ts' \
+            'server/mlb-statcast-certifier-source-alignment-routes.ts' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M2B Statcast split-source successor scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+
+          ! grep -Fxq 'server/mlb-statcast-matchup-certifier.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup-identity-routes.ts' <<< "$changed"
