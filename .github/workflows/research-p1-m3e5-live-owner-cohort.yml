@@ -1,0 +1,254 @@
+name: Research P1-M3E.5 Live Owner Cohort
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m3e5-live-owner-cohort.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research-live-owner-cohort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 9205dfc6567ead4e8b27b84f4440a370ab314a22
+      COURTEDGE_WRITE_TOKEN: ${{ secrets.COURTEDGE_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected='.github/workflows/research-p1-m3e5-live-owner-cohort.yml'
+          [[ "$changed" == "$expected" ]]
+      - name: Wait for exact merged backend and measure owner cohort privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+
+          if [[ -z "${COURTEDGE_WRITE_TOKEN:-}" ]]; then
+            echo 'P1_M3E5_SERVICE_TOKEN_UNAVAILABLE' >&2
+            exit 42
+          fi
+
+          deployed=''
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              deployed=$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('audit/health.json','utf8')); process.stdout.write(String(j.commit||''));")
+              if [[ "$deployed" == "$EXPECTED_BACKEND_COMMIT" ]]; then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$deployed" == "$EXPECTED_BACKEND_COMMIT" ]]
+
+          before_code=$(curl -sS -o audit/ledger-status-before.json -w '%{http_code}' --max-time 25 \
+            "${BACKEND_URL}/api/mlb/ledger/v1/status")
+          anon_code=$(curl -sS -o audit/anonymous-frozen-route.json -w '%{http_code}' --max-time 25 \
+            "${BACKEND_URL}/api/mlb/p1/v1/operating-envelope-frozen")
+          export_code=$(curl -sS -o private/owner-ledger.jsonl -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${COURTEDGE_WRITE_TOKEN}" \
+            "${BACKEND_URL}/api/mlb/ledger/v1/export?format=jsonl&limit=10000")
+
+          [[ "$before_code" == '200' ]]
+          [[ "$anon_code" == '401' ]]
+          [[ "$export_code" == '200' ]]
+          test -s private/owner-ledger.jsonl
+          chmod 600 private/owner-ledger.jsonl
+
+          EXPECTED_BACKEND_COMMIT="$EXPECTED_BACKEND_COMMIT" node --import tsx --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import { buildMlbP1M3dEconomicReview } from './server/mlb-p1-economic-review.ts';
+          import {
+            buildMlbP1M3e5LiveFrozenEnvelope,
+            MLB_P1_M3E5_SOURCE_WINDOW_TRUNCATED,
+          } from './server/mlb-p1-operating-envelope-frozen-live.ts';
+
+          const raw = fs.readFileSync('private/owner-ledger.jsonl', 'utf8');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          const before = JSON.parse(fs.readFileSync('audit/ledger-status-before.json', 'utf8'));
+          const anon = JSON.parse(fs.readFileSync('audit/anonymous-frozen-route.json', 'utf8'));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(health.status === 'healthy', `health=${health.status}`);
+          assert(health.commit === process.env.EXPECTED_BACKEND_COMMIT, `commit=${health.commit}`);
+          assert(before.success === true, 'ledger status success=false');
+          assert(before.data?.schemaVersion === 'mlb-ledger.v1', `schema=${before.data?.schemaVersion}`);
+          assert(before.data?.immutable === true, 'ledger immutable=false');
+          assert(before.data?.ownership?.owners === 1, `owners=${before.data?.ownership?.owners}`);
+          assert(before.data?.ownership?.unownedPredictions === 0, `unowned=${before.data?.ownership?.unownedPredictions}`);
+          assert(anon?.code === 'INTERACTIVE_SESSION_REQUIRED', `anonymousCode=${anon?.code}`);
+
+          const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+          const records = lines.map((line, index) => {
+            try { return JSON.parse(line); }
+            catch { throw new Error(`P1_M3E5_OWNER_EXPORT_JSON_INVALID:${index + 1}`); }
+          });
+          assert(records.length === before.data.predictions,
+            `P1_M3E5_OWNER_EXPORT_INCOMPLETE:${records.length}/${before.data.predictions}`);
+
+          const rawExportSha256 = crypto.createHash('sha256').update(raw).digest('hex');
+          const generatedAt = new Date().toISOString();
+          const review = buildMlbP1M3dEconomicReview(records, { generatedAt });
+          const sourceWindowComplete = review.sample.uniqueAnalyticalDecisions <= review.rows.length;
+
+          let frozen = null;
+          let failClosedCode = null;
+          if (sourceWindowComplete) {
+            try {
+              frozen = buildMlbP1M3e5LiveFrozenEnvelope(review.rows, {
+                ownedLedgerRecords: review.sample.ownedLedgerRecords,
+                uniqueAnalyticalDecisions: review.sample.uniqueAnalyticalDecisions,
+              }, { generatedAt });
+            } catch (error) {
+              if (error instanceof Error && error.message === MLB_P1_M3E5_SOURCE_WINDOW_TRUNCATED) {
+                failClosedCode = error.message;
+              } else {
+                throw error;
+              }
+            }
+          } else {
+            failClosedCode = MLB_P1_M3E5_SOURCE_WINDOW_TRUNCATED;
+          }
+
+          const result = {
+            schemaVersion: 'p1-m3e5-live-owner-cohort-research.v1',
+            generatedAt,
+            backendCommit: health.commit,
+            environment: health.environment,
+            deployment: {
+              exactExpectedCommitObserved: health.commit === process.env.EXPECTED_BACKEND_COMMIT,
+              frozenRouteAnonymousStatus: 401,
+              frozenRouteAnonymousCode: anon.code,
+            },
+            source: {
+              endpoint: '/api/mlb/ledger/v1/export?format=jsonl&limit=10000',
+              ownerScoped: true,
+              serviceTokenUsed: true,
+              rawExportUploaded: false,
+              rawExportSha256,
+              exportedRecords: records.length,
+              publicLedgerPredictions: before.data.predictions,
+              publicLedgerSettlementEvents: before.data.settlementEvents,
+              ownershipOwners: before.data.ownership.owners,
+              unownedPredictions: before.data.ownership.unownedPredictions,
+              completeAgainstPublicLedger: records.length === before.data.predictions,
+            },
+            p1M3d: {
+              state: review.state,
+              sample: review.sample,
+              lifecycle: review.lifecycle,
+              readiness: review.readiness,
+              overall: review.overall,
+              economicallyActionable: review.economicallyActionable,
+              controls: review.controls,
+              sourceWindowRows: review.rows.length,
+              sourceWindowComplete,
+            },
+            p1M3e5: frozen == null ? {
+              state: 'SOURCE_WINDOW_TRUNCATED',
+              analysisPerformed: false,
+              failClosedCode,
+            } : {
+              state: frozen.state,
+              analysisPerformed: true,
+              source: frozen.source,
+              freezeState: frozen.freeze.state,
+              freezeConfiguration: frozen.freeze.configuration,
+              freezeCohort: frozen.freeze.cohort,
+              freezeManifest: frozen.freeze.freeze,
+              evaluationState: frozen.evaluation.state,
+              evaluationManifest: frozen.evaluation.manifest,
+              evaluationCohort: frozen.evaluation.cohort,
+              settlementSnapshotDigest: frozen.evaluation.settlementSnapshotDigest,
+              evaluationBlockers: frozen.evaluation.blockers,
+              interpretation: frozen.interpretation,
+            },
+            safety: {
+              privateRawLedgerPersistedInArtifact: false,
+              predictionsCreated: 0,
+              settlementsCreated: 0,
+              betsPlaced: 0,
+              realFinancialExposure: 0,
+              automaticModelChangesAllowed: false,
+              automaticPromotionAllowed: false,
+            },
+          };
+
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({
+            backendCommit: result.backendCommit,
+            exportedRecords: result.source.exportedRecords,
+            interactiveDecisions: result.p1M3d.sample.uniqueAnalyticalDecisions,
+            settledInteractiveDecisions: result.p1M3d.sample.settledDecisions,
+            sourceWindowRows: result.p1M3d.sourceWindowRows,
+            sourceWindowComplete: result.p1M3d.sourceWindowComplete,
+            m3e5State: result.p1M3e5.state,
+            freezeState: result.p1M3e5.analysisPerformed ? result.p1M3e5.freezeState : null,
+            frozenRows: result.p1M3e5.analysisPerformed ? result.p1M3e5.evaluationCohort.frozenRows : null,
+            unresolvedFrozenRows: result.p1M3e5.analysisPerformed ? result.p1M3e5.evaluationCohort.unresolvedFrozenRows : null,
+            blockers: result.p1M3e5.analysisPerformed ? result.p1M3e5.evaluationBlockers : [result.p1M3e5.failClosedCode],
+          }, null, 2));
+          NODE
+
+          after_code=$(curl -sS -o audit/ledger-status-after.json -w '%{http_code}' --max-time 25 \
+            "${BACKEND_URL}/api/mlb/ledger/v1/status")
+          [[ "$after_code" == '200' ]]
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const before = JSON.parse(fs.readFileSync('audit/ledger-status-before.json', 'utf8'));
+          const after = JSON.parse(fs.readFileSync('audit/ledger-status-after.json', 'utf8'));
+          if (before.data.predictions !== after.data.predictions) throw new Error('P1_M3E5_PREDICTION_COUNT_CHANGED');
+          if (before.data.settlementEvents !== after.data.settlementEvents) throw new Error('P1_M3E5_SETTLEMENT_COUNT_CHANGED');
+          const result = JSON.parse(fs.readFileSync('audit/result.json', 'utf8'));
+          result.safety.predictionsBefore = before.data.predictions;
+          result.safety.predictionsAfter = after.data.predictions;
+          result.safety.settlementEventsBefore = before.data.settlementEvents;
+          result.safety.settlementEventsAfter = after.data.settlementEvents;
+          result.safety.ledgerUnchanged = true;
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          NODE
+
+          rm -f private/owner-ledger.jsonl
+          rmdir private
+          test -f audit/result.json
+          test ! -d private
+          ! find audit -type f \( -name '*.jsonl' -o -name '*.ndjson' \) | grep -q .
+      - name: Prove private raw export is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! find audit -type f \( -name '*.jsonl' -o -name '*.ndjson' \) | grep -q .
+      - name: Upload aggregate P1-M3E.5 owner-cohort evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m3e5-live-owner-cohort-aggregate
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
