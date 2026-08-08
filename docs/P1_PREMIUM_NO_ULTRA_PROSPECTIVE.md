@@ -12,14 +12,17 @@ The historical audit found that:
 
 Because `PREMIUM && !ULTRA` was identified **after looking at those outcomes**, none of those historical games may be used as confirmation evidence. This file freezes the next hypothesis before any new qualifying outcome enters the test.
 
-## Immutable prospective cutoff
+## Immutable prospective cutoff and rule semantics
 
 - Cutoff timestamp: `2026-08-08T04:32:33Z`.
 - Cutoff evidence commit: `a2bc70badc97251f2f0333beb1b2b954f841fad0`.
+- Frozen rule-semantics commit: `a2bc70badc97251f2f0333beb1b2b954f841fad0`.
 - The timestamp is the merge time of permanent forensic evidence PR #372.
 - Any prediction recorded at or before the cutoff is excluded from confirmation.
 
 The previous 13-4 / +28.05% result is development/post-hoc evidence only and is never included in the new confirmation sample.
+
+The historical F5 implementation at the frozen commit defines a selected F5 recommendation with an explicit `finalRecommendation.isPremium` boolean and includes the `ULTRA` token in the selected `finalRecommendation.reason` when 2+ boosts are present. The prospective tracker freezes **that selected recommendation surface** instead of searching arbitrary labels elsewhere in the payload.
 
 ## Candidate definition
 
@@ -29,27 +32,28 @@ A future game belongs to the candidate cohort only when all conditions are true 
 2. source is the interactive app capture path;
 3. analysis stage is `FINAL`;
 4. capture is pregame (`recordedAt < commenceTime`);
-5. the selected recommendation surface contains `PREMIUM`;
-6. the selected recommendation surface does **not** contain `ULTRA`;
-7. the decision was recorded strictly after the frozen cutoff.
+5. the selected `analysis.rawOutput.markets.finalRecommendation` exists and is classifiable;
+6. selected `finalRecommendation.market === F5_ML`;
+7. selected `finalRecommendation.action === BET`;
+8. selected `finalRecommendation.isPremium === true`;
+9. selected `finalRecommendation.reason` does **not** contain the token `ULTRA`;
+10. the decision was recorded strictly after the frozen cutoff.
 
-Only the selected recommendation surface is inspected:
+If `finalRecommendation`, `isPremium` or `reason` is missing or incompatible with the frozen F5 semantics, the row is `UNCLASSIFIABLE` and is excluded. It is **not** silently placed in the control cohort.
 
-- selected decision label/rationale;
-- `selectedLane`;
-- selected `finalRecommendation`.
-
-`alternativePicks`, alternate lines and other non-selected text are forbidden from candidate membership.
+`decision.confidenceLabel`, `selectedLane`, `alternativePicks`, alternate lines and other non-selected text cannot define candidate membership. This prevents future label drift and prevents an ULTRA alternative pick from contaminating the selected decision.
 
 ## Independence unit
 
 The statistical unit is **one game**, not one refresh, capture or revision.
 
-After the existing P1-M3D lifecycle-terminal review, this contract applies a second game-level deduplication. If more than one eligible FINAL F5 record exists for one game, only the latest pregame record is retained. This explicitly prevents the pseudo-replication that made 99 historical ULTRA captures appear to be 99 observations when they were only 12 games.
+After the existing P1-M3D lifecycle-terminal review, this contract applies a second game-level deduplication. If more than one classifiable FINAL F5 record exists for one game, only the latest pregame record is retained. This explicitly prevents the pseudo-replication that made 99 historical ULTRA captures appear to be 99 observations when they were only 12 games.
 
 ## Control
 
-The control cohort is every other future eligible independent FINAL F5 ML game-level decision in the same prospective period that does not satisfy `PREMIUM && !ULTRA`.
+The control cohort is every other future **classifiable** independent FINAL F5 ML game-level decision in the same prospective period that does not satisfy the candidate rule. This includes a selected F5 recommendation with `isPremium === false` or one whose selected reason contains `ULTRA`.
+
+Unclassifiable rows are excluded from both candidate and control.
 
 No price band, team, pitcher, model-probability threshold or edge threshold is selected from the historical subgroup. Those would be new hypotheses and require separate preregistration.
 
@@ -103,6 +107,8 @@ Any future real-money activation must be a separate, explicit, auditable decisio
 - outcomes, ROI, CLV, closing price, Brier and log loss cannot affect candidate membership;
 - historical 13-4 observations are excluded by timestamp;
 - multiple captures of one game cannot increase sample size;
+- only the frozen selected F5 `finalRecommendation` semantics can classify a row;
+- unclassifiable rows cannot dilute the control group;
 - no price-band optimization is allowed inside this hypothesis;
 - no threshold tuning is allowed after the cutoff;
 - no automatic model or stake changes are permitted;
