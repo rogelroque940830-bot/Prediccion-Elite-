@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-statcast-matchup.ts",
+    "server/mlb-statcast-matchup-vsteam-identity.ts",
+    "server/mlb-statcast-matchup-vsteam-identity.test.ts",
+    "server/mlb-statcast-matchup-identity-routes.ts",
+    "server/mlb-statcast-matchup-identity-routes.test.ts",
+    "server/routes.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
