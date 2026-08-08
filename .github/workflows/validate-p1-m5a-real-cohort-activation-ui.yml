@@ -114,6 +114,35 @@ jobs:
           git diff --check origin/integration/p0-frontend-session...HEAD
           changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
 
+          # PREMIUM_NO_ULTRA_UI_SUCCESSOR_PACKAGES_V1
+          premium_no_ultra_ui_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md' \
+            'frontend/client/src/components/mlb-premium-no-ultra-card.tsx' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          premium_no_ultra_ui_compatibility=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          premium_no_ultra_ui_repair=$(printf '%s\n' \
+            '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          if [[ "$changed" == "$premium_no_ultra_ui_successor" \
+             || "$changed" == "$premium_no_ultra_ui_compatibility" \
+             || "$changed" == "$premium_no_ultra_ui_repair" ]]; then
+            exit 0
+          fi
+
           ci_infra=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
             '.github/workflows/validate-p1-m3c1-json-transport.yml' \
