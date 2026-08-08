@@ -1,0 +1,94 @@
+name: Validate P1 PREMIUM No ULTRA UI
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md'
+      - 'frontend/client/src/components/mlb-premium-no-ultra-card.tsx'
+      - 'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts'
+      - 'frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts'
+      - 'frontend/client/src/pages/mlb-economic-review-activated.tsx'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-premium-no-ultra-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run strict parser falsification tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-premium-no-ultra-prospective.test.ts
+      - name: Preserve operating-envelope parser tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-operating-envelope.test.ts
+      - name: Typecheck frontend
+        run: npm --prefix frontend run check
+      - name: Build production frontend bundle
+        run: npm --prefix frontend run build
+      - name: Verify bundle and no-money UI boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          lib='frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts'
+          component='frontend/client/src/components/mlb-premium-no-ultra-card.tsx'
+          page='frontend/client/src/pages/mlb-economic-review-activated.tsx'
+          docs='docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md'
+
+          grep -F '/api/mlb/p1/v1/premium-no-ultra-prospective' "$lib" "$docs"
+          grep -F '2026-08-08T04:32:33Z' "$lib"
+          grep -F 'a2bc70badc97251f2f0333beb1b2b954f841fad0' "$lib"
+          grep -F 'FINAL_RECOMMENDATION_IS_PREMIUM_TRUE_AND_REASON_HAS_NO_ULTRA' "$lib"
+          grep -F 'unsafe_operationalMoneyGateAllowed' frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts
+          grep -F 'unsafe_automaticBettingAllowed' frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts
+          grep -F 'Edge Prospectivo F5 · PREMIUM sin ULTRA' "$component"
+          grep -F 'money gate apagado' "$component"
+          grep -F 'MLB_PREMIUM_NO_ULTRA_ENDPOINT' "$page"
+          grep -F 'parseMlbPremiumNoUltraEnvelope' "$page"
+          grep -F 'MlbPremiumNoUltraCard' "$page"
+
+          ! grep -E 'fetch\([^)]*,[^{]*\{[^}]*method:[[:space:]]*["'"'](POST|PUT|PATCH|DELETE)' "$lib" "$component" "$page"
+          ! grep -E 'operationalMoneyGateAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$lib" "$component" "$page"
+
+          dist=$(find frontend/dist -type f -name '*.js' -print0 | xargs -0 cat)
+          grep -F '/api/mlb/p1/v1/premium-no-ultra-prospective' <<< "$dist"
+          grep -F 'Edge Prospectivo F5' <<< "$dist"
+          grep -F 'Recolectando evidencia' <<< "$dist"
+          grep -F 'Edge respaldado' <<< "$dist"
+          grep -F 'money gate apagado' <<< "$dist"
+      - name: Verify exact six-file UI scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md' \
+            'frontend/client/src/components/mlb-premium-no-ultra-card.tsx' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'PREMIUM no-ULTRA UI scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
