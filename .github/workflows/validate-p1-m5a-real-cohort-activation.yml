@@ -9,10 +9,19 @@ on:
       - 'server/mlb-p1-real-cohort-activation.test.ts'
       - 'server/mlb-p1-economic-review.ts'
       - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/routes.ts'
       - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
+      - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
       - 'tsconfig.p1-m5a-real-cohort-activation.json'
+      - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
@@ -101,22 +110,31 @@ jobs:
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
+            'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
             'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
             'server/mlb-p1-economic-review.test.ts' \
             'server/mlb-p1-economic-review.ts' \
             'server/mlb-p1-real-cohort-activation.test.ts' \
             'server/mlb-p1-real-cohort-activation.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3f3b5-vsteam-identity.json' \
             'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
 
           # Preserve the M5A implementation as one atomic review unit whenever
           # any of its owned service/review/docs/typecheck files are changed.
-          # A workflow-only M6A2 compatibility change does not grant access to
-          # any M5A-owned runtime or scientific implementation file.
+          # Read-only/identity-safe successor packages do not grant access to
+          # any M5A-owned scientific implementation file.
           owned=$(printf '%s\n' \
             'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
             'server/mlb-p1-economic-review.test.ts' \

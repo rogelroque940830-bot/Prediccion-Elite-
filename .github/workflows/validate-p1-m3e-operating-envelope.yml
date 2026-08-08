@@ -8,12 +8,24 @@ on:
       - 'server/mlb-p1-operating-envelope.ts'
       - 'server/mlb-p1-operating-envelope.test.ts'
       - 'server/mlb-p1-operating-envelope-routes.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE.md'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md'
+      - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
       - 'tsconfig.p1-m3e-operating-envelope.json'
+      - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
 
 permissions:
   contents: read
@@ -88,18 +100,50 @@ jobs:
           ! grep -E 'app\.(post|put|patch|delete)\(' "$route"
           ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$source" "$route"
           ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source" "$route"
-      - name: Verify exact P1-M3E read-only scope
+      - name: Verify exact protected P1-M3E or B5 successor scope
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin integration/p0-staging-secure --depth=1
-          git diff --check origin/integration/p0-staging-secure...HEAD
-          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          expected=$(printf '%s\n' \
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+
+          m3e_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
             'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
             'server/mlb-p1-operating-envelope-routes.ts' \
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
             'tsconfig.p1-m3e-operating-envelope.json' | sort)
-          [[ "$changed" == "$expected" ]]
+
+          compatibility_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+
+          b5_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3f3b5-vsteam-identity.json' | sort)
+
+          if [[ "$changed" != "$m3e_package" \
+            && "$changed" != "$compatibility_package" \
+            && "$changed" != "$b5_successor" ]]; then
+            echo 'P1-M3E scope rejected. Diff must be exactly the M3E read-only package, the B5 identity-safe successor package, or the six-workflow compatibility package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
