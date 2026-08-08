@@ -12,6 +12,7 @@ import { registerMlbP1PregameReadinessRoutes } from "./mlb-p1-pregame-readiness-
 import { registerMlbP1ScientificCaptureRoutes } from "./mlb-p1-scientific-capture-routes";
 import { registerMlbP1EconomicReviewRoutes } from "./mlb-p1-economic-review-routes";
 import { registerMlbP1OperatingEnvelopeRoutes } from "./mlb-p1-operating-envelope-routes";
+import { registerMlbPremiumNoUltraProspectiveRoutes } from "./mlb-premium-no-ultra-prospective-routes";
 import { registerMlbStatcastMatchupIdentityMiddleware } from "./mlb-statcast-matchup-identity-routes";
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
 import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
@@ -39,6 +40,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbP1ScientificCaptureRoutes(app);
   registerMlbP1EconomicReviewRoutes(app);
   registerMlbP1OperatingEnvelopeRoutes(app);
+  registerMlbPremiumNoUltraProspectiveRoutes(app);
   registerMlbStatcastMatchupIdentityMiddleware(app);
   registerMlbCoreRoutes(app);
   registerMlbF5OddsProtectionRoutes(app);
