@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "p1-m2b-live-final-readiness-evidence.v1",
+  "generatedAt": "2026-08-08T17:21:33.459Z",
+  "chainOfCustody": {
+    "deployedCommit": "6c462a91fd4913d8704c488babd1448190cb5a5d",
+    "runtimeEquivalentCommit": "9205dfc6567ead4e8b27b84f4440a370ab314a22",
+    "researchPr": 394,
+    "workflowRun": 31269202027,
+    "artifactId": 9025079328,
+    "artifactDigest": "sha256:fa74dcdfd82c11db4c7235299428db9a7739e11e317b9d21a277790406686472"
+  },
+  "sample": {
+    "date": "2026-08-08",
+    "slateGames": 15,
+    "slateReadyToAnalyze": 3,
+    "slateProvisional": 12,
+    "sampledPregameGames": 3,
+    "sampledMarketEvaluations": 6,
+    "markets": ["ML", "F5_ML"],
+    "identitiesPersisted": false
+  },
+  "gateResults": {
+    "READY_FINAL": 0,
+    "READY_PROVISIONAL": 6,
+    "BLOCKED": 0,
+    "REQUEST_FAILED": 0
+  },
+  "warningCounts": {
+    "INJURIES_DEGRADED": 6,
+    "ADVANCED_FACTORS_DEGRADED": 3,
+    "PITCHER_FORM_DEGRADED": 3,
+    "LINEUP_MATCHUP_DEGRADED": 3
+  },
+  "mlFindings": {
+    "samples": 3,
+    "gameIdentityFresh": 3,
+    "pitchersFresh": 3,
+    "lineupsFresh": 3,
+    "marketOddsFresh": 3,
+    "bullpenFresh": 3,
+    "injuriesDegraded": 3,
+    "advancedFactorsDegraded": 3,
+    "advancedCertifiedComponents": "0/5",
+    "observedRuntimeDefect": "ADVANCED_ENDPOINT_RUNTIME_REFERENCE_ERROR_GETGAMEMETA_NOT_DEFINED",
+    "finalAttainableInSample": false
+  },
+  "f5MlFindings": {
+    "samples": 3,
+    "gameIdentityFresh": 3,
+    "pitchersFresh": 3,
+    "lineupsFresh": 3,
+    "marketOddsFresh": 3,
+    "injuriesDegraded": 3,
+    "pitcherForm": {
+      "sourcesAvailable": "2/2",
+      "state": "DEGRADED",
+      "quality": "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP"
+    },
+    "lineupMatchup": {
+      "sourcesAvailable": "1/1",
+      "state": "DEGRADED",
+      "quality": "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP"
+    },
+    "finalAttainableInSample": false
+  },
+  "interpretation": {
+    "analysisRemainsAllowed": true,
+    "currentFinalAttainabilityObserved": false,
+    "bullpenStructuralBlockerResolved": true,
+    "finalReadinessStillStructurallyConstrained": true,
+    "gateShouldBeRelaxed": false,
+    "priorityFixes": [
+      "FIX_ADVANCED_ENDPOINT_GETGAMEMETA_RUNTIME_REFERENCE",
+      "RESTORE_ADVANCED_COMPONENT_CERTIFICATION_ON_CURRENT_GAMES",
+      "ADD_TRUTHFUL_EXPLICIT_TEMPORAL_PROVENANCE_TO_PITCHER_FORM",
+      "ADD_TRUTHFUL_EXPLICIT_TEMPORAL_PROVENANCE_TO_LINEUP_MATCHUP",
+      "CONTINUE_INJURY_SOURCE_IDENTITY_COVERAGE_HARDENING"
+    ]
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "sportsbookCallsPerformedByResearchRunner": 0,
+    "rawGameIdentityPersistedInPermanentEvidence": false
+  }
+}
