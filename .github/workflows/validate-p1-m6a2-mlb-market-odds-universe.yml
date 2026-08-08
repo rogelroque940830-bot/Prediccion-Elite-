@@ -9,21 +9,26 @@ on:
       - 'server/mlb-market-odds-normalizer.test.ts'
       - 'server/mlb-market-universe-odds-routes.ts'
       - 'server/mlb-market-universe-odds-routes.test.ts'
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
       - 'server/mlb-statcast-matchup-vsteam-identity.ts'
       - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
       - 'server/mlb-statcast-matchup-identity-routes.ts'
       - 'server/mlb-statcast-matchup-identity-routes.test.ts'
       - 'server/mlb-statcast-matchup-certifier.ts'
       - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/route-contract.extensions.json'
       - 'server/routes.ts'
       - 'tsconfig.p1-m6a2-market-odds.json'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
       - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
       - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
       - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
@@ -111,7 +116,7 @@ jobs:
           NODE
           grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' dist/index.cjs
           grep -F '/api/mlb/p1/v1/market-universe-odds' dist/index.cjs
-      - name: Verify exact protected P1-M6A2, P1-M3E or B5 successor scope
+      - name: Verify exact protected P1-M6A2 or analytical successor scope
         shell: bash
         run: |
           set -euo pipefail
@@ -146,6 +151,14 @@ jobs:
             'server/routes.ts' \
             'tsconfig.p1-m3e-operating-envelope.json' | sort)
 
+          premium_no_ultra_readonly=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
+
           compatibility_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
@@ -176,10 +189,11 @@ jobs:
           if [[ "$changed" != "$workflow_only" \
             && "$changed" != "$m6a2_package" \
             && "$changed" != "$m3e_successor" \
+            && "$changed" != "$premium_no_ultra_readonly" \
             && "$changed" != "$compatibility_package" \
             && "$changed" != "$b5_successor" \
             && "$changed" != "$b5b_successor" ]]; then
-            echo 'P1-M6A2 scope rejected. Diff must be exactly the M6A2 package, the P1-M3E package, the B5 identity-safe package, the B5B certification package, the seven-workflow compatibility package, or this one-file workflow update.' >&2
+            echo 'P1-M6A2 scope rejected. Diff must be an exact registered package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
