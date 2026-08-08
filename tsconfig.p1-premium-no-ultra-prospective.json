@@ -1,13 +1,19 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "skipLibCheck": true
-  },
   "include": [
     "server/mlb-premium-no-ultra-prospective.ts",
     "server/mlb-premium-no-ultra-prospective.test.ts",
     "server/mlb-ledger-store.ts",
     "server/mlb-p1-economic-review.ts"
-  ]
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "types": ["node"],
+    "noEmit": true,
+    "skipLibCheck": true
+  }
 }
