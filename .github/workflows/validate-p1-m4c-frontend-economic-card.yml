@@ -1,0 +1,169 @@
+name: Validate P1-M4C Frontend Economic Card
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/mlb-economic-decision-card.tsx'
+      - 'frontend/client/src/components/mlb-scientific-capture-status.tsx'
+      - 'frontend/client/src/components/mlb-real-cohort-activation-card.tsx'
+      - 'frontend/client/src/lib/mlb-economic-decision.ts'
+      - 'frontend/client/src/lib/mlb-economic-decision.test.ts'
+      - 'frontend/client/src/lib/mlb-scientific-capture.ts'
+      - 'frontend/client/src/lib/mlb-real-cohort-activation.ts'
+      - 'frontend/client/src/lib/mlb-real-cohort-activation.test.ts'
+      - 'frontend/client/src/pages/mlb-economic-review-activated.tsx'
+      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION_UI.md'
+      - '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml'
+      - '.github/workflows/validate-p1-m3c1-json-transport.yml'
+      - '.github/workflows/validate-p1-m4c-frontend-economic-card.yml'
+      - '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m4c-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M4C, P1-M5A and MLB regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-real-cohort-activation.test.ts \
+            client/src/lib/mlb-economic-decision.test.ts \
+            client/src/lib/mlb-scientific-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify economic card and successor lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='frontend/client/src/App.tsx'
+          helper='frontend/client/src/lib/mlb-economic-decision.ts'
+          card='frontend/client/src/components/mlb-economic-decision-card.tsx'
+          capture='frontend/client/src/lib/mlb-scientific-capture.ts'
+          status='frontend/client/src/components/mlb-scientific-capture-status.tsx'
+
+          grep -F 'MLB_P1_M4C_FRONTEND_RELEASE' "$app" || grep -F 'MLB_P1_M3D_B_FRONTEND_RELEASE' "$app"
+          grep -F 'MLB_P1_M5A_FRONTEND_RELEASE' "$app"
+          grep -F 'parseMlbEconomicAdapterResult(data?.economicDecision)' "$capture"
+          grep -F 'economicDecision: result.economicDecision' "$capture"
+          grep -F 'MlbEconomicDecisionCard decision={state.economicDecision}' "$status"
+          grep -F 'Decisión económica certificada' "$card"
+          grep -F 'Precio mínimo' "$card"
+          grep -F 'EV por unidad' "$card"
+          grep -F 'ESPERAR FINAL' "$card"
+          grep -F 'FINAL ACCIONABLE' "$card"
+          grep -F 'SHADOW · exposición 0' "$card"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const app = fs.readFileSync('frontend/client/src/App.tsx', 'utf8');
+          const helper = fs.readFileSync('frontend/client/src/lib/mlb-economic-decision.ts', 'utf8');
+          const card = fs.readFileSync('frontend/client/src/components/mlb-economic-decision-card.tsx', 'utf8');
+          const capture = fs.readFileSync('frontend/client/src/lib/mlb-scientific-capture.ts', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(helper.includes('safety.realFinancialExposure !== 0'), 'economic parser does not reject exposure');
+          assert(helper.includes('safety.automaticBetPlacement !== false'), 'economic parser does not reject automatic betting');
+          assert(capture.includes('economicDecision != null'), 'capture success does not require economics');
+          assert(card.includes('raw.minimumPrices.active'), 'minimum price missing');
+          assert(card.includes('raw.economics.expectedValuePerUnit'), 'EV missing');
+          assert(card.includes('effective.analyticalUnits'), 'SHADOW stake missing');
+          assert(!/fetch\s*\(|apiRequest\s*\(/.test(card), 'card performs a network side effect');
+          assert(app.includes('MLB_P1_M3D_B_FRONTEND_RELEASE'), 'P1-M3D-B lineage missing');
+          assert(app.includes('MLB_P1_M5A_FRONTEND_RELEASE'), 'P1-M5A successor missing');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m4c-bundle.js
+          grep -F 'p1-m4c-mlb-economic-decision-card-2026-08-06' /tmp/p1-m4c-bundle.js
+          grep -F 'p1-m5a-real-cohort-activation-ui-2026-08-06' /tmp/p1-m4c-bundle.js
+          grep -F 'Decisión económica certificada' /tmp/p1-m4c-bundle.js
+      - name: Diff hygiene and protected successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+
+          # PREMIUM_NO_ULTRA_UI_SUCCESSOR_PACKAGES_V1
+          premium_no_ultra_ui_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md' \
+            'frontend/client/src/components/mlb-premium-no-ultra-card.tsx' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts' \
+            'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          premium_no_ultra_ui_compatibility=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          premium_no_ultra_ui_repair=$(printf '%s\n' \
+            '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          if [[ "$changed" == "$premium_no_ultra_ui_successor" \
+             || "$changed" == "$premium_no_ultra_ui_compatibility" \
+             || "$changed" == "$premium_no_ultra_ui_repair" ]]; then
+            exit 0
+          fi
+
+          ci_infra=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          m3e_ui_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_UI.md' \
+            'frontend/client/src/components/mlb-operating-envelope-card.tsx' \
+            'frontend/client/src/lib/mlb-operating-envelope.test.ts' \
+            'frontend/client/src/lib/mlb-operating-envelope.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          if [[ "$changed" == "$ci_infra" || "$changed" == "$m3e_ui_successor" ]]; then
+            exit 0
+          fi
+
+          allowed=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION_UI.md' \
+            'frontend/client/src/App.tsx' \
+            'frontend/client/src/components/mlb-real-cohort-activation-card.tsx' \
+            'frontend/client/src/lib/mlb-real-cohort-activation.test.ts' \
+            'frontend/client/src/lib/mlb-real-cohort-activation.ts' \
+            'frontend/client/src/pages/mlb-economic-review-activated.tsx' | sort)
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]

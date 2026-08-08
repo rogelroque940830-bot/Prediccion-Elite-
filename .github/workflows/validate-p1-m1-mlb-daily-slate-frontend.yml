@@ -1,0 +1,73 @@
+name: Validate P1-M1 MLB Daily Slate Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-daily-slate.ts'
+      - 'frontend/client/src/lib/mlb-daily-slate.test.ts'
+      - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'docs/P1_M1_MLB_DAILY_SLATE_FRONTEND.md'
+      - '.github/workflows/validate-p1-m1-mlb-daily-slate-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m1-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M1 and existing MLB queue tests
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify actionable daily slate integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/mlb-predictor.tsx'
+          panel='frontend/client/src/components/mlb-daily-slate-panel.tsx'
+          contract='frontend/client/src/lib/mlb-daily-slate.ts'
+          grep -F 'p1-m1-mlb-daily-slate-2026-08-04' frontend/client/src/App.tsx
+          grep -F 'MlbDailySlatePanel' "$page"
+          grep -F 'handleMLBAutoFill(String(game.gamePk))' "$page"
+          grep -F 'id="mlb-analysis-workspace"' "$page"
+          grep -F '/api/mlb/p1/v1/slate?date=' "$panel"
+          grep -F 'Partidos de la jornada' "$panel"
+          grep -F 'Analizar partido' "$panel"
+          grep -F 'Analizar provisional' "$panel"
+          grep -F 'READY_TO_ANALYZE' "$contract"
+          grep -F 'PROVISIONAL_WAITING_FOR_LINEUPS' "$contract"
+          grep -F 'mode === "SHADOW_DECISION_SUPPORT"' "$contract"
+          grep -F 'realFinancialExposure === 0' "$contract"
+          grep -F 'automaticBetPlacement === false' "$contract"
+          [[ "$(grep -Fc '<MlbDailySlatePanel' "$page")" == '1' ]]
+          [[ "$(grep -Fc '/api/mlb/p1/v1/slate?date=' "$panel")" == '1' ]]
+          ! grep -E 'method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"|useMutation|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$panel" "$contract"
+          cat frontend/dist/assets/*.js > /tmp/p1-m1-bundle.js
+          grep -F 'p1-m1-mlb-daily-slate-2026-08-04' /tmp/p1-m1-bundle.js
+          grep -F 'Partidos de la jornada' /tmp/p1-m1-bundle.js
+          grep -F 'Analizar partido' /tmp/p1-m1-bundle.js
+          grep -F 'Analizar provisional' /tmp/p1-m1-bundle.js
+          grep -F 'SHADOW · exposición 0' /tmp/p1-m1-bundle.js
+      - name: Diff hygiene
+        run: git diff --check

@@ -1,0 +1,42 @@
+name: Validate S6F Frontend Sync
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-review-priority.ts'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - '.github/workflows/validate-s6f-frontend-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Type-check frontend
+        run: npm --prefix frontend run check
+      - name: Build frontend
+        run: npm --prefix frontend run build
+      - name: Verify S6F review queue in built bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat frontend/dist/assets/*.js > /tmp/s6f-bundle.js
+          grep -F 'Prioridad = pregame con ambos pitchers identificados' /tmp/s6f-bundle.js
+          grep -F 'La oportunidad real se clasifica después de generar la predicción' /tmp/s6f-bundle.js
+          grep -F 'Prioridad alta para revisión' /tmp/s6f-bundle.js
+          grep -F 'Revisión secundaria' /tmp/s6f-bundle.js
+          grep -F 'Descartar por ahora' /tmp/s6f-bundle.js

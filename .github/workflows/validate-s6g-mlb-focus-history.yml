@@ -1,0 +1,61 @@
+name: Validate S6G/S6H MLB Focus History
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/mlb-history-focus.ts'
+      - 'frontend/client/src/lib/mlb-history-focus.test.ts'
+      - 'frontend/client/src/pages/mlb-history-focused.tsx'
+      - 'frontend/scripts/verify-frontend.mjs'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - '.github/workflows/validate-s6g-mlb-focus-history.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run S6H integrity-gate tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-history-focus.test.ts
+      - name: Run production-equivalent Railway verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify focused history safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'MLB_HISTORY_FOCUS_PRIORITY_LIMIT = 5' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'MLB_HISTORY_FOCUS_VERIFY_LIMIT = 12' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'isStandardAmericanOdds' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'auditMlbHistoryMarketIntegrity' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F '.filter((entry) => entry.audit.status === "PASS")' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'if (pick.analyticalDuplicate) continue' frontend/client/src/lib/mlb-history-focus.ts
+          grep -F 'selectionAlreadyContainsLine' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'Verificar datos' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'NO UTILIZAR' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'hora original de captura' frontend/client/src/pages/mlb-history-focused.tsx
+          grep -F 'path="/mlb-history-audit"' frontend/client/src/App.tsx
+          cat frontend/dist/assets/*.js > /tmp/s6h-bundle.js
+          grep -F 'MLB · En foco' /tmp/s6h-bundle.js
+          grep -F 'Verificar datos' /tmp/s6h-bundle.js
+          grep -F 'INTEGRIDAD APROBADA' /tmp/s6h-bundle.js
+          grep -F 'NO UTILIZAR' /tmp/s6h-bundle.js
+          grep -F 'Abrir auditoría completa' /tmp/s6h-bundle.js

@@ -1,0 +1,60 @@
+name: Validate O1 Operations Incident Center Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/operations-incident-center.ts'
+      - 'frontend/client/src/lib/operations-incident-center.test.ts'
+      - 'frontend/client/src/pages/operations-incident-center.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/scripts/**'
+      - 'docs/O1_OPERATIONS_INCIDENT_CENTER_FRONTEND.md'
+      - '.github/workflows/validate-o1-operations-center-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused O1 tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/operations-incident-center.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private route and read-only safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'path="/operations"' frontend/client/src/App.tsx
+          grep -F 'title: "Operaciones"' frontend/client/src/components/app-sidebar.tsx
+          grep -F 'authenticated ? [...navItems, ...privateNavItems] : navItems' frontend/client/src/components/app-sidebar.tsx
+          grep -F '/api/ops/v1/incident-center?limit=500' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'OBSERVE ONLY' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'Solo lectura · sin reintentos' frontend/client/src/pages/operations-incident-center.tsx
+          grep -F 'automaticSettlementRetry === false' frontend/client/src/lib/operations-incident-center.ts
+          ! grep -E 'fetchJson<.*>\("/api/ops/v1/incident-center.*method:' frontend/client/src/pages/operations-incident-center.tsx
+          cat frontend/dist/assets/*.js > /tmp/o1-bundle.js
+          grep -F 'Centro de Operaciones e Incidencias' /tmp/o1-bundle.js
+          grep -F 'Settlement vencido' /tmp/o1-bundle.js
+          grep -F 'Siguiente acción segura' /tmp/o1-bundle.js
+          grep -F 'OBSERVE ONLY' /tmp/o1-bundle.js
+      - name: Diff hygiene
+        run: git diff --check

@@ -1,0 +1,105 @@
+name: Validate P1-M2C.2 MLB Priority First
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/components/mlb-daily-slate-panel.tsx'
+      - '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml'
+      - '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml'
+      - '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2c2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused MLB regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-flow.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify priority-first operator contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='frontend/client/src/App.tsx'
+          slate='frontend/client/src/components/mlb-daily-slate-panel.tsx'
+          gate='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+          readiness='frontend/client/src/lib/mlb-pregame-readiness.ts'
+          predictor='frontend/client/src/pages/mlb-predictor.tsx'
+
+          grep -F 'p1-m2c2-mlb-priority-first-2026-08-05' "$app"
+          grep -F 'P1-M2C.2 · PRIORITY FIRST' "$slate"
+          grep -F 'data-testid="p1-m2c2-priority-first"' "$slate"
+          grep -F 'data-testid="p1-m2c2-view-ready"' "$slate"
+          grep -F 'data-testid="p1-m2c2-view-provisional"' "$slate"
+          grep -F 'data-testid="p1-m2c2-inactive-games"' "$slate"
+          grep -F 'Modo seguro activo' "$slate"
+          grep -F 'compact={view === "provisional"}' "$slate"
+          grep -F 'P1-M2C.2 · PRIORITY FIRST' "$gate"
+          grep -F 'data-testid="p1-m2c2-quote-comparison"' "$gate"
+          grep -F 'data-testid="p1-m2c2-use-certified-quote"' "$gate"
+          grep -F 'Usar cuota certificada' "$gate"
+          grep -F 'buildMlbPregameCertifiedLinePatch' "$readiness"
+          grep -F 'onApplyCertifiedQuote={applyCertifiedQuote}' "$predictor"
+
+          ! grep -F 'Todos {report.summary.total}' "$slate"
+          ! grep -F 'setView("all")' "$slate"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const slate = fs.readFileSync('frontend/client/src/components/mlb-daily-slate-panel.tsx', 'utf8');
+          const gate = fs.readFileSync('frontend/client/src/components/mlb-pregame-readiness-gate.tsx', 'utf8');
+          const predictor = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(slate.includes('>("ready")'), 'daily slate does not initialize safely');
+          assert(slate.indexOf('visibleGames.map') < slate.indexOf('p1-m2c2-inactive-games'), 'inactive games are not secondary');
+          assert(gate.indexOf('Cuota introducida') < gate.indexOf('Usar cuota certificada'), 'quote comparison order invalid');
+          assert(predictor.includes('setPregameGate(null);') && predictor.includes('setResult(null);'), 'quote application does not invalidate prior decision');
+          NODE
+
+          cat frontend/dist/assets/*.js > /tmp/p1-m2c2-bundle.js
+          grep -F 'p1-m2c2-mlb-priority-first-2026-08-05' /tmp/p1-m2c2-bundle.js
+          grep -F 'P1-M2C.2 · PRIORITY FIRST' /tmp/p1-m2c2-bundle.js
+          grep -F 'Provisionales' /tmp/p1-m2c2-bundle.js
+          grep -F 'Iniciados, cerrados o no accionables' /tmp/p1-m2c2-bundle.js
+          grep -F 'Cuota introducida' /tmp/p1-m2c2-bundle.js
+          grep -F 'Cuota certificada' /tmp/p1-m2c2-bundle.js
+          grep -F 'Usar cuota certificada' /tmp/p1-m2c2-bundle.js
+      - name: Diff hygiene and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session --depth=1
+          git diff --check origin/integration/p0-frontend-session...HEAD
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2c1-mlb-visual-consolidation.yml' \
+            '.github/workflows/validate-p1-m2c2-mlb-priority-first.yml' \
+            '.github/workflows/validate-p1-m2c3-mlb-smart-default.yml' \
+            'frontend/client/src/components/mlb-daily-slate-panel.tsx' | sort)
+          [[ "${changed}" == "${expected}" ]]
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"' \
+            frontend/client/src/components/mlb-pregame-readiness-gate.tsx \
+            frontend/client/src/components/mlb-daily-slate-panel.tsx

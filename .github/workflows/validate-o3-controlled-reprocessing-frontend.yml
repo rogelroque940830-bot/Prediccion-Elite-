@@ -1,0 +1,81 @@
+name: Validate O3 Controlled Reprocessing Frontend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/lib/operations-reprocessing.ts'
+      - 'frontend/client/src/lib/operations-reprocessing.test.ts'
+      - 'frontend/client/src/pages/operations-reprocessing.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/scripts/**'
+      - 'docs/O3_SAFE_CONTROLLED_REPROCESSING_FRONTEND.md'
+      - '.github/workflows/validate-o3-controlled-reprocessing-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-o3-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused O3, O2 and O1 utility tests
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/operations-reprocessing.test.ts \
+            client/src/lib/operations-sla-alerts.test.ts \
+            client/src/lib/operations-incident-center.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify private controlled two-step console
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/operations-reprocessing.tsx'
+          contract='frontend/client/src/lib/operations-reprocessing.ts'
+          grep -F 'path="/operations/reprocessing"' frontend/client/src/App.tsx
+          grep -F 'o3-controlled-reprocessing-2026-08-04' frontend/client/src/App.tsx
+          grep -F 'title: "Reprocesamiento"' frontend/client/src/components/app-sidebar.tsx
+          grep -F '/api/ops/v1/incident-center?limit=500' "$page"
+          grep -F '/api/ops/v1/reprocessing/status' "$page"
+          grep -F '/api/ops/v1/reprocessing/audit?limit=250' "$page"
+          grep -F '/api/ops/v1/reprocessing/preview' "$page"
+          grep -F '/api/ops/v1/reprocessing/execute' "$page"
+          grep -F 'Crear vista previa' "$page"
+          grep -F 'Ejecutar settlement append-only' "$page"
+          grep -F 'REPROCESS_ONE_MLB_GAME' "$contract"
+          grep -F 'automaticExecution === false' "$contract"
+          grep -F 'requiresExplicitPreview === true' "$contract"
+          grep -F 'requiresAdminExecution === true' "$contract"
+          grep -F 'appendOnlySettlementEvents === true' "$contract"
+          grep -F 'historicalLedgerMutation === false' "$contract"
+          grep -F 'realFinancialExposure === 0' "$contract"
+          [[ "$(grep -Fc 'method: "POST"' "$page")" == '2' ]]
+          [[ "$(grep -Fc '/api/ops/v1/reprocessing/execute' "$page")" == '1' ]]
+          ! grep -E 'useEffect|setInterval|setTimeout|automaticExecution: true|automaticSettlementRetry: true|historicalLedgerMutation: true|automaticBetPlacement: true' "$page" "$contract"
+          ! grep -Ei 'sportsbook|placeBet|auto.?execute|source: "correction"' "$page" "$contract"
+          cat frontend/dist/assets/*.js > /tmp/o3-bundle.js
+          grep -F 'o3-controlled-reprocessing-2026-08-04' /tmp/o3-bundle.js
+          grep -F 'Reprocesamiento seguro y controlado' /tmp/o3-bundle.js
+          grep -F 'Crear vista previa' /tmp/o3-bundle.js
+          grep -F 'Ejecutar settlement append-only' /tmp/o3-bundle.js
+          grep -F 'REPROCESS_ONE_MLB_GAME' /tmp/o3-bundle.js
+          grep -F 'Auditoría append-only' /tmp/o3-bundle.js
+          grep -F 'SHADOW ONLY' /tmp/o3-bundle.js
+      - name: Diff hygiene
+        run: git diff --check

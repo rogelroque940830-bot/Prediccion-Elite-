@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerStagingAdminAuthObservation } from "./staging-admin-auth";
 import { createServer } from "http";
 import {
   apiRateLimit,
@@ -7,11 +8,29 @@ import {
   restrictedCors,
   securityHeaders,
 } from "./security";
+import { createSessionMiddleware, registerAuthRoutes } from "./auth";
+import { registerPicksV2Routes } from "./picks-v2";
+import { getMlbClosingLineStore, getMlbLedgerStore, registerMlbLedgerRoutes } from "./mlb-ledger";
+import { startMlbSettlementWorker } from "./mlb-settlement-worker";
+import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
 
-const app = express();
+export const app = express();
 // Railway terminates TLS and forwards one trusted proxy hop.
 app.set("trust proxy", 1);
 const httpServer = createServer(app);
+const deploymentCommit =
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.GIT_COMMIT_SHA ||
+  "unknown";
+
+const missingApiVariables = ["BDL_API_KEY", "ODDS_API_KEY"].filter(
+  (name) => !process.env[name],
+);
+if (missingApiVariables.length > 0) {
+  console.warn(
+    `[config] Variables API faltantes: ${missingApiVariables.join(", ")}`,
+  );
+}
 
 declare module "http" {
   interface IncomingMessage {
@@ -19,12 +38,11 @@ declare module "http" {
   }
 }
 
-// P0 security middleware. Production must configure COURTEDGE_ALLOWED_ORIGINS
-// and COURTEDGE_WRITE_TOKEN before this branch can be promoted.
+// Security boundary for the independent frontend.
 app.use(securityHeaders);
 app.use(restrictedCors);
 app.use(apiRateLimit);
-app.use(requireWriteAuth);
+app.use(createSessionMiddleware());
 
 app.use(
   express.json({
@@ -35,7 +53,17 @@ app.use(
   }),
 );
 
-app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || "256kb" }));
+app.use(
+  express.urlencoded({
+    extended: false,
+    limit: process.env.FORM_BODY_LIMIT || "256kb",
+  }),
+);
+
+// Staging-only visibility. This observer never authorizes a request;
+// the real enforcement remains requireWriteAuth below.
+registerStagingAdminAuthObservation(app);
+app.use(requireWriteAuth);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -63,21 +91,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoints for Railway.
 app.get("/", (_req, res) => {
   res.json({ status: "ok", service: "CourtEdge Backend", version: "1.0.0" });
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "healthy" });
+  res.json({
+    status: "healthy",
+    commit: deploymentCommit,
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
+    mlbLedgerAutoSettlement: process.env.MLB_LEDGER_AUTO_SETTLE !== "false",
+    mlbClosingLineCapture: process.env.MLB_CLOSING_LINE_CAPTURE !== "false",
+  });
 });
 
 (async () => {
+  registerAuthRoutes(app);
+  // Canonical v2 routes must precede historical handlers.
+  registerPicksV2Routes(app);
+  // Scientific MLB ledger: append-only predictions, settlements and reports.
+  registerMlbLedgerRoutes(app);
+  const mlbLedgerStore = getMlbLedgerStore();
+  const mlbClosingLineStore = getMlbClosingLineStore();
+  // Pregame closing prices and official results are append-only workers.
+  startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
+  startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = status >= 500 ? "Internal Server Error" : (err.message || "Request failed");
+    const message =
+      status >= 500 ? "Internal Server Error" : err.message || "Request failed";
 
     console.error("Request error:", err);
 
@@ -95,7 +139,7 @@ app.get("/health", (_req, res) => {
       host: "0.0.0.0",
     },
     () => {
-      log(`CourtEdge Backend serving on port ${port}`);
+      log(`CourtEdge Backend serving on port ${port} commit ${deploymentCommit}`);
     },
   );
 })();
