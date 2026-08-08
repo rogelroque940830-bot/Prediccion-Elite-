@@ -63,7 +63,7 @@ jobs:
           grep -F 'parseMlbPremiumNoUltraEnvelope' "$page"
           grep -F 'MlbPremiumNoUltraCard' "$page"
 
-          ! grep -E 'fetch\([^)]*,[^{]*\{[^}]*method:[[:space:]]*["'"'](POST|PUT|PATCH|DELETE)' "$lib" "$component" "$page"
+          ! grep -E 'POST|PUT|PATCH|DELETE' "$lib" "$component" "$page"
           ! grep -E 'operationalMoneyGateAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$lib" "$component" "$page"
 
           dist=$(find frontend/dist -type f -name '*.js' -print0 | xargs -0 cat)
