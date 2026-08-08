@@ -23,6 +23,7 @@ on:
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
   workflow_dispatch:
 
@@ -146,6 +147,7 @@ jobs:
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
 
           b5_successor=$(printf '%s\n' \
@@ -163,7 +165,7 @@ jobs:
             && "$changed" != "$m3e_successor" \
             && "$changed" != "$compatibility_package" \
             && "$changed" != "$b5_successor" ]]; then
-            echo 'P1-M6A2 scope rejected. Diff must be exactly the M6A2 package, the P1-M3E read-only package, the B5 identity-safe successor package, the five-workflow compatibility package, or this one-file workflow update.' >&2
+            echo 'P1-M6A2 scope rejected. Diff must be exactly the M6A2 package, the P1-M3E read-only package, the B5 identity-safe successor package, the six-workflow compatibility package, or this one-file workflow update.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
