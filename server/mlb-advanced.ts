@@ -54,13 +54,11 @@ export const PARK_FACTORS: Record<number, ParkFactor> = {
   // NL Central
   17:   { venueId: 17,   name: "Wrigley Field",      runs: 102, hrLHB: 100, hrRHB: 102, roof: "open",        elevation: 594, notes: "Viento DECIDE total—clave checar viento hoy" },
   31:   { venueId: 31,   name: "Great American Ball",runs: 108, hrLHB: 112, hrRHB: 115, roof: "open",        elevation: 550, notes: "HR paradise, más runs de MLB" },
-  32:   { venueId: 32,   name: "Daikin Park",        runs: 101, hrLHB: 105, hrRHB: 107, roof: "retractable", elevation: 22,  notes: "ex-Minute Maid, Crawford Boxes" },
   2889: { venueId: 2889, name: "PNC Park",           runs: 95,  hrLHB: 92,  hrRHB: 95,  roof: "open",        elevation: 725 },
   9:    { venueId: 9,    name: "Busch Stadium",      runs: 97,  hrLHB: 95,  hrRHB: 98,  roof: "open",        elevation: 465 },
   32:   { venueId: 32,   name: "American Family Fld",runs: 100, hrLHB: 100, hrRHB: 102, roof: "retractable", elevation: 635 },
 
   // NL West
-  19:   { venueId: 19,   name: "Dodger Stadium",     runs: 99,  hrLHB: 100, hrRHB: 102, roof: "open",        elevation: 340 },
   22:   { venueId: 22,   name: "Oracle Park",        runs: 92,  hrLHB: 85,  hrRHB: 95,  roof: "open",        elevation: 12,  notes: "LHB kill zone, Triples Alley" },
   73:   { venueId: 73,   name: "Petco Park",         runs: 94,  hrLHB: 92,  hrRHB: 93,  roof: "open",        elevation: 62 },
   15:   { venueId: 15,   name: "Chase Field",        runs: 102, hrLHB: 102, hrRHB: 103, roof: "retractable", elevation: 1082 },
