@@ -1,0 +1,97 @@
+name: Validate P1 PREMIUM No ULTRA Prospective
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective.yml'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE.md'
+      - 'server/mlb-premium-no-ultra-prospective.ts'
+      - 'server/mlb-premium-no-ultra-prospective.test.ts'
+      - 'tsconfig.p1-premium-no-ultra-prospective.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-premium-no-ultra-prospective:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned prospective surface
+        run: npx tsc -p tsconfig.p1-premium-no-ultra-prospective.json
+      - name: Run prospective economic falsification tests
+        run: npx tsx --test server/mlb-premium-no-ultra-prospective.test.ts
+      - name: Preserve M3D and M3E scientific contracts
+        run: |
+          npx tsx --test \
+            server/mlb-p1-economic-review.test.ts \
+            server/mlb-p1-operating-envelope.test.ts
+      - name: Build production backend required by S5A
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify frozen prospective and no-money boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-premium-no-ultra-prospective.ts'
+          testfile='server/mlb-premium-no-ultra-prospective.test.ts'
+          docs='docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE.md'
+
+          grep -F 'courtedge-p1-premium-no-ultra-prospective.v1' "$source"
+          grep -F '2026-08-08T04:32:33Z' "$source" "$docs"
+          grep -F 'a2bc70badc97251f2f0333beb1b2b954f841fad0' "$source" "$docs"
+          grep -F 'SELECTED_PREMIUM_AND_NOT_SELECTED_ULTRA' "$source"
+          grep -F 'minimumCandidateSettled: 50' "$source"
+          grep -F 'minimumCandidateDates: 20' "$source"
+          grep -F 'bootstrapReplicates: 5000' "$source"
+          grep -F 'maximumCalibrationGap: 0.05' "$source"
+          grep -F 'maximumCalibrationDisadvantageVsControl: 0.01' "$source"
+          grep -F 'historicalThirteenAndFourIncludedInConfirmation: false' "$source"
+          grep -F 'operationalMoneyGateAllowed: false' "$source"
+          grep -F 'stakeChangesAllowed: false' "$source"
+          grep -F 'automaticBettingAllowed: false' "$source"
+          grep -F 'automaticModelChangesAllowed: false' "$source"
+          grep -F 'automaticPromotionAllowed: false' "$source"
+          grep -F 'changing future outcome and scoring cannot change candidate membership' "$testfile"
+          grep -F 'multiple FINAL rows from the same game count once' "$testfile"
+          grep -F 'alternative ULTRA text is ignored' "$testfile"
+
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|operationalMoneyGateAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source"
+      - name: Verify exact five-file prospective scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE.md' \
+            'server/mlb-premium-no-ultra-prospective.test.ts' \
+            'server/mlb-premium-no-ultra-prospective.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'Prospective PREMIUM no-ULTRA scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
