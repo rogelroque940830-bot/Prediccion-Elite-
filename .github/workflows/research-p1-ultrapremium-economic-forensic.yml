@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/research-p1-ultrapremium-economic-forensic.yml'
       - 'scripts/p1-ultrapremium-economic-forensic.mjs'
+      - 'scripts/p1-ultrapremium-cohort-integrity.mjs'
 
 permissions:
   contents: read
@@ -50,7 +51,7 @@ jobs:
           test -s private/owner-ledger.jsonl
           chmod 600 private/owner-ledger.jsonl
 
-      - name: Run preregistered ULTRAPREMIUM forensic analysis
+      - name: Run preregistered ULTRAPREMIUM economic analysis
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +61,15 @@ jobs:
             audit/ledger-status.json \
             audit/result.json
           test -s audit/result.json
+
+      - name: Audit cohort independence and July-August regime shift
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/p1-ultrapremium-cohort-integrity.mjs \
+            private/owner-ledger.jsonl \
+            audit/cohort-integrity.json
+          test -s audit/cohort-integrity.json
 
       - name: Destroy private owner export before artifact upload
         shell: bash
@@ -77,23 +87,31 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const result = JSON.parse(fs.readFileSync('audit/result.json', 'utf8'));
+          const integrity = JSON.parse(fs.readFileSync('audit/cohort-integrity.json', 'utf8'));
           const fail = (message) => { throw new Error(message); };
           if (result.schemaVersion !== 'p1-ultrapremium-economic-forensic.v1') fail('schema');
+          if (integrity.schemaVersion !== 'p1-ultrapremium-cohort-integrity.v1') fail('integrity schema');
           if (result.backend.commit !== process.env.EXPECTED_BACKEND_COMMIT) fail(`backend=${result.backend.commit}`);
           if (!result.sourceIntegrity.immutableLedger) fail('ledger not immutable');
           if (result.sourceIntegrity.exportedRecords !== result.sourceIntegrity.publicPredictionCount) fail('incomplete export');
-          if (result.sourceIntegrity.rawExportUploaded !== false) fail('raw upload flag');
-          if (result.safety.rawOwnerLedgerPersistedInArtifact !== false) fail('raw persistence');
+          if (result.sourceIntegrity.rawExportSha256 !== integrity.source.rawExportSha256) fail('source digest mismatch');
+          if (result.sourceIntegrity.rawExportUploaded !== false || integrity.source.rawUploaded !== false) fail('raw upload flag');
+          if (result.safety.rawOwnerLedgerPersistedInArtifact !== false || integrity.safety.rawOwnerLedgerPersistedInArtifact !== false) fail('raw persistence');
           if (result.safety.predictionsCreated !== 0 || result.safety.settlementsCreated !== 0 || result.safety.betsPlaced !== 0) fail('write detected');
-          if (result.safety.realFinancialExposure !== 0) fail('financial exposure');
+          if (integrity.safety.predictionsCreated !== 0 || integrity.safety.settlementsCreated !== 0 || integrity.safety.betsPlaced !== 0) fail('integrity write detected');
+          if (result.safety.realFinancialExposure !== 0 || integrity.safety.realFinancialExposure !== 0) fail('financial exposure');
           if (result.interpretationGuards.rankingProbabilityFloorsAreNotCalibratedProbabilities !== true) fail('calibration guard');
           if (result.interpretationGuards.ultraCommitReportedCombinedTwoPlusBoostHitRate !== false) fail('ultra evidence guard');
+          if (integrity.integrityFlags.economicCertificationAllowed !== false) fail('premature economic certification');
           console.log(JSON.stringify({
             decision: result.decision,
-            historicalTokens: result.ledgerCoverage.historicalTokens,
             prospectiveUltra: result.economicGroups.explicitUltraF5ProspectiveApp,
-            prospectiveF5Premium: result.economicGroups.explicitPremiumF5ProspectiveApp,
-            prospectiveTtPremium: result.economicGroups.explicitPremiumStrongEarlyTtOverProspectiveApp,
+            duplicateProfile: integrity.independence.duplicateProfile,
+            earliestUltraPerGame: integrity.independence.earliestUltraPerGame,
+            latestUltraPerGame: integrity.independence.latestUltraPerGame,
+            terminalUltra: integrity.independence.terminalF5PerGameThatIsUltra,
+            modelProvenance: integrity.provenance.allProspectiveUltra,
+            monthContrast: integrity.monthContrast,
           }, null, 2));
           NODE
 
@@ -108,6 +126,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: p1-ultrapremium-economic-forensic-aggregate
-          path: audit/result.json
+          path: |
+            audit/result.json
+            audit/cohort-integrity.json
           if-no-files-found: warn
           retention-days: 30
