@@ -14,6 +14,7 @@ import { registerMlbP1EconomicReviewRoutes } from "./mlb-p1-economic-review-rout
 import { registerMlbP1OperatingEnvelopeRoutes } from "./mlb-p1-operating-envelope-routes";
 import { registerMlbP1FrozenOperatingEnvelopeRoutes } from "./mlb-p1-operating-envelope-frozen-routes";
 import { registerMlbPremiumNoUltraProspectiveRoutes } from "./mlb-premium-no-ultra-prospective-routes";
+import { registerMlbP1AdvancedComponentCertificationMiddleware } from "./mlb-p1-advanced-component-certification-routes";
 import { registerMlbStatcastMatchupIdentityMiddleware } from "./mlb-statcast-matchup-identity-routes";
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
 import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
@@ -43,6 +44,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbP1OperatingEnvelopeRoutes(app);
   registerMlbP1FrozenOperatingEnvelopeRoutes(app);
   registerMlbPremiumNoUltraProspectiveRoutes(app);
+  registerMlbP1AdvancedComponentCertificationMiddleware(app);
   registerMlbStatcastMatchupIdentityMiddleware(app);
   registerMlbCoreRoutes(app);
   registerMlbF5OddsProtectionRoutes(app);
