@@ -161,8 +161,8 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   const data = record(envelope?.data);
   const prereg = record(data?.preregistration);
   const cohort = record(data?.cohort);
-  const candidate = record(data?.candidate);
-  const control = record(data?.control);
+  const candidateValue = data?.candidate;
+  const controlValue = data?.control;
   const inference = record(data?.inference);
   const criteria = record(data?.criteria);
   const interpretation = record(data?.interpretation);
@@ -196,9 +196,10 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   if (Number(cohort?.candidateGames) + Number(cohort?.controlGames) !== Number(cohort?.independentGames)) fail("independent_accounting");
   if (Number(cohort?.candidateSettled) > Number(cohort?.candidateGames) || Number(cohort?.controlSettled) > Number(cohort?.controlGames)) fail("settled_accounting");
 
-  if (!validMetric(candidate) || !validMetric(control)) fail("metrics");
-  const candidateMetric = candidate as MlbPremiumNoUltraMetricSummary;
-  const controlMetric = control as MlbPremiumNoUltraMetricSummary;
+  if (!validMetric(candidateValue)) fail("candidate_metric");
+  if (!validMetric(controlValue)) fail("control_metric");
+  const candidateMetric = candidateValue;
+  const controlMetric = controlValue;
   if (candidateMetric.settled !== cohort?.candidateSettled || candidateMetric.dates !== cohort?.candidateDates) fail("candidate_metric_cohort_parity");
   if (controlMetric.settled !== cohort?.controlSettled || controlMetric.dates !== cohort?.controlDates) fail("control_metric_cohort_parity");
   if (!nonNegativeInteger(inference?.dateClusters)) fail("date_clusters");
