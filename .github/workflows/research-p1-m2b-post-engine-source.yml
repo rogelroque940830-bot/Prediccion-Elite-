@@ -1,0 +1,145 @@
+name: Research P1-M2B Post Engine Source
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-engine-source.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-post-engine-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 76f11bea340812a5209d3c37e497daa17b4bf55e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-engine-source.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Measure engine DIRECT coverage and certifier separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const slateEnvelope=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if(slateEnvelope?.success!==true||!Array.isArray(slateEnvelope?.data?.games))throw new Error('POST_ENGINE_SOURCE_SLATE_INVALID');
+          const slate=slateEnvelope.data,now=Date.now();
+          const games=slate.games.filter((g)=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
+            .sort((a,b)=>{
+              const ams=a.startTime?Date.parse(a.startTime):Infinity,bms=b.startTime?Date.parse(b.startTime):Infinity;
+              return (ams>=now?0:1)-(bms>=now?0:1)||Math.abs(ams-now)-Math.abs(bms-now);
+            }).slice(0,3);
+          const blockerClass=(v)=>String(v||'UNKNOWN').split(':')[0].replace(/[^A-Z0-9_]/gi,'_').toUpperCase();
+          const side=(m)=>({
+            lineupSize:Number(m?.lineupSize)||0,
+            lineupSource:String(m?.lineupSource||'UNKNOWN').toUpperCase(),
+            directCount:Number(m?.directCount)||0,
+            proxyCount:Number(m?.proxyCount)||0,
+            dataConfidence:String(m?.dataConfidence||'UNKNOWN').toUpperCase(),
+            nineDirect:(Number(m?.directCount)||0)===9,
+          });
+          const result={
+            schemaVersion:'p1-m2b-post-engine-source.v1',
+            generatedAt:new Date().toISOString(),
+            deployedCommit:fs.readFileSync('private/deployed-commit.txt','utf8'),
+            baselineEvidence:{evidencePr:407,currentDirectBattersTotal:13,measuredSides:6},
+            slate:{date:slate.date,totalGames:slate.summary?.total??slate.games.length,sampledGames:games.length},
+            samples:[],
+            aggregate:{measuredSides:0,directTotal:0,proxyTotal:0,nineDirectSides:0,confirmedLineupSides:0,sourceStatusCounts:{},blockerClassCounts:{}},
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false}
+          };
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          for(let i=0;i<games.length;i++){
+            const g=games[i],rp=`private/r-${i}.json`;
+            let code='000';
+            try{code=execFileSync('curl',['-sS','-o',rp,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(g.gamePk)}`],{encoding:'utf8'}).trim();}
+            catch{result.samples.push({gameOrdinal:i+1,requestStatus:'FAILED'});continue;}
+            if(code!=='200'){result.samples.push({gameOrdinal:i+1,requestStatus:`HTTP_${code}`});continue;}
+            const r=JSON.parse(fs.readFileSync(rp,'utf8'));
+            const home=side(r?.homeLineupVsAwaySP),away=side(r?.awayLineupVsHomeSP);
+            const sourceStatus=String(r?.sourceStatus||r?.provenance?.status||'MISSING').toUpperCase();
+            const blockers=Array.from(new Set((Array.isArray(r?.provenance?.blockers)?r.provenance.blockers:[]).map(blockerClass)));
+            bump(result.aggregate.sourceStatusCounts,sourceStatus);
+            for(const b of blockers)bump(result.aggregate.blockerClassCounts,b);
+            for(const s of [home,away]){
+              result.aggregate.measuredSides++;
+              result.aggregate.directTotal+=s.directCount;
+              result.aggregate.proxyTotal+=s.proxyCount;
+              if(s.nineDirect)result.aggregate.nineDirectSides++;
+              if(s.lineupSource==='CONFIRMED')result.aggregate.confirmedLineupSides++;
+            }
+            result.samples.push({
+              gameOrdinal:i+1,requestStatus:'OK',sourceStatus,hasGeneratedAt:typeof r?.generatedAt==='string'&&r.generatedAt.length>0,
+              blockerClasses:blockers,home,away,
+              runDelta:{home:Number.isFinite(Number(r?.homeRunsDelta))?Number(r.homeRunsDelta):null,away:Number.isFinite(Number(r?.awayRunsDelta))?Number(r.awayRunsDelta):null}
+            });
+          }
+          const measured=result.samples.filter((s)=>s.requestStatus==='OK');
+          result.conclusion={
+            measured:measured.length>0,
+            sampledGames:measured.length,
+            engineDirectCoverageIncreasedVsPriorAggregate:result.aggregate.directTotal>result.baselineEvidence.currentDirectBattersTotal,
+            certifiedObserved:measured.some((s)=>s.sourceStatus==='CERTIFIED'),
+            certifierRemainedFailClosed:measured.length>0&&measured.every((s)=>s.sourceStatus!=='CERTIFIED'),
+            nineDirectObservedOnAnySide:result.aggregate.nineDirectSides>0,
+            certificationRuleChanged:false,
+            modelFormulaChanged:false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized post-Phase1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-engine-source
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
