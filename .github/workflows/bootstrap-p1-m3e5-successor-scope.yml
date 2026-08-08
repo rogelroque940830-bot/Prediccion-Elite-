@@ -1,0 +1,155 @@
+name: Bootstrap P1-M3E.5 Successor Scope
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/bootstrap-p1-m3e5-successor-scope.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Install exact P1-M3E.5 successor policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          allowlist_files = [
+              '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml',
+              '.github/workflows/validate-p1-m3d-interactive-economic-review.yml',
+              '.github/workflows/validate-p1-m4c-backend-economic-response.yml',
+              '.github/workflows/validate-p1-m5a-real-cohort-activation.yml',
+          ]
+          exact_files = [
+              '.github/workflows/validate-p1-m3e-operating-envelope.yml',
+              '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml',
+              '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml',
+          ]
+          premium_file = '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
+          compatibility = [
+              '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml',
+              '.github/workflows/validate-p1-m3d-interactive-economic-review.yml',
+              '.github/workflows/validate-p1-m3e-operating-envelope.yml',
+              '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml',
+              '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml',
+              '.github/workflows/validate-p1-m4c-backend-economic-response.yml',
+              '.github/workflows/validate-p1-m5a-real-cohort-activation.yml',
+              '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml',
+          ]
+          successor = [
+              '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml',
+              'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md',
+              'server/mlb-p1-operating-envelope-frozen-live.test.ts',
+              'server/mlb-p1-operating-envelope-frozen-live.ts',
+              'server/mlb-p1-operating-envelope-frozen-routes.ts',
+              'server/route-contract.extensions.json',
+              'server/routes.ts',
+              'tsconfig.p1-m3e5-live-frozen-envelope.json',
+          ]
+
+          def package_block(name, items, indent='          '):
+              lines = [f"{indent}{name}=$(printf '%s\\n' \\"]
+              for item in items:
+                  lines.append(f"{indent}  '{item}' \\")
+              lines[-1] = lines[-1][:-2] + ' | sort)'
+              return '\n'.join(lines)
+
+          def insert_missing_into_block(text, marker, items, filename):
+              start = text.rfind(marker)
+              if start < 0:
+                  raise RuntimeError(f'{filename}: block marker not found: {marker}')
+              end = text.find('| sort)', start)
+              if end < 0:
+                  raise RuntimeError(f'{filename}: block terminator not found')
+              segment = text[start:end]
+              additions = []
+              for item in items:
+                  if item not in segment:
+                      additions.append(f"            '{item}' \\\n")
+              return text[:end] + ''.join(additions) + text[end:]
+
+          for filename in allowlist_files:
+              path = Path(filename)
+              text = path.read_text()
+              original = text
+              text = insert_missing_into_block(text, "allowed=$(printf '%s\\n' \\", successor, filename)
+              if text == original:
+                  raise RuntimeError(f'{filename}: successor already present or no change applied')
+              path.write_text(text)
+
+          for filename in exact_files:
+              path = Path(filename)
+              text = path.read_text()
+              original = text
+              text = insert_missing_into_block(text, "compatibility_package=$(printf '%s\\n' \\", compatibility, filename)
+              if 'm3e5_successor=$(printf' not in text:
+                  if_start = text.rfind('          if [[ "$changed"')
+                  if if_start < 0:
+                      raise RuntimeError(f'{filename}: final changed comparison not found')
+                  text = text[:if_start] + package_block('m3e5_successor', successor) + '\n\n' + text[if_start:]
+              if_start = text.rfind('          if [[ "$changed"')
+              then = text.find(']]; then', if_start)
+              if if_start < 0 or then < 0:
+                  raise RuntimeError(f'{filename}: final if terminator not found')
+              condition = text[if_start:then]
+              if '$m3e5_successor' not in condition:
+                  text = text[:then] + ' \\\n            && "$changed" != "$m3e5_successor" ' + text[then:]
+              if text == original:
+                  raise RuntimeError(f'{filename}: no exact-scope change applied')
+              path.write_text(text)
+
+          path = Path(premium_file)
+          text = path.read_text()
+          original = text
+          text = text.replace("          expected=$(printf '%s\\n' \\", "          premium_no_ultra_readonly=$(printf '%s\\n' \\", 1)
+          marker = '          if [[ "$changed" != "$expected" ]]; then'
+          if marker not in text:
+              raise RuntimeError(f'{premium_file}: expected comparison not found')
+          if_start = text.index(marker)
+          insertion = package_block('m3e5_successor', successor) + '\n\n' + package_block('compatibility_package', compatibility) + '\n'
+          text = text[:if_start] + insertion + text[if_start:]
+          text = text.replace(
+              marker,
+              '          if [[ "$changed" != "$premium_no_ultra_readonly" \\\n            && "$changed" != "$m3e5_successor" \\\n            && "$changed" != "$compatibility_package" ]]; then',
+              1,
+          )
+          if text == original:
+              raise RuntimeError(f'{premium_file}: no change applied')
+          path.write_text(text)
+          PY
+
+          rm -f .github/workflows/bootstrap-p1-m3e5-successor-scope.yml
+          git diff --check
+          current=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/bootstrap-p1-m3e5-successor-scope.yml' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+          [[ "$current" == "$expected" ]]
+      - name: Commit final eight-workflow package and remove bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows
+          git commit -m 'ci: authorize exact P1-M3E.5 successor scope'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
