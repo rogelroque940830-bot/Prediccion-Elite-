@@ -1,0 +1,170 @@
+name: Research P1-M2B Statcast Blockers
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-statcast-blockers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-statcast-blockers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: f7f6cbc3cb857ea5a4f2a6e74fc8016a73fff726
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-statcast-blockers.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Audit sanitized Statcast certifier blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate")
+          [[ "$slate_code" == '200' ]]
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+          const envelope = JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if (envelope?.success !== true || !Array.isArray(envelope?.data?.games)) throw new Error('STATCAST_BLOCKER_SLATE_INVALID');
+          const slate = envelope.data;
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((g) => ['SCHEDULED','PREGAME'].includes(g.state) && g.analysisAllowed === true)
+            .sort((a,b) => {
+              const ams = a.startTime ? Date.parse(a.startTime) : Number.POSITIVE_INFINITY;
+              const bms = b.startTime ? Date.parse(b.startTime) : Number.POSITIVE_INFINITY;
+              const afuture = ams >= now ? 0 : 1;
+              const bfuture = bms >= now ? 0 : 1;
+              return afuture - bfuture || Math.abs(ams-now) - Math.abs(bms-now);
+            })
+            .slice(0,3);
+
+          const blockerClass = (value) => String(value || 'UNKNOWN').split(':')[0].replace(/[^A-Z0-9_]/gi,'_').toUpperCase();
+          const result = {
+            schemaVersion: 'p1-m2b-statcast-blocker-audit.v1',
+            generatedAt: new Date().toISOString(),
+            deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            slate: { date: slate.date, totalGames: slate.summary?.total ?? slate.games.length, sampledGames: candidates.length },
+            samples: [],
+            aggregate: { sourceStatusCounts: {}, blockerClassCounts: {}, flagTrueCounts: {}, flagFalseCounts: {} },
+            safety: { writesPerformed: 0, predictionsCreated: 0, settlementsCreated: 0, sportsbookCallsPerformedByResearchRunner: 0, rawIdentityUploaded: false }
+          };
+          const flags = [
+            'currentLineupsConfirmed',
+            'visibleCoverageComplete',
+            'currentSeasonPitcherArsenalsReproduced',
+            'bullpenRosterAndStatsComplete',
+            'recentBatterStatsComplete',
+            'starterRowsReproduced',
+            'bullpenDeltasReproduced',
+            'combinedRunDeltasReproduced'
+          ];
+          const bump = (obj,key) => { obj[key] = (obj[key] || 0) + 1; };
+
+          for (let index=0; index<candidates.length; index++) {
+            const game = candidates[index];
+            const raw = `private/statcast-${index}.json`;
+            let code = '000';
+            try {
+              code = execFileSync('curl',['-sS','-o',raw,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(game.gamePk)}`],{encoding:'utf8'}).trim();
+            } catch {
+              result.samples.push({ gameOrdinal:index+1, requestStatus:'FAILED' });
+              continue;
+            }
+            const response = JSON.parse(fs.readFileSync(raw,'utf8'));
+            if (code !== '200') {
+              result.samples.push({ gameOrdinal:index+1, requestStatus:`HTTP_${code}` });
+              continue;
+            }
+            const provenance = response?.provenance || {};
+            const classes = Array.from(new Set((Array.isArray(provenance.blockers) ? provenance.blockers : []).map(blockerClass)));
+            const sourceStatus = String(response?.sourceStatus || provenance?.status || 'MISSING').toUpperCase();
+            bump(result.aggregate.sourceStatusCounts, sourceStatus);
+            for (const cls of classes) bump(result.aggregate.blockerClassCounts, cls);
+            const flagState = {};
+            for (const flag of flags) {
+              const value = provenance?.[flag] === true;
+              flagState[flag] = value;
+              bump(value ? result.aggregate.flagTrueCounts : result.aggregate.flagFalseCounts, flag);
+            }
+            result.samples.push({
+              gameOrdinal:index+1,
+              requestStatus:'OK',
+              sourceStatus,
+              hasGeneratedAt: typeof response?.generatedAt === 'string' && response.generatedAt.length > 0,
+              blockerClasses: classes,
+              flags: flagState,
+              failureDisposition: provenance?.failureDisposition || null,
+              cacheHit: provenance?.cacheHit === true
+            });
+          }
+          const measured = result.samples.filter((s) => s.requestStatus === 'OK');
+          result.conclusion = {
+            measured: measured.length > 0,
+            sampledEvaluations: measured.length,
+            certifiedObserved: measured.some((s) => s.sourceStatus === 'CERTIFIED'),
+            commonBlockerClasses: Object.entries(result.aggregate.blockerClassCounts).filter(([,count]) => count === measured.length).map(([key]) => key),
+            gateShouldBeRelaxed: false,
+            certifierShouldBeRelaxed: false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({ aggregate:result.aggregate, conclusion:result.conclusion },null,2));
+          NODE
+
+          test -f audit/result.json
+          rm -rf private
+          test ! -d private
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized blocker classes only
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-statcast-blocker-classes
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
