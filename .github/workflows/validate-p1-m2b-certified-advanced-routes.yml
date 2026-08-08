@@ -35,6 +35,8 @@ jobs:
         run: |
           npx tsx --test \
             server/mlb-p1-advanced-component-certification-routes.test.ts \
+            server/mlb-statcast-quality-provenance.test.ts \
+            server/mlb-advanced-context-provenance.test.ts \
             server/mlb-discipline-speed-provenance.test.ts \
             server/mlb-sos-provenance.test.ts \
             server/mlb-p1-advanced-factor-provenance.test.ts
@@ -51,20 +53,20 @@ jobs:
         run: |
           set -euo pipefail
           module='server/mlb-p1-advanced-component-certification-routes.ts'
-          readiness='server/mlb-p1-pregame-readiness-routes.ts'
           testfile='server/mlb-p1-advanced-component-certification-routes.test.ts'
           docs='docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md'
 
+          grep -F 'getStatcastQualityCertifiedSnapshot' "$module"
+          grep -F 'getAdvancedContextCertifiedSnapshot' "$module"
           grep -F 'getDisciplineSpeedCertifiedSnapshot' "$module"
           grep -F 'getTeamSosCertifiedSnapshot' "$module"
-          grep -F 'sourceStatus: "DEGRADED"' "$module"
-          grep -F 'failureDisposition: "DEGRADE_NOT_CERTIFY"' "$module"
-          grep -F 'registerMlbP1AdvancedComponentCertificationMiddleware(app);' "$readiness"
-          grep -F 'generatedAt, undefined' "$testfile"
-          grep -F 'Statcast remains independently fail-closed' "$docs"
+          grep -F 'preserving legacy route' "$module"
+          grep -F 'large certified maps must not leak through the route' "$testfile"
+          grep -F 'strict Advanced Context failure must preserve the legacy route' "$testfile"
+          grep -F 'STATCAST_MATCHUP` remains independently fail-closed' "$docs"
 
           ! grep -E 'automaticBetPlacement:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|probabilityChanged:[[:space:]]*true|thresholdChanged:[[:space:]]*true|stakeChanged:[[:space:]]*true' "$module"
-      - name: Verify exact six-file scope
+      - name: Verify exact five-file scope
         shell: bash
         run: |
           set -euo pipefail
@@ -77,7 +79,6 @@ jobs:
             'docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md' \
             'server/mlb-p1-advanced-component-certification-routes.test.ts' \
             'server/mlb-p1-advanced-component-certification-routes.ts' \
-            'server/mlb-p1-pregame-readiness-routes.ts' \
             'tsconfig.p1-m2b-certified-advanced-routes.json' | sort)
           if [[ "$changed" != "$expected" ]]; then
             echo 'P1-M2B certified advanced route scope rejected.' >&2
