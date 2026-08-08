@@ -1,0 +1,272 @@
+name: Research P1-M2B Current Injury Reconciliation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-injury-reconciliation-current.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-current-injury-reconciliation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: b0a0ad5eb1b8a70dd85882051d5a7f4e05546680
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-injury-reconciliation-current.yml' ]]
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 42); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Audit current injury reconciliation without persisting identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > private/audit.ts <<'TS'
+          import fs from 'node:fs';
+          import { classifyMlbInjuryShadow, fetchOfficialMlbInjurySnapshot } from '../server/mlb-injury-shadow';
+
+          const BACKEND_URL = process.env.BACKEND_URL!;
+          const bump = (obj: Record<string, number>, key: string) => { obj[key] = (obj[key] || 0) + 1; };
+          const clean = (v: unknown) => String(v ?? '').trim();
+          const positiveInt = (v: unknown): number | null => Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null;
+          const isOfficialIl = (entry: any) => /^D\d+$/i.test(clean(entry?.statusCode)) || /injured/i.test(clean(entry?.statusDescription));
+
+          async function json(url: string): Promise<any> {
+            const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(120_000) });
+            if (!r.ok) throw new Error(`HTTP_${r.status}`);
+            return r.json();
+          }
+
+          async function seasonStats(playerId: number, isPitcher: boolean, season: number): Promise<any> {
+            try {
+              const group = isPitcher ? 'pitching' : 'hitting';
+              const p = await json(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=${group}&season=${season}&sportId=1`);
+              return p?.stats?.[0]?.splits?.[0]?.stat ?? {};
+            } catch { return {}; }
+          }
+
+          const slateEnvelope = await json(`${BACKEND_URL}/api/mlb/p1/v1/slate`);
+          if (slateEnvelope?.success !== true || !Array.isArray(slateEnvelope?.data?.games)) throw new Error('INJURY_AUDIT_SLATE_INVALID');
+          const slate = slateEnvelope.data;
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((g: any) => ['SCHEDULED','PREGAME'].includes(g.state) && g.analysisAllowed === true)
+            .sort((a: any,b: any) => {
+              const ac = clean(a.lineupState).toUpperCase() === 'CONFIRMED' ? 0 : 1;
+              const bc = clean(b.lineupState).toUpperCase() === 'CONFIRMED' ? 0 : 1;
+              if (ac !== bc) return ac - bc;
+              const ams = a.startTime ? Date.parse(a.startTime) : Infinity;
+              const bms = b.startTime ? Date.parse(b.startTime) : Infinity;
+              return Math.abs(ams-now) - Math.abs(bms-now);
+            }).slice(0,4);
+
+          const result: any = {
+            schemaVersion: 'p1-m2b-current-injury-reconciliation.v1',
+            generatedAt: new Date().toISOString(),
+            deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            samples: [],
+            aggregate: {
+              measuredGames: 0,
+              measuredSides: 0,
+              statusCounts: {},
+              phaseBCoverageCounts: {},
+              sidesAlreadyVerified: 0,
+              sidesPartialOnlyOfficialGapNoRejects: 0,
+              sidesWithRejectedIdentity: 0,
+              sidesWithSourceHealthProblem: 0,
+              officialOnlyMetadataTotal: 0,
+              officialOnlyRecomputedTotal: 0,
+              officialOnlyDecisionCounts: {},
+              officialOnlyReasonCodeCounts: {},
+              officialOnlyPitchers: 0,
+              officialOnlyHitters: 0,
+              officialOnlyRecentHighLeverageRelieverCandidates: 0,
+              officialOnlyPendingOrConflict: 0,
+              rejectedIdentityTotal: 0,
+            },
+            safety: { writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false }
+          };
+
+          for (let gameIndex=0; gameIndex<candidates.length; gameIndex++) {
+            const g = candidates[gameIndex];
+            const date = clean(g.officialDate || slate.date);
+            const gamePk = positiveInt(g.gamePk);
+            if (!gamePk || !date) { result.samples.push({gameOrdinal:gameIndex+1,requestStatus:'INVALID_GAME'}); continue; }
+            let aggregate: any, feed: any;
+            try {
+              [aggregate, feed] = await Promise.all([
+                json(`${BACKEND_URL}/api/mlb/all?date=${encodeURIComponent(date)}`),
+                json(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`),
+              ]);
+            } catch {
+              result.samples.push({gameOrdinal:gameIndex+1,requestStatus:'FETCH_FAILED'}); continue;
+            }
+            const games = Array.isArray(aggregate?.games) ? aggregate.games : Array.isArray(aggregate?.data?.games) ? aggregate.data.games : [];
+            const ag = games.find((x:any) => positiveInt(x?.gamePk ?? x?.gameId ?? x?.id) === gamePk);
+            if (!ag) { result.samples.push({gameOrdinal:gameIndex+1,requestStatus:'AGGREGATE_GAME_MISSING'}); continue; }
+            const probable = {
+              home: positiveInt(feed?.gameData?.probablePitchers?.home?.id),
+              away: positiveInt(feed?.gameData?.probablePitchers?.away?.id),
+            };
+            const season = Number(date.slice(0,4));
+            const gameSample:any = { gameOrdinal:gameIndex+1, requestStatus:'OK', sides:{} };
+
+            for (const side of ['home','away'] as const) {
+              const teamId = positiveInt(g?.[`${side}Team`]?.id ?? feed?.gameData?.teams?.[side]?.id);
+              const meta = ag?.[`${side}InjuryData`] ?? {};
+              const externalList = Array.isArray(ag?.[`${side}Injuries`]) ? ag[`${side}Injuries`] : [];
+              if (!teamId) { gameSample.sides[side] = {status:'TEAM_ID_MISSING'}; continue; }
+              const official = await fetchOfficialMlbInjurySnapshot(teamId, date);
+              const externalIds = new Set<number>(externalList.map((x:any) => positiveInt(x?.playerId ?? x?.id)).filter((x:any):x is number => x != null));
+              const officialIl = Object.values(official.rosterByPlayerId).filter(isOfficialIl);
+              const officialOnly = officialIl.filter((x:any) => !externalIds.has(Number(x.playerId)));
+
+              const decisions: Record<string,number> = {};
+              const reasons: Record<string,number> = {};
+              let officialOnlyPitchers=0, officialOnlyHitters=0, recentHighLeverage=0, pendingOrConflict=0;
+              for (const entry of officialOnly as any[]) {
+                const isPitcher = clean(entry.position).toUpperCase() === 'P';
+                if (isPitcher) officialOnlyPitchers++; else officialOnlyHitters++;
+                const stats = await seasonStats(Number(entry.playerId), isPitcher, season);
+                const tx = official.latestTransactionByPlayerId[Number(entry.playerId)] ?? null;
+                const shadow = classifyMlbInjuryShadow({
+                  playerId: Number(entry.playerId),
+                  name: clean(entry.name),
+                  isPitcher,
+                  position: entry.position ?? null,
+                  rosterStatusCode: entry.statusCode,
+                  rosterStatusDescription: entry.statusDescription,
+                  latestTransaction: tx,
+                  probablePitcherId: probable[side],
+                  gamesStarted: Number(stats.gamesStarted)||0,
+                  saves: Number(stats.saves)||0,
+                  holds: Number(stats.holds)||0,
+                  gamesFinished: Number(stats.gamesFinished)||0,
+                  inningsPitched: Number(stats.inningsPitched)||0,
+                  plateAppearances: Number(stats.plateAppearances)||0,
+                  ops: Number(stats.ops)||0,
+                  obp: Number(stats.obp)||0,
+                  slg: Number(stats.slg)||0,
+                  asOfDate: date,
+                });
+                bump(decisions, shadow.decision);
+                bump(reasons, shadow.reasonCode);
+                if (shadow.reasonCode === 'OFFICIAL_IL_HIGH_LEVERAGE_RELIEVER' && shadow.confidence === 'HIGH' && shadow.daysSinceOfficialTransaction != null && shadow.daysSinceOfficialTransaction <= 14) recentHighLeverage++;
+                if (shadow.decision === 'PENDING' || shadow.decision === 'CONFLICT') pendingOrConflict++;
+              }
+
+              const status = clean(meta.status).toUpperCase() || 'MISSING';
+              const rejectedCount = Math.max(0, Number(meta.rejectedCount)||0);
+              const officialOnlyMetadata = Math.max(0, Number(meta?.shadowSummary?.officialOnly)||0);
+              const sourceErrors = Array.isArray(meta.sourceErrors) ? meta.sourceErrors.length : 0;
+              const sourceHealthy = meta.stale !== true && clean(meta.officialValidationStatus).toUpperCase()==='VERIFIED' && sourceErrors===0;
+              const phaseCoverage = clean(meta?.phaseB?.coverage).toUpperCase() || 'MISSING';
+              const onlyOfficialGapNoRejects = status==='PARTIAL' && sourceHealthy && rejectedCount===0 && officialOnly.length>0;
+
+              bump(result.aggregate.statusCounts,status);
+              bump(result.aggregate.phaseBCoverageCounts,phaseCoverage);
+              result.aggregate.measuredSides++;
+              if (status==='VERIFIED') result.aggregate.sidesAlreadyVerified++;
+              if (onlyOfficialGapNoRejects) result.aggregate.sidesPartialOnlyOfficialGapNoRejects++;
+              if (rejectedCount>0) result.aggregate.sidesWithRejectedIdentity++;
+              if (!sourceHealthy) result.aggregate.sidesWithSourceHealthProblem++;
+              result.aggregate.officialOnlyMetadataTotal += officialOnlyMetadata;
+              result.aggregate.officialOnlyRecomputedTotal += officialOnly.length;
+              result.aggregate.rejectedIdentityTotal += rejectedCount;
+              result.aggregate.officialOnlyPitchers += officialOnlyPitchers;
+              result.aggregate.officialOnlyHitters += officialOnlyHitters;
+              result.aggregate.officialOnlyRecentHighLeverageRelieverCandidates += recentHighLeverage;
+              result.aggregate.officialOnlyPendingOrConflict += pendingOrConflict;
+              for (const [k,v] of Object.entries(decisions)) result.aggregate.officialOnlyDecisionCounts[k]=(result.aggregate.officialOnlyDecisionCounts[k]||0)+v;
+              for (const [k,v] of Object.entries(reasons)) result.aggregate.officialOnlyReasonCodeCounts[k]=(result.aggregate.officialOnlyReasonCodeCounts[k]||0)+v;
+
+              gameSample.sides[side] = {
+                status,
+                officialValidationStatus: clean(meta.officialValidationStatus).toUpperCase() || 'MISSING',
+                stale: meta.stale === true,
+                sourceErrorCount: sourceErrors,
+                rejectedCount,
+                officialOnlyMetadata,
+                officialOnlyRecomputed: officialOnly.length,
+                phaseBCoverage: phaseCoverage,
+                externalValidatedCount: externalList.length,
+                officialOnlyComposition:{pitchers:officialOnlyPitchers,hitters:officialOnlyHitters,recentHighLeverageRelieverCandidates:recentHighLeverage,pendingOrConflict,decisionCounts:decisions,reasonCodeCounts:reasons},
+                candidateOfficialSupplementOnly: onlyOfficialGapNoRejects,
+              };
+            }
+            result.aggregate.measuredGames++;
+            result.samples.push(gameSample);
+          }
+
+          result.conclusion = {
+            measured: result.aggregate.measuredGames > 0,
+            sampledGames: result.aggregate.measuredGames,
+            anySidesRecoverableByOfficialSupplementWithoutIgnoringRejected: result.aggregate.sidesPartialOnlyOfficialGapNoRejects > 0,
+            recoverableSideCount: result.aggregate.sidesPartialOnlyOfficialGapNoRejects,
+            rejectedIdentityStillExists: result.aggregate.rejectedIdentityTotal > 0,
+            sourceHealthProblemsObserved: result.aggregate.sidesWithSourceHealthProblem > 0,
+            officialOnlyEvidenceIsMaterial: result.aggregate.officialOnlyRecomputedTotal > 0,
+            safeToTreatAllPartialAsFresh: false,
+            nextImplementationShouldIgnoreRejectedExternalRecords: false,
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          TS
+
+          BACKEND_URL="$BACKEND_URL" npx tsx private/audit.ts
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"teamId"|"playerId"|"name"|"homeTeam"|"awayTeam"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized reconciliation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-current-injury-reconciliation
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
