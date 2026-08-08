@@ -1,4 +1,4 @@
-export const MLB_STATCAST_MATCHUP_COVERAGE_SCHEMA = "courtedge-mlb-statcast-matchup-coverage.v1" as const;
+export const MLB_STATCAST_MATCHUP_COVERAGE_SCHEMA = "courtedge-mlb-statcast-matchup-coverage.v2" as const;
 
 export type StatcastMatchupCertificationState =
   | "BLOCKED_UNCONFIRMED_LINEUP"
@@ -16,7 +16,6 @@ export interface StatcastSideCoverage {
   };
   directBatterCoveragePct: number;
   starterPitchTypes: number;
-  fallbackPitchTypesUsed: boolean;
   bullpenEvaluated: number;
   history: {
     requestedBatters: number;
@@ -62,10 +61,11 @@ function positiveTeamId(value: unknown): number | null {
 function sourceCounts(perBatter: any[]): StatcastSideCoverage["batterSourceCounts"] {
   const counts = { direct: 0, teamProxy: 0, leagueFallback: 0, unknown: 0 };
   for (const row of perBatter) {
-    const source = String(row?.source ?? "").trim().toUpperCase();
+    // The production engine exposes `dataQuality`, not `source`.
+    const source = String(row?.dataQuality ?? "").trim().toUpperCase();
     if (source === "DIRECT") counts.direct++;
     else if (source === "TEAM_PROXY") counts.teamProxy++;
-    else if (source === "LEAGUE_FALLBACK") counts.leagueFallback++;
+    else if (source === "LEAGUE") counts.leagueFallback++;
     else counts.unknown++;
   }
   return counts;
@@ -78,8 +78,9 @@ function sideCoverage(input: {
 }): StatcastSideCoverage {
   const perBatter = Array.isArray(input.matchup?.perBatter) ? input.matchup.perBatter : [];
   const counts = sourceCounts(perBatter);
+  const lineupSize = Number(input.matchup?.lineupSize);
   const lineupBatterCount = Math.max(
-    Number.isInteger(Number(input.matchup?.batterCount)) ? Number(input.matchup.batterCount) : 0,
+    Number.isInteger(lineupSize) && lineupSize >= 0 ? lineupSize : 0,
     perBatter.length,
   );
   const historyIdentity = input.history?.identity ?? {};
@@ -92,8 +93,8 @@ function sideCoverage(input: {
     lineupBatterCount,
     batterSourceCounts: counts,
     directBatterCoveragePct,
-    starterPitchTypes: Array.isArray(input.matchup?.arsenal?.pitchTypes) ? input.matchup.arsenal.pitchTypes.length : 0,
-    fallbackPitchTypesUsed: input.matchup?.fallbackPitchTypes === true,
+    // Production exposes the actual starter arsenal as an array.
+    starterPitchTypes: Array.isArray(input.matchup?.arsenal) ? input.matchup.arsenal.length : 0,
     bullpenEvaluated: Array.isArray(input.matchup?.bullpenMatchup) ? input.matchup.bullpenMatchup.length : 0,
     history: {
       requestedBatters: finiteNonNegative(historyIdentity.requestedBatters),
@@ -113,7 +114,6 @@ function visibleSideComplete(side: StatcastSideCoverage): boolean {
     && side.batterSourceCounts.leagueFallback === 0
     && side.batterSourceCounts.unknown === 0
     && side.starterPitchTypes > 0
-    && side.fallbackPitchTypesUsed === false
     && side.bullpenEvaluated > 0
     && side.history.requestedBatters === 9
     && side.history.successfulQueries === 9
@@ -148,8 +148,8 @@ export function buildStatcastMatchupCoverageReport(input: {
   }
 
   // These four provenance dimensions are not represented in the legacy result.
-  // B5A records the gap explicitly rather than inferring successful acquisition
-  // from a non-null numeric output.
+  // In particular, the presence of an arsenal array does not reveal whether it
+  // came from current Savant, prior-season Savant, Stats API, or a cache.
   blockers.push(
     "STATCAST_MATCHUP_PITCHER_ARSENAL_PROVENANCE_UNOBSERVABLE",
     "STATCAST_MATCHUP_BULLPEN_ROSTER_COVERAGE_UNOBSERVABLE",

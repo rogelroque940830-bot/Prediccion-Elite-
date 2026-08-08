@@ -52,6 +52,10 @@ jobs:
           set -euo pipefail
           source='server/mlb-statcast-matchup-coverage.ts'
           docs='docs/P1_M3F3B5A_STATCAST_COVERAGE_OBSERVABILITY.md'
+          grep -F 'courtedge-mlb-statcast-matchup-coverage.v2' "$source"
+          grep -F 'dataQuality' "$source"
+          grep -F 'lineupSize' "$source"
+          grep -F 'Array.isArray(input.matchup?.arsenal)' "$source"
           grep -F 'BLOCKED_UNOBSERVABLE_PROVENANCE' "$source"
           grep -F 'pitcherArsenalSourceObservable: false' "$source"
           grep -F 'bullpenRosterCoverageObservable: false' "$source"
