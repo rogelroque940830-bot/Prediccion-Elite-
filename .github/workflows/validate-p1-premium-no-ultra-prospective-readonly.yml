@@ -1,0 +1,100 @@
+name: Validate P1 PREMIUM No ULTRA Readonly
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-premium-no-ultra-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck read-only adapter surface
+        run: npx tsc -p tsconfig.p1-premium-no-ultra-prospective-readonly.json
+      - name: Preserve frozen prospective hypothesis
+        run: npx tsx --test server/mlb-premium-no-ultra-prospective.test.ts
+      - name: Preserve M3D and M3E scientific contracts
+        run: |
+          npx tsx --test \
+            server/mlb-p1-economic-review.test.ts \
+            server/mlb-p1-operating-envelope.test.ts
+      - name: Verify modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend required by S5A
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify GET-only owner-scoped and no-money boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          route='server/mlb-premium-no-ultra-prospective-routes.ts'
+          source='server/mlb-premium-no-ultra-prospective.ts'
+          docs='docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
+
+          grep -F 'app.get(' "$route"
+          grep -F '"/api/mlb/p1/v1/premium-no-ultra-prospective"' "$route"
+          grep -F 'requireInteractiveMlbCaptureSession' "$route"
+          grep -F 'ownershipStore.listPredictionIds(userId)' "$route"
+          grep -F 'store.getRecord(predictionId)' "$route"
+          grep -F 'buildMlbP1M3dEconomicReview(records)' "$route"
+          grep -F 'buildMlbPremiumNoUltraProspective(economicReview.rows, records)' "$route"
+          grep -F 'PREMIUM_NO_ULTRA_SOURCE_WINDOW_TRUNCATED' "$route" "$docs"
+          grep -F 'registerMlbPremiumNoUltraProspectiveRoutes(app)' server/routes.ts
+          grep -F '"GET", "path": "/api/mlb/p1/v1/premium-no-ultra-prospective"' server/route-contract.extensions.json
+          grep -F 'operationalMoneyGateAllowed: false' "$source"
+          grep -F 'stakeChangesAllowed: false' "$source"
+          grep -F 'automaticBettingAllowed: false' "$source"
+          grep -F 'automaticModelChangesAllowed: false' "$source"
+          grep -F 'automaticPromotionAllowed: false' "$source"
+
+          ! grep -E 'app\.(post|put|patch|delete)\(' "$route"
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$route"
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$route"
+      - name: Verify exact six-file read-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'PREMIUM no-ULTRA read-only scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
