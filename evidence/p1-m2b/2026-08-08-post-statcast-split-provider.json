@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "p1-m2b-post-split-source-provider-evidence.v1",
+  "generatedAt": "2026-08-08T20:11:50.349Z",
+  "deployedCommit": "68b48ca5cb017a6cf88ac7ed8f070f35a018a006",
+  "sourceResearch": {
+    "pullRequest": 421,
+    "workflowRun": 31276303060,
+    "artifact": 9027094867
+  },
+  "sample": {
+    "games": 4,
+    "lineupSides": 8,
+    "confirmedLineupSides": 8,
+    "nineDirectSides": 3,
+    "gamesWithBothSidesNineDirect": 0
+  },
+  "statcast": {
+    "certifiedGames": 0,
+    "degradedGames": 4,
+    "priorStarterXwobaMismatchObserved": 0,
+    "commonBlockers": [
+      "STATCAST_MATCHUP_VISIBLE_COVERAGE_INCOMPLETE",
+      "STATCAST_MATCHUP_PITCHER_ARSENAL_PROVENANCE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_BULLPEN_ROSTER_COVERAGE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_RECENT_BATTER_STATS_COVERAGE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_CACHE_OBSERVATION_TIMES_UNOBSERVABLE"
+    ],
+    "anonymousSideDirectCountsByGame": [
+      [7, 8],
+      [0, 9],
+      [8, 9],
+      [9, 8]
+    ]
+  },
+  "advancedFactors": {
+    "certifiedComponentsPerGame": [4, 4, 4, 4],
+    "fiveOfFiveGames": 0,
+    "otherFourComponentsCertifiedFreshInAllSamples": true
+  },
+  "readiness": {
+    "gateStatusCounts": { "BLOCKED": 4 },
+    "injuriesStateCounts": { "DEGRADED": 4 },
+    "readyFinalGames": 0
+  },
+  "interpretation": {
+    "splitSourceProviderRemovedPriorStarterXwobaMismatch": true,
+    "remainingObservedStatcastBlockerIsEligibilityCoverage": true,
+    "supportsLoweringNineOfNineDirectRequirement": false,
+    "supportsRelaxingCertifier": false,
+    "supportsAutomaticPromotion": false
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "rawIdentityPersisted": false
+  }
+}
