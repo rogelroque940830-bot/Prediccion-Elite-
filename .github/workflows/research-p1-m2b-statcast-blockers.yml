@@ -52,7 +52,7 @@ jobs:
           [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
           printf '%s' "$observed" > private/deployed-commit.txt
 
-      - name: Audit sanitized Statcast certifier blockers
+      - name: Audit sanitized Statcast certifier blockers and visible coverage
         shell: bash
         run: |
           set -euo pipefail
@@ -78,38 +78,81 @@ jobs:
             .slice(0,3);
 
           const blockerClass = (value) => String(value || 'UNKNOWN').split(':')[0].replace(/[^A-Z0-9_]/gi,'_').toUpperCase();
+          const qualityCounts = (rows) => {
+            const counts = { direct:0, teamProxy:0, leagueFallback:0, unknown:0 };
+            for (const row of Array.isArray(rows) ? rows : []) {
+              const q = String(row?.dataQuality || '').toUpperCase();
+              if (q === 'DIRECT') counts.direct++;
+              else if (q === 'TEAM_PROXY') counts.teamProxy++;
+              else if (q === 'LEAGUE') counts.leagueFallback++;
+              else counts.unknown++;
+            }
+            return counts;
+          };
+          const sideSummary = (matchup, history, officialLineupCount, label) => {
+            const rows = Array.isArray(matchup?.perBatter) ? matchup.perBatter : [];
+            const counts = qualityCounts(rows);
+            const lineupSize = Number.isInteger(Number(matchup?.lineupSize)) ? Number(matchup.lineupSize) : 0;
+            const lineupBatterCount = Math.max(lineupSize, rows.length);
+            const arsenalCount = Array.isArray(matchup?.arsenal) ? matchup.arsenal.length : 0;
+            const bullpenCount = Array.isArray(matchup?.bullpenMatchup) ? matchup.bullpenMatchup.length : 0;
+            const identity = history?.identity || {};
+            const requestedBatters = Number(identity.requestedBatters) || 0;
+            const successfulQueries = Number(identity.successfulQueries) || 0;
+            const usableRows = Number(identity.usableRows) || 0;
+            const failures = Number(identity.failures) || 0;
+            const hasOpposingTeamId = Number.isInteger(Number(identity.opposingTeamId)) && Number(identity.opposingTeamId) > 0;
+            const failuresList = [];
+            if (officialLineupCount !== 9) failuresList.push(`${label}_OFFICIAL_LINEUP_NOT_9`);
+            if (lineupBatterCount !== 9) failuresList.push(`${label}_VISIBLE_LINEUP_NOT_9`);
+            if (counts.direct !== 9) failuresList.push(`${label}_DIRECT_BATTERS_NOT_9`);
+            if (counts.teamProxy !== 0) failuresList.push(`${label}_TEAM_PROXY_PRESENT`);
+            if (counts.leagueFallback !== 0) failuresList.push(`${label}_LEAGUE_FALLBACK_PRESENT`);
+            if (counts.unknown !== 0) failuresList.push(`${label}_UNKNOWN_QUALITY_PRESENT`);
+            if (arsenalCount <= 0) failuresList.push(`${label}_ARSENAL_EMPTY`);
+            if (bullpenCount <= 0) failuresList.push(`${label}_BULLPEN_EMPTY`);
+            if (requestedBatters !== 9) failuresList.push(`${label}_HISTORY_REQUESTS_NOT_9`);
+            if (successfulQueries !== 9) failuresList.push(`${label}_HISTORY_SUCCESS_NOT_9`);
+            if (failures !== 0) failuresList.push(`${label}_HISTORY_FAILURES_PRESENT`);
+            if (!hasOpposingTeamId) failuresList.push(`${label}_HISTORY_TEAM_ID_MISSING`);
+            return {
+              officialLineupCount,
+              lineupSource: String(matchup?.lineupSource || 'UNKNOWN').toUpperCase(),
+              lineupSize,
+              perBatterCount: rows.length,
+              batterSourceCounts: counts,
+              arsenalCount,
+              bullpenCount,
+              history: { requestedBatters, successfulQueries, usableRows, failures, hasOpposingTeamId },
+              visibleCriteriaFailures: failuresList
+            };
+          };
+
           const result = {
-            schemaVersion: 'p1-m2b-statcast-blocker-audit.v1',
+            schemaVersion: 'p1-m2b-statcast-blocker-audit.v2',
             generatedAt: new Date().toISOString(),
             deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
             slate: { date: slate.date, totalGames: slate.summary?.total ?? slate.games.length, sampledGames: candidates.length },
             samples: [],
-            aggregate: { sourceStatusCounts: {}, blockerClassCounts: {}, flagTrueCounts: {}, flagFalseCounts: {} },
-            safety: { writesPerformed: 0, predictionsCreated: 0, settlementsCreated: 0, sportsbookCallsPerformedByResearchRunner: 0, rawIdentityUploaded: false }
+            aggregate: { sourceStatusCounts:{}, blockerClassCounts:{}, visibleCriteriaFailureCounts:{} },
+            safety: { writesPerformed:0, predictionsCreated:0, settlementsCreated:0, sportsbookCallsPerformedByResearchRunner:0, rawIdentityUploaded:false }
           };
-          const flags = [
-            'currentLineupsConfirmed',
-            'visibleCoverageComplete',
-            'currentSeasonPitcherArsenalsReproduced',
-            'bullpenRosterAndStatsComplete',
-            'recentBatterStatsComplete',
-            'starterRowsReproduced',
-            'bullpenDeltasReproduced',
-            'combinedRunDeltasReproduced'
-          ];
           const bump = (obj,key) => { obj[key] = (obj[key] || 0) + 1; };
 
           for (let index=0; index<candidates.length; index++) {
             const game = candidates[index];
             const raw = `private/statcast-${index}.json`;
+            const feedRaw = `private/feed-${index}.json`;
             let code = '000';
             try {
               code = execFileSync('curl',['-sS','-o',raw,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(game.gamePk)}`],{encoding:'utf8'}).trim();
+              execFileSync('curl',['-sS','-o',feedRaw,'--max-time','60',`https://statsapi.mlb.com/api/v1.1/game/${encodeURIComponent(game.gamePk)}/feed/live`],{encoding:'utf8'});
             } catch {
               result.samples.push({ gameOrdinal:index+1, requestStatus:'FAILED' });
               continue;
             }
             const response = JSON.parse(fs.readFileSync(raw,'utf8'));
+            const feed = JSON.parse(fs.readFileSync(feedRaw,'utf8'));
             if (code !== '200') {
               result.samples.push({ gameOrdinal:index+1, requestStatus:`HTTP_${code}` });
               continue;
@@ -117,21 +160,20 @@ jobs:
             const provenance = response?.provenance || {};
             const classes = Array.from(new Set((Array.isArray(provenance.blockers) ? provenance.blockers : []).map(blockerClass)));
             const sourceStatus = String(response?.sourceStatus || provenance?.status || 'MISSING').toUpperCase();
+            const homeOrder = feed?.liveData?.boxscore?.teams?.home?.battingOrder;
+            const awayOrder = feed?.liveData?.boxscore?.teams?.away?.battingOrder;
+            const home = sideSummary(response?.homeLineupVsAwaySP, response?.homeLineupVsAwayTeam, Array.isArray(homeOrder) ? homeOrder.length : 0, 'HOME');
+            const away = sideSummary(response?.awayLineupVsHomeSP, response?.awayLineupVsHomeTeam, Array.isArray(awayOrder) ? awayOrder.length : 0, 'AWAY');
             bump(result.aggregate.sourceStatusCounts, sourceStatus);
             for (const cls of classes) bump(result.aggregate.blockerClassCounts, cls);
-            const flagState = {};
-            for (const flag of flags) {
-              const value = provenance?.[flag] === true;
-              flagState[flag] = value;
-              bump(value ? result.aggregate.flagTrueCounts : result.aggregate.flagFalseCounts, flag);
-            }
+            for (const failure of [...home.visibleCriteriaFailures, ...away.visibleCriteriaFailures]) bump(result.aggregate.visibleCriteriaFailureCounts, failure);
             result.samples.push({
               gameOrdinal:index+1,
               requestStatus:'OK',
               sourceStatus,
               hasGeneratedAt: typeof response?.generatedAt === 'string' && response.generatedAt.length > 0,
               blockerClasses: classes,
-              flags: flagState,
+              coverage: { home, away },
               failureDisposition: provenance?.failureDisposition || null,
               cacheHit: provenance?.cacheHit === true
             });
@@ -142,8 +184,9 @@ jobs:
             sampledEvaluations: measured.length,
             certifiedObserved: measured.some((s) => s.sourceStatus === 'CERTIFIED'),
             commonBlockerClasses: Object.entries(result.aggregate.blockerClassCounts).filter(([,count]) => count === measured.length).map(([key]) => key),
-            gateShouldBeRelaxed: false,
-            certifierShouldBeRelaxed: false
+            commonVisibleCriteriaFailures: Object.entries(result.aggregate.visibleCriteriaFailureCounts).filter(([,count]) => count === measured.length * 2 || count === measured.length).map(([key]) => key),
+            gateShouldBeRelaxed:false,
+            certifierShouldBeRelaxed:false
           };
           fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
           console.log(JSON.stringify({ aggregate:result.aggregate, conclusion:result.conclusion },null,2));
@@ -159,7 +202,7 @@ jobs:
           set -euo pipefail
           test -f audit/result.json
           test ! -d private
-          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|"opposingTeamId"[[:space:]]*:[[:space:]]*[0-9]+|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
 
       - name: Upload sanitized blocker classes only
         uses: actions/upload-artifact@v4
