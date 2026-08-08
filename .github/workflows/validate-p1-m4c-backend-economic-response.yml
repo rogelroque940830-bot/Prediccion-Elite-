@@ -11,6 +11,8 @@ on:
       - 'server/mlb-p1-economic-review-routes.ts'
       - 'server/mlb-p1-economic-review.test.ts'
       - 'server/mlb-p1-operating-envelope-routes.ts'
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
+      - 'server/mlb-premium-no-ultra-prospective-routes.test.ts'
       - 'server/mlb-p1-real-cohort-activation.ts'
       - 'server/mlb-p1-real-cohort-activation.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
@@ -28,18 +30,21 @@ on:
       - 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
       - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md'
+      - 'docs/P1_PREMIUM_NO_ULTRA_LIVE_TRACKER.md'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
       - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
       - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
       - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
       - 'tsconfig.p1-m3d-interactive-economic-review.json'
       - 'tsconfig.p1-m3e-operating-envelope.json'
+      - 'tsconfig.p1-premium-no-ultra-live-tracker.json'
       - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
       - 'tsconfig.p1-m5a-real-cohort-activation.json'
       - 'tsconfig.p1-m6a2-market-odds.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-premium-no-ultra-live-tracker.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
@@ -93,7 +98,6 @@ jobs:
           testfile='server/mlb-p1-scientific-capture-service.test.ts'
           docs='docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md'
           inherited='.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
-
           grep -F 'p1-m4c-backend-economic-response-2026-08-06' "$service"
           grep -F 'attachMlbP1M4bEconomicDecision(candidate, serverNow)' "$service"
           grep -F 'economicDecision: MlbP1M4bAdapterResult' "$service"
@@ -104,7 +108,6 @@ jobs:
           grep -F 'WAIT_FOR_FINAL' "$testfile"
           grep -F 'economicDecision: MlbP1M4bAdapterResult' "$docs"
           grep -F 'Diff hygiene and protected extension scope' "$inherited"
-
           node <<'NODE'
           const fs = require('node:fs');
           const service = fs.readFileSync('server/mlb-p1-scientific-capture-service.ts', 'utf8');
@@ -126,15 +129,11 @@ jobs:
           git fetch origin integration/p0-staging-secure --depth=1
           git diff --check origin/integration/p0-staging-secure...HEAD
           changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-
-          # P1-M3E and P1-M3F3B5/B5B are analytical successor surfaces. They may
-          # extend authenticated/identity-safe route composition without
-          # changing M4C's economic write boundary, decision formulas or
-          # sportsbook-exposure policy. P1-M6A2 remains read-only evidence.
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-live-tracker.yml' \
             '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
             '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
@@ -142,6 +141,7 @@ jobs:
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
+            'docs/P1_PREMIUM_NO_ULTRA_LIVE_TRACKER.md' \
             'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
             'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
@@ -155,6 +155,8 @@ jobs:
             'server/mlb-p1-economic-review.test.ts' \
             'server/mlb-p1-economic-review.ts' \
             'server/mlb-p1-operating-envelope-routes.ts' \
+            'server/mlb-premium-no-ultra-prospective-routes.test.ts' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
             'server/mlb-p1-real-cohort-activation.test.ts' \
             'server/mlb-p1-real-cohort-activation.ts' \
             'server/mlb-p1-scientific-capture-service.test.ts' \
@@ -169,12 +171,12 @@ jobs:
             'server/routes.ts' \
             'tsconfig.p1-m3d-interactive-economic-review.json' \
             'tsconfig.p1-m3e-operating-envelope.json' \
+            'tsconfig.p1-premium-no-ultra-live-tracker.json' \
             'tsconfig.p1-m3f3b5-vsteam-identity.json' \
             'tsconfig.p1-m5a-real-cohort-activation.json' \
             'tsconfig.p1-m6a2-market-odds.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
-
           if grep -Fxq 'server/mlb-p1-scientific-capture-service.ts' <<< "$changed" \
             || grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed" \
             || grep -Fxq 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' <<< "$changed"; then
@@ -182,5 +184,4 @@ jobs:
             grep -Fxq 'server/mlb-p1-scientific-capture-service.test.ts' <<< "$changed"
             grep -Fxq 'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' <<< "$changed"
           fi
-
           ! grep -Eq '^(server/(security|mlb-ledger|mlb-p1-scientific-capture-contract|mlb-p1-scientific-capture-routes|mlb-p1-economic-decision-contract|mlb-p1-economic-decision-adapter))' <<< "$unexpected"
