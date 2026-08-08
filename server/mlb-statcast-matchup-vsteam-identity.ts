@@ -4,6 +4,7 @@ const MLB_BASE = "https://statsapi.mlb.com/api";
 const LEAGUE_OPS = 0.720;
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type LegacyEngine = typeof getStatcastMatchupCombined;
 
 export const MLB_STATCAST_VSTEAM_IDENTITY_FIX_SCHEMA = "courtedge-mlb-statcast-vsteam-identity.v1" as const;
 
@@ -158,11 +159,13 @@ export async function getStatcastMatchupCombinedIdentitySafe(input: {
   awayTeamAbbrev: string;
   season: number;
   fetchImpl?: FetchLike;
+  legacyEngine?: LegacyEngine;
 }): Promise<any> {
   const homeTeamId = positiveTeamId(input.homeTeamId);
   const awayTeamId = positiveTeamId(input.awayTeamId);
   const fetchImpl = input.fetchImpl ?? fetch;
-  const legacy = await getStatcastMatchupCombined(
+  const legacyEngine = input.legacyEngine ?? getStatcastMatchupCombined;
+  const legacy = await legacyEngine(
     input.gamePk,
     homeTeamId,
     awayTeamId,
