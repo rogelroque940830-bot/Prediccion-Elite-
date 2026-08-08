@@ -197,8 +197,10 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   if (Number(cohort?.candidateSettled) > Number(cohort?.candidateGames) || Number(cohort?.controlSettled) > Number(cohort?.controlGames)) fail("settled_accounting");
 
   if (!validMetric(candidate) || !validMetric(control)) fail("metrics");
-  if (candidate.settled !== cohort?.candidateSettled || candidate.dates !== cohort?.candidateDates) fail("candidate_metric_cohort_parity");
-  if (control.settled !== cohort?.controlSettled || control.dates !== cohort?.controlDates) fail("control_metric_cohort_parity");
+  const candidateMetric = candidate as MlbPremiumNoUltraMetricSummary;
+  const controlMetric = control as MlbPremiumNoUltraMetricSummary;
+  if (candidateMetric.settled !== cohort?.candidateSettled || candidateMetric.dates !== cohort?.candidateDates) fail("candidate_metric_cohort_parity");
+  if (controlMetric.settled !== cohort?.controlSettled || controlMetric.dates !== cohort?.controlDates) fail("control_metric_cohort_parity");
   if (!nonNegativeInteger(inference?.dateClusters)) fail("date_clusters");
   if (inference?.candidateRoiPct !== null && !validInterval(inference?.candidateRoiPct)) fail("candidate_roi_interval");
   if (inference?.candidateMinusControlRoiPp !== null && !validInterval(inference?.candidateMinusControlRoiPp)) fail("incremental_roi_interval");
@@ -206,10 +208,10 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   const criterionKeys = ["minimumCandidateSampleAccepted", "minimumControlSampleAccepted", "candidateRoiLower95Positive", "candidateMinusControlRoiLower95Positive", "meanClvPositive", "properScoringNotWorse", "calibrationAccepted", "allAccepted"];
   for (const key of criterionKeys) if (typeof criteria?.[key] !== "boolean") fail(`criterion_${key}`);
 
-  const expectedCandidateSample = candidate.settled >= Number(prereg.minimumCandidateSettled)
-    && candidate.dates >= Number(prereg.minimumCandidateDates);
-  const expectedControlSample = control.settled >= Number(prereg.minimumControlSettled)
-    && control.dates >= Number(prereg.minimumControlDates);
+  const expectedCandidateSample = candidateMetric.settled >= Number(prereg?.minimumCandidateSettled)
+    && candidateMetric.dates >= Number(prereg?.minimumCandidateDates);
+  const expectedControlSample = controlMetric.settled >= Number(prereg?.minimumControlSettled)
+    && controlMetric.dates >= Number(prereg?.minimumControlDates);
   if (criteria?.minimumCandidateSampleAccepted !== expectedCandidateSample) fail("candidate_sample_criterion_parity");
   if (criteria?.minimumControlSampleAccepted !== expectedControlSample) fail("control_sample_criterion_parity");
 
@@ -217,15 +219,15 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   const differenceInterval = inference?.candidateMinusControlRoiPp as MlbPremiumNoUltraInterval | null;
   if (criteria?.candidateRoiLower95Positive !== (candidateRoiInterval != null && candidateRoiInterval.lower > 0)) fail("roi_criterion_parity");
   if (criteria?.candidateMinusControlRoiLower95Positive !== (differenceInterval != null && differenceInterval.lower > 0)) fail("incremental_roi_criterion_parity");
-  if (criteria?.meanClvPositive !== (candidate.meanClvPp != null && candidate.meanClvPp > 0)) fail("clv_criterion_parity");
-  const expectedProperScoring = candidate.brierScore != null && control.brierScore != null
-    && candidate.logLoss != null && control.logLoss != null
-    && candidate.brierScore <= control.brierScore
-    && candidate.logLoss <= control.logLoss;
+  if (criteria?.meanClvPositive !== (candidateMetric.meanClvPp != null && candidateMetric.meanClvPp > 0)) fail("clv_criterion_parity");
+  const expectedProperScoring = candidateMetric.brierScore != null && controlMetric.brierScore != null
+    && candidateMetric.logLoss != null && controlMetric.logLoss != null
+    && candidateMetric.brierScore <= controlMetric.brierScore
+    && candidateMetric.logLoss <= controlMetric.logLoss;
   if (criteria?.properScoringNotWorse !== expectedProperScoring) fail("proper_scoring_criterion_parity");
-  const expectedCalibration = candidate.calibrationGap != null && control.calibrationGap != null
-    && candidate.calibrationGap <= 0.05
-    && candidate.calibrationGap <= control.calibrationGap + 0.01;
+  const expectedCalibration = candidateMetric.calibrationGap != null && controlMetric.calibrationGap != null
+    && candidateMetric.calibrationGap <= 0.05
+    && candidateMetric.calibrationGap <= controlMetric.calibrationGap + 0.01;
   if (criteria?.calibrationAccepted !== expectedCalibration) fail("calibration_criterion_parity");
 
   const expectedAll = criterionKeys.filter((key) => key !== "allAccepted").every((key) => criteria?.[key] === true);
