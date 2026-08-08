@@ -26,6 +26,59 @@ import {
 
 /** Odds, officials, advanced context, sharp movement, CLV and health routes. */
 export function registerMarketSupportRoutes(app: Express): void {
+  const MLB_BASE_V11 = "https://statsapi.mlb.com/api/v1.1";
+  const MLB_SEASON_CURRENT = String(new Date().getFullYear());
+
+  // S3 extracted this route from the MLB monolith, but the route still depended
+  // on the monolith-local helper. Keep the same doubleheader-safe feed/live
+  // semantics here so /api/mlb/advanced/:gamePk has all of its runtime inputs.
+  async function getGameMeta(gamePk: number): Promise<any | null> {
+    try {
+      const r = await fetch(`${MLB_BASE_V11}/game/${gamePk}/feed/live`);
+      if (!r.ok) return null;
+      const j: any = await r.json();
+      const gd = j.gameData;
+      if (!gd) return null;
+      const homeTeam = gd.teams?.home || {};
+      const awayTeam = gd.teams?.away || {};
+      const probHome = gd.probablePitchers?.home;
+      const probAway = gd.probablePitchers?.away;
+      const playerKey = (id: number) => `ID${id}`;
+      const enrich = (p: any) => {
+        if (!p?.id) return undefined;
+        const full = gd.players?.[playerKey(p.id)];
+        return {
+          id: p.id,
+          fullName: full?.fullName ?? p.fullName,
+          pitchHand: full?.pitchHand,
+          primaryNumber: full?.primaryNumber,
+        };
+      };
+      return {
+        gamePk,
+        gameDate: gd.datetime?.dateTime || gd.datetime?.originalDate,
+        venue: gd.venue,
+        weather: gd.weather,
+        teams: {
+          home: { team: homeTeam, probablePitcher: enrich(probHome) },
+          away: { team: awayTeam, probablePitcher: enrich(probAway) },
+        },
+        lineups: {
+          homePlayers: (j.liveData?.boxscore?.teams?.home?.battingOrder ?? []).map((id: number) => {
+            const p = gd.players?.[`ID${id}`];
+            return { id, fullName: p?.fullName, primaryPosition: p?.primaryPosition, batSide: p?.batSide };
+          }),
+          awayPlayers: (j.liveData?.boxscore?.teams?.away?.battingOrder ?? []).map((id: number) => {
+            const p = gd.players?.[`ID${id}`];
+            return { id, fullName: p?.fullName, primaryPosition: p?.primaryPosition, batSide: p?.batSide };
+          }),
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // ── GET /api/odds/:sport ───────────────────────────────────────────────
   // Fetches odds from The Odds API (DraftKings = same platform as Hard Rock)
   const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
