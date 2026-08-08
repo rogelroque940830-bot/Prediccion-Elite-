@@ -1,0 +1,264 @@
+name: Research P1-M2B Post Advanced Repair
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-advanced-repair.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-post-advanced-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 6f259cb7d4aaf483b53834a53c44f616db2b5095
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-advanced-repair.yml' ]]
+      - name: Wait for exact repaired backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+      - name: Audit nearest real pregame games after repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 \
+            "${BACKEND_URL}/api/mlb/p1/v1/slate")
+          [[ "$slate_code" == '200' ]]
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+
+          const slateEnvelope = JSON.parse(fs.readFileSync('private/slate.json', 'utf8'));
+          if (slateEnvelope?.success !== true || !Array.isArray(slateEnvelope?.data?.games)) {
+            throw new Error('P1_M2B_POST_REPAIR_SLATE_INVALID');
+          }
+          const slate = slateEnvelope.data;
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((game) => ['SCHEDULED', 'PREGAME'].includes(game.state) && game.analysisAllowed === true)
+            .sort((a, b) => {
+              const ams = a.startTime ? Date.parse(a.startTime) : Number.POSITIVE_INFINITY;
+              const bms = b.startTime ? Date.parse(b.startTime) : Number.POSITIVE_INFINITY;
+              const afuture = ams >= now ? 0 : 1;
+              const bfuture = bms >= now ? 0 : 1;
+              return afuture - bfuture || Math.abs(ams - now) - Math.abs(bms - now);
+            })
+            .slice(0, 3);
+
+          const baseResult = {
+            schemaVersion: 'p1-m2b-post-advanced-repair-research.v1',
+            generatedAt: new Date().toISOString(),
+            deployedCommit: fs.readFileSync('private/deployed-commit.txt', 'utf8'),
+            baseline: {
+              researchPr: 394,
+              workflowRun: 31269202027,
+              sampledEvaluations: 6,
+              READY_FINAL: 0,
+              READY_PROVISIONAL: 6,
+              injuriesDegraded: 6,
+              mlAdvancedFactorsDegraded: 3,
+              mlAdvancedCertifiedComponents: '0/5',
+              advancedRuntimeReferenceErrorObserved: true,
+              f5PitcherFormUntimed: 3,
+              f5LineupMatchupUntimed: 3,
+            },
+          };
+
+          if (!candidates.length) {
+            fs.writeFileSync('audit/result.json', JSON.stringify({
+              ...baseResult,
+              slate: {
+                date: slate.date,
+                totalGames: slate.summary?.total ?? slate.games.length,
+                readyToAnalyze: slate.summary?.ready ?? null,
+                provisional: slate.summary?.provisional ?? null,
+                sampledGames: 0,
+              },
+              conclusion: {
+                postRepairReadinessMeasured: false,
+                reason: 'NO_ANALYSIS_ALLOWED_PREGAME_GAMES_AT_AUDIT_TIME',
+              },
+              safety: { writesPerformed: 0, rawGameIdentityUploaded: false },
+            }, null, 2));
+            process.exit(0);
+          }
+
+          const markets = ['ML', 'F5_ML'];
+          const samples = [];
+          const warningCounts = {};
+          const blockerCounts = {};
+          const fieldStateCounts = {};
+          const statusCounts = { READY_FINAL: 0, READY_PROVISIONAL: 0, BLOCKED: 0, REQUEST_FAILED: 0 };
+          const advancedQualities = {};
+          const advancedErrors = {};
+          const bump = (object, key) => { object[key] = (object[key] || 0) + 1; };
+          const sanitizeEvidence = (evidence) => (Array.isArray(evidence) ? evidence : []).map((item) => ({
+            field: item.field,
+            required: Boolean(item.required),
+            state: item.state,
+            sourceStatus: item.sourceStatus,
+            quality: item.quality,
+            hasObservedAt: typeof item.observedAt === 'string' && item.observedAt.length > 0,
+            ageSeconds: Number.isFinite(item.ageSeconds) ? item.ageSeconds : null,
+            maxAgeSeconds: Number.isFinite(item.maxAgeSeconds) ? item.maxAgeSeconds : null,
+            errors: Array.isArray(item.errors) ? item.errors.map(String) : [],
+          }));
+
+          for (let gameIndex = 0; gameIndex < candidates.length; gameIndex += 1) {
+            const game = candidates[gameIndex];
+            for (const market of markets) {
+              const url = `${process.env.BACKEND_URL}/api/mlb/p1/v1/pregame-readiness?gamePk=${encodeURIComponent(game.gamePk)}&market=${encodeURIComponent(market)}&date=${encodeURIComponent(game.officialDate)}`;
+              const rawPath = `private/readiness-${gameIndex}-${market}.json`;
+              let httpCode = '000';
+              try {
+                httpCode = execFileSync('curl', ['-sS', '-o', rawPath, '-w', '%{http_code}', '--max-time', '150', url], { encoding: 'utf8' }).trim();
+              } catch {
+                statusCounts.REQUEST_FAILED += 1;
+                bump(blockerCounts, 'READINESS_REQUEST_FAILED');
+                samples.push({ gameOrdinal: gameIndex + 1, market, gateStatus: 'REQUEST_FAILED', warnings: [], blockers: ['READINESS_REQUEST_FAILED'], evidence: [] });
+                continue;
+              }
+              const envelope = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
+              if (httpCode !== '200' || envelope?.success !== true || !envelope?.data?.gate) {
+                statusCounts.REQUEST_FAILED += 1;
+                const code = `READINESS_HTTP_${httpCode}`;
+                bump(blockerCounts, code);
+                samples.push({ gameOrdinal: gameIndex + 1, market, gateStatus: 'REQUEST_FAILED', warnings: [], blockers: [code], evidence: [] });
+                continue;
+              }
+
+              const report = envelope.data;
+              const gate = report.gate;
+              const evidence = sanitizeEvidence(report.evidence);
+              if (Object.prototype.hasOwnProperty.call(statusCounts, gate.status)) statusCounts[gate.status] += 1;
+              for (const warning of gate.warnings || []) bump(warningCounts, String(warning));
+              for (const blocker of gate.blockers || []) bump(blockerCounts, String(blocker));
+              for (const item of evidence) {
+                bump(fieldStateCounts, `${item.field}:${item.state}`);
+                if (item.field === 'ADVANCED_FACTORS') {
+                  bump(advancedQualities, String(item.quality || 'NONE'));
+                  for (const error of item.errors || []) bump(advancedErrors, error);
+                }
+              }
+              samples.push({
+                gameOrdinal: gameIndex + 1,
+                market,
+                minutesToStart: game.startTime ? Math.round((Date.parse(game.startTime) - now) / 60000) : null,
+                slateStage: game.analysisStage,
+                lineupState: game.lineupState,
+                httpCode: Number(httpCode),
+                gateStatus: gate.status,
+                analysisAllowed: gate.analysisAllowed,
+                analysisStage: gate.analysisStage,
+                warnings: gate.warnings || [],
+                blockers: gate.blockers || [],
+                evidence,
+              });
+            }
+          }
+
+          const finalSamples = samples.filter((sample) => sample.gateStatus === 'READY_FINAL');
+          const advancedErrorText = Object.keys(advancedErrors).join('\n');
+          const result = {
+            ...baseResult,
+            slate: {
+              date: slate.date,
+              totalGames: slate.summary?.total ?? slate.games.length,
+              readyToAnalyze: slate.summary?.ready ?? null,
+              provisional: slate.summary?.provisional ?? null,
+              waitingForPitchers: slate.summary?.waitingForPitchers ?? null,
+              sampledGames: candidates.length,
+              sampledMarkets: samples.length,
+            },
+            statusCounts,
+            warningCounts,
+            blockerCounts,
+            fieldStateCounts,
+            advancedQualities,
+            advancedErrors,
+            samples,
+            comparison: {
+              advancedRuntimeReferenceErrorStillObserved: /getGameMeta is not defined|MLB_SEASON_CURRENT is not defined/.test(advancedErrorText),
+              advancedRuntimeReferenceErrorResolved: !/getGameMeta is not defined|MLB_SEASON_CURRENT is not defined/.test(advancedErrorText),
+              readyFinalDelta: statusCounts.READY_FINAL - 0,
+              readyProvisionalDelta: statusCounts.READY_PROVISIONAL - 6,
+              advancedDegradedDelta: (warningCounts.ADVANCED_FACTORS_DEGRADED || 0) - 3,
+            },
+            conclusion: {
+              postRepairReadinessMeasured: true,
+              currentFinalAttainabilityObserved: finalSamples.length > 0,
+              finalSamples: finalSamples.length,
+              finalMarkets: [...new Set(finalSamples.map((sample) => sample.market))],
+              nextBlockersMustComeFromCurrentEvidence: true,
+            },
+            safety: {
+              writesPerformed: 0,
+              rawGameIdentityUploaded: false,
+              sportsbookCallsPerformedByResearchRunner: 0,
+            },
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({
+            slate: result.slate,
+            statusCounts: result.statusCounts,
+            warningCounts: result.warningCounts,
+            advancedQualities: result.advancedQualities,
+            advancedRuntimeReferenceErrorResolved: result.comparison.advancedRuntimeReferenceErrorResolved,
+            finalAttainable: result.conclusion.currentFinalAttainabilityObserved,
+          }, null, 2));
+          NODE
+
+          test -f audit/result.json
+          rm -rf private
+          test ! -d private
+      - name: Prove raw identity is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"selection"|"player"|"pitcher"' audit/result.json
+      - name: Upload aggregate post-repair evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-advanced-repair-aggregate
+          path: audit/result.json
+          if-no-files-found: warn
+          retention-days: 30
