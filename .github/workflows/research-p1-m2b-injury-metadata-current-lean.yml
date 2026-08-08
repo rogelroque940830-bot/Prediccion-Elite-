@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 20
     env:
       BACKEND_URL: https://web-p0-integration.up.railway.app
+      AUDIT_DATE: '2026-08-08'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,28 +38,20 @@ jobs:
           set -euo pipefail
           mkdir -p audit private
           chmod 700 private
-          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+          code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 240 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}")
+          [[ "$code" == '200' ]]
 
-          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          AUDIT_DATE="$AUDIT_DATE" node <<'NODE'
           const fs=require('fs');
-          const {execFileSync}=require('child_process');
-          const env=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
-          if(env?.success!==true||!Array.isArray(env?.data?.games))throw new Error('INJURY_META_SLATE_INVALID');
-          const slate=env.data,now=Date.now();
-          const candidates=slate.games
-            .filter(g=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
-            .sort((a,b)=>{
-              const ac=String(a.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
-              const bc=String(b.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
-              if(ac!==bc)return ac-bc;
-              const ams=a.startTime?Date.parse(a.startTime):Infinity,bms=b.startTime?Date.parse(b.startTime):Infinity;
-              return Math.abs(ams-now)-Math.abs(bms-now);
-            }).slice(0,4);
+          const payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));
+          const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
+          if(!games.length)throw new Error('INJURY_META_ALL_GAMES_EMPTY');
           const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
           const clean=v=>String(v??'').trim().toUpperCase();
           const result={
-            schemaVersion:'p1-m2b-current-injury-metadata-lean.v1',
+            schemaVersion:'p1-m2b-current-injury-metadata-lean.v2',
             generatedAt:new Date().toISOString(),
+            auditDate:process.env.AUDIT_DATE,
             samples:[],
             aggregate:{
               measuredGames:0,measuredSides:0,statusCounts:{},phaseBCoverageCounts:{},
@@ -70,28 +63,14 @@ jobs:
             },
             safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false}
           };
-          const cache=new Map();
-          const fetchAggregate=date=>{
-            if(cache.has(date))return cache.get(date);
-            const path=`private/all-${date}.json`;
-            const code=execFileSync('curl',['-sS','-o',path,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/all?date=${encodeURIComponent(date)}`],{encoding:'utf8'}).trim();
-            if(code!=='200')throw new Error(`INJURY_META_ALL_HTTP_${code}`);
-            const body=JSON.parse(fs.readFileSync(path,'utf8'));
-            cache.set(date,body);return body;
-          };
-          const findGame=(payload,gamePk)=>{
-            const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
-            return games.find(g=>Number(g?.gamePk??g?.gameId??g?.id)===Number(gamePk))||null;
-          };
-          for(let i=0;i<candidates.length;i++){
-            const c=candidates[i];
-            const date=String(c.officialDate||slate.date||'').slice(0,10);
-            let ag;
-            try{ag=findGame(fetchAggregate(date),c.gamePk);}catch{result.samples.push({gameOrdinal:i+1,requestStatus:'FETCH_FAILED'});continue;}
-            if(!ag){result.samples.push({gameOrdinal:i+1,requestStatus:'GAME_MISSING'});continue;}
-            const sample={gameOrdinal:i+1,requestStatus:'OK',sides:{}};
+          for(let i=0;i<games.length;i++){
+            const ag=games[i];
+            const sample={gameOrdinal:i+1,sides:{}};
+            let validSideCount=0;
             for(const side of ['home','away']){
-              const meta=ag?.[`${side}InjuryData`]||{};
+              const meta=ag?.[`${side}InjuryData`]||null;
+              if(!meta){sample.sides[side]={status:'MISSING'};continue;}
+              validSideCount++;
               const status=clean(meta.status)||'MISSING';
               const officialValidationStatus=clean(meta.officialValidationStatus)||'MISSING';
               const stale=meta.stale===true;
@@ -119,19 +98,19 @@ jobs:
               result.aggregate.sourceErrorTotal+=sourceErrorCount;
               sample.sides[side]={status,officialValidationStatus,stale,sourceErrorCount,rejectedCount,officialOnly,phaseBCoverage,cause,sourceHealthy};
             }
-            result.aggregate.measuredGames++;
-            result.samples.push(sample);
+            if(validSideCount>0){result.aggregate.measuredGames++;result.samples.push(sample);}
           }
           result.conclusion={
             measured:result.aggregate.measuredGames>0,
             sampledGames:result.aggregate.measuredGames,
+            sampledSides:result.aggregate.measuredSides,
             anyRecoverableOfficialOnlySides:result.aggregate.partialOnlyOfficialGapNoRejects>0,
             recoverableOfficialOnlySideCount:result.aggregate.partialOnlyOfficialGapNoRejects,
             anyRejectedIdentitySides:(result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0,
             anySourceHealthProblems:result.aggregate.partialWithSourceHealthProblem>0,
             safeToTreatAllPartialAsFresh:false,
             safeToIgnoreRejectedExternalRecords:false,
-            nextStep:result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':'INVESTIGATE_REJECTED_IDENTITIES_OR_SOURCE_HEALTH'
+            nextStep:result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':((result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER')
           };
           fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
           console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
