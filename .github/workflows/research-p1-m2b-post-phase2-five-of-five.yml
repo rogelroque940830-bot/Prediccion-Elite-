@@ -1,0 +1,189 @@
+name: Research P1-M2B Post Phase2 Five of Five
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-phase2-five-of-five.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-live-five-of-five:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 2d6d8956d75adf38338e90eca8e48318224e9ed3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-phase2-five-of-five.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 42); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Measure live advanced certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate")
+          [[ "$slate_code" == '200' ]]
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+          const envelope = JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if (envelope?.success !== true || !Array.isArray(envelope?.data?.games)) throw new Error('POST_PHASE2_SLATE_INVALID');
+          const slate = envelope.data;
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((g) => ['SCHEDULED','PREGAME'].includes(g.state) && g.analysisAllowed === true)
+            .sort((a,b) => {
+              const ams = a.startTime ? Date.parse(a.startTime) : Number.POSITIVE_INFINITY;
+              const bms = b.startTime ? Date.parse(b.startTime) : Number.POSITIVE_INFINITY;
+              const afuture = ams >= now ? 0 : 1;
+              const bfuture = bms >= now ? 0 : 1;
+              return afuture - bfuture || Math.abs(ams-now) - Math.abs(bms-now);
+            })
+            .slice(0,3);
+
+          const componentPaths = [
+            ['QUALITY', (gamePk) => `/api/mlb/quality/${gamePk}`],
+            ['STATCAST_MATCHUP', (gamePk) => `/api/mlb/statcast-matchup/${gamePk}`],
+            ['DISCIPLINE_SPEED', (gamePk) => `/api/mlb/discipline-speed/${gamePk}`],
+            ['SOS', (gamePk) => `/api/mlb/sos/${gamePk}`],
+            ['ADVANCED_CONTEXT', (gamePk) => `/api/mlb/advanced/${gamePk}`],
+          ];
+
+          const blockerClass = (value) => String(value || 'UNKNOWN').split(':')[0].replace(/[^A-Z0-9_]/gi,'_').toUpperCase();
+          const result = {
+            schemaVersion: 'p1-m2b-post-phase2-five-of-five.v1',
+            generatedAt: new Date().toISOString(),
+            deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            slate: { date: slate.date, totalGames: slate.summary?.total ?? slate.games.length, sampledGames: candidates.length },
+            samples: [],
+            aggregate: {
+              measuredGames: 0,
+              certifiedComponentCounts: {},
+              advancedCoverageCounts: {},
+              statcastStatusCounts: {},
+              statcastBlockerClassCounts: {},
+              statcastCertifiedGames: 0,
+              fiveOfFiveGames: 0,
+            },
+            safety: { writesPerformed: 0, predictionsCreated: 0, settlementsCreated: 0, sportsbookCallsPerformedByResearchRunner: 0, rawIdentityUploaded: false }
+          };
+          const bump = (obj,key) => { obj[key] = (obj[key] || 0) + 1; };
+          const fetchJson = (path, file, timeout = '210') => {
+            let code = '000';
+            try {
+              code = execFileSync('curl',['-sS','-o',file,'-w','%{http_code}','--max-time',timeout,`${process.env.BACKEND_URL}${path}`],{encoding:'utf8'}).trim();
+            } catch { return { code:'000', body:null }; }
+            let body = null;
+            try { body = JSON.parse(fs.readFileSync(file,'utf8')); } catch {}
+            return { code, body };
+          };
+
+          for (let index=0; index<candidates.length; index++) {
+            const game = candidates[index];
+            const sample = { gameOrdinal:index+1, components:{}, certifiedCount:0, fiveOfFive:false, statcast:null };
+            for (const [name, pathFn] of componentPaths) {
+              const file = `private/component-${index}-${name}.json`;
+              const { code, body } = fetchJson(pathFn(game.gamePk), file);
+              const provenance = body?.provenance || {};
+              const status = code === '200'
+                ? String(body?.sourceStatus || provenance?.status || 'MISSING').toUpperCase()
+                : `HTTP_${code}`;
+              const hasGeneratedAt = typeof (body?.generatedAt || provenance?.generatedAt) === 'string'
+                && String(body?.generatedAt || provenance?.generatedAt).length > 0;
+              const certified = status === 'CERTIFIED' && hasGeneratedAt;
+              sample.components[name] = { status, hasGeneratedAt, certified };
+              if (certified) {
+                sample.certifiedCount++;
+                bump(result.aggregate.certifiedComponentCounts,name);
+              }
+              if (name === 'STATCAST_MATCHUP') {
+                const classes = Array.from(new Set((Array.isArray(provenance?.blockers) ? provenance.blockers : []).map(blockerClass)));
+                sample.statcast = {
+                  status,
+                  hasGeneratedAt,
+                  blockerClasses: classes,
+                  currentLineupsConfirmed: provenance?.currentLineupsConfirmed === true,
+                  visibleCoverageComplete: provenance?.visibleCoverageComplete === true,
+                  starterRowsReproduced: provenance?.starterRowsReproduced === true,
+                  bullpenDeltasReproduced: provenance?.bullpenDeltasReproduced === true,
+                  combinedRunDeltasReproduced: provenance?.combinedRunDeltasReproduced === true,
+                };
+                bump(result.aggregate.statcastStatusCounts,status);
+                for (const cls of classes) bump(result.aggregate.statcastBlockerClassCounts,cls);
+                if (certified) result.aggregate.statcastCertifiedGames++;
+              }
+            }
+            sample.fiveOfFive = sample.certifiedCount === 5;
+            if (sample.fiveOfFive) result.aggregate.fiveOfFiveGames++;
+            bump(result.aggregate.advancedCoverageCounts,String(sample.certifiedCount));
+            result.aggregate.measuredGames++;
+            result.samples.push(sample);
+          }
+
+          result.conclusion = {
+            measured: result.aggregate.measuredGames > 0,
+            sampledGames: result.aggregate.measuredGames,
+            statcastCertifiedObserved: result.aggregate.statcastCertifiedGames > 0,
+            fiveOfFiveObserved: result.aggregate.fiveOfFiveGames > 0,
+            fiveOfFiveGames: result.aggregate.fiveOfFiveGames,
+            certificationRuleRelaxed: false,
+            modelFormulaChanged: false,
+            automaticPromotionAllowed: false,
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({ aggregate:result.aggregate, conclusion:result.conclusion },null,2));
+          NODE
+
+          test -f audit/result.json
+          rm -rf private
+          test ! -d private
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized post-Phase2 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-phase2-five-of-five
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
