@@ -55,9 +55,7 @@ test("discipline route exposes certified top-level provenance without changing c
         provenance: { status: "CERTIFIED", generatedAt: "2026-08-08T17:00:00.000Z" },
       } as any;
     }) as any,
-    disciplineLegacy: (async () => {
-      throw new Error("legacy must not run on certified path");
-    }) as any,
+    disciplineLegacy: (async () => { throw new Error("legacy must not run on certified path"); }) as any,
   });
 
   const result = await service.discipline(123456);
@@ -75,9 +73,7 @@ test("discipline route exposes certified top-level provenance without changing c
 test("discipline certifier failure preserves legacy numbers but cannot certify", async () => {
   const service = createMlbP1AdvancedComponentRouteService({
     fetchImpl: async () => jsonResponse(feed()),
-    disciplineCertifier: (async () => {
-      throw new Error("SPRINT_SPEED_SOURCE_UNAVAILABLE");
-    }) as any,
+    disciplineCertifier: (async () => { throw new Error("SPRINT_SPEED_SOURCE_UNAVAILABLE"); }) as any,
     disciplineLegacy: (async () => ({
       homeSPDiscipline: null,
       awaySPDiscipline: null,
@@ -108,9 +104,7 @@ test("SOS route certifies only when both team snapshots certify and uses oldest 
       teamSos: { teamId, teamName: teamId === 10 ? "Home Club" : "Away Club", sosFactor: teamId === 10 ? 1.03 : 0.97 },
       provenance: { status: "CERTIFIED", generatedAt: teamId === 10 ? "2026-08-08T16:55:00.000Z" : "2026-08-08T16:50:00.000Z" },
     })) as any,
-    sosLegacy: (async () => {
-      throw new Error("legacy must not run on certified path");
-    }) as any,
+    sosLegacy: (async () => { throw new Error("legacy must not run on certified path"); }) as any,
   });
 
   const result = await service.sos(123456);
@@ -143,35 +137,104 @@ test("SOS certifier failure falls back for compatibility but stays degraded and 
   assert.match(result.provenance.blockers[0], /SOS_TEAM_STAFF_ERA_MISSING/);
 });
 
-test("middleware intercepts only GET on the two historical endpoint paths", async () => {
+test("Quality route derives the historical game shape from a certified map snapshot", async () => {
+  const pitcher = (id: number) => ({
+    playerId: id, name: `P${id}`, pa: 100, era: 3.4, xera: 3.6,
+    eraMinusXeraDiff: -0.2, wOBA: 0.29, xwOBA: 0.31,
+    xwobaMinusWobaDiff: 0.02, hardHitPct: 40, barrelPct: 8,
+  });
+  const batter = (id: number) => ({
+    playerId: id, name: `B${id}`, pa: 100, wOBA: 0.34, xwOBA: 0.31, luckDelta: 0.03,
+  });
+  const service = createMlbP1AdvancedComponentRouteService({
+    fetchImpl: async () => jsonResponse(feed()),
+    qualityCertifier: (async () => ({
+      sourceStatus: "CERTIFIED",
+      generatedAt: "2026-08-08T16:40:00.000Z",
+      pitcherMap: { 101: pitcher(101), 202: pitcher(202) },
+      batterMap: {
+        1001: batter(1001), 1002: batter(1002), 1003: batter(1003),
+        2001: batter(2001), 2002: batter(2002), 2003: batter(2003),
+      },
+      provenance: { status: "CERTIFIED", generatedAt: "2026-08-08T16:40:00.000Z" },
+    })) as any,
+  });
+
+  const result = await service.quality(123456);
+  assert.equal(result.success, true);
+  assert.equal(result.sourceStatus, "CERTIFIED");
+  assert.equal(result.generatedAt, "2026-08-08T16:40:00.000Z");
+  assert.equal(result.homeSP?.pitcherId, 101);
+  assert.equal(result.awaySP?.pitcherId, 202);
+  assert.equal(result.homeBatters.length, 3);
+  assert.equal(result.awayBatters.length, 3);
+  assert.equal(result.pitcherMap, undefined, "large certified maps must not leak through the route");
+  assert.equal(result.batterMap, undefined, "large certified maps must not leak through the route");
+});
+
+test("Advanced Context route preserves the historical numerical shape when certified", async () => {
+  const service = createMlbP1AdvancedComponentRouteService({
+    advancedContextCertifier: (async (gamePk: number) => ({
+      sourceStatus: "CERTIFIED",
+      generatedAt: "2026-08-08T16:45:00.000Z",
+      park: { venueId: 1, name: "Test Park", runs: 100, hrLHB: 100, hrRHB: 100, roof: "open", elevation: 10 },
+      weather: { tempF: 80, windMph: 5, windDirection: "Out To CF", condition: "Clear", tempAdj: 0.3, windAdj: 0.3, notes: "test" },
+      homePitcher: { id: 101, name: "Home Starter", isOpener: false, isBullpenGame: false, expectedIP: 6, startRatio: 1, confidenceLabel: "Starter", runAdj: 0, notes: "test" },
+      awayPitcher: { id: 202, name: "Away Starter", isOpener: false, isBullpenGame: false, expectedIP: 6, startRatio: 1, confidenceLabel: "Starter", runAdj: 0, notes: "test" },
+      totalAdjustment: 0.6,
+      breakdown: { park: 0, temp: 0.3, wind: 0.3, homePitcher: 0, awayPitcher: 0 },
+      provenance: { status: "CERTIFIED", generatedAt: "2026-08-08T16:45:00.000Z", gamePk },
+    })) as any,
+  });
+
+  const result = await service.advancedContext(123456);
+  assert.equal(result.success, true);
+  assert.equal(result.sourceStatus, "CERTIFIED");
+  assert.equal(result.generatedAt, "2026-08-08T16:45:00.000Z");
+  assert.equal(result.totalAdjustment, 0.6);
+  assert.deepEqual(result.breakdown, { park: 0, temp: 0.3, wind: 0.3, homePitcher: 0, awayPitcher: 0 });
+});
+
+test("middleware intercepts all four historical GET paths and lets failed strict-only certifiers fall through", async () => {
   const uses = new Map<string, any>();
-  const app = {
-    use(path: string, handler: any) { uses.set(path, handler); },
-  } as unknown as Express;
+  const app = { use(path: string, handler: any) { uses.set(path, handler); } } as unknown as Express;
   const calls: string[] = [];
   registerMlbP1AdvancedComponentCertificationMiddleware(app, {
     async discipline(gamePk: number) { calls.push(`discipline:${gamePk}`); return { success: true, sourceStatus: "CERTIFIED", generatedAt: "2026-08-08T17:00:00.000Z" }; },
     async sos(gamePk: number) { calls.push(`sos:${gamePk}`); return { success: true, sourceStatus: "CERTIFIED", generatedAt: "2026-08-08T17:00:00.000Z" }; },
+    async quality(gamePk: number) { calls.push(`quality:${gamePk}`); return { success: true, sourceStatus: "CERTIFIED", generatedAt: "2026-08-08T17:00:00.000Z" }; },
+    async advancedContext(gamePk: number) { calls.push(`advanced:${gamePk}`); throw new Error("ADVANCED_CONTEXT_ROOF_STATUS_UNVERIFIED"); },
   });
 
-  assert.ok(uses.has("/api/mlb/discipline-speed/:gamePk"));
-  assert.ok(uses.has("/api/mlb/sos/:gamePk"));
+  for (const path of [
+    "/api/mlb/quality/:gamePk",
+    "/api/mlb/advanced/:gamePk",
+    "/api/mlb/discipline-speed/:gamePk",
+    "/api/mlb/sos/:gamePk",
+  ]) assert.ok(uses.has(path));
 
   let body: any = null;
-  await uses.get("/api/mlb/discipline-speed/:gamePk")(
+  await uses.get("/api/mlb/quality/:gamePk")(
     { method: "GET", params: { gamePk: "777" } },
     { status() { return this; }, json(value: any) { body = value; return value; } },
-    () => { throw new Error("GET should not fall through"); },
+    () => { throw new Error("certified quality must not fall through"); },
   );
   assert.equal(body.sourceStatus, "CERTIFIED");
-  assert.deepEqual(calls, ["discipline:777"]);
 
-  let fellThrough = false;
+  let advancedFellThrough = false;
+  await uses.get("/api/mlb/advanced/:gamePk")(
+    { method: "GET", params: { gamePk: "777" } },
+    { status() { return this; }, json(value: any) { return value; } },
+    () => { advancedFellThrough = true; },
+  );
+  assert.equal(advancedFellThrough, true, "strict Advanced Context failure must preserve the legacy route");
+
+  let postFellThrough = false;
   await uses.get("/api/mlb/sos/:gamePk")(
     { method: "POST", params: { gamePk: "777" } },
     { status() { return this; }, json(value: any) { return value; } },
-    () => { fellThrough = true; },
+    () => { postFellThrough = true; },
   );
-  assert.equal(fellThrough, true);
-  assert.deepEqual(calls, ["discipline:777"]);
+  assert.equal(postFellThrough, true);
+  assert.deepEqual(calls, ["quality:777", "advanced:777"]);
 });
