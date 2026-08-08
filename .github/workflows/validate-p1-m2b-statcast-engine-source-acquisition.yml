@@ -1,0 +1,90 @@
+name: Validate P1-M2B Statcast Engine Source Acquisition
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-statcast-matchup.ts'
+      - 'server/mlb-statcast-savant-source.ts'
+      - 'server/mlb-statcast-savant-source.test.ts'
+      - 'docs/P1_M2B_STATCAST_ENGINE_SOURCE_ACQUISITION.md'
+      - '.github/workflows/validate-p1-m2b-statcast-engine-source-acquisition.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-statcast-engine-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck source acquisition surface
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --esModuleInterop --skipLibCheck --types node server/mlb-statcast-savant-source.ts server/mlb-statcast-matchup.ts server/mlb-statcast-savant-source.test.ts
+      - name: Run source acquisition invariants
+        run: npx tsx --test server/mlb-statcast-savant-source.test.ts
+      - name: Preserve Statcast observability and strict-certification contracts
+        run: |
+          npx tsx --test server/mlb-statcast-matchup-coverage.test.ts
+          npx tsx --test server/mlb-statcast-matchup-vsteam-identity.test.ts
+          npx tsx --test server/mlb-statcast-matchup-certifier.test.ts
+          npx tsx --test server/mlb-statcast-matchup-identity-routes.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify source-only scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          engine='server/mlb-statcast-matchup.ts'
+          source='server/mlb-statcast-savant-source.ts'
+          testfile='server/mlb-statcast-savant-source.test.ts'
+          docs='docs/P1_M2B_STATCAST_ENGINE_SOURCE_ACQUISITION.md'
+
+          grep -F 'minPitches: input.coverage === "INCLUSIVE" ? "1" : "q"' "$source"
+          grep -F 'loadBatterArsenalFromSavant(year, "DIRECT_INCLUSIVE")' "$engine"
+          grep -F 'loadBatterArsenalFromSavant(year, "QUALIFIED_PROXY")' "$engine"
+          grep -F 'const data = await loadQualifiedBatterArsenal(year);' "$engine"
+          grep -F 'role: "pitcher", year, coverage: "QUALIFIED"' "$engine"
+          grep -F 'return { minPitches: 30, minTeamPa: 50 }' "$engine"
+          grep -F 'directMatches >= arsenal.pitches.length * 0.6' "$engine"
+          grep -F 'strict Statcast certifier is intentionally not modified' "$docs"
+          grep -F 'large' "$testfile" >/dev/null || true
+
+          ! grep -F 'pitch_type=ALL&min_pa=q&min_pitches=q' "$engine"
+          ! grep -Ei 'placeBet|sportsbook.*write|appendPrediction|appendSettlement|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticPromotionAllowed:[[:space:]]*true' "$engine" "$source"
+      - name: Verify exact five-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-statcast-engine-source-acquisition.yml' \
+            'docs/P1_M2B_STATCAST_ENGINE_SOURCE_ACQUISITION.md' \
+            'server/mlb-statcast-matchup.ts' \
+            'server/mlb-statcast-savant-source.test.ts' \
+            'server/mlb-statcast-savant-source.ts' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M2B Statcast engine source acquisition scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+
+          ! grep -Fxq 'server/mlb-statcast-matchup-certifier.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup-certifier.test.ts' <<< "$changed"
