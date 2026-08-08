@@ -3,11 +3,11 @@
     "server/mlb-p1-advanced-component-certification-routes.ts",
     "server/mlb-p1-advanced-component-certification-routes.test.ts",
     "server/mlb-discipline-speed.ts",
-    "server/mlb-sos.ts",
-    "shared/**/*"
+    "server/mlb-sos.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
+    "target": "ES2022",
     "module": "ESNext",
     "strict": false,
     "lib": ["esnext", "dom"],
@@ -16,9 +16,6 @@
     "moduleResolution": "bundler",
     "types": ["node"],
     "baseUrl": ".",
-    "paths": {
-      "@shared/*": ["./shared/*"]
-    },
     "outDir": "dist",
     "noEmit": true
   }
