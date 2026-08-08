@@ -1,0 +1,72 @@
+name: Validate P1-M3F3B4 Advanced Context Provenance
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-advanced-context-provenance.ts'
+      - 'server/mlb-advanced-context-provenance.test.ts'
+      - 'docs/P1_M3F3B4_ADVANCED_CONTEXT_PROVENANCE.md'
+      - '.github/workflows/validate-p1-m3f3b4-advanced-context-provenance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3b4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck inherited readiness surface
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
+      - name: Run M3F3B4 provenance falsification tests
+        run: npx tsx --test server/mlb-advanced-context-provenance.test.ts
+      - name: Preserve earlier advanced-factor provenance contracts
+        run: |
+          npx tsx --test server/mlb-statcast-quality-provenance.test.ts
+          npx tsx --test server/mlb-discipline-speed-provenance.test.ts
+          npx tsx --test server/mlb-sos-provenance.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Preserve production and shadow contracts
+        run: |
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify certification and no model change
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-advanced-context-provenance.ts'
+          docs='docs/P1_M3F3B4_ADVANCED_CONTEXT_PROVENANCE.md'
+          grep -F 'courtedge-mlb-advanced-context-evidence.v1' "$source"
+          grep -F 'THROW_FAIL_CLOSED' "$source"
+          grep -F 'cacheMaxAgeSeconds: CACHE_MAX_AGE_SECONDS' "$source"
+          grep -F 'venueIdentityVerified: true' "$source"
+          grep -F 'ADVANCED_CONTEXT_RETRACTABLE_ROOF_STATUS_UNVERIFIED' "$source"
+          grep -F 'No model formula, probability, threshold' "$docs"
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
+      - name: Verify exact M3F3B4 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b4-advanced-context-provenance.yml' \
+            'docs/P1_M3F3B4_ADVANCED_CONTEXT_PROVENANCE.md' \
+            'server/mlb-advanced-context-provenance.test.ts' \
+            'server/mlb-advanced-context-provenance.ts' | sort)
+          [[ "$changed" == "$expected" ]]
