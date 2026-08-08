@@ -144,6 +144,12 @@ function validMetric(value: unknown): value is MlbPremiumNoUltraMetricSummary {
     && Number(metric.clvAvailable) <= Number(metric.settled);
 }
 
+function assertValidMetric(value: unknown, message: string): asserts value is MlbPremiumNoUltraMetricSummary {
+  if (!validMetric(value)) {
+    throw new Error(`PREMIUM_NO_ULTRA_UI_INVALID_RESPONSE:${message}`);
+  }
+}
+
 function validInterval(value: unknown): value is MlbPremiumNoUltraInterval {
   const interval = record(value);
   return Boolean(interval)
@@ -196,8 +202,8 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   if (Number(cohort?.candidateGames) + Number(cohort?.controlGames) !== Number(cohort?.independentGames)) fail("independent_accounting");
   if (Number(cohort?.candidateSettled) > Number(cohort?.candidateGames) || Number(cohort?.controlSettled) > Number(cohort?.controlGames)) fail("settled_accounting");
 
-  if (!validMetric(candidateValue)) fail("candidate_metric");
-  if (!validMetric(controlValue)) fail("control_metric");
+  assertValidMetric(candidateValue, "candidate_metric");
+  assertValidMetric(controlValue, "control_metric");
   const candidateMetric = candidateValue;
   const controlMetric = controlValue;
   if (candidateMetric.settled !== cohort?.candidateSettled || candidateMetric.dates !== cohort?.candidateDates) fail("candidate_metric_cohort_parity");
