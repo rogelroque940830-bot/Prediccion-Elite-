@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "p1-m2b-post-advanced-repair-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "6f259cb7d4aaf483b53834a53c44f616db2b5095",
+    "researchPr": 397,
+    "workflowRun": 31270837955,
+    "artifactId": 9025517825,
+    "rawGameIdentityPersisted": false
+  },
+  "baseline": {
+    "evidencePr": 395,
+    "READY_FINAL": 0,
+    "READY_PROVISIONAL": 6,
+    "mlAdvancedFactorsDegraded": 3,
+    "mlAdvancedCertifiedComponents": "0/5",
+    "advancedRuntimeReferenceErrorObserved": true
+  },
+  "postRepair": {
+    "sampledPregameGames": 3,
+    "sampledMarketEvaluations": 6,
+    "READY_FINAL": 0,
+    "READY_PROVISIONAL": 6,
+    "BLOCKED": 0,
+    "REQUEST_FAILED": 0,
+    "injuriesDegraded": 6,
+    "mlAdvancedFactorsDegraded": 3,
+    "advancedRuntimeReferenceErrorResolved": true,
+    "mlAdvancedCertifiedComponents": "2/5",
+    "remainingAdvancedComponentErrors": [
+      "ADVANCED_FACTORS_UNCERTIFIED:STATCAST_MATCHUP:ADVANCED_ENDPOINT_ERROR",
+      "ADVANCED_FACTORS_UNCERTIFIED:DISCIPLINE_SPEED:DISCIPLINE_ENDPOINT_ERROR",
+      "ADVANCED_FACTORS_UNCERTIFIED:SOS:SOS_ENDPOINT_ERROR"
+    ],
+    "f5PitcherForm": {
+      "state": "DEGRADED",
+      "quality": "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP"
+    },
+    "f5LineupMatchup": {
+      "state": "DEGRADED",
+      "quality": "DERIVED_WITHOUT_EXPLICIT_TIMESTAMP"
+    }
+  },
+  "interpretation": {
+    "advancedRouteRepairValidatedLive": true,
+    "advancedCertificationImproved": true,
+    "readyFinalObserved": false,
+    "gateShouldBeRelaxed": false,
+    "nextMlBlockers": [
+      "STATCAST_MATCHUP_ENDPOINT_MISSING_OR_UNAVAILABLE",
+      "DISCIPLINE_SPEED_ENDPOINT_MISSING_OR_UNAVAILABLE",
+      "SOS_ENDPOINT_MISSING_OR_UNAVAILABLE",
+      "INJURIES_DEGRADED"
+    ]
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "sportsbookCallsPerformedByResearchRunner": 0,
+    "rawGameIdentityPersisted": false
+  }
+}
