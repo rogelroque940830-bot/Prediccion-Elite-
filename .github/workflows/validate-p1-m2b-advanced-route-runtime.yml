@@ -29,7 +29,19 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
       - name: Typecheck extracted market-support route
-        run: npx tsc -p tsconfig.p1-m2b-advanced-route-runtime.json
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p audit
+          npx tsc -p tsconfig.p1-m2b-advanced-route-runtime.json 2>&1 | tee audit/tsc-output.txt
+      - name: Preserve typecheck diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-advanced-route-typecheck
+          path: audit/tsc-output.txt
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run advanced-route runtime regression
         run: npx tsx --test server/market-support-routes.advanced-runtime.test.ts
       - name: Preserve P1-M2B gate and advanced provenance contracts
