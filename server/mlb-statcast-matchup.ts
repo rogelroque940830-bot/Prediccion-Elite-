@@ -1,3 +1,5 @@
+import { buildSavantPitchArsenalUrl } from "./mlb-statcast-savant-source";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STATCAST PITCH-BY-PITCH MATCHUP ENGINE
 //
@@ -237,20 +239,29 @@ const VS_PITCHER_TTL = 24 * 3600 * 1000;
 const recentStatsCache: Record<string, { ts: number; ops: number; pa: number; tier: BatterMatchup["momentumTier"] }> = {};
 const vsPitcherCache: Record<string, { ts: number; data: BatterMatchup["vsPitcherCareer"] | null }> = {};
 const bullpenCache: Record<string, { ts: number; data: number[] }> = {};
-let batterArsenalCache: { ts: number; year: number; data: BatterPitchStats[] } | null = null;
+type BatterArsenalSourceMode = "DIRECT_INCLUSIVE" | "QUALIFIED_PROXY";
+const batterArsenalCaches: Record<BatterArsenalSourceMode, { ts: number; year: number; data: BatterPitchStats[] } | null> = {
+  DIRECT_INCLUSIVE: null,
+  QUALIFIED_PROXY: null,
+};
 let pitcherArsenalCache: { ts: number; year: number; data: Record<number, PitcherArsenal> } | null = null;
 
 // Team-vs-pitch-type aggregate (proxy cuando no hay datos del bateador individual)
 interface TeamPitchAggregate { pa: number; xwoba: number; whiff: number; }
 let teamArsenalCache: { ts: number; year: number; data: Record<string, Record<string, TeamPitchAggregate>> } | null = null;
 
-async function loadBatterArsenal(year: number): Promise<BatterPitchStats[]> {
-  if (batterArsenalCache && batterArsenalCache.year === year && Date.now() - batterArsenalCache.ts < CACHE_TTL) {
-    return batterArsenalCache.data;
+async function loadBatterArsenalFromSavant(
+  year: number,
+  mode: BatterArsenalSourceMode,
+): Promise<BatterPitchStats[]> {
+  const cached = batterArsenalCaches[mode];
+  if (cached && cached.year === year && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data;
   }
-  const url = `https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=batter&pitch_type=ALL&min_pa=q&min_pitches=q&year=${year}&team=&csv=true`;
+  const coverage = mode === "DIRECT_INCLUSIVE" ? "INCLUSIVE" : "QUALIFIED";
+  const url = buildSavantPitchArsenalUrl({ role: "batter", year, coverage });
   const csv = await fetchSavantCsv(url);
-  if (!csv) return batterArsenalCache?.data ?? [];
+  if (!csv) return cached?.data ?? [];
   const rows = parseCsv(csv);
   const data: BatterPitchStats[] = rows.map(r => ({
     playerId: parseInt(r["player_id"]),
@@ -269,8 +280,16 @@ async function loadBatterArsenal(year: number): Promise<BatterPitchStats[]> {
     hardHit: parseFloat(r["hard_hit_percent"]) || 0,
     runValue100: parseFloat(r["run_value_per_100"]) || 0,
   })).filter(r => r.playerId > 0);
-  batterArsenalCache = { ts: Date.now(), year, data };
+  batterArsenalCaches[mode] = { ts: Date.now(), year, data };
   return data;
+}
+
+async function loadBatterArsenal(year: number): Promise<BatterPitchStats[]> {
+  return loadBatterArsenalFromSavant(year, "DIRECT_INCLUSIVE");
+}
+
+async function loadQualifiedBatterArsenal(year: number): Promise<BatterPitchStats[]> {
+  return loadBatterArsenalFromSavant(year, "QUALIFIED_PROXY");
 }
 
 async function loadTeamArsenal(year: number): Promise<Record<string, Record<string, TeamPitchAggregate>>> {
@@ -278,7 +297,7 @@ async function loadTeamArsenal(year: number): Promise<Record<string, Record<stri
     return teamArsenalCache.data;
   }
   // Re-usa el batter arsenal CSV pero agrega por team+pitch_type
-  const data = await loadBatterArsenal(year);
+  const data = await loadQualifiedBatterArsenal(year);
   const byTeam: Record<string, Record<string, TeamPitchAggregate & { _xwobaSum: number; _whiffSum: number }>> = {};
   for (const r of data) {
     if (r.pa < 30 || !r.team) continue;
@@ -309,7 +328,7 @@ async function loadPitcherArsenal(year: number): Promise<Record<number, PitcherA
   if (pitcherArsenalCache && pitcherArsenalCache.year === year && Date.now() - pitcherArsenalCache.ts < CACHE_TTL) {
     return pitcherArsenalCache.data;
   }
-  const url = `https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=pitcher&pitch_type=ALL&min_pa=q&min_pitches=q&year=${year}&team=&csv=true`;
+  const url = buildSavantPitchArsenalUrl({ role: "pitcher", year, coverage: "QUALIFIED" });
   const csv = await fetchSavantCsv(url);
   if (!csv) return pitcherArsenalCache?.data ?? {};
   const rows = parseCsv(csv);
@@ -334,7 +353,7 @@ async function loadPitcherArsenal(year: number): Promise<Record<number, PitcherA
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FALLBACK: MLB Stats API pitchArsenal (MLB + AAA) para pitchers sin Savant
-//   - Savant requiere min_pitches=qualified → excluye rookies con muestra chica
+//   - Savant Qualified puede excluir pitchers con muestra chica
 //   - MLB Stats API expone pitchArsenal con sportId=1 (MLB) y sportId=11 (AAA)
 //   - Solo devuelve % uso + velocidad → usamos league-avg wOBA por pitch type
 //   - Confidence ajustada según fuente (MLB > AAA > AAA prior)
@@ -406,7 +425,7 @@ async function resolveArsenal(
   season: number,
 ): Promise<{ arsenal: PitcherArsenal | null; source: ArsenalSource }> {
   // FIX 17 jun 2026: Arsenal completo prioridad.
-  // Bug: Savant CSV con min_pa=q excluye pitchers con sample bajo por pitch type.
+  // Bug histórico: Savant Qualified excluye pitchers con sample bajo por pitch type.
   // Resultado anterior: pitchers tipo Mize devolvían solo 2 pitches (FF+FS) cuando realmente
   // lanzan 5 (FF+FS+SL+SI+SV). Cache stale agravaba el problema.
   //
