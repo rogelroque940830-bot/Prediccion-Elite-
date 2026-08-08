@@ -27,12 +27,17 @@ jobs:
         with:
           node-version: '24.18.0'
           cache: npm
-      - name: Install dependencies reproducibly
-        run: npm ci
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
       - name: Run strict parser falsification tests
-        run: npx tsx --test frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-premium-no-ultra-prospective.test.ts
       - name: Preserve operating-envelope parser tests
-        run: npx tsx --test frontend/client/src/lib/mlb-operating-envelope.test.ts
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-operating-envelope.test.ts
       - name: Typecheck frontend
         run: npm --prefix frontend run check
       - name: Build production frontend bundle
