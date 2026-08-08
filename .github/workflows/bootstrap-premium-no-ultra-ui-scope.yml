@@ -1,4 +1,4 @@
-name: Bootstrap PREMIUM No ULTRA UI Scope
+name: Repair PREMIUM No ULTRA UI Successor Scope
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  bootstrap:
+  repair:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,22 +19,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Apply exact six-guardian successor policy
+      - name: Apply exact successor and repair packages to real guardians
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
-          files = [
-              '.github/workflows/validate-p1-m3c-emission-ui.yml',
-              '.github/workflows/validate-p1-m3c1-terminal-refresh.yml',
-              '.github/workflows/validate-p1-m3d-interactive-economic-review-ui.yml',
+          bootstrap = '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml'
+          guardians = [
+              '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml',
+              '.github/workflows/validate-p1-m3c1-json-transport.yml',
+              '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml',
               '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml',
-              '.github/workflows/validate-p1-m4c-response-ui.yml',
+              '.github/workflows/validate-p1-m4c-frontend-economic-card.yml',
               '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml',
           ]
-          ui = [
+          ui_successor = [
               '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml',
               'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md',
               'frontend/client/src/components/mlb-premium-no-ultra-card.tsx',
@@ -42,71 +43,69 @@ jobs:
               'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts',
               'frontend/client/src/pages/mlb-economic-review-activated.tsx',
           ]
-          compat = files
+          compatibility = guardians
+          repair_package = [bootstrap, *guardians]
+          marker = '# PREMIUM_NO_ULTRA_UI_SUCCESSOR_PACKAGES_V1'
 
-          def package_block(name, items, indent='          '):
-              lines = [f"{indent}{name}=$(printf '%s\\n' \\"]
-              for item in items:
-                  lines.append(f"{indent}  '{item}' \\")
-              lines[-1] = lines[-1][:-2] + ' | sort)'
+          def package_block(name, items):
+              lines = [f"          {name}=$(printf '%s\\n' \\"]
+              for index, item in enumerate(items):
+                  suffix = ' \\' if index < len(items) - 1 else ' | sort)'
+                  lines.append(f"            '{item}'{suffix}")
               return '\n'.join(lines)
 
-          for filename in files:
+          block = '\n'.join([
+              f'          {marker}',
+              package_block('premium_no_ultra_ui_successor', ui_successor),
+              '',
+              package_block('premium_no_ultra_ui_compatibility', compatibility),
+              '',
+              package_block('premium_no_ultra_ui_repair', repair_package),
+              '',
+              '          if [[ "$changed" == "$premium_no_ultra_ui_successor" \\',
+              '             || "$changed" == "$premium_no_ultra_ui_compatibility" \\',
+              '             || "$changed" == "$premium_no_ultra_ui_repair" ]]; then',
+              '            exit 0',
+              '          fi',
+              '',
+          ])
+
+          for filename in guardians:
               path = Path(filename)
+              if not path.exists():
+                  raise RuntimeError(f'{filename}: guardian does not exist')
               text = path.read_text()
-              original = text
-              if "allowed=$(printf '%s\\n' \\" in text:
-                  start = text.rfind("allowed=$(printf '%s\\n' \\")
-                  end = text.find('| sort)', start)
-                  if start < 0 or end < 0:
-                      raise RuntimeError(f'{filename}: allowed block not found')
-                  segment = text[start:end]
-                  additions = []
-                  for item in ui + compat:
-                      if item not in segment:
-                          additions.append(f"            '{item}' \\\n")
-                  text = text[:end] + ''.join(additions) + text[end:]
-              else:
-                  marker = '          changed=$(git diff --name-only'
-                  start = text.rfind(marker)
-                  if start < 0:
-                      raise RuntimeError(f'{filename}: changed marker not found')
-                  line_end = text.find('\n', start)
-                  insertion = '\n\n' + package_block('premium_no_ultra_ui', ui) + '\n\n' + package_block('premium_no_ultra_ui_compatibility', compat) + '\n'
-                  text = text[:line_end + 1] + insertion + text[line_end + 1:]
-                  if_start = text.find('if [[ "$changed"', line_end + 1)
-                  if if_start < 0:
-                      raise RuntimeError(f'{filename}: changed comparison not found')
-                  then = text.find(']]; then', if_start)
-                  if then < 0:
-                      raise RuntimeError(f'{filename}: comparison terminator not found')
-                  extra = ' \\\n            && "$changed" != "$premium_no_ultra_ui" \\\n            && "$changed" != "$premium_no_ultra_ui_compatibility" '
-                  text = text[:then] + extra + text[then:]
-              if text == original:
-                  raise RuntimeError(f'{filename}: no change applied')
+              if marker in text:
+                  raise RuntimeError(f'{filename}: successor package marker already present')
+              needle = '          changed=$(git diff --name-only'
+              start = text.rfind(needle)
+              if start < 0:
+                  raise RuntimeError(f'{filename}: final changed-set marker not found')
+              line_end = text.find('\n', start)
+              if line_end < 0:
+                  raise RuntimeError(f'{filename}: changed-set line is unterminated')
+              text = text[:line_end + 1] + '\n' + block + text[line_end + 1:]
               path.write_text(text)
           PY
 
           rm -f .github/workflows/bootstrap-premium-no-ultra-ui-scope.yml
           git diff --check
-          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD -- . || true)
-          # Working-tree validation after bootstrap transformation.
           current=$(git diff --name-only | sort)
           expected=$(printf '%s\n' \
             '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml' \
-            '.github/workflows/validate-p1-m3c-emission-ui.yml' \
-            '.github/workflows/validate-p1-m3c1-terminal-refresh.yml' \
-            '.github/workflows/validate-p1-m3d-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3c-mlb-scientific-emission.yml' \
+            '.github/workflows/validate-p1-m3c1-json-transport.yml' \
+            '.github/workflows/validate-p1-m3d-b-interactive-economic-review-ui.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
-            '.github/workflows/validate-p1-m4c-response-ui.yml' \
+            '.github/workflows/validate-p1-m4c-frontend-economic-card.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
           [[ "$current" == "$expected" ]]
-      - name: Commit final six-workflow package and remove bootstrap
+      - name: Commit repaired guardian package and remove broken bootstrap
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add .github/workflows
-          git commit -m 'ci: authorize exact PREMIUM no ULTRA UI successor scope'
+          git commit -m 'ci: repair exact PREMIUM no ULTRA UI successor scopes'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
