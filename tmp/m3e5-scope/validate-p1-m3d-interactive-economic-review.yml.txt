@@ -167,13 +167,13 @@ jobs:
             'tsconfig.p1-premium-no-ultra-prospective-readonly.json' \
             'tsconfig.p1-m3f3b5-vsteam-identity.json' \
             'tsconfig.p1-m5a-real-cohort-activation.json' \
-            'tsconfig.p1-m6a2-market-odds.json'             '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'tsconfig.p1-m6a2-market-odds.json' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
             'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
             'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
             'server/mlb-p1-operating-envelope-frozen-live.ts' \
             'server/mlb-p1-operating-envelope-frozen-routes.ts' \
-            'tsconfig.p1-m3e5-live-frozen-envelope.json' \
-| sort)
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
 
