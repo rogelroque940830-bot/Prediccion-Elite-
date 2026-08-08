@@ -1,0 +1,253 @@
+name: Research P1-M2B Statcast Source Coverage
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-statcast-source-coverage.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-statcast-source-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: f7f6cbc3cb857ea5a4f2a6e74fc8016a73fff726
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-statcast-source-coverage.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Compare Savant qualified and inclusive coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate")
+          [[ "$slate_code" == '200' ]]
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+          const slateEnvelope = JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if (slateEnvelope?.success !== true || !Array.isArray(slateEnvelope?.data?.games)) throw new Error('STATCAST_SOURCE_SLATE_INVALID');
+          const slate = slateEnvelope.data;
+          const season = Number(String(slate.date || '').slice(0,4));
+          if (!Number.isInteger(season) || season < 2020) throw new Error('STATCAST_SOURCE_SEASON_INVALID');
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((g) => ['SCHEDULED','PREGAME'].includes(g.state) && g.analysisAllowed === true)
+            .sort((a,b) => {
+              const ams = a.startTime ? Date.parse(a.startTime) : Number.POSITIVE_INFINITY;
+              const bms = b.startTime ? Date.parse(b.startTime) : Number.POSITIVE_INFINITY;
+              const afuture = ams >= now ? 0 : 1;
+              const bfuture = bms >= now ? 0 : 1;
+              return afuture - bfuture || Math.abs(ams-now) - Math.abs(bms-now);
+            })
+            .slice(0,3);
+
+          function fetchCsv(label, minPa, minPitches) {
+            const path = `private/${label}.csv`;
+            const url = `https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=batter&pitch_type=ALL&min_pa=${minPa}&min_pitches=${minPitches}&year=${season}&team=&csv=true`;
+            let code = '000';
+            try {
+              code = execFileSync('curl',[
+                '-sS','-L','-o',path,'-w','%{http_code}','--max-time','120',
+                '-H','User-Agent: Mozilla/5.0',
+                '-H','Referer: https://baseballsavant.mlb.com/',
+                url
+              ],{encoding:'utf8'}).trim();
+            } catch (error) {
+              return { code:'000', path, error:'FETCH_FAILED' };
+            }
+            return { code, path, error:null };
+          }
+
+          function csvLine(line) {
+            const out=[]; let cur=''; let inQuotes=false;
+            for (let i=0;i<line.length;i++) {
+              const ch=line[i];
+              if (ch==='"' && line[i+1]==='"') { cur+='"'; i++; }
+              else if (ch==='"') inQuotes=!inQuotes;
+              else if (ch===',' && !inQuotes) { out.push(cur); cur=''; }
+              else cur+=ch;
+            }
+            out.push(cur); return out;
+          }
+          function parseSource(path) {
+            const text=fs.readFileSync(path,'utf8').replace(/^\uFEFF/,'');
+            const lines=text.split(/\r?\n/).filter(Boolean);
+            if (lines.length<2) return { rows:0, uniquePlayers:0, byPlayer:new Map() };
+            const headers=csvLine(lines[0]);
+            const idIndex=headers.indexOf('player_id');
+            const typeIndex=headers.indexOf('pitch_type');
+            const pitchesIndex=headers.indexOf('pitches');
+            if (idIndex<0 || typeIndex<0 || pitchesIndex<0) return { rows:0, uniquePlayers:0, byPlayer:new Map() };
+            const byPlayer=new Map(); let rows=0;
+            for (const line of lines.slice(1)) {
+              const values=csvLine(line);
+              const id=Number(values[idIndex]);
+              const type=String(values[typeIndex]||'').trim();
+              const pitches=Number(values[pitchesIndex])||0;
+              if (!Number.isInteger(id) || id<=0 || !type) continue;
+              rows++;
+              if (!byPlayer.has(id)) byPlayer.set(id,new Map());
+              const player=byPlayer.get(id);
+              player.set(type,Math.max(player.get(type)||0,pitches));
+            }
+            return { rows, uniquePlayers:byPlayer.size, byPlayer };
+          }
+
+          const qualifiedFetch=fetchCsv('qualified','q','q');
+          const inclusiveFetch=fetchCsv('inclusive','1','1');
+          if (qualifiedFetch.code!=='200' || inclusiveFetch.code!=='200') throw new Error(`STATCAST_SOURCE_CSV_HTTP:${qualifiedFetch.code}:${inclusiveFetch.code}`);
+          const qualified=parseSource(qualifiedFetch.path);
+          const inclusive=parseSource(inclusiveFetch.path);
+
+          function currentCounts(matchup) {
+            const rows=Array.isArray(matchup?.perBatter)?matchup.perBatter:[];
+            let direct=0, proxy=0, league=0, unknown=0;
+            for (const row of rows) {
+              const q=String(row?.dataQuality||'').toUpperCase();
+              if (q==='DIRECT') direct++;
+              else if (q==='TEAM_PROXY') proxy++;
+              else if (q==='LEAGUE') league++;
+              else unknown++;
+            }
+            return { direct, proxy, league, unknown };
+          }
+          function projectedDirect(lineupIds, matchup, sourceMap) {
+            const arsenalTypes=(Array.isArray(matchup?.arsenal)?matchup.arsenal:[]).map((p)=>String(p?.type||'').trim()).filter(Boolean);
+            if (!arsenalTypes.length) return 0;
+            let direct=0;
+            for (const batterId of lineupIds) {
+              const rows=sourceMap.get(batterId) || new Map();
+              const directMatches=arsenalTypes.filter((type)=>(rows.get(type)||0)>=30).length;
+              if (directMatches >= arsenalTypes.length*0.6) direct++;
+            }
+            return direct;
+          }
+          function side(lineupIds, matchup) {
+            const current=currentCounts(matchup);
+            const q=projectedDirect(lineupIds,matchup,qualified.byPlayer);
+            const i=projectedDirect(lineupIds,matchup,inclusive.byPlayer);
+            return {
+              lineupCount:lineupIds.length,
+              arsenalPitchTypes:Array.isArray(matchup?.arsenal)?matchup.arsenal.length:0,
+              currentEngine:current,
+              projectedQualifiedDirect:q,
+              projectedInclusiveDirect:i,
+              qualifiedMatchesCurrentDirect:q===current.direct,
+              inclusiveImprovement:i-current.direct,
+              inclusiveReachesNine:i===9
+            };
+          }
+
+          const result={
+            schemaVersion:'p1-m2b-statcast-source-coverage.v1',
+            generatedAt:new Date().toISOString(),
+            deployedCommit:fs.readFileSync('private/deployed-commit.txt','utf8'),
+            season,
+            sourceVariants:{
+              qualified:{httpStatus:Number(qualifiedFetch.code),rows:qualified.rows,uniquePlayers:qualified.uniquePlayers},
+              inclusive:{httpStatus:Number(inclusiveFetch.code),rows:inclusive.rows,uniquePlayers:inclusive.uniquePlayers}
+            },
+            samples:[],
+            aggregate:{ sidesMeasured:0, currentDirectTotal:0, projectedQualifiedDirectTotal:0, projectedInclusiveDirectTotal:0, inclusiveNineOfNineSides:0, qualifiedSimulationMismatchSides:0 },
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,sportsbookCallsPerformedByResearchRunner:0,rawIdentityUploaded:false}
+          };
+
+          for (let index=0;index<candidates.length;index++) {
+            const game=candidates[index];
+            const routePath=`private/statcast-${index}.json`;
+            const feedPath=`private/feed-${index}.json`;
+            let routeCode='000';
+            try {
+              routeCode=execFileSync('curl',['-sS','-o',routePath,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(game.gamePk)}`],{encoding:'utf8'}).trim();
+              execFileSync('curl',['-sS','-o',feedPath,'--max-time','60',`https://statsapi.mlb.com/api/v1.1/game/${encodeURIComponent(game.gamePk)}/feed/live`],{encoding:'utf8'});
+            } catch {
+              result.samples.push({gameOrdinal:index+1,requestStatus:'FAILED'}); continue;
+            }
+            if (routeCode!=='200') { result.samples.push({gameOrdinal:index+1,requestStatus:`HTTP_${routeCode}`}); continue; }
+            const response=JSON.parse(fs.readFileSync(routePath,'utf8'));
+            const feed=JSON.parse(fs.readFileSync(feedPath,'utf8'));
+            const homeIds=Array.isArray(feed?.liveData?.boxscore?.teams?.home?.battingOrder)?feed.liveData.boxscore.teams.home.battingOrder:[];
+            const awayIds=Array.isArray(feed?.liveData?.boxscore?.teams?.away?.battingOrder)?feed.liveData.boxscore.teams.away.battingOrder:[];
+            const home=side(homeIds,response?.homeLineupVsAwaySP);
+            const away=side(awayIds,response?.awayLineupVsHomeSP);
+            for (const s of [home,away]) {
+              result.aggregate.sidesMeasured++;
+              result.aggregate.currentDirectTotal+=s.currentEngine.direct;
+              result.aggregate.projectedQualifiedDirectTotal+=s.projectedQualifiedDirect;
+              result.aggregate.projectedInclusiveDirectTotal+=s.projectedInclusiveDirect;
+              if (s.inclusiveReachesNine) result.aggregate.inclusiveNineOfNineSides++;
+              if (!s.qualifiedMatchesCurrentDirect) result.aggregate.qualifiedSimulationMismatchSides++;
+            }
+            result.samples.push({gameOrdinal:index+1,requestStatus:'OK',home,away});
+          }
+          const ok=result.samples.filter((s)=>s.requestStatus==='OK');
+          result.conclusion={
+            measured:ok.length>0,
+            sampledGames:ok.length,
+            qualifiedSimulationMatchesEngineAllSides:result.aggregate.qualifiedSimulationMismatchSides===0,
+            inclusiveSourceAddsDirectCoverage:result.aggregate.projectedInclusiveDirectTotal>result.aggregate.currentDirectTotal,
+            inclusiveSourceAchievesNineDirectAllSides:result.aggregate.sidesMeasured>0 && result.aggregate.inclusiveNineOfNineSides===result.aggregate.sidesMeasured,
+            internalMinPitchesPreserved:30,
+            requiredArsenalCoveragePctPreserved:60,
+            modelFormulaChanged:false,
+            certificationRuleChanged:false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({sourceVariants:result.sourceVariants,aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          test -f audit/result.json
+          rm -rf private
+          test ! -d private
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized source coverage only
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-statcast-source-coverage
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
