@@ -86,14 +86,35 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+          premium_no_ultra_readonly=$(printf '%s\n' \
             '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
             'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
             'server/mlb-premium-no-ultra-prospective-routes.ts' \
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
             'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
-          if [[ "$changed" != "$expected" ]]; then
+          m3e5_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-live.ts' \
+            'server/mlb-p1-operating-envelope-frozen-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
+
+          compatibility_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+          if [[ "$changed" != "$premium_no_ultra_readonly" \
+            && "$changed" != "$m3e5_successor" \
+            && "$changed" != "$compatibility_package" ]]; then
             echo 'PREMIUM no-ULTRA read-only scope rejected.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
