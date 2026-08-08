@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Express } from "express";
+import { PARK_FACTORS } from "./mlb-advanced";
 import { invalidateCache } from "./route-runtime";
 import { registerMarketSupportRoutes } from "./market-support-routes";
 
@@ -20,6 +21,13 @@ function captureApp(): { app: Express; get: Map<string, RouteHandler> } {
   } as unknown as Express;
   return { app, get };
 }
+
+test("shadowed duplicate park-factor keys are removed without changing effective runtime values", () => {
+  assert.equal(PARK_FACTORS[19]?.name, "Coors Field");
+  assert.equal(PARK_FACTORS[19]?.runs, 115);
+  assert.equal(PARK_FACTORS[32]?.name, "American Family Fld");
+  assert.equal(PARK_FACTORS[32]?.runs, 100);
+});
 
 test("MLB advanced route retains doubleheader-safe metadata and dynamic season after S3 extraction", async () => {
   process.env.ODDS_API_KEY = "test-odds-key";
