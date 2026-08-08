@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 55
     env:
       BACKEND_URL: https://web-p0-integration.up.railway.app
-      ACCEPTABLE_BACKEND_COMMITS: b0a0ad5eb1b8a70dd85882051d5a7f4e05546680,97b4a9936df0dd735bea991a3018e52e32e974a5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,24 +38,39 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
 
-      - name: Wait for runtime-equivalent deployed backend
+      - name: Resolve deployed backend and prove injury-runtime equivalence
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p audit private
           chmod 700 private
           observed=''
-          acceptable=",${ACCEPTABLE_BACKEND_COMMITS},"
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 12); do
             code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
             if [[ "$code" == '200' ]]; then
               observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
-              if [[ "$acceptable" == *",${observed},"* ]]; then break; fi
+              [[ -n "$observed" ]] && break
             fi
-            sleep 10
+            sleep 5
           done
-          [[ "$acceptable" == *",${observed},"* ]]
+          [[ -n "$observed" ]]
+          git cat-file -e "${observed}^{commit}"
+          target='${{ github.event.pull_request.base.sha }}'
+          injury_files=(
+            server/mlb-core-routes.ts
+            server/mlb-injury-identity.ts
+            server/mlb-injury-shadow.ts
+            server/mlb-injury-phase-b.ts
+            server/mlb-p1-pregame-readiness-service.ts
+            server/mlb-p1-pregame-readiness-contract.ts
+          )
+          git diff --quiet "$observed" "$target" -- "${injury_files[@]}" || {
+            echo "Deployed backend injury/readiness runtime differs from current integration base." >&2
+            git diff --name-only "$observed" "$target" -- "${injury_files[@]}" >&2
+            exit 1
+          }
           printf '%s' "$observed" > private/deployed-commit.txt
+          printf '%s' "$target" > private/target-base.txt
 
       - name: Audit current injury reconciliation without persisting identities
         shell: bash
@@ -105,9 +119,17 @@ jobs:
             schemaVersion: 'p1-m2b-current-injury-reconciliation.v1',
             generatedAt: new Date().toISOString(),
             deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            targetIntegrationBase: fs.readFileSync('private/target-base.txt','utf8'),
             runtimeEquivalence: {
-              acceptedCommits: ['b0a0ad5eb1b8a70dd85882051d5a7f4e05546680','97b4a9936df0dd735bea991a3018e52e32e974a5'],
-              differenceBetweenAcceptedCommits: 'EVIDENCE_ONLY_PR_424_NO_RUNTIME_CHANGE'
+              verifiedByGitDiff: true,
+              files: [
+                'server/mlb-core-routes.ts',
+                'server/mlb-injury-identity.ts',
+                'server/mlb-injury-shadow.ts',
+                'server/mlb-injury-phase-b.ts',
+                'server/mlb-p1-pregame-readiness-service.ts',
+                'server/mlb-p1-pregame-readiness-contract.ts'
+              ]
             },
             samples: [],
             aggregate: {
