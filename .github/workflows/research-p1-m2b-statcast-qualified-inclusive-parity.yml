@@ -1,0 +1,156 @@
+name: Research P1-M2B Statcast Qualified Inclusive Parity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-statcast-qualified-inclusive-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-savant-row-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-statcast-qualified-inclusive-parity.yml' ]]
+
+      - name: Verify overlapping Qualified and Inclusive Savant values
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+
+          node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+
+          function fetchCsv(year, mode) {
+            const path = `private/${year}-${mode}.csv`;
+            const minPitches = mode === 'inclusive' ? '1' : 'q';
+            const url = `https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?min=1&minPitches=${minPitches}&pitchType=&team=&type=batter&year=${year}&csv=true`;
+            const code = execFileSync('curl', [
+              '-sS','-L','-o',path,'-w','%{http_code}','--max-time','120',
+              '-H','User-Agent: Mozilla/5.0',
+              '-H','Referer: https://baseballsavant.mlb.com/',
+              url
+            ], { encoding: 'utf8' }).trim();
+            if (code !== '200') throw new Error(`SAVANT_${year}_${mode}_HTTP_${code}`);
+            return path;
+          }
+
+          function csvLine(line) {
+            const out=[]; let cur=''; let quoted=false;
+            for(let i=0;i<line.length;i++){
+              const ch=line[i];
+              if(ch==='"' && line[i+1]==='"'){cur+='"';i++;}
+              else if(ch==='"') quoted=!quoted;
+              else if(ch===',' && !quoted){out.push(cur);cur='';}
+              else cur+=ch;
+            }
+            out.push(cur); return out;
+          }
+
+          const numerical = ['pitches','pa','est_woba','woba','whiff_percent','run_value_per_100'];
+          function parse(path) {
+            const lines=fs.readFileSync(path,'utf8').replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean);
+            const headers=csvLine(lines[0]||'');
+            const index=Object.fromEntries(headers.map((h,i)=>[h,i]));
+            for(const needed of ['player_id','pitch_type','team_name_alt',...numerical]){
+              if(index[needed] == null) throw new Error(`SAVANT_HEADER_MISSING_${needed}`);
+            }
+            const rows=new Map();
+            for(const line of lines.slice(1)){
+              const v=csvLine(line);
+              const playerId=Number(v[index.player_id]);
+              const pitchType=String(v[index.pitch_type]||'').trim();
+              if(!Number.isInteger(playerId)||playerId<=0||!pitchType) continue;
+              const key=`${playerId}:${pitchType}`;
+              rows.set(key,{
+                team:String(v[index.team_name_alt]||'').trim(),
+                pitches:Number(v[index.pitches])||0,
+                pa:Number(v[index.pa])||0,
+                est_woba:Number(v[index.est_woba])||0,
+                woba:Number(v[index.woba])||0,
+                whiff_percent:Number(v[index.whiff_percent])||0,
+                run_value_per_100:Number(v[index.run_value_per_100])||0,
+              });
+            }
+            return rows;
+          }
+
+          const result={
+            schemaVersion:'p1-m2b-statcast-qualified-inclusive-parity.v1',
+            generatedAt:new Date().toISOString(),
+            seasons:{},
+            aggregate:{qualifiedRows:0,inclusiveRows:0,qualifiedMissingFromInclusive:0,overlapRows:0,valueMismatchRows:0,fieldMismatchCounts:{}},
+            safety:{identitiesPersisted:false,modelChanged:false,certificationRuleChanged:false}
+          };
+          const bump=(obj,key)=>{obj[key]=(obj[key]||0)+1;};
+
+          for(const year of [2026,2025]){
+            const qualified=parse(fetchCsv(year,'qualified'));
+            const inclusive=parse(fetchCsv(year,'inclusive'));
+            let missing=0,overlap=0,mismatchRows=0;
+            const fieldMismatchCounts={};
+            for(const [key,q] of qualified){
+              const inc=inclusive.get(key);
+              if(!inc){missing++;continue;}
+              overlap++;
+              let mismatched=false;
+              if(q.team!==inc.team){bump(fieldMismatchCounts,'team_name_alt');mismatched=true;}
+              for(const field of numerical){
+                if(Math.abs(q[field]-inc[field])>1e-12){bump(fieldMismatchCounts,field);mismatched=true;}
+              }
+              if(mismatched)mismatchRows++;
+            }
+            result.seasons[String(year)]={qualifiedRows:qualified.size,inclusiveRows:inclusive.size,qualifiedMissingFromInclusive:missing,overlapRows:overlap,valueMismatchRows:mismatchRows,fieldMismatchCounts};
+            result.aggregate.qualifiedRows+=qualified.size;
+            result.aggregate.inclusiveRows+=inclusive.size;
+            result.aggregate.qualifiedMissingFromInclusive+=missing;
+            result.aggregate.overlapRows+=overlap;
+            result.aggregate.valueMismatchRows+=mismatchRows;
+            for(const [field,count] of Object.entries(fieldMismatchCounts)) result.aggregate.fieldMismatchCounts[field]=(result.aggregate.fieldMismatchCounts[field]||0)+count;
+          }
+          result.conclusion={
+            qualifiedIsExactSubsetOfInclusive:result.aggregate.qualifiedMissingFromInclusive===0,
+            overlappingNumericalValuesIdentical:result.aggregate.valueMismatchRows===0,
+            safeToUseQualifiedEligibilityMaskOnInclusiveRows:result.aggregate.qualifiedMissingFromInclusive===0&&result.aggregate.valueMismatchRows===0,
+            certifierToleranceShouldChange:false,
+            engineFormulaShouldChange:false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact contains only aggregate parity counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"player_id"|"playerId"|"pitcherId"|"gamePk"|"homeTeam"|"awayTeam"' audit/result.json
+
+      - name: Upload sanitized parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-statcast-qualified-inclusive-parity
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
