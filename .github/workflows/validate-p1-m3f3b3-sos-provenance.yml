@@ -1,0 +1,70 @@
+name: Validate P1-M3F3B3 SOS Provenance
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-sos.ts'
+      - 'server/mlb-sos-provenance.test.ts'
+      - 'docs/P1_M3F3B3_SOS_PROVENANCE.md'
+      - '.github/workflows/validate-p1-m3f3b3-sos-provenance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3b3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck inherited readiness surface
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
+      - name: Run M3F3B3 provenance falsification tests
+        run: npx tsx --test server/mlb-sos-provenance.test.ts
+      - name: Preserve earlier advanced-factor provenance contracts
+        run: |
+          npx tsx --test server/mlb-statcast-quality-provenance.test.ts
+          npx tsx --test server/mlb-discipline-speed-provenance.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Preserve production and shadow contracts
+        run: |
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify certification and no model change
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-sos.ts'
+          docs='docs/P1_M3F3B3_SOS_PROVENANCE.md'
+          grep -F 'courtedge-mlb-sos-evidence.v1' "$source"
+          grep -F 'THROW_FAIL_CLOSED' "$source"
+          grep -F 'cacheMaxAgeSeconds: 3600' "$source"
+          grep -F 'INSUFFICIENT_GAMES' "$source"
+          grep -F 'No model formula, probability, threshold' "$docs"
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
+      - name: Verify exact M3F3B3 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b3-sos-provenance.yml' \
+            'docs/P1_M3F3B3_SOS_PROVENANCE.md' \
+            'server/mlb-sos-provenance.test.ts' \
+            'server/mlb-sos.ts' | sort)
+          [[ "$changed" == "$expected" ]]
