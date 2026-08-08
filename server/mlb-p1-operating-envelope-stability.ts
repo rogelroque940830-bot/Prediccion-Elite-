@@ -536,15 +536,34 @@ export function buildMlbP1M3e2OperatingEnvelopeStability(
     bootstrapReplicates: config.bootstrapReplicates,
   };
   const validation = holdoutInference(split.validation, winner.rule, holdoutOptions);
-  const confirmation = holdoutInference(split.confirmation, winner.rule, holdoutOptions);
-  const supported = validation.criteria.allAccepted && confirmation.criteria.allAccepted;
-  const state: MlbP1M3e2State = !validation.criteria.allAccepted
-    ? "VALIDATION_FAILED"
-    : !confirmation.criteria.allAccepted
-      ? "CONFIRMATION_FAILED"
-      : "STABLE_MODEL_QUALITY_ENVELOPE_RESEARCH_ONLY";
   const validationSelected: MlbP1M3eMetricSummary = validation.comparison.selected;
+  if (!validation.criteria.allAccepted) {
+    return {
+      ...base,
+      state: "VALIDATION_FAILED",
+      temporalSplit,
+      selectedRule: winner.rule,
+      discovery: winner.value,
+      validation,
+      confirmation: null,
+      economicsDiagnostics: {
+        promotionCriterion: false,
+        validationSelectedFlatRoiPct: validationSelected.flatStakeRoiPct,
+        validationSelectedMeanClvPp: validationSelected.meanClvPp,
+        confirmationSelectedFlatRoiPct: null,
+        confirmationSelectedMeanClvPp: null,
+      },
+      interpretation: safeInterpretation(false),
+      blockers: blockers("VALIDATION", validation),
+    };
+  }
+
+  const confirmation = holdoutInference(split.confirmation, winner.rule, holdoutOptions);
   const confirmationSelected: MlbP1M3eMetricSummary = confirmation.comparison.selected;
+  const supported = confirmation.criteria.allAccepted;
+  const state: MlbP1M3e2State = supported
+    ? "STABLE_MODEL_QUALITY_ENVELOPE_RESEARCH_ONLY"
+    : "CONFIRMATION_FAILED";
   return {
     ...base,
     state,
@@ -561,9 +580,6 @@ export function buildMlbP1M3e2OperatingEnvelopeStability(
       confirmationSelectedMeanClvPp: confirmationSelected.meanClvPp,
     },
     interpretation: safeInterpretation(supported),
-    blockers: [
-      ...blockers("VALIDATION", validation),
-      ...blockers("CONFIRMATION", confirmation),
-    ],
+    blockers: blockers("CONFIRMATION", confirmation),
   };
 }

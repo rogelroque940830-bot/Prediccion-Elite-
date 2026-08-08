@@ -143,7 +143,7 @@ test("stable pregame envelope must survive discovery, validation and final untou
   assert.equal(report.economicsDiagnostics.promotionCriterion, false);
 });
 
-test("discovery winner is frozen before validation and rejected when validation reverses", () => {
+test("discovery winner is frozen before validation and final holdout stays unopened when validation reverses", () => {
   const reversedValidation: Pattern = {
     ...stablePattern,
     validation: { selectedWins: 2, rejectedWins: 4 },
@@ -153,8 +153,12 @@ test("discovery winner is frozen before validation and rejected when validation 
   assert.deepEqual(reversed.selectedRule, stable.selectedRule);
   assert.equal(reversed.state, "VALIDATION_FAILED");
   assert.equal(reversed.validation?.criteria.allAccepted, false);
+  assert.equal(reversed.confirmation, null);
+  assert.equal(reversed.economicsDiagnostics.confirmationSelectedFlatRoiPct, null);
+  assert.equal(reversed.economicsDiagnostics.confirmationSelectedMeanClvPp, null);
   assert.equal(reversed.interpretation.stableModelQualityEnvelopeSupported, false);
   assert.ok(reversed.blockers.some((value) => value.startsWith("P1_M3E2_VALIDATION_")));
+  assert.equal(reversed.blockers.some((value) => value.startsWith("P1_M3E2_CONFIRMATION_")), false);
 });
 
 test("a rule that survives validation is still rejected when the final holdout reverses", () => {
