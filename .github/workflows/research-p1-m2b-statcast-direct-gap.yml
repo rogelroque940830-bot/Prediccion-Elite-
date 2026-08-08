@@ -1,0 +1,226 @@
+name: Research P1-M2B Statcast DIRECT Gap
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-statcast-direct-gap.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-direct-gap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 97b4a9936df0dd735bea991a3018e52e32e974a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-statcast-direct-gap.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 42); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Audit anonymous DIRECT shortfalls and prior-season coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const envelope=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if(envelope?.success!==true||!Array.isArray(envelope?.data?.games))throw new Error('DIRECT_GAP_SLATE_INVALID');
+          const slate=envelope.data;
+          const season=Number(String(slate.date||'').slice(0,4));
+          if(!Number.isInteger(season)||season<2020)throw new Error('DIRECT_GAP_SEASON_INVALID');
+          const now=Date.now();
+          const candidates=slate.games
+            .filter((g)=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
+            .sort((a,b)=>{
+              const ac=String(a.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              const bc=String(b.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              if(ac!==bc)return ac-bc;
+              const ams=a.startTime?Date.parse(a.startTime):Infinity,bms=b.startTime?Date.parse(b.startTime):Infinity;
+              return Math.abs(ams-now)-Math.abs(bms-now);
+            }).slice(0,4);
+
+          const csvUrl=(year)=>`https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?min=1&minPitches=1&pitchType=&team=&type=batter&year=${year}&csv=true`;
+          const fetchCsv=(year,label)=>{
+            const path=`private/${label}.csv`;
+            const code=execFileSync('curl',['-sS','-L','-o',path,'-w','%{http_code}','--max-time','150','-H','User-Agent: Mozilla/5.0','-H','Referer: https://baseballsavant.mlb.com/',csvUrl(year)],{encoding:'utf8'}).trim();
+            if(code!=='200')throw new Error(`DIRECT_GAP_SAVANT_HTTP_${year}_${code}`);
+            return path;
+          };
+          function csvLine(line){
+            const out=[];let cur='',q=false;
+            for(let i=0;i<line.length;i++){
+              const c=line[i];
+              if(c==='"'&&line[i+1]==='"'){cur+='"';i++;}
+              else if(c==='"')q=!q;
+              else if(c===','&&!q){out.push(cur);cur='';}
+              else cur+=c;
+            }
+            out.push(cur);return out;
+          }
+          function parsePlayerPitchMap(path){
+            const text=fs.readFileSync(path,'utf8').replace(/^\uFEFF/,'');
+            const lines=text.split(/\r?\n/).filter(Boolean);
+            if(lines.length<2)throw new Error('DIRECT_GAP_SAVANT_EMPTY');
+            const headers=csvLine(lines[0]);
+            const id=headers.indexOf('player_id'),pt=headers.indexOf('pitch_type'),pitches=headers.indexOf('pitches');
+            if(id<0||pt<0||pitches<0)throw new Error('DIRECT_GAP_SAVANT_HEADERS');
+            const map=new Map();
+            for(const line of lines.slice(1)){
+              const v=csvLine(line),pid=Number(v[id]),type=String(v[pt]||'').trim(),n=Number(v[pitches])||0;
+              if(!Number.isInteger(pid)||pid<=0||!type)continue;
+              if(!map.has(pid))map.set(pid,new Map());
+              const pm=map.get(pid);pm.set(type,Math.max(pm.get(type)||0,n));
+            }
+            return map;
+          }
+          const currentMap=parsePlayerPitchMap(fetchCsv(season,'current'));
+          const previousMap=parsePlayerPitchMap(fetchCsv(season-1,'previous'));
+
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          const result={
+            schemaVersion:'p1-m2b-statcast-direct-gap.v1',
+            generatedAt:new Date().toISOString(),
+            deployedCommit:fs.readFileSync('private/deployed-commit.txt','utf8'),
+            season,
+            rules:{minPitchesPerPitchType:30,requiredArsenalCoveragePct:60,certificationRequiresNineDirect:true},
+            samples:[],
+            aggregate:{
+              measuredGames:0,measuredSides:0,confirmedSides:0,engineNineDirectSides:0,
+              nonDirectBatters:0,currentShortfallHistogram:{},priorSeasonWouldUpgradeBatters:0,
+              projectedNineDirectSidesWithPriorSeasonFallback:0,projectedBothSidesNineDirectGamesWithPriorSeasonFallback:0
+            },
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,modelFormulaChanged:false,thresholdChanged:false}
+          };
+
+          function analyzeSide(matchup){
+            const per=Array.isArray(matchup?.perBatter)?matchup.perBatter:[];
+            const types=(Array.isArray(matchup?.arsenal)?matchup.arsenal:[]).map((p)=>String(p?.type||'').trim()).filter(Boolean);
+            const required=Math.ceil(types.length*0.60);
+            const nonDirect=[];
+            let engineDirect=0,projectedDirect=0;
+            for(const row of per){
+              const pid=Number(row?.batterId);
+              const quality=String(row?.dataQuality||'').toUpperCase();
+              if(quality==='DIRECT')engineDirect++;
+              const cur=currentMap.get(pid)||new Map(),prev=previousMap.get(pid)||new Map();
+              let currentMatches=0,combinedMatches=0,priorAdds=0;
+              for(const type of types){
+                const c=(cur.get(type)||0)>=30;
+                const p=(prev.get(type)||0)>=30;
+                if(c)currentMatches++;
+                if(c||p)combinedMatches++;
+                if(!c&&p)priorAdds++;
+              }
+              const currentDirect=currentMatches>=required;
+              const combinedDirect=combinedMatches>=required;
+              if(combinedDirect)projectedDirect++;
+              if(quality!=='DIRECT'){
+                const shortfall=Math.max(0,required-currentMatches);
+                nonDirect.push({quality,shortfall,priorAdds,wouldUpgradeWithPrior:!currentDirect&&combinedDirect});
+              }
+            }
+            const shortfallHistogram={};
+            let upgrades=0;
+            for(const b of nonDirect){bump(shortfallHistogram,String(b.shortfall));if(b.wouldUpgradeWithPrior)upgrades++;}
+            return {
+              lineupSize:Number(matchup?.lineupSize)||per.length,
+              lineupSource:String(matchup?.lineupSource||'UNKNOWN').toUpperCase(),
+              arsenalPitchTypes:types.length,
+              requiredDirectPitchTypes:required,
+              engineDirectCount:engineDirect,
+              engineProxyCount:Number(matchup?.proxyCount)||0,
+              nonDirectCount:nonDirect.length,
+              shortfallHistogram,
+              priorSeasonWouldUpgradeBatters:upgrades,
+              projectedDirectCountWithPriorSeasonFallback:projectedDirect,
+              projectedNineDirectWithPriorSeasonFallback:projectedDirect===9
+            };
+          }
+
+          for(let i=0;i<candidates.length;i++){
+            const g=candidates[i],path=`private/statcast-${i}.json`;
+            let code='000';
+            try{code=execFileSync('curl',['-sS','-o',path,'-w','%{http_code}','--max-time','240',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(g.gamePk)}`],{encoding:'utf8'}).trim();}
+            catch{result.samples.push({gameOrdinal:i+1,requestStatus:'FAILED'});continue;}
+            if(code!=='200'){result.samples.push({gameOrdinal:i+1,requestStatus:`HTTP_${code}`});continue;}
+            const s=JSON.parse(fs.readFileSync(path,'utf8'));
+            const home=analyzeSide(s?.homeLineupVsAwaySP),away=analyzeSide(s?.awayLineupVsHomeSP);
+            result.aggregate.measuredGames++;
+            for(const side of [home,away]){
+              result.aggregate.measuredSides++;
+              if(side.lineupSource==='CONFIRMED')result.aggregate.confirmedSides++;
+              if(side.engineDirectCount===9)result.aggregate.engineNineDirectSides++;
+              result.aggregate.nonDirectBatters+=side.nonDirectCount;
+              result.aggregate.priorSeasonWouldUpgradeBatters+=side.priorSeasonWouldUpgradeBatters;
+              if(side.projectedNineDirectWithPriorSeasonFallback)result.aggregate.projectedNineDirectSidesWithPriorSeasonFallback++;
+              for(const [k,v] of Object.entries(side.shortfallHistogram))result.aggregate.currentShortfallHistogram[k]=(result.aggregate.currentShortfallHistogram[k]||0)+v;
+            }
+            if(home.projectedNineDirectWithPriorSeasonFallback&&away.projectedNineDirectWithPriorSeasonFallback)result.aggregate.projectedBothSidesNineDirectGamesWithPriorSeasonFallback++;
+            result.samples.push({gameOrdinal:i+1,requestStatus:'OK',home,away});
+          }
+          result.conclusion={
+            measured:result.aggregate.measuredGames>0,
+            sampledGames:result.aggregate.measuredGames,
+            missingDirectMostlyOneMatchShort:(result.aggregate.currentShortfallHistogram['1']||0)>(result.aggregate.nonDirectBatters/2),
+            priorSeasonFallbackAddsCoverage:result.aggregate.priorSeasonWouldUpgradeBatters>0,
+            priorSeasonFallbackCreatesAnyBothSidesNineDirectGame:result.aggregate.projectedBothSidesNineDirectGamesWithPriorSeasonFallback>0,
+            candidateRequiresNumericalImpactStudyBeforeRuntimeChange:true,
+            lowerCurrentThresholdSupported:false,
+            lowerNineDirectRequirementSupported:false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"playerId"|"batterId"|"pitcherId"|"homeTeam"|"awayTeam"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized DIRECT-gap evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-statcast-direct-gap
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
