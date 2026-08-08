@@ -1,0 +1,195 @@
+name: Research P1-M2B Post Split Source Provider
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-split-provider.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-post-split-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 68b48ca5cb017a6cf88ac7ed8f070f35a018a006
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-split-provider.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 42); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Measure Statcast certification and M2B advanced readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const slateEnvelope=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if(slateEnvelope?.success!==true||!Array.isArray(slateEnvelope?.data?.games))throw new Error('POST_SPLIT_PROVIDER_SLATE_INVALID');
+          const slate=slateEnvelope.data,now=Date.now();
+          const candidates=slate.games
+            .filter((g)=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
+            .sort((a,b)=>{
+              const ac=String(a.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              const bc=String(b.lineupState||'').toUpperCase()==='CONFIRMED'?0:1;
+              if(ac!==bc)return ac-bc;
+              const ap=String(a.state).toUpperCase()==='PREGAME'?0:1;
+              const bp=String(b.state).toUpperCase()==='PREGAME'?0:1;
+              if(ap!==bp)return ap-bp;
+              const ams=a.startTime?Date.parse(a.startTime):Infinity,bms=b.startTime?Date.parse(b.startTime):Infinity;
+              return Math.abs(ams-now)-Math.abs(bms-now);
+            }).slice(0,4);
+
+          const blockerClass=(v)=>String(v||'UNKNOWN').split(':')[0].replace(/[^A-Z0-9_]/gi,'_').toUpperCase();
+          const componentName=(endpoint)=>{
+            const t=String(endpoint||'');
+            if(t.includes('/quality/'))return 'QUALITY';
+            if(t.includes('/statcast-matchup/'))return 'STATCAST_MATCHUP';
+            if(t.includes('/discipline-speed/'))return 'DISCIPLINE_SPEED';
+            if(t.includes('/sos/'))return 'SOS';
+            if(t.includes('/advanced/'))return 'ADVANCED_CONTEXT';
+            return 'UNKNOWN';
+          };
+          const side=(m)=>({
+            lineupSize:Number(m?.lineupSize)||0,
+            lineupSource:String(m?.lineupSource||'UNKNOWN').toUpperCase(),
+            directCount:Number(m?.directCount)||0,
+            proxyCount:Number(m?.proxyCount)||0,
+            nineDirect:(Number(m?.directCount)||0)===9,
+          });
+          const result={
+            schemaVersion:'p1-m2b-post-split-source-provider.v1',
+            generatedAt:new Date().toISOString(),
+            deployedCommit:fs.readFileSync('private/deployed-commit.txt','utf8'),
+            baseline:{advancedCertifiedComponents:'4/5',statcastCertified:false,priorBlocker:'STATCAST_CERT_STARTER_XWOBA_MISMATCH'},
+            slate:{date:slate.date,totalGames:slate.summary?.total??slate.games.length,sampledGames:candidates.length},
+            samples:[],
+            aggregate:{
+              statcastSourceStatusCounts:{},statcastBlockerClassCounts:{},measuredSides:0,nineDirectSides:0,confirmedLineupSides:0,
+              readinessGateStatusCounts:{},advancedCertifiedCountHistogram:{},advancedStateCounts:{},injuriesStateCounts:{},advancedFiveOfFiveGames:0
+            },
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false}
+          };
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+
+          for(let i=0;i<candidates.length;i++){
+            const g=candidates[i],sp=`private/statcast-${i}.json`,rp=`private/readiness-${i}.json`;
+            let sc='000',rc='000';
+            try{
+              sc=execFileSync('curl',['-sS','-o',sp,'-w','%{http_code}','--max-time','240',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(g.gamePk)}`],{encoding:'utf8'}).trim();
+              rc=execFileSync('curl',['-sS','-o',rp,'-w','%{http_code}','--max-time','240',`${process.env.BACKEND_URL}/api/mlb/p1/v1/pregame-readiness?gamePk=${encodeURIComponent(g.gamePk)}&market=ML&date=${encodeURIComponent(g.officialDate)}`],{encoding:'utf8'}).trim();
+            }catch{
+              result.samples.push({gameOrdinal:i+1,requestStatus:'FAILED'});continue;
+            }
+            if(sc!=='200'||rc!=='200'){
+              result.samples.push({gameOrdinal:i+1,requestStatus:`STATCAST_${sc}_READINESS_${rc}`});continue;
+            }
+            const s=JSON.parse(fs.readFileSync(sp,'utf8'));
+            const r=JSON.parse(fs.readFileSync(rp,'utf8'));
+            if(r?.success!==true||!r?.data?.gate){result.samples.push({gameOrdinal:i+1,requestStatus:'READINESS_INVALID'});continue;}
+            const report=r.data;
+            const advanced=(report.evidence||[]).find((e)=>e.field==='ADVANCED_FACTORS');
+            const injuries=(report.evidence||[]).find((e)=>e.field==='INJURIES');
+            const calls=Array.isArray(advanced?.details?.calls)?advanced.details.calls:[];
+            const components=calls.map((c)=>({component:componentName(c.endpoint),certified:Boolean(c.certified),sourceStatus:c.sourceStatus||null,freshness:c.freshness||null}));
+            const certifiedCount=components.filter((c)=>c.certified).length;
+            const statcastStatus=String(s?.sourceStatus||s?.provenance?.status||'MISSING').toUpperCase();
+            const blockers=Array.from(new Set((Array.isArray(s?.provenance?.blockers)?s.provenance.blockers:[]).map(blockerClass)));
+            const home=side(s?.homeLineupVsAwaySP),away=side(s?.awayLineupVsHomeSP);
+            bump(result.aggregate.statcastSourceStatusCounts,statcastStatus);
+            for(const b of blockers)bump(result.aggregate.statcastBlockerClassCounts,b);
+            for(const x of [home,away]){
+              result.aggregate.measuredSides++;
+              if(x.nineDirect)result.aggregate.nineDirectSides++;
+              if(x.lineupSource==='CONFIRMED')result.aggregate.confirmedLineupSides++;
+            }
+            bump(result.aggregate.readinessGateStatusCounts,report.gate.status);
+            bump(result.aggregate.advancedCertifiedCountHistogram,String(certifiedCount));
+            bump(result.aggregate.advancedStateCounts,advanced?.state||'MISSING');
+            bump(result.aggregate.injuriesStateCounts,injuries?.state||'MISSING');
+            if(certifiedCount===5)result.aggregate.advancedFiveOfFiveGames++;
+            result.samples.push({
+              gameOrdinal:i+1,requestStatus:'OK',slateLineupState:String(g.lineupState||'UNKNOWN').toUpperCase(),
+              statcast:{
+                sourceStatus:statcastStatus,
+                hasGeneratedAt:typeof s?.generatedAt==='string'&&s.generatedAt.length>0,
+                blockerClasses:blockers,
+                currentLineupsConfirmed:s?.provenance?.currentLineupsConfirmed===true,
+                visibleCoverageComplete:s?.provenance?.visibleCoverageComplete===true,
+                starterRowsReproduced:s?.provenance?.starterRowsReproduced===true,
+                bullpenDeltasReproduced:s?.provenance?.bullpenDeltasReproduced===true,
+                combinedRunDeltasReproduced:s?.provenance?.combinedRunDeltasReproduced===true,
+                home,away
+              },
+              readiness:{gateStatus:report.gate.status,advanced:{state:advanced?.state||null,quality:advanced?.quality||null,certifiedComponents:certifiedCount,components},injuries:{state:injuries?.state||null,sourceStatus:injuries?.sourceStatus||null}}
+            });
+          }
+          const measured=result.samples.filter((x)=>x.requestStatus==='OK');
+          result.conclusion={
+            measured:measured.length>0,
+            sampledGames:measured.length,
+            statcastCertifiedObserved:measured.some((x)=>x.statcast.sourceStatus==='CERTIFIED'),
+            statcastCertifiedGames:measured.filter((x)=>x.statcast.sourceStatus==='CERTIFIED').length,
+            advancedFiveOfFiveObserved:result.aggregate.advancedFiveOfFiveGames>0,
+            advancedFiveOfFiveGames:result.aggregate.advancedFiveOfFiveGames,
+            readyFinalObserved:measured.some((x)=>x.readiness.gateStatus==='READY_FINAL'),
+            injuriesStillDegraded:measured.some((x)=>x.readiness.injuries.state==='DEGRADED'),
+            priorStarterXwobaMismatchStillObserved:(result.aggregate.statcastBlockerClassCounts.STATCAST_CERT_STARTER_XWOBA_MISMATCH||0)>0,
+            gateShouldBeRelaxed:false,
+            certifierShouldBeRelaxed:false
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized post-split evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-split-source-provider
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
