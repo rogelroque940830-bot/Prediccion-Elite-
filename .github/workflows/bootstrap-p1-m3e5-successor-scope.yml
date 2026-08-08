@@ -62,9 +62,9 @@ jobs:
 
           def package_block(name, items, indent='          '):
               lines = [f"{indent}{name}=$(printf '%s\\n' \\"]
-              for item in items:
+              for item in items[:-1]:
                   lines.append(f"{indent}  '{item}' \\")
-              lines[-1] = lines[-1][:-2] + ' | sort)'
+              lines.append(f"{indent}  '{items[-1]}' | sort)")
               return '\n'.join(lines)
 
           def insert_missing_into_block(text, marker, items, filename):
@@ -75,11 +75,15 @@ jobs:
               if end < 0:
                   raise RuntimeError(f'{filename}: block terminator not found')
               segment = text[start:end]
-              additions = []
-              for item in items:
-                  if item not in segment:
-                      additions.append(f"            '{item}' \\\n")
-              return text[:end] + ''.join(additions) + text[end:]
+              missing = [item for item in items if item not in segment]
+              if not missing:
+                  return text
+              before = text[start:end].rstrip()
+              rebuilt = before + ' \\\n'
+              for item in missing[:-1]:
+                  rebuilt += f"            '{item}' \\\n"
+              rebuilt += f"            '{missing[-1]}' | sort)"
+              return text[:start] + rebuilt + text[end + len('| sort)'):]
 
           for filename in allowlist_files:
               path = Path(filename)
@@ -137,5 +141,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add tmp/m3e5-scope
-          git commit -m 'chore: export P1-M3E.5 guardian transforms'
+          git commit -m 'chore: refresh P1-M3E.5 guardian transforms'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
