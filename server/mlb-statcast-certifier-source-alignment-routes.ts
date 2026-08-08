@@ -1,4 +1,4 @@
-import type { Express, NextFunction, Request, Response as ExpressResponse } from "express";
+import type { Express, NextFunction, Request as ExpressRequest, Response as ExpressResponse } from "express";
 import {
   createStatcastIdentityRouteService,
   type StatcastIdentityRouteDependencies,
@@ -9,7 +9,8 @@ import { buildSavantPitchArsenalUrl } from "./mlb-statcast-savant-source";
 const SAVANT_HOST = "baseballsavant.mlb.com";
 const SAVANT_PITCH_ARSENAL_PATH = "/leaderboard/pitch-arsenal-stats";
 
-type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<globalThis.Response>;
+type FetchInput = string | URL | globalThis.Request;
+type FetchLike = (input: FetchInput, init?: RequestInit) => Promise<globalThis.Response>;
 
 export const MLB_STATCAST_CERTIFIER_SOURCE_ALIGNMENT_SCHEMA = "courtedge-p1-m2b-statcast-certifier-source-alignment.v1" as const;
 
@@ -18,15 +19,15 @@ function positiveInt(value: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function inputUrl(input: string | URL | Request): string {
+function inputUrl(input: FetchInput): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
   return input.url;
 }
 
-function rewrittenRequestInput(input: string | URL | Request, rewrittenUrl: string): string | URL | Request {
-  if (typeof Request !== "undefined" && input instanceof Request) {
-    return new Request(rewrittenUrl, input);
+function rewrittenRequestInput(input: FetchInput, rewrittenUrl: string): FetchInput {
+  if (typeof globalThis.Request !== "undefined" && input instanceof globalThis.Request) {
+    return new globalThis.Request(rewrittenUrl, input);
   }
   return rewrittenUrl;
 }
@@ -81,7 +82,7 @@ export function registerMlbStatcastCertifierSourceAlignmentMiddleware(
   app: Express,
   service: StatcastIdentityRouteService = createStatcastCertifierSourceAlignedRouteService(),
 ): void {
-  app.use("/api/mlb/statcast-matchup/:gamePk", async (req: Request, res: ExpressResponse, next: NextFunction) => {
+  app.use("/api/mlb/statcast-matchup/:gamePk", async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
     if (req.method !== "GET") return next();
     const gamePk = positiveInt(req.params.gamePk);
     if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
