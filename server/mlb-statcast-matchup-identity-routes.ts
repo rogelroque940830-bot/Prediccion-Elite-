@@ -1,9 +1,9 @@
-import type { Express, NextFunction, Request, Response } from "express";
+import type { Express, NextFunction, Request, Response as ExpressResponse } from "express";
 import { getStatcastMatchupCombinedIdentitySafe } from "./mlb-statcast-matchup-vsteam-identity";
 
 const MLB_FEED_BASE = "https://statsapi.mlb.com/api/v1.1/game";
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type FetchLike = (input: string, init?: RequestInit) => Promise<globalThis.Response>;
 
 export interface StatcastIdentityRouteService {
   review(gamePk: number): Promise<any>;
@@ -62,7 +62,7 @@ export function registerMlbStatcastMatchupIdentityMiddleware(
   // Compatibility interception: keep the historical app.get registration in
   // mlb-core-routes for route-contract stability, but serve GET through the
   // identity-safe correction before that legacy handler is reached.
-  app.use("/api/mlb/statcast-matchup/:gamePk", async (req: Request, res: Response, next: NextFunction) => {
+  app.use("/api/mlb/statcast-matchup/:gamePk", async (req: Request, res: ExpressResponse, next: NextFunction) => {
     if (req.method !== "GET") return next();
     const gamePk = positiveInt(req.params.gamePk);
     if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
