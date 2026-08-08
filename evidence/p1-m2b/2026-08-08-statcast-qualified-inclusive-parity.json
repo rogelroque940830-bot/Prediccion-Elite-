@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "p1-m2b-statcast-qualified-inclusive-parity-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "researchPr": 415,
+    "workflowRun": 31274473695,
+    "artifactId": 9026597324,
+    "rawIdentityPersisted": false
+  },
+  "seasons": {
+    "2026": { "qualifiedRows": 895, "inclusiveRows": 4979, "qualifiedMissingFromInclusive": 0, "valueMismatchRows": 0 },
+    "2025": { "qualifiedRows": 852, "inclusiveRows": 5438, "qualifiedMissingFromInclusive": 0, "valueMismatchRows": 0 }
+  },
+  "aggregate": {
+    "qualifiedRows": 1747,
+    "inclusiveRows": 10417,
+    "qualifiedMissingFromInclusive": 0,
+    "overlapRows": 1747,
+    "valueMismatchRows": 0,
+    "fieldMismatchCounts": {}
+  },
+  "verifiedFields": ["team_name_alt", "pitches", "pa", "est_woba", "woba", "whiff_percent", "run_value_per_100"],
+  "interpretation": {
+    "qualifiedIsExactSubsetOfInclusive": true,
+    "overlappingNumericalValuesIdentical": true,
+    "safeToUseQualifiedEligibilityMaskOnInclusiveRows": true,
+    "certifierToleranceShouldChange": false,
+    "engineFormulaShouldChange": false,
+    "nextAction": "BUILD_SUCCESSOR_PROVIDER_THAT_USES_INCLUSIVE_ROWS_FOR_DIRECT_EVIDENCE_AND_QUALIFIED_ELIGIBILITY_FOR_TEAM_PROXY_AGGREGATION"
+  }
+}
