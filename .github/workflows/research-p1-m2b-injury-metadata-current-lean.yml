@@ -32,26 +32,32 @@ jobs:
           changed=$(git diff --name-only "$base...$head" | sort)
           [[ "$changed" == '.github/workflows/research-p1-m2b-injury-metadata-current-lean.yml' ]]
 
-      - name: Audit anonymous injury metadata causes
+      - name: Audit backend availability and anonymous injury metadata causes
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p audit private
           chmod 700 private
-          code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 240 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}")
-          [[ "$code" == '200' ]]
 
-          AUDIT_DATE="$AUDIT_DATE" node <<'NODE'
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/api/mlb/p1/v1/slate" || true)
+          all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}" || true)
+          health_code=${health_code:-000}
+          slate_code=${slate_code:-000}
+          all_code=${all_code:-000}
+
+          HEALTH_CODE="$health_code" SLATE_CODE="$slate_code" ALL_CODE="$all_code" AUDIT_DATE="$AUDIT_DATE" node <<'NODE'
           const fs=require('fs');
-          const payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));
-          const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
-          if(!games.length)throw new Error('INJURY_META_ALL_GAMES_EMPTY');
+          const code=v=>/^\d{3}$/.test(String(v||''))?String(v):'000';
+          const endpointStatus={health:code(process.env.HEALTH_CODE),slate:code(process.env.SLATE_CODE),all:code(process.env.ALL_CODE)};
           const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
           const clean=v=>String(v??'').trim().toUpperCase();
           const result={
-            schemaVersion:'p1-m2b-current-injury-metadata-lean.v2',
+            schemaVersion:'p1-m2b-current-injury-metadata-lean.v3',
             generatedAt:new Date().toISOString(),
             auditDate:process.env.AUDIT_DATE,
+            endpointStatus,
+            deployedCommit:null,
             samples:[],
             aggregate:{
               measuredGames:0,measuredSides:0,statusCounts:{},phaseBCoverageCounts:{},
@@ -63,57 +69,71 @@ jobs:
             },
             safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false}
           };
-          for(let i=0;i<games.length;i++){
-            const ag=games[i];
-            const sample={gameOrdinal:i+1,sides:{}};
-            let validSideCount=0;
-            for(const side of ['home','away']){
-              const meta=ag?.[`${side}InjuryData`]||null;
-              if(!meta){sample.sides[side]={status:'MISSING'};continue;}
-              validSideCount++;
-              const status=clean(meta.status)||'MISSING';
-              const officialValidationStatus=clean(meta.officialValidationStatus)||'MISSING';
-              const stale=meta.stale===true;
-              const sourceErrorCount=Array.isArray(meta.sourceErrors)?meta.sourceErrors.length:0;
-              const rejectedCount=Math.max(0,Number(meta.rejectedCount)||0);
-              const officialOnly=Math.max(0,Number(meta?.shadowSummary?.officialOnly)||0);
-              const phaseBCoverage=clean(meta?.phaseB?.coverage)||'MISSING';
-              const sourceHealthy=!stale&&officialValidationStatus==='VERIFIED'&&sourceErrorCount===0;
-              let cause='NONE';
-              if(status==='PARTIAL'){
-                result.aggregate.partialSides++;
-                if(!sourceHealthy){cause='SOURCE_HEALTH';result.aggregate.partialWithSourceHealthProblem++;}
-                else if(rejectedCount>0&&officialOnly>0){cause='OFFICIAL_GAP_AND_REJECTED';result.aggregate.partialWithBothOfficialGapAndRejected++;}
-                else if(rejectedCount>0){cause='REJECTED_IDENTITY';result.aggregate.partialWithRejectedIdentity++;}
-                else if(officialOnly>0){cause='OFFICIAL_ONLY_GAP';result.aggregate.partialOnlyOfficialGapNoRejects++;}
-                else{cause='OTHER';result.aggregate.partialOther++;}
-              }
-              bump(result.aggregate.statusCounts,status);
-              bump(result.aggregate.phaseBCoverageCounts,phaseBCoverage);
-              result.aggregate.measuredSides++;
-              if(status==='VERIFIED')result.aggregate.alreadyVerifiedSides++;
-              if(sourceHealthy)result.aggregate.freshOfficialVerifiedSides++;
-              result.aggregate.officialOnlyTotal+=officialOnly;
-              result.aggregate.rejectedIdentityTotal+=rejectedCount;
-              result.aggregate.sourceErrorTotal+=sourceErrorCount;
-              sample.sides[side]={status,officialValidationStatus,stale,sourceErrorCount,rejectedCount,officialOnly,phaseBCoverage,cause,sourceHealthy};
-            }
-            if(validSideCount>0){result.aggregate.measuredGames++;result.samples.push(sample);}
+          if(endpointStatus.health==='200'){
+            try{
+              const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+              const commit=String(h?.commit||'').trim();
+              result.deployedCommit=/^[0-9a-f]{7,40}$/i.test(commit)?commit:null;
+            }catch{}
           }
+          if(endpointStatus.all==='200'){
+            let payload=null;
+            try{payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
+            const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
+            for(let i=0;i<games.length;i++){
+              const ag=games[i];
+              const sample={gameOrdinal:i+1,sides:{}};
+              let validSideCount=0;
+              for(const side of ['home','away']){
+                const meta=ag?.[`${side}InjuryData`]||null;
+                if(!meta){sample.sides[side]={status:'MISSING'};continue;}
+                validSideCount++;
+                const status=clean(meta.status)||'MISSING';
+                const officialValidationStatus=clean(meta.officialValidationStatus)||'MISSING';
+                const stale=meta.stale===true;
+                const sourceErrorCount=Array.isArray(meta.sourceErrors)?meta.sourceErrors.length:0;
+                const rejectedCount=Math.max(0,Number(meta.rejectedCount)||0);
+                const officialOnly=Math.max(0,Number(meta?.shadowSummary?.officialOnly)||0);
+                const phaseBCoverage=clean(meta?.phaseB?.coverage)||'MISSING';
+                const sourceHealthy=!stale&&officialValidationStatus==='VERIFIED'&&sourceErrorCount===0;
+                let cause='NONE';
+                if(status==='PARTIAL'){
+                  result.aggregate.partialSides++;
+                  if(!sourceHealthy){cause='SOURCE_HEALTH';result.aggregate.partialWithSourceHealthProblem++;}
+                  else if(rejectedCount>0&&officialOnly>0){cause='OFFICIAL_GAP_AND_REJECTED';result.aggregate.partialWithBothOfficialGapAndRejected++;}
+                  else if(rejectedCount>0){cause='REJECTED_IDENTITY';result.aggregate.partialWithRejectedIdentity++;}
+                  else if(officialOnly>0){cause='OFFICIAL_ONLY_GAP';result.aggregate.partialOnlyOfficialGapNoRejects++;}
+                  else{cause='OTHER';result.aggregate.partialOther++;}
+                }
+                bump(result.aggregate.statusCounts,status);
+                bump(result.aggregate.phaseBCoverageCounts,phaseBCoverage);
+                result.aggregate.measuredSides++;
+                if(status==='VERIFIED')result.aggregate.alreadyVerifiedSides++;
+                if(sourceHealthy)result.aggregate.freshOfficialVerifiedSides++;
+                result.aggregate.officialOnlyTotal+=officialOnly;
+                result.aggregate.rejectedIdentityTotal+=rejectedCount;
+                result.aggregate.sourceErrorTotal+=sourceErrorCount;
+                sample.sides[side]={status,officialValidationStatus,stale,sourceErrorCount,rejectedCount,officialOnly,phaseBCoverage,cause,sourceHealthy};
+              }
+              if(validSideCount>0){result.aggregate.measuredGames++;result.samples.push(sample);}
+            }
+          }
+          const backendUsable=endpointStatus.all==='200'&&result.aggregate.measuredGames>0;
           result.conclusion={
-            measured:result.aggregate.measuredGames>0,
+            backendUsableForInjuryAudit:backendUsable,
+            measured:backendUsable,
             sampledGames:result.aggregate.measuredGames,
             sampledSides:result.aggregate.measuredSides,
-            anyRecoverableOfficialOnlySides:result.aggregate.partialOnlyOfficialGapNoRejects>0,
+            anyRecoverableOfficialOnlySides:backendUsable&&result.aggregate.partialOnlyOfficialGapNoRejects>0,
             recoverableOfficialOnlySideCount:result.aggregate.partialOnlyOfficialGapNoRejects,
-            anyRejectedIdentitySides:(result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0,
-            anySourceHealthProblems:result.aggregate.partialWithSourceHealthProblem>0,
+            anyRejectedIdentitySides:backendUsable&&(result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0,
+            anySourceHealthProblems:backendUsable&&result.aggregate.partialWithSourceHealthProblem>0,
             safeToTreatAllPartialAsFresh:false,
             safeToIgnoreRejectedExternalRecords:false,
-            nextStep:result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':((result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER')
+            nextStep:!backendUsable?'RESTORE_OR_WAIT_FOR_INTEGRATION_BACKEND':(result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':((result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected)>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER'))
           };
           fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
-          console.log(JSON.stringify({aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          console.log(JSON.stringify({endpointStatus:result.endpointStatus,aggregate:result.aggregate,conclusion:result.conclusion},null,2));
           NODE
 
           rm -rf private
