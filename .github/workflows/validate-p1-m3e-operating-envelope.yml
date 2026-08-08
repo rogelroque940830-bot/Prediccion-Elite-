@@ -24,6 +24,7 @@ on:
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
 
 permissions:
@@ -126,6 +127,7 @@ jobs:
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
 
           b5_successor=$(printf '%s\n' \
@@ -141,7 +143,7 @@ jobs:
           if [[ "$changed" != "$m3e_package" \
             && "$changed" != "$compatibility_package" \
             && "$changed" != "$b5_successor" ]]; then
-            echo 'P1-M3E scope rejected. Diff must be exactly the M3E read-only package, the B5 identity-safe successor package, or the five-workflow compatibility package.' >&2
+            echo 'P1-M3E scope rejected. Diff must be exactly the M3E read-only package, the B5 identity-safe successor package, or the six-workflow compatibility package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
