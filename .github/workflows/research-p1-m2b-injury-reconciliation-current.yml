@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 55
     env:
       BACKEND_URL: https://web-p0-integration.up.railway.app
-      EXPECTED_BACKEND_COMMIT: b0a0ad5eb1b8a70dd85882051d5a7f4e05546680
+      ACCEPTABLE_BACKEND_COMMITS: b0a0ad5eb1b8a70dd85882051d5a7f4e05546680,97b4a9936df0dd735bea991a3018e52e32e974a5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,22 +39,23 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
 
-      - name: Wait for exact deployed backend
+      - name: Wait for runtime-equivalent deployed backend
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p audit private
           chmod 700 private
           observed=''
-          for attempt in $(seq 1 42); do
+          acceptable=",${ACCEPTABLE_BACKEND_COMMITS},"
+          for attempt in $(seq 1 30); do
             code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
             if [[ "$code" == '200' ]]; then
               observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
-              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+              if [[ "$acceptable" == *",${observed},"* ]]; then break; fi
             fi
             sleep 10
           done
-          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          [[ "$acceptable" == *",${observed},"* ]]
           printf '%s' "$observed" > private/deployed-commit.txt
 
       - name: Audit current injury reconciliation without persisting identities
@@ -104,6 +105,10 @@ jobs:
             schemaVersion: 'p1-m2b-current-injury-reconciliation.v1',
             generatedAt: new Date().toISOString(),
             deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            runtimeEquivalence: {
+              acceptedCommits: ['b0a0ad5eb1b8a70dd85882051d5a7f4e05546680','97b4a9936df0dd735bea991a3018e52e32e974a5'],
+              differenceBetweenAcceptedCommits: 'EVIDENCE_ONLY_PR_424_NO_RUNTIME_CHANGE'
+            },
             samples: [],
             aggregate: {
               measuredGames: 0,
