@@ -54,7 +54,9 @@ jobs:
           grep -F 'courtedge-p1-premium-no-ultra-prospective.v1' "$source"
           grep -F '2026-08-08T04:32:33Z' "$source" "$docs"
           grep -F 'a2bc70badc97251f2f0333beb1b2b954f841fad0' "$source" "$docs"
-          grep -F 'SELECTED_PREMIUM_AND_NOT_SELECTED_ULTRA' "$source"
+          grep -F 'ANALYSIS_RAW_OUTPUT_MARKETS_FINAL_RECOMMENDATION' "$source"
+          grep -F 'FINAL_RECOMMENDATION_IS_PREMIUM_TRUE_AND_REASON_HAS_NO_ULTRA' "$source"
+          grep -F 'unclassifiableExcluded: true' "$source"
           grep -F 'minimumCandidateSettled: 50' "$source"
           grep -F 'minimumCandidateDates: 20' "$source"
           grep -F 'bootstrapReplicates: 5000' "$source"
@@ -69,6 +71,7 @@ jobs:
           grep -F 'changing future outcome and scoring cannot change candidate membership' "$testfile"
           grep -F 'multiple FINAL rows from the same game count once' "$testfile"
           grep -F 'alternative ULTRA text is ignored' "$testfile"
+          grep -F 'UNCLASSIFIABLE instead of control' "$testfile"
 
           ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|operationalMoneyGateAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source"
       - name: Verify exact five-file prospective scope
