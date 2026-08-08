@@ -34,9 +34,9 @@ jobs:
       - name: Preserve operating-envelope parser tests
         run: npx tsx --test frontend/client/src/lib/mlb-operating-envelope.test.ts
       - name: Typecheck frontend
-        run: npm --prefix frontend/client run check
+        run: npm --prefix frontend run check
       - name: Build production frontend bundle
-        run: npm --prefix frontend/client run build
+        run: npm --prefix frontend run build
       - name: Verify bundle and no-money UI boundaries
         shell: bash
         run: |
