@@ -4,6 +4,7 @@ import type { LedgerRecord } from "./mlb-ledger-store";
 import type { MlbP1M3dReviewRow } from "./mlb-p1-economic-review";
 import {
   buildMlbPremiumNoUltraProspective,
+  classifyPremiumNoUltra,
   MLB_PREMIUM_NO_ULTRA_CUTOFF,
   selectedPremiumNoUltra,
 } from "./mlb-premium-no-ultra-prospective";
@@ -52,21 +53,30 @@ function ledgerRecord({
   id = "p-1",
   recordedAt = "2026-08-09T16:00:00Z",
   commenceTime = "2026-08-09T23:00:00Z",
-  selectedLabel = "PREMIUM",
-  finalRecommendation = null as unknown,
-  selectedLane = null as unknown,
+  isPremium = true as boolean | null,
+  reason = "🏆 PREMIUM · F5 ML HOME" as string | null,
+  finalMarket = "F5_ML" as string | null,
+  finalAction = "BET" as string | null,
   alternativePicks = [] as unknown[],
   source = "app",
 }: {
   id?: string;
   recordedAt?: string;
   commenceTime?: string;
-  selectedLabel?: string | null;
-  finalRecommendation?: unknown;
-  selectedLane?: unknown;
+  isPremium?: boolean | null;
+  reason?: string | null;
+  finalMarket?: string | null;
+  finalAction?: string | null;
   alternativePicks?: unknown[];
   source?: string;
 } = {}): LedgerRecord {
+  const finalRecommendation = finalMarket == null ? null : {
+    market: finalMarket,
+    side: "HOME",
+    action: finalAction,
+    reason,
+    isPremium,
+  };
   return {
     prediction: {
       id,
@@ -79,13 +89,13 @@ function ledgerRecord({
         awayTeam: "AWAY",
       },
       decision: {
-        confidenceLabel: selectedLabel,
-        rationale: "selected recommendation",
+        confidenceLabel: "UNRELATED_DECISION_LABEL",
+        rationale: "not used for candidate membership",
       },
       payload: {
         analysis: {
           rawOutput: {
-            selectedLane,
+            selectedLane: { confidenceLabel: "UNRELATED_SELECTED_LANE" },
             markets: {
               finalRecommendation,
               alternativePicks,
@@ -113,76 +123,60 @@ test("cutoff is frozen at the permanent-evidence merge timestamp", () => {
   assert.equal(MLB_PREMIUM_NO_ULTRA_CUTOFF, "2026-08-08T04:32:33Z");
 });
 
-test("selected PREMIUM without selected ULTRA is candidate; alternative ULTRA text is ignored", () => {
+test("selected finalRecommendation PREMIUM without ULTRA is candidate; alternative ULTRA text is ignored", () => {
   const record = ledgerRecord({
-    selectedLabel: "PREMIUM",
-    alternativePicks: [{ confidenceLabel: "ULTRA", note: "not selected" }],
+    isPremium: true,
+    reason: "🏆 PREMIUM · F5 ML HOME",
+    alternativePicks: [{ market: "F5_ML", reason: "🚀 ULTRA alternative" }],
   });
+  assert.equal(classifyPremiumNoUltra(record), "CANDIDATE");
   assert.equal(selectedPremiumNoUltra(record), true);
 });
 
-test("selected ULTRA blocks candidate membership even when PREMIUM also appears", () => {
+test("selected finalRecommendation ULTRA is control even when isPremium is true", () => {
   const record = ledgerRecord({
-    selectedLabel: "PREMIUM ULTRA",
+    isPremium: true,
+    reason: "🚀 ULTRA 🏆 PREMIUM · F5 ML HOME",
   });
+  assert.equal(classifyPremiumNoUltra(record), "CONTROL");
   assert.equal(selectedPremiumNoUltra(record), false);
 });
 
-test("pre-cutoff and PROVISIONAL rows never enter the prospective FINAL cohort", () => {
-  const before = reviewRow({
-    predictionId: "before",
-    lifecycleKey: "before",
-    gamePk: 900010,
-    recordedAt: "2026-08-08T04:32:32Z",
-  });
-  const provisional = reviewRow({
-    predictionId: "provisional",
-    lifecycleKey: "provisional",
-    gamePk: 900011,
-    stage: "PROVISIONAL",
-  });
-  const control = reviewRow({
-    predictionId: "control",
-    lifecycleKey: "control",
-    gamePk: 900012,
-    sourceCategory: "STANDARD",
-  });
+test("missing frozen finalRecommendation semantics are UNCLASSIFIABLE instead of control", () => {
+  assert.equal(classifyPremiumNoUltra(ledgerRecord({ finalMarket: null })), "UNCLASSIFIABLE");
+  assert.equal(classifyPremiumNoUltra(ledgerRecord({ isPremium: null })), "UNCLASSIFIABLE");
+  assert.equal(classifyPremiumNoUltra(ledgerRecord({ reason: null })), "UNCLASSIFIABLE");
+});
+
+test("pre-cutoff, PROVISIONAL, and unclassifiable rows never enter the prospective cohort", () => {
+  const before = reviewRow({ predictionId: "before", lifecycleKey: "before", gamePk: 900010, recordedAt: "2026-08-08T04:32:32Z" });
+  const provisional = reviewRow({ predictionId: "provisional", lifecycleKey: "provisional", gamePk: 900011, stage: "PROVISIONAL" });
+  const unclassifiable = reviewRow({ predictionId: "unclassifiable", lifecycleKey: "unclassifiable", gamePk: 900012 });
+  const control = reviewRow({ predictionId: "control", lifecycleKey: "control", gamePk: 900013, sourceCategory: "STANDARD" });
   const result = reportFor(
-    [before, provisional, control],
+    [before, provisional, unclassifiable, control],
     [
-      ledgerRecord({ id: "before", recordedAt: before.recordedAt, selectedLabel: "PREMIUM" }),
-      ledgerRecord({ id: "provisional", recordedAt: provisional.recordedAt, selectedLabel: "PREMIUM" }),
-      ledgerRecord({ id: "control", recordedAt: control.recordedAt, selectedLabel: "STANDARD" }),
+      ledgerRecord({ id: "before", recordedAt: before.recordedAt }),
+      ledgerRecord({ id: "provisional", recordedAt: provisional.recordedAt }),
+      ledgerRecord({ id: "unclassifiable", recordedAt: unclassifiable.recordedAt, finalMarket: null }),
+      ledgerRecord({ id: "control", recordedAt: control.recordedAt, isPremium: false, reason: "F5 ML HOME" }),
     ],
   );
-  assert.equal(result.cohort.afterCutoff, 2);
-  assert.equal(result.cohort.eligibleFinalF5Rows, 1);
+  assert.equal(result.cohort.afterCutoff, 3);
+  assert.equal(result.cohort.finalF5Rows, 2);
+  assert.equal(result.cohort.unclassifiableRowsExcluded, 1);
   assert.equal(result.cohort.candidateGames, 0);
   assert.equal(result.cohort.controlGames, 1);
 });
 
-test("multiple FINAL rows from the same game count once and the latest terminal decision wins", () => {
-  const first = reviewRow({
-    predictionId: "same-1",
-    lifecycleKey: "same-life-1",
-    gamePk: 900020,
-    recordedAt: "2026-08-09T15:00:00Z",
-  });
-  const latest = reviewRow({
-    predictionId: "same-2",
-    lifecycleKey: "same-life-2",
-    gamePk: 900020,
-    recordedAt: "2026-08-09T16:00:00Z",
-    result: "LOSS",
-    flatProfitUnits: -1,
-    brierScore: 0.49,
-    logLoss: 1.203973,
-  });
+test("multiple FINAL rows from the same game count once and the latest classifiable decision wins", () => {
+  const first = reviewRow({ predictionId: "same-1", lifecycleKey: "same-life-1", gamePk: 900020, recordedAt: "2026-08-09T15:00:00Z" });
+  const latest = reviewRow({ predictionId: "same-2", lifecycleKey: "same-life-2", gamePk: 900020, recordedAt: "2026-08-09T16:00:00Z", result: "LOSS", flatProfitUnits: -1, brierScore: 0.49, logLoss: 1.203973 });
   const result = reportFor(
     [first, latest],
     [
-      ledgerRecord({ id: "same-1", recordedAt: first.recordedAt, selectedLabel: "PREMIUM" }),
-      ledgerRecord({ id: "same-2", recordedAt: latest.recordedAt, selectedLabel: "STANDARD" }),
+      ledgerRecord({ id: "same-1", recordedAt: first.recordedAt, isPremium: true }),
+      ledgerRecord({ id: "same-2", recordedAt: latest.recordedAt, isPremium: false, reason: "F5 ML HOME" }),
     ],
   );
   assert.equal(result.cohort.independentGames, 1);
@@ -195,23 +189,15 @@ test("changing future outcome and scoring cannot change candidate membership", (
   const candidate = reviewRow({ predictionId: "candidate", lifecycleKey: "candidate", gamePk: 900030 });
   const control = reviewRow({ predictionId: "control", lifecycleKey: "control", gamePk: 900031, sourceCategory: "STANDARD" });
   const records = [
-    ledgerRecord({ id: "candidate", recordedAt: candidate.recordedAt, selectedLabel: "PREMIUM" }),
-    ledgerRecord({ id: "control", recordedAt: control.recordedAt, selectedLabel: "STANDARD" }),
+    ledgerRecord({ id: "candidate", recordedAt: candidate.recordedAt, isPremium: true }),
+    ledgerRecord({ id: "control", recordedAt: control.recordedAt, isPremium: false, reason: "F5 ML HOME" }),
   ];
   const original = reportFor([candidate, control], records);
-  const mutatedCandidate = {
-    ...candidate,
-    result: "LOSS",
-    flatProfitUnits: -1,
-    brierScore: 0.49,
-    logLoss: 1.203973,
-    clvPp: -4,
-  } satisfies MlbP1M3dReviewRow;
+  const mutatedCandidate = { ...candidate, result: "LOSS", flatProfitUnits: -1, brierScore: 0.49, logLoss: 1.203973, clvPp: -4 } satisfies MlbP1M3dReviewRow;
   const mutated = reportFor([mutatedCandidate, control], records);
   assert.equal(original.cohort.candidateGames, 1);
   assert.equal(mutated.cohort.candidateGames, 1);
   assert.equal(original.cohort.controlGames, mutated.cohort.controlGames);
-  assert.equal(original.interpretation.historicalThirteenAndFourIncludedInConfirmation, false);
   assert.equal(mutated.interpretation.historicalThirteenAndFourIncludedInConfirmation, false);
 });
 
@@ -220,10 +206,7 @@ function isoDate(dayOffset: number): string {
   return new Date(base + dayOffset * 86_400_000).toISOString().slice(0, 10);
 }
 
-function syntheticPair(index: number, candidateWin: boolean, controlWin: boolean): {
-  rows: MlbP1M3dReviewRow[];
-  records: LedgerRecord[];
-} {
+function syntheticPair(index: number, candidateWin: boolean, controlWin: boolean): { rows: MlbP1M3dReviewRow[]; records: LedgerRecord[] } {
   const date = isoDate(Math.floor(index / 2));
   const candidateId = `cand-${index}`;
   const controlId = `ctrl-${index}`;
@@ -231,10 +214,6 @@ function syntheticPair(index: number, candidateWin: boolean, controlWin: boolean
   const commenceTime = `${date}T23:00:00Z`;
   const candidateProbability = 0.9;
   const controlProbability = 0.5;
-  const candidateBrier = (candidateProbability - (candidateWin ? 1 : 0)) ** 2;
-  const controlBrier = (controlProbability - (controlWin ? 1 : 0)) ** 2;
-  const candidateLogLoss = -(candidateWin ? Math.log(candidateProbability) : Math.log(1 - candidateProbability));
-  const controlLogLoss = -(controlWin ? Math.log(controlProbability) : Math.log(1 - controlProbability));
   return {
     rows: [
       reviewRow({
@@ -246,8 +225,8 @@ function syntheticPair(index: number, candidateWin: boolean, controlWin: boolean
         modelProbability: candidateProbability,
         result: candidateWin ? "WIN" : "LOSS",
         flatProfitUnits: candidateWin ? 0.909091 : -1,
-        brierScore: candidateBrier,
-        logLoss: candidateLogLoss,
+        brierScore: (candidateProbability - (candidateWin ? 1 : 0)) ** 2,
+        logLoss: -(candidateWin ? Math.log(candidateProbability) : Math.log(1 - candidateProbability)),
         clvPp: 1,
       }),
       reviewRow({
@@ -260,14 +239,14 @@ function syntheticPair(index: number, candidateWin: boolean, controlWin: boolean
         modelProbability: controlProbability,
         result: controlWin ? "WIN" : "LOSS",
         flatProfitUnits: controlWin ? 0.909091 : -1,
-        brierScore: controlBrier,
-        logLoss: controlLogLoss,
+        brierScore: (controlProbability - (controlWin ? 1 : 0)) ** 2,
+        logLoss: -(controlWin ? Math.log(controlProbability) : Math.log(1 - controlProbability)),
         clvPp: 0.2,
       }),
     ],
     records: [
-      ledgerRecord({ id: candidateId, recordedAt, commenceTime, selectedLabel: "PREMIUM" }),
-      ledgerRecord({ id: controlId, recordedAt, commenceTime, selectedLabel: "STANDARD" }),
+      ledgerRecord({ id: candidateId, recordedAt, commenceTime, isPremium: true }),
+      ledgerRecord({ id: controlId, recordedAt, commenceTime, isPremium: false, reason: "F5 ML HOME" }),
     ],
   };
 }
@@ -290,6 +269,7 @@ test("strong synthetic future evidence can reach research support but never acti
   });
   assert.equal(report.cohort.candidateSettled, 60);
   assert.equal(report.cohort.controlSettled, 60);
+  assert.equal(report.cohort.unclassifiableRowsExcluded, 0);
   assert.equal(report.criteria.minimumCandidateSampleAccepted, true);
   assert.equal(report.criteria.minimumControlSampleAccepted, true);
   assert.equal(report.criteria.candidateRoiLower95Positive, true);
