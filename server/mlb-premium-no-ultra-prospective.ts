@@ -5,11 +5,14 @@ import type { MlbP1M3dReviewRow } from "./mlb-p1-economic-review";
 export const MLB_PREMIUM_NO_ULTRA_SCHEMA = "courtedge-p1-premium-no-ultra-prospective.v1" as const;
 export const MLB_PREMIUM_NO_ULTRA_CUTOFF = "2026-08-08T04:32:33Z" as const;
 export const MLB_PREMIUM_NO_ULTRA_CUTOFF_COMMIT = "a2bc70badc97251f2f0333beb1b2b954f841fad0" as const;
+export const MLB_PREMIUM_NO_ULTRA_RULE_SEMANTICS_COMMIT = "a2bc70badc97251f2f0333beb1b2b954f841fad0" as const;
 
 export type MlbPremiumNoUltraState =
   | "COLLECTING_PROSPECTIVE_EVIDENCE"
   | "CANDIDATE_NOT_CONFIRMED"
   | "ECONOMIC_EDGE_SUPPORTED_RESEARCH_ONLY";
+
+export type MlbPremiumNoUltraClassification = "CANDIDATE" | "CONTROL" | "UNCLASSIFIABLE";
 
 export interface MlbPremiumNoUltraMetricSummary {
   observations: number;
@@ -52,10 +55,13 @@ export interface MlbPremiumNoUltraReport {
   preregistration: {
     cutoff: typeof MLB_PREMIUM_NO_ULTRA_CUTOFF;
     cutoffEvidenceCommit: typeof MLB_PREMIUM_NO_ULTRA_CUTOFF_COMMIT;
+    ruleSemanticsCommit: typeof MLB_PREMIUM_NO_ULTRA_RULE_SEMANTICS_COMMIT;
     market: "F5_ML";
     requiredStage: "FINAL";
     requiredSource: "app";
-    candidateRule: "SELECTED_PREMIUM_AND_NOT_SELECTED_ULTRA";
+    classificationSurface: "ANALYSIS_RAW_OUTPUT_MARKETS_FINAL_RECOMMENDATION";
+    candidateRule: "FINAL_RECOMMENDATION_IS_PREMIUM_TRUE_AND_REASON_HAS_NO_ULTRA";
+    unclassifiableExcluded: true;
     oneTerminalDecisionPerGame: true;
     alternativePicksExcluded: true;
     outcomeForbiddenFromMembership: true;
@@ -70,7 +76,9 @@ export interface MlbPremiumNoUltraReport {
   cohort: {
     inputReviewRows: number;
     afterCutoff: number;
-    eligibleFinalF5Rows: number;
+    finalF5Rows: number;
+    unclassifiableRowsExcluded: number;
+    eligibleClassifiableRows: number;
     independentGames: number;
     duplicateGameRowsExcluded: number;
     candidateGames: number;
@@ -131,9 +139,8 @@ const DEFAULTS = {
 
 interface EligibleDecision {
   row: MlbP1M3dReviewRow;
-  record: LedgerRecord;
   gameKey: string;
-  candidate: boolean;
+  classification: Exclude<MlbPremiumNoUltraClassification, "UNCLASSIFIABLE">;
 }
 
 function object(value: unknown): Record<string, any> | null {
@@ -181,30 +188,34 @@ function timestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function selectedRecommendationSurface(record: LedgerRecord): Record<string, unknown> {
+function containsToken(value: string, token: "PREMIUM" | "ULTRA"): boolean {
+  return new RegExp(`(^|[^A-Z])${token}([^A-Z]|$)`).test(value.toUpperCase());
+}
+
+function frozenFinalRecommendation(record: LedgerRecord): Record<string, any> | null {
   const prediction = record.prediction as unknown as Record<string, any>;
   const payload = object(prediction.payload);
   const analysis = object(payload?.analysis);
   const rawOutput = object(analysis?.rawOutput);
   const markets = object(rawOutput?.markets);
-  return {
-    decision: {
-      confidenceLabel: prediction.decision?.confidenceLabel ?? payload?.decision?.confidenceLabel ?? null,
-      rationale: prediction.decision?.rationale ?? payload?.decision?.rationale ?? null,
-    },
-    selectedLane: rawOutput?.selectedLane ?? null,
-    finalRecommendation: markets?.finalRecommendation ?? rawOutput?.finalRecommendation ?? null,
-  };
+  return object(markets?.finalRecommendation ?? rawOutput?.finalRecommendation);
 }
 
-function containsToken(value: unknown, token: "PREMIUM" | "ULTRA"): boolean {
-  const text = JSON.stringify(value).toUpperCase();
-  return new RegExp(`(^|[^A-Z])${token}([^A-Z]|$)`).test(text);
+export function classifyPremiumNoUltra(record: LedgerRecord): MlbPremiumNoUltraClassification {
+  const recommendation = frozenFinalRecommendation(record);
+  if (!recommendation) return "UNCLASSIFIABLE";
+  if (recommendation.market !== "F5_ML" || recommendation.action !== "BET") return "UNCLASSIFIABLE";
+  if (typeof recommendation.isPremium !== "boolean" || typeof recommendation.reason !== "string") {
+    return "UNCLASSIFIABLE";
+  }
+  if (recommendation.isPremium === true && !containsToken(recommendation.reason, "ULTRA")) {
+    return "CANDIDATE";
+  }
+  return "CONTROL";
 }
 
 export function selectedPremiumNoUltra(record: LedgerRecord): boolean {
-  const surface = selectedRecommendationSurface(record);
-  return containsToken(surface, "PREMIUM") && !containsToken(surface, "ULTRA");
+  return classifyPremiumNoUltra(record) === "CANDIDATE";
 }
 
 function gameKey(row: MlbP1M3dReviewRow): string {
@@ -223,10 +234,16 @@ function pregame(record: LedgerRecord): boolean {
 function eligibleRows(
   rows: MlbP1M3dReviewRow[],
   recordsByPredictionId: Map<string, LedgerRecord>,
-): { eligible: EligibleDecision[]; afterCutoff: number; finalF5: number } {
+): {
+  eligible: EligibleDecision[];
+  afterCutoff: number;
+  finalF5: number;
+  unclassifiable: number;
+} {
   const cutoff = Date.parse(MLB_PREMIUM_NO_ULTRA_CUTOFF);
   let afterCutoff = 0;
   let finalF5 = 0;
+  let unclassifiable = 0;
   const eligible: EligibleDecision[] = [];
   for (const row of rows) {
     const recordedAt = timestamp(row.recordedAt);
@@ -236,17 +253,15 @@ function eligibleRows(
     finalF5 += 1;
     const record = recordsByPredictionId.get(row.predictionId);
     if (!record) throw new Error(`PREMIUM_NO_ULTRA_RECORD_MISSING:${row.predictionId}`);
-    if (record.prediction.source !== "app") continue;
-    if (!pregame(record)) continue;
-    if (!validDate(row.gameDate)) continue;
-    eligible.push({
-      row,
-      record,
-      gameKey: gameKey(row),
-      candidate: selectedPremiumNoUltra(record),
-    });
+    if (record.prediction.source !== "app" || !pregame(record) || !validDate(row.gameDate)) continue;
+    const classification = classifyPremiumNoUltra(record);
+    if (classification === "UNCLASSIFIABLE") {
+      unclassifiable += 1;
+      continue;
+    }
+    eligible.push({ row, gameKey: gameKey(row), classification });
   }
-  return { eligible, afterCutoff, finalF5 };
+  return { eligible, afterCutoff, finalF5, unclassifiable };
 }
 
 function independentLatestPerGame(eligible: EligibleDecision[]): EligibleDecision[] {
@@ -282,13 +297,12 @@ function metrics(entries: EligibleDecision[]): MlbPremiumNoUltraMetricSummary {
   const settled = entries.filter((entry) => scoreable(entry.row));
   const wins = settled.filter((entry) => entry.row.result === "WIN").length;
   const losses = settled.filter((entry) => entry.row.result === "LOSS").length;
-  const modelProbability = settled.map((entry) => entry.row.modelProbability);
   const observedWinRate = settled.length ? wins / settled.length : null;
-  const meanModelProbability = average(modelProbability);
+  const meanModelProbability = average(settled.map((entry) => entry.row.modelProbability));
   const clv = settled
     .map((entry) => entry.row.clvPp)
     .filter((value): value is number => value != null && Number.isFinite(value));
-  const flatStakeProfitUnits = settled.reduce((sum, entry) => sum + entry.row.flatProfitUnits, 0);
+  const profit = settled.reduce((sum, entry) => sum + entry.row.flatProfitUnits, 0);
   return {
     observations: entries.length,
     settled: settled.length,
@@ -302,8 +316,8 @@ function metrics(entries: EligibleDecision[]): MlbPremiumNoUltraMetricSummary {
     calibrationGap: observedWinRate == null || meanModelProbability == null
       ? null
       : round(Math.abs(meanModelProbability - observedWinRate)),
-    flatStakeProfitUnits: round(flatStakeProfitUnits, 6),
-    flatStakeRoiPct: settled.length ? round((flatStakeProfitUnits / settled.length) * 100, 4) : null,
+    flatStakeProfitUnits: round(profit, 6),
+    flatStakeRoiPct: settled.length ? round((profit / settled.length) * 100, 4) : null,
     brierScore: settled.length ? round(average(settled.map((entry) => entry.row.brierScore as number)) as number) : null,
     logLoss: settled.length ? round(average(settled.map((entry) => entry.row.logLoss as number)) as number) : null,
     clvAvailable: clv.length,
@@ -340,9 +354,9 @@ function interval(
     confidenceLevel: 0.95,
     replicatesRequested,
     replicatesUsed: values.length,
-    pointEstimate: round(pointEstimate, 8),
-    lower: round(quantile(values, 0.025), 8),
-    upper: round(quantile(values, 0.975), 8),
+    pointEstimate: round(pointEstimate),
+    lower: round(quantile(values, 0.025)),
+    upper: round(quantile(values, 0.975)),
   };
 }
 
@@ -350,11 +364,7 @@ function bootstrapRoi(
   candidate: EligibleDecision[],
   control: EligibleDecision[],
   replicates: number,
-): {
-  dateClusters: number;
-  candidateRoiPct: MlbPremiumNoUltraBootstrapInterval | null;
-  candidateMinusControlRoiPp: MlbPremiumNoUltraBootstrapInterval | null;
-} {
+): MlbPremiumNoUltraReport["inference"] {
   const dates = [...new Set([...candidate, ...control]
     .filter((entry) => scoreable(entry.row))
     .map((entry) => entry.row.gameDate))].sort();
@@ -411,8 +421,8 @@ export function buildMlbPremiumNoUltraProspective(
   const recordsByPredictionId = new Map(records.map((record) => [record.prediction.id, record]));
   const filtered = eligibleRows(rows, recordsByPredictionId);
   const independent = independentLatestPerGame(filtered.eligible);
-  const candidateEntries = independent.filter((entry) => entry.candidate);
-  const controlEntries = independent.filter((entry) => !entry.candidate);
+  const candidateEntries = independent.filter((entry) => entry.classification === "CANDIDATE");
+  const controlEntries = independent.filter((entry) => entry.classification === "CONTROL");
   const candidate = metrics(candidateEntries);
   const control = metrics(controlEntries);
   const minimumCandidateSampleAccepted = candidate.settled >= minimumCandidateSettled
@@ -422,10 +432,12 @@ export function buildMlbPremiumNoUltraProspective(
   const enoughForInference = minimumCandidateSampleAccepted && minimumControlSampleAccepted;
   const inference = enoughForInference
     ? bootstrapRoi(candidateEntries, controlEntries, bootstrapReplicates)
-    : { dateClusters: new Set([...candidateEntries, ...controlEntries]
-      .filter((entry) => scoreable(entry.row)).map((entry) => entry.row.gameDate)).size,
+    : {
+      dateClusters: new Set([...candidateEntries, ...controlEntries]
+        .filter((entry) => scoreable(entry.row)).map((entry) => entry.row.gameDate)).size,
       candidateRoiPct: null,
-      candidateMinusControlRoiPp: null };
+      candidateMinusControlRoiPp: null,
+    };
   const candidateRoiLower95Positive = (inference.candidateRoiPct?.lower ?? -Infinity) > 0;
   const candidateMinusControlRoiLower95Positive = (inference.candidateMinusControlRoiPp?.lower ?? -Infinity) > 0;
   const meanClvPositive = candidate.meanClvPp != null && candidate.meanClvPp > 0;
@@ -483,10 +495,13 @@ export function buildMlbPremiumNoUltraProspective(
     preregistration: {
       cutoff: MLB_PREMIUM_NO_ULTRA_CUTOFF,
       cutoffEvidenceCommit: MLB_PREMIUM_NO_ULTRA_CUTOFF_COMMIT,
+      ruleSemanticsCommit: MLB_PREMIUM_NO_ULTRA_RULE_SEMANTICS_COMMIT,
       market: "F5_ML",
       requiredStage: "FINAL",
       requiredSource: "app",
-      candidateRule: "SELECTED_PREMIUM_AND_NOT_SELECTED_ULTRA",
+      classificationSurface: "ANALYSIS_RAW_OUTPUT_MARKETS_FINAL_RECOMMENDATION",
+      candidateRule: "FINAL_RECOMMENDATION_IS_PREMIUM_TRUE_AND_REASON_HAS_NO_ULTRA",
+      unclassifiableExcluded: true,
       oneTerminalDecisionPerGame: true,
       alternativePicksExcluded: true,
       outcomeForbiddenFromMembership: true,
@@ -501,7 +516,9 @@ export function buildMlbPremiumNoUltraProspective(
     cohort: {
       inputReviewRows: rows.length,
       afterCutoff: filtered.afterCutoff,
-      eligibleFinalF5Rows: filtered.finalF5,
+      finalF5Rows: filtered.finalF5,
+      unclassifiableRowsExcluded: filtered.unclassifiable,
+      eligibleClassifiableRows: filtered.eligible.length,
       independentGames: independent.length,
       duplicateGameRowsExcluded: filtered.eligible.length - independent.length,
       candidateGames: candidateEntries.length,
