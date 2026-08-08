@@ -1,0 +1,90 @@
+name: Validate P1-M2B Advanced Route Runtime Repair
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/market-support-routes.ts'
+      - 'server/market-support-routes.advanced-runtime.test.ts'
+      - 'tsconfig.p1-m2b-advanced-route-runtime.json'
+      - 'docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md'
+      - '.github/workflows/validate-p1-m2b-advanced-route-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2b-advanced-route-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck extracted market-support route
+        run: npx tsc -p tsconfig.p1-m2b-advanced-route-runtime.json
+      - name: Run advanced-route runtime regression
+        run: npx tsx --test server/market-support-routes.advanced-runtime.test.ts
+      - name: Preserve P1-M2B gate and advanced provenance contracts
+        run: |
+          npx tsx --test \
+            server/mlb-p1-pregame-readiness-contract.test.ts \
+            server/mlb-p1-advanced-factor-provenance.test.ts \
+            server/mlb-advanced-context-provenance.test.ts \
+            server/mlb-statcast-quality-provenance.test.ts \
+            server/mlb-discipline-speed-provenance.test.ts \
+            server/mlb-sos-provenance.test.ts
+      - name: Verify modular route inventory
+        run: npm run test:s3-modularization
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify exact runtime repair and safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          route='server/market-support-routes.ts'
+          testfile='server/market-support-routes.advanced-runtime.test.ts'
+          docs='docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md'
+
+          grep -F 'const MLB_BASE_V11 = "https://statsapi.mlb.com/api/v1.1"' "$route"
+          grep -F 'const MLB_SEASON_CURRENT = String(new Date().getFullYear())' "$route"
+          grep -F 'async function getGameMeta(gamePk: number)' "$route"
+          grep -F '${MLB_BASE_V11}/game/${gamePk}/feed/live' "$route"
+          grep -F 'season=${MLB_SEASON_CURRENT}' "$route"
+          grep -F 'app.get("/api/mlb/advanced/:gamePk"' "$route"
+          grep -F 'unexpected fetch:' "$testfile"
+          grep -F 'getGameMeta is not defined' "$docs"
+          grep -F 'MLB_SEASON_CURRENT' "$docs"
+
+          ! grep -F 'const MLB_SEASON_CURRENT = "2026"' "$route"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$route"
+      - name: Verify exact five-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-advanced-route-runtime.yml' \
+            'docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md' \
+            'server/market-support-routes.advanced-runtime.test.ts' \
+            'server/market-support-routes.ts' \
+            'tsconfig.p1-m2b-advanced-route-runtime.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M2B advanced runtime scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
