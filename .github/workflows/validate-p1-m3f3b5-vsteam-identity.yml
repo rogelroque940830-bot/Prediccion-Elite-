@@ -5,16 +5,21 @@ on:
     branches:
       - integration/p0-staging-secure
     paths:
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
       - 'server/mlb-statcast-matchup-vsteam-identity.ts'
       - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
       - 'server/mlb-statcast-matchup-identity-routes.ts'
       - 'server/mlb-statcast-matchup-identity-routes.test.ts'
       - 'server/mlb-statcast-matchup-certifier.ts'
       - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/route-contract.extensions.json'
       - 'server/routes.ts'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
       - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
       - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
       - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
@@ -93,7 +98,7 @@ jobs:
           NODE
 
           ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$fix" "$route"
-      - name: Verify exact P1-M3F3B5 or B5B successor scope
+      - name: Verify exact P1-M3F3B5 or registered successor scope
         shell: bash
         run: |
           set -euo pipefail
@@ -120,6 +125,14 @@ jobs:
             'server/mlb-statcast-matchup-identity-routes.test.ts' \
             'server/mlb-statcast-matchup-identity-routes.ts' | sort)
 
+          premium_no_ultra_readonly=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
+
           compatibility_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
@@ -131,8 +144,9 @@ jobs:
 
           if [[ "$changed" != "$b5_package" \
             && "$changed" != "$b5b_successor" \
+            && "$changed" != "$premium_no_ultra_readonly" \
             && "$changed" != "$compatibility_package" ]]; then
-            echo 'P1-M3F3B5 scope rejected. Diff must be exactly the original B5 identity package, the exact B5B certification successor, or the seven-workflow compatibility package.' >&2
+            echo 'P1-M3F3B5 scope rejected. Diff must be an exact registered analytical package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
