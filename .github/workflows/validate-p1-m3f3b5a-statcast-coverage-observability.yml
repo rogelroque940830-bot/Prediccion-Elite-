@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
       - name: Typecheck coverage contract
-        run: npx tsc --noEmit --target ES2020 --module NodeNext --moduleResolution NodeNext --skipLibCheck server/mlb-statcast-matchup-coverage.ts server/mlb-statcast-matchup-coverage.test.ts
+        run: npx tsc --noEmit --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck server/mlb-statcast-matchup-coverage.ts server/mlb-statcast-matchup-coverage.test.ts
       - name: Run B5A falsification tests
         run: npx tsx --test server/mlb-statcast-matchup-coverage.test.ts
       - name: Preserve B5 identity and prior advanced-factor provenance contracts
