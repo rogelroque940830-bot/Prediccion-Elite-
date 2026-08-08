@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "p1-m2b-post-discipline-sos-wiring-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "f5b38116d87b38a4e21f1af3cda8f9af6660ad65",
+    "researchPr": 400,
+    "workflowRun": 31271708169,
+    "artifactId": 9025801851,
+    "rawIdentityPersisted": false
+  },
+  "sample": {
+    "market": "ML",
+    "sampledPregameGames": 3,
+    "READY_FINAL": 0,
+    "READY_PROVISIONAL": 3
+  },
+  "advancedFactors": {
+    "state": "DEGRADED",
+    "quality": "ADVANCED_COMPONENT_NOT_CERTIFIED",
+    "certifiedComponentsObserved": "2/5",
+    "components": {
+      "QUALITY": {
+        "certified": "0/3",
+        "httpOk": "3/3",
+        "explicitTimestamp": "0/3",
+        "currentFinding": "LEGACY_ROUTE_NOT_EXPOSING_CERTIFICATION"
+      },
+      "STATCAST_MATCHUP": {
+        "certified": "0/3",
+        "httpOk": "3/3",
+        "sourceStatus": "DEGRADED",
+        "currentFinding": "STRICT_CERTIFIER_REMAINS_FAIL_CLOSED"
+      },
+      "DISCIPLINE_SPEED": {
+        "certified": "3/3",
+        "fresh": "3/3",
+        "explicitTimestamp": "3/3",
+        "currentFinding": "WIRING_VALIDATED_LIVE"
+      },
+      "SOS": {
+        "certified": "3/3",
+        "fresh": "3/3",
+        "explicitTimestamp": "3/3",
+        "currentFinding": "WIRING_VALIDATED_LIVE"
+      },
+      "ADVANCED_CONTEXT": {
+        "certified": "0/3",
+        "httpOk": "3/3",
+        "explicitTimestamp": "0/3",
+        "currentFinding": "LEGACY_ROUTE_NOT_EXPOSING_CERTIFICATION"
+      }
+    }
+  },
+  "injuries": {
+    "state": "DEGRADED",
+    "observed": "3/3",
+    "sourceStatus": "PARTIAL+PARTIAL"
+  },
+  "interpretation": {
+    "disciplineSpeedWiringValidatedLive": true,
+    "sosWiringValidatedLive": true,
+    "netAdvancedCountDidNotIncrease": true,
+    "reason": "QUALITY_AND_ADVANCED_CONTEXT_STILL_USE_LEGACY_UNCERTIFIED_ROUTE_SURFACES_WHILE_STATCAST_REMAINS_STRICTLY_DEGRADED",
+    "gateShouldBeRelaxed": false,
+    "nextAction": "WIRE_ALREADY_VALIDATED_QUALITY_AND_ADVANCED_CONTEXT_CERTIFIERS_WITH_FAIL_CLOSED_COMPATIBILITY; THEN_REAUDIT_STATCAST"
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "sportsbookCallsPerformedByResearchRunner": 0,
+    "rawIdentityPersisted": false
+  }
+}
