@@ -1,0 +1,86 @@
+name: Validate P1-M2B Certified Advanced Routes
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-advanced-component-certification-routes.ts'
+      - 'server/mlb-p1-advanced-component-certification-routes.test.ts'
+      - 'server/mlb-p1-pregame-readiness-routes.ts'
+      - 'tsconfig.p1-m2b-certified-advanced-routes.json'
+      - 'docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md'
+      - '.github/workflows/validate-p1-m2b-certified-advanced-routes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2b-certified-advanced-routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck certified advanced route integration
+        run: npx tsc -p tsconfig.p1-m2b-certified-advanced-routes.json
+      - name: Run certification routing falsifications
+        run: |
+          npx tsx --test \
+            server/mlb-p1-advanced-component-certification-routes.test.ts \
+            server/mlb-discipline-speed-provenance.test.ts \
+            server/mlb-sos-provenance.test.ts \
+            server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Verify modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify fail-closed certification and safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='server/mlb-p1-advanced-component-certification-routes.ts'
+          readiness='server/mlb-p1-pregame-readiness-routes.ts'
+          testfile='server/mlb-p1-advanced-component-certification-routes.test.ts'
+          docs='docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md'
+
+          grep -F 'getDisciplineSpeedCertifiedSnapshot' "$module"
+          grep -F 'getTeamSosCertifiedSnapshot' "$module"
+          grep -F 'sourceStatus: "DEGRADED"' "$module"
+          grep -F 'failureDisposition: "DEGRADE_NOT_CERTIFY"' "$module"
+          grep -F 'registerMlbP1AdvancedComponentCertificationMiddleware(app);' "$readiness"
+          grep -F 'generatedAt, undefined' "$testfile"
+          grep -F 'Statcast remains independently fail-closed' "$docs"
+
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|probabilityChanged:[[:space:]]*true|thresholdChanged:[[:space:]]*true|stakeChanged:[[:space:]]*true' "$module"
+      - name: Verify exact six-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-certified-advanced-routes.yml' \
+            'docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md' \
+            'server/mlb-p1-advanced-component-certification-routes.test.ts' \
+            'server/mlb-p1-advanced-component-certification-routes.ts' \
+            'server/mlb-p1-pregame-readiness-routes.ts' \
+            'tsconfig.p1-m2b-certified-advanced-routes.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M2B certified advanced route scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
