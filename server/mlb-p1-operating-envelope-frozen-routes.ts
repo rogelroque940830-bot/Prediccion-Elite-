@@ -53,7 +53,7 @@ export function registerMlbP1FrozenOperatingEnvelopeRoutes(
   service: MlbP1FrozenOperatingEnvelopeReader = createCompleteOwnedFrozenOperatingEnvelopeReader(),
 ): void {
   app.get(
-    MLB_P1_M3E5_ENDPOINT,
+    "/api/mlb/p1/v1/operating-envelope-frozen",
     requireInteractiveMlbCaptureSession,
     (req, res) => {
       const identity = authenticatedIdentity(req);
