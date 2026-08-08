@@ -145,6 +145,80 @@ test("rejects independent-game accounting drift", () => {
 test("supported state requires every registered criterion and remains research-only", () => {
   const value = validEnvelope();
   value.data.state = "ECONOMIC_EDGE_SUPPORTED_RESEARCH_ONLY";
+  value.data.cohort = {
+    inputReviewRows: 100,
+    afterCutoff: 100,
+    finalF5Rows: 100,
+    unclassifiableRowsExcluded: 0,
+    eligibleClassifiableRows: 100,
+    independentGames: 100,
+    duplicateGameRowsExcluded: 0,
+    candidateGames: 50,
+    controlGames: 50,
+    candidateSettled: 50,
+    controlSettled: 50,
+    candidateDates: 20,
+    controlDates: 20,
+  };
+  value.data.candidate = metric({
+    observations: 50,
+    settled: 50,
+    pending: 0,
+    dates: 20,
+    wins: 32,
+    losses: 18,
+    hitRatePct: 64,
+    meanModelProbability: 0.61,
+    observedWinRate: 0.64,
+    calibrationGap: 0.03,
+    flatStakeProfitUnits: 7.5,
+    flatStakeRoiPct: 15,
+    brierScore: 0.21,
+    logLoss: 0.61,
+    clvAvailable: 50,
+    clvCoveragePct: 100,
+    meanClvPp: 1.8,
+    medianClvPp: 1.5,
+  });
+  value.data.control = metric({
+    observations: 50,
+    settled: 50,
+    pending: 0,
+    dates: 20,
+    wins: 26,
+    losses: 24,
+    hitRatePct: 52,
+    meanModelProbability: 0.56,
+    observedWinRate: 0.52,
+    calibrationGap: 0.04,
+    flatStakeProfitUnits: -0.5,
+    flatStakeRoiPct: -1,
+    brierScore: 0.24,
+    logLoss: 0.69,
+    clvAvailable: 50,
+    clvCoveragePct: 100,
+    meanClvPp: 0.2,
+    medianClvPp: 0.1,
+  });
+  value.data.inference = {
+    dateClusters: 20,
+    candidateRoiPct: {
+      confidenceLevel: 0.95,
+      replicatesRequested: 5000,
+      replicatesUsed: 5000,
+      pointEstimate: 15,
+      lower: 2,
+      upper: 28,
+    },
+    candidateMinusControlRoiPp: {
+      confidenceLevel: 0.95,
+      replicatesRequested: 5000,
+      replicatesUsed: 5000,
+      pointEstimate: 16,
+      lower: 1,
+      upper: 31,
+    },
+  };
   for (const key of Object.keys(value.data.criteria)) {
     value.data.criteria[key as keyof typeof value.data.criteria] = true;
   }
