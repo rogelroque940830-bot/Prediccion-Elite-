@@ -16,7 +16,7 @@ const speedCsv = [
 
 function pitcherPayload(withSample = true) {
   return withSample
-    ? { stats: [{ splits: [{ stat: { strikePercentage: ".66", strikeOuts: "100", battersFaced: "400", inningsPitched: "100.0" } }] }] }
+    ? { stats: [{ splits: [{ stat: { numberOfPitches: "1000", strikes: "660", strikeoutsPer9Inn: "9.0" } }] }] }
     : { stats: [{ splits: [] }] };
 }
 
@@ -76,7 +76,7 @@ test("complete MLB pitcher acquisition plus Savant speed emits certified provena
   assert.equal(snapshot.provenance.status, "CERTIFIED");
   assert.equal(snapshot.provenance.failureDisposition, "THROW_FAIL_CLOSED");
   assert.equal(snapshot.provenance.speedCacheMaxAgeSeconds, 21_600);
-  assert.equal(snapshot.homeSPDiscipline?.strikePct, 66);
+  assert.equal(snapshot.homeSPDiscipline?.strikePct, 0.66);
   assert.equal(snapshot.homeBatterSpeed[0]?.sprintSpeed, 29.1);
 });
 
