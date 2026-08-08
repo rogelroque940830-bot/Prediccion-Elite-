@@ -1,0 +1,233 @@
+name: Research P1-M2B Post Quality Context Wiring
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-quality-context-wiring.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-post-quality-context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: af6a711e5f73d84395cdbb86d13501afd6ebf48c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-quality-context-wiring.yml' ]]
+
+      - name: Wait for exact merged backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Measure sanitized live ML advanced certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate")
+          [[ "$slate_code" == '200' ]]
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+
+          const envelope = JSON.parse(fs.readFileSync('private/slate.json', 'utf8'));
+          if (envelope?.success !== true || !Array.isArray(envelope?.data?.games)) {
+            throw new Error('POST_QUALITY_CONTEXT_SLATE_INVALID');
+          }
+          const slate = envelope.data;
+          const now = Date.now();
+          const candidates = slate.games
+            .filter((g) => ['SCHEDULED', 'PREGAME'].includes(g.state) && g.analysisAllowed === true)
+            .sort((a, b) => {
+              const ams = a.startTime ? Date.parse(a.startTime) : Number.POSITIVE_INFINITY;
+              const bms = b.startTime ? Date.parse(b.startTime) : Number.POSITIVE_INFINITY;
+              const afuture = ams >= now ? 0 : 1;
+              const bfuture = bms >= now ? 0 : 1;
+              return afuture - bfuture || Math.abs(ams - now) - Math.abs(bms - now);
+            })
+            .slice(0, 3);
+
+          const componentName = (endpoint) => {
+            const text = String(endpoint || '');
+            if (text.includes('/quality/')) return 'QUALITY';
+            if (text.includes('/statcast-matchup/')) return 'STATCAST_MATCHUP';
+            if (text.includes('/discipline-speed/')) return 'DISCIPLINE_SPEED';
+            if (text.includes('/sos/')) return 'SOS';
+            if (text.includes('/advanced/')) return 'ADVANCED_CONTEXT';
+            return 'UNKNOWN';
+          };
+          const names = ['QUALITY','STATCAST_MATCHUP','DISCIPLINE_SPEED','SOS','ADVANCED_CONTEXT'];
+          const counts = Object.fromEntries(names.map((name) => [name, { certified: 0, degraded: 0, fresh: 0, timed: 0, httpOk: 0 }]));
+          const result = {
+            schemaVersion: 'p1-m2b-post-quality-context-wiring.v1',
+            generatedAt: new Date().toISOString(),
+            deployedCommit: fs.readFileSync('private/deployed-commit.txt','utf8'),
+            baseline: {
+              evidencePr: 401,
+              sampledMlEvaluations: 3,
+              aggregateCertifiedComponents: '2/5',
+              qualityCertified: false,
+              advancedContextCertified: false,
+              disciplineSpeedCertified: true,
+              sosCertified: true,
+              statcastCertified: false
+            },
+            slate: {
+              date: slate.date,
+              totalGames: slate.summary?.total ?? slate.games.length,
+              sampledGames: candidates.length
+            },
+            samples: [],
+            aggregate: {
+              gateStatusCounts: {},
+              advancedStateCounts: {},
+              advancedQualityCounts: {},
+              certifiedCountHistogram: {},
+              componentCounts: counts,
+              injuriesStateCounts: {}
+            },
+            safety: {
+              writesPerformed: 0,
+              predictionsCreated: 0,
+              settlementsCreated: 0,
+              sportsbookCallsPerformedByResearchRunner: 0,
+              rawIdentityUploaded: false
+            }
+          };
+          const bump = (obj, key) => { obj[key] = (obj[key] || 0) + 1; };
+
+          for (let index = 0; index < candidates.length; index += 1) {
+            const game = candidates[index];
+            const url = `${process.env.BACKEND_URL}/api/mlb/p1/v1/pregame-readiness?gamePk=${encodeURIComponent(game.gamePk)}&market=ML&date=${encodeURIComponent(game.officialDate)}`;
+            const raw = `private/readiness-${index}.json`;
+            let code = '000';
+            try {
+              code = execFileSync('curl', ['-sS','-o',raw,'-w','%{http_code}','--max-time','210',url], { encoding:'utf8' }).trim();
+            } catch {
+              result.samples.push({ gameOrdinal: index + 1, requestStatus: 'FAILED' });
+              continue;
+            }
+            const response = JSON.parse(fs.readFileSync(raw,'utf8'));
+            if (code !== '200' || response?.success !== true || !response?.data?.gate) {
+              result.samples.push({ gameOrdinal: index + 1, requestStatus: `HTTP_${code}` });
+              continue;
+            }
+            const report = response.data;
+            const advanced = (report.evidence || []).find((item) => item.field === 'ADVANCED_FACTORS');
+            const injuries = (report.evidence || []).find((item) => item.field === 'INJURIES');
+            const calls = Array.isArray(advanced?.details?.calls) ? advanced.details.calls : [];
+            const components = calls.map((call) => ({
+              component: componentName(call.endpoint),
+              ok: Boolean(call.ok),
+              httpStatus: Number(call.status) || 0,
+              sourceStatus: call.sourceStatus || null,
+              certified: Boolean(call.certified),
+              hasExplicitTimestamp: typeof call.explicitTimestamp === 'string' && call.explicitTimestamp.length > 0,
+              freshness: call.freshness || null
+            }));
+            const certifiedCount = components.filter((component) => component.certified).length;
+            bump(result.aggregate.gateStatusCounts, report.gate.status);
+            bump(result.aggregate.advancedStateCounts, advanced?.state || 'MISSING');
+            bump(result.aggregate.advancedQualityCounts, advanced?.quality || 'NONE');
+            bump(result.aggregate.certifiedCountHistogram, String(certifiedCount));
+            bump(result.aggregate.injuriesStateCounts, injuries?.state || 'MISSING');
+            for (const component of components) {
+              const c = result.aggregate.componentCounts[component.component];
+              if (!c) continue;
+              if (component.ok) c.httpOk += 1;
+              if (component.certified) c.certified += 1;
+              else c.degraded += 1;
+              if (component.hasExplicitTimestamp) c.timed += 1;
+              if (component.freshness === 'FRESH') c.fresh += 1;
+            }
+            result.samples.push({
+              gameOrdinal: index + 1,
+              requestStatus: 'OK',
+              gateStatus: report.gate.status,
+              advanced: {
+                state: advanced?.state || null,
+                quality: advanced?.quality || null,
+                sourceStatus: advanced?.sourceStatus || null,
+                certifiedComponents: certifiedCount,
+                totalComponents: components.length,
+                components
+              },
+              injuries: {
+                state: injuries?.state || null,
+                quality: injuries?.quality || null,
+                sourceStatus: injuries?.sourceStatus || null
+              }
+            });
+          }
+
+          const measured = result.samples.filter((sample) => sample.requestStatus === 'OK' && sample.advanced);
+          const allCertified = (name) => measured.length > 0 && measured.every((sample) => sample.advanced.components.some((c) => c.component === name && c.certified));
+          result.conclusion = {
+            measured: measured.length > 0,
+            sampledMlEvaluations: measured.length,
+            qualityCertifiedInAllMeasured: allCertified('QUALITY'),
+            advancedContextCertifiedInAllMeasured: allCertified('ADVANCED_CONTEXT'),
+            disciplineSpeedCertifiedInAllMeasured: allCertified('DISCIPLINE_SPEED'),
+            sosCertifiedInAllMeasured: allCertified('SOS'),
+            statcastCertifiedInAllMeasured: allCertified('STATCAST_MATCHUP'),
+            maxCertifiedComponentsObserved: measured.length ? Math.max(...measured.map((sample) => sample.advanced.certifiedComponents)) : 0,
+            minCertifiedComponentsObserved: measured.length ? Math.min(...measured.map((sample) => sample.advanced.certifiedComponents)) : 0,
+            readyFinalObserved: measured.some((sample) => sample.gateStatus === 'READY_FINAL'),
+            gateShouldBeRelaxed: false
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({ aggregate: result.aggregate, conclusion: result.conclusion }, null, 2));
+          NODE
+
+          test -f audit/result.json
+          rm -rf private
+          test ! -d private
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          test ! -d private
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized aggregate only
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-quality-context-wiring-aggregate
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
