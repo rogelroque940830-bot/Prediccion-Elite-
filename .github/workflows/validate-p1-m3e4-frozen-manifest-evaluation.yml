@@ -1,0 +1,87 @@
+name: Validate P1-M3E.4 Frozen Manifest Evaluation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-operating-envelope-frozen-evaluation.ts'
+      - 'server/mlb-p1-operating-envelope-frozen-evaluation.test.ts'
+      - 'docs/P1_M3E4_MLB_FROZEN_MANIFEST_EVALUATION.md'
+      - 'tsconfig.p1-m3e4-frozen-manifest-evaluation.json'
+      - '.github/workflows/validate-p1-m3e4-frozen-manifest-evaluation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3e4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned P1-M3E.4 surface
+        run: npx tsc -p tsconfig.p1-m3e4-frozen-manifest-evaluation.json
+      - name: Run P1-M3E.4 falsification tests
+        run: npx tsx --test server/mlb-p1-operating-envelope-frozen-evaluation.test.ts
+      - name: Preserve P1-M3E.3, P1-M3E.2 and P1-M3E behavior
+        run: |
+          npx tsx --test server/mlb-p1-operating-envelope-freeze.test.ts
+          npx tsx --test server/mlb-p1-operating-envelope-stability.test.ts
+          npx tsx --test server/mlb-p1-operating-envelope.test.ts
+      - name: Build production backend without wiring research module
+        run: npm run build:backend
+      - name: Verify immutable manifest, settlement barrier and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-p1-operating-envelope-frozen-evaluation.ts'
+          docs='docs/P1_M3E4_MLB_FROZEN_MANIFEST_EVALUATION.md'
+
+          grep -F 'courtedge-p1-m3e4-frozen-manifest-evaluation.v1' "$source"
+          grep -F 'P1_M3E4_FROZEN_MANIFEST_MISMATCH' "$source"
+          grep -F 'FROZEN_WAITING_FOR_SETTLEMENTS' "$source"
+          grep -F 'P1_M3E4_SCOREABLE_DATE_COVERAGE_INCOMPLETE' "$source"
+          grep -F 'buildMlbP1M3e2OperatingEnvelopeStability(frozenRows' "$source"
+          grep -F 'confirmationOpenedOnlyAfterValidationPasses: true' "$source"
+          grep -F 'futureRowsExcludedFromEvaluation: true' "$source"
+          grep -F 'economicProfitabilityCertified: false' "$source"
+          grep -F 'operationalRecommendationGateAllowed: false' "$source"
+          grep -F 'bettingRecommendationAllowed: false' "$source"
+          grep -F 'stakeChangesAllowed: false' "$source"
+          grep -F 'automaticBettingAllowed: false' "$source"
+          grep -F 'premiumNoUltraProspectiveHypothesisChanged: false' "$source"
+          grep -F 'automaticModelChangesAllowed: false' "$source"
+          grep -F 'automaticPromotionAllowed: false' "$source"
+          grep -F 'wait until every frozen decision has a terminal settlement' "$docs"
+
+          ! grep -E 'app\.(post|put|patch|delete|get)\(' "$source"
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$source"
+          ! grep -E 'operationalRecommendationGateAllowed:[[:space:]]*true|bettingRecommendationAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source"
+      - name: Verify exact isolated P1-M3E.4 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e4-frozen-manifest-evaluation.yml' \
+            'docs/P1_M3E4_MLB_FROZEN_MANIFEST_EVALUATION.md' \
+            'server/mlb-p1-operating-envelope-frozen-evaluation.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-evaluation.ts' \
+            'tsconfig.p1-m3e4-frozen-manifest-evaluation.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M3E.4 scope rejected: expected exact five-file isolated research package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
