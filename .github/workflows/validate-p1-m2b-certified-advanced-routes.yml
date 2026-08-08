@@ -7,7 +7,7 @@ on:
     paths:
       - 'server/mlb-p1-advanced-component-certification-routes.ts'
       - 'server/mlb-p1-advanced-component-certification-routes.test.ts'
-      - 'server/routes.ts'
+      - 'server/mlb-p1-pregame-readiness-routes.ts'
       - 'tsconfig.p1-m2b-certified-advanced-routes.json'
       - 'docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md'
       - '.github/workflows/validate-p1-m2b-certified-advanced-routes.yml'
@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           module='server/mlb-p1-advanced-component-certification-routes.ts'
-          routes='server/routes.ts'
+          readiness='server/mlb-p1-pregame-readiness-routes.ts'
           testfile='server/mlb-p1-advanced-component-certification-routes.test.ts'
           docs='docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md'
 
@@ -59,8 +59,7 @@ jobs:
           grep -F 'getTeamSosCertifiedSnapshot' "$module"
           grep -F 'sourceStatus: "DEGRADED"' "$module"
           grep -F 'failureDisposition: "DEGRADE_NOT_CERTIFY"' "$module"
-          grep -F 'registerMlbP1AdvancedComponentCertificationMiddleware(app);' "$routes"
-          grep -F 'registerMlbP1AdvancedComponentCertificationMiddleware(app);' "$routes"
+          grep -F 'registerMlbP1AdvancedComponentCertificationMiddleware(app);' "$readiness"
           grep -F 'generatedAt, undefined' "$testfile"
           grep -F 'Statcast remains independently fail-closed' "$docs"
 
@@ -78,7 +77,7 @@ jobs:
             'docs/P1_M2B_CERTIFIED_ADVANCED_ROUTES.md' \
             'server/mlb-p1-advanced-component-certification-routes.test.ts' \
             'server/mlb-p1-advanced-component-certification-routes.ts' \
-            'server/routes.ts' \
+            'server/mlb-p1-pregame-readiness-routes.ts' \
             'tsconfig.p1-m2b-certified-advanced-routes.json' | sort)
           if [[ "$changed" != "$expected" ]]; then
             echo 'P1-M2B certified advanced route scope rejected.' >&2
