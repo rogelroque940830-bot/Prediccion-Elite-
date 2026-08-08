@@ -1,0 +1,112 @@
+name: Diagnostic P1 PREMIUM No ULTRA Live Backend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/diagnostic-p1-premium-no-ultra-live-backend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-premium-no-ultra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: 4d8dcbaafe3d232bd5fd18681d42cd9d88862e6e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for exact backend and verify read-only protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for attempt in $(seq 1 100); do
+            health_code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            before_code=$(curl -sS -o audit/ledger-before.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status" || true)
+            session_code=$(curl -sS -c audit/cookies.txt -o audit/anonymous-session.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/auth/session" || true)
+            tracker_code=$(curl -sS -b audit/cookies.txt -o audit/anonymous-tracker.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/p1/v1/premium-no-ultra-prospective" || true)
+            after_code=$(curl -sS -o audit/ledger-after.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/api/mlb/ledger/v1/status" || true)
+
+            backend_ok=false
+            if [[ "${health_code}" == "200" ]] && EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('audit/health.json', 'utf8'));
+          process.exit(health.status === 'healthy' && health.commit === process.env.EXPECTED_BACKEND_COMMIT ? 0 : 1);
+          NODE
+            then backend_ok=true; fi
+
+            echo "Attempt ${attempt}/100: health=${health_code} before=${before_code} session=${session_code} tracker=${tracker_code} after=${after_code} backend=${backend_ok}"
+
+            if [[ "${backend_ok}" == "true" && "${before_code}" == "200" && "${session_code}" == "200" && "${tracker_code}" == "401" && "${after_code}" == "200" ]]; then
+              EXPECTED_BACKEND_COMMIT="${EXPECTED_BACKEND_COMMIT}" node <<'NODE'
+          const fs = require('node:fs');
+          const read = (name) => JSON.parse(fs.readFileSync(name, 'utf8'));
+          const health = read('audit/health.json');
+          const before = read('audit/ledger-before.json');
+          const after = read('audit/ledger-after.json');
+          const session = read('audit/anonymous-session.json');
+          const tracker = read('audit/anonymous-tracker.json');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(health.commit === process.env.EXPECTED_BACKEND_COMMIT, `commit=${health.commit}`);
+          assert(health.status === 'healthy', `health=${health.status}`);
+          assert(before.success === true && after.success === true, 'ledger status failed');
+          assert(before.data?.schemaVersion === 'mlb-ledger.v1', `schema=${before.data?.schemaVersion}`);
+          assert(before.data?.immutable === true && after.data?.immutable === true, 'ledger is not immutable');
+          assert(before.data?.predictions === after.data?.predictions, 'prediction count changed');
+          assert(before.data?.settlementEvents === after.data?.settlementEvents, 'settlement count changed');
+          assert(session.success === true && session.authenticated === false, 'anonymous auth session not anonymous');
+          assert(tracker.success === false, 'anonymous tracker unexpectedly succeeded');
+          assert(tracker.code === 'INTERACTIVE_SESSION_REQUIRED', `tracker code=${tracker.code}`);
+
+          const evidence = {
+            backendCommit: health.commit,
+            environment: health.environment,
+            endpoint: '/api/mlb/p1/v1/premium-no-ultra-prospective',
+            anonymousSessionStatus: 200,
+            anonymousSessionAuthenticated: false,
+            anonymousTrackerStatus: 401,
+            anonymousTrackerCode: tracker.code,
+            ownerScopedReadProtected: true,
+            ledger: {
+              schemaVersion: before.data.schemaVersion,
+              immutable: before.data.immutable,
+              predictionsBefore: before.data.predictions,
+              predictionsAfter: after.data.predictions,
+              settlementsBefore: before.data.settlementEvents,
+              settlementsAfter: after.data.settlementEvents,
+            },
+            authenticatedOwnerReportExercisedByDiagnostic: false,
+            predictionsCreated: 0,
+            settlementsCreated: 0,
+            betsPlaced: 0,
+            realFinancialExposure: 0,
+          };
+          fs.writeFileSync('audit/result.json', JSON.stringify(evidence, null, 2));
+          console.log(JSON.stringify(evidence, null, 2));
+          NODE
+              exit 0
+            fi
+
+            if [[ "${attempt}" == "100" ]]; then
+              echo 'Timed out waiting for exact PREMIUM no-ULTRA backend deployment' >&2
+              for file in health.json ledger-before.json anonymous-session.json anonymous-tracker.json ledger-after.json; do
+                echo "--- ${file}"
+                cat "audit/${file}" 2>/dev/null || true
+              done
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Upload read-only tracker diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-premium-no-ultra-live-backend-evidence
+          path: audit
+          if-no-files-found: warn
+          retention-days: 30
