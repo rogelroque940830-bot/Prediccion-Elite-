@@ -6,6 +6,7 @@ import {
 } from "./mlb-p1-pregame-readiness-service";
 import type { MlbP1M2aMarket } from "./mlb-p1-pregame-readiness-contract";
 import { registerMlbP1AdvancedComponentCertificationMiddleware } from "./mlb-p1-advanced-component-certification-routes";
+import { registerMlbStatcastCertifierSourceAlignmentMiddleware } from "./mlb-statcast-certifier-source-alignment-routes";
 
 const MARKET_ALIASES: Record<string, MlbP1M2aMarket> = {
   ML: "ML",
@@ -61,6 +62,7 @@ function parseManualOdds(req: any, market: MlbP1M2aMarket): MlbP1M2bManualOdds |
 export function registerMlbP1PregameReadinessRoutes(app: Express): void {
   // M2B owns readiness of the advanced evidence it consumes. Register these
   // GET-only certification interceptors before legacy MLB core routes are added.
+  registerMlbStatcastCertifierSourceAlignmentMiddleware(app);
   registerMlbP1AdvancedComponentCertificationMiddleware(app);
 
   app.get("/api/mlb/p1/v1/pregame-readiness", async (req, res) => {
