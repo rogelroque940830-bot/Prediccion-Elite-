@@ -41,6 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           source='server/mlb-p1-operating-envelope-stability.ts'
+          tests='server/mlb-p1-operating-envelope-stability.test.ts'
           docs='docs/P1_M3E2_MLB_OPERATING_ENVELOPE_STABILITY.md'
 
           grep -F 'courtedge-p1-m3e2-operating-envelope-stability.v1' "$source"
@@ -58,6 +59,7 @@ jobs:
           grep -F 'premiumNoUltraProspectiveHypothesisChanged: false' "$source"
           grep -F 'automaticModelChangesAllowed: false' "$source"
           grep -F 'automaticPromotionAllowed: false' "$source"
+          grep -F 'final holdout stays unopened when validation reverses' "$tests"
           grep -F 'Forbidden selector inputs' "$docs"
 
           matcher=$(sed -n '/export function matchesMlbP1M3e2Rule/,/^}/p' "$source")
@@ -79,6 +81,15 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
+
+          holdout_hardening=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e2-operating-envelope-stability.yml' \
+            'server/mlb-p1-operating-envelope-stability.test.ts' \
+            'server/mlb-p1-operating-envelope-stability.ts' | sort)
+          if [[ "$changed" == "$holdout_hardening" ]]; then
+            exit 0
+          fi
+
           expected=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3e2-operating-envelope-stability.yml' \
             'docs/P1_M3E2_MLB_OPERATING_ENVELOPE_STABILITY.md' \
@@ -86,7 +97,7 @@ jobs:
             'server/mlb-p1-operating-envelope-stability.ts' \
             'tsconfig.p1-m3e2-operating-envelope-stability.json' | sort)
           if [[ "$changed" != "$expected" ]]; then
-            echo 'P1-M3E.2 scope rejected: expected exact five-file isolated research package.' >&2
+            echo 'P1-M3E.2 scope rejected: expected exact research package or exact sequential-holdout hardening package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
