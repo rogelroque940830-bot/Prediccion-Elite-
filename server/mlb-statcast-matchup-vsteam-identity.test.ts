@@ -86,7 +86,9 @@ test("identity-safe combined result queries numeric opponent ids and only recomp
   assert.equal(result.homeLineupVsAwayTeam.teamOpsVsOpp, 0.820);
   assert.equal(result.awayLineupVsHomeTeam.teamOpsVsOpp, 0.620);
   assert.equal(result.homeRunsDelta, 0.35);
-  assert.equal(result.awayRunsDelta, -0.23);
+  // -0.20*0.50 + -0.10*0.25 + ((0.620-0.720)*4)*0.25 = -0.225;
+  // production uses Math.round(value*100)/100, and Math.round(-22.5) is -22.
+  assert.equal(result.awayRunsDelta, -0.22);
   assert.equal(result.untouchedMarker, "PRESERVED");
   assert.deepEqual(result.identityCorrection.weightsPreserved, { starter: 0.50, bullpen: 0.25, vsTeam: 0.25 });
 });
