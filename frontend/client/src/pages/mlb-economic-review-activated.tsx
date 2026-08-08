@@ -161,11 +161,9 @@ export default function MlbEconomicReviewActivated() {
           </Card>
         )}
 
-        {premiumNoUltraQuery.isLoading && <p className="mt-4 text-xs text-muted-foreground" data-testid="premium-no-ultra-loading">Actualizando edge prospectivo F5…</p>}
-        {premiumNoUltraQuery.data && <MlbPremiumNoUltraCard report={premiumNoUltraQuery.data} isFetching={premiumNoUltraQuery.isFetching} onRefresh={() => void premiumNoUltraQuery.refetch()} />}
-        {premiumNoUltraQuery.isError && <p className="mt-4 rounded-lg border border-red-500/35 p-3 text-xs text-red-100" data-testid="premium-no-ultra-error">
-          Edge prospectivo F5 no disponible · {premiumNoUltraQuery.error instanceof Error ? premiumNoUltraQuery.error.message : "respuesta inválida"}. Sin edge inferido.
-        </p>}
+        {premiumNoUltraQuery.isLoading && <p className="mt-4 text-xs text-muted-foreground">Actualizando edge prospectivo F5…</p>}
+        {premiumNoUltraQuery.data && <MlbPremiumNoUltraCard report={premiumNoUltraQuery.data} />}
+        {premiumNoUltraQuery.isError && <p className="mt-4 border p-2 text-xs text-red-100">Edge F5 no disponible · {premiumNoUltraQuery.error instanceof Error ? premiumNoUltraQuery.error.message : "respuesta inválida"}.</p>}
       </div>
       <MlbEconomicReview />
     </>
