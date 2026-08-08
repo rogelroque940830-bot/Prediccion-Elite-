@@ -1,0 +1,176 @@
+name: Research P1-M2B Statcast Source Coverage V2
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-statcast-source-coverage-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-statcast-source-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_BACKEND_COMMIT: f7f6cbc3cb857ea5a4f2a6e74fc8016a73fff726
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-statcast-source-coverage-v2.yml' ]]
+
+      - name: Wait for exact deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          observed=''
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 25 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == '200' ]]; then
+              observed=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('private/health.json','utf8'));process.stdout.write(String(j.commit||''));")
+              if [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]; then break; fi
+            fi
+            sleep 10
+          done
+          [[ "$observed" == "$EXPECTED_BACKEND_COMMIT" ]]
+          printf '%s' "$observed" > private/deployed-commit.txt
+
+      - name: Compare official Savant qualified and inclusive queries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 90 -o private/slate.json "${BACKEND_URL}/api/mlb/p1/v1/slate"
+
+          BACKEND_URL="$BACKEND_URL" node <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const slateEnvelope=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+          if (slateEnvelope?.success!==true || !Array.isArray(slateEnvelope?.data?.games)) throw new Error('SLATE_INVALID');
+          const slate=slateEnvelope.data;
+          const season=Number(String(slate.date||'').slice(0,4));
+          const now=Date.now();
+          const games=slate.games.filter((g)=>['SCHEDULED','PREGAME'].includes(g.state)&&g.analysisAllowed===true)
+            .sort((a,b)=>{
+              const ams=a.startTime?Date.parse(a.startTime):Infinity;
+              const bms=b.startTime?Date.parse(b.startTime):Infinity;
+              return (ams>=now?0:1)-(bms>=now?0:1)||Math.abs(ams-now)-Math.abs(bms-now);
+            }).slice(0,3);
+
+          function getCsv(name,minPitches){
+            const path=`private/${name}.csv`;
+            const url=`https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?min=1&minPitches=${minPitches}&pitchType=&team=&type=batter&year=${season}&csv=true`;
+            const code=execFileSync('curl',['-sS','-L','-o',path,'-w','%{http_code}','--max-time','120','-H','User-Agent: Mozilla/5.0','-H','Referer: https://baseballsavant.mlb.com/',url],{encoding:'utf8'}).trim();
+            if(code!=='200') throw new Error(`SAVANT_HTTP_${name}_${code}`);
+            return path;
+          }
+          function split(line){
+            const out=[];let cur='';let q=false;
+            for(let i=0;i<line.length;i++){
+              const c=line[i];
+              if(c==='"'&&line[i+1]==='"'){cur+='"';i++;}
+              else if(c==='"')q=!q;
+              else if(c===','&&!q){out.push(cur);cur='';}
+              else cur+=c;
+            }
+            out.push(cur);return out;
+          }
+          function parse(path){
+            const lines=fs.readFileSync(path,'utf8').replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean);
+            const h=split(lines[0]||'');
+            const ii=h.indexOf('player_id'),ti=h.indexOf('pitch_type'),pi=h.indexOf('pitches');
+            if(ii<0||ti<0||pi<0) throw new Error('SAVANT_HEADERS_INVALID');
+            const map=new Map();let rows=0;
+            for(const line of lines.slice(1)){
+              const v=split(line),id=Number(v[ii]),type=String(v[ti]||'').trim(),p=Number(v[pi])||0;
+              if(!Number.isInteger(id)||id<=0||!type)continue;
+              rows++;
+              if(!map.has(id))map.set(id,new Map());
+              map.get(id).set(type,Math.max(map.get(id).get(type)||0,p));
+            }
+            return {rows,players:map.size,map};
+          }
+
+          const qualified=parse(getCsv('qualified','q'));
+          const inclusive=parse(getCsv('inclusive','1'));
+
+          function engineCounts(matchup){
+            const c={direct:0,proxy:0,league:0,unknown:0};
+            for(const r of Array.isArray(matchup?.perBatter)?matchup.perBatter:[]){
+              const q=String(r?.dataQuality||'').toUpperCase();
+              if(q==='DIRECT')c.direct++;else if(q==='TEAM_PROXY')c.proxy++;else if(q==='LEAGUE')c.league++;else c.unknown++;
+            }
+            return c;
+          }
+          function project(ids,matchup,map){
+            const types=(Array.isArray(matchup?.arsenal)?matchup.arsenal:[]).map((p)=>String(p?.type||'').trim()).filter(Boolean);
+            let direct=0;
+            for(const id of ids){
+              const rows=map.get(Number(id))||new Map();
+              const matches=types.filter((t)=>(rows.get(t)||0)>=30).length;
+              if(types.length&&matches>=types.length*0.6)direct++;
+            }
+            return direct;
+          }
+          function side(ids,matchup){
+            const current=engineCounts(matchup);
+            const q=project(ids,matchup,qualified.map);
+            const inc=project(ids,matchup,inclusive.map);
+            return {lineupCount:ids.length,arsenalPitchTypes:Array.isArray(matchup?.arsenal)?matchup.arsenal.length:0,currentEngine:current,projectedQualifiedDirect:q,projectedInclusiveDirect:inc,qualifiedMatchesCurrent:q===current.direct,inclusiveImprovement:inc-current.direct,inclusiveReachesNine:inc===9};
+          }
+
+          const result={schemaVersion:'p1-m2b-statcast-source-coverage.v2',generatedAt:new Date().toISOString(),deployedCommit:fs.readFileSync('private/deployed-commit.txt','utf8'),season,
+            sourceVariants:{qualified:{rows:qualified.rows,uniquePlayers:qualified.players},inclusive:{rows:inclusive.rows,uniquePlayers:inclusive.players}},samples:[],
+            aggregate:{sidesMeasured:0,currentDirectTotal:0,projectedQualifiedDirectTotal:0,projectedInclusiveDirectTotal:0,inclusiveNineOfNineSides:0,qualifiedSimulationMismatchSides:0},
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,rawIdentityUploaded:false}};
+
+          for(let i=0;i<games.length;i++){
+            const g=games[i],rp=`private/r-${i}.json`,fp=`private/f-${i}.json`;
+            const rc=execFileSync('curl',['-sS','-o',rp,'-w','%{http_code}','--max-time','210',`${process.env.BACKEND_URL}/api/mlb/statcast-matchup/${encodeURIComponent(g.gamePk)}`],{encoding:'utf8'}).trim();
+            execFileSync('curl',['-sS','-o',fp,'--max-time','60',`https://statsapi.mlb.com/api/v1.1/game/${encodeURIComponent(g.gamePk)}/feed/live`]);
+            if(rc!=='200'){result.samples.push({gameOrdinal:i+1,requestStatus:`HTTP_${rc}`});continue;}
+            const r=JSON.parse(fs.readFileSync(rp,'utf8')),f=JSON.parse(fs.readFileSync(fp,'utf8'));
+            const hi=Array.isArray(f?.liveData?.boxscore?.teams?.home?.battingOrder)?f.liveData.boxscore.teams.home.battingOrder:[];
+            const ai=Array.isArray(f?.liveData?.boxscore?.teams?.away?.battingOrder)?f.liveData.boxscore.teams.away.battingOrder:[];
+            const home=side(hi,r?.homeLineupVsAwaySP),away=side(ai,r?.awayLineupVsHomeSP);
+            for(const s of [home,away]){
+              result.aggregate.sidesMeasured++;result.aggregate.currentDirectTotal+=s.currentEngine.direct;result.aggregate.projectedQualifiedDirectTotal+=s.projectedQualifiedDirect;result.aggregate.projectedInclusiveDirectTotal+=s.projectedInclusiveDirect;
+              if(s.inclusiveReachesNine)result.aggregate.inclusiveNineOfNineSides++;if(!s.qualifiedMatchesCurrent)result.aggregate.qualifiedSimulationMismatchSides++;
+            }
+            result.samples.push({gameOrdinal:i+1,requestStatus:'OK',home,away});
+          }
+          result.conclusion={measured:result.aggregate.sidesMeasured>0,qualifiedSimulationMatchesEngineAllSides:result.aggregate.qualifiedSimulationMismatchSides===0,inclusiveSourceAddsDirectCoverage:result.aggregate.projectedInclusiveDirectTotal>result.aggregate.currentDirectTotal,inclusiveSourceAchievesNineDirectAllSides:result.aggregate.sidesMeasured>0&&result.aggregate.inclusiveNineOfNineSides===result.aggregate.sidesMeasured,internalMinPitchesPreserved:30,requiredArsenalCoveragePctPreserved:60,modelFormulaChanged:false,certificationRuleChanged:false};
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({sourceVariants:result.sourceVariants,aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"playerId"|"pitcherId"|"selection"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized source coverage only
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-statcast-source-coverage-v2
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
