@@ -3,7 +3,10 @@
     "server/mlb-p1-advanced-component-certification-routes.ts",
     "server/mlb-p1-advanced-component-certification-routes.test.ts",
     "server/mlb-discipline-speed.ts",
-    "server/mlb-sos.ts"
+    "server/mlb-sos.ts",
+    "server/mlb-statcast-quality.ts",
+    "server/mlb-advanced-context-provenance.ts",
+    "server/mlb-advanced.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {

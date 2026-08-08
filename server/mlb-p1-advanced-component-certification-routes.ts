@@ -9,6 +9,16 @@ import {
   getTeamSos,
   type TeamSosCertifiedSnapshot,
 } from "./mlb-sos";
+import {
+  evaluateBatter,
+  evaluatePitcher,
+  getStatcastQualityCertifiedSnapshot,
+  type StatcastQualityCertifiedSnapshot,
+} from "./mlb-statcast-quality";
+import {
+  getAdvancedContextCertifiedSnapshot,
+  type AdvancedContextCertifiedSnapshot,
+} from "./mlb-advanced-context-provenance";
 
 const MLB_FEED_BASE = "https://statsapi.mlb.com/api/v1.1/game";
 export const MLB_P1_ADVANCED_COMPONENT_ROUTE_SCHEMA = "courtedge-p1-m2b-advanced-component-route.v1" as const;
@@ -18,6 +28,8 @@ type DisciplineCertifier = typeof getDisciplineSpeedCertifiedSnapshot;
 type DisciplineLegacy = typeof getDisciplineSpeedForGame;
 type SosCertifier = typeof getTeamSosCertifiedSnapshot;
 type SosLegacy = typeof getTeamSos;
+type QualityCertifier = typeof getStatcastQualityCertifiedSnapshot;
+type AdvancedContextCertifier = typeof getAdvancedContextCertifiedSnapshot;
 
 export interface AdvancedComponentRouteDependencies {
   fetchImpl?: FetchLike;
@@ -25,12 +37,16 @@ export interface AdvancedComponentRouteDependencies {
   disciplineLegacy?: DisciplineLegacy;
   sosCertifier?: SosCertifier;
   sosLegacy?: SosLegacy;
+  qualityCertifier?: QualityCertifier;
+  advancedContextCertifier?: AdvancedContextCertifier;
   now?: () => Date;
 }
 
 export interface AdvancedComponentRouteService {
   discipline(gamePk: number): Promise<any>;
   sos(gamePk: number): Promise<any>;
+  quality(gamePk: number): Promise<any>;
+  advancedContext(gamePk: number): Promise<any>;
 }
 
 function positiveInt(value: unknown): number | null {
@@ -100,6 +116,8 @@ export function createMlbP1AdvancedComponentRouteService(
   const disciplineLegacy = dependencies.disciplineLegacy ?? getDisciplineSpeedForGame;
   const sosCertifier = dependencies.sosCertifier ?? getTeamSosCertifiedSnapshot;
   const sosLegacy = dependencies.sosLegacy ?? getTeamSos;
+  const qualityCertifier = dependencies.qualityCertifier ?? getStatcastQualityCertifiedSnapshot;
+  const advancedContextCertifier = dependencies.advancedContextCertifier ?? getAdvancedContextCertifiedSnapshot;
   const now = dependencies.now ?? (() => new Date());
 
   return {
@@ -196,6 +214,32 @@ export function createMlbP1AdvancedComponentRouteService(
         };
       }
     },
+
+    async quality(gamePk: number): Promise<any> {
+      const [feed, certified]: [any, StatcastQualityCertifiedSnapshot] = await Promise.all([
+        fetchGameFeed(gamePk, fetchImpl),
+        qualityCertifier({ fetchImpl }),
+      ]);
+      const homePitcher = pitcher(feed, "home");
+      const awayPitcher = pitcher(feed, "away");
+      const homeBatterIds = lineupIds(feed, "home");
+      const awayBatterIds = lineupIds(feed, "away");
+      return {
+        success: true,
+        homeSP: evaluatePitcher(homePitcher.id ? certified.pitcherMap[homePitcher.id] : undefined),
+        awaySP: evaluatePitcher(awayPitcher.id ? certified.pitcherMap[awayPitcher.id] : undefined),
+        homeBatters: homeBatterIds.map((id) => evaluateBatter(certified.batterMap[id])).filter(Boolean),
+        awayBatters: awayBatterIds.map((id) => evaluateBatter(certified.batterMap[id])).filter(Boolean),
+        sourceStatus: certified.sourceStatus,
+        generatedAt: certified.generatedAt,
+        provenance: certified.provenance,
+      };
+    },
+
+    async advancedContext(gamePk: number): Promise<any> {
+      const certified: AdvancedContextCertifiedSnapshot = await advancedContextCertifier(gamePk, { fetchImpl });
+      return { success: true, ...certified };
+    },
   };
 }
 
@@ -203,6 +247,30 @@ export function registerMlbP1AdvancedComponentCertificationMiddleware(
   app: Express,
   service: AdvancedComponentRouteService = createMlbP1AdvancedComponentRouteService(),
 ): void {
+  app.use("/api/mlb/quality/:gamePk", async (req: Request, res: ExpressResponse, next: NextFunction) => {
+    if (req.method !== "GET") return next();
+    const gamePk = positiveInt(req.params.gamePk);
+    if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+    try {
+      return res.json(await service.quality(gamePk));
+    } catch (error) {
+      console.warn("p1 quality certifier unavailable; preserving legacy route", clean((error as any)?.message || error));
+      return next();
+    }
+  });
+
+  app.use("/api/mlb/advanced/:gamePk", async (req: Request, res: ExpressResponse, next: NextFunction) => {
+    if (req.method !== "GET") return next();
+    const gamePk = positiveInt(req.params.gamePk);
+    if (!gamePk) return res.status(400).json({ error: "Invalid gamePk" });
+    try {
+      return res.json(await service.advancedContext(gamePk));
+    } catch (error) {
+      console.warn("p1 advanced-context certifier unavailable; preserving legacy route", clean((error as any)?.message || error));
+      return next();
+    }
+  });
+
   app.use("/api/mlb/discipline-speed/:gamePk", async (req: Request, res: ExpressResponse, next: NextFunction) => {
     if (req.method !== "GET") return next();
     const gamePk = positiveInt(req.params.gamePk);
