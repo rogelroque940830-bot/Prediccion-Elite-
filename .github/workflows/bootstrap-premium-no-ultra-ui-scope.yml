@@ -1,0 +1,111 @@
+# clean one-shot rerun; this file removes itself after applying the exact policy
+name: Bootstrap PREMIUM No ULTRA UI Scope
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply exact six-guardian successor policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              '.github/workflows/validate-p1-m3c-emission-ui.yml',
+              '.github/workflows/validate-p1-m3c1-terminal-refresh.yml',
+              '.github/workflows/validate-p1-m3d-interactive-economic-review-ui.yml',
+              '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml',
+              '.github/workflows/validate-p1-m4c-response-ui.yml',
+              '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml',
+          ]
+          ui = [
+              '.github/workflows/validate-p1-premium-no-ultra-prospective-ui.yml',
+              'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_UI.md',
+              'frontend/client/src/components/mlb-premium-no-ultra-card.tsx',
+              'frontend/client/src/lib/mlb-premium-no-ultra-prospective.test.ts',
+              'frontend/client/src/lib/mlb-premium-no-ultra-prospective.ts',
+              'frontend/client/src/pages/mlb-economic-review-activated.tsx',
+          ]
+          compat = files
+
+          def package_block(name, items, indent='          '):
+              lines = [f"{indent}{name}=$(printf '%s\\n' \\"]
+              for item in items:
+                  lines.append(f"{indent}  '{item}' \\")
+              lines[-1] = lines[-1][:-2] + ' | sort)'
+              return '\n'.join(lines)
+
+          for filename in files:
+              path = Path(filename)
+              text = path.read_text()
+              original = text
+              if "allowed=$(printf '%s\\n' \\" in text:
+                  start = text.rfind("allowed=$(printf '%s\\n' \\")
+                  end = text.find('| sort)', start)
+                  if start < 0 or end < 0:
+                      raise RuntimeError(f'{filename}: allowed block not found')
+                  segment = text[start:end]
+                  additions = []
+                  for item in ui + compat:
+                      if item not in segment:
+                          additions.append(f"            '{item}' \\\n")
+                  text = text[:end] + ''.join(additions) + text[end:]
+              else:
+                  marker = '          changed=$(git diff --name-only'
+                  start = text.rfind(marker)
+                  if start < 0:
+                      raise RuntimeError(f'{filename}: changed marker not found')
+                  line_end = text.find('\n', start)
+                  insertion = '\n\n' + package_block('premium_no_ultra_ui', ui) + '\n\n' + package_block('premium_no_ultra_ui_compatibility', compat) + '\n'
+                  text = text[:line_end + 1] + insertion + text[line_end + 1:]
+                  if_start = text.find('if [[ "$changed"', line_end + 1)
+                  if if_start < 0:
+                      raise RuntimeError(f'{filename}: changed comparison not found')
+                  then = text.find(']]; then', if_start)
+                  if then < 0:
+                      raise RuntimeError(f'{filename}: comparison terminator not found')
+                  extra = ' \\\n            && "$changed" != "$premium_no_ultra_ui" \\\n            && "$changed" != "$premium_no_ultra_ui_compatibility" '
+                  text = text[:then] + extra + text[then:]
+              if text == original:
+                  raise RuntimeError(f'{filename}: no change applied')
+              path.write_text(text)
+          PY
+
+          rm -f .github/workflows/bootstrap-premium-no-ultra-ui-scope.yml
+          git diff --check
+          current=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/bootstrap-premium-no-ultra-ui-scope.yml' \
+            '.github/workflows/validate-p1-m3c-emission-ui.yml' \
+            '.github/workflows/validate-p1-m3c1-terminal-refresh.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review-ui.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope-ui.yml' \
+            '.github/workflows/validate-p1-m4c-response-ui.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation-ui.yml' | sort)
+          [[ "$current" == "$expected" ]]
+      - name: Commit final six-workflow package and remove bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows
+          git commit -m 'ci: authorize exact PREMIUM no ULTRA UI successor scope'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
