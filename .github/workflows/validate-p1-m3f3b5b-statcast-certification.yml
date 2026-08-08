@@ -1,0 +1,94 @@
+name: Validate P1-M3F3B5B Statcast Certification
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3b5b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck strict Statcast certification surface
+        run: npx tsc --noEmit --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck server/mlb-statcast-matchup-certifier.ts server/mlb-statcast-matchup-certifier.test.ts server/mlb-statcast-matchup-identity-routes.ts server/mlb-statcast-matchup-identity-routes.test.ts
+      - name: Run B5B certification and route falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-statcast-matchup-certifier.test.ts \
+            server/mlb-statcast-matchup-identity-routes.test.ts
+      - name: Preserve B5A, B5 identity and prior advanced-factor provenance contracts
+        run: |
+          npx tsx --test server/mlb-statcast-matchup-coverage.test.ts
+          npx tsx --test server/mlb-statcast-matchup-vsteam-identity.test.ts
+          npx tsx --test server/mlb-statcast-quality-provenance.test.ts
+          npx tsx --test server/mlb-discipline-speed-provenance.test.ts
+          npx tsx --test server/mlb-sos-provenance.test.ts
+          npx tsx --test server/mlb-advanced-context-provenance.test.ts
+      - name: Preserve M2B conservative advanced-factor aggregation
+        run: npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Preserve production and shadow contracts
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify fail-closed certification and safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert='server/mlb-statcast-matchup-certifier.ts'
+          route='server/mlb-statcast-matchup-identity-routes.ts'
+          docs='docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+
+          grep -F 'courtedge-mlb-statcast-matchup-certification.v1' "$cert"
+          grep -F 'READINESS_COMBINED_RUN_DELTAS_AND_STARTER_ROWS' "$cert"
+          grep -F 'BASEBALL_SAVANT_CURRENT_SEASON' "$cert"
+          grep -F 'MLB_ACTIVE_ROSTER_AND_SEASON_STATS' "$cert"
+          grep -F 'MLB_STATS_BY_DATE_RANGE' "$cert"
+          grep -F 'MLB_STATS_VS_PLAYER_TOTAL_WHEN_REQUIRED' "$cert"
+          grep -F 'DEGRADE_NOT_CERTIFY' "$cert"
+          grep -F 'STATCAST_CERT_COMBINED_RUN_DELTA_MISMATCH' "$cert"
+          grep -F 'sourceStatus: certification.sourceStatus' "$route"
+          grep -F 'certification.generatedAt ? { generatedAt: certification.generatedAt }' "$route"
+          grep -F 'runDeltaMutatedByCertifier: false' "$cert" "$route"
+          grep -F 'A successful source certificate does not demonstrate predictive improvement' "$docs"
+          ! grep -Ei 'placeBet|sportsbook.*write|appendPrediction|appendSettlement|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticPromotionAllowed:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true' "$cert" "$route"
+      - name: Verify exact B5B scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' | sort)
+          [[ "$changed" == "$expected" ]]
+          ! grep -Fxq 'server/mlb-statcast-matchup.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-p1-pregame-readiness-service.ts' <<< "$changed"
