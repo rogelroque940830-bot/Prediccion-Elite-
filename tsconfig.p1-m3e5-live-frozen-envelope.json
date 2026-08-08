@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-p1-operating-envelope-frozen-live.ts",
+    "server/mlb-p1-operating-envelope-frozen-live.test.ts",
+    "server/mlb-p1-operating-envelope-frozen-routes.ts",
+    "server/mlb-p1-operating-envelope-freeze.ts",
+    "server/mlb-p1-operating-envelope-frozen-evaluation.ts",
+    "server/mlb-p1-operating-envelope-stability.ts",
+    "server/mlb-p1-operating-envelope.ts",
+    "server/mlb-p1-economic-review.ts",
+    "server/mlb-shadow-evaluation.ts",
+    "server/mlb-ledger-store.ts",
+    "server/mlb-ledger-ownership-store.ts",
+    "server/mlb-p1-scientific-capture-contract.ts",
+    "server/mlb-p1-economic-decision-adapter.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "types": ["node"],
+    "noEmit": true
+  }
+}
