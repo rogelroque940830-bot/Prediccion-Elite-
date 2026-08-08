@@ -10,7 +10,7 @@ This is therefore an integration/wiring repair, not a new predictive hypothesis.
 
 ## Repair
 
-A compatibility middleware is registered before `registerMlbCoreRoutes()` for exactly two existing GET paths:
+The compatibility middleware is registered by `registerMlbP1PregameReadinessRoutes()`, which already runs before `registerMlbCoreRoutes()`. This keeps the integration owned by M2B readiness and leaves the global route composition root unchanged. It intercepts exactly two existing GET paths:
 
 - `/api/mlb/discipline-speed/:gamePk`
 - `/api/mlb/sos/:gamePk`
