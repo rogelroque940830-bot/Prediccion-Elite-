@@ -1,0 +1,73 @@
+name: Validate P1-M3F3A Advanced Factor Provenance
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-pregame-readiness-service.ts'
+      - 'server/mlb-p1-advanced-factor-provenance.test.ts'
+      - 'docs/P1_M3F3A_ADVANCED_FACTOR_AGGREGATE_PROVENANCE.md'
+      - '.github/workflows/validate-p1-m3f3a-advanced-factor-provenance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck inherited P1-M2B readiness surface
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
+      - name: Run M3F3A falsification tests
+        run: npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Preserve P1-M2B readiness contracts
+        run: |
+          npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+          npx tsx --test server/mlb-p1-pregame-readiness-contract.test.ts
+      - name: Preserve route and production backend contracts
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Preserve real-save and shadow scientific gates
+        run: |
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify no actionability/model/promotion change
+        shell: bash
+        run: |
+          set -euo pipefail
+          service='server/mlb-p1-pregame-readiness-service.ts'
+          docs='docs/P1_M3F3A_ADVANCED_FACTOR_AGGREGATE_PROVENANCE.md'
+          grep -F 'SHADOW_DECISION_SUPPORT' "$service"
+          grep -F 'realFinancialExposure: 0' "$service"
+          grep -F 'automaticBetPlacement: false' "$service"
+          grep -F 'automaticModelChangesAllowed: false' "$service"
+          grep -F 'automaticPromotionAllowed: false' "$service"
+          grep -F 'oldest component observation time' "$docs"
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$service"
+      - name: Verify exact M3F3A scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3a-advanced-factor-provenance.yml' \
+            'docs/P1_M3F3A_ADVANCED_FACTOR_AGGREGATE_PROVENANCE.md' \
+            'server/mlb-p1-advanced-factor-provenance.test.ts' \
+            'server/mlb-p1-pregame-readiness-service.ts' | sort)
+          [[ "$changed" == "$expected" ]]

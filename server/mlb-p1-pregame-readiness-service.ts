@@ -127,6 +127,11 @@ function newest(values: readonly unknown[]): string | null {
     .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
 }
 
+function oldest(values: readonly unknown[]): string | null {
+  return values.map(iso).filter((value): value is string => value != null)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
+}
+
 function collectTimes(value: unknown, depth = 0, seen = new Set<unknown>()): string[] {
   if (depth > 4 || !value || typeof value !== "object" || seen.has(value)) return [];
   seen.add(value);
@@ -148,6 +153,15 @@ function definitions(field: MlbP1M2aField) {
 function maxAge(field: MlbP1M2aField): number {
   const values = definitions(field).map((source) => source.requiredMaxAgeSeconds);
   return values.length ? Math.min(...values) : 300;
+}
+
+function detailedAdvancedDefinitions() {
+  return definitions("ADVANCED_FACTORS").filter((source) => source.id !== "aggregate-analysis-payload");
+}
+
+function detailedAdvancedMaxAge(): number {
+  const values = detailedAdvancedDefinitions().map((source) => source.requiredMaxAgeSeconds);
+  return values.length ? Math.min(...values) : maxAge("ADVANCED_FACTORS");
 }
 
 function requiredFor(market: MlbP1M2aMarket): MlbP1M2aField[] {
@@ -172,6 +186,7 @@ function envelope(input: {
   sourceIds?: string[];
   endpoints?: string[];
   authority?: string;
+  maxAgeSeconds?: number;
 }): MlbP1M2bEvidenceEnvelope {
   const sources = definitions(input.field);
   const observedAt = input.observedAt ?? null;
@@ -185,7 +200,7 @@ function envelope(input: {
     fetchedAt: input.fetchedAt,
     observedAt,
     ageSeconds: observedAt ? Math.max(0, Math.round((input.now.getTime() - Date.parse(observedAt)) / 1000)) : null,
-    maxAgeSeconds: maxAge(input.field),
+    maxAgeSeconds: input.maxAgeSeconds ?? maxAge(input.field),
     sourceStatus: input.sourceStatus,
     quality: input.quality,
     details: input.details ?? {},
@@ -511,6 +526,123 @@ function fieldUrls(field: MlbP1M2aField, base: string, gamePk: number, home: str
   return [];
 }
 
+function advancedComponentStatus(data: any): string | null {
+  const status = clean(
+    data?.sourceStatus
+    ?? data?.provenance?.sourceStatus
+    ?? data?.provenance?.status,
+  ).toUpperCase();
+  return status || null;
+}
+
+function advancedComponentTime(data: any): string | null {
+  return oldest([
+    data?.observedAt,
+    data?.generatedAt,
+    data?.fetchedAt,
+    data?.providerLastUpdate,
+    data?.provenance?.observedAt,
+    data?.provenance?.generatedAt,
+    data?.provenance?.fetchedAt,
+    data?.provenance?.providerLastUpdate,
+  ]);
+}
+
+async function advancedDerived(
+  urls: string[],
+  fetchImpl: FetchLike,
+  fetchedAt: string,
+  timeoutMs: number,
+  required: boolean,
+  now: Date,
+): Promise<MlbP1M2bEvidenceEnvelope> {
+  const calls = await Promise.all(urls.map((url) => fetchJson(fetchImpl, url, fetchedAt, timeoutMs)));
+  const successful = calls.filter((call) => call.ok);
+  const maxAgeSeconds = detailedAdvancedMaxAge();
+  const components = calls.map((call) => {
+    const explicitTimestamp = call.ok ? advancedComponentTime(call.data) : null;
+    const sourceStatus = call.ok ? advancedComponentStatus(call.data) : null;
+    const certified = sourceStatus === "CERTIFIED";
+    const freshness = explicitTimestamp
+      ? classifyMlbP1M2aFreshness({ observedAt: explicitTimestamp, now, maxAgeSeconds })
+      : "UNKNOWN";
+    return {
+      endpoint: call.url,
+      ok: call.ok,
+      status: call.status,
+      durationMs: call.durationMs,
+      sourceStatus,
+      certified,
+      explicitTimestamp,
+      freshness,
+      error: call.error,
+    };
+  });
+  const observedAt = oldest(components.map((component) => component.explicitTimestamp));
+  const uncertified = components.filter((component) => component.ok && !component.certified);
+  const untimed = components.filter((component) => component.ok && !component.explicitTimestamp);
+  const stale = components.filter((component) => component.ok && component.explicitTimestamp && component.freshness === "STALE");
+  const unknownFreshness = components.filter((component) => component.ok && component.explicitTimestamp && component.freshness === "UNKNOWN");
+
+  let state: MlbP1M2aEvidenceState;
+  let quality: string;
+  if (!successful.length) {
+    state = "MISSING";
+    quality = "UNAVAILABLE";
+  } else if (successful.length < calls.length) {
+    state = "DEGRADED";
+    quality = "PARTIAL_SOURCE_COVERAGE";
+  } else if (uncertified.length > 0) {
+    state = "DEGRADED";
+    quality = "ADVANCED_COMPONENT_NOT_CERTIFIED";
+  } else if (untimed.length > 0) {
+    state = "DEGRADED";
+    quality = "ADVANCED_COMPONENT_WITHOUT_EXPLICIT_TIMESTAMP";
+  } else if (stale.length > 0) {
+    state = "STALE";
+    quality = "CERTIFIED_COMPONENT_SET_STALE";
+  } else if (unknownFreshness.length > 0 || !observedAt) {
+    state = "DEGRADED";
+    quality = "CERTIFIED_COMPONENT_TIME_UNKNOWN";
+  } else {
+    state = "FRESH";
+    quality = "CERTIFIED_COMPONENT_SET";
+  }
+
+  const detailedSources = detailedAdvancedDefinitions();
+  const errors = [
+    ...calls.filter((call) => !call.ok).map((call) => `${call.url}: ${call.error || "FAILED"}`),
+    ...uncertified.map((component) => `${component.endpoint}: ADVANCED_COMPONENT_UNCERTIFIED:${component.sourceStatus || "MISSING"}`),
+    ...untimed.map((component) => `${component.endpoint}: ADVANCED_COMPONENT_UNTIMED`),
+    ...stale.map((component) => `${component.endpoint}: ADVANCED_COMPONENT_STALE`),
+    ...unknownFreshness.map((component) => `${component.endpoint}: ADVANCED_COMPONENT_TIME_UNKNOWN`),
+  ];
+  if (state !== "FRESH") errors.push(`ADVANCED_FACTORS_${state}`);
+
+  return envelope({
+    field: "ADVANCED_FACTORS",
+    required,
+    state,
+    fetchedAt,
+    observedAt,
+    now,
+    sourceStatus: `${components.filter((component) => component.certified).length}/${calls.length}_COMPONENTS_CERTIFIED`,
+    quality,
+    endpoints: urls,
+    sourceIds: detailedSources.map((source) => source.id),
+    authority: detailedSources.map((source) => source.authority).join("+") || "DERIVED",
+    maxAgeSeconds,
+    details: {
+      requested: calls.length,
+      available: successful.length,
+      certified: components.filter((component) => component.certified).length,
+      timingPolicy: "OLDEST_CERTIFIED_COMPONENT",
+      calls: components,
+    },
+    errors,
+  });
+}
+
 async function derived(
   field: MlbP1M2aField,
   urls: string[],
@@ -520,6 +652,9 @@ async function derived(
   required: boolean,
   now: Date,
 ): Promise<MlbP1M2bEvidenceEnvelope> {
+  if (field === "ADVANCED_FACTORS") {
+    return advancedDerived(urls, fetchImpl, fetchedAt, timeoutMs, required, now);
+  }
   const calls = await Promise.all(urls.map((url) => fetchJson(fetchImpl, url, fetchedAt, timeoutMs)));
   const successful = calls.filter((call) => call.ok);
   const observedAt = newest(successful.flatMap((call) => collectTimes(call.data)));
