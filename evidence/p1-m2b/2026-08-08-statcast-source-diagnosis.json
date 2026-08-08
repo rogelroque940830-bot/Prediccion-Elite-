@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "p1-m2b-statcast-source-diagnosis.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "f7f6cbc3cb857ea5a4f2a6e74fc8016a73fff726",
+    "blockerResearchPr": 405,
+    "blockerWorkflowRun": 31272416324,
+    "blockerArtifactId": 9026005676,
+    "sourceResearchPr": 406,
+    "sourceWorkflowRun": 31272690518,
+    "sourceArtifactId": 9026084797,
+    "rawIdentityPersisted": false
+  },
+  "currentStatcastCertification": {
+    "sourceStatus": "DEGRADED",
+    "sampledPregameGames": 3,
+    "commonBlockers": [
+      "STATCAST_MATCHUP_VISIBLE_COVERAGE_INCOMPLETE",
+      "STATCAST_MATCHUP_PITCHER_ARSENAL_PROVENANCE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_BULLPEN_ROSTER_COVERAGE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_RECENT_BATTER_STATS_COVERAGE_UNOBSERVABLE",
+      "STATCAST_MATCHUP_CACHE_OBSERVATION_TIMES_UNOBSERVABLE"
+    ],
+    "visibleCoverage": {
+      "confirmedNinePlayerLineupsObserved": true,
+      "starterArsenalsPresent": true,
+      "bullpensEvaluated": true,
+      "historyQueriesSuccessful": true,
+      "historyFailuresObserved": 0,
+      "universalFailure": "NOT_ALL_BATTERS_DIRECT; TEAM_PROXY_PRESENT"
+    }
+  },
+  "sourceDiagnosis": {
+    "officialParameterNames": ["min", "minPitches", "pitchType"],
+    "legacySnakeCaseParametersIneffective": true,
+    "qualifiedSource": { "rows": 895, "uniquePlayers": 356 },
+    "inclusiveOfficialSource": { "rows": 4979, "uniquePlayers": 622 },
+    "internalEvidenceRulePreserved": {
+      "minimumPitchesPerPitchType": 30,
+      "minimumArsenalCoveragePct": 60
+    },
+    "measuredSides": 6,
+    "currentDirectBattersTotal": 13,
+    "projectedInclusiveDirectBattersTotal": 41,
+    "inclusiveNineOfNineSides": 3,
+    "qualifiedSimulationMatchedCurrentEngineAllSides": true
+  },
+  "interpretation": {
+    "certifierRuleShouldBeRelaxed": false,
+    "modelFormulaShouldChange": false,
+    "sourceAcquisitionCanIncreaseDirectCoverage": true,
+    "sourceAcquisitionGuaranteesNineOfNineEveryGame": false,
+    "recommendedNextAction": "ALIGN_BATTER_SOURCE_ACQUISITION_WITH_OFFICIAL_SAVANT_PARAMETERS_WHILE_PRESERVING_INTERNAL_30_PITCH_AND_60_PERCENT_RULE; KEEP_STATCAST_FAIL_CLOSED_WHEN_9_OF_9_DIRECT_IS_NOT_AVAILABLE"
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "rawIdentityPersisted": false
+  }
+}
