@@ -1,0 +1,69 @@
+name: Validate P1-M3F3B1 Statcast Quality Provenance
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-statcast-quality.ts'
+      - 'server/mlb-statcast-quality-provenance.test.ts'
+      - 'docs/P1_M3F3B1_STATCAST_QUALITY_PROVENANCE.md'
+      - '.github/workflows/validate-p1-m3f3b1-statcast-quality-provenance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3b1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck quality source and inherited readiness
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
+      - name: Run M3F3B1 provenance falsification tests
+        run: npx tsx --test server/mlb-statcast-quality-provenance.test.ts
+      - name: Preserve M3F3A and M2B readiness behavior
+        run: |
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+          npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+          npx tsx --test server/mlb-p1-pregame-readiness-contract.test.ts
+      - name: Preserve production and shadow contracts
+        run: |
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify certification and no model change
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-statcast-quality.ts'
+          docs='docs/P1_M3F3B1_STATCAST_QUALITY_PROVENANCE.md'
+          grep -F 'courtedge-mlb-statcast-quality-evidence.v1' "$source"
+          grep -F 'THROW_FAIL_CLOSED' "$source"
+          grep -F 'cacheMaxAgeSeconds: 21_600' "$source"
+          grep -F 'No model, probability, threshold' "$docs"
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
+      - name: Verify exact M3F3B1 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b1-statcast-quality-provenance.yml' \
+            'docs/P1_M3F3B1_STATCAST_QUALITY_PROVENANCE.md' \
+            'server/mlb-statcast-quality-provenance.test.ts' \
+            'server/mlb-statcast-quality.ts' | sort)
+          [[ "$changed" == "$expected" ]]
