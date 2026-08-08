@@ -1,0 +1,85 @@
+name: Temporary P1-M2B Patch Statcast Engine Source
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/temp-p1-m2b-patch-statcast-engine-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-engine-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Apply exact source-acquisition patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('server/mlb-statcast-matchup.ts')
+          source = path.read_text()
+
+          import_line = 'import { buildSavantPitchArsenalUrl } from "./mlb-statcast-savant-source";\n\n'
+          if import_line not in source:
+              source = import_line + source
+
+          old_cache = '''let batterArsenalCache: { ts: number; year: number; data: BatterPitchStats[] } | null = null;\nlet pitcherArsenalCache: { ts: number; year: number; data: Record<number, PitcherArsenal> } | null = null;'''
+          new_cache = '''type BatterArsenalSourceMode = "DIRECT_INCLUSIVE" | "QUALIFIED_PROXY";\nconst batterArsenalCaches: Record<BatterArsenalSourceMode, { ts: number; year: number; data: BatterPitchStats[] } | null> = {\n  DIRECT_INCLUSIVE: null,\n  QUALIFIED_PROXY: null,\n};\nlet pitcherArsenalCache: { ts: number; year: number; data: Record<number, PitcherArsenal> } | null = null;'''
+          if old_cache not in source and new_cache not in source:
+              raise SystemExit('batter cache anchor missing')
+          source = source.replace(old_cache, new_cache)
+
+          pattern = re.compile(r'async function loadBatterArsenal\(year: number\): Promise<BatterPitchStats\[]> \{.*?\n\}\n\n(?=async function loadTeamArsenal)', re.S)
+          replacement = '''async function loadBatterArsenalFromSavant(\n  year: number,\n  mode: BatterArsenalSourceMode,\n): Promise<BatterPitchStats[]> {\n  const cached = batterArsenalCaches[mode];\n  if (cached && cached.year === year && Date.now() - cached.ts < CACHE_TTL) {\n    return cached.data;\n  }\n  const coverage = mode === "DIRECT_INCLUSIVE" ? "INCLUSIVE" : "QUALIFIED";\n  const url = buildSavantPitchArsenalUrl({ role: "batter", year, coverage });\n  const csv = await fetchSavantCsv(url);\n  if (!csv) return cached?.data ?? [];\n  const rows = parseCsv(csv);\n  const data: BatterPitchStats[] = rows.map(r => ({\n    playerId: parseInt(r["player_id"]),\n    playerName: r["last_name, first_name"],\n    team: r["team_name_alt"],\n    pitchType: r["pitch_type"],\n    pitchName: r["pitch_name"],\n    pitches: parseInt(r["pitches"]) || 0,\n    pa: parseInt(r["pa"]) || 0,\n    ba: parseFloat(r["ba"]) || 0,\n    slg: parseFloat(r["slg"]) || 0,\n    woba: parseFloat(r["woba"]) || 0,\n    xwoba: parseFloat(r["est_woba"]) || parseFloat(r["woba"]) || 0,\n    whiff: parseFloat(r["whiff_percent"]) || 0,\n    k: parseFloat(r["k_percent"]) || 0,\n    hardHit: parseFloat(r["hard_hit_percent"]) || 0,\n    runValue100: parseFloat(r["run_value_per_100"]) || 0,\n  })).filter(r => r.playerId > 0);\n  batterArsenalCaches[mode] = { ts: Date.now(), year, data };\n  return data;\n}\n\nasync function loadBatterArsenal(year: number): Promise<BatterPitchStats[]> {\n  return loadBatterArsenalFromSavant(year, "DIRECT_INCLUSIVE");\n}\n\nasync function loadQualifiedBatterArsenal(year: number): Promise<BatterPitchStats[]> {\n  return loadBatterArsenalFromSavant(year, "QUALIFIED_PROXY");\n}\n\n'''
+          source, count = pattern.subn(replacement, source, count=1)
+          if count != 1:
+              if 'async function loadQualifiedBatterArsenal' not in source:
+                  raise SystemExit(f'loadBatterArsenal replacement count={count}')
+
+          source = source.replace(
+              '  const data = await loadBatterArsenal(year);\n  const byTeam:',
+              '  const data = await loadQualifiedBatterArsenal(year);\n  const byTeam:',
+              1,
+          )
+
+          old_pitcher_url = '  const url = `https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats?type=pitcher&pitch_type=ALL&min_pa=q&min_pitches=q&year=${year}&team=&csv=true`;'
+          new_pitcher_url = '  const url = buildSavantPitchArsenalUrl({ role: "pitcher", year, coverage: "QUALIFIED" });'
+          if old_pitcher_url not in source and new_pitcher_url not in source:
+              raise SystemExit('pitcher url anchor missing')
+          source = source.replace(old_pitcher_url, new_pitcher_url, 1)
+
+          source = source.replace(
+              '//   - Savant requiere min_pitches=qualified → excluye rookies con muestra chica',
+              '//   - Savant Qualified puede excluir pitchers con muestra chica',
+          )
+          source = source.replace(
+              '// Bug: Savant CSV con min_pa=q excluye pitchers con sample bajo por pitch type.',
+              '// Bug histórico: Savant Qualified excluye pitchers con sample bajo por pitch type.',
+          )
+
+          path.write_text(source)
+          PY
+
+          git diff --check
+          grep -F 'buildSavantPitchArsenalUrl({ role: "batter", year, coverage })' server/mlb-statcast-matchup.ts
+          grep -F 'loadBatterArsenalFromSavant(year, "DIRECT_INCLUSIVE")' server/mlb-statcast-matchup.ts
+          grep -F 'loadBatterArsenalFromSavant(year, "QUALIFIED_PROXY")' server/mlb-statcast-matchup.ts
+          grep -F 'const data = await loadQualifiedBatterArsenal(year);' server/mlb-statcast-matchup.ts
+          grep -F 'buildSavantPitchArsenalUrl({ role: "pitcher", year, coverage: "QUALIFIED" })' server/mlb-statcast-matchup.ts
+          ! grep -F 'pitch_type=ALL&min_pa=q&min_pitches=q' server/mlb-statcast-matchup.ts
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/mlb-statcast-matchup.ts
+          git commit -m 'P1-M2B: separate direct and proxy Savant acquisition'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
