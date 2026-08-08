@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "p1-m3e5-live-owner-cohort-evidence.v1",
+  "generatedAt": "2026-08-08T17:12:38.899Z",
+  "chainOfCustody": {
+    "backendCommit": "9205dfc6567ead4e8b27b84f4440a370ab314a22",
+    "researchPr": 392,
+    "workflowRun": 31268788005,
+    "artifactId": 9024971742,
+    "artifactDigest": "sha256:6c34dcf5f6d4108a923b8d679aaedd13762b7f5079787e27e81fedd940da9fbe",
+    "rawOwnerExportSha256": "e4d02902513a2563bab7a317987d38f1fdd2e7cfb451742e0a9618d0e6a096a1",
+    "rawOwnerExportUploaded": false
+  },
+  "deployment": {
+    "environment": "p0-integration",
+    "exactExpectedCommitObserved": true,
+    "frozenRouteAnonymousStatus": 401,
+    "frozenRouteAnonymousCode": "INTERACTIVE_SESSION_REQUIRED"
+  },
+  "ownerLedger": {
+    "exportedRecords": 2676,
+    "publicLedgerPredictions": 2676,
+    "publicLedgerSettlementEvents": 2607,
+    "ownershipOwners": 1,
+    "unownedPredictions": 0,
+    "completeAgainstPublicLedger": true
+  },
+  "p1M3d": {
+    "state": "PRELIMINARY_REVIEW_ONLY",
+    "interactiveLedgerRecords": 12,
+    "lifecycleChains": 10,
+    "terminalLeaves": 10,
+    "uniqueAnalyticalDecisions": 10,
+    "analyticalDuplicatesExcluded": 0,
+    "lifecycleBranchesExcluded": 0,
+    "malformedInteractiveRecordsExcluded": 0,
+    "economicLayersValid": 10,
+    "economicLayersInvalid": 0,
+    "settledDecisions": 9,
+    "pendingDecisions": 1,
+    "clvCoveredDecisions": 0,
+    "provisionalToFinalChains": 0,
+    "finalOnlyChains": 0,
+    "provisionalOnlyChains": 10,
+    "readinessRecommendation": "KEEP_COLLECTING_INTERACTIVE_SHADOW_EVIDENCE",
+    "conclusionsAllowed": false,
+    "descriptiveOnly": {
+      "settled": 9,
+      "wins": 4,
+      "losses": 5,
+      "hitRatePct": 44.44,
+      "flatStakeProfitUnits": -2.495,
+      "flatStakeRoiPct": -27.7222,
+      "brierScore": 0.274189,
+      "logLoss": 0.750026,
+      "meanModelProbability": 0.65014,
+      "observedWinRate": 0.444444,
+      "meanMarketImpliedProbability": 0.604268,
+      "meanEdgePp": 5.1899,
+      "clvCoveragePct": 0
+    }
+  },
+  "p1M3e5": {
+    "state": "WAITING_FOR_FREEZE",
+    "analysisPerformed": true,
+    "sourceWindowComplete": true,
+    "inputRows": 10,
+    "eligiblePregameRows": 10,
+    "eligibleDistinctDates": 3,
+    "minimumPregameDecisions": 120,
+    "minimumDistinctDates": 36,
+    "freezeManifest": null,
+    "evaluationState": "WAITING_FOR_FREEZE",
+    "evaluationBlockers": [
+      "P1_M3E4_FROZEN_MANIFEST_REQUIRED"
+    ],
+    "stableModelQualityEnvelopeSupported": false,
+    "economicProfitabilityCertified": false
+  },
+  "safety": {
+    "privateRawLedgerPersistedInArtifact": false,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "realFinancialExposure": 0,
+    "predictionsBefore": 2676,
+    "predictionsAfter": 2676,
+    "settlementEventsBefore": 2607,
+    "settlementEventsAfter": 2607,
+    "ledgerUnchanged": true,
+    "automaticModelChangesAllowed": false,
+    "automaticPromotionAllowed": false
+  },
+  "decision": {
+    "freezeThresholdsChanged": false,
+    "modelOrThresholdChangeAuthorized": false,
+    "nextScientificBottleneck": "ACCUMULATE_GENUINE_TERMINAL_INTERACTIVE_PREGAME_DECISIONS_AND_DATE_DIVERSITY"
+  }
+}
