@@ -161,6 +161,8 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   const data = record(envelope?.data);
   const prereg = record(data?.preregistration);
   const cohort = record(data?.cohort);
+  const candidate = record(data?.candidate);
+  const control = record(data?.control);
   const inference = record(data?.inference);
   const criteria = record(data?.criteria);
   const interpretation = record(data?.interpretation);
@@ -194,13 +196,38 @@ export function parseMlbPremiumNoUltraEnvelope(value: unknown): MlbPremiumNoUltr
   if (Number(cohort?.candidateGames) + Number(cohort?.controlGames) !== Number(cohort?.independentGames)) fail("independent_accounting");
   if (Number(cohort?.candidateSettled) > Number(cohort?.candidateGames) || Number(cohort?.controlSettled) > Number(cohort?.controlGames)) fail("settled_accounting");
 
-  if (!validMetric(data?.candidate) || !validMetric(data?.control)) fail("metrics");
+  if (!validMetric(candidate) || !validMetric(control)) fail("metrics");
+  if (candidate.settled !== cohort?.candidateSettled || candidate.dates !== cohort?.candidateDates) fail("candidate_metric_cohort_parity");
+  if (control.settled !== cohort?.controlSettled || control.dates !== cohort?.controlDates) fail("control_metric_cohort_parity");
   if (!nonNegativeInteger(inference?.dateClusters)) fail("date_clusters");
   if (inference?.candidateRoiPct !== null && !validInterval(inference?.candidateRoiPct)) fail("candidate_roi_interval");
   if (inference?.candidateMinusControlRoiPp !== null && !validInterval(inference?.candidateMinusControlRoiPp)) fail("incremental_roi_interval");
 
   const criterionKeys = ["minimumCandidateSampleAccepted", "minimumControlSampleAccepted", "candidateRoiLower95Positive", "candidateMinusControlRoiLower95Positive", "meanClvPositive", "properScoringNotWorse", "calibrationAccepted", "allAccepted"];
   for (const key of criterionKeys) if (typeof criteria?.[key] !== "boolean") fail(`criterion_${key}`);
+
+  const expectedCandidateSample = candidate.settled >= Number(prereg.minimumCandidateSettled)
+    && candidate.dates >= Number(prereg.minimumCandidateDates);
+  const expectedControlSample = control.settled >= Number(prereg.minimumControlSettled)
+    && control.dates >= Number(prereg.minimumControlDates);
+  if (criteria?.minimumCandidateSampleAccepted !== expectedCandidateSample) fail("candidate_sample_criterion_parity");
+  if (criteria?.minimumControlSampleAccepted !== expectedControlSample) fail("control_sample_criterion_parity");
+
+  const candidateRoiInterval = inference?.candidateRoiPct as MlbPremiumNoUltraInterval | null;
+  const differenceInterval = inference?.candidateMinusControlRoiPp as MlbPremiumNoUltraInterval | null;
+  if (criteria?.candidateRoiLower95Positive !== (candidateRoiInterval != null && candidateRoiInterval.lower > 0)) fail("roi_criterion_parity");
+  if (criteria?.candidateMinusControlRoiLower95Positive !== (differenceInterval != null && differenceInterval.lower > 0)) fail("incremental_roi_criterion_parity");
+  if (criteria?.meanClvPositive !== (candidate.meanClvPp != null && candidate.meanClvPp > 0)) fail("clv_criterion_parity");
+  const expectedProperScoring = candidate.brierScore != null && control.brierScore != null
+    && candidate.logLoss != null && control.logLoss != null
+    && candidate.brierScore <= control.brierScore
+    && candidate.logLoss <= control.logLoss;
+  if (criteria?.properScoringNotWorse !== expectedProperScoring) fail("proper_scoring_criterion_parity");
+  const expectedCalibration = candidate.calibrationGap != null && control.calibrationGap != null
+    && candidate.calibrationGap <= 0.05
+    && candidate.calibrationGap <= control.calibrationGap + 0.01;
+  if (criteria?.calibrationAccepted !== expectedCalibration) fail("calibration_criterion_parity");
+
   const expectedAll = criterionKeys.filter((key) => key !== "allAccepted").every((key) => criteria?.[key] === true);
   if (criteria?.allAccepted !== expectedAll) fail("criteria_parity");
   if ((data?.state === "ECONOMIC_EDGE_SUPPORTED_RESEARCH_ONLY") !== criteria?.allAccepted) fail("supported_state_parity");
