@@ -12,17 +12,21 @@ on:
       - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
       - 'server/mlb-statcast-matchup-identity-routes.ts'
       - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE.md'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
       - 'tsconfig.p1-m3e-operating-envelope.json'
       - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
       - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
@@ -126,6 +130,7 @@ jobs:
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
@@ -140,10 +145,19 @@ jobs:
             'server/routes.ts' \
             'tsconfig.p1-m3f3b5-vsteam-identity.json' | sort)
 
+          b5b_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' | sort)
+
           if [[ "$changed" != "$m3e_package" \
             && "$changed" != "$compatibility_package" \
-            && "$changed" != "$b5_successor" ]]; then
-            echo 'P1-M3E scope rejected. Diff must be exactly the M3E read-only package, the B5 identity-safe successor package, or the six-workflow compatibility package.' >&2
+            && "$changed" != "$b5_successor" \
+            && "$changed" != "$b5b_successor" ]]; then
+            echo 'P1-M3E scope rejected. Diff must be exactly the M3E read-only package, the B5 identity-safe package, the B5B certification package, or the seven-workflow compatibility package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
