@@ -22,6 +22,8 @@ on:
       - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
       - 'server/mlb-statcast-matchup-identity-routes.ts'
       - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
       - 'server/security.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
@@ -29,6 +31,7 @@ on:
       - 'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md'
       - 'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
       - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
       - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
       - 'tsconfig.p1-m3b-mlb-scientific-capture.json'
@@ -41,6 +44,7 @@ on:
       - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
       - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
       - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
       - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
       - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
@@ -110,19 +114,21 @@ jobs:
 
           # P1-M3B remains the protected write boundary. Later phases may only
           # extend the paired write service or add owner-scoped/read-only or
-          # identity-safe analytical successor surfaces. P1-M3E and P1-M3F3B5
+          # identity-safe analytical successor surfaces. P1-M3E and P1-M3F3B5/B5B
           # cannot write the ledger or create financial exposure.
           allowed=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
             '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
             '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
             '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
             'docs/P1_M3D_INTERACTIVE_ECONOMIC_REVIEW.md' \
             'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
             'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
             'docs/P1_M4C_BACKEND_ECONOMIC_RESPONSE.md' \
             'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
             'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
@@ -138,6 +144,8 @@ jobs:
             'server/mlb-p1-real-cohort-activation.ts' \
             'server/mlb-p1-scientific-capture-service.test.ts' \
             'server/mlb-p1-scientific-capture-service.ts' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
             'server/mlb-statcast-matchup-identity-routes.test.ts' \
             'server/mlb-statcast-matchup-identity-routes.ts' \
             'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
