@@ -9,10 +9,20 @@ on:
       - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
       - 'server/mlb-statcast-matchup-identity-routes.ts'
       - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
       - 'server/routes.ts'
       - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
       - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
       - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
 
 permissions:
   contents: read
@@ -83,7 +93,7 @@ jobs:
           NODE
 
           ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$fix" "$route"
-      - name: Verify exact P1-M3F3B5 scope
+      - name: Verify exact P1-M3F3B5 or B5B successor scope
         shell: bash
         run: |
           set -euo pipefail
@@ -91,7 +101,8 @@ jobs:
           head='${{ github.event.pull_request.head.sha }}'
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+
+          b5_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
             'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
             'server/mlb-statcast-matchup-identity-routes.test.ts' \
@@ -100,5 +111,29 @@ jobs:
             'server/mlb-statcast-matchup-vsteam-identity.ts' \
             'server/routes.ts' \
             'tsconfig.p1-m3f3b5-vsteam-identity.json' | sort)
-          [[ "$changed" == "$expected" ]]
+
+          b5b_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' | sort)
+
+          compatibility_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+
+          if [[ "$changed" != "$b5_package" \
+            && "$changed" != "$b5b_successor" \
+            && "$changed" != "$compatibility_package" ]]; then
+            echo 'P1-M3F3B5 scope rejected. Diff must be exactly the original B5 identity package, the exact B5B certification successor, or the seven-workflow compatibility package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
           ! grep -Fxq 'server/mlb-statcast-matchup.ts' <<< "$changed"
