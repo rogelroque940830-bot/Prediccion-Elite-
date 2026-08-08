@@ -1,0 +1,104 @@
+name: Research P0 Exact Nixpacks Boot Smoke
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p0-exact-nixpacks-boot-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-nixpacks-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p0-exact-nixpacks-boot-smoke.yml' ]]
+
+      - name: Reproduce Nixpacks install and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install
+          npm run build:backend
+
+      - name: Reproduce Nixpacks start command and prove health
+        shell: bash
+        env:
+          NODE_ENV: test
+          PORT: '5056'
+          BDL_API_KEY: nixpacks-smoke-placeholder
+          ODDS_API_KEY: nixpacks-smoke-placeholder
+          COURTEDGE_WRITE_TOKEN: nixpacks-smoke-write-token
+          COURTEDGE_SESSION_SECRET: nixpacks-smoke-session-secret
+          COURTEDGE_ADMIN_USERNAME: admin
+          RAILWAY_GIT_COMMIT_SHA: exact-nixpacks-smoke
+          MLB_LEDGER_AUTO_SETTLE: 'false'
+          MLB_CLOSING_LINE_CAPTURE: 'false'
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          node dist/index.cjs > audit/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          code='000'
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 5 http://127.0.0.1:5056/health || true)
+            [[ "$code" == '200' ]] && break
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          running=false
+          kill -0 "$pid" 2>/dev/null && running=true
+          NODE_VERSION="$(node --version)" NPM_VERSION="$(npm --version)" HTTP_CODE="$code" PROCESS_RUNNING="$running" node <<'NODE'
+          const fs=require('fs');
+          let health=null;
+          try{health=JSON.parse(fs.readFileSync('audit/health.json','utf8'));}catch{}
+          const result={
+            schemaVersion:'p0-exact-nixpacks-boot-smoke.v1',
+            nodeVersion:process.env.NODE_VERSION,
+            npmVersion:process.env.NPM_VERSION,
+            installCommand:'npm install',
+            buildCommand:'npm run build:backend',
+            startCommand:'node dist/index.cjs',
+            httpStatus:process.env.HTTP_CODE,
+            processRunning:process.env.PROCESS_RUNNING==='true',
+            healthStatus:health?.status||null,
+            commit:health?.commit||null,
+            bootSucceeded:process.env.HTTP_CODE==='200'&&process.env.PROCESS_RUNNING==='true'
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          NODE
+          if [[ "$code" != '200' ]]; then
+            echo '--- exact Nixpacks server log ---'
+            cat audit/server.log
+            exit 1
+          fi
+
+      - name: Upload exact Nixpacks boot evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-exact-nixpacks-boot-smoke
+          path: |
+            audit/result.json
+            audit/server.log
+          if-no-files-found: error
+          retention-days: 14
