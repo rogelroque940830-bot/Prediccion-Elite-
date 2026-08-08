@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MlbOperatingEnvelopeCard } from "@/components/mlb-operating-envelope-card";
+import { MlbPremiumNoUltraCard } from "@/components/mlb-premium-no-ultra-card";
 import { MlbRealCohortActivationCard } from "@/components/mlb-real-cohort-activation-card";
 import { fetchJson } from "@/lib/queryClient";
 import {
@@ -14,6 +15,10 @@ import {
   MLB_P1_M3E_ENDPOINT,
   parseMlbP1M3eEnvelope,
 } from "@/lib/mlb-operating-envelope";
+import {
+  MLB_PREMIUM_NO_ULTRA_ENDPOINT,
+  parseMlbPremiumNoUltraEnvelope,
+} from "@/lib/mlb-premium-no-ultra-prospective";
 import { parseMlbP1M5aActivation } from "@/lib/mlb-real-cohort-activation";
 import MlbEconomicReview from "@/pages/mlb-economic-review";
 
@@ -49,6 +54,16 @@ export default function MlbEconomicReviewActivated() {
     refetchOnMount: "always",
   });
 
+  const premiumNoUltraQuery = useQuery({
+    queryKey: ["p1-premium-no-ultra-prospective"],
+    queryFn: async () => {
+      const raw = await fetchJson<unknown>(MLB_PREMIUM_NO_ULTRA_ENDPOINT);
+      return parseMlbPremiumNoUltraEnvelope(raw).data;
+    },
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+
   let activation = null;
   let activationError: string | null = null;
   if (reviewQuery.data) {
@@ -76,6 +91,12 @@ export default function MlbEconomicReviewActivated() {
     ? operatingEnvelopeQuery.error instanceof Error
       ? operatingEnvelopeQuery.error.message
       : "P1_M3E_OPERATING_ENVELOPE_UNAVAILABLE"
+    : null;
+
+  const premiumNoUltraError = premiumNoUltraQuery.isError
+    ? premiumNoUltraQuery.error instanceof Error
+      ? premiumNoUltraQuery.error.message
+      : "PREMIUM_NO_ULTRA_PROSPECTIVE_UNAVAILABLE"
     : null;
 
   return (
@@ -142,6 +163,42 @@ export default function MlbEconomicReviewActivated() {
               </p>
               <Button className="mt-3" variant="outline" size="sm" onClick={() => void operatingEnvelopeQuery.refetch()}>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Reintentar M3E
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {premiumNoUltraQuery.isLoading && (
+          <Card className="mt-4 border-cyan-500/25 bg-cyan-500/[0.04]" data-testid="premium-no-ultra-loading">
+            <CardContent className="flex items-center gap-3 p-5">
+              <RefreshCw className="h-5 w-5 animate-spin text-cyan-300" />
+              <div>
+                <p className="font-semibold">Actualizando edge prospectivo F5</p>
+                <p className="text-sm text-muted-foreground">Contando solo juegos FINAL nuevos posteriores al corte del 08/08/2026.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {premiumNoUltraQuery.data && (
+          <MlbPremiumNoUltraCard
+            report={premiumNoUltraQuery.data}
+            isFetching={premiumNoUltraQuery.isFetching}
+            onRefresh={() => void premiumNoUltraQuery.refetch()}
+          />
+        )}
+
+        {premiumNoUltraError && (
+          <Card className="mt-4 border-red-500/35 bg-red-500/[0.06]" data-testid="premium-no-ultra-error">
+            <CardContent className="p-5 text-center">
+              <AlertTriangle className="mx-auto h-7 w-7 text-red-300" />
+              <p className="mt-2 font-semibold text-red-100">Edge prospectivo F5 no disponible</p>
+              <p className="mt-1 text-xs text-muted-foreground">{premiumNoUltraError}</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                No se infiere ni se activa una ventaja económica si el backend no puede reconstruir la cohorte completa y segura.
+              </p>
+              <Button className="mt-3" variant="outline" size="sm" onClick={() => void premiumNoUltraQuery.refetch()}>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Reintentar edge
               </Button>
             </CardContent>
           </Card>
