@@ -7,6 +7,7 @@ on:
     paths:
       - 'server/market-support-routes.ts'
       - 'server/market-support-routes.advanced-runtime.test.ts'
+      - 'server/mlb-advanced.ts'
       - 'tsconfig.p1-m2b-advanced-route-runtime.json'
       - 'docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md'
       - '.github/workflows/validate-p1-m2b-advanced-route-runtime.yml'
@@ -67,6 +68,7 @@ jobs:
           set -euo pipefail
           route='server/market-support-routes.ts'
           testfile='server/market-support-routes.advanced-runtime.test.ts'
+          park='server/mlb-advanced.ts'
           docs='docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md'
 
           grep -F 'const MLB_BASE_V11 = "https://statsapi.mlb.com/api/v1.1"' "$route"
@@ -75,13 +77,16 @@ jobs:
           grep -F '${MLB_BASE_V11}/game/${gamePk}/feed/live' "$route"
           grep -F 'season=${MLB_SEASON_CURRENT}' "$route"
           grep -F 'app.get("/api/mlb/advanced/:gamePk"' "$route"
-          grep -F 'unexpected fetch:' "$testfile"
+          grep -F 'PARK_FACTORS[19]?.name, "Coors Field"' "$testfile"
+          grep -F 'PARK_FACTORS[32]?.name, "American Family Fld"' "$testfile"
           grep -F 'getGameMeta is not defined' "$docs"
           grep -F 'MLB_SEASON_CURRENT' "$docs"
 
+          [[ $(grep -Ec '^[[:space:]]*19:[[:space:]]*\{' "$park") -eq 1 ]]
+          [[ $(grep -Ec '^[[:space:]]*32:[[:space:]]*\{' "$park") -eq 1 ]]
           ! grep -F 'const MLB_SEASON_CURRENT = "2026"' "$route"
           ! grep -E 'appendPrediction\(|appendSettlement\(|sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$route"
-      - name: Verify exact five-file scope
+      - name: Verify exact six-file scope
         shell: bash
         run: |
           set -euo pipefail
@@ -94,6 +99,7 @@ jobs:
             'docs/P1_M2B_ADVANCED_ROUTE_RUNTIME_REPAIR.md' \
             'server/market-support-routes.advanced-runtime.test.ts' \
             'server/market-support-routes.ts' \
+            'server/mlb-advanced.ts' \
             'tsconfig.p1-m2b-advanced-route-runtime.json' | sort)
           if [[ "$changed" != "$expected" ]]; then
             echo 'P1-M2B advanced runtime scope rejected.' >&2
