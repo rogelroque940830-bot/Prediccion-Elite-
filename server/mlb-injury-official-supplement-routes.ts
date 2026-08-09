@@ -32,7 +32,9 @@ function gamesFromPayload(payload: any): any[] {
 
 function sideEligibleForOfficialSupplement(meta: any): boolean {
   const sourceErrors = Array.isArray(meta?.sourceErrors) ? meta.sourceErrors : [];
-  return clean(meta?.status).toUpperCase() === "PARTIAL"
+  return clean(meta?.source).toUpperCase() === "BALLDONTLIE"
+    && clean(meta?.validationSource).toUpperCase() === "MLB_STATS"
+    && clean(meta?.status).toUpperCase() === "PARTIAL"
     && clean(meta?.officialValidationStatus).toUpperCase() === "VERIFIED"
     && meta?.stale !== true
     && sourceErrors.length === 0
@@ -126,7 +128,10 @@ export async function supplementMlbAllOfficialInjuryEvidence(
   return payload;
 }
 
-export function registerMlbOfficialInjurySupplementMiddleware(app: Express): void {
+export function registerMlbOfficialInjurySupplementMiddleware(
+  app: Express,
+  fetchOfficialSnapshot: FetchOfficialSnapshot = (teamId, date) => fetchOfficialMlbInjurySnapshot(teamId, date),
+): void {
   app.use("/api/mlb/all", (req: Request, res: Response, next: NextFunction) => {
     const date = clean(req.query.date) || todayISO();
     const originalJson = res.json.bind(res);
@@ -135,7 +140,7 @@ export function registerMlbOfficialInjurySupplementMiddleware(app: Express): voi
     res.json = ((body: any) => {
       if (intercepted) return originalJson(body);
       intercepted = true;
-      void supplementMlbAllOfficialInjuryEvidence(body, date)
+      void supplementMlbAllOfficialInjuryEvidence(body, date, fetchOfficialSnapshot)
         .then((decorated) => originalJson(decorated))
         .catch((error) => {
           console.error("MLB official injury supplement middleware failed closed:", error);
