@@ -2,11 +2,11 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "node scripts/railway-volume-readonly-diagnostic.cjs"
+startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [deploy.healthcheck]
-path = "/"
+path = "/api/mlb/all"
 timeout = 60
 interval = 30
