@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import express from "express";
 import {
   MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA,
+  registerMlbOfficialInjurySupplementMiddleware,
   supplementMlbAllOfficialInjuryEvidence,
 } from "./mlb-injury-official-supplement-routes";
 import type { MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
@@ -145,6 +148,23 @@ test("rejected external identity remains PARTIAL and official snapshot is not re
   assert.equal(body.games[0].homeInjuries.length, 1);
 });
 
+test("unknown detector or validator source remains fail-closed", async () => {
+  for (const meta of [
+    partialMeta({ source: "OTHER_PROVIDER" }),
+    partialMeta({ validationSource: "OTHER_VALIDATOR" }),
+  ]) {
+    const body = payload(meta);
+    let calls = 0;
+    await supplementMlbAllOfficialInjuryEvidence(body, "2026-08-09", async () => {
+      calls += 1;
+      return officialSnapshot([201, 301, 302]);
+    });
+    assert.equal(calls, 0);
+    assert.equal(body.games[0].homeInjuryData.status, "PARTIAL");
+    assert.equal(body.games[0].homeInjuries.length, 1);
+  }
+});
+
 test("blocked or unhealthy Phase B source remains PARTIAL", async () => {
   const meta = partialMeta({
     phaseB: { ...partialMeta().phaseB, coverage: "BLOCKED" },
@@ -191,4 +211,40 @@ test("invalid date never attempts supplementation", async () => {
   });
   assert.equal(calls, 0);
   assert.equal(body.games[0].homeInjuryData.status, "PARTIAL");
+});
+
+test("Express middleware asynchronously decorates one downstream JSON response exactly once", async () => {
+  const app = express();
+  let officialCalls = 0;
+  let downstreamCalls = 0;
+  registerMlbOfficialInjurySupplementMiddleware(app, async (teamId, date) => {
+    officialCalls += 1;
+    assert.equal(teamId, 10);
+    assert.equal(date, "2026-08-09");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return officialSnapshot([201, 301, 302]);
+  });
+  app.get("/api/mlb/all", (_req, res) => {
+    downstreamCalls += 1;
+    return res.json(payload());
+  });
+
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/mlb/all?date=2026-08-09`);
+    assert.equal(response.status, 200);
+    const body = await response.json() as any;
+    assert.equal(downstreamCalls, 1);
+    assert.equal(officialCalls, 1);
+    assert.equal(body.games[0].homeInjuryData.status, "VERIFIED");
+    assert.equal(body.games[0].homeInjuryData.officialSupplementedCount, 2);
+    assert.equal(body.games[0].homeInjuries.length, 3);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
