@@ -1,0 +1,162 @@
+name: Research P1-M2B Injury Metadata Current 2026-08-09
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-injury-metadata-current-20260809.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-current-injury-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      AUDIT_DATE: '2026-08-09'
+      EXPECTED_COMMIT: 85fda50bfd587b3867915f0880c7b590f763a480
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-injury-metadata-current-20260809.yml' ]]
+
+      - name: Audit exact deployed backend and anonymous injury metadata causes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}" || true)
+          health_code=${health_code:-000}
+          all_code=${all_code:-000}
+
+          HEALTH_CODE="$health_code" ALL_CODE="$all_code" AUDIT_DATE="$AUDIT_DATE" EXPECTED_COMMIT="$EXPECTED_COMMIT" node <<'NODE'
+          const fs=require('fs');
+          const code=v=>/^\d{3}$/.test(String(v||''))?String(v):'000';
+          const endpointStatus={health:code(process.env.HEALTH_CODE),all:code(process.env.ALL_CODE)};
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          const clean=v=>String(v??'').trim().toUpperCase();
+          const expected=String(process.env.EXPECTED_COMMIT||'').trim().toLowerCase();
+          const result={
+            schemaVersion:'p1-m2b-current-injury-metadata-lean.v4',
+            generatedAt:new Date().toISOString(),
+            auditDate:process.env.AUDIT_DATE,
+            endpointStatus,
+            expectedCommit:expected,
+            deployedCommit:null,
+            deployedCommitMatchesExpected:false,
+            samples:[],
+            aggregate:{
+              measuredGames:0,measuredSides:0,statusCounts:{},phaseBCoverageCounts:{},
+              alreadyVerifiedSides:0,partialSides:0,
+              partialOnlyOfficialGapNoRejects:0,partialWithRejectedIdentity:0,partialWithSourceHealthProblem:0,
+              partialWithBothOfficialGapAndRejected:0,partialOther:0,
+              officialOnlyTotal:0,rejectedIdentityTotal:0,sourceErrorTotal:0,
+              freshOfficialVerifiedSides:0
+            },
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,rawIdentityUploaded:false,readinessPolicyChanged:false,modelFormulaChanged:false}
+          };
+          if(endpointStatus.health==='200'){
+            try{
+              const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+              const commit=String(h?.commit||'').trim().toLowerCase();
+              result.deployedCommit=/^[0-9a-f]{7,40}$/.test(commit)?commit:null;
+              result.deployedCommitMatchesExpected=Boolean(result.deployedCommit)
+                && (expected===result.deployedCommit || expected.startsWith(result.deployedCommit) || result.deployedCommit.startsWith(expected));
+            }catch{}
+          }
+          const chainOfCustodyOk=endpointStatus.health==='200'&&endpointStatus.all==='200'&&result.deployedCommitMatchesExpected;
+          if(chainOfCustodyOk){
+            let payload=null;
+            try{payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
+            const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
+            for(let i=0;i<games.length;i++){
+              const ag=games[i];
+              const sample={gameOrdinal:i+1,sides:{}};
+              let validSideCount=0;
+              for(const side of ['home','away']){
+                const meta=ag?.[`${side}InjuryData`]||null;
+                if(!meta){sample.sides[side]={status:'MISSING'};continue;}
+                validSideCount++;
+                const status=clean(meta.status)||'MISSING';
+                const officialValidationStatus=clean(meta.officialValidationStatus)||'MISSING';
+                const stale=meta.stale===true;
+                const sourceErrorCount=Array.isArray(meta.sourceErrors)?meta.sourceErrors.length:0;
+                const rejectedCount=Math.max(0,Number(meta.rejectedCount)||0);
+                const officialOnly=Math.max(0,Number(meta?.shadowSummary?.officialOnly)||0);
+                const phaseBCoverage=clean(meta?.phaseB?.coverage)||'MISSING';
+                const sourceHealthy=!stale&&officialValidationStatus==='VERIFIED'&&sourceErrorCount===0;
+                let cause='NONE';
+                if(status==='PARTIAL'){
+                  result.aggregate.partialSides++;
+                  if(!sourceHealthy){cause='SOURCE_HEALTH';result.aggregate.partialWithSourceHealthProblem++;}
+                  else if(rejectedCount>0&&officialOnly>0){cause='OFFICIAL_GAP_AND_REJECTED';result.aggregate.partialWithBothOfficialGapAndRejected++;}
+                  else if(rejectedCount>0){cause='REJECTED_IDENTITY';result.aggregate.partialWithRejectedIdentity++;}
+                  else if(officialOnly>0){cause='OFFICIAL_ONLY_GAP';result.aggregate.partialOnlyOfficialGapNoRejects++;}
+                  else{cause='OTHER';result.aggregate.partialOther++;}
+                }
+                bump(result.aggregate.statusCounts,status);
+                bump(result.aggregate.phaseBCoverageCounts,phaseBCoverage);
+                result.aggregate.measuredSides++;
+                if(status==='VERIFIED')result.aggregate.alreadyVerifiedSides++;
+                if(sourceHealthy)result.aggregate.freshOfficialVerifiedSides++;
+                result.aggregate.officialOnlyTotal+=officialOnly;
+                result.aggregate.rejectedIdentityTotal+=rejectedCount;
+                result.aggregate.sourceErrorTotal+=sourceErrorCount;
+                sample.sides[side]={status,officialValidationStatus,stale,sourceErrorCount,rejectedCount,officialOnly,phaseBCoverage,cause,sourceHealthy};
+              }
+              if(validSideCount>0){result.aggregate.measuredGames++;result.samples.push(sample);}
+            }
+          }
+          const backendUsable=chainOfCustodyOk&&result.aggregate.measuredGames>0;
+          const rejectedSides=result.aggregate.partialWithRejectedIdentity+result.aggregate.partialWithBothOfficialGapAndRejected;
+          result.conclusion={
+            chainOfCustodyOk,
+            backendUsableForInjuryAudit:backendUsable,
+            measured:backendUsable,
+            sampledGames:result.aggregate.measuredGames,
+            sampledSides:result.aggregate.measuredSides,
+            anyRecoverableOfficialOnlySides:backendUsable&&result.aggregate.partialOnlyOfficialGapNoRejects>0,
+            recoverableOfficialOnlySideCount:result.aggregate.partialOnlyOfficialGapNoRejects,
+            anyRejectedIdentitySides:backendUsable&&rejectedSides>0,
+            rejectedIdentitySideCount:rejectedSides,
+            anySourceHealthProblems:backendUsable&&result.aggregate.partialWithSourceHealthProblem>0,
+            safeToTreatAllPartialAsFresh:false,
+            safeToIgnoreRejectedExternalRecords:false,
+            nextStep:!result.deployedCommitMatchesExpected?'WAIT_FOR_EXACT_DEPLOY':(!backendUsable?'RESTORE_OR_WAIT_FOR_INTEGRATION_BACKEND':(result.aggregate.partialOnlyOfficialGapNoRejects>0?'TEST_OFFICIAL_SUPPLEMENT':(rejectedSides>0?'INVESTIGATE_REJECTED_IDENTITIES':'INVESTIGATE_SOURCE_HEALTH_OR_OTHER')))
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({endpointStatus:result.endpointStatus,deployedCommit:result.deployedCommit,deployedCommitMatchesExpected:result.deployedCommitMatchesExpected,aggregate:result.aggregate,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact is identity-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"teamId"|"playerId"|"name"|"homeTeam"|"awayTeam"|/api/mlb/[A-Za-z0-9_-]+/[0-9]+' audit/result.json
+
+      - name: Upload sanitized injury metadata evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-current-injury-metadata-20260809
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
