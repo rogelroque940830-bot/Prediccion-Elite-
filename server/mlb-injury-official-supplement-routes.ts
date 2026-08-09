@@ -1,6 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { fetchOfficialMlbInjurySnapshot, type MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
 import { reconcileMlbOfficialOnlyInjuries } from "./mlb-injury-official-supplement";
+import { todayISO } from "./route-runtime";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA = "courtedge-mlb-official-injury-supplement.v1" as const;
 
@@ -80,8 +81,8 @@ async function supplementSide(input: {
     asOfDate: input.asOfDate,
   });
 
-  // Chain-of-custody guard: if the response metadata and current official snapshot disagree,
-  // keep the original PARTIAL response rather than silently upgrading stale/mismatched evidence.
+  // Chain-of-custody guard: if response metadata and the current official snapshot disagree,
+  // preserve PARTIAL rather than upgrading mismatched evidence.
   if (reconciliation.rawOfficialOnlyCount !== expectedOfficialOnly) return;
   if (!reconciliation.coverageReconciled || reconciliation.unresolvedOfficialOnlyCount !== 0) return;
   if (reconciliation.supplementedCount !== expectedOfficialOnly) return;
@@ -127,7 +128,7 @@ export async function supplementMlbAllOfficialInjuryEvidence(
 
 export function registerMlbOfficialInjurySupplementMiddleware(app: Express): void {
   app.use("/api/mlb/all", (req: Request, res: Response, next: NextFunction) => {
-    const date = clean(req.query.date);
+    const date = clean(req.query.date) || todayISO();
     const originalJson = res.json.bind(res);
     let intercepted = false;
 
