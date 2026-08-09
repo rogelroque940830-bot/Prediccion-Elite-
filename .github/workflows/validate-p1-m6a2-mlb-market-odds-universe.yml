@@ -197,6 +197,15 @@ jobs:
             'server/routes.ts' \
             'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
 
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
           if [[ "$changed" != "$workflow_only" \
             && "$changed" != "$m6a2_package" \
             && "$changed" != "$m3e_successor" \
@@ -204,7 +213,8 @@ jobs:
             && "$changed" != "$compatibility_package" \
             && "$changed" != "$b5_successor" \
             && "$changed" != "$b5b_successor"  \
-            && "$changed" != "$m3e5_successor" ]]; then
+            && "$changed" != "$m3e5_successor" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
             echo 'P1-M6A2 scope rejected. Diff must be an exact registered package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
