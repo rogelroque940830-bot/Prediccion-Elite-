@@ -85,7 +85,7 @@ jobs:
           ! grep -E 'app\.(post|put|patch|delete)\(' "$route"
           ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$live" "$route"
           ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$live" "$route"
-      - name: Verify exact isolated P1-M3E.5 package
+      - name: Verify exact isolated P1-M3E.5 or registered successor package
         shell: bash
         run: |
           set -euo pipefail
@@ -98,7 +98,11 @@ jobs:
           fi
           git diff --check "$base...$head"
           changed=$(git diff --name-only "$base...$head" | sort)
-          expected=$(printf '%s\n' \
+
+          workflow_only=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' | sort)
+
+          m3e5_package=$(printf '%s\n' \
             '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
             'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
             'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
@@ -107,8 +111,20 @@ jobs:
             'server/route-contract.extensions.json' \
             'server/routes.ts' \
             'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
-          if [[ "$changed" != "$expected" ]]; then
-            echo 'P1-M3E.5 scope rejected. Diff must contain exactly the isolated eight-file successor package.' >&2
+
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          if [[ "$changed" != "$workflow_only" \
+            && "$changed" != "$m3e5_package" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
+            echo 'P1-M3E.5 scope rejected. Diff must be an exact registered package.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
