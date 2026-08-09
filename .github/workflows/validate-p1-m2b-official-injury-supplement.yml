@@ -10,6 +10,8 @@ on:
       - 'server/mlb-injury-official-supplement.test.ts'
       - 'server/mlb-injury-official-supplement-routes.ts'
       - 'server/mlb-injury-official-supplement-routes.test.ts'
+      - 'server/mlb-injury-identity-runtime-research.ts'
+      - 'server/mlb-injury-identity-runtime-research.test.ts'
       - 'server/routes.ts'
       - 'tsconfig.p1-m2b-official-injury-supplement.json'
 
@@ -19,7 +21,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,15 +37,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Official supplement focused tests including HTTP runtime interception
+      - name: Official supplement and deployed aggregate-research tests
         run: >-
           npx tsx --test
           server/mlb-injury-official-supplement.test.ts
           server/mlb-injury-official-supplement-routes.test.ts
+          server/mlb-injury-identity-runtime-research.test.ts
           server/mlb-injury-phase-b.test.ts
           server/mlb-injury-identity.test.ts
 
-      - name: Official supplement focused typecheck
+      - name: Official supplement and research focused typecheck
         run: npx tsc -p tsconfig.p1-m2b-official-injury-supplement.json --noEmit
 
       - name: P1-M2B existing focused typecheck
@@ -55,7 +58,7 @@ jobs:
       - name: Production backend build
         run: npm run build:backend
 
-      - name: Prove middleware order, source identity and fail-closed boundaries
+      - name: Prove permanent supplement boundaries and temporary research isolation
         shell: bash
         run: |
           node <<'NODE'
@@ -64,6 +67,7 @@ jobs:
           const routes = fs.readFileSync('server/routes.ts', 'utf8');
           const supplement = fs.readFileSync('server/mlb-injury-official-supplement-routes.ts', 'utf8');
           const helper = fs.readFileSync('server/mlb-injury-official-supplement.ts', 'utf8');
+          const research = fs.readFileSync('server/mlb-injury-identity-runtime-research.ts', 'utf8');
           assert.ok(routes.indexOf('registerMlbOfficialInjurySupplementMiddleware(app)') < routes.indexOf('registerMlbCoreRoutes(app)'));
           assert.match(supplement, /source\)\.toUpperCase\(\) === "BALLDONTLIE"/);
           assert.match(supplement, /validationSource\)\.toUpperCase\(\) === "MLB_STATS"/);
@@ -73,30 +77,46 @@ jobs:
           assert.match(supplement, /rawOfficialOnlyCount !== expectedOfficialOnly/);
           assert.match(helper, /decision:\s*"PENDING"/);
           assert.match(helper, /impact:\s*"NONE"/);
-          assert.doesNotMatch(supplement, /automaticBet|sportsbook|stake|probabilit/i);
+
+          assert.match(supplement, /MLB_INJURY_IDENTITY_RESEARCH_ENDPOINT = "\/api\/mlb\/p1\/research\/injury-identity-authority"/);
+          assert.match(supplement, /RAILWAY_ENVIRONMENT_NAME !== "p0-integration"/);
+          assert.match(supplement, /date !== MLB_INJURY_IDENTITY_RESEARCH_DATE/);
+          assert.match(supplement, /cache-control", "no-store"/);
+          assert.match(research, /rawPlayerIdentityReturned:\s*false/);
+          assert.match(research, /rawTeamIdentityReturned:\s*false/);
+          assert.match(research, /fuzzyMatchingUsed:\s*false/);
+          assert.match(research, /surnameOnlyMatchingUsed:\s*false/);
+          assert.match(research, /writesPerformed:\s*0/);
+          assert.doesNotMatch(supplement + research, /automaticBet|sportsbook|stake|probabilit/i);
           NODE
 
-      - name: Exact seven-file scope and no model/core mutation
+      - name: Verify exact permanent or temporary research scope
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
-          printf '%s\n' "${changed[@]}"
-          expected=(
-            ".github/workflows/validate-p1-m2b-official-injury-supplement.yml"
-            "server/mlb-injury-official-supplement-routes.test.ts"
-            "server/mlb-injury-official-supplement-routes.ts"
-            "server/mlb-injury-official-supplement.test.ts"
-            "server/mlb-injury-official-supplement.ts"
-            "server/routes.ts"
-            "tsconfig.p1-m2b-official-injury-supplement.json"
-          )
-          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
-          for i in "${!expected[@]}"; do
-            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
-              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}";
-              exit 1;
-            }
-          done
-          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^server/mlb-core-routes\.ts$|^frontend/|ledger|settlement'
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+
+          permanent=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          temporary_research=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-identity-runtime-research.test.ts' \
+            'server/mlb-injury-identity-runtime-research.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          if [[ "$changed" != "$permanent" && "$changed" != "$temporary_research" ]]; then
+            echo 'P1-M2B official injury scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+
+          ! grep -E '^server/mlb-core-routes\.ts$|^frontend/|ledger|settlement' <<< "$changed"
