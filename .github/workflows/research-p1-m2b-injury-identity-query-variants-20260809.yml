@@ -1,0 +1,203 @@
+name: Research P1-M2B Injury Identity Query Variants 2026-08-09
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-injury-identity-query-variants-20260809.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 30affdc625cb6cfec3851be0c4d9c2ba583368f5
+      AUDIT_DATE: '2026-08-09'
+      BDL_API_KEY: ${{ secrets.BDL_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-injury-identity-query-variants-20260809.yml' ]]
+
+      - name: Compare strict MLB people-search query variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 120 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}" || true)
+
+          HEALTH_CODE="${health_code:-000}" ALL_CODE="${all_code:-000}" node <<'NODE'
+          const fs=require('fs');
+          const expected=String(process.env.EXPECTED_COMMIT||'').trim().toLowerCase();
+          const code=v=>/^\d{3}$/.test(String(v||''))?String(v):'000';
+          const endpointStatus={health:code(process.env.HEALTH_CODE),all:code(process.env.ALL_CODE)};
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/gi,'').toLowerCase();
+          const clean=v=>String(v??'').trim();
+          const result={
+            schemaVersion:'p1-m2b-injury-identity-query-variants.v1',
+            generatedAt:new Date().toISOString(),auditDate:process.env.AUDIT_DATE,
+            endpointStatus,expectedCommit:expected,deployedCommit:null,deployedCommitMatchesExpected:false,
+            bdlSecretAvailable:Boolean(clean(process.env.BDL_API_KEY)),
+            sample:{slateTeams:0,rawActiveMappedRecords:0,dedupedRecords:0,baselineAccepted:0,baselineRejected:0},
+            rejectedSourceNameShape:{fullNamePresent:0,structuredPresent:0,bothPresent:0,normalizedEqual:0,normalizedDifferent:0,fullNameOnly:0,structuredOnly:0,neither:0},
+            variantRescueCounts:{currentNoSport:0,currentSport1:0,structuredNoSport:0,structuredSport1:0},
+            rescuedByAnyVariant:0,
+            rescuePatternCounts:{},
+            strictTeamMatchCandidateCounts:{currentNoSport:0,currentSport1:0,structuredNoSport:0,structuredSport1:0},
+            sourceErrors:{bdl:0,mlbSearch:0},
+            conclusion:{state:'NOT_RUN',bestVariant:null,bestStrictRescueCount:0,nextStep:'NONE'},
+            safety:{writesPerformed:0,rawPlayerIdentityUploaded:false,rawTeamIdentityUploaded:false,fuzzyMatchingUsed:false,surnameOnlyMatchingUsed:false,identityRuleChanged:false,modelFormulaChanged:false}
+          };
+          try{
+            const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+            const commit=clean(h?.commit).toLowerCase();
+            result.deployedCommit=/^[0-9a-f]{7,40}$/.test(commit)?commit:null;
+            result.deployedCommitMatchesExpected=Boolean(result.deployedCommit)&&(expected===result.deployedCommit||expected.startsWith(result.deployedCommit)||result.deployedCommit.startsWith(expected));
+          }catch{}
+
+          const isActive=inj=>{
+            const text=[inj?.status,inj?.type,inj?.detail,inj?.description,inj?.short_comment].filter(Boolean).join(' ').toLowerCase();
+            if(!text)return false;
+            if(/\b(reinstated|activated|available|healthy|returned|cleared|probable)\b/.test(text))return false;
+            return /\b(out|injured list|day[- ]to[- ]day|dtd|doubtful|questionable|suspended|bereavement|paternity|restricted list)\b/.test(text)||/\b(10|15|60)[- ]day il\b/.test(text)||/\bil\b/.test(text);
+          };
+          const teamMap={ARI:109,ATL:144,BAL:110,BOS:111,CHC:112,CWS:145,CHW:145,CIN:113,CLE:114,COL:115,DET:116,HOU:117,KC:118,LAA:108,LAD:119,MIA:146,MIL:158,MIN:142,NYM:121,NYY:147,OAK:133,ATH:133,PHI:143,PIT:134,SD:135,SEA:136,SF:137,STL:138,TB:139,TEX:140,TOR:141,WSH:120,WAS:120};
+
+          async function searchPeople(name,sport1){
+            if(!clean(name))return [];
+            const u=new URL('https://statsapi.mlb.com/api/v1/people/search');
+            u.searchParams.set('names',name);u.searchParams.set('season','2026');u.searchParams.set('hydrate','currentTeam');
+            if(sport1)u.searchParams.set('sportIds','1');
+            try{
+              const r=await fetch(u,{headers:{Accept:'application/json','User-Agent':'CourtEdge-Injury-Identity-Research/1.0'}});
+              if(!r.ok){result.sourceErrors.mlbSearch++;return [];}
+              const j=await r.json();return Array.isArray(j?.people)?j.people:[];
+            }catch{result.sourceErrors.mlbSearch++;return [];}
+          }
+          function strictAccepted(people,queryName,teamId){
+            const target=norm(queryName);
+            return people.some(person=>norm(person?.fullName)===target&&Number(person?.currentTeam?.id)===teamId);
+          }
+          function sameTeamCount(people,teamId){return people.filter(person=>Number(person?.currentTeam?.id)===teamId).length;}
+
+          async function main(){
+            const custody=endpointStatus.health==='200'&&endpointStatus.all==='200'&&result.deployedCommitMatchesExpected;
+            if(!custody){result.conclusion={state:'CHAIN_OF_CUSTODY_FAILED',bestVariant:null,bestStrictRescueCount:0,nextStep:'WAIT_FOR_EXACT_DEPLOY'};return;}
+            if(!result.bdlSecretAvailable){result.conclusion={state:'SECRET_UNAVAILABLE',bestVariant:null,bestStrictRescueCount:0,nextStep:'NONE'};return;}
+            let all={};try{all=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
+            const games=Array.isArray(all?.games)?all.games:Array.isArray(all?.data?.games)?all.data.games:[];
+            const teamIds=new Set();
+            for(const g of games){for(const side of ['home','away']){const id=Number(g?.[`${side}Team`]?.id);if(Number.isInteger(id)&&id>0)teamIds.add(id);}}
+            result.sample.slateTeams=teamIds.size;
+
+            let cursor=null,pages=0,raw=[];
+            while(pages<10){
+              const u=new URL('https://api.balldontlie.io/mlb/v1/player_injuries');u.searchParams.set('per_page','100');if(cursor)u.searchParams.set('cursor',String(cursor));
+              let r;try{r=await fetch(u,{headers:{Authorization:process.env.BDL_API_KEY,Accept:'application/json'}});}catch{result.sourceErrors.bdl++;break;}
+              if(!r.ok){result.sourceErrors.bdl++;break;}
+              const j=await r.json();const data=Array.isArray(j?.data)?j.data:[];
+              for(const inj of data){if(!isActive(inj))continue;const abbr=clean(inj?.player?.team?.abbreviation).toUpperCase();const tid=teamMap[abbr];if(tid&&teamIds.has(tid))raw.push({inj,tid});}
+              pages++;cursor=j?.meta?.next_cursor??null;if(!cursor)break;
+            }
+            result.sample.rawActiveMappedRecords=raw.length;
+            const seen=new Set(),dedup=[];
+            for(const item of raw){const p=item.inj?.player??{};const key=String(p.id||p.player_id||p.full_name||`${p.first_name||''}-${p.last_name||''}`).toLowerCase();if(!key||seen.has(key))continue;seen.add(key);dedup.push(item);}
+            result.sample.dedupedRecords=dedup.length;
+
+            for(const {inj,tid} of dedup){
+              const p=inj?.player??{};
+              const full=clean(p.full_name);
+              const structured=clean(`${clean(p.first_name)} ${clean(p.last_name)}`);
+              const currentName=full||structured;
+              const baselinePeople=await searchPeople(currentName,false);
+              if(strictAccepted(baselinePeople,currentName,tid)){result.sample.baselineAccepted++;continue;}
+              result.sample.baselineRejected++;
+
+              if(full)result.rejectedSourceNameShape.fullNamePresent++;
+              if(structured)result.rejectedSourceNameShape.structuredPresent++;
+              if(full&&structured){
+                result.rejectedSourceNameShape.bothPresent++;
+                if(norm(full)===norm(structured))result.rejectedSourceNameShape.normalizedEqual++;
+                else result.rejectedSourceNameShape.normalizedDifferent++;
+              }else if(full)result.rejectedSourceNameShape.fullNameOnly++;
+              else if(structured)result.rejectedSourceNameShape.structuredOnly++;
+              else result.rejectedSourceNameShape.neither++;
+
+              const queries={
+                currentNoSport:{name:currentName,sport:false,people:baselinePeople},
+                currentSport1:{name:currentName,sport:true,people:null},
+                structuredNoSport:{name:structured,sport:false,people:null},
+                structuredSport1:{name:structured,sport:true,people:null},
+              };
+              queries.currentSport1.people=await searchPeople(queries.currentSport1.name,true);
+              if(structured&&norm(structured)===norm(currentName)){
+                queries.structuredNoSport.people=baselinePeople;
+                queries.structuredSport1.people=queries.currentSport1.people;
+              }else{
+                queries.structuredNoSport.people=await searchPeople(structured,false);
+                queries.structuredSport1.people=await searchPeople(structured,true);
+              }
+
+              const rescued=[];
+              for(const [key,q] of Object.entries(queries)){
+                const people=Array.isArray(q.people)?q.people:[];
+                result.strictTeamMatchCandidateCounts[key]+=sameTeamCount(people,tid);
+                if(strictAccepted(people,q.name,tid)){
+                  result.variantRescueCounts[key]++;
+                  rescued.push(key);
+                }
+              }
+              if(rescued.length){result.rescuedByAnyVariant++;bump(result.rescuePatternCounts,rescued.sort().join('+'));}
+              else bump(result.rescuePatternCounts,'NONE');
+            }
+
+            const entries=Object.entries(result.variantRescueCounts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+            const best=entries[0]??[null,0];
+            result.conclusion={
+              state:'MEASURED',bestVariant:best[0],bestStrictRescueCount:best[1],
+              baselineReproduced:result.sample.baselineRejected===28,
+              nextStep:best[1]>0?(String(best[0]).startsWith('structured')?'VALIDATE_STRUCTURED_NAME_RULE':'VALIDATE_SPORT_FILTER_RULE'):'TEST_ALTERNATE_MLB_IDENTITY_AUTHORITY'
+            };
+          }
+          main().then(()=>{
+            fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+            console.log(JSON.stringify({endpointStatus:result.endpointStatus,deployedCommitMatchesExpected:result.deployedCommitMatchesExpected,bdlSecretAvailable:result.bdlSecretAvailable,sample:result.sample,rejectedSourceNameShape:result.rejectedSourceNameShape,variantRescueCounts:result.variantRescueCounts,rescuedByAnyVariant:result.rescuedByAnyVariant,rescuePatternCounts:result.rescuePatternCounts,strictTeamMatchCandidateCounts:result.strictTeamMatchCandidateCounts,sourceErrors:result.sourceErrors,conclusion:result.conclusion},null,2));
+          }).catch(error=>{console.error(error);process.exit(1);});
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove artifact is aggregate-only and no fuzzy resolver was used
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"playerId"|"playerName"|"fullName"|"first_name"|"last_name"|"teamId"|"teamName"|"gamePk"|"homeTeam"|"awayTeam"' audit/result.json
+          grep -F '"fuzzyMatchingUsed": false' audit/result.json
+          grep -F '"surnameOnlyMatchingUsed": false' audit/result.json
+
+      - name: Upload sanitized query-variant evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-injury-identity-query-variants-20260809
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
