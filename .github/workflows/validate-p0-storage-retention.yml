@@ -61,7 +61,58 @@ jobs:
       - name: Production backend build
         run: npm run build:backend
 
-      - name: Guard starts an unchanged backend entry
+      - name: Supervisor boots real backend and prunes startup fixtures
+        shell: bash
+        env:
+          NODE_ENV: test
+          PORT: '5057'
+          BDL_API_KEY: retention-smoke-placeholder
+          ODDS_API_KEY: retention-smoke-placeholder
+          COURTEDGE_WRITE_TOKEN: retention-smoke-write-token
+          COURTEDGE_SESSION_SECRET: retention-smoke-session-secret
+          COURTEDGE_ADMIN_USERNAME: admin
+          RAILWAY_GIT_COMMIT_SHA: storage-retention-smoke
+          MLB_LEDGER_AUTO_SETTLE: 'false'
+          MLB_CLOSING_LINE_CAPTURE: 'false'
+          MLB_S5F_SNAPSHOT_MAX_FILES: '10'
+          MLB_S5F_SNAPSHOT_MAX_BYTES: '16777216'
+          MLB_S6K_SNAPSHOT_MAX_FILES: '25'
+          MLB_S6K_SNAPSHOT_MAX_BYTES: '16777216'
+          COURTEDGE_STORAGE_RETENTION_INTERVAL_MS: '60000'
+        run: |
+          set -euo pipefail
+          export COURTEDGE_DATA_ROOT="${RUNNER_TEMP}/storage-retention-smoke"
+          s5f="${COURTEDGE_DATA_ROOT}/mlb-s5f-certification/snapshots"
+          s6k="${COURTEDGE_DATA_ROOT}/mlb-s6k-first-ten-cycles/snapshots"
+          mkdir -p "$s5f" "$s6k" audit
+          for i in $(seq -w 1 12); do printf '{}\n' > "$s5f/snapshot-$i.json"; done
+          for i in $(seq -w 1 27); do printf '{}\n' > "$s6k/snapshot-$i.json"; done
+
+          node scripts/storage-retention-guard.cjs > audit/storage-retention-supervisor.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+
+          code='000'
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o audit/health.json -w '%{http_code}' --max-time 5 http://127.0.0.1:5057/health || true)
+            [[ "$code" == '200' ]] && break
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+
+          if [[ "$code" != '200' ]]; then
+            echo '--- storage retention supervisor log ---'
+            cat audit/storage-retention-supervisor.log
+            exit 1
+          fi
+          kill -0 "$pid"
+          [[ "$(find "$s5f" -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 10 ]]
+          [[ "$(find "$s6k" -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 25 ]]
+          grep -F '[storage-retention] trigger=startup' audit/storage-retention-supervisor.log
+          grep -F 'mlb-s5f-certification snapshots=12->10' audit/storage-retention-supervisor.log
+          grep -F 'mlb-s6k-first-ten-cycles snapshots=27->25' audit/storage-retention-supervisor.log
+
+      - name: Guard starts the unchanged backend entry
         run: |
           grep -F "spawn(process.execPath, [backendEntry]" scripts/storage-retention-guard.cjs
           grep -F "path.join(process.cwd(), 'dist', 'index.cjs')" scripts/storage-retention-guard.cjs
