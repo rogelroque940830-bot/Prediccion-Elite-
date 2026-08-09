@@ -1,9 +1,14 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { fetchOfficialMlbInjurySnapshot, type MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
 import { reconcileMlbOfficialOnlyInjuries } from "./mlb-injury-official-supplement";
+import {
+  MLB_INJURY_IDENTITY_RESEARCH_DATE,
+  runMlbInjuryIdentityRuntimeResearch,
+} from "./mlb-injury-identity-runtime-research";
 import { todayISO } from "./route-runtime";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA = "courtedge-mlb-official-injury-supplement.v1" as const;
+export const MLB_INJURY_IDENTITY_RESEARCH_ENDPOINT = "/api/mlb/p1/research/injury-identity-authority" as const;
 
 type FetchOfficialSnapshot = (
   teamId: number,
@@ -132,6 +137,25 @@ export function registerMlbOfficialInjurySupplementMiddleware(
   app: Express,
   fetchOfficialSnapshot: FetchOfficialSnapshot = (teamId, date) => fetchOfficialMlbInjurySnapshot(teamId, date),
 ): void {
+  // Temporary, aggregate-only research endpoint. It exists only in p0-integration, only for
+  // the frozen 2026-08-09 audit date, returns no names/IDs, performs no writes, and is removed
+  // immediately after the identity-authority experiment is captured.
+  app.get(MLB_INJURY_IDENTITY_RESEARCH_ENDPOINT, async (req: Request, res: Response) => {
+    if (process.env.RAILWAY_ENVIRONMENT_NAME !== "p0-integration") {
+      return res.status(404).json({ error: "not_found" });
+    }
+    const date = clean(req.query.date) || todayISO();
+    if (date !== MLB_INJURY_IDENTITY_RESEARCH_DATE) {
+      return res.status(400).json({ error: "audit_date_not_allowed" });
+    }
+    res.setHeader("cache-control", "no-store");
+    const result = await runMlbInjuryIdentityRuntimeResearch({
+      date,
+      bdlApiKey: clean(process.env.BDL_API_KEY),
+    });
+    return res.status(result.state === "SOURCE_UNAVAILABLE" ? 503 : 200).json(result);
+  });
+
   app.use("/api/mlb/all", (req: Request, res: Response, next: NextFunction) => {
     const date = clean(req.query.date) || todayISO();
     const originalJson = res.json.bind(res);
