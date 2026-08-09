@@ -15,6 +15,7 @@ import { registerMlbP1OperatingEnvelopeRoutes } from "./mlb-p1-operating-envelop
 import { registerMlbP1FrozenOperatingEnvelopeRoutes } from "./mlb-p1-operating-envelope-frozen-routes";
 import { registerMlbPremiumNoUltraProspectiveRoutes } from "./mlb-premium-no-ultra-prospective-routes";
 import { registerMlbStatcastMatchupIdentityMiddleware } from "./mlb-statcast-matchup-identity-routes";
+import { registerMlbOfficialInjurySupplementMiddleware } from "./mlb-injury-official-supplement-routes";
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
 import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
 import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe-odds-routes";
@@ -44,6 +45,9 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbP1FrozenOperatingEnvelopeRoutes(app);
   registerMlbPremiumNoUltraProspectiveRoutes(app);
   registerMlbStatcastMatchupIdentityMiddleware(app);
+  // Decorates only safe PARTIAL injury responses after the core computes them.
+  // It must be registered before the core GET /api/mlb/all handler.
+  registerMlbOfficialInjurySupplementMiddleware(app);
   registerMlbCoreRoutes(app);
   registerMlbF5OddsProtectionRoutes(app);
   registerMlbP1M6a2MarketUniverseOddsRoutes(app);
