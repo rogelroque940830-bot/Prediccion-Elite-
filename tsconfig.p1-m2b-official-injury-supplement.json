@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-injury-official-supplement.ts",
+    "server/mlb-injury-official-supplement.test.ts",
+    "server/mlb-injury-official-supplement-routes.ts",
+    "server/mlb-injury-official-supplement-routes.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}
