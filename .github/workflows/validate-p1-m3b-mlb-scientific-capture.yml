@@ -166,7 +166,13 @@ jobs:
             'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
             'server/mlb-p1-operating-envelope-frozen-live.ts' \
             'server/mlb-p1-operating-envelope-frozen-routes.ts' \
-            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
           unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
           [[ -z "$unexpected" ]]
 
