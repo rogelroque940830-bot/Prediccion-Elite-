@@ -1,0 +1,89 @@
+name: Validate P0 Storage Retention Guard
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - railway.toml
+      - scripts/storage-retention-guard.cjs
+      - scripts/storage-retention-guard.test.cjs
+      - .github/workflows/validate-p0-storage-retention.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check retention supervisor
+        run: node --check scripts/storage-retention-guard.cjs
+
+      - name: Storage retention unit tests
+        run: node --test scripts/storage-retention-guard.test.cjs
+
+      - name: Validate exact allowlist and production contract
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const guard = require('./scripts/storage-retention-guard.cjs');
+          const policies = guard.buildDefaultPolicies('/app/data', {});
+          assert.deepEqual(policies.map((p) => p.snapshotDir), [
+            '/app/data/mlb-s5f-certification/snapshots',
+            '/app/data/mlb-s6k-first-ten-cycles/snapshots',
+          ]);
+          assert.equal(policies[0].maxFiles, 100);
+          assert.equal(policies[0].maxBytes, 384 * 1024 * 1024);
+          assert.equal(policies[1].maxFiles, 500);
+          assert.equal(policies[1].maxBytes, 128 * 1024 * 1024);
+          const railway = fs.readFileSync('railway.toml', 'utf8');
+          assert.match(railway, /startCommand = "node scripts\/storage-retention-guard\.cjs"/);
+          assert.match(railway, /path = "\/api\/mlb\/all"/);
+          NODE
+
+      - name: Production backend build
+        run: npm run build:backend
+
+      - name: Guard starts an unchanged backend entry
+        run: |
+          grep -F "spawn(process.execPath, [backendEntry]" scripts/storage-retention-guard.cjs
+          grep -F "path.join(process.cwd(), 'dist', 'index.cjs')" scripts/storage-retention-guard.cjs
+
+      - name: Exact four-file scope
+        shell: bash
+        run: |
+          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            ".github/workflows/validate-p0-storage-retention.yml"
+            "railway.toml"
+            "scripts/storage-retention-guard.cjs"
+            "scripts/storage-retention-guard.test.cjs"
+          )
+          if [[ "${#changed[@]}" -ne "${#expected[@]}" ]]; then
+            echo "Unexpected changed-file count: ${#changed[@]}"
+            exit 1
+          fi
+          for i in "${!expected[@]}"; do
+            if [[ "${changed[$i]}" != "${expected[$i]}" ]]; then
+              echo "Unexpected scope at index $i: ${changed[$i]} != ${expected[$i]}"
+              exit 1
+            fi
+          done
