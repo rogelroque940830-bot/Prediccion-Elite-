@@ -45,7 +45,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbP1FrozenOperatingEnvelopeRoutes(app);
   registerMlbPremiumNoUltraProspectiveRoutes(app);
   registerMlbStatcastMatchupIdentityMiddleware(app);
-  // Decorates only safe PARTIAL injury responses after the core computes them.
+  // Decorates only safe PARTIAL injury responses with evidence-only MLB official supplements.
   // It must be registered before the core GET /api/mlb/all handler.
   registerMlbOfficialInjurySupplementMiddleware(app);
   registerMlbCoreRoutes(app);
