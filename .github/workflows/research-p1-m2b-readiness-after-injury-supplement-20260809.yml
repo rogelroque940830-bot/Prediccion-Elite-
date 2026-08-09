@@ -1,0 +1,132 @@
+name: Research P1-M2B Readiness After Injury Supplement 2026-08-09
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-readiness-after-injury-supplement-20260809.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: 30affdc625cb6cfec3851be0c4d9c2ba583368f5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-readiness-after-injury-supplement-20260809.yml' ]]
+
+      - name: Audit nearest live pregame games
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 90 "${BACKEND_URL}/api/mlb/p1/v1/slate" || true)
+          HEALTH_CODE="${health_code:-000}" SLATE_CODE="${slate_code:-000}" BACKEND_URL="$BACKEND_URL" EXPECTED_COMMIT="$EXPECTED_COMMIT" node <<'NODE'
+          const fs=require('fs');
+          const cp=require('child_process');
+          const expected=String(process.env.EXPECTED_COMMIT||'').toLowerCase();
+          const code=v=>/^\d{3}$/.test(String(v||''))?String(v):'000';
+          const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+          const result={
+            schemaVersion:'p1-m2b-readiness-after-injury-supplement.v1',
+            generatedAt:new Date().toISOString(),
+            endpointStatus:{health:code(process.env.HEALTH_CODE),slate:code(process.env.SLATE_CODE)},
+            expectedCommit:expected,deployedCommit:null,deployedCommitMatchesExpected:false,
+            slate:{date:null,totalGames:0,sampledGames:0,sampledMarkets:0},
+            statusCounts:{READY_FINAL:0,READY_PROVISIONAL:0,BLOCKED:0,REQUEST_FAILED:0},
+            warningCounts:{},blockerCounts:{},fieldStateCounts:{},samples:[],
+            safety:{writesPerformed:0,rawGameIdentityUploaded:false,modelFormulaChanged:false,thresholdChanged:false,stakeChanged:false}
+          };
+          try{
+            const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+            const commit=String(h?.commit||'').trim().toLowerCase();
+            result.deployedCommit=/^[0-9a-f]{7,40}$/.test(commit)?commit:null;
+            result.deployedCommitMatchesExpected=Boolean(result.deployedCommit)&&(expected===result.deployedCommit||expected.startsWith(result.deployedCommit)||result.deployedCommit.startsWith(expected));
+          }catch{}
+          const custody=result.endpointStatus.health==='200'&&result.endpointStatus.slate==='200'&&result.deployedCommitMatchesExpected;
+          if(custody){
+            const env=JSON.parse(fs.readFileSync('private/slate.json','utf8'));
+            const slate=env?.data||env;
+            const games=Array.isArray(slate?.games)?slate.games:[];
+            const now=Date.now();
+            const candidates=games.filter(g=>['SCHEDULED','PREGAME'].includes(String(g.state))&&g.analysisAllowed===true)
+              .sort((a,b)=>Math.abs(Date.parse(a.startTime||'')-now)-Math.abs(Date.parse(b.startTime||'')-now)).slice(0,3);
+            result.slate.date=slate?.date||null;
+            result.slate.totalGames=slate?.summary?.total??games.length;
+            result.slate.sampledGames=candidates.length;
+            for(let gi=0;gi<candidates.length;gi++){
+              const g=candidates[gi];
+              for(const market of ['ML','F5_ML']){
+                const p=`private/r-${gi}-${market}.json`;
+                const url=`${process.env.BACKEND_URL}/api/mlb/p1/v1/pregame-readiness?gamePk=${encodeURIComponent(g.gamePk)}&market=${market}&date=${encodeURIComponent(g.officialDate)}`;
+                let http='000';
+                try{http=cp.execFileSync('curl',['-sS','-o',p,'-w','%{http_code}','--max-time','150',url],{encoding:'utf8'}).trim();}catch{}
+                if(http!=='200'){
+                  result.statusCounts.REQUEST_FAILED++; bump(result.blockerCounts,`READINESS_HTTP_${http}`);
+                  result.samples.push({gameOrdinal:gi+1,market,httpCode:Number(http)||0,gateStatus:'REQUEST_FAILED',warnings:[],blockers:[`READINESS_HTTP_${http}`],evidence:[]});
+                  continue;
+                }
+                let env2={}; try{env2=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}
+                const report=env2?.data||env2; const gate=report?.gate;
+                if(!gate){result.statusCounts.REQUEST_FAILED++;continue;}
+                if(Object.hasOwn(result.statusCounts,gate.status)) result.statusCounts[gate.status]++;
+                for(const w of gate.warnings||[]) bump(result.warningCounts,String(w));
+                for(const b of gate.blockers||[]) bump(result.blockerCounts,String(b));
+                const ev=(report.evidence||[]).map(x=>({field:x.field,required:Boolean(x.required),state:x.state,sourceStatus:x.sourceStatus,quality:x.quality,hasObservedAt:typeof x.observedAt==='string'&&x.observedAt.length>0,errors:Array.isArray(x.errors)?x.errors.map(String):[]}));
+                for(const x of ev) bump(result.fieldStateCounts,`${x.field}:${x.state}`);
+                result.samples.push({gameOrdinal:gi+1,market,httpCode:200,gateStatus:gate.status,analysisStage:gate.analysisStage,warnings:gate.warnings||[],blockers:gate.blockers||[],evidence:ev});
+              }
+            }
+            result.slate.sampledMarkets=result.samples.length;
+          }
+          const injuryWarnings=result.warningCounts.INJURIES_DEGRADED||0;
+          const advancedWarnings=result.warningCounts.ADVANCED_FACTORS_DEGRADED||0;
+          result.conclusion={
+            chainOfCustodyOk:custody,
+            readinessMeasured:custody&&result.slate.sampledGames>0,
+            finalObserved:result.statusCounts.READY_FINAL>0,
+            injuryDegradedEvaluations:injuryWarnings,
+            advancedDegradedEvaluations:advancedWarnings,
+            injuryDegradationEliminatedInSample:custody&&result.slate.sampledMarkets>0&&injuryWarnings===0,
+            nextStep:!custody?'WAIT_FOR_EXACT_DEPLOY':(result.slate.sampledGames===0?'WAIT_FOR_PREGAME_SAMPLE':(injuryWarnings>0?'TRACE_REMAINING_REJECTED_IDENTITY_GAMES':(result.statusCounts.READY_FINAL>0?'FINAL_ATTAINABILITY_OBSERVED':'INSPECT_NEXT_NON_INJURY_BLOCKER')))
+          };
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({endpointStatus:result.endpointStatus,deployedCommit:result.deployedCommit,deployedCommitMatchesExpected:result.deployedCommitMatchesExpected,slate:result.slate,statusCounts:result.statusCounts,warningCounts:result.warningCounts,blockerCounts:result.blockerCounts,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove sanitized artifact has no raw identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"homeTeam"|"awayTeam"|"selection"|"playerId"|"playerName"|"pitcherName"' audit/result.json
+
+      - name: Upload sanitized readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-readiness-after-injury-supplement-20260809
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
