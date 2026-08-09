@@ -1,0 +1,102 @@
+name: Validate P1-M2B Official Injury Supplement
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p1-m2b-official-injury-supplement.yml'
+      - 'server/mlb-injury-official-supplement.ts'
+      - 'server/mlb-injury-official-supplement.test.ts'
+      - 'server/mlb-injury-official-supplement-routes.ts'
+      - 'server/mlb-injury-official-supplement-routes.test.ts'
+      - 'server/routes.ts'
+      - 'tsconfig.p1-m2b-official-injury-supplement.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Official supplement focused tests including HTTP runtime interception
+        run: >-
+          npx tsx --test
+          server/mlb-injury-official-supplement.test.ts
+          server/mlb-injury-official-supplement-routes.test.ts
+          server/mlb-injury-phase-b.test.ts
+          server/mlb-injury-identity.test.ts
+
+      - name: Official supplement focused typecheck
+        run: npx tsc -p tsconfig.p1-m2b-official-injury-supplement.json --noEmit
+
+      - name: P1-M2B existing focused typecheck
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json --noEmit
+
+      - name: P1-M2B readiness regressions
+        run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+
+      - name: Production backend build
+        run: npm run build:backend
+
+      - name: Prove middleware order, source identity and fail-closed boundaries
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const assert = require('assert/strict');
+          const routes = fs.readFileSync('server/routes.ts', 'utf8');
+          const supplement = fs.readFileSync('server/mlb-injury-official-supplement-routes.ts', 'utf8');
+          const helper = fs.readFileSync('server/mlb-injury-official-supplement.ts', 'utf8');
+          assert.ok(routes.indexOf('registerMlbOfficialInjurySupplementMiddleware(app)') < routes.indexOf('registerMlbCoreRoutes(app)'));
+          assert.match(supplement, /source\)\.toUpperCase\(\) === "BALLDONTLIE"/);
+          assert.match(supplement, /validationSource\)\.toUpperCase\(\) === "MLB_STATS"/);
+          assert.match(supplement, /rejectedCount\) === 0/);
+          assert.match(supplement, /phaseB:\s*meta\?\.phaseB/);
+          assert.match(supplement, /supplementEvidenceOnly:\s*true/);
+          assert.match(supplement, /rawOfficialOnlyCount !== expectedOfficialOnly/);
+          assert.match(helper, /decision:\s*"PENDING"/);
+          assert.match(helper, /impact:\s*"NONE"/);
+          assert.doesNotMatch(supplement, /automaticBet|sportsbook|stake|probabilit/i);
+          NODE
+
+      - name: Exact seven-file scope and no model/core mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            ".github/workflows/validate-p1-m2b-official-injury-supplement.yml"
+            "server/mlb-injury-official-supplement-routes.test.ts"
+            "server/mlb-injury-official-supplement-routes.ts"
+            "server/mlb-injury-official-supplement.test.ts"
+            "server/mlb-injury-official-supplement.ts"
+            "server/routes.ts"
+            "tsconfig.p1-m2b-official-injury-supplement.json"
+          )
+          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
+          for i in "${!expected[@]}"; do
+            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
+              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}";
+              exit 1;
+            }
+          done
+          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^server/mlb-core-routes\.ts$|^frontend/|ledger|settlement'
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
