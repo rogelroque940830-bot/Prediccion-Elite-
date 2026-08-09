@@ -112,9 +112,20 @@ jobs:
             '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
             '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
             '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
           if [[ "$changed" != "$premium_no_ultra_readonly" \
             && "$changed" != "$m3e5_successor" \
-            && "$changed" != "$compatibility_package" ]]; then
+            && "$changed" != "$compatibility_package" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
             echo 'PREMIUM no-ULTRA read-only scope rejected.' >&2
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
