@@ -1,0 +1,71 @@
+name: Research P1 Odds Consumption Inventory 2026-08-10
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-odds-consumption-inventory-20260810.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-odds-consumption-inventory-20260810.yml' ]]
+          git diff --check "$base...$head"
+
+      - name: Build static provider-consumption inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          {
+            echo '=== DIRECT THE ODDS API CALL SITES ==='
+            grep -RIn --exclude-dir=.git --exclude='research-p1-odds-consumption-inventory-20260810.yml' 'api\.the-odds-api\.com' server frontend scripts .github 2>/dev/null || true
+            echo
+            echo '=== ODDS API KEY CONSUMERS ==='
+            grep -RIn --exclude-dir=.git --exclude='research-p1-odds-consumption-inventory-20260810.yml' 'ODDS_API_KEY' server frontend scripts .github 2>/dev/null || true
+            echo
+            echo '=== INTERNAL MLB ODDS CONSUMERS ==='
+            grep -RIn --exclude-dir=.git --exclude='research-p1-odds-consumption-inventory-20260810.yml' -E '/api/odds/mlb|market-universe-odds' server frontend scripts .github 2>/dev/null || true
+            echo
+            echo '=== TIMER / POLLING REFERENCES IN MATCHING FILES ==='
+            files=$(grep -RIl --exclude-dir=.git --exclude='research-p1-odds-consumption-inventory-20260810.yml' -E 'api\.the-odds-api\.com|/api/odds/mlb|market-universe-odds' server frontend scripts 2>/dev/null || true)
+            for f in $files; do
+              echo "--- $f"
+              grep -nE 'setInterval|setTimeout|poll|refresh|interval|cache|withCache|TTL|60_000|300_000|ODDS' "$f" 2>/dev/null || true
+            done
+            echo
+            echo '=== SHARED CACHE IMPLEMENTATION ==='
+            grep -nE 'CACHE_TTL|withCache|cache.*ttl|ttl|expires|Date\.now' server/route-runtime.ts 2>/dev/null || true
+          } | tee audit/inventory.txt
+
+      - name: Prove no provider/network execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s audit/inventory.txt
+          ! grep -E 'curl|wget|fetch\(' .github/workflows/research-p1-odds-consumption-inventory-20260810.yml | grep -v "grep -RIn" | grep -v "grep -RIl"
+
+      - name: Upload static inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-odds-consumption-inventory-20260810
+          path: audit/inventory.txt
+          if-no-files-found: error
+          retention-days: 7
