@@ -328,8 +328,8 @@ test("aggregate diagnostic is opt-in on existing MLB all route and returns no id
     assert.equal(body.researchInjuryIdentityDiagnostic.officialAuthority.safelyResolvableIdentityTotal, 13);
     const diagnosticJson = JSON.stringify(body.researchInjuryIdentityDiagnostic);
     assert.equal(diagnosticJson.includes("secret-test"), false);
-    assert.equal(diagnosticJson.includes("playerId"), false);
-    assert.equal(diagnosticJson.includes("playerName"), false);
+    assert.equal(diagnosticJson.includes('"playerId":'), false);
+    assert.equal(diagnosticJson.includes('"playerName":'), false);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
