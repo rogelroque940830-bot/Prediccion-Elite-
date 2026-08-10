@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "p1-m2b-post-rejected-il-live-evidence.v1",
+  "capturedAt": "2026-08-10T18:12:46Z",
+  "deployedCommit": "78ac15e52cec34b0229b3a2b94dc958720e4e1c1",
+  "chainOfCustody": {
+    "healthHttp": 200,
+    "historicalAllHttp": 200,
+    "currentAllHttp": 200,
+    "commitMatch": true
+  },
+  "historical20260809": {
+    "games": 15,
+    "sides": 30,
+    "verified": 29,
+    "partial": 1,
+    "rawRejectedTotal": 27,
+    "sidesWithRawRejects": 17,
+    "reconciledRejectedTotal": 26,
+    "sidesWithReconciledRejects": 16,
+    "unresolvedRejectedTotal": 1,
+    "sidesWithUnresolvedRejects": 1,
+    "officialSupplementedTotal": 90,
+    "coverageReconciledSides": 27,
+    "evidenceOnlyReconciledSides": 16,
+    "invariantViolations": 0
+  },
+  "current20260810": {
+    "games": 10,
+    "sides": 20,
+    "verified": 19,
+    "partial": 1,
+    "rawRejectedTotal": 17,
+    "sidesWithRawRejects": 11,
+    "reconciledRejectedTotal": 16,
+    "sidesWithReconciledRejects": 10,
+    "unresolvedRejectedTotal": 1,
+    "sidesWithUnresolvedRejects": 1,
+    "officialSupplementedTotal": 64,
+    "coverageReconciledSides": 17,
+    "evidenceOnlyReconciledSides": 10,
+    "invariantViolations": 0
+  },
+  "readinessSample": {
+    "gamesSampled": 3,
+    "evaluations": 6,
+    "statusCounts": { "BLOCKED": 6 },
+    "blockerCounts": { "MARKET_ODDS_MISSING": 6 },
+    "injuryStateCounts": { "FRESH": 6 },
+    "ml": {
+      "evaluations": 3,
+      "advancedFactors": "DEGRADED"
+    },
+    "f5Ml": {
+      "evaluations": 3,
+      "pitcherForm": "DEGRADED",
+      "lineupMatchup": "DEGRADED"
+    }
+  },
+  "conclusion": {
+    "state": "VALID_POST_RECONCILIATION_LIVE_AUDIT",
+    "injuriesRemovedAsSampledHardBlocker": true,
+    "remainingHardBlockerInSample": "MARKET_ODDS_MISSING",
+    "readyFinalObserved": false,
+    "transactionOnlyRejectedIdentityRemainsBlocked": true
+  },
+  "sourceRun": {
+    "researchPullRequest": 457,
+    "workflowRun": 31417880262,
+    "job": 93551164708,
+    "artifactId": 9074137079,
+    "artifactSha256": "52e584f64df8e296c13b7643fa3f50ceedd4f42fd94f05c07e84fb475d180257"
+  },
+  "safety": {
+    "writesPerformedByAudit": 0,
+    "modelChanged": false,
+    "phaseBChanged": false,
+    "recommendationChangedByAudit": false,
+    "rawPayloadUploaded": false,
+    "playerIdentitiesUploaded": false,
+    "teamIdentitiesUploaded": false,
+    "gameIdsUploaded": false,
+    "credentialUploaded": false
+  }
+}
