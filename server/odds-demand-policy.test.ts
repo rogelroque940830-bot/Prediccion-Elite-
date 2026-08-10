@@ -1,3 +1,4 @@
+// Research-only trigger for post-Step-2 deployment proof; no runtime behavior change.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
