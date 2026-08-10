@@ -10,6 +10,8 @@ on:
       - 'server/mlb-p1-pregame-readiness.test.ts'
       - 'server/mlb-p1-pregame-readiness-contract.ts'
       - 'server/mlb-p1-daily-slate.ts'
+      - 'server/mlb-p1-bounded-f5-odds-routes.ts'
+      - 'server/mlb-p1-bounded-f5-odds-routes.test.ts'
       - 'server/routes.ts'
       - 'server/route-contract.extensions.json'
       - 'tsconfig.p1-m2b-mlb-pregame-readiness.json'
@@ -35,8 +37,11 @@ jobs:
         run: npm ci
       - name: Run focused P1-M2B typecheck
         run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
-      - name: Run P1-M2B readiness tests
-        run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+      - name: Run P1-M2B readiness and bounded F5 tests
+        run: |
+          npx tsx --test \
+            server/mlb-p1-pregame-readiness.test.ts \
+            server/mlb-p1-bounded-f5-odds-routes.test.ts
       - name: Run P1-M2A contract regression
         run: npx tsx --test server/mlb-p1-pregame-readiness-contract.test.ts
       - name: Run P1-M1 slate regression
@@ -50,12 +55,17 @@ jobs:
         run: |
           set -euo pipefail
           grep -F 'app.get("/api/mlb/p1/v1/pregame-readiness"' server/mlb-p1-pregame-readiness-routes.ts
+          grep -F 'registerMlbP1BoundedF5OddsRoutes(app)' server/mlb-p1-pregame-readiness-routes.ts
+          grep -F 'app.get("/api/mlb/p1/v1/bounded-f5-odds"' server/mlb-p1-bounded-f5-odds-routes.ts
+          grep -F 'SINGLE_GAME_ON_DEMAND' server/mlb-p1-bounded-f5-odds-routes.ts
+          grep -F 'providerRequests: 0' server/mlb-p1-bounded-f5-odds-routes.ts
+          grep -F 'OUT_OF_USAGE_CREDITS' server/mlb-p1-bounded-f5-odds-routes.test.ts
           grep -F 'courtedge-p1-m2b-pregame-readiness.v1' server/mlb-p1-pregame-readiness-service.ts
           grep -F 'SHADOW_DECISION_SUPPORT' server/mlb-p1-pregame-readiness-service.ts
           grep -F 'realFinancialExposure: 0' server/mlb-p1-pregame-readiness-service.ts
           grep -F 'automaticBetPlacement: false' server/mlb-p1-pregame-readiness-service.ts
           grep -F 'automaticModelChangesAllowed: false' server/mlb-p1-pregame-readiness-service.ts
           grep -F 'automaticPromotionAllowed: false' server/mlb-p1-pregame-readiness-service.ts
-          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]|appendSettlement|UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM' server/mlb-p1-pregame-readiness-*.ts
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]|appendSettlement|UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM' server/mlb-p1-pregame-readiness-*.ts server/mlb-p1-bounded-f5-odds-routes.ts
       - name: Diff hygiene
         run: git diff --check
