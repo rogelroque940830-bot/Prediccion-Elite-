@@ -23,6 +23,7 @@ export type MlbRegistryFamily =
 export type MlbRegistryQuoteShape =
   | "TEAM_TWO_WAY"
   | "TEAM_THREE_WAY"
+  | "TEAM_SPREAD"
   | "OVER_UNDER"
   | "PLAYER_OVER_UNDER"
   | "PLAYER_YES_NO";
@@ -141,7 +142,6 @@ const HARD_ROCK_EXACT_EVIDENCE: Readonly<Record<string, readonly string[]>> = Ob
   alternate_totals: ["HARD_ROCK_TEAM_TOTALS_20260714"],
   team_totals: ["HARD_ROCK_TEAM_TOTALS_20260714"],
   alternate_team_totals: ["HARD_ROCK_TEAM_TOTALS_20260714"],
-  h2h_1st_1_innings: ["HARD_ROCK_MLB_GUIDE_20260807"],
   h2h_1st_5_innings: ["HARD_ROCK_F5_TOTAL_ML_20260701"],
   spreads_1st_5_innings: ["HARD_ROCK_F5_RUN_LINE_20260421"],
   totals_1st_5_innings: ["HARD_ROCK_F5_TOTAL_ML_20260701"],
@@ -166,6 +166,7 @@ const HARD_ROCK_EXACT_EVIDENCE: Readonly<Record<string, readonly string[]>> = Ob
 });
 
 const HARD_ROCK_CATEGORY_ONLY_EVIDENCE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  h2h_1st_1_innings: ["HARD_ROCK_MLB_GUIDE_20260807"],
   batter_first_home_run: ["HARD_ROCK_MLB_GUIDE_20260807"],
   batter_hits_alternate: ["HARD_ROCK_MLB_GUIDE_20260807"],
 });
@@ -242,12 +243,12 @@ function entry(input: {
 
 const FEATURED_MARKETS: readonly MlbMarketRegistryEntry[] = [
   entry({ providerMarketKey: "h2h", displayName: "Moneyline", documentationClass: "MLB_FEATURED", providerApplicability: "MLB_EXPLICIT", acquisition: "SPORT_ODDS_OR_EVENT_ODDS", period: "FULL_GAME", family: "MONEYLINE", quoteShape: "TEAM_TWO_WAY" }),
-  entry({ providerMarketKey: "spreads", displayName: "Run line / spread", documentationClass: "MLB_FEATURED", providerApplicability: "MLB_EXPLICIT", acquisition: "SPORT_ODDS_OR_EVENT_ODDS", period: "FULL_GAME", family: "RUN_LINE", quoteShape: "OVER_UNDER", notes: ["Canonical normalizer requires opposite team lines and paired prices."] }),
+  entry({ providerMarketKey: "spreads", displayName: "Run line / spread", documentationClass: "MLB_FEATURED", providerApplicability: "MLB_EXPLICIT", acquisition: "SPORT_ODDS_OR_EVENT_ODDS", period: "FULL_GAME", family: "RUN_LINE", quoteShape: "TEAM_SPREAD", notes: ["Canonical normalizer requires opposite team lines and paired prices."] }),
   entry({ providerMarketKey: "totals", displayName: "Game total", documentationClass: "MLB_FEATURED", providerApplicability: "MLB_EXPLICIT", acquisition: "SPORT_ODDS_OR_EVENT_ODDS", period: "FULL_GAME", family: "TOTAL", quoteShape: "OVER_UNDER" }),
 ];
 
 const GENERAL_ADDITIONAL_MARKETS: readonly MlbMarketRegistryEntry[] = [
-  entry({ providerMarketKey: "alternate_spreads", displayName: "Alternate run lines / spreads", documentationClass: "GENERAL_ADDITIONAL", providerApplicability: "LIVE_DISCOVERY_REQUIRED", acquisition: "EVENT_ODDS_ONLY", period: "FULL_GAME", family: "RUN_LINE", quoteShape: "OVER_UNDER", notes: ["Provider documents this as a general additional market; MLB availability must be discovered live."] }),
+  entry({ providerMarketKey: "alternate_spreads", displayName: "Alternate run lines / spreads", documentationClass: "GENERAL_ADDITIONAL", providerApplicability: "LIVE_DISCOVERY_REQUIRED", acquisition: "EVENT_ODDS_ONLY", period: "FULL_GAME", family: "RUN_LINE", quoteShape: "TEAM_SPREAD", notes: ["Provider documents this as a general additional market; MLB availability must be discovered live."] }),
   entry({ providerMarketKey: "alternate_totals", displayName: "Alternate game totals", documentationClass: "GENERAL_ADDITIONAL", providerApplicability: "LIVE_DISCOVERY_REQUIRED", acquisition: "EVENT_ODDS_ONLY", period: "FULL_GAME", family: "TOTAL", quoteShape: "OVER_UNDER", notes: ["Provider documents this as a general additional market; Hard Rock first-party MLB content shows alternate run totals, but per-event Florida availability is still required."] }),
   entry({ providerMarketKey: "h2h_3_way", displayName: "Three-way moneyline", documentationClass: "GENERAL_ADDITIONAL", providerApplicability: "LIVE_DISCOVERY_REQUIRED", acquisition: "EVENT_ODDS_ONLY", period: "FULL_GAME", family: "MONEYLINE", quoteShape: "TEAM_THREE_WAY", notes: ["No MLB-specific provider applicability is asserted; live discovery is mandatory.", "Must never be coerced into the two-way MLB moneyline contract."] }),
   entry({ providerMarketKey: "team_totals", displayName: "Team totals", documentationClass: "GENERAL_ADDITIONAL", providerApplicability: "LIVE_DISCOVERY_REQUIRED", acquisition: "EVENT_ODDS_ONLY", period: "FULL_GAME", family: "TEAM_TOTAL", quoteShape: "OVER_UNDER", notes: ["Hard Rock first-party baseball content confirms team totals; exact Florida event availability still requires live discovery."] }),
@@ -257,8 +258,8 @@ const GENERAL_ADDITIONAL_MARKETS: readonly MlbMarketRegistryEntry[] = [
 const BASEBALL_PERIOD_FAMILIES = [
   { prefix: "h2h", label: "Moneyline", family: "MONEYLINE" as const, quoteShape: "TEAM_TWO_WAY" as const },
   { prefix: "h2h_3_way", label: "Three-way moneyline", family: "MONEYLINE" as const, quoteShape: "TEAM_THREE_WAY" as const },
-  { prefix: "spreads", label: "Run line / spread", family: "RUN_LINE" as const, quoteShape: "OVER_UNDER" as const },
-  { prefix: "alternate_spreads", label: "Alternate run lines / spreads", family: "RUN_LINE" as const, quoteShape: "OVER_UNDER" as const },
+  { prefix: "spreads", label: "Run line / spread", family: "RUN_LINE" as const, quoteShape: "TEAM_SPREAD" as const },
+  { prefix: "alternate_spreads", label: "Alternate run lines / spreads", family: "RUN_LINE" as const, quoteShape: "TEAM_SPREAD" as const },
   { prefix: "totals", label: "Total", family: "TOTAL" as const, quoteShape: "OVER_UNDER" as const },
   { prefix: "alternate_totals", label: "Alternate totals", family: "TOTAL" as const, quoteShape: "OVER_UNDER" as const },
 ] as const;

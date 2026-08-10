@@ -54,6 +54,30 @@ test("documented baseball period catalog includes 1, 3, 5 and 7 inning families 
   assert.equal(getMlbMarketRegistryEntry("team_totals_1st_3_innings"), null);
 });
 
+test("run-line families use a team-spread quote shape and first-inning winner evidence stays category-only", () => {
+  for (const key of [
+    "spreads",
+    "alternate_spreads",
+    "spreads_1st_1_innings",
+    "alternate_spreads_1st_1_innings",
+    "spreads_1st_3_innings",
+    "alternate_spreads_1st_3_innings",
+    "spreads_1st_5_innings",
+    "alternate_spreads_1st_5_innings",
+    "spreads_1st_7_innings",
+    "alternate_spreads_1st_7_innings",
+  ]) {
+    const market = getMlbMarketRegistryEntry(key);
+    assert.ok(market, `missing spread registry entry: ${key}`);
+    assert.equal(market.quoteShape, "TEAM_SPREAD", `${key} must not be modeled as an over/under quote`);
+  }
+
+  const firstInningWinner = getMlbMarketRegistryEntry("h2h_1st_1_innings");
+  assert.ok(firstInningWinner);
+  assert.equal(firstInningWinner.hardRockEvidenceStatus, "CATEGORY_ONLY_FIRST_PARTY_EVIDENCE");
+  assert.equal(firstInningWinner.liveHardRockFloridaDiscoveryRequired, true);
+});
+
 test("three-way markets remain contract mismatches and are never treated as two-way MLB moneylines", () => {
   for (const key of [
     "h2h_3_way",
