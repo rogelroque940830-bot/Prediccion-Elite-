@@ -484,7 +484,7 @@ export class MlbS5eCoverageService {
       try {
         let payload = payloadByDate.get(record.prediction.game.gameDate);
         if (!payload) {
-          payload = await fetchJson(this.fetcher, `${this.selfBaseUrl}/api/odds/mlb/f5?date=${encodeURIComponent(record.prediction.game.gameDate)}`);
+          payload = await fetchJson(this.fetcher, `${this.selfBaseUrl}/api/odds/mlb/f5?date=${encodeURIComponent(record.prediction.game.gameDate)}&background=cache-only`);
           payloadByDate.set(record.prediction.game.gameDate, payload);
         }
         const games = Array.isArray(payload?.games) ? payload.games : [];

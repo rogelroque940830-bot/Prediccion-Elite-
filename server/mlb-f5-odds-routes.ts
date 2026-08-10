@@ -11,6 +11,8 @@ export const MLB_F5_ODDS_SCHEMA_VERSION = "mlb-f5-odds-consensus.v2" as const;
 export const MLB_F5_CONSENSUS_METHOD = "median_implied_probability" as const;
 const MLB_F5_CACHE_KEY = "mlb-f5-events-v2-probability-consensus";
 const F5_BOOKS = ["fanduel", "betmgm", "draftkings"] as const;
+const F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000;
+const f5BackgroundCache = new Map<string, { data: any; providerFetchedAt: number }>();
 
 type RawPriceQuote = {
   bookKey: string;
@@ -284,42 +286,90 @@ async function handleMlbF5Odds(req: Request, res: Response, next: NextFunction):
 
   const dateParam = String(req.query.date ?? "").trim();
   const cacheKey = `${MLB_F5_CACHE_KEY}:${dateParam || "all"}`;
+  const backgroundCacheOnly = String(req.query.background ?? "").trim().toLowerCase() === "cache-only";
   try {
-    const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
-    const data = await withCache(cacheKey, async () => {
-      const eventsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/baseball_mlb/events/?apiKey=${ODDS_API_KEY}`);
-      const events = await eventsResponse.json();
-      if (!Array.isArray(events)) {
-        const error: any = new Error(events?.message || "Odds API error");
-        error.code = events?.error_code;
-        error.noCache = true;
-        throw error;
+    let data: any;
+    if (backgroundCacheOnly) {
+      const cached = f5BackgroundCache.get(cacheKey);
+      if (!cached || Date.now() - cached.providerFetchedAt >= F5_BACKGROUND_CACHE_TTL_MS) {
+        return void res.json({
+          success: false,
+          schemaVersion: MLB_F5_ODDS_SCHEMA_VERSION,
+          games: [],
+          source: "n/a",
+          code: "BACKGROUND_CACHE_MISS",
+          error: "No recent F5 cache is available; background provider refresh is disabled to conserve quota.",
+          backgroundCacheOnly: true,
+        });
       }
-
-      const eligibleEvents = dateParam
-        ? events.filter((event: any) => commenceToFloridaDate(String(event?.commence_time ?? "")) === dateParam)
-        : events;
-      const queue = [...eligibleEvents];
-      const games: any[] = [];
-      const workers = Array.from({ length: 4 }, async () => {
-        while (queue.length > 0) {
-          const event: any = queue.shift();
-          if (!event) break;
-          try {
-            const url = `https://api.the-odds-api.com/v4/sports/baseball_mlb/events/${event.id}/odds/?apiKey=${ODDS_API_KEY}&regions=us,us2&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&bookmakers=${F5_BOOKS.join(",")}`;
-            const response = await fetch(url);
-            if (!response.ok) continue;
-            const providerGame = await response.json();
-            games.push(buildMlbF5ConsensusGame(providerGame, new Date().toISOString()));
-          } catch {
-            // One event may be unavailable while the rest of the slate remains usable.
-          }
+      data = cached.data;
+    } else {
+      const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
+      data = await withCache(cacheKey, async () => {
+        const providerFetchedAt = Date.now();
+        const eventsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/baseball_mlb/events/?apiKey=${ODDS_API_KEY}`);
+        const events = await eventsResponse.json();
+        if (!Array.isArray(events)) {
+          const error: any = new Error(events?.message || "Odds API error");
+          error.code = events?.error_code;
+          error.noCache = true;
+          throw error;
         }
-      });
-      await Promise.all(workers);
-      return { games };
-    });
 
+        const eligibleEvents = dateParam
+          ? events.filter((event: any) => commenceToFloridaDate(String(event?.commence_time ?? "")) === dateParam)
+          : events;
+        const queue = [...eligibleEvents];
+        const games: any[] = [];
+        const eventFailures: Array<{ code: string | null; message: string; status: number | null }> = [];
+        const workers = Array.from({ length: 4 }, async () => {
+          while (queue.length > 0) {
+            const event: any = queue.shift();
+            if (!event) break;
+            try {
+              const url = `https://api.the-odds-api.com/v4/sports/baseball_mlb/events/${event.id}/odds/?apiKey=${ODDS_API_KEY}&regions=us,us2&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&bookmakers=${F5_BOOKS.join(",")}`;
+              const response = await fetch(url);
+              if (!response.ok) {
+                const body: any = await response.json().catch(() => null);
+                eventFailures.push({
+                  code: String(body?.error_code ?? "").trim() || null,
+                  message: String(body?.message ?? `Odds API HTTP ${response.status}`),
+                  status: response.status,
+                });
+                continue;
+              }
+              const providerGame = await response.json();
+              games.push(buildMlbF5ConsensusGame(providerGame, new Date().toISOString()));
+            } catch (error) {
+              eventFailures.push({
+                code: null,
+                message: error instanceof Error ? error.message : String(error),
+                status: null,
+              });
+            }
+          }
+        });
+        await Promise.all(workers);
+        if (eligibleEvents.length > 0 && games.length === 0 && eventFailures.length > 0) {
+          const first = eventFailures[0];
+          const error: any = new Error(first.message || "F5 event odds provider failure");
+          error.code = first.code || "F5_EVENT_ODDS_PROVIDER_FAILURE";
+          error.noCache = true;
+          throw error;
+        }
+        return {
+          games,
+          providerFetchedAt,
+          eligibleEventCount: eligibleEvents.length,
+          providerFailureCount: eventFailures.length,
+          providerErrorCodes: Array.from(new Set(eventFailures.map((failure) => failure.code).filter(Boolean))),
+        };
+      });
+      const providerFetchedAt = Number(data?.providerFetchedAt);
+      if (Number.isFinite(providerFetchedAt) && providerFetchedAt > 0) {
+        f5BackgroundCache.set(cacheKey, { data, providerFetchedAt });
+      }
+    }
     let games = Array.isArray((data as any)?.games) ? (data as any).games : [];
     if (dateParam) {
       games = games.filter((game: any) => commenceToFloridaDate(String(game?.commence ?? "")) === dateParam);
@@ -334,6 +384,11 @@ async function handleMlbF5Odds(req: Request, res: Response, next: NextFunction):
       games,
       source: sources.join(", ") || "n/a",
       consensusMethod: MLB_F5_CONSENSUS_METHOD,
+      backgroundCacheOnly,
+      coverageStatus: Number((data as any)?.providerFailureCount || 0) > 0 ? "PARTIAL" : "COMPLETE",
+      eligibleEventCount: Number((data as any)?.eligibleEventCount || 0),
+      providerFailureCount: Number((data as any)?.providerFailureCount || 0),
+      providerErrorCodes: Array.isArray((data as any)?.providerErrorCodes) ? (data as any).providerErrorCodes : [],
       note: "Hard Rock no publica mercados F5. Consenso por mediana de probabilidad implícita de FanDuel/BetMGM/DraftKings; nunca se promedian cuotas americanas directamente.",
     });
   } catch (error: any) {

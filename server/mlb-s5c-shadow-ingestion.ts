@@ -525,13 +525,17 @@ export class MlbS5cShadowIngestionService {
     };
 
     try {
-      const [schedule, oddsPayload] = await Promise.all([
-        fetchJson(this.fetcher, `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${encodeURIComponent(gameDate)}&hydrate=team,probablePitcher,venue,weather`),
-        fetchJson(this.fetcher, `${this.selfBaseUrl}/api/odds/mlb/f5?date=${encodeURIComponent(gameDate)}`),
-      ]);
+      const schedule = await fetchJson(
+        this.fetcher,
+        `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${encodeURIComponent(gameDate)}&hydrate=team,probablePitcher,venue,weather`,
+      );
       const games = scheduleGames(schedule);
-      const oddsGames = Array.isArray(oddsPayload?.games) ? oddsPayload.games : [];
       summary.gamesDiscovered = games.length;
+      const hasPregameGame = games.some((game) => isPregame(game, now.getTime()));
+      const oddsPayload = hasPregameGame
+        ? await fetchJson(this.fetcher, `${this.selfBaseUrl}/api/odds/mlb/f5?date=${encodeURIComponent(gameDate)}&background=cache-only`)
+        : { success: true, games: [], backgroundCacheOnly: true };
+      const oddsGames = Array.isArray(oddsPayload?.games) ? oddsPayload.games : [];
 
       for (const game of games) {
         if (!isPregame(game, now.getTime())) {
