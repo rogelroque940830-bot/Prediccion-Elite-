@@ -56,7 +56,6 @@ export function isOfficialMlbIlRosterIdentity(entry: MlbInjuryIdentityOfficialRo
  *
  * This helper is intentionally side-effect free; the core route remains responsible for
  * downstream stats enrichment and can still reject a resolved identity if enrichment fails.
- * The registered S5A patch job wires this helper into core only after its guarded tests pass.
  */
 export function resolveMlbInjuryIdentity(input: {
   playerName: string;
