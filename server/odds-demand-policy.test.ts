@@ -1,3 +1,4 @@
+// Research-only trigger for post-Registry exact-deployment verification; runtime logic is unchanged.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
