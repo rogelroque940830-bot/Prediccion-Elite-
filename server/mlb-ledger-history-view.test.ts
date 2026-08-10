@@ -1,0 +1,141 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
+
+function record({
+  id,
+  recordedAtMs,
+  marketType,
+  selection,
+  odds,
+  stake,
+  result,
+  profitUnits,
+}: {
+  id: string;
+  recordedAtMs: number;
+  marketType: string;
+  selection: string;
+  odds: number;
+  stake: number;
+  result?: string;
+  profitUnits?: number;
+}) {
+  return {
+    prediction: {
+      id,
+      clientRequestId: `request-${id}`,
+      recordedAt: new Date(recordedAtMs).toISOString(),
+      recordedAtMs,
+      game: {
+        gamePk: 123,
+        gameDate: "2026-07-28",
+        commenceTime: "2026-07-28T23:10:00.000Z",
+        homeTeam: "Detroit Tigers",
+        awayTeam: "Baltimore Orioles",
+      },
+      market: {
+        type: marketType,
+        selection,
+        line: null,
+        oddsAmerican: odds,
+        book: "Hard Rock",
+      },
+      probabilities: {
+        model: 0.61,
+        marketImplied: 0.56,
+        noVig: 0.55,
+        edgePp: 6,
+      },
+      decision: {
+        signal: "BET",
+        confidenceLabel: "A",
+        confidencePct: 61,
+        stakeUnits: stake,
+      },
+      analysisStage: "FINAL",
+      model: { name: "CourtEdge MLB", version: "predictor-full-snapshot-v2" },
+      source: "app",
+      payloadSha256: `sha-${id}`,
+      payload: {
+        analysis: {
+          injuryAudit: { schemaVersion: "mlb-injury-audit.v1" },
+        },
+      },
+    },
+    settlement: result ? {
+      eventId: `event-${id}`,
+      predictionId: id,
+      recordedAt: new Date(recordedAtMs + 1000).toISOString(),
+      recordedAtMs: recordedAtMs + 1000,
+      settledAt: new Date(recordedAtMs + 1000).toISOString(),
+      result,
+      closingOddsAmerican: null,
+      closingLine: null,
+      closingImpliedProbability: null,
+      clvPp: null,
+      outcomeValue: null,
+      finalScore: { home: 5, away: 3 },
+      profitUnits: profitUnits ?? 0,
+      source: "official",
+      payloadSha256: `settlement-sha-${id}`,
+      payload: {},
+    } : null,
+  } as any;
+}
+
+test("builds ledger-backed history summary and keeps pending picks", () => {
+  const view = buildMlbLedgerHistoryView([
+    record({ id: "old-loss", recordedAtMs: 1000, marketType: "ML", selection: "Seattle Mariners ML", odds: -140, stake: 1, result: "LOSS", profitUnits: -1 }),
+    record({ id: "new-pending", recordedAtMs: 3000, marketType: "F5_ML", selection: "Detroit Tigers F5 ML", odds: -115, stake: 1 }),
+    record({ id: "middle-win", recordedAtMs: 2000, marketType: "TOTAL", selection: "Under 8.5", odds: 110, stake: 1, result: "WIN", profitUnits: 1.1 }),
+  ]);
+
+  assert.equal(view.schemaVersion, "mlb-ledger-history-view.v1");
+  assert.equal(view.source, "immutable-ledger");
+  assert.deepEqual(view.summary, {
+    total: 3,
+    pending: 1,
+    settled: 2,
+    wins: 1,
+    losses: 1,
+    pushes: 0,
+    voids: 0,
+    winRatePct: 50,
+    totalProfitUnits: 0.1,
+    totalStakedUnits: 2,
+    roiPct: 5,
+  });
+  assert.equal(view.picks[0].id, "new-pending");
+  assert.equal(view.picks[0].result, "PENDING");
+  assert.equal(view.picks[0].immutable, true);
+  assert.equal(view.picks[1].result, "W");
+  assert.equal(view.picks[2].result, "L");
+});
+
+test("excludes pushes and voids from ROI denominator", () => {
+  const view = buildMlbLedgerHistoryView([
+    record({ id: "push", recordedAtMs: 1000, marketType: "TOTAL", selection: "Over 8", odds: -110, stake: 2, result: "PUSH", profitUnits: 0 }),
+    record({ id: "void", recordedAtMs: 2000, marketType: "ML", selection: "Detroit Tigers ML", odds: -120, stake: 3, result: "VOID", profitUnits: 0 }),
+  ]);
+
+  assert.equal(view.summary.settled, 2);
+  assert.equal(view.summary.pushes, 1);
+  assert.equal(view.summary.voids, 1);
+  assert.equal(view.summary.totalStakedUnits, 0);
+  assert.equal(view.summary.roiPct, 0);
+});
+
+
+test("marks equivalent C1 ledger records as analytical duplicates without removing them", () => {
+  const first = record({ id: "first", recordedAtMs: 1000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
+  const duplicate = record({ id: "duplicate", recordedAtMs: 2000, marketType: "ML", selection: "Detroit Tigers ML", odds: -140, stake: 1, result: "WIN", profitUnits: 0.7143 });
+  const view = buildMlbLedgerHistoryView([first, duplicate]);
+  assert.equal(view.summary.total, 2);
+  assert.equal(view.analyticalCalibration.auditedLedgerRecords, 2);
+  assert.equal(view.analyticalCalibration.uniqueDecisions, 1);
+  assert.equal(view.analyticalCalibration.duplicatesExcluded, 1);
+  const duplicatePick = view.picks.find((pick) => pick.id === "duplicate");
+  assert.equal(duplicatePick?.analyticalDuplicate, true);
+  assert.equal(duplicatePick?.analyticalDuplicateOfPredictionId, "first");
+});

@@ -26,6 +26,17 @@ import {
 } from "./sharp-signals";
 import { computeContextual } from "./nba-contextual";
 import { computeMLBContextual } from "./mlb-contextual";
+import { registerNbaManualRoutes } from "./nba-manual-routes";
+import { registerIndependentNbaRoutes } from "./nba-independent-routes";
+import { registerNhlManualRoutes } from "./nhl-manual-routes";
+import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";
+import { buildMlbPeopleSearchUrl } from "./mlb-injury-identity";
+import {
+  classifyMlbInjuryShadow,
+  fetchOfficialMlbInjurySnapshot,
+  summarizeMlbInjuryShadow,
+} from "./mlb-injury-shadow";
+import { buildMlbInjuryPhaseBPlan } from "./mlb-injury-phase-b";
 
 function requireSecret(name: string): string {
   const value = (process.env[name] || "").trim();
@@ -63,10 +74,48 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return data;
 }
 
-async function nbaFetch(url: string) {
-  const res = await fetch(url, { headers: NBA_HEADERS });
-  if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
-  return res.json();
+async function nbaFetch(
+  url: string,
+  headers: Record<string, string> = NBA_HEADERS,
+  timeoutMs = 12_000,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (!res.ok) throw new Error(`NBA API ${res.status}: ${url}`);
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const WNBA_HEADERS: Record<string, string> = {
+  ...NBA_HEADERS,
+  Referer: "https://www.wnba.com/",
+  Origin: "https://www.wnba.com",
+};
+
+async function wnbaFetch(url: string) {
+  const candidates: Array<{ url: string; headers: Record<string, string> }> = url.includes("stats.nba.com")
+    ? [
+        // Reproduce primero la llamada exacta que ya funciona en producción.
+        { url, headers: NBA_HEADERS },
+        // Host alternativo WNBA con sus propios Origin/Referer.
+        { url: url.replace("https://stats.nba.com", "https://stats.wnba.com"), headers: WNBA_HEADERS },
+      ]
+    : [{ url, headers: url.includes("stats.wnba.com") ? WNBA_HEADERS : NBA_HEADERS }];
+
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return await nbaFetch(candidate.url, candidate.headers, 12_000);
+    } catch (error) {
+      lastError = error;
+      console.warn(`WNBA stats source failed: ${candidate.url}`, error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("WNBA stats sources unavailable");
 }
 
 function idx(headers: string[], name: string) {
@@ -163,7 +212,37 @@ function savePicks(picks: SavedPick[]): void {
   }
 }
 
+async function resolveMlbAnalysisDate(rawDate: unknown, gamePk?: number): Promise<string> {
+  const candidate = String(rawDate || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+
+  if (Number.isFinite(gamePk) && Number(gamePk) > 0) {
+    try {
+      const response = await fetch(
+        `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePks=${Number(gamePk)}`,
+        { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } },
+      );
+      if (response.ok) {
+        const payload: any = await response.json();
+        const resolved = payload?.dates?.[0]?.date;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(resolved || ""))) {
+          return String(resolved);
+        }
+      }
+    } catch (error) {
+      console.warn("[MLB] Could not resolve analysis date from gamePk", gamePk, error);
+    }
+  }
+
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function registerRoutes(httpServer: Server, app: Express): void {
+  registerIndependentNbaRoutes(app);
+  registerNbaManualRoutes(app);
+  registerNhlManualRoutes(app);
+  registerIndependentWnbaRoutes(app);
+
 
   // ── Early Markets MLB ──────────────────────────────────
   // F5 ML, F5 O/U, NRFI/YRFI, 1ª-2ª-3ª inning ML
@@ -177,7 +256,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
       // Calcular ERE para ambos equipos + matchup signal en paralelo
       const sharedGamePk = home.gamePk || away.gamePk;
-      const currentSeason = new Date().getFullYear();
+      const analysisDateIso = await resolveMlbAnalysisDate(req.body?.gameDate, sharedGamePk);
+      const currentSeason = Number(analysisDateIso.slice(0, 4));
       // FASE 1 — toggle para A/B testing del matchup signal
       const disableMatchup = req.body?.disableMatchup === true || req.query?.disableMatchup === "1";
       const [homeEre, awayEre, matchupSignal] = await Promise.all([
@@ -186,14 +266,14 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           gamePk: home.gamePk, opposingPitcherId: home.opposingPitcherId,
           opposingPitcherHand: home.opposingPitcherHand,
           venue: home.venue, tempF: home.tempF, windMph: home.windMph,
-          windDirOut: home.windDirOut,
+          windDirOut: home.windDirOut, gameDate: analysisDateIso,
         }),
         computeMlbEre({
           teamId: away.teamId, teamName: away.teamName || "",
           gamePk: away.gamePk, opposingPitcherId: away.opposingPitcherId,
           opposingPitcherHand: away.opposingPitcherHand,
           venue: away.venue, tempF: away.tempF, windMph: away.windMph,
-          windDirOut: away.windDirOut,
+          windDirOut: away.windDirOut, gameDate: analysisDateIso,
         }),
         // FASE 1 — matchup pitch-by-pitch para refinar NRFI/YRFI top-4
         (sharedGamePk && !disableMatchup)
@@ -213,7 +293,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         | { home: Array<{ type: any; label: string }>; away: Array<{ type: any; label: string }> }
         | undefined = undefined;
       try {
-        const gameDateIso = (req.body?.gameDate as string) || new Date().toISOString().slice(0, 10);
+        const gameDateIso = analysisDateIso;
         const [{ getPitcherRecentCombined }, { analyzePitcherVsTeamMatchup }, { getTeamSos }, { getPitcherQualityMap }] = await Promise.all([
           import("./mlb-pitcher-recent"),
           import("./mlb-pitcher-vs-team"),
@@ -362,6 +442,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const tempF = req.query.tempF ? parseFloat(String(req.query.tempF)) : undefined;
       const windMph = req.query.windMph ? parseFloat(String(req.query.windMph)) : undefined;
       const windDirOut = String(req.query.windOut || "false").toLowerCase() === "true";
+      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);
 
       const data = await computeMlbEre({
         teamId, teamName,
@@ -372,6 +453,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         tempF: isNaN(tempF as any) ? undefined : tempF,
         windMph: isNaN(windMph as any) ? undefined : windMph,
         windDirOut,
+        gameDate,
       });
       res.json({ success: true, data });
     } catch (e: any) {
@@ -390,11 +472,13 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const opposingPitcherId = req.query.pitcherId ? parseInt(String(req.query.pitcherId), 10) : undefined;
       const handStr = String(req.query.hand || "").toUpperCase();
       const opposingPitcherHand: "R" | "L" | undefined = handStr === "R" || handStr === "L" ? (handStr as "R" | "L") : undefined;
+      const gameDate = await resolveMlbAnalysisDate(req.query.date, gamePk);
 
       const data = await computeMlbTesi({
         teamId, teamName, gamePk: isNaN(gamePk as any) ? undefined : gamePk,
         opposingPitcherId: isNaN(opposingPitcherId as any) ? undefined : opposingPitcherId,
         opposingPitcherHand,
+        gameDate,
       });
       res.json({ success: true, data });
     } catch (e: any) {
@@ -1402,39 +1486,134 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     TEX: 140, TOR: 141, WSH: 120, WAS: 120,
   };
 
-  // Cache global de lesionados MLB (se refresca cada 30 min)
-  let mlbInjuryCache: { ts: number; byTeam: Record<number, any[]> } = { ts: 0, byTeam: {} };
-  async function getMLBInjuriesFromBDL(): Promise<Record<number, any[]>> {
-    const now = Date.now();
-    if (now - mlbInjuryCache.ts < 30 * 60 * 1000 && Object.keys(mlbInjuryCache.byTeam).length > 0) {
-      return mlbInjuryCache.byTeam;
+  type MlbInjuryFeedStatus = "VERIFIED" | "PARTIAL" | "SOURCE_UNAVAILABLE";
+  interface MlbInjuryFeed {
+    status: MlbInjuryFeedStatus;
+    source: "BALLDONTLIE";
+    fetchedAt: string;
+    stale: boolean;
+    sourceErrors: string[];
+    totalRecords: number;
+    activeRecords: number;
+    byTeam: Record<number, any[]>;
+  }
+
+  const MLB_INJURY_TTL_MS = 5 * 60 * 1000;
+  const MLB_MAX_TRUSTED_INJURIES_PER_TEAM = 18;
+  let mlbInjuryCache: { ts: number; feed: MlbInjuryFeed } | null = null;
+
+  function isActiveMlbInjuryRecord(injury: any): boolean {
+    const text = [
+      injury?.status,
+      injury?.type,
+      injury?.detail,
+      injury?.description,
+      injury?.short_comment,
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    if (!text) return false;
+    if (/\b(reinstated|activated|available|healthy|returned|cleared|probable)\b/.test(text)) return false;
+    return /\b(out|injured list|day[- ]to[- ]day|dtd|doubtful|questionable|suspended|bereavement|paternity|restricted list)\b/.test(text)
+      || /\b(10|15|60)[- ]day il\b/.test(text)
+      || /\bil\b/.test(text);
+  }
+
+  function dedupeMlbInjuries(records: any[]): any[] {
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const injury of records) {
+      const player = injury?.player ?? {};
+      const key = String(player.id || player.player_id || player.full_name || `${player.first_name || ""}-${player.last_name || ""}`).toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(injury);
     }
+    return result;
+  }
+
+  async function getMLBInjuriesFromBDL(): Promise<MlbInjuryFeed> {
+    const now = Date.now();
+    if (mlbInjuryCache && now - mlbInjuryCache.ts < MLB_INJURY_TTL_MS) {
+      return mlbInjuryCache.feed;
+    }
+
+    const previous = mlbInjuryCache?.feed;
     const byTeam: Record<number, any[]> = {};
+    let totalRecords = 0;
+    let activeRecords = 0;
+    const sourceErrors: string[] = [];
+
     try {
       let cursor: number | null = null;
       let pages = 0;
       while (pages < 10) {
         const url: string = `${BDL_BASE}/mlb/v1/player_injuries?per_page=100${cursor ? `&cursor=${cursor}` : ""}`;
-        const r = await fetch(url, { headers: { Authorization: BDL_KEY } });
-        if (!r.ok) break;
+        const r = await fetch(url, { headers: { Authorization: BDL_KEY, Accept: "application/json" } });
+        if (!r.ok) throw new Error(`BALLDONTLIE injuries HTTP ${r.status}`);
         const j: any = await r.json();
-        const data: any[] = j.data ?? [];
-        for (const inj of data) {
-          const abbr = (inj.player?.team?.abbreviation || "").toUpperCase();
+        const data: any[] = Array.isArray(j.data) ? j.data : [];
+        totalRecords += data.length;
+
+        for (const injury of data) {
+          if (!isActiveMlbInjuryRecord(injury)) continue;
+          const abbr = (injury.player?.team?.abbreviation || "").toUpperCase();
           const mlbTeamId = BDL_MLB_TEAM_TO_ID[abbr];
           if (!mlbTeamId) continue;
           if (!byTeam[mlbTeamId]) byTeam[mlbTeamId] = [];
-          byTeam[mlbTeamId].push(inj);
+          byTeam[mlbTeamId].push(injury);
+          activeRecords++;
         }
+
+        pages++;
         cursor = j.meta?.next_cursor ?? null;
         if (!cursor) break;
-        pages++;
       }
-      mlbInjuryCache = { ts: now, byTeam };
-    } catch (e) {
-      console.error("BDL MLB injuries fetch failed:", e);
+
+      for (const teamId of Object.keys(byTeam).map(Number)) {
+        byTeam[teamId] = dedupeMlbInjuries(byTeam[teamId]);
+      }
+
+      const feed: MlbInjuryFeed = {
+        status: "VERIFIED",
+        source: "BALLDONTLIE",
+        fetchedAt: new Date(now).toISOString(),
+        stale: false,
+        sourceErrors,
+        totalRecords,
+        activeRecords,
+        byTeam,
+      };
+      mlbInjuryCache = { ts: now, feed };
+      return feed;
+    } catch (error: any) {
+      const message = String(error?.message || error || "Unknown injury-source failure");
+      sourceErrors.push(message);
+      console.error("BDL MLB injuries fetch failed:", error);
+
+      if (previous && Object.keys(previous.byTeam).length > 0) {
+        const feed: MlbInjuryFeed = {
+          ...previous,
+          status: "PARTIAL",
+          stale: true,
+          sourceErrors: [...previous.sourceErrors, ...sourceErrors],
+        };
+        mlbInjuryCache = { ts: now, feed };
+        return feed;
+      }
+
+      const feed: MlbInjuryFeed = {
+        status: "SOURCE_UNAVAILABLE",
+        source: "BALLDONTLIE",
+        fetchedAt: new Date(now).toISOString(),
+        stale: false,
+        sourceErrors,
+        totalRecords: 0,
+        activeRecords: 0,
+        byTeam: {},
+      };
+      mlbInjuryCache = { ts: now, feed };
+      return feed;
     }
-    return byTeam;
   }
 
   function parseIP(ip: string): number {
@@ -2134,9 +2313,14 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         // 2. Collect unique team IDs and pitcher IDs
         const teamIds = new Set<number>();
         const pitcherIds = new Set<number>();
+        const probablePitcherByTeam: Record<number, number | null> = {};
         for (const g of rawGames) {
-          teamIds.add(g.teams.home.team.id);
-          teamIds.add(g.teams.away.team.id);
+          const homeTeamId = g.teams.home.team.id;
+          const awayTeamId = g.teams.away.team.id;
+          teamIds.add(homeTeamId);
+          teamIds.add(awayTeamId);
+          probablePitcherByTeam[homeTeamId] = g.teams.home.probablePitcher?.id ?? null;
+          probablePitcherByTeam[awayTeamId] = g.teams.away.probablePitcher?.id ?? null;
           if (g.teams.home.probablePitcher?.id) pitcherIds.add(g.teams.home.probablePitcher.id);
           if (g.teams.away.probablePitcher?.id) pitcherIds.add(g.teams.away.probablePitcher.id);
         }
@@ -2368,13 +2552,77 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         });
         await Promise.all(pitcherPromises);
 
-        // 5a. Fetch injuries from BALLDONTLIE (incluye Day-To-Day + IL)
-        const bdlInjuriesByTeam = await getMLBInjuriesFromBDL();
+        // 5a. Fetch injuries from BALLDONTLIE with explicit source quality.
+        const injuryFeed = await getMLBInjuriesFromBDL();
+        const bdlInjuriesByTeam = injuryFeed.byTeam;
         const injuryMap: Record<number, any[]> = {};
+        const injuryMetaMap: Record<number, any> = {};
+        const officialInjurySnapshots: Record<number, Awaited<ReturnType<typeof fetchOfficialMlbInjurySnapshot>>> = {};
+        await Promise.all([...teamIds].map(async (tid) => {
+          officialInjurySnapshots[tid] = await fetchOfficialMlbInjurySnapshot(tid, dateParam);
+        }));
         const injuryPromises = [...teamIds].map(async (tid) => {
-          const bdlList = bdlInjuriesByTeam[tid] ?? [];
+          const rawBdlList = bdlInjuriesByTeam[tid] ?? [];
+          const anomalous = rawBdlList.length > MLB_MAX_TRUSTED_INJURIES_PER_TEAM;
+          const teamStatus = anomalous ? "ANOMALOUS" : injuryFeed.status;
+          const officialSnapshot = officialInjurySnapshots[tid];
+          injuryMetaMap[tid] = {
+            source: injuryFeed.source,
+            validationSource: officialSnapshot?.source ?? "MLB_STATS",
+            status: teamStatus,
+            fetchedAt: injuryFeed.fetchedAt,
+            stale: injuryFeed.stale,
+            sourceErrors: [...(injuryFeed.sourceErrors ?? []), ...(officialSnapshot?.errors ?? [])],
+            officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+            officialFetchedAt: officialSnapshot?.fetchedAt,
+            count: rawBdlList.length,
+            autoApplyAllowed: false,
+            shadowMode: true,
+            note: anomalous
+              ? `Lista anormal (${rawBdlList.length}); ajuste automático bloqueado`
+              : teamStatus === "SOURCE_UNAVAILABLE"
+                ? "Fuente de lesiones no disponible"
+                : teamStatus === "PARTIAL"
+                  ? "Datos de lesiones en caché/degradados; clasificación conservadora"
+                  : rawBdlList.length === 0
+                    ? "BALLDONTLIE no reporta ausencias; MLB se usa para comprobar cobertura"
+                    : "Ausencias detectadas por BALLDONTLIE y enviadas a validación MLB",
+          };
+
+          const bdlList = anomalous ? [] : rawBdlList;
           if (bdlList.length === 0) {
+            const officialIlEntries = Object.values(officialSnapshot?.rosterByPlayerId ?? {})
+              .filter((entry: any) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")));
+            const officialOnly = anomalous ? 0 : officialIlEntries.length;
+            const sourcesVerified = !anomalous
+              && injuryFeed.status === "VERIFIED"
+              && officialSnapshot?.status === "VERIFIED";
+            const phaseB = buildMlbInjuryPhaseBPlan({
+              sourceStatus: injuryFeed.status,
+              officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+              stale: injuryFeed.stale,
+              anomalous,
+              rejectedCount: 0,
+              officialOnly,
+              players: [],
+            });
             injuryMap[tid] = [];
+            injuryMetaMap[tid] = {
+              ...injuryMetaMap[tid],
+              status: anomalous ? "ANOMALOUS" : sourcesVerified && officialOnly === 0 ? "VERIFIED" : "PARTIAL",
+              autoApplyAllowed: phaseB.autoApplyAllowed,
+              phaseB,
+              shadowSummary: {
+                total: 0, applyCandidates: 0, alreadyReflected: 0,
+                ignored: 0, conflicts: 0, pending: 0,
+                highConfidence: 0, officialOnly, mode: "SHADOW",
+              },
+              note: anomalous
+                ? `Lista anormal (${rawBdlList.length}); ajuste automático bloqueado`
+                : officialOnly > 0
+                  ? `BALLDONTLIE no reportó ${officialOnly} jugador(es) que MLB mantiene en lista de lesionados; cobertura en revisión`
+                  : "Ambas fuentes verificadas: no hay ausencias activas confirmadas para este equipo",
+            };
             return;
           }
           const teamGP = teamStatsMap[tid]?.gamesPlayed ?? 0;
@@ -2384,27 +2632,31 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             const name = player.full_name || `${player.first_name} ${player.last_name}`.trim();
             const pos = player.position || "";
             const status = inj.status || "";
-            const isPitcher = /pitcher/i.test(pos);
+            const normalizedPos = String(pos).trim().toUpperCase();
+            const isPitcher = /pitcher/i.test(String(pos)) || ["P", "SP", "RP", "LHP", "RHP"].includes(normalizedPos);
             const detailParts = [inj.type, inj.detail, inj.side].filter(Boolean).join(" ");
             const fullStatus = detailParts ? `${status} · ${detailParts}` : status;
             const returnDate = inj.return_date || null;
             const shortComment = inj.short_comment || null;
             // Buscar player en MLB Stats API por nombre
             try {
-              const lookupUrl = `${MLB_BASE}/people/search?names=${encodeURIComponent(name)}&season=${MLB_SEASON_CURRENT}`;
+              const lookupUrl = buildMlbPeopleSearchUrl(MLB_BASE, name, MLB_SEASON_CURRENT);
               const lookupJson = await (await fetch(lookupUrl)).json();
               const people = lookupJson.people ?? [];
-              // Filtrar por equipo correcto
-              const match = people.find((p: any) => p.currentTeam?.id === tid) ?? people[0];
+              // Verificación estricta: mismo nombre normalizado Y equipo MLB actual.
+              // Nunca usar el primer resultado como fallback: eso mezclaba jugadores de otros clubes.
+              const normalizePersonName = (value: string) => String(value || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]/gi, "")
+                .toLowerCase();
+              const targetName = normalizePersonName(name);
+              const match = people.find((p: any) =>
+                p.currentTeam?.id === tid && normalizePersonName(p.fullName) === targetName
+              );
               const pid = match?.id;
               const positionAbbr = match?.primaryPosition?.abbreviation || (isPitcher ? "P" : pos.split(" ").map((w: string) => w[0]).join("").toUpperCase());
-              if (!pid) {
-                return {
-                  name, position: positionAbbr, status: fullStatus, isPitcher,
-                  returnDate, shortComment,
-                  source: "BDL",
-                };
-              }
+              if (!pid) return null;
               if (isPitcher) {
                 const sJ = await (await fetch(`${MLB_BASE}/people/${pid}/stats?stats=season&group=pitching&season=${MLB_SEASON_CURRENT}`)).json();
                 const s = sJ.stats?.[0]?.splits?.[0]?.stat ?? {};
@@ -2414,11 +2666,12 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                   st = fb.stats?.[0]?.splits?.[0]?.stat ?? s;
                 }
                 const playerGP = parseInt(st.gamesPlayed) || 0;
-                const gamesMissed = Math.max(0, teamGP - playerGP);
+                // No inferir juegos perdidos con teamGP-playerGP: banca, menores, trades y descansos lo vuelven inválido.
+                const gamesMissed = 0;
                 // Bullpen leverage data — saves/holds/games finished diferencian closer real vs setup vs middle
                 const ipPitcher = parseIP(st.inningsPitched || "0");
                 return {
-                  name, position: positionAbbr, status: fullStatus,
+                  playerId: pid, name, position: positionAbbr, status: fullStatus,
                   era: parseFloat(st.era) || null,
                   whip: parseFloat(st.whip) || null,
                   k9: parseFloat(st.strikeoutsPer9Inn) || null,
@@ -2447,14 +2700,15 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                   st = fb.stats?.[0]?.splits?.[0]?.stat ?? st;
                 }
                 const playerGP = parseInt(st.gamesPlayed) || 0;
-                const gamesMissed = Math.max(0, teamGP - playerGP);
+                // No inferir juegos perdidos con teamGP-playerGP: banca, menores, trades y descansos lo vuelven inválido.
+                const gamesMissed = 0;
                 // Star Power: slugging y composición para proxy de WAR
                 const slg = parseFloat(st.slg) || 0;
                 const obp = parseFloat(st.obp) || 0;
                 const ops = parseFloat(st.ops) || 0;
                 const iso = slg > 0 && parseFloat(st.avg) > 0 ? Math.round((slg - parseFloat(st.avg)) * 1000) / 1000 : null;
                 return {
-                  name, position: positionAbbr, status: fullStatus,
+                  playerId: pid, name, position: positionAbbr, status: fullStatus,
                   ops: ops || null,
                   avg: parseFloat(st.avg) || null,
                   obp: obp || null,
@@ -2476,10 +2730,98 @@ export function registerRoutes(httpServer: Server, app: Express): void {
                 };
               }
             } catch {
-              return { name, position: pos, status: fullStatus, isPitcher, returnDate, shortComment, source: "BDL" };
+              // Una búsqueda o enriquecimiento fallido no puede convertirse en una ausencia verificada.
+              return null;
             }
           }));
-          injuryMap[tid] = list;
+          const verifiedList = list.filter(Boolean) as any[];
+          const rejectedCount = rawBdlList.length - verifiedList.length;
+          const probablePitcherId = probablePitcherByTeam[tid] ?? null;
+          const shadowList = verifiedList.map((player: any) => {
+            const rosterEvidence = officialSnapshot?.rosterByPlayerId?.[player.playerId];
+            const transactionEvidence = officialSnapshot?.latestTransactionByPlayerId?.[player.playerId] ?? null;
+            const shadow = classifyMlbInjuryShadow({
+              playerId: player.playerId,
+              name: player.name,
+              isPitcher: player.isPitcher,
+              position: player.position,
+              rosterStatusCode: rosterEvidence?.statusCode ?? null,
+              rosterStatusDescription: rosterEvidence?.statusDescription ?? null,
+              latestTransaction: transactionEvidence,
+              probablePitcherId,
+              gamesStarted: player.gamesStarted,
+              saves: player.saves,
+              holds: player.holds,
+              gamesFinished: player.gamesFinished,
+              inningsPitched: player.inningsPitched,
+              plateAppearances: player.plateAppearances,
+              ops: player.ops,
+              obp: player.obp,
+              slg: player.slg,
+              asOfDate: dateParam,
+            });
+            return {
+              ...player,
+              officialStatusCode: rosterEvidence?.statusCode ?? null,
+              officialStatus: rosterEvidence?.statusDescription ?? null,
+              officialTransaction: transactionEvidence,
+              shadow,
+            };
+          });
+          const bdlPlayerIds = new Set(shadowList.map((player: any) => Number(player.playerId)));
+          const officialOnly = Object.values(officialSnapshot?.rosterByPlayerId ?? {})
+            .filter((entry: any) => /^D\d+$/i.test(String(entry.statusCode || "")) || /injured/i.test(String(entry.statusDescription || "")))
+            .filter((entry: any) => !bdlPlayerIds.has(Number(entry.playerId)))
+            .length;
+          const shadowSummary = {
+            ...summarizeMlbInjuryShadow(shadowList.map((player: any) => player.shadow)),
+            officialOnly,
+          };
+          const phaseB = buildMlbInjuryPhaseBPlan({
+            sourceStatus: injuryFeed.status,
+            officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+            stale: injuryFeed.stale,
+            anomalous,
+            rejectedCount,
+            officialOnly,
+            players: shadowList.map((player: any) => ({
+              playerId: Number(player.playerId),
+              name: String(player.name),
+              isPitcher: Boolean(player.isPitcher),
+              shadow: player.shadow,
+            })),
+          });
+          injuryMap[tid] = shadowList;
+
+          // Fase B: candidatos de alta confianza pasan a una segunda reconciliación con Bullpen Status.
+          const identityComplete = injuryFeed.status === "VERIFIED"
+            && officialSnapshot?.status === "VERIFIED"
+            && rejectedCount === 0
+            && officialOnly === 0;
+          const safeStatus = identityComplete ? "VERIFIED" : "PARTIAL";
+          injuryMetaMap[tid] = {
+            source: injuryFeed.source,
+            validationSource: officialSnapshot?.source ?? "MLB_STATS",
+            status: safeStatus,
+            fetchedAt: injuryFeed.fetchedAt,
+            stale: injuryFeed.stale,
+            sourceErrors: [...(injuryFeed.sourceErrors ?? []), ...(officialSnapshot?.errors ?? [])],
+            officialValidationStatus: officialSnapshot?.status ?? "PARTIAL",
+            officialFetchedAt: officialSnapshot?.fetchedAt,
+            count: shadowList.length,
+            rejectedCount,
+            autoApplyAllowed: phaseB.autoApplyAllowed,
+            shadowMode: true,
+            shadowSummary,
+            phaseB,
+            note: phaseB.autoApplyAllowed
+              ? `${phaseB.eligiblePlayerNames.length} relevista(s) superaron la Fase B; falta reconciliación final con Bullpen Status`
+              : rejectedCount > 0
+                ? `${rejectedCount} registro(s) descartado(s); los candidatos restantes no superaron todas las barreras de activación`
+                : shadowList.length > 0
+                  ? "BALLDONTLIE detecta y MLB valida; la Fase B se abstiene cuando falta certeza o existe riesgo de doble conteo"
+                  : "Fuentes verificadas: no hay ausencias activas confirmadas para este equipo",
+          };
         });
         await Promise.all(injuryPromises);
 
@@ -2706,6 +3048,36 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             h2hAwayWins: h2h?.awayWins ?? 0,
             homeInjuries: injuryMap[homeId] ?? [],
             awayInjuries: injuryMap[awayId] ?? [],
+            homeInjuryData: injuryMetaMap[homeId] ?? {
+              source: injuryFeed.source,
+              status: injuryFeed.status,
+              fetchedAt: injuryFeed.fetchedAt,
+              stale: injuryFeed.stale,
+              sourceErrors: injuryFeed.sourceErrors,
+              count: 0,
+              autoApplyAllowed: false,
+              shadowMode: true,
+              shadowSummary: {
+                total: 0, applyCandidates: 0, alreadyReflected: 0,
+                ignored: 0, conflicts: 0, pending: 0,
+                highConfidence: 0, mode: "SHADOW",
+              },
+            },
+            awayInjuryData: injuryMetaMap[awayId] ?? {
+              source: injuryFeed.source,
+              status: injuryFeed.status,
+              fetchedAt: injuryFeed.fetchedAt,
+              stale: injuryFeed.stale,
+              sourceErrors: injuryFeed.sourceErrors,
+              count: 0,
+              autoApplyAllowed: false,
+              shadowMode: true,
+              shadowSummary: {
+                total: 0, applyCandidates: 0, alreadyReflected: 0,
+                ignored: 0, conflicts: 0, pending: 0,
+                highConfidence: 0, mode: "SHADOW",
+              },
+            },
           };
         });
       });
@@ -2730,10 +3102,10 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const buildUrl = (lastN: number, measureType: "Advanced" | "Base") =>
           `https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&Height=&ISTRound=&LastNGames=${lastN}&LeagueID=10&Location=&MeasureType=${measureType}&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=`;
         const [advSeasonJson, baseSeasonJson, advL10Json, baseL10Json] = await Promise.all([
-          nbaFetch(buildUrl(0, "Advanced")),
-          nbaFetch(buildUrl(0, "Base")),
-          nbaFetch(buildUrl(10, "Advanced")),
-          nbaFetch(buildUrl(10, "Base")),
+          wnbaFetch(buildUrl(0, "Advanced")),
+          wnbaFetch(buildUrl(0, "Base")),
+          wnbaFetch(buildUrl(10, "Advanced")),
+          wnbaFetch(buildUrl(10, "Base")),
         ]);
         const parseAdv = (json: any) => {
           const H: string[] = json.resultSets[0].headers;
@@ -2794,8 +3166,44 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       });
       res.json({ success: true, data });
     } catch (e) {
-      console.error("wnba error", e);
-      res.status(500).json({ success: false, error: "No se pudieron obtener datos WNBA" });
+      console.error("wnba direct source error", e);
+      try {
+        const fallbackUrl = (process.env.WNBA_READONLY_FALLBACK_URL || "https://web-production-7067b.up.railway.app/api/wnba/all").trim();
+        const currentHost = (req.get("host") || "").toLowerCase();
+        if (currentHost && fallbackUrl.toLowerCase().includes(currentHost)) {
+          throw new Error("Refusing recursive WNBA fallback");
+        }
+
+        const fallbackData = await withCache("wnba-all-production-fallback-v1", async () => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          try {
+            const fallbackRes = await fetch(fallbackUrl, {
+              headers: { Accept: "application/json" },
+              signal: controller.signal,
+            });
+            if (!fallbackRes.ok) {
+              throw new Error(`WNBA fallback HTTP ${fallbackRes.status}`);
+            }
+            const payload: any = await fallbackRes.json();
+            if (!payload?.success || !Array.isArray(payload.data) || payload.data.length === 0) {
+              throw new Error("WNBA fallback returned invalid or empty data");
+            }
+            return payload.data;
+          } finally {
+            clearTimeout(timer);
+          }
+        });
+
+        return res.json({
+          success: true,
+          data: fallbackData,
+          source: "production-readonly-fallback",
+        });
+      } catch (fallbackError) {
+        console.error("wnba production fallback error", fallbackError);
+        return res.status(500).json({ success: false, error: "No se pudieron obtener datos WNBA" });
+      }
     }
   });
 
@@ -2807,7 +3215,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const data = await withCache(cacheKey, async () => {
         const encoded = encodeURIComponent(date);
         const url = `https://stats.nba.com/stats/scoreboardV3?LeagueID=10&gameDate=${encoded}&DayOffset=0`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const games: unknown[] = json.scoreboard?.games ?? [];
         return (games as any[]).map((g) => ({
           gameId: g.gameId,
@@ -2831,9 +3239,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const buildUrl = (lastN: number) =>
           `https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&Height=&LastNGames=${lastN}&LeagueID=10&Location=&MeasureType=Advanced&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=`;
         const [advSeasonJson, advL10Json, logJson] = await Promise.all([
-          nbaFetch(buildUrl(0)),
-          nbaFetch(buildUrl(10)),
-          nbaFetch(`https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`),
+          wnbaFetch(buildUrl(0)),
+          wnbaFetch(buildUrl(10)),
+          wnbaFetch(`https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`),
         ]);
 
         const sH: string[] = advSeasonJson.resultSets[0].headers;
@@ -2923,7 +3331,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     try {
       const data = await withCache("wnba-fatigue-v1", async () => {
         const url = `https://stats.nba.com/stats/leaguegamelog?Counter=0&DateFrom=&DateTo=&Direction=DESC&LeagueID=10&PlayerOrTeam=T&Season=2026&SeasonType=Regular+Season&Sorter=DATE`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const H: string[] = json.resultSets[0].headers;
         const R: unknown[][] = json.resultSets[0].rowSet;
         // Por equipo: lista [{date, isHome, opponent, win}]
@@ -2978,8 +3386,44 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       });
       res.json({ success: true, data });
     } catch (e) {
-      console.error("wnba fatigue error", e);
-      res.status(500).json({ success: false, error: "No se pudo calcular fatigue WNBA" });
+      console.error("wnba fatigue direct source error", e);
+      try {
+        const fallbackUrl = (process.env.WNBA_READONLY_FATIGUE_FALLBACK_URL || "https://web-production-7067b.up.railway.app/api/wnba/fatigue").trim();
+        const currentHost = (req.get("host") || "").toLowerCase();
+        if (currentHost && fallbackUrl.toLowerCase().includes(currentHost)) {
+          throw new Error("Refusing recursive WNBA fatigue fallback");
+        }
+
+        const fallbackData = await withCache("wnba-fatigue-production-fallback-v1", async () => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          try {
+            const fallbackRes = await fetch(fallbackUrl, {
+              headers: { Accept: "application/json" },
+              signal: controller.signal,
+            });
+            if (!fallbackRes.ok) {
+              throw new Error(`WNBA fatigue fallback HTTP ${fallbackRes.status}`);
+            }
+            const payload: any = await fallbackRes.json();
+            if (!payload?.success || !Array.isArray(payload.data) || payload.data.length === 0) {
+              throw new Error("WNBA fatigue fallback returned invalid or empty data");
+            }
+            return payload.data;
+          } finally {
+            clearTimeout(timer);
+          }
+        });
+
+        return res.json({
+          success: true,
+          data: fallbackData,
+          source: "production-readonly-fallback",
+        });
+      } catch (fallbackError) {
+        console.error("wnba fatigue production fallback error", fallbackError);
+        return res.status(500).json({ success: false, error: "No se pudo calcular fatigue WNBA" });
+      }
     }
   });
 
@@ -3029,7 +3473,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
     try {
       const data = await withCache("wnba-players-v1", async () => {
         const url = `https://stats.nba.com/stats/leaguedashplayerstats?College=&Conference=&Country=&DateFrom=&DateTo=&Division=&DraftPick=&DraftYear=&GameScope=&GameSegment=&Height=&LastNGames=0&LeagueID=10&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2026&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=&Weight=`;
-        const json = await nbaFetch(url);
+        const json = await wnbaFetch(url);
         const H: string[] = json.resultSets[0].headers;
         const R: unknown[][] = json.resultSets[0].rowSet;
         const players: Record<number, any[]> = {};
@@ -3070,10 +3514,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
   // NHL ROUTES
   // ════════════════════════════════════════════════════════════════════════════
 
+  function nhlSeasonContext(dateIso: string): { seasonId: string; moneyPuckYear: string } {
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(dateIso)
+      ? new Date(`${dateIso}T12:00:00Z`)
+      : new Date();
+    const year = parsed.getUTCFullYear();
+    const month = parsed.getUTCMonth() + 1;
+    // NHL/MoneyPuck season folders use the year in which the season starts.
+    // During the summer offseason we keep the completed season until August.
+    const startYear = month >= 8 ? year : year - 1;
+    return { seasonId: `${startYear}${startYear + 1}`, moneyPuckYear: String(startYear) };
+  }
+
   app.get("/api/nhl/all", async (req, res) => {
     try {
       const dateParam = (req.query.date as string) || todayISO();
-      const cacheKey = `nhl-all-v9-${dateParam}`;
+      const { seasonId: nhlSeasonId, moneyPuckYear: nhlMoneyPuckYear } = nhlSeasonContext(dateParam);
+      const cacheKey = `nhl-all-v10-${nhlSeasonId}-${dateParam}`;
 
       const data = await withCache(cacheKey, async () => {
         // 1. Schedule
@@ -3123,7 +3580,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         // 4. Fetch team detailed stats (PP%, PK%, Shots, Corsi)
         const teamDetailMap: Record<string, any> = {};
         try {
-          const summJson = await (await fetch("https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=20252026")).json();
+          const summJson = await (await fetch(`https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=${nhlSeasonId}`)).json();
           for (const t of summJson.data ?? []) {
             // Find matching team by name
             const abbr = Object.entries(teamMap).find(([_, v]) => (v as any).name === t.teamFullName)?.[0];
@@ -3145,8 +3602,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const mpGoalieMap: Record<string, any> = {};
         try {
           const [mpTeamRes, mpGRes] = await Promise.all([
-            fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/teams.csv"),
-            fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/goalies.csv"),
+            fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/teams.csv`),
+            fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/goalies.csv`),
           ]);
           
           // Parse team CSV
@@ -3209,7 +3666,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           // Parse skater data for top players per team (injury impact)
           const mpSkaterMap: Record<string, { name: string; pos: string; gp: number; gameScore: number }[]> = {};
           try {
-            const mpSRes = await fetch("https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/skaters.csv");
+            const mpSRes = await fetch(`https://moneypuck.com/moneypuck/playerData/seasonSummary/${nhlMoneyPuckYear}/regular/skaters.csv`);
             const mpSCsv = await mpSRes.text();
             const mpSRows = mpSCsv.split("\n").map(r => r.split(","));
             const mpSH = mpSRows[0];
@@ -3257,7 +3714,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
         // Step A: Get probable starters from DailyFaceoff + RotoWire (cross-reference)
         //   DailyFaceoff sometimes lags behind; we also try RotoWire as secondary
-        const dfGoalieMap: Record<string, { name: string; svPct: number; gaa: number; wins: number; losses: number; otl: number; status: string }> = {};
+        const dfGoalieMap: Record<string, { name: string; svPct?: number; gaa?: number; wins: number; losses: number; otl: number; status: string }> = {};
 
         // A1: DailyFaceoff
         try {
@@ -3277,8 +3734,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (homeAbbr && dg.homeGoalieName) {
                 dfGoalieMap[homeAbbr] = {
                   name: dg.homeGoalieName,
-                  svPct: dg.homeGoalieSavePercentage ? Math.round(dg.homeGoalieSavePercentage * 1000) / 1000 : 0.900,
-                  gaa: dg.homeGoalieGoalsAgainstAvg ? Math.round(dg.homeGoalieGoalsAgainstAvg * 100) / 100 : 3.00,
+                  svPct: dg.homeGoalieSavePercentage !== "" && dg.homeGoalieSavePercentage != null && Number.isFinite(Number(dg.homeGoalieSavePercentage)) && Number(dg.homeGoalieSavePercentage) > 0 && Number(dg.homeGoalieSavePercentage) <= 1 ? Math.round(Number(dg.homeGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: dg.homeGoalieGoalsAgainstAvg !== "" && dg.homeGoalieGoalsAgainstAvg != null && Number.isFinite(Number(dg.homeGoalieGoalsAgainstAvg)) && Number(dg.homeGoalieGoalsAgainstAvg) >= 0 ? Math.round(Number(dg.homeGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.homeGoalieWins || 0,
                   losses: dg.homeGoalieLosses || 0,
                   otl: dg.homeGoalieOvertimeLosses || 0,
@@ -3293,8 +3750,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               if (awayAbbr && dg.awayGoalieName) {
                 dfGoalieMap[awayAbbr] = {
                   name: dg.awayGoalieName,
-                  svPct: dg.awayGoalieSavePercentage ? Math.round(dg.awayGoalieSavePercentage * 1000) / 1000 : 0.900,
-                  gaa: dg.awayGoalieGoalsAgainstAvg ? Math.round(dg.awayGoalieGoalsAgainstAvg * 100) / 100 : 3.00,
+                  svPct: dg.awayGoalieSavePercentage !== "" && dg.awayGoalieSavePercentage != null && Number.isFinite(Number(dg.awayGoalieSavePercentage)) && Number(dg.awayGoalieSavePercentage) > 0 && Number(dg.awayGoalieSavePercentage) <= 1 ? Math.round(Number(dg.awayGoalieSavePercentage) * 1000) / 1000 : undefined,
+                  gaa: dg.awayGoalieGoalsAgainstAvg !== "" && dg.awayGoalieGoalsAgainstAvg != null && Number.isFinite(Number(dg.awayGoalieGoalsAgainstAvg)) && Number(dg.awayGoalieGoalsAgainstAvg) >= 0 ? Math.round(Number(dg.awayGoalieGoalsAgainstAvg) * 100) / 100 : undefined,
                   wins: dg.awayGoalieWins || 0,
                   losses: dg.awayGoalieLosses || 0,
                   otl: dg.awayGoalieOvertimeLosses || 0,
@@ -3323,14 +3780,22 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               const abbr = g[side]?.abbrev;
               const leaders = gc[side]?.leaders;
               if (!abbr || !leaders) continue;
-              nhlGoalieIdMap[abbr] = leaders.map((l: any) => ({
-                playerId: l.playerId,
-                name: ((l.firstName?.default || "") + " " + (l.lastName?.default || "")).trim(),
-                svPct: l.savePctg ? Math.round(l.savePctg * 1000) / 1000 : 0.900,
-                gaa: l.gaa ? Math.round(l.gaa * 100) / 100 : 3.00,
-                record: l.record || "0-0",
-                gp: l.gamesPlayed || 0,
-              }));
+              nhlGoalieIdMap[abbr] = leaders.flatMap((l: any) => {
+                const goalieName = ((l.firstName?.default || "") + " " + (l.lastName?.default || "")).trim();
+                const rawSvPct = Number(l.savePctg);
+                const rawGaa = Number(l.gaa ?? l.goalsAgainstAverage);
+                if (!goalieName || !Number.isFinite(rawSvPct) || rawSvPct <= 0 || rawSvPct > 1 || !Number.isFinite(rawGaa) || rawGaa < 0) {
+                  return [];
+                }
+                return [{
+                  playerId: l.playerId,
+                  name: goalieName,
+                  svPct: Math.round(rawSvPct * 1000) / 1000,
+                  gaa: Math.round(rawGaa * 100) / 100,
+                  record: typeof l.record === "string" ? l.record : "",
+                  gp: l.gamesPlayed || 0,
+                }];
+              });
             }
           } catch {}
         });
@@ -3349,12 +3814,12 @@ export function registerRoutes(httpServer: Server, app: Express): void {
 
           // Find the correct goalie: prefer DailyFaceoff name, match to NHL ID
           let starterName = dfGoalie?.name || "";
-          let starterSvPct = dfGoalie?.svPct || 0.900;
-          let starterGaa = dfGoalie?.gaa || 3.00;
-          let starterRecord = dfGoalie ? `${dfGoalie.wins}-${dfGoalie.losses}-${dfGoalie.otl}` : "0-0";
+          let starterSvPct: number | undefined = dfGoalie?.svPct;
+          let starterGaa: number | undefined = dfGoalie?.gaa;
+          let starterRecord = dfGoalie ? `${dfGoalie.wins}-${dfGoalie.losses}-${dfGoalie.otl}` : "";
           let starterGP = 0;
           let starterPlayerId: number | null = null;
-          let confirmStatus = dfGoalie?.status || "Unknown";
+          let confirmStatus = dfGoalie?.status || "UNCONFIRMED";
 
           if (dfGoalie && nhlGoalies.length > 0) {
             // Match DailyFaceoff name to NHL player ID (fuzzy: last name match)
@@ -3369,15 +3834,9 @@ export function registerRoutes(httpServer: Server, app: Express): void {
               starterRecord = matched.record;
             }
           } else if (!dfGoalie && nhlGoalies.length > 0) {
-            // Fallback: pick goalie with most GP from NHL data
-            const best = nhlGoalies.reduce((a, b) => a.gp > b.gp ? a : b);
-            starterName = best.name;
-            starterSvPct = best.svPct;
-            starterGaa = best.gaa;
-            starterRecord = best.record;
-            starterGP = best.gp;
-            starterPlayerId = best.playerId;
-            confirmStatus = "Fallback";
+            // NHL goalieComparison contains team leaders/candidates, not a confirmed starter.
+            // Keep them only in goalieOptions; never promote the highest-GP goalie automatically.
+            confirmStatus = "UNCONFIRMED";
           }
 
           // Fetch recent game log (last 5 starts) for the probable starter
@@ -3386,7 +3845,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           let last5Record = "";
           if (starterPlayerId) {
             try {
-              const glRes = await fetch(`https://api-web.nhle.com/v1/player/${starterPlayerId}/game-log/20252026/2`);
+              const glRes = await fetch(`https://api-web.nhle.com/v1/player/${starterPlayerId}/game-log/${nhlSeasonId}/2`);
               const glJson = await glRes.json();
               const glGames: any[] = (glJson.gameLog ?? []).slice(0, 5);
               if (glGames.length >= 3) {
@@ -3414,18 +3873,23 @@ export function registerRoutes(httpServer: Server, app: Express): void {
             if (mpG) gsax = mpG.gsax;
           }
 
-          goalieMap[abbr] = {
-            name: starterName,
-            savePct: starterSvPct,
-            gaa: starterGaa,
-            record: starterRecord,
-            gamesPlayed: starterGP,
-            recentGAA,
-            recentSvPct,
-            last5Record,
-            confirmStatus,
-            gsax,
-          };
+          if (starterName && Number.isFinite(starterSvPct) && Number.isFinite(starterGaa)) {
+            const normalizedStatus = String(confirmStatus || "UNCONFIRMED").toUpperCase();
+            goalieMap[abbr] = {
+              name: starterName,
+              savePct: starterSvPct,
+              gaa: starterGaa,
+              record: starterRecord,
+              gamesPlayed: starterGP,
+              recentGAA,
+              recentSvPct,
+              last5Record,
+              confirmStatus,
+              confirmed: normalizedStatus.includes("CONFIRMED") && !normalizedStatus.includes("UNCONFIRMED"),
+              source: "dailyfaceoff",
+              gsax,
+            };
+          }
         });
         await Promise.all(goalieLogPromises);
 
@@ -3451,7 +3915,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const rosterPromises = Array.from(rosterAbbrs).map(async (tricode) => {
           try {
             const rosterData = await withCache(`nhl-roster-${tricode}`, async () => {
-              const rRes = await fetch(`https://api-web.nhle.com/v1/club-stats/${tricode}/20252026/2`);
+              const rRes = await fetch(`https://api-web.nhle.com/v1/club-stats/${tricode}/${nhlSeasonId}/2`);
               if (!rRes.ok) return null;
               return rRes.json();
             });
@@ -3518,7 +3982,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         const oppsPromises = Array.from(rosterAbbrs).map(async (tricode) => {
           try {
             const schedData = await withCache(`nhl-sched-${tricode}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3548,7 +4012,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         for (const tricode of Array.from(rosterAbbrs)) {
           try {
             const schedData = await withCache(`nhl-sched-${tricode}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${tricode}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3589,7 +4053,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
           let hWins = 0, aWins = 0;
           try {
             const schedData = await withCache(`nhl-sched-${hA}`, () =>
-              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${hA}/20252026`).then(r => r.json())
+              fetch(`https://api-web.nhle.com/v1/club-schedule-season/${hA}/${nhlSeasonId}`).then(r => r.json())
             );
             const completed = (schedData.games || []).filter((sg: any) =>
               sg.gameState === "OFF" || sg.gameState === "FINAL"
@@ -3695,7 +4159,7 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         });
       });
 
-      res.json({ success: true, games: data, date: dateParam });
+      res.json({ success: true, games: data, date: dateParam, seasonId: nhlSeasonId, asOf: new Date().toISOString() });
     } catch (e) {
       console.error("nhl error", e);
       res.status(500).json({ success: false, error: "No se pudieron obtener datos NHL" });
@@ -4335,7 +4799,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
       const gc = data?.matchup?.goalieComparison;
       const homeStarter = gc?.homeTeam?.leaders?.[0] ?? null;
       const awayStarter = gc?.awayTeam?.leaders?.[0] ?? null;
-      const confirmed = !!(homeStarter && awayStarter);
+      // goalieComparison exposes statistical leaders/candidates. It does not prove who starts.
+      const confirmed = false;
       const minutesUntilGame = data?.startTimeUTC ? (new Date(data.startTimeUTC).getTime() - Date.now()) / 60000 : null;
       const name = (p: any) => p ? `${p.firstName?.default || p.firstName || ""} ${p.lastName?.default || p.lastName || ""}`.trim() : null;
       res.json({
@@ -4344,6 +4809,8 @@ export function registerRoutes(httpServer: Server, app: Express): void {
         minutesUntilGame,
         home: homeStarter ? { name: name(homeStarter), svPct: homeStarter.savePctg, gaa: homeStarter.goalsAgainstAverage } : null,
         away: awayStarter ? { name: name(awayStarter), svPct: awayStarter.savePctg, gaa: awayStarter.goalsAgainstAverage } : null,
+        source: "nhl-gamecenter-candidates",
+        note: "Goalie comparison lists candidates/leaders; verify the official starter before betting.",
       });
     } catch (e: any) {
       res.json({ success: false, error: e.message });

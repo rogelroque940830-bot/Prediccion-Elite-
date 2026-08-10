@@ -43,6 +43,11 @@ function isLocalDevelopmentOrigin(origin: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 
+function headerText(req: Request, name: string): string {
+  const value = req.headers[name.toLowerCase()];
+  return (Array.isArray(value) ? value[0] : value || "").trim();
+}
+
 export function securityHeaders(_req: Request, res: Response, next: NextFunction): void {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -60,11 +65,14 @@ export function restrictedCors(req: Request, res: Response, next: NextFunction):
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-CourtEdge-Write-Key",
+    "Content-Type, Authorization, X-CourtEdge-Write-Key, X-CourtEdge-CSRF",
   );
   res.setHeader("Access-Control-Max-Age", "600");
 
-  if (origin && allowed) res.setHeader("Access-Control-Allow-Origin", origin);
+  if (origin && allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
 
   if (req.method === "OPTIONS") {
     res.sendStatus(allowed ? 204 : 403);
@@ -114,10 +122,31 @@ const PROTECTED_WRITE_PATHS = [
   /^\/api\/picks(?:\/|$)/,
   /^\/api\/clv(?:\/|$)/,
   /^\/api\/sharp(?:\/|$)/,
+  /^\/api\/mlb\/ledger(?:\/|$)/,
 ];
 
 function isProtectedWrite(req: Request): boolean {
   return isWriteMethod(req.method) && PROTECTED_WRITE_PATHS.some((pattern) => pattern.test(req.path));
+}
+
+function hasValidSessionWrite(req: Request): "valid" | "invalid-csrf" | "none" {
+  const sessionData = (req as Request & { session?: Record<string, unknown> }).session;
+  if (!sessionData?.courtEdgeAuthenticated) return "none";
+
+  const expected = typeof sessionData.csrfToken === "string" ? sessionData.csrfToken : "";
+  const actual = headerText(req, "x-courtedge-csrf");
+  if (!expected || !actual || !timingSafeEqualText(actual, expected)) return "invalid-csrf";
+  return "valid";
+}
+
+function hasValidServiceToken(req: Request): boolean {
+  const expected = (process.env.COURTEDGE_WRITE_TOKEN || "").trim();
+  if (!expected) return false;
+
+  const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  const header = headerText(req, "x-courtedge-write-key");
+  const actual = (bearer || header || "").trim();
+  return Boolean(actual && timingSafeEqualText(actual, expected));
 }
 
 export function requireWriteAuth(req: Request, res: Response, next: NextFunction): void {
@@ -135,25 +164,21 @@ export function requireWriteAuth(req: Request, res: Response, next: NextFunction
     return;
   }
 
-  const expected = (process.env.COURTEDGE_WRITE_TOKEN || "").trim();
-  if (!expected) {
-    res.status(503).json({
-      success: false,
-      error: "Write operations are disabled until COURTEDGE_WRITE_TOKEN is configured.",
-    });
+  const sessionState = hasValidSessionWrite(req);
+  if (sessionState === "valid" || hasValidServiceToken(req)) {
+    next();
     return;
   }
 
-  const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-  const header = req.headers["x-courtedge-write-key"];
-  const actual = (bearer || (Array.isArray(header) ? header[0] : header) || "").trim();
-
-  if (!actual || !timingSafeEqualText(actual, expected)) {
-    res.status(401).json({ success: false, error: "Unauthorized write operation" });
+  if (sessionState === "invalid-csrf") {
+    res.status(403).json({ success: false, error: "Invalid CSRF token" });
     return;
   }
 
-  next();
+  res.status(401).json({
+    success: false,
+    error: "Authentication required for write operations",
+  });
 }
 
 const cleanupTimer = setInterval(() => {

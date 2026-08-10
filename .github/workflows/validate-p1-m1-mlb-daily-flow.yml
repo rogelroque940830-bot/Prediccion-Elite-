@@ -1,0 +1,83 @@
+name: Validate P1 M1 MLB Daily Flow
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-frontend-session
+    paths:
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
+      - 'frontend/client/src/lib/mlb-daily-flow.ts'
+      - 'frontend/client/src/lib/mlb-daily-flow.test.ts'
+      - 'docs/P1_M1_MLB_DAILY_FLOW.md'
+      - '.github/workflows/validate-p1-m1-mlb-daily-flow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+      - name: Run focused P1-M1 tests
+        run: |
+          cd frontend
+          npx tsx --test client/src/lib/mlb-daily-flow.test.ts
+      - name: Run production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+      - name: Verify daily slate orchestration and safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          page='frontend/client/src/pages/mlb-predictor.tsx'
+          helper='frontend/client/src/lib/mlb-daily-flow.ts'
+          grep -F 'p1-m1-mlb-daily-flow-2026-08-04' "$helper"
+          grep -F 'from "@/lib/mlb-daily-flow"' "$page"
+          grep -F 'enabled: Boolean(selectedDate)' "$page"
+          grep -F 'P1 · Jornada MLB' "$page"
+          grep -F 'data-testid="p1-mlb-daily-slate"' "$page"
+          grep -F 'LISTO PARA PREPARAR' "$helper"
+          grep -F 'ESPERAR PITCHERS' "$helper"
+          grep -F 'JUEGO CERRADO' "$helper"
+          grep -F 'Preparar análisis' "$page"
+          grep -F 'Cargar datos disponibles' "$page"
+          grep -F 'void handleMLBAutoFill(gameId)' "$page"
+          grep -F 'data-testid="p1-preparation-gate"' "$page"
+          grep -F 'Preparar el juego no genera, guarda ni apuesta automáticamente.' "$page"
+          grep -F 'setResult(null);' "$page"
+          grep -F 'setLineupMatchup(null);' "$page"
+          grep -F 'setAdvancedData(null);' "$page"
+          grep -F 'Generar Predicción' "$page"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const page = fs.readFileSync('frontend/client/src/pages/mlb-predictor.tsx', 'utf8');
+          const start = page.indexOf('data-testid="p1-mlb-daily-slate"');
+          const end = page.indexOf('data-testid="p1-preparation-gate"');
+          if (start < 0 || end < 0 || end <= start) throw new Error('P1 sections missing or reordered');
+          const daily = page.slice(start, end);
+          for (const forbidden of ['handlePredict(', 'savePick(', 'placeBet', 'sportsbook', 'method: "POST"']) {
+            if (daily.includes(forbidden)) throw new Error(`Forbidden automatic action in daily flow: ${forbidden}`);
+          }
+          const modelImport = page.match(/from "@\/lib\/mlb-model"/g) ?? [];
+          if (modelImport.length !== 1) throw new Error(`Unexpected MLB model import count: ${modelImport.length}`);
+          NODE
+          cat frontend/dist/assets/*.js > /tmp/p1-m1-bundle.js
+          grep -F 'p1-m1-mlb-daily-flow-2026-08-04' /tmp/p1-m1-bundle.js
+          grep -F 'P1 · Jornada MLB' /tmp/p1-m1-bundle.js
+          grep -F 'Preparar análisis' /tmp/p1-m1-bundle.js
+          grep -F 'LISTO PARA PREPARAR' /tmp/p1-m1-bundle.js
+          grep -F 'ESPERAR PITCHERS' /tmp/p1-m1-bundle.js
+          grep -F 'JUEGO CERRADO' /tmp/p1-m1-bundle.js
+      - name: Diff hygiene
+        run: git diff --check

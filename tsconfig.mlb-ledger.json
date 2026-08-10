@@ -1,0 +1,31 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/better-sqlite3.d.ts",
+    "server/mlb-ledger.ts",
+    "server/mlb-ledger-store.ts",
+    "server/mlb-ledger.test.ts",
+    "server/mlb-settlement-worker.ts",
+    "server/mlb-settlement-worker.test.ts",
+    "server/mlb-scientific-snapshot.ts",
+    "server/mlb-scientific-snapshot.test.ts",
+    "server/picks-v2.ts",
+    "server/mlb-closing-line-store.ts",
+    "server/mlb-closing-line-store.test.ts",
+    "server/mlb-closing-line-worker.ts",
+    "server/mlb-closing-line-worker.test.ts",
+    "server/mlb-closing-line-report.ts",
+    "server/mlb-closing-line-report.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  }
+}
