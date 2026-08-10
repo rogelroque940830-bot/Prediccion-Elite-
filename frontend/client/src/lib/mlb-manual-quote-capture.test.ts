@@ -45,6 +45,7 @@ test("manual signatures require complete market-specific bilateral prices", () =
   assert.equal(buildMlbManualQuoteSignature("F5_TOTAL", lines), null);
 
   assert.equal(buildMlbManualQuoteSignature("ML", { ...lines, mlAway: "" }), null);
+  assert.equal(buildMlbManualQuoteSignature("ML", { ...lines, mlAway: "+115.5" }), null);
   assert.equal(buildMlbManualQuoteSignature("RUN_LINE", { ...lines, runLineHomeOdds: "-95" }), null);
   assert.equal(buildMlbManualQuoteSignature("TOTAL", { ...lines, underOdds: "abc" }), null);
 });
@@ -61,6 +62,7 @@ test("capture exists only after an explicit valid game/date/timestamp action", (
   });
   assert.equal(createMlbManualQuoteCapture({ ...context("ML"), gamePk: "", capturedAt }), null);
   assert.equal(createMlbManualQuoteCapture({ ...context("ML"), date: "08/10/2026", capturedAt }), null);
+  assert.equal(createMlbManualQuoteCapture({ ...context("ML"), date: "2026-02-31", capturedAt }), null);
   assert.equal(createMlbManualQuoteCapture({ ...context("ML"), capturedAt: "not-a-time" }), null);
   assert.equal(capture("F5_TOTAL"), null);
 });
