@@ -18,96 +18,64 @@ export interface MlbManualQuoteContext {
   lines: MlbPregameLineInputs;
 }
 
-export interface MlbManualQuoteRequest {
-  url: string;
-  oddsMode: "manual" | "automatic";
-  captureCurrent: boolean;
-}
+type NormalizedQuote = { signature: string; values: number[] };
 
-function finite(value: unknown): number | null {
+function number(value: unknown): number | null {
   const text = String(value ?? "").trim();
   if (!text) return null;
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function americanOdds(value: unknown): number | null {
-  const parsed = finite(value);
-  if (parsed == null || !Number.isInteger(parsed) || Math.abs(parsed) < 100 || Math.abs(parsed) > 100_000) return null;
-  return parsed;
+function american(value: unknown): number | null {
+  const parsed = number(value);
+  return parsed != null && Number.isInteger(parsed) && Math.abs(parsed) >= 100 && Math.abs(parsed) <= 100_000
+    ? parsed
+    : null;
 }
 
-function iso(value: unknown): string | null {
-  const text = String(value ?? "").trim();
-  const parsed = text ? Date.parse(text) : NaN;
+function timestamp(value: unknown): string | null {
+  const parsed = Date.parse(String(value ?? "").trim());
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function gamePk(value: unknown): string | null {
-  const parsed = Number(String(value ?? "").trim());
-  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : null;
+function identity(gamePk: unknown, date: unknown): [string, string] | null {
+  const game = Number(String(gamePk ?? "").trim());
+  const day = String(date ?? "").trim();
+  if (!Number.isInteger(game) || game <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const parsed = Date.parse(`${day}T00:00:00.000Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === day
+    ? [String(game), day]
+    : null;
 }
 
-function officialDate(value: unknown): string | null {
-  const text = String(value ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
-  const parsed = Date.parse(`${text}T00:00:00.000Z`);
-  if (!Number.isFinite(parsed)) return null;
-  return new Date(parsed).toISOString().slice(0, 10) === text ? text : null;
+function quote(market: MlbPregameMarket, lines: MlbPregameLineInputs): NormalizedQuote | null {
+  let values: Array<number | null>;
+  if (market === "ML") values = [american(lines.mlHome), american(lines.mlAway)];
+  else if (market === "F5_ML") values = [american(lines.f5MlHome), american(lines.f5MlAway)];
+  else if (market === "RUN_LINE") values = [number(lines.runLine), american(lines.runLineHomeOdds), american(lines.runLineAwayOdds)];
+  else if (market === "TOTAL") values = [number(lines.totalLine), american(lines.overOdds), american(lines.underOdds)];
+  else return null;
+  if (values.some((value) => value == null)) return null;
+  const normalized = values as number[];
+  return { signature: `${market}|${normalized.join("|")}`, values: normalized };
 }
 
-function canonicalNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
-}
-
-export function buildMlbManualQuoteSignature(
-  market: MlbPregameMarket,
-  lines: MlbPregameLineInputs,
-): string | null {
-  if (market === "ML") {
-    const home = americanOdds(lines.mlHome);
-    const away = americanOdds(lines.mlAway);
-    return home != null && away != null ? `ML|${home}|${away}` : null;
-  }
-  if (market === "F5_ML") {
-    const home = americanOdds(lines.f5MlHome);
-    const away = americanOdds(lines.f5MlAway);
-    return home != null && away != null ? `F5_ML|${home}|${away}` : null;
-  }
-  if (market === "RUN_LINE") {
-    const line = finite(lines.runLine);
-    const home = americanOdds(lines.runLineHomeOdds);
-    const away = americanOdds(lines.runLineAwayOdds);
-    return line != null && home != null && away != null
-      ? `RUN_LINE|${canonicalNumber(line)}|${home}|${away}`
-      : null;
-  }
-  if (market === "TOTAL") {
-    const line = finite(lines.totalLine);
-    const over = americanOdds(lines.overOdds);
-    const under = americanOdds(lines.underOdds);
-    return line != null && over != null && under != null
-      ? `TOTAL|${canonicalNumber(line)}|${over}|${under}`
-      : null;
-  }
-
-  // The current predictor does not carry a distinct F5 Over/Under pair.
-  // Do not synthesize it from full-game total prices.
-  return null;
+export function buildMlbManualQuoteSignature(market: MlbPregameMarket, lines: MlbPregameLineInputs): string | null {
+  return quote(market, lines)?.signature ?? null;
 }
 
 export function createMlbManualQuoteCapture(input: MlbManualQuoteContext & { capturedAt: string }): MlbManualQuoteCapture | null {
-  const normalizedGamePk = gamePk(input.gamePk);
-  const normalizedDate = officialDate(input.date);
-  const signature = buildMlbManualQuoteSignature(input.market, input.lines);
-  const normalizedCapturedAt = iso(input.capturedAt);
-  if (!normalizedGamePk || !normalizedDate || !signature || !normalizedCapturedAt) return null;
+  const id = identity(input.gamePk, input.date);
+  const normalizedQuote = quote(input.market, input.lines);
+  const capturedAt = timestamp(input.capturedAt);
+  if (!id || !normalizedQuote || !capturedAt) return null;
   return {
-    gamePk: normalizedGamePk,
-    date: normalizedDate,
+    gamePk: id[0],
+    date: id[1],
     market: input.market,
-    capturedAt: normalizedCapturedAt,
-    signature,
+    capturedAt,
+    signature: normalizedQuote.signature,
     book: MLB_MANUAL_QUOTE_BOOK,
   };
 }
@@ -117,101 +85,50 @@ export function isMlbManualQuoteCaptureCurrent(
   context: MlbManualQuoteContext,
 ): boolean {
   if (!capture) return false;
-  const normalizedGamePk = gamePk(context.gamePk);
-  const normalizedDate = officialDate(context.date);
-  if (!normalizedGamePk || !normalizedDate) return false;
-  if (capture.gamePk !== normalizedGamePk || capture.date !== normalizedDate || capture.market !== context.market) return false;
-  const signature = buildMlbManualQuoteSignature(context.market, context.lines);
-  return Boolean(signature && signature === capture.signature && iso(capture.capturedAt));
+  const id = identity(context.gamePk, context.date);
+  const normalizedQuote = quote(context.market, context.lines);
+  return Boolean(
+    id
+      && normalizedQuote
+      && capture.gamePk === id[0]
+      && capture.date === id[1]
+      && capture.market === context.market
+      && capture.signature === normalizedQuote.signature
+      && timestamp(capture.capturedAt),
+  );
 }
 
-function addMarketParams(
-  params: URLSearchParams,
-  market: MlbPregameMarket,
-  lines: MlbPregameLineInputs,
-): boolean {
-  if (market === "ML") {
-    const home = americanOdds(lines.mlHome);
-    const away = americanOdds(lines.mlAway);
-    if (home == null || away == null) return false;
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return true;
-  }
-  if (market === "F5_ML") {
-    const home = americanOdds(lines.f5MlHome);
-    const away = americanOdds(lines.f5MlAway);
-    if (home == null || away == null) return false;
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return true;
-  }
-  if (market === "RUN_LINE") {
-    const line = finite(lines.runLine);
-    const home = americanOdds(lines.runLineHomeOdds);
-    const away = americanOdds(lines.runLineAwayOdds);
-    if (line == null || home == null || away == null) return false;
-    params.set("manualLine", canonicalNumber(line));
-    params.set("manualHomeOdds", String(home));
-    params.set("manualAwayOdds", String(away));
-    return true;
-  }
-  if (market === "TOTAL") {
-    const line = finite(lines.totalLine);
-    const over = americanOdds(lines.overOdds);
-    const under = americanOdds(lines.underOdds);
-    if (line == null || over == null || under == null) return false;
-    params.set("manualLine", canonicalNumber(line));
-    params.set("manualOverOdds", String(over));
-    params.set("manualUnderOdds", String(under));
-    return true;
-  }
-  return false;
-}
-
-/**
- * Overlay an explicit operator-verified Hard Rock snapshot onto the existing
- * readiness URL. The capture must match the exact game/date/market/quote tuple.
- * This prevents a prior-game snapshot from being reused during a React render
- * before effect-driven cleanup can run. Time age remains server-authoritative.
- */
 export function applyMlbManualQuoteCapture(input: {
   automaticUrl: string;
   market: MlbPregameMarket;
   lines: MlbPregameLineInputs;
   capture?: MlbManualQuoteCapture | null;
-}): MlbManualQuoteRequest {
+}): { url: string; oddsMode: "manual" | "automatic"; captureCurrent: boolean } {
   const [path, rawQuery = ""] = input.automaticUrl.split("?", 2);
   const params = new URLSearchParams(rawQuery);
-  const context: MlbManualQuoteContext = {
+  const normalizedQuote = quote(input.market, input.lines);
+  if (!normalizedQuote || !isMlbManualQuoteCaptureCurrent(input.capture, {
     gamePk: params.get("gamePk") ?? "",
     date: params.get("date") ?? "",
     market: input.market,
     lines: input.lines,
-  };
-  if (!isMlbManualQuoteCaptureCurrent(input.capture, context)) {
-    return { url: input.automaticUrl, oddsMode: "automatic", captureCurrent: false };
+  })) return { url: input.automaticUrl, oddsMode: "automatic", captureCurrent: false };
+
+  const values = normalizedQuote.values;
+  if (input.market === "ML" || input.market === "F5_ML") {
+    params.set("manualHomeOdds", String(values[0]));
+    params.set("manualAwayOdds", String(values[1]));
+  } else if (input.market === "RUN_LINE") {
+    params.set("manualLine", String(values[0]));
+    params.set("manualHomeOdds", String(values[1]));
+    params.set("manualAwayOdds", String(values[2]));
+  } else {
+    params.set("manualLine", String(values[0]));
+    params.set("manualOverOdds", String(values[1]));
+    params.set("manualUnderOdds", String(values[2]));
   }
-
-  params.delete("oddsMode");
-  params.delete("manualCapturedAt");
-  params.delete("manualBook");
-  params.delete("manualLine");
-  params.delete("manualHomeOdds");
-  params.delete("manualAwayOdds");
-  params.delete("manualOverOdds");
-  params.delete("manualUnderOdds");
-
-  if (!addMarketParams(params, input.market, input.lines)) {
-    return { url: input.automaticUrl, oddsMode: "automatic", captureCurrent: false };
-  }
-
   params.set("oddsMode", "manual");
   params.set("manualCapturedAt", input.capture!.capturedAt);
   params.set("manualBook", input.capture!.book);
-  return {
-    url: `${path}?${params.toString()}`,
-    oddsMode: "manual",
-    captureCurrent: true,
-  };
+  return { url: `${path}?${params.toString()}`, oddsMode: "manual", captureCurrent: true };
 }
