@@ -1,3 +1,4 @@
+// Research-only trigger: verify the post-Step-4 integration deployment identity.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
