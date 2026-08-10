@@ -24,8 +24,18 @@ const lines: MlbPregameLineInputs = {
   f5OddsSource: "manual",
 };
 
-const automaticUrl = "/api/mlb/p1/v1/pregame-readiness?gamePk=824158&date=2026-08-10&market=ML";
+const gamePk = "824158";
+const date = "2026-08-10";
+const automaticUrl = `/api/mlb/p1/v1/pregame-readiness?gamePk=${gamePk}&date=${date}&market=ML`;
 const capturedAt = "2026-08-10T19:50:00.000Z";
+const context = (market: "ML" | "F5_ML" | "RUN_LINE" | "TOTAL" | "F5_TOTAL", overrideLines = lines) => ({
+  gamePk,
+  date,
+  market,
+  lines: overrideLines,
+});
+const capture = (market: "ML" | "F5_ML" | "RUN_LINE" | "TOTAL" | "F5_TOTAL", overrideLines = lines, time = capturedAt) =>
+  createMlbManualQuoteCapture({ ...context(market, overrideLines), capturedAt: time });
 
 test("manual signatures require complete market-specific bilateral prices", () => {
   assert.equal(buildMlbManualQuoteSignature("ML", lines), "ML|-125|115");
@@ -39,30 +49,59 @@ test("manual signatures require complete market-specific bilateral prices", () =
   assert.equal(buildMlbManualQuoteSignature("TOTAL", { ...lines, underOdds: "abc" }), null);
 });
 
-test("capture exists only after an explicit timestamped user action", () => {
-  const capture = createMlbManualQuoteCapture("ML", lines, capturedAt);
-  assert.deepEqual(capture, {
+test("capture exists only after an explicit valid game/date/timestamp action", () => {
+  const mlCapture = capture("ML");
+  assert.deepEqual(mlCapture, {
+    gamePk,
+    date,
     market: "ML",
     capturedAt,
     signature: "ML|-125|115",
     book: MLB_MANUAL_QUOTE_BOOK,
   });
-  assert.equal(createMlbManualQuoteCapture("ML", lines, "not-a-time"), null);
-  assert.equal(createMlbManualQuoteCapture("F5_TOTAL", lines, capturedAt), null);
+  assert.equal(createMlbManualQuoteCapture({ ...context("ML"), gamePk: "", capturedAt }), null);
+  assert.equal(createMlbManualQuoteCapture({ ...context("ML"), date: "08/10/2026", capturedAt }), null);
+  assert.equal(createMlbManualQuoteCapture({ ...context("ML"), capturedAt: "not-a-time" }), null);
+  assert.equal(capture("F5_TOTAL"), null);
 });
 
 test("changing any certified value invalidates the capture instead of manufacturing a new timestamp", () => {
-  const capture = createMlbManualQuoteCapture("TOTAL", lines, capturedAt);
-  assert.ok(capture);
-  assert.equal(isMlbManualQuoteCaptureCurrent(capture, "TOTAL", lines), true);
-  assert.equal(isMlbManualQuoteCaptureCurrent(capture, "TOTAL", { ...lines, overOdds: "-115" }), false);
-  assert.equal(isMlbManualQuoteCaptureCurrent(capture, "TOTAL", { ...lines, totalLine: "9" }), false);
-  assert.equal(isMlbManualQuoteCaptureCurrent(capture, "ML", lines), false);
+  const totalCapture = capture("TOTAL");
+  assert.ok(totalCapture);
+  assert.equal(isMlbManualQuoteCaptureCurrent(totalCapture, context("TOTAL")), true);
+  assert.equal(isMlbManualQuoteCaptureCurrent(totalCapture, context("TOTAL", { ...lines, overOdds: "-115" })), false);
+  assert.equal(isMlbManualQuoteCaptureCurrent(totalCapture, context("TOTAL", { ...lines, totalLine: "9" })), false);
+  assert.equal(isMlbManualQuoteCaptureCurrent(totalCapture, context("ML")), false);
+});
+
+test("capture is bound to exact game and official date before React cleanup can run", () => {
+  const mlCapture = capture("ML");
+  assert.ok(mlCapture);
+  assert.equal(isMlbManualQuoteCaptureCurrent(mlCapture, context("ML")), true);
+  assert.equal(isMlbManualQuoteCaptureCurrent(mlCapture, { ...context("ML"), gamePk: "999999" }), false);
+  assert.equal(isMlbManualQuoteCaptureCurrent(mlCapture, { ...context("ML"), date: "2026-08-11" }), false);
+
+  const otherGame = applyMlbManualQuoteCapture({
+    automaticUrl: automaticUrl.replace(`gamePk=${gamePk}`, "gamePk=999999"),
+    market: "ML",
+    lines,
+    capture: mlCapture,
+  });
+  assert.equal(otherGame.oddsMode, "automatic");
+  assert.doesNotMatch(otherGame.url, /oddsMode=manual/);
+
+  const otherDate = applyMlbManualQuoteCapture({
+    automaticUrl: automaticUrl.replace(`date=${date}`, "date=2026-08-11"),
+    market: "ML",
+    lines,
+    capture: mlCapture,
+  });
+  assert.equal(otherDate.oddsMode, "automatic");
 });
 
 test("ML capture overlays exact backend manual parameters and preserves stored capture time", () => {
-  const capture = createMlbManualQuoteCapture("ML", lines, capturedAt);
-  const request = applyMlbManualQuoteCapture({ automaticUrl, market: "ML", lines, capture });
+  const mlCapture = capture("ML");
+  const request = applyMlbManualQuoteCapture({ automaticUrl, market: "ML", lines, capture: mlCapture });
   assert.equal(request.oddsMode, "manual");
   assert.equal(request.captureCurrent, true);
   const parsed = new URL(request.url, "https://local.invalid");
@@ -74,7 +113,7 @@ test("ML capture overlays exact backend manual parameters and preserves stored c
 });
 
 test("Run Line and Total map only their exact server contract fields", () => {
-  const rlCapture = createMlbManualQuoteCapture("RUN_LINE", lines, capturedAt);
+  const rlCapture = capture("RUN_LINE");
   const rl = applyMlbManualQuoteCapture({
     automaticUrl: automaticUrl.replace("market=ML", "market=RUN_LINE"),
     market: "RUN_LINE",
@@ -87,7 +126,7 @@ test("Run Line and Total map only their exact server contract fields", () => {
   assert.equal(rlUrl.searchParams.get("manualAwayOdds"), "-155");
   assert.equal(rlUrl.searchParams.get("manualOverOdds"), null);
 
-  const totalCapture = createMlbManualQuoteCapture("TOTAL", lines, capturedAt);
+  const totalCapture = capture("TOTAL");
   const total = applyMlbManualQuoteCapture({
     automaticUrl: automaticUrl.replace("market=ML", "market=TOTAL"),
     market: "TOTAL",
@@ -102,8 +141,8 @@ test("Run Line and Total map only their exact server contract fields", () => {
 });
 
 test("manual capture remains fail-closed when absent, edited, incomplete or unsupported", () => {
-  const capture = createMlbManualQuoteCapture("F5_ML", lines, capturedAt);
-  assert.ok(capture);
+  const f5Capture = capture("F5_ML");
+  assert.ok(f5Capture);
 
   const absent = applyMlbManualQuoteCapture({ automaticUrl, market: "ML", lines, capture: null });
   assert.equal(absent.oddsMode, "automatic");
@@ -113,7 +152,7 @@ test("manual capture remains fail-closed when absent, edited, incomplete or unsu
     automaticUrl: automaticUrl.replace("market=ML", "market=F5_ML"),
     market: "F5_ML",
     lines: { ...lines, f5MlAway: "+110" },
-    capture,
+    capture: f5Capture,
   });
   assert.equal(edited.oddsMode, "automatic");
   assert.doesNotMatch(edited.url, /oddsMode=manual/);
@@ -128,7 +167,7 @@ test("manual capture remains fail-closed when absent, edited, incomplete or unsu
 });
 
 test("capture helper never decides time freshness locally", () => {
-  const oldCapture = createMlbManualQuoteCapture("ML", lines, "2026-08-01T00:00:00.000Z");
+  const oldCapture = capture("ML", lines, "2026-08-01T00:00:00.000Z");
   assert.ok(oldCapture);
   const request = applyMlbManualQuoteCapture({ automaticUrl, market: "ML", lines, capture: oldCapture });
   assert.equal(request.oddsMode, "manual");
