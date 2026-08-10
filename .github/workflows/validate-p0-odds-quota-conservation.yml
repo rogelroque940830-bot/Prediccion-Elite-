@@ -15,6 +15,8 @@ on:
       - 'server/odds-demand-policy.ts'
       - 'server/mlb-market-universe-registry.ts'
       - 'server/mlb-market-universe-registry.test.ts'
+      - 'server/mlb-odds-budget-controller.ts'
+      - 'server/mlb-odds-budget-controller.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
       - 'server/mlb-market-contract.ts'
       - 'server/index.ts'
@@ -39,7 +41,7 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
 
-      - name: Quota conservation, F5 and market-registry falsification tests
+      - name: Quota conservation, F5, market-registry and credit-budget falsification tests
         run: >-
           npx tsx --test
           server/mlb-odds-quota-conservation.test.ts
@@ -47,13 +49,14 @@ jobs:
           server/mlb-s5c-shadow-ingestion.test.ts
           server/mlb-s5e-coverage-service.test.ts
           server/mlb-market-universe-registry.test.ts
+          server/mlb-odds-budget-controller.test.ts
 
       - name: Preserve modular routes and production bundle
         run: |
           npm run test:s3-modularization
           npm run build:backend
 
-      - name: Prove provider quota cannot be consumed by legacy/background/registry paths
+      - name: Prove provider quota cannot be consumed by legacy/background/registry/budget paths
         shell: bash
         run: |
           set -euo pipefail
@@ -75,4 +78,8 @@ jobs:
           ! grep -nE 'setInterval|setTimeout' server/mlb-f5-odds-routes.ts
           ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-odds-budget-controller.ts
+          grep -F 'PROVIDER_QUOTA_NOT_PROBED' server/mlb-odds-budget-controller.ts
+          grep -F 'PROVIDER_REMAINING_INSUFFICIENT' server/mlb-odds-budget-controller.ts
+          grep -F 'CONSERVATIVE_WORST_CASE' server/mlb-odds-budget-controller.ts
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
