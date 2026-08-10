@@ -1,31 +1,29 @@
-name: TEMP P1-M2B Official IL Identity Target Patcher
+name: TEMP P1-M2B Official IL Identity One-Shot Patcher
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+  push:
     branches:
-      - integration/p0-staging-secure
+      - main
+    paths:
+      - '.github/workflows/temp-p1-m2b-official-il-identity-target-patcher.yml'
 
 permissions:
   contents: write
 
 jobs:
   patch-and-validate:
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'fix/p1-m2b-official-il-roster-identity-fallback-20260810'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Checkout exact trusted PR head
+      - name: Checkout exact trusted production-fix branch
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: fix/p1-m2b-official-il-roster-identity-fallback-20260810
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify exact trusted scope before executing head code
+      - name: Verify exact trusted scope before executing branch code
         shell: bash
         run: |
           set -euo pipefail
@@ -43,7 +41,6 @@ jobs:
             printf 'Changed files:\n%s\n' "$changed" >&2
             exit 1
           fi
-          # Ensure package/install scripts and workflow code are inherited from the trusted base.
           ! grep -Eq '^package(-lock)?\.json$|^\.github/workflows/' <<< "$changed"
 
       - name: Apply exact core wiring patch
@@ -173,4 +170,4 @@ jobs:
           git add server/mlb-core-routes.ts
           [[ "$(git diff --cached --name-only)" == 'server/mlb-core-routes.ts' ]]
           git commit -m 'P1-M2B: wire official IL roster identity fallback'
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          git push origin HEAD:fix/p1-m2b-official-il-roster-identity-fallback-20260810
