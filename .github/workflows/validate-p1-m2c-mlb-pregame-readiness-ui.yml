@@ -7,6 +7,8 @@ on:
     paths:
       - 'frontend/client/src/lib/mlb-pregame-readiness.ts'
       - 'frontend/client/src/lib/mlb-pregame-readiness.test.ts'
+      - 'frontend/client/src/lib/mlb-manual-quote-capture.ts'
+      - 'frontend/client/src/lib/mlb-manual-quote-capture.test.ts'
       - 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
       - 'frontend/client/src/pages/mlb-predictor.tsx'
       - 'frontend/client/src/App.tsx'
@@ -15,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-p1-m2c-frontend:
@@ -35,6 +37,7 @@ jobs:
           cd frontend
           npx tsx --test \
             client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-manual-quote-capture.test.ts \
             client/src/lib/mlb-daily-slate.test.ts \
             client/src/lib/mlb-review-priority.test.ts
       - name: Run production-equivalent frontend verification
@@ -48,6 +51,7 @@ jobs:
           page='frontend/client/src/pages/mlb-predictor.tsx'
           panel='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
           contract='frontend/client/src/lib/mlb-pregame-readiness.ts'
+          manual='frontend/client/src/lib/mlb-manual-quote-capture.ts'
           app='frontend/client/src/App.tsx'
 
           grep -F 'p1-m2c-mlb-pregame-readiness-ui-2026-08-05' "$app"
@@ -62,6 +66,12 @@ jobs:
           grep -F 'validateMlbPregameModelQuote' "$contract"
           grep -F 'MODEL_HOME_ODDS_DO_NOT_MATCH_CERTIFIED_QUOTE' "$contract"
           grep -F 'F5_TOTAL_EXACT_PRICES_NOT_CAPTURED' "$contract"
+          grep -F 'MLB_MANUAL_QUOTE_BOOK' "$manual"
+          grep -F 'buildMlbManualQuoteSignature' "$manual"
+          grep -F 'isMlbManualQuoteCaptureCurrent' "$manual"
+          grep -F 'manualCapturedAt' "$manual"
+          grep -F 'manualHomeOdds' "$manual"
+          grep -F 'manualOverOdds' "$manual"
           grep -F 'READY_FINAL' "$panel"
           grep -F 'READY_PROVISIONAL' "$panel"
           grep -F 'BLOCKED' "$panel"
@@ -73,7 +83,7 @@ jobs:
           [[ "$(grep -Fc '/api/mlb/p1/v1/pregame-readiness' "$contract")" == '1' ]]
           ! grep -F 'const MARKETS: MlbPregameMarket[] = ["ML", "F5_ML", "RUN_LINE", "TOTAL", "F5_TOTAL"]' "$panel"
 
-          ! grep -E 'method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"|useMutation|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$panel" "$contract"
+          ! grep -E 'method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"|useMutation|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$panel" "$contract" "$manual"
 
           cat frontend/dist/assets/*.js > /tmp/p1-m2c-bundle.js
           grep -F 'p1-m2c-mlb-pregame-readiness-ui-2026-08-05' /tmp/p1-m2c-bundle.js
@@ -87,3 +97,112 @@ jobs:
           grep -F 'SHADOW · exposición 0' /tmp/p1-m2c-bundle.js
       - name: Diff hygiene
         run: git diff --check
+
+  patch-p1-m2c4-manual-quote-gate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feature/p1-m2c4-hardrock-manual-provenance-20260810'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/p1-m2c4-hardrock-manual-provenance-20260810
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify exact pre/post patch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-frontend-session
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          pre=$(printf '%s\n' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.test.ts' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.ts' | sort)
+          post=$(printf '%s\n' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.test.ts' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.ts' | sort)
+          if [[ "$changed" != "$pre" && "$changed" != "$post" ]]; then
+            echo 'Unexpected P1-M2C.4 feature scope; refusing write.' >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+          ! grep -Eq '^package(-lock)?\.json$|^\.github/workflows/' <<< "$changed"
+
+      - name: Apply trusted exact component patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show origin/integration/p0-frontend-session:scripts/temp-p1-m2c4-manual-quote-patcher.py > /tmp/p1-m2c4-patcher.py
+          python /tmp/p1-m2c4-patcher.py
+          git diff --check
+
+      - name: Prove exact component delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          panel='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
+          grep -F 'applyMlbManualQuoteCapture' "$panel"
+          grep -F 'P1-M2C.4 · HARD ROCK MANUAL' "$panel"
+          grep -F 'Confirmo Hard Rock y capturo ahora' "$panel"
+          grep -F 'setManualCapture(null)' "$panel"
+          grep -F 'f5OddsSource: "none"' "$panel"
+          grep -F 'Hard Rock manual verificada' "$panel"
+          [[ "$(git diff --name-only | sort)" == 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' ]]
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies reproducibly
+        run: npm --prefix frontend ci
+
+      - name: Falsification and existing P1-M2C regressions
+        run: |
+          cd frontend
+          npx tsx --test \
+            client/src/lib/mlb-manual-quote-capture.test.ts \
+            client/src/lib/mlb-pregame-readiness.test.ts \
+            client/src/lib/mlb-daily-slate.test.ts \
+            client/src/lib/mlb-review-priority.test.ts
+
+      - name: Production-equivalent frontend verification
+        env:
+          COURTEDGE_STANDALONE_DOCKER_BUILD: 'true'
+        run: npm --prefix frontend run verify
+
+      - name: Prove exact three-file feature package and safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only origin/integration/p0-frontend-session...HEAD | sort)
+          effective=$(printf '%s\n%s\n' "$changed" "$(git diff --name-only)" | sed '/^$/d' | sort -u)
+          expected=$(printf '%s\n' \
+            'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.test.ts' \
+            'frontend/client/src/lib/mlb-manual-quote-capture.ts' | sort)
+          [[ "$effective" == "$expected" ]]
+          ! git diff origin/integration/p0-frontend-session -- \
+            frontend/client/src/components/mlb-pregame-readiness-gate.tsx \
+            frontend/client/src/lib/mlb-manual-quote-capture.ts | \
+            grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|sportsbook.*write|appendSettlement|useMutation|method:[[:space:]]*"(POST|PUT|PATCH|DELETE)"'
+
+      - name: Commit only patched gate component
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- frontend/client/src/components/mlb-pregame-readiness-gate.tsx; then
+            echo 'Gate already patched; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/client/src/components/mlb-pregame-readiness-gate.tsx
+          [[ "$(git diff --cached --name-only)" == 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' ]]
+          git commit -m 'P1-M2C.4: wire explicit Hard Rock manual quote capture'
+          git push origin HEAD:feature/p1-m2c4-hardrock-manual-provenance-20260810
