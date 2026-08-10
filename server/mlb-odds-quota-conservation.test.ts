@@ -1,4 +1,3 @@
-// Post-patcher revalidation trigger: runtime logic unchanged; this commit exists only to run the full post-patch CI matrix with a non-bot actor.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
@@ -76,7 +75,7 @@ function localGet(baseUrl: string, path: string): Promise<{ status: number; body
   });
 }
 
-test("static quota policy disables legacy polling, makes S5C/S5E cache-only, and keeps background freshness at five minutes", () => {
+test("static quota policy disables legacy polling, makes S5C/S5E cache-only, and keeps all F5 cache reuse inside five minutes", () => {
   const legacy = fs.readFileSync("server/legacy-picks-routes.ts", "utf8");
   const s5c = fs.readFileSync("server/mlb-s5c-shadow-ingestion.ts", "utf8");
   const s5e = fs.readFileSync("server/mlb-s5e-coverage-service.ts", "utf8");
@@ -101,14 +100,17 @@ test("static quota policy disables legacy polling, makes S5C/S5E cache-only, and
 
   assert.match(f5, /F5_BACKGROUND_CACHE_TTL_MS = 5 \* 60 \* 1000/);
   assert.doesNotMatch(f5, /F5_BACKGROUND_CACHE_TTL_MS = 30 \* 60 \* 1000/);
+  assert.match(f5, /const cacheFresh = Boolean/);
+  assert.doesNotMatch(f5, /withCache\(cacheKey/);
   assert.match(f5, /BACKGROUND_CACHE_MISS/);
   assert.match(f5, /F5_EVENT_ODDS_PROVIDER_FAILURE/);
   assert.match(f5, /providerFailureCount/);
   assert.match(f5, /providerErrorCodes/);
 });
 
-test("F5 quota-conservation route behavior is fail-closed and does not spend provider quota for background cache-only reads", async () => {
+test("F5 quota-conservation route is fail-closed, background never refreshes, and foreground refreshes only after five minutes", async () => {
   const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
   const previousKey = process.env.ODDS_API_KEY;
   process.env.ODDS_API_KEY = "quota-test-key";
 
@@ -132,6 +134,8 @@ test("F5 quota-conservation route behavior is fail-closed and does not spend pro
     {
       const date = "2026-09-02";
       let providerCalls = 0;
+      let fakeNow = 1_800_000_000_000;
+      Date.now = () => fakeNow;
       globalThis.fetch = (async (input: string | URL | Request) => {
         const url = String(input);
         providerCalls += 1;
@@ -145,20 +149,41 @@ test("F5 quota-conservation route behavior is fail-closed and does not spend pro
       }) as typeof fetch;
 
       await withServer(async (baseUrl) => {
-        const foreground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}`);
-        assert.equal(foreground.status, 200);
-        assert.equal(foreground.body.success, true);
-        assert.equal(foreground.body.games.length, 1);
-        assert.equal(foreground.body.coverageStatus, "COMPLETE");
+        const firstForeground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}`);
+        assert.equal(firstForeground.status, 200);
+        assert.equal(firstForeground.body.success, true);
+        assert.equal(firstForeground.body.games.length, 1);
+        assert.equal(firstForeground.body.coverageStatus, "COMPLETE");
         assert.equal(providerCalls, 2);
 
-        const background = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}&background=cache-only`);
-        assert.equal(background.status, 200);
-        assert.equal(background.body.success, true);
-        assert.equal(background.body.backgroundCacheOnly, true);
-        assert.equal(background.body.games.length, 1);
-        assert.equal(providerCalls, 2);
+        const firstFetchAt = fakeNow;
+        fakeNow = firstFetchAt + (4 * 60 * 1000);
+        const freshForeground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}`);
+        assert.equal(freshForeground.status, 200);
+        assert.equal(freshForeground.body.success, true);
+        assert.equal(providerCalls, 2, "foreground must reuse provider data while it is younger than five minutes");
+
+        const freshBackground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}&background=cache-only`);
+        assert.equal(freshBackground.status, 200);
+        assert.equal(freshBackground.body.success, true);
+        assert.equal(freshBackground.body.backgroundCacheOnly, true);
+        assert.equal(freshBackground.body.games.length, 1);
+        assert.equal(providerCalls, 2, "background must never spend quota while fresh cache exists");
+
+        fakeNow = firstFetchAt + (5 * 60 * 1000) + 1;
+        const staleBackground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}&background=cache-only`);
+        assert.equal(staleBackground.status, 200);
+        assert.equal(staleBackground.body.success, false);
+        assert.equal(staleBackground.body.code, "BACKGROUND_CACHE_MISS");
+        assert.equal(providerCalls, 2, "stale background request must not refresh provider");
+
+        const refreshedForeground = await localGet(baseUrl, `/api/odds/mlb/f5?date=${date}`);
+        assert.equal(refreshedForeground.status, 200);
+        assert.equal(refreshedForeground.body.success, true);
+        assert.equal(refreshedForeground.body.games.length, 1);
+        assert.equal(providerCalls, 4, "foreground must refresh provider after five-minute expiry");
       });
+      Date.now = originalNow;
     }
 
     {
@@ -223,6 +248,7 @@ test("F5 quota-conservation route behavior is fail-closed and does not spend pro
       assert.equal(providerCalls, 3);
     }
   } finally {
+    Date.now = originalNow;
     globalThis.fetch = originalFetch;
     if (previousKey == null) delete process.env.ODDS_API_KEY;
     else process.env.ODDS_API_KEY = previousKey;
