@@ -4,7 +4,9 @@
     "server/mlb-injury-official-supplement.ts",
     "server/mlb-injury-official-supplement.test.ts",
     "server/mlb-injury-official-supplement-routes.ts",
-    "server/mlb-injury-official-supplement-routes.test.ts"
+    "server/mlb-injury-official-supplement-routes.test.ts",
+    "server/mlb-injury-identity-diagnostic.ts",
+    "server/mlb-injury-identity-diagnostic.test.ts"
   ],
   "exclude": [
     "node_modules",
