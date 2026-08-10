@@ -52,6 +52,9 @@ jobs:
       - name: P1-M2B readiness regressions
         run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
 
+      - name: Preserve modular route inventory
+        run: npm run test:s3-modularization
+
       - name: Production backend build
         run: npm run build:backend
 
@@ -71,9 +74,11 @@ jobs:
           assert.match(supplementRoutes, /phaseB:\s*meta\?\.phaseB/);
           assert.match(supplementRoutes, /supplementEvidenceOnly:\s*true/);
           assert.match(supplementRoutes, /rawOfficialOnlyCount !== expectedOfficialOnly/);
-          assert.match(supplementRoutes, /\/api\/mlb\/research\/injury-identity-diagnostic/);
+          assert.match(supplementRoutes, /researchInjuryIdentityDiagnostic/);
+          assert.match(supplementRoutes, /MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY/);
           assert.match(supplementRoutes, /requireSecret\("BDL_API_KEY"\)/);
           assert.match(supplementRoutes, /Cache-Control/);
+          assert.doesNotMatch(supplementRoutes, /app\.get\(["']\/api\/mlb\/research/);
           assert.match(helper, /decision:\s*"PENDING"/);
           assert.match(helper, /impact:\s*"NONE"/);
           assert.match(helper, /aggregateOnly:\s*true/);
