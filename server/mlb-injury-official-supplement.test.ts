@@ -177,12 +177,21 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const diagnosticPlayerIds: Record<string, number> = {
+  "Strict Player": 1001,
+  "Roster Rescue": 1002,
+  "Tx Rescue": 1003,
+  "Unresolved Player": 1004,
+  "Inactive Player": 1005,
+  "Same Name": 1006,
+};
+
 function diagnosticInjury(name: string, position = "OF", overrides: Record<string, unknown> = {}) {
   const [first_name, ...rest] = name.split(" ");
   return {
     status: "10-day IL",
     player: {
-      id: name.length * 100,
+      id: diagnosticPlayerIds[name] ?? 1999,
       first_name,
       last_name: rest.join(" "),
       full_name: name,
