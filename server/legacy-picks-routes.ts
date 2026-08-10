@@ -255,13 +255,14 @@ export function registerLegacyPicksCompatibilityRoutes(app: Express): void {
   // Así el CLV no depende de que el usuario abra la app a tiempo — antes era el
   // problema #1: si nadie cargaba odds en los últimos 60 min antes de un juego,
   // ese partido se perdía para siempre.
-  const ODDS_API_KEY_BG = requireSecret("ODDS_API_KEY");
+  const LEGACY_ODDS_BACKGROUND_POLLING = process.env.LEGACY_ODDS_BACKGROUND_POLLING?.trim().toLowerCase() === "true";
+  const ODDS_API_KEY_BG = LEGACY_ODDS_BACKGROUND_POLLING ? requireSecret("ODDS_API_KEY") : null;
   const SPORT_MAP_BG: Record<string, string> = {
     nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb",
   };
   async function pollOddsForSport(sport: string) {
     try {
-      const apiSport = SPORT_MAP_BG[sport]; if (!apiSport) return 0;
+      const apiSport = SPORT_MAP_BG[sport]; if (!apiSport || !ODDS_API_KEY_BG) return 0;
       const url = `https://api.the-odds-api.com/v4/sports/${apiSport}/odds/?apiKey=${ODDS_API_KEY_BG}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american&bookmakers=hardrockbet_fl,hardrockbet,hardrockbet_az,draftkings,fanduel,betmgm`;
       const resp = await fetch(url);
       const data: any = await resp.json();
@@ -291,23 +292,28 @@ export function registerLegacyPicksCompatibilityRoutes(app: Express): void {
       return saved;
     } catch (e) { console.error(`[odds-poll ${sport}] error:`, e); return 0; }
   }
-  // First poll 30 s after boot, then every 15 min
-  setTimeout(async () => {
-    const a = await pollOddsForSport("mlb");
-    const b = await pollOddsForSport("nhl");
-    const c = await pollOddsForSport("nba");
-    console.log(`[odds-poll boot] mlb=${a} nhl=${b} nba=${c} snapshots`);
-  }, 30 * 1000);
-  // CUOTA: plan Starter de 500 req/mes. Cada poll hace 3 deportes = 3 requests.
-  // A 2h: 3*12*30 = 1080/mes — supera 500, pero combinado con la cuota fresca del día 1
-  // del mes nos da cobertura ~14 días/mes (la mejor relación cobertura/resolución).
-  // Antes era 15 min y consumía la cuota en 1.7 días.
-  setInterval(async () => {
-    const a = await pollOddsForSport("mlb");
-    const b = await pollOddsForSport("nhl");
-    const c = await pollOddsForSport("nba");
-    if (a + b + c > 0) console.log(`[odds-poll] mlb=${a} nhl=${b} nba=${c} snapshots`);
-  }, 2 * 60 * 60 * 1000);
+  // Legacy all-sport polling is disabled by default. It is incompatible with a bounded
+  // monthly provider quota and duplicates newer decision/checkpoint-specific collectors.
+  // On-demand odds routes still record snapshots. Explicit opt-in is available only for
+  // environments with a separately budgeted provider plan.
+  if (LEGACY_ODDS_BACKGROUND_POLLING) {
+    const bootPoll = setTimeout(async () => {
+      const a = await pollOddsForSport("mlb");
+      const b = await pollOddsForSport("nhl");
+      const c = await pollOddsForSport("nba");
+      console.log(`[odds-poll boot] mlb=${a} nhl=${b} nba=${c} snapshots`);
+    }, 30 * 1000);
+    bootPoll.unref();
+    const recurringPoll = setInterval(async () => {
+      const a = await pollOddsForSport("mlb");
+      const b = await pollOddsForSport("nhl");
+      const c = await pollOddsForSport("nba");
+      if (a + b + c > 0) console.log(`[odds-poll] mlb=${a} nhl=${b} nba=${c} snapshots`);
+    }, 2 * 60 * 60 * 1000);
+    recurringPoll.unref();
+  } else {
+    console.log("[odds-poll] legacy background polling disabled; set LEGACY_ODDS_BACKGROUND_POLLING=true for explicit opt-in");
+  }
 
   // Auto-refresh CLV every 30 minutes (background)
   setInterval(async () => {
