@@ -1,0 +1,250 @@
+name: Research P1-M2B Market Odds Missing Live 2026-08-10
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-market-odds-missing-live-20260810.yml'
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_URL: https://web-p0-integration.up.railway.app
+  EXPECTED_COMMIT: ea8091ff61f3c829f51599f49e09de50f3622d7e
+  AUDIT_DATE: '2026-08-10'
+
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-market-odds-missing-live-20260810.yml' ]]
+
+      - name: Wait for exact Railway commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          matched=0
+          for i in $(seq 1 20); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == "200" ]]; then
+              commit=$(node -e "try{const j=require('/tmp/health.json');process.stdout.write(String(j.commit||'').toLowerCase())}catch{}")
+              expected=$(printf '%s' "$EXPECTED_COMMIT" | tr '[:upper:]' '[:lower:]')
+              if [[ -n "$commit" && ( "$commit" == "$expected" || "$commit" == "${expected:0:${#commit}}" || "$expected" == "${commit:0:${#expected}}" ) ]]; then
+                matched=1
+                break
+              fi
+            fi
+            sleep 15
+          done
+          [[ "$matched" -eq 1 ]] || { echo 'Exact Railway commit did not become active in time.' >&2; exit 1; }
+
+      - name: Capture minimal live market evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p private audit
+          chmod 700 private
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          slate_code=$(curl -sS -o private/slate.json -w '%{http_code}' --max-time 120 "${BACKEND_URL}/api/mlb/p1/v1/slate?date=${AUDIT_DATE}" || true)
+          full_code=$(curl -sS -o private/full.json -w '%{http_code}' --max-time 180 "${BACKEND_URL}/api/odds/mlb?date=${AUDIT_DATE}" || true)
+          f5_code=$(curl -sS -o private/f5.json -w '%{http_code}' --max-time 240 "${BACKEND_URL}/api/odds/mlb/f5?date=${AUDIT_DATE}" || true)
+
+          HEALTH_CODE="$health_code" SLATE_CODE="$slate_code" FULL_CODE="$full_code" F5_CODE="$f5_code" node <<'NODE'
+          const fs = require('fs');
+          const backend = process.env.BACKEND_URL;
+          const date = process.env.AUDIT_DATE;
+          const expected = String(process.env.EXPECTED_COMMIT || '').toLowerCase();
+          const clean = (v) => String(v ?? '').trim();
+          const read = (p) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return null; } };
+          const teamKey = (v) => clean(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+          const isAmerican = (v) => { const n=Number(v); return Number.isFinite(n) && (n <= -100 || n >= 100); };
+          const iso = (v) => { const n=Date.parse(clean(v)); return Number.isFinite(n) ? new Date(n).toISOString() : null; };
+          const start = (g) => iso(g?.commence ?? g?.commenceTime ?? g?.startTime ?? g?.gameDate);
+          const slatePayload = read('private/slate.json');
+          const fullPayload = read('private/full.json');
+          const f5Payload = read('private/f5.json');
+          const health = read('private/health.json');
+          const officialGames = Array.isArray(slatePayload?.data?.games) ? slatePayload.data.games : Array.isArray(slatePayload?.games) ? slatePayload.games : [];
+          const fullGames = Array.isArray(fullPayload?.games) ? fullPayload.games : Array.isArray(fullPayload?.data?.games) ? fullPayload.data.games : [];
+          const f5Games = Array.isArray(f5Payload?.games) ? f5Payload.games : Array.isArray(f5Payload?.data?.games) ? f5Payload.data.games : [];
+
+          const result = {
+            schemaVersion:'p1-m2b-market-odds-missing-live.v1',
+            auditDate:date,
+            expectedCommit:expected,
+            deployedCommit:null,
+            commitMatch:false,
+            endpointStatus:{
+              health:String(process.env.HEALTH_CODE||'000'),
+              slate:String(process.env.SLATE_CODE||'000'),
+              fullOdds:String(process.env.FULL_CODE||'000'),
+              f5Odds:String(process.env.F5_CODE||'000'),
+            },
+            official:{games:officialGames.length},
+            fullGame:null,
+            f5:null,
+            readiness:null,
+            conclusion:{state:'NOT_MEASURED',primaryCause:null},
+            providerCallBudget:{marketUniverseEndpointCalled:false},
+            privacy:{rawPayloadUploaded:false,teamIdentitiesUploaded:false,gameIdsUploaded:false,credentialUploaded:false},
+            safety:{writesPerformed:0,modelChanged:false,marketContractChanged:false,thresholdChanged:false},
+          };
+
+          const deployed=clean(health?.commit).toLowerCase();
+          result.deployedCommit=/^[0-9a-f]{7,40}$/.test(deployed)?deployed:null;
+          result.commitMatch=Boolean(result.deployedCommit)&&(deployed===expected||deployed.startsWith(expected)||expected.startsWith(deployed));
+
+          function findMarketGame(games, official) {
+            const home=teamKey(official?.homeTeam?.name ?? official?.homeTeam);
+            const away=teamKey(official?.awayTeam?.name ?? official?.awayTeam);
+            const matches=games.filter(g=>teamKey(g?.homeTeam??g?.home_team)===home&&teamKey(g?.awayTeam??g?.away_team)===away);
+            if(!matches.length) return null;
+            if(matches.length===1) return matches[0];
+            const t=iso(official?.startTime);
+            if(!t) return null;
+            return matches.map(g=>({g,d:start(g)?Math.abs(Date.parse(start(g))-Date.parse(t)):Infinity})).sort((a,b)=>a.d-b.d)[0]?.g??null;
+          }
+
+          let fullMatched=0, fullValid=0, fullIncomplete=0, fullHardRock=0, fullOtherBook=0;
+          for(const official of officialGames){
+            const g=findMarketGame(fullGames,official);
+            if(!g) continue;
+            fullMatched++;
+            const valid=isAmerican(g?.ml?.home)&&isAmerican(g?.ml?.away);
+            if(valid) fullValid++; else fullIncomplete++;
+            const source=clean(g?.source).toLowerCase();
+            if(source.includes('hard rock')) fullHardRock++; else if(source&&source!=='n/a') fullOtherBook++;
+          }
+          result.fullGame={
+            success:fullPayload?.success===true,
+            errorCode:clean(fullPayload?.code)||null,
+            errorPresent:Boolean(fullPayload?.error),
+            returnedGames:fullGames.length,
+            officialMatched:fullMatched,
+            officialUnmatched:Math.max(0,officialGames.length-fullMatched),
+            validMlPairs:fullValid,
+            matchedButIncompleteMl:fullIncomplete,
+            hardRockSelectedGames:fullHardRock,
+            otherBookSelectedGames:fullOtherBook,
+            sourceAvailable:clean(fullPayload?.source)!==''&&clean(fullPayload?.source).toLowerCase()!=='n/a',
+          };
+
+          let f5Matched=0, f5Valid=0, f5Incomplete=0, f5WithContributors=0;
+          for(const official of officialGames){
+            const g=findMarketGame(f5Games,official);
+            if(!g) continue;
+            f5Matched++;
+            const valid=isAmerican(g?.f5Ml?.home)&&isAmerican(g?.f5Ml?.away);
+            if(valid) f5Valid++; else f5Incomplete++;
+            if(Number(g?.f5Ml?.n)>0) f5WithContributors++;
+          }
+          result.f5={
+            success:f5Payload?.success===true,
+            schemaVersion:clean(f5Payload?.schemaVersion)||null,
+            errorCode:clean(f5Payload?.code)||null,
+            errorPresent:Boolean(f5Payload?.error),
+            returnedGames:f5Games.length,
+            officialMatched:f5Matched,
+            officialUnmatched:Math.max(0,officialGames.length-f5Matched),
+            validMlPairs:f5Valid,
+            matchedButIncompleteMl:f5Incomplete,
+            gamesWithContributingF5MlQuotes:f5WithContributors,
+            sourceAvailable:clean(f5Payload?.source)!==''&&clean(f5Payload?.source).toLowerCase()!=='n/a',
+          };
+
+          async function readinessSample(){
+            const chosen=officialGames.slice(0,3);
+            const evaluations=[];
+            for(const g of chosen){
+              const gamePk=Number(g?.gamePk);
+              if(!Number.isInteger(gamePk)||gamePk<=0) continue;
+              for(const market of ['ML','F5_ML']){
+                let status=0, payload=null;
+                try{
+                  const r=await fetch(`${backend}/api/mlb/p1/v1/pregame-readiness?gamePk=${gamePk}&market=${market}&date=${date}`,{signal:AbortSignal.timeout(120000),headers:{accept:'application/json'}});
+                  status=r.status; payload=await r.json().catch(()=>null);
+                }catch{}
+                const report=payload?.success===true&&payload?.data?payload.data:payload;
+                const odds=(Array.isArray(report?.evidence)?report.evidence:[]).find(e=>clean(e?.field)==='MARKET_ODDS');
+                evaluations.push({
+                  market,
+                  httpStatus:status,
+                  gate:clean(report?.gate?.status).toUpperCase()||null,
+                  oddsState:clean(odds?.state).toUpperCase()||null,
+                  sourceStatus:clean(odds?.sourceStatus).toUpperCase()||null,
+                  errors:Array.isArray(odds?.errors)?odds.errors.map(clean).filter(Boolean):[],
+                });
+              }
+            }
+            const aggregate=(key)=>evaluations.reduce((acc,e)=>{const k=key(e)||'UNKNOWN';acc[k]=(acc[k]||0)+1;return acc;},{});
+            return {
+              evaluations:evaluations.length,
+              byMarket:aggregate(e=>e.market),
+              gateStates:aggregate(e=>e.gate),
+              oddsStates:aggregate(e=>e.oddsState),
+              sourceStatuses:aggregate(e=>e.sourceStatus),
+              errors:evaluations.flatMap(e=>e.errors).reduce((acc,k)=>{acc[k]=(acc[k]||0)+1;return acc;},{}),
+            };
+          }
+
+          (async()=>{
+            result.readiness=await readinessSample();
+            const chain=result.endpointStatus.health==='200'&&result.endpointStatus.slate==='200'&&result.commitMatch;
+            if(!chain){result.conclusion={state:'CHAIN_OF_CUSTODY_FAILED',primaryCause:null};}
+            else if(result.fullGame.errorCode==='OUT_OF_USAGE_CREDITS'||result.f5.errorCode==='OUT_OF_USAGE_CREDITS'){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'PROVIDER_CREDITS_EXHAUSTED'};
+            }else if(!result.fullGame.success||!result.f5.success){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'LEGACY_ODDS_ENDPOINT_FAILURE'};
+            }else if(result.fullGame.returnedGames===0&&result.f5.returnedGames===0){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'PROVIDER_RETURNED_NO_DATED_EVENTS'};
+            }else if(result.fullGame.officialMatched===0&&result.f5.officialMatched===0){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'TEAM_OR_START_IDENTITY_MISMATCH'};
+            }else if(result.fullGame.matchedButIncompleteMl>0||result.f5.matchedButIncompleteMl>0){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'MATCHED_MARKET_QUOTES_INCOMPLETE'};
+            }else if((result.fullGame.officialUnmatched>0||result.f5.officialUnmatched>0)){
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'PARTIAL_MARKET_SLATE_COVERAGE'};
+            }else{
+              result.conclusion={state:'VALID_DIAGNOSIS',primaryCause:'LEGACY_ENDPOINTS_APPEAR_COMPLETE_REVIEW_READINESS_MAPPING'};
+            }
+            fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+            console.log(JSON.stringify(result,null,2));
+            fs.rmSync('private',{recursive:true,force:true});
+          })().catch(err=>{console.error(err);process.exitCode=1});
+          NODE
+
+      - name: Prove sanitized read-only artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          ! grep -E '"gamePk"|"gameId"|"homeTeam"|"awayTeam"|Authorization|ODDS_API_KEY|apiKey' audit/result.json
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('audit/result.json','utf8'));
+          if(!r.commitMatch) throw new Error('commit mismatch');
+          if(r.safety?.writesPerformed!==0) throw new Error('write detected');
+          if(r.providerCallBudget?.marketUniverseEndpointCalled!==false) throw new Error('unexpected expensive endpoint call');
+          NODE
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-market-odds-missing-live-20260810
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
