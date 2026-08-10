@@ -1,0 +1,192 @@
+name: Research P1-M2B Railway Rejected Injury Identity Live 2026-08-10
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-railway-rejected-identity-live-20260810.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit-live-rejected-identities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      AUDIT_DATE: '2026-08-10'
+      EXPECTED_COMMIT: 9b7a980d7b9c1252b2c289091fe17b5f1c5f3c81
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-railway-rejected-identity-live-20260810.yml' ]]
+
+      - name: Audit exact deployed backend and aggregate identity causes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 300 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}&researchInjuryIdentityDiagnostic=aggregate-v1" || true)
+          health_code=${health_code:-000}
+          all_code=${all_code:-000}
+
+          HEALTH_CODE="$health_code" ALL_CODE="$all_code" AUDIT_DATE="$AUDIT_DATE" EXPECTED_COMMIT="$EXPECTED_COMMIT" node <<'NODE'
+          const fs=require('fs');
+          const code=v=>/^\d{3}$/.test(String(v||''))?String(v):'000';
+          const clean=v=>String(v??'').trim().toUpperCase();
+          const nonneg=v=>Number.isFinite(Number(v))?Math.max(0,Math.trunc(Number(v))):0;
+          const expected=String(process.env.EXPECTED_COMMIT||'').trim().toLowerCase();
+          const endpointStatus={health:code(process.env.HEALTH_CODE),all:code(process.env.ALL_CODE)};
+          const result={
+            schemaVersion:'p1-m2b-railway-rejected-identity-live.v1',
+            generatedAt:new Date().toISOString(),
+            auditDate:process.env.AUDIT_DATE,
+            endpointStatus,
+            expectedCommit:expected,
+            deployedCommit:null,
+            deployedCommitMatchesExpected:false,
+            slate:{measuredGames:0,measuredSides:0,statusCounts:{},sidesWithRejectedIdentity:0,rejectedIdentityTotal:0,sourceErrorTotal:0},
+            diagnostic:null,
+            parity:{comparable:false,exactRejectedCountMatch:false,slateRejectedIdentityTotal:0,diagnosticRejectedTotal:0,reason:'NOT_MEASURED'},
+            conclusion:{state:'NOT_MEASURED',causeDistributionScientificallyUsable:false,rosterFallbackCandidateCount:0,transactionOnlyExploratoryCount:0,remainingUnresolvedCount:0},
+            privacy:{rawPayloadUploaded:false,playerNamesUploaded:false,playerIdsUploaded:false,credentialUploaded:false},
+            safety:{writesPerformed:0,predictionsCreated:0,settlementsCreated:0,betsPlaced:0,modelFormulaChanged:false,phaseBChanged:false}
+          };
+
+          if(endpointStatus.health==='200'){
+            try{
+              const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+              const commit=String(h?.commit||'').trim().toLowerCase();
+              result.deployedCommit=/^[0-9a-f]{7,40}$/.test(commit)?commit:null;
+              result.deployedCommitMatchesExpected=Boolean(result.deployedCommit)
+                && (expected===result.deployedCommit || expected.startsWith(result.deployedCommit) || result.deployedCommit.startsWith(expected));
+            }catch{}
+          }
+
+          const custody=endpointStatus.health==='200'&&endpointStatus.all==='200'&&result.deployedCommitMatchesExpected;
+          if(custody){
+            let payload=null;
+            try{payload=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
+            const games=Array.isArray(payload?.games)?payload.games:Array.isArray(payload?.data?.games)?payload.data.games:[];
+            const bump=(o,k)=>{o[k]=(o[k]||0)+1;};
+            for(const game of games){
+              let valid=0;
+              for(const side of ['home','away']){
+                const meta=game?.[`${side}InjuryData`];
+                if(!meta) continue;
+                valid++;
+                result.slate.measuredSides++;
+                const status=clean(meta.status)||'MISSING';
+                bump(result.slate.statusCounts,status);
+                const rejected=nonneg(meta.rejectedCount);
+                if(rejected>0) result.slate.sidesWithRejectedIdentity++;
+                result.slate.rejectedIdentityTotal+=rejected;
+                result.slate.sourceErrorTotal+=Array.isArray(meta.sourceErrors)?meta.sourceErrors.length:0;
+              }
+              if(valid>0) result.slate.measuredGames++;
+            }
+
+            const d=payload?.researchInjuryIdentityDiagnostic;
+            if(d && d?.privacy?.aggregateOnly===true && d?.privacy?.playerNamesReturned===false && d?.privacy?.playerIdsReturned===false && d?.privacy?.credentialReturned===false){
+              result.diagnostic={
+                schemaVersion:String(d.schemaVersion||''),
+                source:{
+                  bdlPages:nonneg(d?.source?.bdlPages),
+                  bdlTotalRecords:nonneg(d?.source?.bdlTotalRecords),
+                  activeMappedBeforeDedupe:nonneg(d?.source?.activeMappedBeforeDedupe),
+                  activeMappedAfterDedupe:nonneg(d?.source?.activeMappedAfterDedupe),
+                  teamsWithActiveRecords:nonneg(d?.source?.teamsWithActiveRecords)
+                },
+                strictResolver:{
+                  resolved:nonneg(d?.strictResolver?.resolved),
+                  rejected:nonneg(d?.strictResolver?.rejected),
+                  rejectionReasons:{
+                    MISSING_NAME:nonneg(d?.strictResolver?.rejectionReasons?.MISSING_NAME),
+                    SEARCH_TRANSPORT_FAILURE:nonneg(d?.strictResolver?.rejectionReasons?.SEARCH_TRANSPORT_FAILURE),
+                    SEARCH_EMPTY:nonneg(d?.strictResolver?.rejectionReasons?.SEARCH_EMPTY),
+                    EXACT_NAME_NOT_FOUND:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_NOT_FOUND),
+                    EXACT_NAME_NO_CURRENT_TEAM:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_NO_CURRENT_TEAM),
+                    EXACT_NAME_WRONG_CURRENT_TEAM:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_WRONG_CURRENT_TEAM),
+                    STATS_ENRICHMENT_FAILURE:nonneg(d?.strictResolver?.rejectionReasons?.STATS_ENRICHMENT_FAILURE)
+                  }
+                },
+                officialAuthority:{
+                  rejectedEvaluated:nonneg(d?.officialAuthority?.rejectedEvaluated),
+                  uniqueRosterExactName:nonneg(d?.officialAuthority?.uniqueRosterExactName),
+                  uniqueRosterIlExactName:nonneg(d?.officialAuthority?.uniqueRosterIlExactName),
+                  uniqueRosterNonIlExactName:nonneg(d?.officialAuthority?.uniqueRosterNonIlExactName),
+                  uniqueTransactionExactNameOnly:nonneg(d?.officialAuthority?.uniqueTransactionExactNameOnly),
+                  ambiguousOfficialExactName:nonneg(d?.officialAuthority?.ambiguousOfficialExactName),
+                  noOfficialExactName:nonneg(d?.officialAuthority?.noOfficialExactName),
+                  authorityUnavailable:nonneg(d?.officialAuthority?.authorityUnavailable),
+                  safelyResolvableIdentityTotal:nonneg(d?.officialAuthority?.safelyResolvableIdentityTotal),
+                  remainingUnresolved:nonneg(d?.officialAuthority?.remainingUnresolved)
+                }
+              };
+
+              const diagRejected=result.diagnostic.strictResolver.rejected;
+              const slateRejected=result.slate.rejectedIdentityTotal;
+              const fullSlate=result.slate.measuredSides===30;
+              const diagCoversAllMappedTeams=result.diagnostic.source.teamsWithActiveRecords<=result.slate.measuredSides;
+              result.parity={
+                comparable:fullSlate&&diagCoversAllMappedTeams,
+                exactRejectedCountMatch:fullSlate&&diagCoversAllMappedTeams&&diagRejected===slateRejected,
+                slateRejectedIdentityTotal:slateRejected,
+                diagnosticRejectedTotal:diagRejected,
+                reason:!fullSlate?'SLATE_NOT_ALL_30_TEAMS':(!diagCoversAllMappedTeams?'DIAGNOSTIC_TEAM_SCOPE_EXCEEDS_SLATE':(diagRejected===slateRejected?'EXACT_MATCH':'REJECT_COUNT_MISMATCH'))
+              };
+              const usable=result.parity.comparable&&result.parity.exactRejectedCountMatch&&result.slate.sourceErrorTotal===0;
+              result.conclusion={
+                state:usable?'VALID_AGGREGATE_MEASUREMENT':'PARITY_NOT_PROVEN',
+                causeDistributionScientificallyUsable:usable,
+                rosterFallbackCandidateCount:usable?result.diagnostic.officialAuthority.uniqueRosterExactName:0,
+                rosterIlCandidateCount:usable?result.diagnostic.officialAuthority.uniqueRosterIlExactName:0,
+                rosterNonIlCandidateCount:usable?result.diagnostic.officialAuthority.uniqueRosterNonIlExactName:0,
+                transactionOnlyExploratoryCount:usable?result.diagnostic.officialAuthority.uniqueTransactionExactNameOnly:0,
+                remainingUnresolvedCount:usable?result.diagnostic.officialAuthority.remainingUnresolved:0,
+                transactionOnlyAuthorizesProductionRescue:false,
+                fuzzyMatchingAuthorized:false,
+                rejectedRecordsMayBeIgnored:false
+              };
+            } else {
+              result.conclusion.state='DIAGNOSTIC_MISSING_OR_PRIVACY_INVALID';
+            }
+          } else {
+            result.conclusion.state='CHAIN_OF_CUSTODY_FAILED';
+          }
+
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify({endpointStatus:result.endpointStatus,deployedCommit:result.deployedCommit,deployedCommitMatchesExpected:result.deployedCommitMatchesExpected,slate:result.slate,diagnostic:result.diagnostic,parity:result.parity,conclusion:result.conclusion},null,2));
+          NODE
+
+          rm -rf private
+          test -f audit/result.json
+
+      - name: Prove accepted artifact contains aggregate evidence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"teamId"|"playerId"[[:space:]]*:|"playerName"[[:space:]]*:|"name"[[:space:]]*:|"homeTeam"|"awayTeam"|Authorization|BDL_API_KEY' audit/result.json
+
+      - name: Upload sanitized rejected-identity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-railway-rejected-identity-live-20260810
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
