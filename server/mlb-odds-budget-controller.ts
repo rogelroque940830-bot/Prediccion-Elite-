@@ -17,7 +17,8 @@ export type MlbOddsBudgetBlockReason =
 export type MlbOddsBudgetDenialCode =
   | "PROVIDER_QUOTA_NOT_PROBED"
   | "BUDGET_CONTROLLER_BLOCKED"
-  | "INVALID_WORST_CASE_CREDITS"
+  | "INVALID_OPERATION_ID"
+  | "INVALID_OPERATION_PLAN"
   | "DUPLICATE_OPERATION_ID"
   | "RUN_BUDGET_INSUFFICIENT"
   | "PROVIDER_REMAINING_INSUFFICIENT";
@@ -46,6 +47,18 @@ export interface MlbOddsBudgetConfig {
   maxRunCredits: number;
   reserveCredits: number;
 }
+
+export type MlbOddsBudgetOperationPlan =
+  | {
+      operationId: string;
+      endpoint: "EVENT_MARKETS";
+    }
+  | {
+      operationId: string;
+      endpoint: "EVENT_ODDS" | "SPORT_ODDS";
+      marketKeys: readonly string[];
+      bookmakerCount: number;
+    };
 
 export interface MlbOddsBudgetReservation {
   operationId: string;
@@ -143,15 +156,16 @@ export function bookmakerRegionEquivalents(bookmakerCount: number): number {
 }
 
 function uniqueMarketCount(marketKeys: readonly string[]): number {
+  if (!Array.isArray(marketKeys)) throw new Error("marketKeys must be an array");
   const keys = new Set(marketKeys.map((key) => String(key).trim()).filter(Boolean));
   if (keys.size === 0) throw new Error("at least one market key is required");
   return keys.size;
 }
 
 /**
- * The provider charges event-odds requests by unique markets actually returned and
- * bookmaker-region equivalents. Requested unique markets therefore form a safe upper
- * bound for authorization before the response exists.
+ * Event odds are charged by unique markets actually returned and bookmaker-region
+ * equivalents. Requested unique markets therefore form a conservative authorization
+ * ceiling before the response exists.
  */
 export function estimateMlbEventOddsWorstCaseCredits(
   marketKeys: readonly string[],
@@ -161,14 +175,25 @@ export function estimateMlbEventOddsWorstCaseCredits(
 }
 
 /**
- * Featured sport-odds requests are charged by markets specified and bookmaker-region
- * equivalents. This is an exact pre-request cost when the request is non-empty.
+ * Featured sport odds are charged by markets specified and bookmaker-region
+ * equivalents, so the requested unique market count is the pre-request cost ceiling.
  */
 export function estimateMlbSportOddsCredits(
   marketKeys: readonly string[],
   bookmakerCount: number,
 ): number {
   return uniqueMarketCount(marketKeys) * bookmakerRegionEquivalents(bookmakerCount);
+}
+
+export function estimateMlbOperationWorstCaseCredits(plan: MlbOddsBudgetOperationPlan): number {
+  if (plan.endpoint === "EVENT_MARKETS") return MLB_ODDS_ENDPOINT_REPORTED_COSTS.EVENT_MARKETS;
+  if (plan.endpoint === "EVENT_ODDS") {
+    return estimateMlbEventOddsWorstCaseCredits(plan.marketKeys, plan.bookmakerCount);
+  }
+  if (plan.endpoint === "SPORT_ODDS") {
+    return estimateMlbSportOddsCredits(plan.marketKeys, plan.bookmakerCount);
+  }
+  throw new Error(`unsupported paid odds endpoint: ${String((plan as any)?.endpoint ?? "")}`);
 }
 
 export class MlbOddsRunBudgetController {
@@ -206,10 +231,10 @@ export class MlbOddsRunBudgetController {
     return this.snapshot();
   }
 
-  authorizePaidOperation(input: MlbOddsBudgetReservation): MlbOddsBudgetAuthorization {
-    const operationId = String(input.operationId ?? "").trim();
+  authorizePaidOperation(input: MlbOddsBudgetOperationPlan): MlbOddsBudgetAuthorization {
+    const operationId = String((input as any)?.operationId ?? "").trim();
     if (!operationId) {
-      return { ok: false, code: "DUPLICATE_OPERATION_ID", detail: "operationId is required" };
+      return { ok: false, code: "INVALID_OPERATION_ID", detail: "operationId is required" };
     }
     if (this.operations.has(operationId)) {
       return { ok: false, code: "DUPLICATE_OPERATION_ID", detail: `operation ${operationId} already exists` };
@@ -220,12 +245,20 @@ export class MlbOddsRunBudgetController {
     if (this.status !== "ACTIVE" || this.providerUsage == null) {
       return { ok: false, code: "PROVIDER_QUOTA_NOT_PROBED", detail: "zero-cost provider quota probe required before paid work" };
     }
-    if (!Number.isInteger(input.worstCaseCredits) || input.worstCaseCredits <= 0) {
-      return { ok: false, code: "INVALID_WORST_CASE_CREDITS", detail: "worstCaseCredits must be a positive integer" };
+
+    let worstCaseCredits: number;
+    try {
+      worstCaseCredits = estimateMlbOperationWorstCaseCredits(input);
+    } catch (error: any) {
+      return {
+        ok: false,
+        code: "INVALID_OPERATION_PLAN",
+        detail: String(error?.message ?? "invalid odds operation plan"),
+      };
     }
 
     const outstanding = this.outstandingWorstCaseCredits();
-    if (this.runCreditsCharged + outstanding + input.worstCaseCredits > this.maxRunCredits) {
+    if (this.runCreditsCharged + outstanding + worstCaseCredits > this.maxRunCredits) {
       return {
         ok: false,
         code: "RUN_BUDGET_INSUFFICIENT",
@@ -234,7 +267,7 @@ export class MlbOddsRunBudgetController {
     }
 
     const spendableProviderCredits = this.providerUsage.requestsRemaining - this.reserveCredits - outstanding;
-    if (spendableProviderCredits < input.worstCaseCredits) {
+    if (spendableProviderCredits < worstCaseCredits) {
       return {
         ok: false,
         code: "PROVIDER_REMAINING_INSUFFICIENT",
@@ -245,7 +278,7 @@ export class MlbOddsRunBudgetController {
     const reservation: MlbOddsBudgetOperationRecord = {
       operationId,
       endpoint: input.endpoint,
-      worstCaseCredits: input.worstCaseCredits,
+      worstCaseCredits,
       status: "RESERVED",
       chargedCredits: null,
       accounting: "NONE",
@@ -256,7 +289,7 @@ export class MlbOddsRunBudgetController {
       reservation: {
         operationId,
         endpoint: input.endpoint,
-        worstCaseCredits: input.worstCaseCredits,
+        worstCaseCredits,
       },
     };
   }
