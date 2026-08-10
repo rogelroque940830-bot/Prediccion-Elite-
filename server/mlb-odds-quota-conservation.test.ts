@@ -76,20 +76,17 @@ function localGet(baseUrl: string, path: string): Promise<{ status: number; body
   });
 }
 
-test("static quota policy disables legacy polling, makes S5C/S5E cache-only, and keeps all F5 cache reuse inside five minutes", () => {
+test("static quota policy removes legacy provider polling, makes S5C/S5E cache-only, and keeps all F5 cache reuse inside five minutes", () => {
   const legacy = fs.readFileSync("server/legacy-picks-routes.ts", "utf8");
   const s5c = fs.readFileSync("server/mlb-s5c-shadow-ingestion.ts", "utf8");
   const s5e = fs.readFileSync("server/mlb-s5e-coverage-service.ts", "utf8");
   const f5 = fs.readFileSync("server/mlb-f5-odds-routes.ts", "utf8");
 
-  assert.match(legacy, /LEGACY_ODDS_BACKGROUND_POLLING/);
-  assert.match(legacy, /LEGACY_ODDS_BACKGROUND_POLLING \? requireSecret\("ODDS_API_KEY"\) : null/);
-  assert.match(legacy, /if \(LEGACY_ODDS_BACKGROUND_POLLING\)/);
-  assert.match(legacy, /legacy background polling disabled/);
-  assert.ok(
-    legacy.indexOf("if (LEGACY_ODDS_BACKGROUND_POLLING)") < legacy.indexOf("const bootPoll = setTimeout"),
-    "legacy boot poll must live inside the explicit opt-in gate",
-  );
+  assert.doesNotMatch(legacy, /api\.the-odds-api\.com/);
+  assert.doesNotMatch(legacy, /ODDS_API_KEY/);
+  assert.doesNotMatch(legacy, /LEGACY_ODDS_BACKGROUND_POLLING/);
+  assert.doesNotMatch(legacy, /pollOddsForSport/);
+  assert.match(legacy, /Legacy provider polling was permanently removed/);
 
   assert.match(s5c, /hasPregameGame/);
   assert.match(s5c, /background=cache-only/);

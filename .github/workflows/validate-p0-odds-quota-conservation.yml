@@ -7,10 +7,13 @@ on:
     paths:
       - '.github/workflows/validate-p0-odds-quota-conservation.yml'
       - 'server/legacy-picks-routes.ts'
-      - 'server/mlb-f5-odds-routes.ts'
       - 'server/mlb-odds-quota-conservation.test.ts'
+      - 'server/mlb-f5-odds-routes.ts'
       - 'server/mlb-s5c-shadow-ingestion.ts'
       - 'server/mlb-s5e-coverage-service.ts'
+      - 'server/mlb-closing-line-worker.ts'
+      - 'server/odds-demand-policy.ts'
+      - 'server/index.ts'
 
 permissions:
   contents: read
@@ -45,40 +48,25 @@ jobs:
           npm run test:s3-modularization
           npm run build:backend
 
-      - name: Prove background quota policy and five-minute scientific freshness
+      - name: Prove provider quota cannot be consumed by legacy/background paths
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
-          grep -F 'legacy background polling disabled' server/legacy-picks-routes.ts
+          ! grep -F 'api.the-odds-api.com' server/legacy-picks-routes.ts
+          ! grep -F 'ODDS_API_KEY' server/legacy-picks-routes.ts
+          ! grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
+          ! grep -F 'pollOddsForSport' server/legacy-picks-routes.ts
+          grep -F 'Legacy provider polling was permanently removed' server/legacy-picks-routes.ts
+
           grep -F 'background=cache-only' server/mlb-s5c-shadow-ingestion.ts
           grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
           grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          ! grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          grep -F 'const cacheFresh = Boolean' server/mlb-f5-odds-routes.ts
-          ! grep -F 'withCache(cacheKey' server/mlb-f5-odds-routes.ts
           grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
-          grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
-          grep -F 'providerFailureCount' server/mlb-f5-odds-routes.ts
-          grep -F 'providerErrorCodes' server/mlb-f5-odds-routes.ts
 
-      - name: Exact three-file F5 successor package and safety boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
-          expected=(
-            ".github/workflows/validate-p0-odds-quota-conservation.yml"
-            "server/mlb-f5-odds-routes.ts"
-            "server/mlb-odds-quota-conservation.test.ts"
-          )
-          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
-          for i in "${!expected[@]}"; do
-            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
-              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}" >&2
-              exit 1
-            }
-          done
-          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^frontend/|ledger|settlement|mlb-core-routes\.ts'
-          ! git diff "origin/${GITHUB_BASE_REF}...HEAD" -- server/mlb-f5-odds-routes.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
+          grep -F 'isMlbClosingLineCaptureEnabled' server/index.ts
+          grep -F 'if (mlbClosingLineCaptureEnabled)' server/index.ts
+
+          ! grep -nE 'setInterval|setTimeout' server/mlb-market-universe-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/mlb-f5-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
