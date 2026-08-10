@@ -46,6 +46,9 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbPremiumNoUltraProspectiveRoutes(app);
   registerMlbStatcastMatchupIdentityMiddleware(app);
   // Decorates only safe PARTIAL injury responses with evidence-only MLB official supplements.
+  // Exact rejected identities may close coverage only when payload/BDL counts match, the legacy
+  // lookup reproduces WRONG_CURRENT_TEAM, and one verified MLB team-IL identity matches exactly.
+  // Raw rejectedCount and Phase B remain unchanged; transaction-only/ambiguous evidence stays blocked.
   // Railway research reuses the existing GET /api/mlb/all surface through an explicit query
   // and appends aggregate-only identity diagnostics; it does not register a new route.
   // It must remain before the core GET /api/mlb/all handler.
