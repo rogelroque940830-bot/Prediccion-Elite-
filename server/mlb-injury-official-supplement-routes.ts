@@ -1,7 +1,8 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { fetchOfficialMlbInjurySnapshot, type MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
 import { reconcileMlbOfficialOnlyInjuries } from "./mlb-injury-official-supplement";
-import { todayISO } from "./route-runtime";
+import { buildMlbInjuryIdentityDiagnostic } from "./mlb-injury-identity-diagnostic";
+import { requireSecret, todayISO } from "./route-runtime";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA = "courtedge-mlb-official-injury-supplement.v1" as const;
 
@@ -132,6 +133,27 @@ export function registerMlbOfficialInjurySupplementMiddleware(
   app: Express,
   fetchOfficialSnapshot: FetchOfficialSnapshot = (teamId, date) => fetchOfficialMlbInjurySnapshot(teamId, date),
 ): void {
+  // Aggregate-only research surface. It executes inside Railway so the provider credential
+  // never leaves the service. The response deliberately contains no player names or IDs.
+  app.get("/api/mlb/research/injury-identity-diagnostic", async (req: Request, res: Response) => {
+    const date = clean(req.query.date) || todayISO();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: "INVALID_DATE" });
+    }
+    try {
+      const diagnostic = await buildMlbInjuryIdentityDiagnostic({
+        asOfDate: date,
+        season: date.slice(0, 4),
+        bdlKey: requireSecret("BDL_API_KEY"),
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json(diagnostic);
+    } catch (error) {
+      console.error("MLB injury identity diagnostic failed:", error);
+      return res.status(503).json({ error: "DIAGNOSTIC_UNAVAILABLE" });
+    }
+  });
+
   app.use("/api/mlb/all", (req: Request, res: Response, next: NextFunction) => {
     const date = clean(req.query.date) || todayISO();
     const originalJson = res.json.bind(res);
