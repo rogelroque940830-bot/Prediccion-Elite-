@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: s5b-shadow-${{ github.event.pull_request.number || github.ref }}
@@ -77,106 +77,3 @@ jobs:
             s5b-shadow-run.log
           if-no-files-found: warn
           retention-days: 30
-
-  patch-p0-odds-quota-conservation:
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'fix/p0-odds-quota-conservation-20260810'
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - name: Checkout exact fix branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify exact F5-v3 pre/post scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin integration/p0-staging-secure
-          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          pre=$(printf '%s\n' \
-            '.github/workflows/validate-p0-odds-quota-conservation.yml' \
-            'server/mlb-odds-quota-conservation.test.ts' | sort)
-          post=$(printf '%s\n' \
-            '.github/workflows/validate-p0-odds-quota-conservation.yml' \
-            'server/mlb-f5-odds-routes.ts' \
-            'server/mlb-odds-quota-conservation.test.ts' | sort)
-          if [[ "$changed" != "$pre" && "$changed" != "$post" ]]; then
-            printf 'Unexpected F5-v3 scope:\n%s\n' "$changed" >&2
-            exit 1
-          fi
-
-      - name: Apply exact F5 five-minute foreground cache patch
-        run: python scripts/temp-p0-odds-quota-patcher.py
-
-      - name: Verify only F5 runtime changed and v3 invariants hold
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          mapfile -t runtime_changed < <(git diff --name-only | sort)
-          [[ "${#runtime_changed[@]}" -eq 1 ]]
-          [[ "${runtime_changed[0]}" == 'server/mlb-f5-odds-routes.ts' ]]
-          grep -F 'import { FL_TZ, invalidateCache, requireSecret } from "./route-runtime";' server/mlb-f5-odds-routes.ts
-          ! grep -F 'withCache' server/mlb-f5-odds-routes.ts
-          grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          grep -F 'const cacheFresh = Boolean(cached && Date.now() - cached.providerFetchedAt < F5_BACKGROUND_CACHE_TTL_MS);' server/mlb-f5-odds-routes.ts
-          grep -F 'if (cacheFresh && cached)' server/mlb-f5-odds-routes.ts
-          grep -F 'else if (backgroundCacheOnly)' server/mlb-f5-odds-routes.ts
-          grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
-          grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
-
-      - name: Setup Node 24
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24.18.0'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run quota and F5 falsification tests
-        run: >-
-          npx tsx --test
-          server/mlb-odds-quota-conservation.test.ts
-          server/mlb-f5-odds-routes.test.ts
-          server/mlb-s5c-shadow-ingestion.test.ts
-          server/mlb-s5e-coverage-service.test.ts
-
-      - name: Preserve route inventory, backend bundle and S5B
-        run: |
-          npm run test:s3-modularization
-          npm run build:backend
-          npm run test:s5b-shadow
-
-      - name: Prove exact effective scope and no model or money mutation
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
-          effective=$(printf '%s\n%s\n' "$changed" "$(git diff --name-only)" | sed '/^$/d' | sort -u)
-          expected=$(printf '%s\n' \
-            '.github/workflows/validate-p0-odds-quota-conservation.yml' \
-            'server/mlb-f5-odds-routes.ts' \
-            'server/mlb-odds-quota-conservation.test.ts' | sort)
-          [[ "$effective" == "$expected" ]]
-          ! git diff origin/integration/p0-staging-secure -- server/mlb-f5-odds-routes.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
-
-      - name: Commit only the F5 runtime file
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- server/mlb-f5-odds-routes.ts; then
-            echo 'F5 runtime already patched; nothing to commit.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add server/mlb-f5-odds-routes.ts
-          [[ "$(git diff --cached --name-only)" == 'server/mlb-f5-odds-routes.ts' ]]
-          git commit -m 'P0 odds: enforce five-minute foreground F5 cache'
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
