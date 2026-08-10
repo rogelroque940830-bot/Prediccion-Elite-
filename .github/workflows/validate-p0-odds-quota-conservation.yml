@@ -7,21 +7,23 @@ on:
     paths:
       - '.github/workflows/validate-p0-odds-quota-conservation.yml'
       - 'server/legacy-picks-routes.ts'
-      - 'server/mlb-f5-odds-routes.ts'
       - 'server/mlb-odds-quota-conservation.test.ts'
+      - 'server/mlb-f5-odds-routes.ts'
       - 'server/mlb-s5c-shadow-ingestion.ts'
       - 'server/mlb-s5e-coverage-service.ts'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  validate:
+  patch-remove-legacy-provider-poller:
+    if: github.event.pull_request.head.ref == 'fix/p0-remove-legacy-background-odds-poller-20260810'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v5
@@ -29,56 +31,89 @@ jobs:
           node-version: '24.18.0'
           cache: npm
 
-      - name: Install dependencies reproducibly
-        run: npm ci
-
-      - name: Quota conservation and F5 falsification tests
-        run: >-
-          npx tsx --test
-          server/mlb-odds-quota-conservation.test.ts
-          server/mlb-f5-odds-routes.test.ts
-          server/mlb-s5c-shadow-ingestion.test.ts
-          server/mlb-s5e-coverage-service.test.ts
-
-      - name: Preserve modular routes and production bundle
-        run: |
-          npm run test:s3-modularization
-          npm run build:backend
-
-      - name: Prove background quota policy and five-minute scientific freshness
+      - name: Remove legacy provider poller with exact anchors
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
-          grep -F 'legacy background polling disabled' server/legacy-picks-routes.ts
+          python - <<'PY'
+          from pathlib import Path
+
+          legacy_path = Path('server/legacy-picks-routes.ts')
+          legacy = legacy_path.read_text()
+          legacy = legacy.replace(
+              'import { getAllSnapshots, recordSnapshot } from "./sharp-signals";\nimport { requireSecret } from "./route-runtime";\n',
+              'import { getAllSnapshots } from "./sharp-signals";\n',
+              1,
+          )
+          start = '  // ── BACKGROUND ODDS POLLER ──────────────────────────────────────────────\n'
+          end = '  // Auto-refresh CLV every 30 minutes (background)\n'
+          if legacy.count(start) != 1 or legacy.count(end) != 1:
+              raise SystemExit('legacy poller anchors are not exact singletons')
+          before, rest = legacy.split(start, 1)
+          _, after = rest.split(end, 1)
+          replacement = (
+              '  // Legacy provider polling was permanently removed. CourtEdge must not consume\n'
+              '  // sportsbook quota merely because the backend is running. Fresh odds are acquired\n'
+              '  // only by explicit foreground analysis/market requests; CLV refresh below reuses\n'
+              '  // already-recorded snapshots and makes no provider request.\n\n'
+              + end
+          )
+          legacy_path.write_text(before + replacement + after)
+
+          test_path = Path('server/mlb-odds-quota-conservation.test.ts')
+          test = test_path.read_text()
+          test = test.replace(
+              'test("static quota policy disables legacy polling, makes S5C/S5E cache-only, and keeps all F5 cache reuse inside five minutes", () => {',
+              'test("static quota policy removes legacy provider polling, makes S5C/S5E cache-only, and keeps all F5 cache reuse inside five minutes", () => {',
+              1,
+          )
+          assertion_start = '  assert.match(legacy, /LEGACY_ODDS_BACKGROUND_POLLING/);\n'
+          assertion_end = '  assert.match(s5c, /hasPregameGame/);\n'
+          if test.count(assertion_start) != 1 or test.count(assertion_end) != 1:
+              raise SystemExit('quota test anchors are not exact singletons')
+          before, rest = test.split(assertion_start, 1)
+          _, after = rest.split(assertion_end, 1)
+          assertions = (
+              '  assert.doesNotMatch(legacy, /api\\.the-odds-api\\.com/);\n'
+              '  assert.doesNotMatch(legacy, /ODDS_API_KEY/);\n'
+              '  assert.doesNotMatch(legacy, /LEGACY_ODDS_BACKGROUND_POLLING/);\n'
+              '  assert.doesNotMatch(legacy, /pollOddsForSport/);\n'
+              '  assert.match(legacy, /Legacy provider polling was permanently removed/);\n\n'
+              + assertion_end
+          )
+          test_path.write_text(before + assertions + after)
+          PY
+
+      - name: Validate exact safety change
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsx --test server/mlb-odds-quota-conservation.test.ts server/mlb-f5-odds-routes.test.ts
+          npm run build:backend
+          ! grep -F 'api.the-odds-api.com' server/legacy-picks-routes.ts
+          ! grep -F 'ODDS_API_KEY' server/legacy-picks-routes.ts
+          ! grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
+          ! grep -F 'pollOddsForSport' server/legacy-picks-routes.ts
           grep -F 'background=cache-only' server/mlb-s5c-shadow-ingestion.ts
           grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
-          grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          ! grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          grep -F 'const cacheFresh = Boolean' server/mlb-f5-odds-routes.ts
-          ! grep -F 'withCache(cacheKey' server/mlb-f5-odds-routes.ts
-          grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
-          grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
-          grep -F 'providerFailureCount' server/mlb-f5-odds-routes.ts
-          grep -F 'providerErrorCodes' server/mlb-f5-odds-routes.ts
+          git diff --check
 
-      - name: Exact three-file F5 successor package and safety boundary
+      - name: Commit exact runtime/test patch
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
-          expected=(
-            ".github/workflows/validate-p0-odds-quota-conservation.yml"
-            "server/mlb-f5-odds-routes.ts"
-            "server/mlb-odds-quota-conservation.test.ts"
-          )
-          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
-          for i in "${!expected[@]}"; do
-            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
-              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}" >&2
-              exit 1
-            }
-          done
-          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^frontend/|ledger|settlement|mlb-core-routes\.ts'
-          ! git diff "origin/${GITHUB_BASE_REF}...HEAD" -- server/mlb-f5-odds-routes.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
-          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          if git diff --quiet -- server/legacy-picks-routes.ts server/mlb-odds-quota-conservation.test.ts; then
+            echo 'Patch already applied; nothing to commit.'
+            exit 0
+          fi
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=('server/legacy-picks-routes.ts' 'server/mlb-odds-quota-conservation.test.ts')
+          [[ "${#changed[@]}" -eq 2 ]]
+          [[ "${changed[0]}" == "${expected[0]}" ]]
+          [[ "${changed[1]}" == "${expected[1]}" ]]
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/legacy-picks-routes.ts server/mlb-odds-quota-conservation.test.ts
+          git commit -m 'P0 odds: remove legacy background provider polling'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
