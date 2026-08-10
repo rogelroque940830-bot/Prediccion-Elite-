@@ -3,10 +3,19 @@ import type { MlbPregameLineInputs, MlbPregameMarket } from "./mlb-pregame-readi
 export const MLB_MANUAL_QUOTE_BOOK = "Hard Rock Bet · verificado por usuario" as const;
 
 export interface MlbManualQuoteCapture {
+  gamePk: string;
+  date: string;
   market: MlbPregameMarket;
   capturedAt: string;
   signature: string;
   book: typeof MLB_MANUAL_QUOTE_BOOK;
+}
+
+export interface MlbManualQuoteContext {
+  gamePk: string;
+  date: string;
+  market: MlbPregameMarket;
+  lines: MlbPregameLineInputs;
 }
 
 export interface MlbManualQuoteRequest {
@@ -32,6 +41,18 @@ function iso(value: unknown): string | null {
   const text = String(value ?? "").trim();
   const parsed = text ? Date.parse(text) : NaN;
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function gamePk(value: unknown): string | null {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : null;
+}
+
+function officialDate(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const parsed = Date.parse(`${text}T00:00:00.000Z`);
+  return Number.isFinite(parsed) ? text : null;
 }
 
 function canonicalNumber(value: number): string {
@@ -74,16 +95,16 @@ export function buildMlbManualQuoteSignature(
   return null;
 }
 
-export function createMlbManualQuoteCapture(
-  market: MlbPregameMarket,
-  lines: MlbPregameLineInputs,
-  capturedAt: string,
-): MlbManualQuoteCapture | null {
-  const signature = buildMlbManualQuoteSignature(market, lines);
-  const normalizedCapturedAt = iso(capturedAt);
-  if (!signature || !normalizedCapturedAt) return null;
+export function createMlbManualQuoteCapture(input: MlbManualQuoteContext & { capturedAt: string }): MlbManualQuoteCapture | null {
+  const normalizedGamePk = gamePk(input.gamePk);
+  const normalizedDate = officialDate(input.date);
+  const signature = buildMlbManualQuoteSignature(input.market, input.lines);
+  const normalizedCapturedAt = iso(input.capturedAt);
+  if (!normalizedGamePk || !normalizedDate || !signature || !normalizedCapturedAt) return null;
   return {
-    market,
+    gamePk: normalizedGamePk,
+    date: normalizedDate,
+    market: input.market,
     capturedAt: normalizedCapturedAt,
     signature,
     book: MLB_MANUAL_QUOTE_BOOK,
@@ -92,11 +113,14 @@ export function createMlbManualQuoteCapture(
 
 export function isMlbManualQuoteCaptureCurrent(
   capture: MlbManualQuoteCapture | null | undefined,
-  market: MlbPregameMarket,
-  lines: MlbPregameLineInputs,
+  context: MlbManualQuoteContext,
 ): boolean {
-  if (!capture || capture.market !== market) return false;
-  const signature = buildMlbManualQuoteSignature(market, lines);
+  if (!capture) return false;
+  const normalizedGamePk = gamePk(context.gamePk);
+  const normalizedDate = officialDate(context.date);
+  if (!normalizedGamePk || !normalizedDate) return false;
+  if (capture.gamePk !== normalizedGamePk || capture.date !== normalizedDate || capture.market !== context.market) return false;
+  const signature = buildMlbManualQuoteSignature(context.market, context.lines);
   return Boolean(signature && signature === capture.signature && iso(capture.capturedAt));
 }
 
@@ -146,9 +170,9 @@ function addMarketParams(
 
 /**
  * Overlay an explicit operator-verified Hard Rock snapshot onto the existing
- * readiness URL. The underlying automatic URL remains the fallback whenever
- * the capture is absent, stale-by-signature, incomplete or for an unsupported
- * market. Time freshness itself remains server-authoritative.
+ * readiness URL. The capture must match the exact game/date/market/quote tuple.
+ * This prevents a prior-game snapshot from being reused during a React render
+ * before effect-driven cleanup can run. Time age remains server-authoritative.
  */
 export function applyMlbManualQuoteCapture(input: {
   automaticUrl: string;
@@ -156,12 +180,18 @@ export function applyMlbManualQuoteCapture(input: {
   lines: MlbPregameLineInputs;
   capture?: MlbManualQuoteCapture | null;
 }): MlbManualQuoteRequest {
-  if (!isMlbManualQuoteCaptureCurrent(input.capture, input.market, input.lines)) {
+  const [path, rawQuery = ""] = input.automaticUrl.split("?", 2);
+  const params = new URLSearchParams(rawQuery);
+  const context: MlbManualQuoteContext = {
+    gamePk: params.get("gamePk") ?? "",
+    date: params.get("date") ?? "",
+    market: input.market,
+    lines: input.lines,
+  };
+  if (!isMlbManualQuoteCaptureCurrent(input.capture, context)) {
     return { url: input.automaticUrl, oddsMode: "automatic", captureCurrent: false };
   }
 
-  const [path, rawQuery = ""] = input.automaticUrl.split("?", 2);
-  const params = new URLSearchParams(rawQuery);
   params.delete("oddsMode");
   params.delete("manualCapturedAt");
   params.delete("manualBook");
