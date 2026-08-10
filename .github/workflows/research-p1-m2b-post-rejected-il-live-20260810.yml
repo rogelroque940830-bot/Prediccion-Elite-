@@ -1,0 +1,268 @@
+name: Research P1-M2B Post Rejected IL Reconciliation Live 2026-08-10
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-post-rejected-il-live-20260810.yml'
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_URL: https://web-p0-integration.up.railway.app
+  EXPECTED_COMMIT: 78ac15e52cec34b0229b3a2b94dc958720e4e1c1
+  HISTORICAL_DATE: '2026-08-09'
+  CURRENT_DATE: '2026-08-10'
+
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-post-rejected-il-live-20260810.yml' ]]
+
+      - name: Capture live payloads and prove chain of custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p private audit
+          chmod 700 private
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          hist_code=$(curl -sS -o private/historical.json -w '%{http_code}' --max-time 300 "${BACKEND_URL}/api/mlb/all?date=${HISTORICAL_DATE}" || true)
+          current_code=$(curl -sS -o private/current.json -w '%{http_code}' --max-time 300 "${BACKEND_URL}/api/mlb/all?date=${CURRENT_DATE}" || true)
+
+          HEALTH_CODE="$health_code" HIST_CODE="$hist_code" CURRENT_CODE="$current_code" node <<'NODE'
+          const fs = require('fs');
+          const backend = process.env.BACKEND_URL;
+          const expectedCommit = String(process.env.EXPECTED_COMMIT || '').toLowerCase();
+          const historicalDate = process.env.HISTORICAL_DATE;
+          const currentDate = process.env.CURRENT_DATE;
+          const nonneg = (v) => Number.isFinite(Number(v)) ? Math.max(0, Math.trunc(Number(v))) : 0;
+          const clean = (v) => String(v ?? '').trim();
+          const gamesFrom = (p) => Array.isArray(p?.games) ? p.games : Array.isArray(p?.data?.games) ? p.data.games : [];
+          const readJson = (path) => { try { return JSON.parse(fs.readFileSync(path, 'utf8')); } catch { return null; } };
+
+          const result = {
+            schemaVersion: 'p1-m2b-post-rejected-il-live-audit.v1',
+            expectedCommit,
+            deployedCommit: null,
+            commitMatch: false,
+            endpointStatus: {
+              health: String(process.env.HEALTH_CODE || '000'),
+              historicalAll: String(process.env.HIST_CODE || '000'),
+              currentAll: String(process.env.CURRENT_CODE || '000'),
+            },
+            historical: null,
+            current: null,
+            readiness: null,
+            conclusion: {
+              state: 'NOT_MEASURED',
+              historicalEffectObserved: false,
+              currentEffectObserved: false,
+              finalReadinessObserved: false,
+            },
+            privacy: {
+              rawPayloadUploaded: false,
+              playerIdentitiesUploaded: false,
+              teamIdentitiesUploaded: false,
+              gameIdsUploaded: false,
+              credentialUploaded: false,
+            },
+            safety: {
+              writesPerformed: 0,
+              modelChanged: false,
+              phaseBChanged: false,
+              recommendationChangedByAudit: false,
+            },
+          };
+
+          const health = readJson('private/health.json');
+          if (result.endpointStatus.health === '200') {
+            const c = clean(health?.commit).toLowerCase();
+            result.deployedCommit = /^[0-9a-f]{7,40}$/.test(c) ? c : null;
+            result.commitMatch = Boolean(result.deployedCommit)
+              && (c === expectedCommit || c.startsWith(expectedCommit) || expectedCommit.startsWith(c));
+          }
+
+          function summarizeAll(payload, label) {
+            const games = gamesFrom(payload);
+            const summary = {
+              date: label,
+              games: games.length,
+              sides: 0,
+              verified: 0,
+              partial: 0,
+              otherStatus: 0,
+              rawRejectedTotal: 0,
+              sidesWithRawRejects: 0,
+              reconciledRejectedTotal: 0,
+              sidesWithReconciledRejects: 0,
+              unresolvedRejectedTotal: 0,
+              officialSupplementedTotal: 0,
+              coverageReconciledSides: 0,
+              evidenceOnlyReconciledSides: 0,
+              invariantViolations: 0,
+            };
+            for (const game of games) {
+              for (const side of ['home', 'away']) {
+                const meta = game?.[`${side}InjuryData`];
+                if (!meta) continue;
+                summary.sides += 1;
+                const status = clean(meta.status).toUpperCase();
+                if (status === 'VERIFIED') summary.verified += 1;
+                else if (status === 'PARTIAL') summary.partial += 1;
+                else summary.otherStatus += 1;
+                const raw = nonneg(meta.rejectedCount);
+                const reconciled = nonneg(meta.rejectedIdentityReconciledCount);
+                const unresolved = nonneg(meta.unresolvedRejectedIdentityCount);
+                const supplemented = nonneg(meta.officialSupplementedCount);
+                summary.rawRejectedTotal += raw;
+                summary.reconciledRejectedTotal += reconciled;
+                summary.unresolvedRejectedTotal += unresolved;
+                summary.officialSupplementedTotal += supplemented;
+                if (raw > 0) summary.sidesWithRawRejects += 1;
+                if (reconciled > 0) summary.sidesWithReconciledRejects += 1;
+                if (meta.coverageReconciled === true) summary.coverageReconciledSides += 1;
+                if (meta.rejectedIdentityReconciliationEvidenceOnly === true) summary.evidenceOnlyReconciledSides += 1;
+
+                if (status === 'VERIFIED' && raw > 0) {
+                  const valid = reconciled === raw
+                    && unresolved === 0
+                    && clean(meta.rejectedIdentityReconciliationMode) === 'MLB_OFFICIAL_IL_EXACT_NAME'
+                    && meta.rejectedIdentityReconciliationEvidenceOnly === true
+                    && meta.supplementEvidenceOnly === true;
+                  if (!valid) summary.invariantViolations += 1;
+                }
+                if (reconciled > 0 && (raw <= 0 || reconciled > raw)) summary.invariantViolations += 1;
+              }
+            }
+            return summary;
+          }
+
+          async function readinessAudit(currentPayload) {
+            const games = gamesFrom(currentPayload);
+            const getId = (g) => Number(g?.gamePk ?? g?.gameId ?? g?.id);
+            const stateText = (g) => [g?.state, g?.status?.abstractGameState, g?.status?.detailedState, g?.detailedState]
+              .filter(Boolean).join(' ').toLowerCase();
+            const eligible = games.filter((g) => {
+              const id = getId(g);
+              if (!Number.isInteger(id) || id <= 0) return false;
+              const s = stateText(g);
+              return !/final|completed|game over|in progress|live/.test(s);
+            });
+            const chosen = (eligible.length ? eligible : games.filter((g) => Number.isInteger(getId(g)) && getId(g) > 0)).slice(0, 3);
+            const evaluations = [];
+            for (const game of chosen) {
+              const gamePk = getId(game);
+              for (const market of ['ML', 'F5_ML']) {
+                let httpStatus = 0;
+                let body = null;
+                try {
+                  const response = await fetch(`${backend}/api/mlb/p1/v1/pregame-readiness?gamePk=${gamePk}&market=${market}&date=${currentDate}`, {
+                    headers: { accept: 'application/json' },
+                    signal: AbortSignal.timeout(120000),
+                  });
+                  httpStatus = response.status;
+                  body = await response.json().catch(() => null);
+                } catch {}
+                const evidence = Array.isArray(body?.evidence) ? body.evidence : [];
+                const evidenceState = (field) => clean(evidence.find((item) => clean(item?.field) === field)?.state).toUpperCase() || null;
+                const blockers = Array.isArray(body?.gate?.blockers) ? body.gate.blockers.map(clean).filter(Boolean) : [];
+                evaluations.push({
+                  market,
+                  httpStatus,
+                  status: clean(body?.gate?.status).toUpperCase() || null,
+                  stage: clean(body?.gate?.analysisStage).toUpperCase() || null,
+                  blockers,
+                  injuries: evidenceState('INJURIES'),
+                  advancedFactors: evidenceState('ADVANCED_FACTORS'),
+                  pitcherForm: evidenceState('PITCHER_FORM'),
+                  lineupMatchup: evidenceState('LINEUP_MATCHUP'),
+                });
+              }
+            }
+            const statusCounts = {};
+            const blockerCounts = {};
+            for (const evaluation of evaluations) {
+              const status = evaluation.status || `HTTP_${evaluation.httpStatus || 0}`;
+              statusCounts[status] = (statusCounts[status] || 0) + 1;
+              for (const blocker of evaluation.blockers) blockerCounts[blocker] = (blockerCounts[blocker] || 0) + 1;
+            }
+            return {
+              gamesSampled: chosen.length,
+              evaluations: evaluations.length,
+              statusCounts,
+              blockerCounts,
+              injuryStateCounts: evaluations.reduce((acc, item) => {
+                const key = item.injuries || 'UNKNOWN';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+              }, {}),
+              evaluationsDetail: evaluations,
+            };
+          }
+
+          (async () => {
+            if (result.endpointStatus.health !== '200' || !result.commitMatch
+              || result.endpointStatus.historicalAll !== '200' || result.endpointStatus.currentAll !== '200') {
+              result.conclusion.state = 'CHAIN_OF_CUSTODY_OR_ENDPOINT_FAILED';
+            } else {
+              const historicalPayload = readJson('private/historical.json');
+              const currentPayload = readJson('private/current.json');
+              result.historical = summarizeAll(historicalPayload, historicalDate);
+              result.current = summarizeAll(currentPayload, currentDate);
+              result.readiness = await readinessAudit(currentPayload);
+              const historicalShape = result.historical.games === 15 && result.historical.sides === 30;
+              const invariants = result.historical.invariantViolations === 0 && result.current.invariantViolations === 0;
+              result.conclusion.state = historicalShape && invariants
+                ? 'VALID_POST_RECONCILIATION_LIVE_AUDIT'
+                : 'LIVE_AUDIT_INCOMPLETE_OR_INVARIANT_FAILED';
+              result.conclusion.historicalEffectObserved = result.historical.reconciledRejectedTotal > 0;
+              result.conclusion.currentEffectObserved = result.current.reconciledRejectedTotal > 0;
+              result.conclusion.finalReadinessObserved = nonneg(result.readiness?.statusCounts?.READY_FINAL) > 0;
+            }
+            fs.writeFileSync('audit/result.json', JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(result, null, 2));
+            fs.rmSync('private', { recursive: true, force: true });
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Prove sanitized artifact and safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit/result.json
+          ! grep -E '"gamePk"|"gameId"|"homeTeam"|"awayTeam"|"playerId"|"playerName"|Authorization|BDL_API_KEY' audit/result.json
+          node <<'NODE'
+          const fs = require('fs');
+          const r = JSON.parse(fs.readFileSync('audit/result.json', 'utf8'));
+          if (!r.commitMatch) throw new Error('deployed commit mismatch');
+          if (r.safety?.writesPerformed !== 0) throw new Error('audit performed writes');
+          if (r.privacy?.rawPayloadUploaded !== false || r.privacy?.playerIdentitiesUploaded !== false) throw new Error('privacy invariant failed');
+          if (r.historical?.invariantViolations !== 0 || r.current?.invariantViolations !== 0) throw new Error('reconciliation invariant failed');
+          NODE
+
+      - name: Upload sanitized live evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-post-rejected-il-live-20260810
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
