@@ -147,7 +147,9 @@ jobs:
         run: |
           set -euo pipefail
           git show origin/integration/p0-frontend-session:scripts/temp-p1-m2c4-manual-quote-patcher.py > /tmp/p1-m2c4-patcher.py
+          git show origin/integration/p0-frontend-session:scripts/temp-p1-m2c4-context-hardening.py > /tmp/p1-m2c4-context-hardening.py
           python /tmp/p1-m2c4-patcher.py
+          python /tmp/p1-m2c4-context-hardening.py
           git diff --check
 
       - name: Prove exact component delta
@@ -161,6 +163,8 @@ jobs:
           grep -F 'setManualCapture(null)' "$panel"
           grep -F 'f5OddsSource: "none"' "$panel"
           grep -F 'Hard Rock manual verificada' "$panel"
+          grep -F 'isMlbManualQuoteCaptureCurrent(manualCapture, { gamePk, date, market, lines })' "$panel"
+          grep -F 'const capture = createMlbManualQuoteCapture({' "$panel"
           [[ "$(git diff --name-only | sort)" == 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' ]]
 
       - uses: actions/setup-node@v5
