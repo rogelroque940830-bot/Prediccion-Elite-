@@ -1,3 +1,4 @@
+// RESEARCH-ONLY CI trigger for live P0 odds-demand deployment proof. Do not merge.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
