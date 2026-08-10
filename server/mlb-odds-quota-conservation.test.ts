@@ -1,3 +1,4 @@
+// Post-patcher revalidation trigger: runtime logic unchanged; this commit exists only to run the full post-patch CI matrix with a non-bot actor.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
