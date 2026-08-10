@@ -25,6 +25,7 @@ import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
 import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
+import { isMlbClosingLineCaptureEnabled } from "./odds-demand-policy";
 import { getOperationalBackupService } from "./operational-backup";
 import { startOperationalBackupWorker } from "./operational-backup-worker";
 import { registerOperationalRoutes } from "./operational-routes";
@@ -51,6 +52,7 @@ const deploymentCommit =
   process.env.RAILWAY_GIT_COMMIT_SHA ||
   process.env.GIT_COMMIT_SHA ||
   "unknown";
+const mlbClosingLineCaptureEnabled = isMlbClosingLineCaptureEnabled();
 
 const missingApiVariables = ["BDL_API_KEY", "ODDS_API_KEY"].filter(
   (name) => !process.env[name],
@@ -176,7 +178,7 @@ app.get("/health", (_req, res) => {
     commit: deploymentCommit,
     environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
     mlbLedgerAutoSettlement: process.env.MLB_LEDGER_AUTO_SETTLE !== "false",
-    mlbClosingLineCapture: process.env.MLB_CLOSING_LINE_CAPTURE !== "false",
+    mlbClosingLineCapture: mlbClosingLineCaptureEnabled,
     authPersistence: true,
     authSessionStore: "sqlite",
     authRoles: ["admin", "analyst", "viewer"],
@@ -206,7 +208,11 @@ app.get("/health", (_req, res) => {
   registerOperationalSlaAlertRoutes(app, operationalSlaAlerts);
   registerOperationalReprocessingRoutes(app, operationalReprocessing);
   registerOperationalEvidenceRepairRoutes(app, operationalEvidenceRepair);
-  startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
+  if (mlbClosingLineCaptureEnabled) {
+    startMlbClosingLineWorker(mlbLedgerStore, mlbClosingLineStore);
+  } else {
+    log("MLB closing-line provider worker disabled; explicit MLB_CLOSING_LINE_CAPTURE=true is required", "odds");
+  }
   startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);
   startOperationalAlertWorker(operationalAlerts);
