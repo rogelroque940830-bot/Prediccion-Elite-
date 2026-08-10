@@ -248,3 +248,21 @@ test("Express middleware asynchronously decorates one downstream JSON response e
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+test("aggregate diagnostic route rejects invalid dates before any provider credential access", async () => {
+  const app = express();
+  registerMlbOfficialInjurySupplementMiddleware(app, async () => officialSnapshot([]));
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/mlb/research/injury-identity-diagnostic?date=bad-date`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "INVALID_DATE" });
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
