@@ -36,15 +36,9 @@ jobs:
             'server/mlb-f5-odds-routes.ts'
             'server/mlb-market-universe-odds-routes.ts'
           )
-          [[ "${#direct[@]}" -eq "${#expected[@]}" ]] || {
-            echo "Unexpected direct-provider runtime file count: ${#direct[@]}" >&2
-            exit 1
-          }
+          [[ "${#direct[@]}" -eq "${#expected[@]}" ]] || exit 1
           for i in "${!expected[@]}"; do
-            [[ "${direct[$i]}" == "${expected[$i]}" ]] || {
-              echo "Unexpected direct provider consumer: ${direct[$i]} expected ${expected[$i]}" >&2
-              exit 1
-            }
+            [[ "${direct[$i]}" == "${expected[$i]}" ]] || exit 1
           done
 
           echo '=== ODDS API KEY RUNTIME REFERENCES ==='
@@ -53,16 +47,17 @@ jobs:
           echo '=== INTERNAL /api/odds CALLERS (SERVER + FRONTEND) ==='
           grep -RIn --include='*.ts' --include='*.tsx' '/api/odds' server frontend 2>/dev/null || true
 
+          echo '=== PREGAME READINESS CALLERS ==='
+          grep -RIn --include='*.ts' --include='*.tsx' 'pregame-readiness' server frontend 2>/dev/null || true
+          grep -RIn --include='*.ts' --include='*.tsx' 'MlbPregameReadiness\|PregameReadiness\|pregameReadiness' server frontend 2>/dev/null || true
+
           echo '=== MARKET UNIVERSE CALLERS ==='
           grep -RIn --include='*.ts' --include='*.tsx' 'market-universe-odds' server frontend 2>/dev/null || true
 
           echo '=== BACKGROUND/TIMER SIGNALS IN ODDS-RELEVANT MODULES ==='
           grep -nE 'setInterval|setTimeout|background=cache-only|LEGACY_ODDS_BACKGROUND_POLLING|MLB_CLOSING_LINE_CAPTURE' \
-            server/legacy-picks-routes.ts \
-            server/mlb-closing-line-worker.ts \
-            server/mlb-s5c-shadow-ingestion.ts \
-            server/mlb-s5e-coverage-service.ts \
-            server/index.ts || true
+            server/legacy-picks-routes.ts server/mlb-closing-line-worker.ts \
+            server/mlb-s5c-shadow-ingestion.ts server/mlb-s5e-coverage-service.ts server/index.ts || true
 
           echo '=== HARD SAFETY ASSERTIONS ==='
           grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
