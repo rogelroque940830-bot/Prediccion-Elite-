@@ -1,0 +1,156 @@
+name: Research P0 Odds Quota Postdeploy Smoke 2026-08-10
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p0-odds-quota-postdeploy-smoke-20260810.yml'
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_URL: https://web-p0-integration.up.railway.app
+  EXPECTED_COMMIT: 211a8a102acbec847628d7aa35c562242a9cbc03
+  AUDIT_DATE: '2026-08-10'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p0-odds-quota-postdeploy-smoke-20260810.yml' ]]
+          git diff --check "$base...$head"
+
+      - name: Wait for exact deployed merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          matched=0
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "${BACKEND_URL}/health" || true)
+            if [[ "$code" == "200" ]]; then
+              commit=$(node -e "try{const j=require('/tmp/health.json');process.stdout.write(String(j.commit||'').toLowerCase())}catch{}")
+              expected=$(printf '%s' "$EXPECTED_COMMIT" | tr '[:upper:]' '[:lower:]')
+              if [[ -n "$commit" && ( "$commit" == "$expected" || "$commit" == "${expected:0:${#commit}}" || "$expected" == "${commit:0:${#expected}}" ) ]]; then
+                matched=1
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$matched" -eq 1 ]] || { echo 'Exact Railway commit did not become active in time.' >&2; exit 1; }
+
+      - name: Verify quota-conservation behavior live
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p private audit
+          chmod 700 private
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          before_code=$(curl -sS -o private/cache-before.json -w '%{http_code}' --max-time 60 "${BACKEND_URL}/api/odds/mlb/f5?date=${AUDIT_DATE}&background=cache-only" || true)
+          foreground_code=$(curl -sS -o private/foreground.json -w '%{http_code}' --max-time 120 "${BACKEND_URL}/api/odds/mlb/f5?date=${AUDIT_DATE}" || true)
+          after_code=$(curl -sS -o private/cache-after.json -w '%{http_code}' --max-time 60 "${BACKEND_URL}/api/odds/mlb/f5?date=${AUDIT_DATE}&background=cache-only" || true)
+
+          HEALTH_CODE="$health_code" BEFORE_CODE="$before_code" FOREGROUND_CODE="$foreground_code" AFTER_CODE="$after_code" node <<'NODE'
+          const fs=require('fs');
+          const read=(p)=>{try{return JSON.parse(fs.readFileSync(p,'utf8'))}catch{return null}};
+          const clean=(v)=>String(v??'').trim();
+          const expected=clean(process.env.EXPECTED_COMMIT).toLowerCase();
+          const health=read('private/health.json');
+          const before=read('private/cache-before.json');
+          const foreground=read('private/foreground.json');
+          const after=read('private/cache-after.json');
+          const deployed=clean(health?.commit).toLowerCase();
+          const commitMatch=Boolean(deployed)&&(deployed===expected||deployed.startsWith(expected)||expected.startsWith(deployed));
+          const result={
+            schemaVersion:'p0-odds-quota-postdeploy-smoke.v1',
+            auditDate:process.env.AUDIT_DATE,
+            expectedCommit:expected,
+            deployedCommit:/^[0-9a-f]{7,40}$/.test(deployed)?deployed:null,
+            commitMatch,
+            http:{
+              health:String(process.env.HEALTH_CODE||'000'),
+              backgroundBefore:String(process.env.BEFORE_CODE||'000'),
+              foreground:String(process.env.FOREGROUND_CODE||'000'),
+              backgroundAfter:String(process.env.AFTER_CODE||'000'),
+            },
+            backgroundBefore:{
+              success:before?.success===true,
+              code:clean(before?.code)||null,
+              backgroundCacheOnly:before?.backgroundCacheOnly===true,
+              games:Array.isArray(before?.games)?before.games.length:0,
+            },
+            foreground:{
+              success:foreground?.success===true,
+              code:clean(foreground?.code)||null,
+              games:Array.isArray(foreground?.games)?foreground.games.length:0,
+              coverageStatus:clean(foreground?.coverageStatus)||null,
+            },
+            backgroundAfter:{
+              success:after?.success===true,
+              code:clean(after?.code)||null,
+              backgroundCacheOnly:after?.backgroundCacheOnly===true,
+              games:Array.isArray(after?.games)?after.games.length:0,
+            },
+            conclusion:{
+              state:'NOT_MEASURED',
+              exhaustedQuotaStillExternalBlocker:false,
+              backgroundCacheMissExplicit:false,
+              f5ProviderFailureExplicit:false,
+              oddsRestored:false,
+            },
+            privacy:{rawPayloadUploaded:false,teamIdentitiesUploaded:false,gameIdsUploaded:false,credentialUploaded:false},
+            safety:{writesPerformed:0,modelChanged:false,thresholdChanged:false,marketContractChanged:false},
+          };
+          if(!commitMatch||result.http.health!=='200'){
+            result.conclusion.state='CHAIN_OF_CUSTODY_FAILED';
+          }else{
+            const cacheMiss = result.backgroundBefore.code==='BACKGROUND_CACHE_MISS' && result.backgroundBefore.backgroundCacheOnly;
+            const explicitQuota = result.foreground.code==='OUT_OF_USAGE_CREDITS';
+            const afterMiss = result.backgroundAfter.code==='BACKGROUND_CACHE_MISS' && result.backgroundAfter.backgroundCacheOnly;
+            result.conclusion.backgroundCacheMissExplicit=cacheMiss&&afterMiss;
+            result.conclusion.f5ProviderFailureExplicit=explicitQuota;
+            result.conclusion.exhaustedQuotaStillExternalBlocker=explicitQuota;
+            result.conclusion.oddsRestored=result.foreground.success&&result.foreground.games>0;
+            result.conclusion.state=(cacheMiss&&afterMiss&&explicitQuota)
+              ? 'VALID_QUOTA_CONSERVATION_POSTDEPLOY'
+              : 'POSTDEPLOY_BEHAVIOR_REQUIRES_REVIEW';
+          }
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result,null,2));
+          fs.rmSync('private',{recursive:true,force:true});
+          NODE
+
+      - name: Prove sanitized read-only artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"gameId"|"homeTeam"|"awayTeam"|Authorization|ODDS_API_KEY|apiKey' audit/result.json
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('audit/result.json','utf8'));
+          if(!r.commitMatch) throw new Error('commit mismatch');
+          if(r.safety?.writesPerformed!==0) throw new Error('unexpected write');
+          if(r.conclusion?.state!=='VALID_QUOTA_CONSERVATION_POSTDEPLOY') throw new Error(`unexpected state ${r.conclusion?.state}`);
+          NODE
+
+      - name: Upload sanitized smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-odds-quota-postdeploy-smoke-20260810
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
