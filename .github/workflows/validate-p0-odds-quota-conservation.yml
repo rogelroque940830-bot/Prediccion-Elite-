@@ -55,6 +55,8 @@ jobs:
           grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
           grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
           ! grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000' server/mlb-f5-odds-routes.ts
+          grep -F 'const cacheFresh = Boolean' server/mlb-f5-odds-routes.ts
+          ! grep -F 'withCache(cacheKey' server/mlb-f5-odds-routes.ts
           grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
           grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
           grep -F 'providerFailureCount' server/mlb-f5-odds-routes.ts
