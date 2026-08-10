@@ -9,6 +9,8 @@ import { buildMlbPeopleSearchUrl } from "./mlb-injury-identity";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SOURCE = "MLB_STATS_OFFICIAL_SUPPLEMENT" as const;
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_REASON = "OFFICIAL_SOURCE_SUPPLEMENT_EVIDENCE_ONLY" as const;
+export const MLB_REJECTED_IDENTITY_RECONCILIATION_MODE = "MLB_OFFICIAL_IL_EXACT_NAME" as const;
+export const MLB_REJECTED_IDENTITY_RECONCILIATION_REASON = "EXACT_NAME_WRONG_CURRENT_TEAM_RECONCILED_BY_OFFICIAL_IL" as const;
 export const MLB_INJURY_IDENTITY_DIAGNOSTIC_SCHEMA = "courtedge-mlb-injury-identity-diagnostic.v1" as const;
 
 export interface MlbOfficialInjurySupplementPlayer {
