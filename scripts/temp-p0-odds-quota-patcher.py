@@ -229,3 +229,97 @@ replace_between(
 ''',
     "F5 response observability",
 )
+
+# 5. Upgrade the F5 acquisition block so foreground shares the same five-minute provider cache.
+# This prevents the route-runtime 30-minute generic cache from keeping interactive/readiness
+# calls stale. Foreground may refresh only after five minutes; background remains cache-only.
+replace_once(
+    "server/mlb-f5-odds-routes.ts",
+    'import { FL_TZ, invalidateCache, requireSecret, withCache } from "./route-runtime";\n',
+    'import { FL_TZ, invalidateCache, requireSecret } from "./route-runtime";\n',
+    "F5 remove generic thirty-minute cache import",
+)
+replace_between(
+    "server/mlb-f5-odds-routes.ts",
+    '    let data: any;\n',
+    '    let games = Array.isArray((data as any)?.games) ? (data as any).games : [];\n',
+    '''    let data: any;
+    const cached = f5BackgroundCache.get(cacheKey);
+    const cacheFresh = Boolean(cached && Date.now() - cached.providerFetchedAt < F5_BACKGROUND_CACHE_TTL_MS);
+    if (cacheFresh && cached) {
+      data = cached.data;
+    } else if (backgroundCacheOnly) {
+      return void res.json({
+        success: false,
+        schemaVersion: MLB_F5_ODDS_SCHEMA_VERSION,
+        games: [],
+        source: "n/a",
+        code: "BACKGROUND_CACHE_MISS",
+        error: "No recent F5 cache is available; background provider refresh is disabled to conserve quota.",
+        backgroundCacheOnly: true,
+      });
+    } else {
+      const ODDS_API_KEY = requireSecret("ODDS_API_KEY");
+      const providerFetchedAt = Date.now();
+      const eventsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/baseball_mlb/events/?apiKey=${ODDS_API_KEY}`);
+      const events = await eventsResponse.json();
+      if (!Array.isArray(events)) {
+        const error: any = new Error(events?.message || "Odds API error");
+        error.code = events?.error_code;
+        error.noCache = true;
+        throw error;
+      }
+
+      const eligibleEvents = dateParam
+        ? events.filter((event: any) => commenceToFloridaDate(String(event?.commence_time ?? "")) === dateParam)
+        : events;
+      const queue = [...eligibleEvents];
+      const games: any[] = [];
+      const eventFailures: Array<{ code: string | null; message: string; status: number | null }> = [];
+      const workers = Array.from({ length: 4 }, async () => {
+        while (queue.length > 0) {
+          const event: any = queue.shift();
+          if (!event) break;
+          try {
+            const url = `https://api.the-odds-api.com/v4/sports/baseball_mlb/events/${event.id}/odds/?apiKey=${ODDS_API_KEY}&regions=us,us2&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&bookmakers=${F5_BOOKS.join(",")}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+              const body: any = await response.json().catch(() => null);
+              eventFailures.push({
+                code: String(body?.error_code ?? "").trim() || null,
+                message: String(body?.message ?? `Odds API HTTP ${response.status}`),
+                status: response.status,
+              });
+              continue;
+            }
+            const providerGame = await response.json();
+            games.push(buildMlbF5ConsensusGame(providerGame, new Date().toISOString()));
+          } catch (error) {
+            eventFailures.push({
+              code: null,
+              message: error instanceof Error ? error.message : String(error),
+              status: null,
+            });
+          }
+        }
+      });
+      await Promise.all(workers);
+      if (eligibleEvents.length > 0 && games.length === 0 && eventFailures.length > 0) {
+        const first = eventFailures[0];
+        const error: any = new Error(first.message || "F5 event odds provider failure");
+        error.code = first.code || "F5_EVENT_ODDS_PROVIDER_FAILURE";
+        error.noCache = true;
+        throw error;
+      }
+      data = {
+        games,
+        providerFetchedAt,
+        eligibleEventCount: eligibleEvents.length,
+        providerFailureCount: eventFailures.length,
+        providerErrorCodes: Array.from(new Set(eventFailures.map((failure) => failure.code).filter(Boolean))),
+      };
+      f5BackgroundCache.set(cacheKey, { data, providerFetchedAt });
+    }
+''',
+    "F5 five-minute foreground/background provider cache",
+)
