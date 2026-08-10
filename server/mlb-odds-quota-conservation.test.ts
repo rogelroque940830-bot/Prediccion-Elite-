@@ -1,4 +1,4 @@
-// Post-patcher v3 revalidation trigger only; runtime logic is unchanged by this commit.
+// Final clean-base revalidation trigger only; runtime logic is unchanged by this commit.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
