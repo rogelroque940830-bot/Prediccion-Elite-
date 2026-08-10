@@ -104,12 +104,12 @@ replace_once(
     "S5E cache-only acquisition",
 )
 
-# 4. Protected F5 route maintains a bounded last-successful cache for background-only reads.
+# 4. Protected F5 route maintains a five-minute last-successful cache for background-only reads.
 replace_once(
     "server/mlb-f5-odds-routes.ts",
     'const F5_BOOKS = ["fanduel", "betmgm", "draftkings"] as const;\n',
     'const F5_BOOKS = ["fanduel", "betmgm", "draftkings"] as const;\n'
-    'const F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000;\n'
+    'const F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000;\n'
     'const f5BackgroundCache = new Map<string, { data: any; providerFetchedAt: number }>();\n',
     "F5 background cache declarations",
 )
