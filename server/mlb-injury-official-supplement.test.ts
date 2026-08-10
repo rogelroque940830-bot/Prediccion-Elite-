@@ -357,3 +357,24 @@ test("ambiguous official exact-name authority never counts as a safe rescue", as
   assert.equal(report.officialAuthority.safelyResolvableIdentityTotal, 0);
   assert.equal(report.officialAuthority.remainingUnresolved, 1);
 });
+
+test("route-level rejected identity reconciliation constants do not weaken the generic helper barrier", async () => {
+  const supplement = await import("./mlb-injury-official-supplement");
+  assert.equal(supplement.MLB_REJECTED_IDENTITY_RECONCILIATION_MODE, "MLB_OFFICIAL_IL_EXACT_NAME");
+  assert.equal(
+    supplement.MLB_REJECTED_IDENTITY_RECONCILIATION_REASON,
+    "EXACT_NAME_WRONG_CURRENT_TEAM_RECONCILED_BY_OFFICIAL_IL",
+  );
+
+  const result = reconcileMlbOfficialOnlyInjuries({
+    sourceStatus: "VERIFIED",
+    stale: false,
+    rejectedCount: 1,
+    officialSnapshot: snapshot(),
+    existingPlayerIds: [],
+    asOfDate: "2026-08-09",
+  });
+  assert.equal(result.reason, "REJECTED_EXTERNAL_IDENTITY");
+  assert.equal(result.coverageReconciled, false);
+  assert.deepEqual(result.supplements, []);
+});
