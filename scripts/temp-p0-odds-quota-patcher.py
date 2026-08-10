@@ -46,7 +46,7 @@ replace_once(
 replace_between(
     "server/legacy-picks-routes.ts",
     "  // First poll 30 s after boot, then every 15 min\n",
-    "  // Auto-refresh CLV for settled picks that don't have it yet\n",
+    "  // Auto-refresh CLV every 30 minutes (background)\n",
     '''  // Legacy all-sport polling is disabled by default. It is incompatible with a bounded
   // monthly provider quota and duplicates newer decision/checkpoint-specific collectors.
   // On-demand odds routes still record snapshots. Explicit opt-in is available only for
