@@ -3,10 +3,12 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 import express from "express";
 import {
+  MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY,
   MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA,
   registerMlbOfficialInjurySupplementMiddleware,
   supplementMlbAllOfficialInjuryEvidence,
 } from "./mlb-injury-official-supplement-routes";
+import { MLB_INJURY_IDENTITY_DIAGNOSTIC_SCHEMA } from "./mlb-injury-official-supplement";
 import type { MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
 
 function officialSnapshot(ids: number[]): MlbOfficialInjurySnapshot {
@@ -244,14 +246,71 @@ test("Express middleware asynchronously decorates one downstream JSON response e
     assert.equal(body.games[0].homeInjuryData.status, "VERIFIED");
     assert.equal(body.games[0].homeInjuryData.officialSupplementedCount, 2);
     assert.equal(body.games[0].homeInjuries.length, 3);
+    assert.equal(body.researchInjuryIdentityDiagnostic, undefined);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
 
-test("aggregate diagnostic route rejects invalid dates before any provider credential access", async () => {
+test("aggregate diagnostic is opt-in on existing MLB all route and returns no identity material", async () => {
   const app = express();
-  registerMlbOfficialInjurySupplementMiddleware(app, async () => officialSnapshot([]));
+  let diagnosticCalls = 0;
+  registerMlbOfficialInjurySupplementMiddleware(
+    app,
+    async () => officialSnapshot([201, 301, 302]),
+    async (input) => {
+      diagnosticCalls += 1;
+      assert.equal(input.asOfDate, "2026-08-09");
+      assert.equal(input.season, "2026");
+      assert.equal(input.bdlKey, "secret-test");
+      return {
+        schemaVersion: MLB_INJURY_IDENTITY_DIAGNOSTIC_SCHEMA,
+        asOfDate: input.asOfDate,
+        season: input.season,
+        privacy: {
+          aggregateOnly: true,
+          playerNamesReturned: false,
+          playerIdsReturned: false,
+          credentialReturned: false,
+        },
+        source: {
+          bdlPages: 1,
+          bdlTotalRecords: 40,
+          activeMappedBeforeDedupe: 30,
+          activeMappedAfterDedupe: 28,
+          teamsWithActiveRecords: 17,
+        },
+        strictResolver: {
+          resolved: 10,
+          rejected: 18,
+          rejectionReasons: {
+            MISSING_NAME: 0,
+            SEARCH_TRANSPORT_FAILURE: 0,
+            SEARCH_EMPTY: 2,
+            EXACT_NAME_NOT_FOUND: 1,
+            EXACT_NAME_NO_CURRENT_TEAM: 7,
+            EXACT_NAME_WRONG_CURRENT_TEAM: 8,
+            STATS_ENRICHMENT_FAILURE: 0,
+          },
+        },
+        officialAuthority: {
+          rejectedEvaluated: 18,
+          uniqueRosterExactName: 10,
+          uniqueRosterIlExactName: 8,
+          uniqueRosterNonIlExactName: 2,
+          uniqueTransactionExactNameOnly: 3,
+          ambiguousOfficialExactName: 1,
+          noOfficialExactName: 4,
+          authorityUnavailable: 0,
+          safelyResolvableIdentityTotal: 13,
+          remainingUnresolved: 5,
+        },
+      };
+    },
+    () => "secret-test",
+  );
+  app.get("/api/mlb/all", (_req, res) => res.json(payload()));
+
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve, reject) => {
     server.once("listening", resolve);
@@ -259,9 +318,18 @@ test("aggregate diagnostic route rejects invalid dates before any provider crede
   });
   try {
     const address = server.address() as AddressInfo;
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/mlb/research/injury-identity-diagnostic?date=bad-date`);
-    assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { error: "INVALID_DATE" });
+    const url = `http://127.0.0.1:${address.port}/api/mlb/all?date=2026-08-09&researchInjuryIdentityDiagnostic=${MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY}`;
+    const response = await fetch(url);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    const body = await response.json() as any;
+    assert.equal(diagnosticCalls, 1);
+    assert.equal(body.researchInjuryIdentityDiagnostic.strictResolver.rejected, 18);
+    assert.equal(body.researchInjuryIdentityDiagnostic.officialAuthority.safelyResolvableIdentityTotal, 13);
+    const diagnosticJson = JSON.stringify(body.researchInjuryIdentityDiagnostic);
+    assert.equal(diagnosticJson.includes("secret-test"), false);
+    assert.equal(diagnosticJson.includes("playerId"), false);
+    assert.equal(diagnosticJson.includes("playerName"), false);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
