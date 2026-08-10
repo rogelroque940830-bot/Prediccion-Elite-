@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import fs from "node:fs";
 import path from "node:path";
-import { getAllSnapshots, recordSnapshot } from "./sharp-signals";
-import { requireSecret } from "./route-runtime";
+import { getAllSnapshots } from "./sharp-signals";
 
 /**
  * Compatibility routes for the pre-ledger picks dashboard and its historical
@@ -250,70 +249,10 @@ export function registerLegacyPicksCompatibilityRoutes(app: Express): void {
     res.json({ success: true, updated, totalProcessed, alreadyComputed, noMatch, noCommenceYet, snapshotsAvailable: Object.keys(closingMap).length });
   });
 
-  // ── BACKGROUND ODDS POLLER ──────────────────────────────────────────────
-  // Cada 15 min refresca odds para MLB/NHL/NBA y guarda snapshots automáticamente.
-  // Así el CLV no depende de que el usuario abra la app a tiempo — antes era el
-  // problema #1: si nadie cargaba odds en los últimos 60 min antes de un juego,
-  // ese partido se perdía para siempre.
-  const LEGACY_ODDS_BACKGROUND_POLLING = process.env.LEGACY_ODDS_BACKGROUND_POLLING?.trim().toLowerCase() === "true";
-  const ODDS_API_KEY_BG = LEGACY_ODDS_BACKGROUND_POLLING ? requireSecret("ODDS_API_KEY") : null;
-  const SPORT_MAP_BG: Record<string, string> = {
-    nba: "basketball_nba", nhl: "icehockey_nhl", mlb: "baseball_mlb",
-  };
-  async function pollOddsForSport(sport: string) {
-    try {
-      const apiSport = SPORT_MAP_BG[sport]; if (!apiSport || !ODDS_API_KEY_BG) return 0;
-      const url = `https://api.the-odds-api.com/v4/sports/${apiSport}/odds/?apiKey=${ODDS_API_KEY_BG}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american&bookmakers=hardrockbet_fl,hardrockbet,hardrockbet_az,draftkings,fanduel,betmgm`;
-      const resp = await fetch(url);
-      const data: any = await resp.json();
-      if (!Array.isArray(data)) return 0;
-      const nowTs = Date.now();
-      let saved = 0;
-      for (const g of data) {
-        const gameKey = `${g.away_team}@${g.home_team}@${g.commence_time}`;
-        for (const book of (g.bookmakers || [])) {
-          const mkts: any = {};
-          for (const mkt of (book.markets || [])) {
-            mkts[mkt.key] = {};
-            for (const o of (mkt.outcomes || [])) {
-              mkts[mkt.key][o.name] = { price: o.price, point: o.point };
-            }
-          }
-          const h = mkts.h2h || {}, s = mkts.spreads || {}, t = mkts.totals || {};
-          recordSnapshot({
-            ts: nowTs, sport, gameKey, book: book.key,
-            ml: (h[g.home_team] && h[g.away_team]) ? { home: h[g.home_team].price, away: h[g.away_team].price } : null,
-            spread: (s[g.home_team] && s[g.away_team]) ? { line: s[g.home_team].point, homeOdds: s[g.home_team].price, awayOdds: s[g.away_team].price } : null,
-            total: (t["Over"] && t["Under"]) ? { line: t["Over"].point, overOdds: t["Over"].price, underOdds: t["Under"].price } : null,
-          });
-          saved++;
-        }
-      }
-      return saved;
-    } catch (e) { console.error(`[odds-poll ${sport}] error:`, e); return 0; }
-  }
-  // Legacy all-sport polling is disabled by default. It is incompatible with a bounded
-  // monthly provider quota and duplicates newer decision/checkpoint-specific collectors.
-  // On-demand odds routes still record snapshots. Explicit opt-in is available only for
-  // environments with a separately budgeted provider plan.
-  if (LEGACY_ODDS_BACKGROUND_POLLING) {
-    const bootPoll = setTimeout(async () => {
-      const a = await pollOddsForSport("mlb");
-      const b = await pollOddsForSport("nhl");
-      const c = await pollOddsForSport("nba");
-      console.log(`[odds-poll boot] mlb=${a} nhl=${b} nba=${c} snapshots`);
-    }, 30 * 1000);
-    bootPoll.unref();
-    const recurringPoll = setInterval(async () => {
-      const a = await pollOddsForSport("mlb");
-      const b = await pollOddsForSport("nhl");
-      const c = await pollOddsForSport("nba");
-      if (a + b + c > 0) console.log(`[odds-poll] mlb=${a} nhl=${b} nba=${c} snapshots`);
-    }, 2 * 60 * 60 * 1000);
-    recurringPoll.unref();
-  } else {
-    console.log("[odds-poll] legacy background polling disabled; set LEGACY_ODDS_BACKGROUND_POLLING=true for explicit opt-in");
-  }
+  // Legacy provider polling was permanently removed. CourtEdge must not consume
+  // sportsbook quota merely because the backend is running. Fresh odds are acquired
+  // only by explicit foreground analysis/market requests; CLV refresh below reuses
+  // already-recorded snapshots and makes no provider request.
 
   // Auto-refresh CLV every 30 minutes (background)
   setInterval(async () => {
