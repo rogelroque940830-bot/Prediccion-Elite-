@@ -33,8 +33,8 @@ function finite(value: unknown): number | null {
 
 function americanOdds(value: unknown): number | null {
   const parsed = finite(value);
-  if (parsed == null || Math.abs(parsed) < 100 || Math.abs(parsed) > 100_000) return null;
-  return Math.round(parsed);
+  if (parsed == null || !Number.isInteger(parsed) || Math.abs(parsed) < 100 || Math.abs(parsed) > 100_000) return null;
+  return parsed;
 }
 
 function iso(value: unknown): string | null {
@@ -52,7 +52,8 @@ function officialDate(value: unknown): string | null {
   const text = String(value ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
   const parsed = Date.parse(`${text}T00:00:00.000Z`);
-  return Number.isFinite(parsed) ? text : null;
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString().slice(0, 10) === text ? text : null;
 }
 
 function canonicalNumber(value: number): string {
