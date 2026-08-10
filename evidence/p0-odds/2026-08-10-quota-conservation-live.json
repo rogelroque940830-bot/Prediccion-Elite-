@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "p0-odds-quota-conservation-live-evidence.v1",
+  "capturedAt": "2026-08-10T19:06:43Z",
+  "deployedCommit": "211a8a102acbec847628d7aa35c562242a9cbc03",
+  "chainOfCustody": {
+    "healthHttp": 200,
+    "commitMatch": true
+  },
+  "providerState": {
+    "monthlyQuotaExhausted": true,
+    "foregroundF5": {
+      "success": false,
+      "code": "OUT_OF_USAGE_CREDITS",
+      "games": 0
+    }
+  },
+  "backgroundCacheOnly": {
+    "beforeForeground": {
+      "success": false,
+      "code": "BACKGROUND_CACHE_MISS",
+      "backgroundCacheOnly": true,
+      "games": 0
+    },
+    "afterFailedForeground": {
+      "success": false,
+      "code": "BACKGROUND_CACHE_MISS",
+      "backgroundCacheOnly": true,
+      "games": 0
+    },
+    "successfulCachePopulatedByFailedProviderCall": false
+  },
+  "conclusion": {
+    "state": "VALID_QUOTA_CONSERVATION_POSTDEPLOY",
+    "backgroundCacheMissExplicit": true,
+    "f5ProviderFailureExplicit": true,
+    "exhaustedQuotaStillExternalBlocker": true,
+    "oddsRestored": false
+  },
+  "sourceRun": {
+    "researchPullRequest": 467,
+    "workflowRun": 31422419713,
+    "job": 93566098918,
+    "artifactId": 9075948411,
+    "artifactSha256": "98073a030fc3f3c061790484a63bf376dfbf6bfc90dd9eb884e5438310b2f6b8"
+  },
+  "safety": {
+    "auditWrites": 0,
+    "modelChanged": false,
+    "thresholdChanged": false,
+    "marketContractChanged": false,
+    "rawPayloadUploaded": false,
+    "teamIdentitiesUploaded": false,
+    "gameIdsUploaded": false,
+    "credentialUploaded": false
+  }
+}
