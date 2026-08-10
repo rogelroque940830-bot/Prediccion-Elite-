@@ -57,7 +57,7 @@ jobs:
           const readJson = (path) => { try { return JSON.parse(fs.readFileSync(path, 'utf8')); } catch { return null; } };
 
           const result = {
-            schemaVersion: 'p1-m2b-post-rejected-il-live-audit.v1',
+            schemaVersion: 'p1-m2b-post-rejected-il-live-audit.v2',
             expectedCommit,
             deployedCommit: null,
             commitMatch: false,
@@ -112,6 +112,7 @@ jobs:
               reconciledRejectedTotal: 0,
               sidesWithReconciledRejects: 0,
               unresolvedRejectedTotal: 0,
+              sidesWithUnresolvedRejects: 0,
               officialSupplementedTotal: 0,
               coverageReconciledSides: 0,
               evidenceOnlyReconciledSides: 0,
@@ -128,7 +129,10 @@ jobs:
                 else summary.otherStatus += 1;
                 const raw = nonneg(meta.rejectedCount);
                 const reconciled = nonneg(meta.rejectedIdentityReconciledCount);
-                const unresolved = nonneg(meta.unresolvedRejectedIdentityCount);
+                const unresolved = Math.max(0, raw - reconciled);
+                const annotatedUnresolved = meta.unresolvedRejectedIdentityCount == null
+                  ? null
+                  : nonneg(meta.unresolvedRejectedIdentityCount);
                 const supplemented = nonneg(meta.officialSupplementedCount);
                 summary.rawRejectedTotal += raw;
                 summary.reconciledRejectedTotal += reconciled;
@@ -136,18 +140,23 @@ jobs:
                 summary.officialSupplementedTotal += supplemented;
                 if (raw > 0) summary.sidesWithRawRejects += 1;
                 if (reconciled > 0) summary.sidesWithReconciledRejects += 1;
+                if (unresolved > 0) summary.sidesWithUnresolvedRejects += 1;
                 if (meta.coverageReconciled === true) summary.coverageReconciledSides += 1;
                 if (meta.rejectedIdentityReconciliationEvidenceOnly === true) summary.evidenceOnlyReconciledSides += 1;
 
                 if (status === 'VERIFIED' && raw > 0) {
                   const valid = reconciled === raw
                     && unresolved === 0
+                    && annotatedUnresolved === 0
                     && clean(meta.rejectedIdentityReconciliationMode) === 'MLB_OFFICIAL_IL_EXACT_NAME'
                     && meta.rejectedIdentityReconciliationEvidenceOnly === true
                     && meta.supplementEvidenceOnly === true;
                   if (!valid) summary.invariantViolations += 1;
                 }
                 if (reconciled > 0 && (raw <= 0 || reconciled > raw)) summary.invariantViolations += 1;
+                if (annotatedUnresolved != null && reconciled > 0 && annotatedUnresolved !== unresolved) {
+                  summary.invariantViolations += 1;
+                }
               }
             }
             return summary;
@@ -179,14 +188,15 @@ jobs:
                   httpStatus = response.status;
                   body = await response.json().catch(() => null);
                 } catch {}
-                const evidence = Array.isArray(body?.evidence) ? body.evidence : [];
+                const report = body?.success === true && body?.data && typeof body.data === 'object' ? body.data : body;
+                const evidence = Array.isArray(report?.evidence) ? report.evidence : [];
                 const evidenceState = (field) => clean(evidence.find((item) => clean(item?.field) === field)?.state).toUpperCase() || null;
-                const blockers = Array.isArray(body?.gate?.blockers) ? body.gate.blockers.map(clean).filter(Boolean) : [];
+                const blockers = Array.isArray(report?.gate?.blockers) ? report.gate.blockers.map(clean).filter(Boolean) : [];
                 evaluations.push({
                   market,
                   httpStatus,
-                  status: clean(body?.gate?.status).toUpperCase() || null,
-                  stage: clean(body?.gate?.analysisStage).toUpperCase() || null,
+                  status: clean(report?.gate?.status).toUpperCase() || null,
+                  stage: clean(report?.gate?.analysisStage).toUpperCase() || null,
                   blockers,
                   injuries: evidenceState('INJURIES'),
                   advancedFactors: evidenceState('ADVANCED_FACTORS'),
