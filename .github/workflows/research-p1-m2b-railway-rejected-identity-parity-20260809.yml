@@ -1,0 +1,152 @@
+name: Research P1-M2B Railway Rejected Identity Parity 2026-08-09
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/research-p1-m2b-railway-rejected-identity-parity-20260809.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove-live-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BACKEND_URL: https://web-p0-integration.up.railway.app
+      AUDIT_DATE: '2026-08-09'
+      EXPECTED_COMMIT: 9b7a980d7b9c1252b2c289091fe17b5f1c5f3c81
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact one-file research scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ "$changed" == '.github/workflows/research-p1-m2b-railway-rejected-identity-parity-20260809.yml' ]]
+
+      - name: Prove full-slate rejected-identity parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit private
+          chmod 700 private
+          health_code=$(curl -sS -o private/health.json -w '%{http_code}' --max-time 45 "${BACKEND_URL}/health" || true)
+          all_code=$(curl -sS -o private/all.json -w '%{http_code}' --max-time 300 "${BACKEND_URL}/api/mlb/all?date=${AUDIT_DATE}&researchInjuryIdentityDiagnostic=aggregate-v1" || true)
+          HEALTH_CODE="${health_code:-000}" ALL_CODE="${all_code:-000}" AUDIT_DATE="$AUDIT_DATE" EXPECTED_COMMIT="$EXPECTED_COMMIT" node <<'NODE'
+          const fs=require('fs');
+          const nonneg=v=>Number.isFinite(Number(v))?Math.max(0,Math.trunc(Number(v))):0;
+          const expected=String(process.env.EXPECTED_COMMIT||'').toLowerCase();
+          const result={
+            schemaVersion:'p1-m2b-railway-rejected-identity-parity.v1',
+            auditDate:process.env.AUDIT_DATE,
+            endpointStatus:{health:String(process.env.HEALTH_CODE||'000'),all:String(process.env.ALL_CODE||'000')},
+            expectedCommit:expected,
+            deployedCommit:null,
+            commitMatch:false,
+            slate:{games:0,sides:0,rejectedTotal:0,sidesWithRejects:0,sourceErrors:0},
+            diagnostic:null,
+            parity:{exact:false,reason:'NOT_MEASURED'},
+            conclusion:{state:'NOT_MEASURED',productionInferenceAllowed:false},
+            privacy:{rawPayloadUploaded:false,playerIdentitiesUploaded:false,credentialUploaded:false},
+            safety:{writesPerformed:0,modelChanged:false,phaseBChanged:false}
+          };
+          if(result.endpointStatus.health==='200'){
+            try{
+              const h=JSON.parse(fs.readFileSync('private/health.json','utf8'));
+              const c=String(h?.commit||'').toLowerCase();
+              result.deployedCommit=/^[0-9a-f]{7,40}$/.test(c)?c:null;
+              result.commitMatch=Boolean(result.deployedCommit)&&(expected===c||expected.startsWith(c)||c.startsWith(expected));
+            }catch{}
+          }
+          if(result.endpointStatus.health==='200'&&result.endpointStatus.all==='200'&&result.commitMatch){
+            let p=null;
+            try{p=JSON.parse(fs.readFileSync('private/all.json','utf8'));}catch{}
+            const games=Array.isArray(p?.games)?p.games:Array.isArray(p?.data?.games)?p.data.games:[];
+            for(const g of games){
+              let has=false;
+              for(const side of ['home','away']){
+                const m=g?.[`${side}InjuryData`];
+                if(!m) continue;
+                has=true;
+                result.slate.sides++;
+                const r=nonneg(m.rejectedCount);
+                result.slate.rejectedTotal+=r;
+                if(r>0) result.slate.sidesWithRejects++;
+                result.slate.sourceErrors+=Array.isArray(m.sourceErrors)?m.sourceErrors.length:0;
+              }
+              if(has) result.slate.games++;
+            }
+            const d=p?.researchInjuryIdentityDiagnostic;
+            const privacyOk=d?.privacy?.aggregateOnly===true&&d?.privacy?.playerNamesReturned===false&&d?.privacy?.playerIdsReturned===false&&d?.privacy?.credentialReturned===false;
+            if(privacyOk){
+              result.diagnostic={
+                activeMappedAfterDedupe:nonneg(d?.source?.activeMappedAfterDedupe),
+                teamsWithActiveRecords:nonneg(d?.source?.teamsWithActiveRecords),
+                resolved:nonneg(d?.strictResolver?.resolved),
+                rejected:nonneg(d?.strictResolver?.rejected),
+                rejectionReasons:{
+                  MISSING_NAME:nonneg(d?.strictResolver?.rejectionReasons?.MISSING_NAME),
+                  SEARCH_TRANSPORT_FAILURE:nonneg(d?.strictResolver?.rejectionReasons?.SEARCH_TRANSPORT_FAILURE),
+                  SEARCH_EMPTY:nonneg(d?.strictResolver?.rejectionReasons?.SEARCH_EMPTY),
+                  EXACT_NAME_NOT_FOUND:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_NOT_FOUND),
+                  EXACT_NAME_NO_CURRENT_TEAM:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_NO_CURRENT_TEAM),
+                  EXACT_NAME_WRONG_CURRENT_TEAM:nonneg(d?.strictResolver?.rejectionReasons?.EXACT_NAME_WRONG_CURRENT_TEAM),
+                  STATS_ENRICHMENT_FAILURE:nonneg(d?.strictResolver?.rejectionReasons?.STATS_ENRICHMENT_FAILURE)
+                },
+                officialAuthority:{
+                  rejectedEvaluated:nonneg(d?.officialAuthority?.rejectedEvaluated),
+                  uniqueRosterExactName:nonneg(d?.officialAuthority?.uniqueRosterExactName),
+                  uniqueRosterIlExactName:nonneg(d?.officialAuthority?.uniqueRosterIlExactName),
+                  uniqueRosterNonIlExactName:nonneg(d?.officialAuthority?.uniqueRosterNonIlExactName),
+                  uniqueTransactionExactNameOnly:nonneg(d?.officialAuthority?.uniqueTransactionExactNameOnly),
+                  ambiguousOfficialExactName:nonneg(d?.officialAuthority?.ambiguousOfficialExactName),
+                  noOfficialExactName:nonneg(d?.officialAuthority?.noOfficialExactName),
+                  authorityUnavailable:nonneg(d?.officialAuthority?.authorityUnavailable),
+                  remainingUnresolved:nonneg(d?.officialAuthority?.remainingUnresolved)
+                }
+              };
+              const full=result.slate.games===15&&result.slate.sides===30;
+              const exact=full&&result.slate.sourceErrors===0&&result.diagnostic.teamsWithActiveRecords===30&&result.slate.rejectedTotal===result.diagnostic.rejected;
+              result.parity={
+                exact,
+                reason:!full?'NOT_15_GAMES_30_SIDES':(result.slate.sourceErrors>0?'SOURCE_ERRORS':(result.diagnostic.teamsWithActiveRecords!==30?'DIAGNOSTIC_NOT_30_TEAMS':(result.slate.rejectedTotal!==result.diagnostic.rejected?'REJECT_COUNT_MISMATCH':'EXACT_MATCH')))
+              };
+              result.conclusion={
+                state:exact?'VALID_FULL_SLATE_PARITY':'PARITY_NOT_PROVEN',
+                productionInferenceAllowed:exact,
+                rosterExactNameCandidateCount:exact?result.diagnostic.officialAuthority.uniqueRosterExactName:0,
+                rosterIlCandidateCount:exact?result.diagnostic.officialAuthority.uniqueRosterIlExactName:0,
+                transactionOnlyExploratoryCount:exact?result.diagnostic.officialAuthority.uniqueTransactionExactNameOnly:0,
+                transactionOnlyAuthorizesProductionRescue:false,
+                fuzzyMatchingAuthorized:false,
+                rejectedRecordsMayBeIgnored:false
+              };
+            } else result.conclusion.state='DIAGNOSTIC_MISSING_OR_PRIVACY_INVALID';
+          } else result.conclusion.state='CHAIN_OF_CUSTODY_FAILED';
+          fs.writeFileSync('audit/result.json',JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result,null,2));
+          NODE
+          rm -rf private
+
+      - name: Prove sanitized artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '"gamePk"|"teamId"|"playerId"[[:space:]]*:|"playerName"[[:space:]]*:|"name"[[:space:]]*:|"homeTeam"|"awayTeam"|Authorization|BDL_API_KEY' audit/result.json
+
+      - name: Upload sanitized parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-m2b-railway-rejected-identity-parity-20260809
+          path: audit/result.json
+          if-no-files-found: error
+          retention-days: 30
