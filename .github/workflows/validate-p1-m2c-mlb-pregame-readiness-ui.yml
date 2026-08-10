@@ -158,13 +158,14 @@ jobs:
           set -euo pipefail
           panel='frontend/client/src/components/mlb-pregame-readiness-gate.tsx'
           grep -F 'applyMlbManualQuoteCapture' "$panel"
-          grep -F 'P1-M2C.4 · HARD ROCK MANUAL' "$panel"
           grep -F 'Confirmo Hard Rock y capturo ahora' "$panel"
           grep -F 'setManualCapture(null)' "$panel"
           grep -F 'f5OddsSource: "none"' "$panel"
           grep -F 'Hard Rock manual verificada' "$panel"
-          grep -F 'isMlbManualQuoteCaptureCurrent(manualCapture, { gamePk, date, market, lines })' "$panel"
           grep -F 'const capture = createMlbManualQuoteCapture({' "$panel"
+          grep -F 'request.captureCurrent' "$panel"
+          ! grep -F 'manualCaptureCurrent' "$panel"
+          ! grep -F 'Intl.DateTimeFormat' "$panel"
           [[ "$(git diff --name-only | sort)" == 'frontend/client/src/components/mlb-pregame-readiness-gate.tsx' ]]
 
       - uses: actions/setup-node@v5
