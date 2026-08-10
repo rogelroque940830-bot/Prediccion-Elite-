@@ -1,7 +1,9 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { fetchOfficialMlbInjurySnapshot, type MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
-import { reconcileMlbOfficialOnlyInjuries } from "./mlb-injury-official-supplement";
-import { buildMlbInjuryIdentityDiagnostic } from "./mlb-injury-identity-diagnostic";
+import {
+  buildMlbInjuryIdentityDiagnostic,
+  reconcileMlbOfficialOnlyInjuries,
+} from "./mlb-injury-official-supplement";
 import { requireSecret, todayISO } from "./route-runtime";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA = "courtedge-mlb-official-injury-supplement.v1" as const;
