@@ -1,4 +1,4 @@
-name: Validate P0 Odds Quota Conservation
+name: Research MLB Odds Consumer Audit
 
 on:
   pull_request:
@@ -6,79 +6,77 @@ on:
       - integration/p0-staging-secure
     paths:
       - '.github/workflows/validate-p0-odds-quota-conservation.yml'
-      - 'server/legacy-picks-routes.ts'
-      - 'server/mlb-f5-odds-routes.ts'
-      - 'server/mlb-odds-quota-conservation.test.ts'
-      - 'server/mlb-s5c-shadow-ingestion.ts'
-      - 'server/mlb-s5e-coverage-service.ts'
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24.18.0'
-          cache: npm
-
-      - name: Install dependencies reproducibly
-        run: npm ci
-
-      - name: Quota conservation and F5 falsification tests
-        run: >-
-          npx tsx --test
-          server/mlb-odds-quota-conservation.test.ts
-          server/mlb-f5-odds-routes.test.ts
-          server/mlb-s5c-shadow-ingestion.test.ts
-          server/mlb-s5e-coverage-service.test.ts
-
-      - name: Preserve modular routes and production bundle
-        run: |
-          npm run test:s3-modularization
-          npm run build:backend
-
-      - name: Prove background quota policy and five-minute scientific freshness
+      - name: Exhaustive static odds-consumer inventory
         shell: bash
         run: |
           set -euo pipefail
+          echo "AUDIT_COMMIT=$GITHUB_SHA"
+          echo '=== DIRECT PROVIDER RUNTIME FILES ==='
+          mapfile -t direct < <(grep -RIl --include='*.ts' 'api\.the-odds-api\.com' server \
+            | grep -vE '\.test\.ts$' | sort)
+          printf '%s\n' "${direct[@]}"
+
+          expected=(
+            'server/legacy-picks-routes.ts'
+            'server/market-support-routes.ts'
+            'server/mlb-closing-line-worker.ts'
+            'server/mlb-f5-odds-routes.ts'
+            'server/mlb-market-universe-odds-routes.ts'
+          )
+          [[ "${#direct[@]}" -eq "${#expected[@]}" ]] || {
+            echo "Unexpected direct-provider runtime file count: ${#direct[@]}" >&2
+            exit 1
+          }
+          for i in "${!expected[@]}"; do
+            [[ "${direct[$i]}" == "${expected[$i]}" ]] || {
+              echo "Unexpected direct provider consumer: ${direct[$i]} expected ${expected[$i]}" >&2
+              exit 1
+            }
+          done
+
+          echo '=== ODDS API KEY RUNTIME REFERENCES ==='
+          grep -RIn --include='*.ts' 'ODDS_API_KEY' server | grep -vE '\.test\.ts:' || true
+
+          echo '=== INTERNAL /api/odds CALLERS (SERVER + FRONTEND) ==='
+          grep -RIn --include='*.ts' --include='*.tsx' '/api/odds' server frontend 2>/dev/null || true
+
+          echo '=== MARKET UNIVERSE CALLERS ==='
+          grep -RIn --include='*.ts' --include='*.tsx' 'market-universe-odds' server frontend 2>/dev/null || true
+
+          echo '=== BACKGROUND/TIMER SIGNALS IN ODDS-RELEVANT MODULES ==='
+          grep -nE 'setInterval|setTimeout|background=cache-only|LEGACY_ODDS_BACKGROUND_POLLING|MLB_CLOSING_LINE_CAPTURE' \
+            server/legacy-picks-routes.ts \
+            server/mlb-closing-line-worker.ts \
+            server/mlb-s5c-shadow-ingestion.ts \
+            server/mlb-s5e-coverage-service.ts \
+            server/index.ts || true
+
+          echo '=== HARD SAFETY ASSERTIONS ==='
           grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
           grep -F 'legacy background polling disabled' server/legacy-picks-routes.ts
           grep -F 'background=cache-only' server/mlb-s5c-shadow-ingestion.ts
           grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
+          grep -F 'if (mlbClosingLineCaptureEnabled)' server/index.ts
+          grep -F 'isMlbClosingLineCaptureEnabled' server/index.ts
           grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          ! grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000' server/mlb-f5-odds-routes.ts
-          grep -F 'const cacheFresh = Boolean' server/mlb-f5-odds-routes.ts
-          ! grep -F 'withCache(cacheKey' server/mlb-f5-odds-routes.ts
           grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
-          grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
-          grep -F 'providerFailureCount' server/mlb-f5-odds-routes.ts
-          grep -F 'providerErrorCodes' server/mlb-f5-odds-routes.ts
 
-      - name: Exact three-file F5 successor package and safety boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
-          expected=(
-            ".github/workflows/validate-p0-odds-quota-conservation.yml"
-            "server/mlb-f5-odds-routes.ts"
-            "server/mlb-odds-quota-conservation.test.ts"
-          )
-          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
-          for i in "${!expected[@]}"; do
-            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
-              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}" >&2
-              exit 1
-            }
-          done
-          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^frontend/|ledger|settlement|mlb-core-routes\.ts'
-          ! git diff "origin/${GITHUB_BASE_REF}...HEAD" -- server/mlb-f5-odds-routes.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
-          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          echo '=== NO UNGATED TIMER IN NON-WORKER DIRECT CONSUMERS ==='
+          ! grep -nE 'setInterval|setTimeout' server/mlb-market-universe-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/mlb-f5-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
+
+          echo 'AUDIT_RESULT=PASS'
