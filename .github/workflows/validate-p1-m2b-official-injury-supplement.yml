@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Official supplement focused tests including HTTP runtime interception
+      - name: Official supplement and aggregate identity diagnostic tests
         run: >-
           npx tsx --test
           server/mlb-injury-official-supplement.test.ts
@@ -52,28 +52,40 @@ jobs:
       - name: P1-M2B readiness regressions
         run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
 
+      - name: Preserve modular route inventory
+        run: npm run test:s3-modularization
+
       - name: Production backend build
         run: npm run build:backend
 
-      - name: Prove middleware order, source identity and fail-closed boundaries
+      - name: Prove middleware order, source identity, privacy and fail-closed boundaries
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('fs');
           const assert = require('assert/strict');
           const routes = fs.readFileSync('server/routes.ts', 'utf8');
-          const supplement = fs.readFileSync('server/mlb-injury-official-supplement-routes.ts', 'utf8');
+          const supplementRoutes = fs.readFileSync('server/mlb-injury-official-supplement-routes.ts', 'utf8');
           const helper = fs.readFileSync('server/mlb-injury-official-supplement.ts', 'utf8');
           assert.ok(routes.indexOf('registerMlbOfficialInjurySupplementMiddleware(app)') < routes.indexOf('registerMlbCoreRoutes(app)'));
-          assert.match(supplement, /source\)\.toUpperCase\(\) === "BALLDONTLIE"/);
-          assert.match(supplement, /validationSource\)\.toUpperCase\(\) === "MLB_STATS"/);
-          assert.match(supplement, /rejectedCount\) === 0/);
-          assert.match(supplement, /phaseB:\s*meta\?\.phaseB/);
-          assert.match(supplement, /supplementEvidenceOnly:\s*true/);
-          assert.match(supplement, /rawOfficialOnlyCount !== expectedOfficialOnly/);
+          assert.match(supplementRoutes, /source\)\.toUpperCase\(\) === "BALLDONTLIE"/);
+          assert.match(supplementRoutes, /validationSource\)\.toUpperCase\(\) === "MLB_STATS"/);
+          assert.match(supplementRoutes, /rejectedCount\) === 0/);
+          assert.match(supplementRoutes, /phaseB:\s*meta\?\.phaseB/);
+          assert.match(supplementRoutes, /supplementEvidenceOnly:\s*true/);
+          assert.match(supplementRoutes, /rawOfficialOnlyCount !== expectedOfficialOnly/);
+          assert.match(supplementRoutes, /researchInjuryIdentityDiagnostic/);
+          assert.match(supplementRoutes, /MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY/);
+          assert.match(supplementRoutes, /requireSecret\("BDL_API_KEY"\)/);
+          assert.match(supplementRoutes, /Cache-Control/);
+          assert.doesNotMatch(supplementRoutes, /app\.get\(["']\/api\/mlb\/research/);
           assert.match(helper, /decision:\s*"PENDING"/);
           assert.match(helper, /impact:\s*"NONE"/);
-          assert.doesNotMatch(supplement, /automaticBet|sportsbook|stake|probabilit/i);
+          assert.match(helper, /aggregateOnly:\s*true/);
+          assert.match(helper, /playerNamesReturned:\s*false/);
+          assert.match(helper, /playerIdsReturned:\s*false/);
+          assert.match(helper, /credentialReturned:\s*false/);
+          assert.doesNotMatch(supplementRoutes, /automaticBet|sportsbook|stake|probabilit/i);
           NODE
 
       - name: Exact seven-file scope and no model/core mutation

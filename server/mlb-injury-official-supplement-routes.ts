@@ -1,14 +1,25 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { fetchOfficialMlbInjurySnapshot, type MlbOfficialInjurySnapshot } from "./mlb-injury-shadow";
-import { reconcileMlbOfficialOnlyInjuries } from "./mlb-injury-official-supplement";
-import { todayISO } from "./route-runtime";
+import {
+  buildMlbInjuryIdentityDiagnostic,
+  reconcileMlbOfficialOnlyInjuries,
+  type MlbInjuryIdentityDiagnostic,
+} from "./mlb-injury-official-supplement";
+import { requireSecret, todayISO } from "./route-runtime";
 
 export const MLB_OFFICIAL_INJURY_SUPPLEMENT_SCHEMA = "courtedge-mlb-official-injury-supplement.v1" as const;
+export const MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY = "aggregate-v1" as const;
 
 type FetchOfficialSnapshot = (
   teamId: number,
   asOfDate: string,
 ) => Promise<MlbOfficialInjurySnapshot>;
+
+type BuildIdentityDiagnostic = (input: {
+  asOfDate: string;
+  season: string;
+  bdlKey: string;
+}) => Promise<MlbInjuryIdentityDiagnostic>;
 
 function positiveInt(value: unknown): number | null {
   const parsed = Number(value);
@@ -128,12 +139,23 @@ export async function supplementMlbAllOfficialInjuryEvidence(
   return payload;
 }
 
+function attachDiagnostic(payload: any, diagnostic: MlbInjuryIdentityDiagnostic): any {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  return {
+    ...payload,
+    researchInjuryIdentityDiagnostic: diagnostic,
+  };
+}
+
 export function registerMlbOfficialInjurySupplementMiddleware(
   app: Express,
   fetchOfficialSnapshot: FetchOfficialSnapshot = (teamId, date) => fetchOfficialMlbInjurySnapshot(teamId, date),
+  buildIdentityDiagnostic: BuildIdentityDiagnostic = (input) => buildMlbInjuryIdentityDiagnostic(input),
+  getBdlKey: () => string = () => requireSecret("BDL_API_KEY"),
 ): void {
   app.use("/api/mlb/all", (req: Request, res: Response, next: NextFunction) => {
     const date = clean(req.query.date) || todayISO();
+    const wantsIdentityDiagnostic = clean(req.query.researchInjuryIdentityDiagnostic) === MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY;
     const originalJson = res.json.bind(res);
     let intercepted = false;
 
@@ -141,7 +163,23 @@ export function registerMlbOfficialInjurySupplementMiddleware(
       if (intercepted) return originalJson(body);
       intercepted = true;
       void supplementMlbAllOfficialInjuryEvidence(body, date, fetchOfficialSnapshot)
-        .then((decorated) => originalJson(decorated))
+        .then(async (decorated) => {
+          if (!wantsIdentityDiagnostic || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return originalJson(decorated);
+          }
+          try {
+            const diagnostic = await buildIdentityDiagnostic({
+              asOfDate: date,
+              season: date.slice(0, 4),
+              bdlKey: getBdlKey(),
+            });
+            res.setHeader("Cache-Control", "no-store");
+            return originalJson(attachDiagnostic(decorated, diagnostic));
+          } catch (error) {
+            console.error("MLB injury identity diagnostic failed closed:", error);
+            return originalJson(decorated);
+          }
+        })
         .catch((error) => {
           console.error("MLB official injury supplement middleware failed closed:", error);
           originalJson(body);
