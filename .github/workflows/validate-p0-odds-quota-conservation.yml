@@ -55,23 +55,22 @@ jobs:
           grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
           grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
           ! grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 30 * 60 * 1000' server/mlb-f5-odds-routes.ts
+          grep -F 'const cacheFresh = Boolean' server/mlb-f5-odds-routes.ts
+          ! grep -F 'withCache(cacheKey' server/mlb-f5-odds-routes.ts
           grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
           grep -F 'F5_EVENT_ODDS_PROVIDER_FAILURE' server/mlb-f5-odds-routes.ts
           grep -F 'providerFailureCount' server/mlb-f5-odds-routes.ts
           grep -F 'providerErrorCodes' server/mlb-f5-odds-routes.ts
 
-      - name: Exact six-file runtime package and safety boundary
+      - name: Exact three-file F5 successor package and safety boundary
         shell: bash
         run: |
           set -euo pipefail
           mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
           expected=(
             ".github/workflows/validate-p0-odds-quota-conservation.yml"
-            "server/legacy-picks-routes.ts"
             "server/mlb-f5-odds-routes.ts"
             "server/mlb-odds-quota-conservation.test.ts"
-            "server/mlb-s5c-shadow-ingestion.ts"
-            "server/mlb-s5e-coverage-service.ts"
           )
           [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
           for i in "${!expected[@]}"; do
@@ -81,5 +80,5 @@ jobs:
             }
           done
           ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^frontend/|ledger|settlement|mlb-core-routes\.ts'
-          ! git diff "origin/${GITHUB_BASE_REF}...HEAD" -- server/legacy-picks-routes.ts server/mlb-f5-odds-routes.ts server/mlb-s5c-shadow-ingestion.ts server/mlb-s5e-coverage-service.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
+          ! git diff "origin/${GITHUB_BASE_REF}...HEAD" -- server/mlb-f5-odds-routes.ts | grep -Ei 'modelProbability|confidencePct|stakeUnits|automaticBetPlacement: true|realFinancialExposure: [1-9]|sportsbook.*write|appendSettlement|DELETE[[:space:]]+FROM|UPDATE[[:space:]]+[A-Za-z_]'
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
