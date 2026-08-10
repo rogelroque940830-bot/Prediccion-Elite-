@@ -11,6 +11,7 @@ export type MlbOddsBudgetBlockReason =
   | "PROVIDER_USAGE_HEADERS_INVALID"
   | "ZERO_COST_PROBE_REPORTED_NONZERO_COST"
   | "PROVIDER_COST_EXCEEDED_AUTHORIZATION"
+  | "PROVIDER_USAGE_INCONSISTENT"
   | "RUN_BUDGET_EXCEEDED"
   | "PROVIDER_RESERVE_BREACHED";
 
@@ -215,7 +216,7 @@ export class MlbOddsRunBudgetController {
   }
 
   ingestZeroCostProbe(headers: HeaderReader): MlbOddsBudgetSnapshot {
-    if (this.status === "BLOCKED") return this.snapshot();
+    if (this.status !== "UNPROBED") return this.snapshot();
     const parsed = readMlbOddsProviderUsageHeaders(headers);
     if (!parsed.ok) {
       this.block("PROVIDER_USAGE_HEADERS_INVALID");
@@ -331,8 +332,9 @@ export class MlbOddsRunBudgetController {
     }
 
     const actualCredits = parsed.value.requestsLast;
+    const reconciliation = this.reconcileProviderUsage(parsed.value);
     this.runCreditsCharged += actualCredits;
-    this.providerUsage = parsed.value;
+    this.providerUsage = reconciliation.usage;
     this.operations.set(operationId, {
       ...record,
       status: "SETTLED",
@@ -348,7 +350,11 @@ export class MlbOddsRunBudgetController {
       this.block("RUN_BUDGET_EXCEEDED");
       return this.snapshot();
     }
-    if (parsed.value.requestsRemaining < this.reserveCredits) {
+    if (reconciliation.inconsistent) {
+      this.block("PROVIDER_USAGE_INCONSISTENT");
+      return this.snapshot();
+    }
+    if (this.providerUsage.requestsRemaining < this.reserveCredits) {
       this.block("PROVIDER_RESERVE_BREACHED");
       return this.snapshot();
     }
@@ -389,6 +395,35 @@ export class MlbOddsRunBudgetController {
       if (record.status === "RESERVED") total += record.worstCaseCredits;
     }
     return total;
+  }
+
+  private reconcileProviderUsage(next: MlbOddsProviderUsageSnapshot): {
+    usage: MlbOddsProviderUsageSnapshot;
+    inconsistent: boolean;
+  } {
+    const current = this.providerUsage;
+    if (current == null) return { usage: next, inconsistent: false };
+
+    const usedMovesForward = next.requestsUsed >= current.requestsUsed;
+    const remainingMovesDown = next.requestsRemaining <= current.requestsRemaining;
+    if (usedMovesForward && remainingMovesDown) {
+      return { usage: next, inconsistent: false };
+    }
+
+    const looksOlderOrReset = next.requestsUsed <= current.requestsUsed
+      && next.requestsRemaining >= current.requestsRemaining;
+    if (looksOlderOrReset) {
+      return { usage: current, inconsistent: false };
+    }
+
+    return {
+      usage: {
+        requestsRemaining: Math.min(current.requestsRemaining, next.requestsRemaining),
+        requestsUsed: Math.max(current.requestsUsed, next.requestsUsed),
+        requestsLast: next.requestsLast,
+      },
+      inconsistent: true,
+    };
   }
 
   private block(reason: MlbOddsBudgetBlockReason): void {
