@@ -17,6 +17,7 @@ on:
       - 'server/mlb-market-universe-registry.test.ts'
       - 'server/mlb-odds-budget-controller.ts'
       - 'server/mlb-odds-budget-controller.test.ts'
+      - 'server/mlb-odds-budget-controller-concurrency.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
       - 'server/mlb-market-contract.ts'
       - 'server/index.ts'
@@ -50,6 +51,7 @@ jobs:
           server/mlb-s5e-coverage-service.test.ts
           server/mlb-market-universe-registry.test.ts
           server/mlb-odds-budget-controller.test.ts
+          server/mlb-odds-budget-controller-concurrency.test.ts
 
       - name: Preserve modular routes and production bundle
         run: |
@@ -82,4 +84,5 @@ jobs:
           grep -F 'PROVIDER_QUOTA_NOT_PROBED' server/mlb-odds-budget-controller.ts
           grep -F 'PROVIDER_REMAINING_INSUFFICIENT' server/mlb-odds-budget-controller.ts
           grep -F 'CONSERVATIVE_WORST_CASE' server/mlb-odds-budget-controller.ts
+          grep -F 'PROVIDER_USAGE_INCONSISTENT' server/mlb-odds-budget-controller.ts
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
