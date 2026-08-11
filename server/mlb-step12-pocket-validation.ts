@@ -74,6 +74,8 @@ export interface MlbStep12PocketValidationResult {
     minimumHoldoutDecisiveRows: 30;
     minimumHoldoutUniqueDates: 20;
     maximumAbsoluteDiscoveryHoldoutDrift: 0.15;
+    exactHoldoutPValueRecomputedFromCounts: true;
+    bonferroniParityRecomputedFromTopK: true;
     hitRateBandIsDescriptiveNotPromotion: true;
     lowerHitRateStableSignalsRemainResearchEligible: true;
     historicalPricesRequiredForSportingSupport: false;
@@ -89,6 +91,7 @@ const FAMILYWISE_ALPHA = 0.05;
 const MIN_HOLDOUT_DECISIVE_ROWS = 30;
 const MIN_HOLDOUT_UNIQUE_DATES = 20;
 const MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT = 0.15;
+const P_VALUE_PARITY_TOLERANCE = 1e-10;
 
 function finiteProbability(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -106,11 +109,54 @@ function validateMetrics(metrics: MlbStep12PocketMetrics): boolean {
     && Math.abs(metrics.decisiveHitRate - metrics.hits / metrics.decisiveRows) <= 1e-12;
 }
 
+function logFactorial(n: number): number {
+  let total = 0;
+  for (let i = 2; i <= n; i += 1) total += Math.log(i);
+  return total;
+}
+
+export function exactOneSidedBinomialTail(hits: number, n: number, baseline: number): number {
+  if (!Number.isInteger(hits) || !Number.isInteger(n) || hits < 0 || n < 0 || hits > n || !finiteProbability(baseline)) {
+    throw new Error("STEP12C_BINOMIAL_ARGUMENT_INVALID");
+  }
+  if (n === 0) return 1;
+  if (baseline === 0) return hits === 0 ? 1 : 0;
+  if (baseline === 1) return 1;
+  const logNFact = logFactorial(n);
+  let tail = 0;
+  for (let k = hits; k <= n; k += 1) {
+    const logChoose = logNFact - logFactorial(k) - logFactorial(n - k);
+    const logP = logChoose + k * Math.log(baseline) + (n - k) * Math.log1p(-baseline);
+    tail += Math.exp(logP);
+  }
+  return Math.min(1, Math.max(0, tail));
+}
+
 function descriptiveBand(rate: number | null): MlbStep12PocketValidationResult["descriptiveHitRateBand"] {
   if (rate == null) return "NO_DECISIVE_SAMPLE";
   if (rate >= 0.80) return "EXCEPTIONAL_80_PLUS";
   if (rate >= 0.70) return "STRONG_70_TO_80";
   return "USEFUL_BELOW_70";
+}
+
+function policy(): MlbStep12PocketValidationResult["policy"] {
+  return {
+    researchOnly: true,
+    familywiseAlpha: FAMILYWISE_ALPHA,
+    minimumHoldoutDecisiveRows: MIN_HOLDOUT_DECISIVE_ROWS,
+    minimumHoldoutUniqueDates: MIN_HOLDOUT_UNIQUE_DATES,
+    maximumAbsoluteDiscoveryHoldoutDrift: MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT,
+    exactHoldoutPValueRecomputedFromCounts: true,
+    bonferroniParityRecomputedFromTopK: true,
+    hitRateBandIsDescriptiveNotPromotion: true,
+    lowerHitRateStableSignalsRemainResearchEligible: true,
+    historicalPricesRequiredForSportingSupport: false,
+    historicalPricesRequiredForHistoricalEvClaim: true,
+    holdoutThresholdTuningAllowed: false,
+    livePickFiltersChanged: false,
+    betEliteLabelProduced: false,
+    automaticBetPlacement: false,
+  };
 }
 
 function invalidResult(rule: MlbStep12PocketRuleEvidence, horizon: string, baseline: number, reasons: string[]): MlbStep12PocketValidationResult {
@@ -135,24 +181,6 @@ function invalidResult(rule: MlbStep12PocketRuleEvidence, horizon: string, basel
   };
 }
 
-function policy(): MlbStep12PocketValidationResult["policy"] {
-  return {
-    researchOnly: true,
-    familywiseAlpha: FAMILYWISE_ALPHA,
-    minimumHoldoutDecisiveRows: MIN_HOLDOUT_DECISIVE_ROWS,
-    minimumHoldoutUniqueDates: MIN_HOLDOUT_UNIQUE_DATES,
-    maximumAbsoluteDiscoveryHoldoutDrift: MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT,
-    hitRateBandIsDescriptiveNotPromotion: true,
-    lowerHitRateStableSignalsRemainResearchEligible: true,
-    historicalPricesRequiredForSportingSupport: false,
-    historicalPricesRequiredForHistoricalEvClaim: true,
-    holdoutThresholdTuningAllowed: false,
-    livePickFiltersChanged: false,
-    betEliteLabelProduced: false,
-    automaticBetPlacement: false,
-  };
-}
-
 export function validateMlbStep12Pocket(
   target: MlbStep12PocketTargetEvidence,
   rule: MlbStep12PocketRuleEvidence,
@@ -163,18 +191,28 @@ export function validateMlbStep12Pocket(
 
   if (!String(rule.ruleKey ?? "").trim()) invalidReasons.push("RULE_KEY_REQUIRED");
   if (!(rule.side === "HOME" || rule.side === "AWAY")) invalidReasons.push("SIDE_INVALID");
-  if (!Number.isInteger(target.attemptedRules) || target.attemptedRules < target.topK || target.topK <= 0) invalidReasons.push("TARGET_COUNTS_INVALID");
+  if (!Number.isInteger(target.attemptedRules) || !Number.isInteger(target.topK) || target.attemptedRules < target.topK || target.topK <= 0) invalidReasons.push("TARGET_COUNTS_INVALID");
   if (!finiteProbability(homeBaseline)) invalidReasons.push("BASELINE_INVALID");
   if (!validateMetrics(rule.discovery)) invalidReasons.push("DISCOVERY_METRICS_INVALID");
   if (!validateMetrics(rule.holdout)) invalidReasons.push("HOLDOUT_METRICS_INVALID");
   if (rule.discoveryWilsonLower95 != null && !finiteProbability(rule.discoveryWilsonLower95)) invalidReasons.push("DISCOVERY_WILSON_INVALID");
-  if (rule.holdoutOneSidedPValueVsBaseline != null && !finiteProbability(rule.holdoutOneSidedPValueVsBaseline)) invalidReasons.push("RAW_P_VALUE_INVALID");
-  if (rule.holdoutBonferroniPValueTopK != null && !finiteProbability(rule.holdoutBonferroniPValueTopK)) invalidReasons.push("ADJUSTED_P_VALUE_INVALID");
-  if (rule.holdoutOneSidedPValueVsBaseline != null && rule.holdoutBonferroniPValueTopK != null
-    && rule.holdoutBonferroniPValueTopK + 1e-12 < rule.holdoutOneSidedPValueVsBaseline) {
-    invalidReasons.push("ADJUSTED_P_VALUE_LT_RAW_P_VALUE");
+  if (rule.holdoutOneSidedPValueVsBaseline == null || !finiteProbability(rule.holdoutOneSidedPValueVsBaseline)) invalidReasons.push("RAW_P_VALUE_INVALID");
+  if (rule.holdoutBonferroniPValueTopK == null || !finiteProbability(rule.holdoutBonferroniPValueTopK)) invalidReasons.push("ADJUSTED_P_VALUE_INVALID");
+
+  if (finiteProbability(homeBaseline) && validateMetrics(rule.holdout) && Number.isInteger(target.topK) && target.topK > 0) {
+    const recomputedRaw = exactOneSidedBinomialTail(rule.holdout.hits, rule.holdout.decisiveRows, selectedSideBaseline);
+    const recomputedAdjusted = Math.min(1, recomputedRaw * target.topK);
+    if (rule.holdoutOneSidedPValueVsBaseline == null
+      || Math.abs(rule.holdoutOneSidedPValueVsBaseline - recomputedRaw) > P_VALUE_PARITY_TOLERANCE) {
+      invalidReasons.push("RAW_P_VALUE_PARITY_FAILURE");
+    }
+    if (rule.holdoutBonferroniPValueTopK == null
+      || Math.abs(rule.holdoutBonferroniPValueTopK - recomputedAdjusted) > P_VALUE_PARITY_TOLERANCE) {
+      invalidReasons.push("BONFERRONI_PARITY_FAILURE");
+    }
   }
-  if (invalidReasons.length) return invalidResult(rule, target.horizon, selectedSideBaseline, invalidReasons);
+
+  if (invalidReasons.length) return invalidResult(rule, target.horizon, selectedSideBaseline, [...new Set(invalidReasons)]);
 
   const discoveryRate = rule.discovery.decisiveHitRate;
   const holdoutRate = rule.holdout.decisiveHitRate;
@@ -192,12 +230,12 @@ export function validateMlbStep12Pocket(
     if (holdoutRate == null) reasons.push("NO_HOLDOUT_DECISIVE_RATE");
     else if (holdoutRate <= selectedSideBaseline) reasons.push("NO_POSITIVE_HOLDOUT_LIFT");
     if (drift != null && drift > MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT) reasons.push("DISCOVERY_HOLDOUT_DRIFT_GT_15PP");
-  } else if (rule.holdoutBonferroniPValueTopK != null && rule.holdoutBonferroniPValueTopK <= FAMILYWISE_ALPHA) {
+  } else if ((rule.holdoutBonferroniPValueTopK as number) <= FAMILYWISE_ALPHA) {
     status = "OOS_SUPPORTED_HYPOTHESIS";
     reasons.push("POSITIVE_HOLDOUT_LIFT", "FAMILYWISE_P_LE_0_05", "SAMPLE_AND_DATE_FLOORS_MET", "DISCOVERY_HOLDOUT_DRIFT_WITHIN_15PP");
   } else {
     status = "PROMISING_NOT_FAMILYWISE_SUPPORTED";
-    if (rule.holdoutOneSidedPValueVsBaseline != null && rule.holdoutOneSidedPValueVsBaseline <= FAMILYWISE_ALPHA) {
+    if ((rule.holdoutOneSidedPValueVsBaseline as number) <= FAMILYWISE_ALPHA) {
       reasons.push("RAW_P_LE_0_05_BUT_FAMILYWISE_NOT_SUPPORTED");
     } else {
       reasons.push("HOLDOUT_NOT_SIGNIFICANT_VS_BASELINE");
@@ -232,6 +270,14 @@ export function validateMlbStep12PilotEvidence(pilot: MlbStep12PocketPilotEviden
   if (pilot.policy.historicalPricesUsed || pilot.policy.historicalEvClaimProduced || pilot.policy.holdoutThresholdTuningAllowed
     || pilot.policy.automaticBestRulePromotion || pilot.policy.livePickFiltersChanged || pilot.policy.betEliteProduced) {
     throw new Error("STEP12C_RESEARCH_BOUNDARY_VIOLATION");
+  }
+  const horizonSet = new Set<string>();
+  for (const target of pilot.targets) {
+    if (!String(target.horizon ?? "").trim() || horizonSet.has(target.horizon)) throw new Error("STEP12C_TARGET_IDENTITY_INVALID");
+    horizonSet.add(target.horizon);
+    if (target.rules.length !== target.topK) throw new Error("STEP12C_TOPK_CARDINALITY_MISMATCH");
+    const keys = target.rules.map((rule) => rule.ruleKey);
+    if (new Set(keys).size !== keys.length) throw new Error("STEP12C_DUPLICATE_RULE_KEY");
   }
   return pilot.targets.flatMap((target) => target.rules.map((rule) => validateMlbStep12Pocket(target, rule)));
 }
