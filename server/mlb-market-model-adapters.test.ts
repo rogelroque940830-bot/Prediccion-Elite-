@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MLB_CURRENT_PREDICTOR_MODEL_VERSION,
   MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS,
   MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY,
   MLB_MARKET_MODEL_ADAPTER_SCHEMA,
@@ -27,7 +28,7 @@ function evidence(
     probability: 0.579259804182259,
     projectedRuns: 9.2,
     probabilityUsesSportsbookPrice: false,
-    modelVersion: "predictor-full-snapshot-v2",
+    modelVersion: MLB_CURRENT_PREDICTOR_MODEL_VERSION,
     generatedAt: "2026-08-11T13:55:00.000Z",
   };
   const { sourceEvidenceDigest: suppliedDigest, ...rest } = overrides;
@@ -89,6 +90,34 @@ test("source-reported total probability and selected side must match determinist
 
   const wrongSide = adaptMlbCurrentPredictorProbability(evidence({ side: "UNDER" }));
   assert.equal(assessment(wrongSide).unavailableReason, "PURE_MODEL_SELECTED_SIDE_MISMATCH");
+});
+
+test("evidence digest is lossless for tiny numeric mutations below the old 12-decimal rounding boundary", () => {
+  const input = evidence();
+  input.probability += 1e-13;
+  const result = adaptMlbCurrentPredictorProbability(input);
+  assert.equal(result.adapterStatus, "UNAVAILABLE");
+  assert.equal(assessment(result).unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
+
+  const projectionInput = evidence();
+  projectionInput.projectedRuns += 1e-13;
+  const projectionResult = adaptMlbCurrentPredictorProbability(projectionInput);
+  assert.equal(projectionResult.adapterStatus, "UNAVAILABLE");
+  assert.equal(assessment(projectionResult).unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
+});
+
+test("only the recognized current predictor model version can produce READY evidence", () => {
+  for (const modelVersion of [
+    "P1-M6A3A-EXPERIMENTAL_SHADOW",
+    "team-strength-challenger",
+    "starting-pitcher-challenger",
+    "lineup-t5-challenger",
+    "predictor-full-snapshot-v3",
+  ]) {
+    const result = adaptMlbCurrentPredictorProbability(evidence({ modelVersion }));
+    assert.equal(result.adapterStatus, "UNAVAILABLE");
+    assert.equal(assessment(result).unavailableReason, "MODEL_EVIDENCE_NOT_CURRENT_PREDICTOR");
+  }
 });
 
 test("a market-regressed total probability is rejected before numerical attractiveness matters", () => {
@@ -234,9 +263,12 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   const second = adaptMlbCurrentPredictorProbability({ ...input });
   assert.deepEqual(first, second);
   assert.equal(first.policy.currentReadyMarkets.join(","), "TOTAL,F5_TOTAL");
+  assert.equal(first.policy.currentPredictorModelVersion, MLB_CURRENT_PREDICTOR_MODEL_VERSION);
   assert.equal(first.policy.legacyMarketRegressedProbabilityAccepted, false);
   assert.equal(first.policy.integerLinePushMayBeInvented, false);
   assert.equal(first.policy.evidenceDigestRecomputedBeforeReady, true);
+  assert.equal(first.policy.evidenceDigestUsesLosslessNumericSerialization, true);
+  assert.equal(first.policy.exactCurrentPredictorProvenanceRequired, true);
   assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
   assert.equal(first.policy.malformedEnvelopeCanThrow, false);
   assert.equal(first.policy.unsupportedMarketCanProduceAssessment, false);
