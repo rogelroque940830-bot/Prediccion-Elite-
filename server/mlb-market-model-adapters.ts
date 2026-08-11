@@ -72,6 +72,8 @@ export interface MlbMarketModelAdapterResult {
     evidenceDigestUsesLosslessNumericSerialization: true;
     evidenceDigestRecursiveTraversalAllowed: false;
     exactEnvelopeFieldSetRequired: true;
+    envelopeFieldsSnapshottedExactlyOnce: true;
+    rawEnvelopeNotReadAfterSnapshot: true;
     exactCurrentPredictorProvenanceRequired: true;
     exactHalfRunIdentityRequired: true;
     positiveTotalLineRequired: true;
@@ -113,6 +115,8 @@ const EVIDENCE_DIGEST_FIELDS = [
   "generatedAt",
 ] as const;
 const EVIDENCE_ENVELOPE_FIELDS = [...EVIDENCE_DIGEST_FIELDS, "sourceEvidenceDigest"] as const;
+type EvidenceEnvelopeField = typeof EVIDENCE_ENVELOPE_FIELDS[number];
+type EvidenceEnvelopeSnapshot = Readonly<Record<EvidenceEnvelopeField, unknown>>;
 
 const EXPECTED_METRIC: Readonly<Record<MlbMarketEdgeSupportedMarket, MlbCurrentPredictorProbabilityMetric>> = Object.freeze({
   ML: "ML_FINAL_SELECTED_PROBABILITY",
@@ -162,6 +166,12 @@ function hasExactEvidenceEnvelopeFields(value: Record<string, unknown>): boolean
   const actual = (keys as string[]).sort();
   const expected = [...EVIDENCE_ENVELOPE_FIELDS].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function snapshotEvidenceEnvelope(value: Record<string, unknown>): EvidenceEnvelopeSnapshot {
+  const snapshot = Object.create(null) as Record<EvidenceEnvelopeField, unknown>;
+  for (const key of EVIDENCE_ENVELOPE_FIELDS) snapshot[key] = value[key];
+  return Object.freeze(snapshot);
 }
 
 function exactScalarEvidence(value: unknown): string {
@@ -286,6 +296,8 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     evidenceDigestUsesLosslessNumericSerialization: true,
     evidenceDigestRecursiveTraversalAllowed: false,
     exactEnvelopeFieldSetRequired: true,
+    envelopeFieldsSnapshottedExactlyOnce: true,
+    rawEnvelopeNotReadAfterSnapshot: true,
     exactCurrentPredictorProvenanceRequired: true,
     exactHalfRunIdentityRequired: true,
     positiveTotalLineRequired: true,
@@ -378,38 +390,41 @@ function result(
 function adaptValidatedMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
   const raw = record(input);
   if (!raw) return invalidResult(input, "MODEL_EVIDENCE_ENVELOPE_INVALID");
-  if (!hasExactEvidenceEnvelopeFields(raw)) return invalidResult(input, "MODEL_EVIDENCE_FIELDS_INVALID");
-  if (!isSupportedMarket(raw.marketType)) return invalidResult(input, "MODEL_EVIDENCE_MARKET_UNSUPPORTED");
-  if (!isSupportedMetric(raw.metric)) return invalidResult(input, "MODEL_EVIDENCE_METRIC_UNSUPPORTED");
-  if (!isSide(raw.side)) return invalidResult(input, "MODEL_EVIDENCE_SIDE_INVALID");
-  if (!Number.isInteger(raw.gamePk) || Number(raw.gamePk) <= 0) return invalidResult(input, "MODEL_EVIDENCE_GAME_ID_INVALID");
-  if (!lineIdentityValid(raw.marketType, raw.line)) return invalidResult(input, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
-  if (!totalLineIsPositive(raw.marketType, raw.line as number | null)) return invalidResult(input, "MODEL_EVIDENCE_TOTAL_LINE_INVALID");
-  if (!nullableFiniteNumber(raw.probability)) return invalidResult(input, "MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID");
-  if (!nullableFiniteNumber(raw.projectedRuns)) return invalidResult(input, "MODEL_EVIDENCE_PROJECTED_RUNS_FIELD_INVALID");
-  if (typeof raw.probabilityUsesSportsbookPrice !== "boolean") return invalidResult(input, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
+  if (!hasExactEvidenceEnvelopeFields(raw)) return safeInvalidResult("MODEL_EVIDENCE_FIELDS_INVALID");
+
+  // This is the only read of caller-controlled field values. Everything below uses this frozen plain snapshot.
+  const snapshot = snapshotEvidenceEnvelope(raw);
+  if (!isSupportedMarket(snapshot.marketType)) return invalidResult(snapshot, "MODEL_EVIDENCE_MARKET_UNSUPPORTED");
+  if (!isSupportedMetric(snapshot.metric)) return invalidResult(snapshot, "MODEL_EVIDENCE_METRIC_UNSUPPORTED");
+  if (!isSide(snapshot.side)) return invalidResult(snapshot, "MODEL_EVIDENCE_SIDE_INVALID");
+  if (!Number.isInteger(snapshot.gamePk) || Number(snapshot.gamePk) <= 0) return invalidResult(snapshot, "MODEL_EVIDENCE_GAME_ID_INVALID");
+  if (!lineIdentityValid(snapshot.marketType, snapshot.line)) return invalidResult(snapshot, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
+  if (!totalLineIsPositive(snapshot.marketType, snapshot.line as number | null)) return invalidResult(snapshot, "MODEL_EVIDENCE_TOTAL_LINE_INVALID");
+  if (!nullableFiniteNumber(snapshot.probability)) return invalidResult(snapshot, "MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID");
+  if (!nullableFiniteNumber(snapshot.projectedRuns)) return invalidResult(snapshot, "MODEL_EVIDENCE_PROJECTED_RUNS_FIELD_INVALID");
+  if (typeof snapshot.probabilityUsesSportsbookPrice !== "boolean") return invalidResult(snapshot, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
   if (
-    typeof raw.modelVersion !== "string"
-    || !raw.modelVersion.trim()
-    || !validIso(raw.generatedAt)
-    || typeof raw.sourceEvidenceDigest !== "string"
-    || !HEX_64.test(raw.sourceEvidenceDigest)
+    typeof snapshot.modelVersion !== "string"
+    || !snapshot.modelVersion.trim()
+    || !validIso(snapshot.generatedAt)
+    || typeof snapshot.sourceEvidenceDigest !== "string"
+    || !HEX_64.test(snapshot.sourceEvidenceDigest)
   ) {
-    return invalidResult(input, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+    return invalidResult(snapshot, "MODEL_EVIDENCE_PROVENANCE_INVALID");
   }
 
   const evidence: MlbCurrentPredictorProbabilityEvidence = {
-    gamePk: raw.gamePk as number,
-    marketType: raw.marketType,
-    side: raw.side,
-    line: raw.line as number | null,
-    metric: raw.metric,
-    probability: raw.probability as number | null,
-    projectedRuns: raw.projectedRuns as number | null,
-    probabilityUsesSportsbookPrice: raw.probabilityUsesSportsbookPrice,
-    modelVersion: raw.modelVersion,
-    generatedAt: raw.generatedAt as string,
-    sourceEvidenceDigest: raw.sourceEvidenceDigest,
+    gamePk: snapshot.gamePk as number,
+    marketType: snapshot.marketType,
+    side: snapshot.side,
+    line: snapshot.line as number | null,
+    metric: snapshot.metric,
+    probability: snapshot.probability as number | null,
+    projectedRuns: snapshot.projectedRuns as number | null,
+    probabilityUsesSportsbookPrice: snapshot.probabilityUsesSportsbookPrice,
+    modelVersion: snapshot.modelVersion,
+    generatedAt: snapshot.generatedAt as string,
+    sourceEvidenceDigest: snapshot.sourceEvidenceDigest,
   };
 
   if (!sideValid(evidence.marketType, evidence.side)) {
