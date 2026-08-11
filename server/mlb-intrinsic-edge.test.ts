@@ -266,6 +266,45 @@ test("duplicate HOME_SIDE across full and early projections counts once before s
   assert.equal(result.policy.duplicateHorizonThesisKindsCountOnceInRank, true);
 });
 
+test("non-qualifying late bullpen magnitude cannot outrank stronger F5-only thesis evidence", () => {
+  const weakerEarlyHugeLateConflict = candidate({
+    gamePk: 30,
+    signals: [
+      signal("STATCAST_QUALITY", "awaySP.runsDelta", 0.30),
+      signal("DISCIPLINE_SPEED", "homeRunsDelta", 0.20),
+      signal("STATCAST_QUALITY", "homeSP.runsDelta", -0.28),
+      signal("DISCIPLINE_SPEED", "awayRunsDelta", -0.17),
+    ],
+  });
+  const strongerEarlySmallerLateConflict = candidate({
+    gamePk: 31,
+    signals: [
+      signal("STATCAST_QUALITY", "awaySP.runsDelta", 0.36),
+      signal("DISCIPLINE_SPEED", "homeRunsDelta", 0.22),
+      signal("STATCAST_QUALITY", "homeSP.runsDelta", -0.31),
+      signal("DISCIPLINE_SPEED", "awayRunsDelta", -0.19),
+    ],
+  });
+  const result = buildMlbIntrinsicEdge({
+    shortlist: shortlist([weakerEarlyHugeLateConflict, strongerEarlySmallerLateConflict]),
+    bullpenByGame: {
+      30: { home: certifiedBullpen(3.0) },
+      31: { home: certifiedBullpen(0.40) },
+    },
+  });
+
+  const weaker = result.games.find((game) => game.gamePk === 30)!;
+  const stronger = result.games.find((game) => game.gamePk === 31)!;
+  assert.equal(weaker.projections.fullGame.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), false);
+  assert.equal(stronger.projections.fullGame.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), false);
+  assert.equal(weaker.projections.earlyWindow.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), true);
+  assert.equal(stronger.projections.earlyWindow.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), true);
+  assert.equal(weaker.maxAbsoluteNativeRunSignal, 3.0);
+  assert.equal(stronger.maxAbsoluteNativeRunSignal, 0.4);
+  assert.deepEqual(result.rankedGames.map((game) => game.gamePk), [31, 30]);
+  assert.equal(result.policy.nonQualifyingSignalsAffectIntrinsicRank, false);
+});
+
 test("later PROVISIONAL game can rank above earlier FINAL game; time and stage do not affect intrinsic rank", () => {
   const earlyFinal = strongHomeSide(70, true, "2026-08-10T17:05:00.000Z");
   const lateProvisional = candidate({
@@ -342,6 +381,7 @@ test("intrinsic engine is zero-odds, unweighted, horizon-scoped, post-rank cappe
   assert.match(source, /legacyCompositeModelsCountAsIndependentEvidence: false/);
   assert.match(source, /sameUnderlyingEvidenceDoubleCountingAllowed: false/);
   assert.match(source, /duplicateHorizonThesisKindsCountOnceInRank: true/);
+  assert.match(source, /nonQualifyingSignalsAffectIntrinsicRank: false/);
   assert.match(source, /contradictionsWithinQualifyingProjectionCanBeElite: false/);
   assert.match(source, /horizonScopedThesesRequired: true/);
   assert.match(source, /lateBullpenEvidenceAllowedInEarlyWindow: false/);
