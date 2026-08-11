@@ -26,6 +26,8 @@ on:
       - 'server/mlb-intrinsic-edge.test.ts'
       - 'server/mlb-market-discovery.ts'
       - 'server/mlb-market-discovery.test.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+      - 'server/mlb-selective-odds-acquisition.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
       - 'server/mlb-market-contract.ts'
       - 'server/index.ts'
@@ -50,7 +52,7 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
 
-      - name: Quota conservation, F5, registry, budget, cheap-screen, shortlist, intrinsic-edge and market-discovery falsification tests
+      - name: Quota conservation, F5, registry, budget, cheap-screen, shortlist, intrinsic-edge, discovery and selective acquisition falsification tests
         run: >-
           npx tsx --test
           server/mlb-odds-quota-conservation.test.ts
@@ -64,13 +66,14 @@ jobs:
           server/mlb-shortlist.test.ts
           server/mlb-intrinsic-edge.test.ts
           server/mlb-market-discovery.test.ts
+          server/mlb-selective-odds-acquisition.test.ts
 
       - name: Preserve modular routes and production bundle
         run: |
           npm run test:s3-modularization
           npm run build:backend
 
-      - name: Prove provider quota and market signals cannot contaminate pre-odds intrinsic planning
+      - name: Prove provider quota and market signals cannot contaminate pre-odds planning or selective acquisition
         shell: bash
         run: |
           set -euo pipefail
@@ -91,13 +94,40 @@ jobs:
           ! grep -nE 'setInterval|setTimeout' server/mlb-market-universe-odds-routes.ts
           ! grep -nE 'setInterval|setTimeout' server/mlb-f5-odds-routes.ts
           ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
-          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-odds-budget-controller.ts
           ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval|setTimeout' server/mlb-cheap-screening.ts
           ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout' server/mlb-shortlist.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-intrinsic-edge.ts
           ! grep -nE 'from[[:space:]]+.*\./mlb-(ere|tesi|f5-unified|early-markets)' server/mlb-intrinsic-edge.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-market-discovery.ts
+
+          ! grep -nE 'setInterval|setTimeout|app\.get|app\.post|register[A-Za-z]*Routes|requireSecret|process\.env' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'endpoint: "SPORT_ODDS"' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'endpoint: "EVENT_MARKETS"' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'regions=' server/mlb-selective-odds-acquisition.ts
+          grep -F 'endpoint: "EVENT_ODDS"' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_CACHE_TTL_MS = MLB_P1_M6A2_MAX_QUOTE_AGE_MS' server/mlb-selective-odds-acquisition.ts
+          grep -F 'PAID_MARKET_KEY_MUTATION' server/mlb-selective-odds-acquisition.ts
+          grep -F 'RUN_ID_REUSED_WITH_DIFFERENT_PLAN' server/mlb-selective-odds-acquisition.ts
+          grep -F 'explicitInvocationRequired: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'publicRouteRegistered: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'backgroundPolling: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'finalistGamesOnly: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'exactDiscoveryMarketKeysOnly: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'onePaidRequestPerGameMaximum: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'paidRequestsSequentialByIntrinsicRank: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'lowerRankCannotBypassBudgetDeniedHigherRank: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'eventMarketsDiscoveryCalls: 0' server/mlb-selective-odds-acquisition.ts
+          grep -F 'sportOddsCalls: 0' server/mlb-selective-odds-acquisition.ts
+          grep -F 'executionAndReferenceBooksShareOneRequest: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'cacheTtlIsRefreshPolicyNotPolling: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'negativeMarketAvailabilityCachedWithinTtl: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'sameRunIdReplayConsumesPaidCredits: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'runIdPlanMutationAllowed: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'staleOrMissingExecutionQuoteCanBeRecommended: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'calculatesMarketEdge: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'recommendsBet: false' server/mlb-selective-odds-acquisition.ts
 
           grep -F 'requiresMarketOdds: false' server/mlb-cheap-screening.ts
           grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-cheap-screening.ts
@@ -115,10 +145,13 @@ jobs:
           grep -F 'numericEliteScoreProduced: false' server/mlb-intrinsic-edge.ts
           grep -F 'legacyCompositeModelsCountAsIndependentEvidence: false' server/mlb-intrinsic-edge.ts
           grep -F 'sameUnderlyingEvidenceDoubleCountingAllowed: false' server/mlb-intrinsic-edge.ts
+          grep -F 'nonQualifyingSignalsAffectIntrinsicRank: false' server/mlb-intrinsic-edge.ts
           grep -F 'contradictionsWithinQualifyingProjectionCanBeElite: false' server/mlb-intrinsic-edge.ts
           grep -F 'requiresFinalInputsForResearchEliteCandidate: false' server/mlb-intrinsic-edge.ts
           grep -F 'horizonScopedThesesRequired: true' server/mlb-intrinsic-edge.ts
           grep -F 'lateBullpenEvidenceAllowedInEarlyWindow: false' server/mlb-intrinsic-edge.ts
+          grep -F 'upstreamShortlistSelectedCapAffectsIntrinsicPopulation: false' server/mlb-intrinsic-edge.ts
+          grep -F 'intrinsicCapAppliedAfterIntrinsicRanking: true' server/mlb-intrinsic-edge.ts
           grep -F 'researchOnlyNotOutcomeCertified: true' server/mlb-intrinsic-edge.ts
 
           grep -F 'firstThreeInningsPriority: false' server/mlb-market-discovery.ts
