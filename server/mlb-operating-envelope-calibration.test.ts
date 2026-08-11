@@ -93,6 +93,21 @@ test("pushes are excluded from all binary calibration metrics but remain settlem
   assert.ok(Math.abs(report.baseline.flatStakeRoiPct! - ((0.9 - 1 + 0) / 3) * 100) < 1e-12);
 });
 
+test("calibration gap is absolute so overconfidence cannot look artificially better", () => {
+  const observations = [
+    row(1, { predictionId: "overconfident-win", modelWinProbability: 0.8, outcome: "WIN", realizedProfitUnits: 0.9 }),
+    row(2, { predictionId: "overconfident-loss-1", modelWinProbability: 0.8, outcome: "LOSS", realizedProfitUnits: -1 }),
+    row(3, { predictionId: "overconfident-loss-2", modelWinProbability: 0.8, outcome: "LOSS", realizedProfitUnits: -1 }),
+    row(4, { predictionId: "overconfident-loss-3", modelWinProbability: 0.8, outcome: "LOSS", realizedProfitUnits: -1 }),
+    row(5, { predictionId: "overconfident-loss-4", modelWinProbability: 0.8, outcome: "LOSS", realizedProfitUnits: -1 }),
+  ];
+  const report = buildMlbOperatingEnvelopeCalibration({ observations, rules: [] });
+  assert.ok(Math.abs(report.baseline.decisiveWinRate! - 0.2) < 1e-12);
+  assert.ok(Math.abs(report.baseline.meanModelWinProbability! - 0.8) < 1e-12);
+  assert.ok(Math.abs(report.baseline.calibrationGap! - 0.6) < 1e-12);
+  assert.ok(report.baseline.calibrationGap! >= 0);
+});
+
 test("push-heavy cohorts cannot satisfy the 80 observation 30 date research gate", () => {
   const observations = Array.from({ length: 80 }, (_, index) => row(index, {
     outcome: index === 0 ? "WIN" : "PUSH",
