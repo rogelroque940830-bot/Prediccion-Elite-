@@ -76,8 +76,11 @@ export interface MlbEliteEvidenceLedger {
     capturesEveryStep11aEliteCandidate: true;
     additionalEligibilityFilterApplied: false;
     silentCandidateDropAllowed: false;
+    step11aSummaryCountMustMatchRows: true;
+    exactStep9EvidenceParityRequired: true;
     immutablePregameSnapshot: true;
     settlementMutatesPregameSnapshot: false;
+    settlementOutcomeWhitelistRequired: true;
     missingClosingLineBlocksCapture: false;
     missingClosingLineBlocksSettlement: false;
     closingLineRequiredForCalibration: false;
@@ -124,6 +127,19 @@ function sameLine(left: number | null, right: number | null): boolean {
   return Object.is(left, right) || left === right;
 }
 
+function sameNullableNumber(left: number | null, right: number | null): boolean {
+  if (left === null || right === null) return left === right;
+  return Object.is(left, right) || left === right;
+}
+
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function isSettlementOutcome(value: unknown): value is MlbCalibrationOutcome {
+  return value === "WIN" || value === "LOSS" || value === "PUSH";
+}
+
 function americanToDecimal(american: number): number {
   if (!Number.isFinite(american) || american === 0) throw new Error("MLB_ELITE_LEDGER_EXECUTION_ODDS_INVALID");
   return american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
@@ -167,6 +183,20 @@ function requireEdgeEvidence(candidate: MlbOperatingEnvelopeMarketResult, edge: 
     || !finite(edge.execution.selectedOddsAmerican) || !validIso(edge.execution.capturedAt)) {
     throw new Error("MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID");
   }
+
+  const parity = candidate.intrinsicProjectionScope === edge.intrinsicProjectionScope
+    && sameStringArray(candidate.intrinsicThesisKinds, edge.intrinsicThesisKinds)
+    && sameStringArray(candidate.supportingComponents, edge.supportingComponents)
+    && sameNullableNumber(candidate.modelWinProbability, edge.model.winProbability)
+    && sameNullableNumber(candidate.modelPushProbability, edge.model.pushProbability)
+    && sameNullableNumber(candidate.expectedValuePerUnit, edge.economics.expectedValuePerUnit)
+    && sameNullableNumber(candidate.executionEdgePp, edge.economics.executionEdgePp)
+    && sameNullableNumber(candidate.executionNoVigEdgePp, edge.economics.executionNoVigEdgePp)
+    && sameNullableNumber(candidate.referenceNoVigEdgePp, edge.economics.referenceNoVigEdgePp)
+    && candidate.referenceAgreement === edge.economics.referenceAgreement
+    && edge.execution.selectedSide === candidate.selectedSide
+    && sameLine(edge.execution.line, candidate.selectedLine);
+  if (!parity) throw new Error("MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH");
 }
 
 export function captureMlbEliteEvidenceLedger(input: {
@@ -179,12 +209,21 @@ export function captureMlbEliteEvidenceLedger(input: {
   if (input.operatingEnvelope.sourceRunId !== input.marketEdge.sourceRunId) {
     throw new Error("MLB_ELITE_LEDGER_SOURCE_RUN_MISMATCH");
   }
+  if (input.operatingEnvelope.sourceMarketEdgeSchemaVersion !== input.marketEdge.schemaVersion) {
+    throw new Error("MLB_ELITE_LEDGER_SOURCE_EDGE_SCHEMA_MISMATCH");
+  }
 
-  const candidates = input.operatingEnvelope.games.flatMap((game) =>
-    game.markets
-      .filter((market) => market.classification === "ELITE_EVIDENCE_CANDIDATE" || market.eliteEvidenceCandidate === true)
-      .map((market) => ({ game, market })),
-  );
+  const candidates = input.operatingEnvelope.games.flatMap((game) => {
+    const gameCandidates = game.markets.filter((market) =>
+      market.classification === "ELITE_EVIDENCE_CANDIDATE" || market.eliteEvidenceCandidate === true);
+    if (gameCandidates.length !== game.summary.eliteEvidenceCandidates) {
+      throw new Error(`MLB_ELITE_LEDGER_STEP11A_GAME_SUMMARY_MISMATCH:${game.gamePk}`);
+    }
+    return gameCandidates.map((market) => ({ game, market }));
+  });
+  if (candidates.length !== input.operatingEnvelope.summary.eliteEvidenceCandidates) {
+    throw new Error("MLB_ELITE_LEDGER_STEP11A_TOP_LEVEL_SUMMARY_MISMATCH");
+  }
 
   const entries: MlbEliteEvidenceLedgerEntry[] = [];
   const seen = new Set<string>();
@@ -275,8 +314,11 @@ function buildLedger(
       capturesEveryStep11aEliteCandidate: true,
       additionalEligibilityFilterApplied: false,
       silentCandidateDropAllowed: false,
+      step11aSummaryCountMustMatchRows: true,
+      exactStep9EvidenceParityRequired: true,
       immutablePregameSnapshot: true,
       settlementMutatesPregameSnapshot: false,
+      settlementOutcomeWhitelistRequired: true,
       missingClosingLineBlocksCapture: false,
       missingClosingLineBlocksSettlement: false,
       closingLineRequiredForCalibration: false,
@@ -296,7 +338,8 @@ export function settleMlbEliteEvidenceLedger(input: {
 }): MlbEliteEvidenceLedger {
   const requested = new Map<string, MlbEliteEvidenceSettlementInput>();
   for (const settlement of input.settlements) {
-    if (!settlement.predictionId || !validIso(settlement.settledAt) || !settlement.officialEvidenceId) {
+    if (!settlement.predictionId || !isSettlementOutcome((settlement as { outcome?: unknown }).outcome)
+      || !validIso(settlement.settledAt) || !settlement.officialEvidenceId) {
       throw new Error("MLB_ELITE_LEDGER_SETTLEMENT_INPUT_INVALID");
     }
     if (requested.has(settlement.predictionId)) throw new Error(`MLB_ELITE_LEDGER_DUPLICATE_SETTLEMENT:${settlement.predictionId}`);
