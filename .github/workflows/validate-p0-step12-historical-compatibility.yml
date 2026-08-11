@@ -11,6 +11,8 @@ on:
       - 'server/mlb-step12-historical-feature-table.test.ts'
       - 'server/mlb-step12-pocket-evaluator.ts'
       - 'server/mlb-step12-pocket-evaluator.test.ts'
+      - 'server/mlb-step12-pocket-validation.ts'
+      - 'server/mlb-step12-pocket-validation.test.ts'
       - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
       - 'docs/P0_STEP12_ALIGNMENT_AUDIT.md'
       - '.github/workflows/validate-p0-step12-historical-compatibility.yml'
@@ -30,17 +32,19 @@ jobs:
           cache: npm
       - name: Install dependencies reproducibly
         run: npm ci
-      - name: Test Step 12 compatibility feature-table and pocket boundaries
+      - name: Test Step 12 compatibility feature-table pocket and robust-validation boundaries
         run: |
           npx tsx --test server/mlb-step12-historical-compatibility.test.ts
           npx tsx --test server/mlb-step12-historical-feature-table.test.ts
           npx tsx --test server/mlb-step12-pocket-evaluator.test.ts
+          npx tsx --test server/mlb-step12-pocket-validation.test.ts
       - name: Type-check Step 12 research surface
         run: >-
           npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
           server/mlb-step12-historical-compatibility.ts server/mlb-step12-historical-compatibility.test.ts
           server/mlb-step12-historical-feature-table.ts server/mlb-step12-historical-feature-table.test.ts
           server/mlb-step12-pocket-evaluator.ts server/mlb-step12-pocket-evaluator.test.ts
+          server/mlb-step12-pocket-validation.ts server/mlb-step12-pocket-validation.test.ts
       - name: Preserve backend regressions
         run: |
           npx tsx --test server/mlb-operating-envelope-calibration.test.ts
@@ -53,15 +57,16 @@ jobs:
           compat='server/mlb-step12-historical-compatibility.ts'
           table='server/mlb-step12-historical-feature-table.ts'
           pocket='server/mlb-step12-pocket-evaluator.ts'
+          validate='server/mlb-step12-pocket-validation.ts'
           grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$compat"
           grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$compat"
           grep -F 'highHitRatePocketsMayBeInvestigated: true' "$compat"
           grep -F 'lowerHitRateStableSignalsRemainEligibleForResearch: true' "$compat"
           grep -F 'qualityAndFrequencyMustBeReportedTogether: true' "$compat"
-          grep -F 'livePickFiltersChanged: false' "$compat" "$table" "$pocket"
+          grep -F 'livePickFiltersChanged: false' "$compat" "$table" "$pocket" "$validate"
           grep -F 'step11cCapturePopulationChanged: false' "$compat"
-          grep -F 'betEliteLabelProduced: false' "$compat" "$table" "$pocket"
-          grep -F 'automaticBetPlacement: false' "$compat" "$table" "$pocket"
+          grep -F 'betEliteLabelProduced: false' "$compat" "$table" "$pocket" "$validate"
+          grep -F 'automaticBetPlacement: false' "$compat" "$table" "$pocket" "$validate"
           grep -F 'randomShuffleAllowed: false' "$table"
           grep -F 'pregameAsOfRequired: true' "$table"
           grep -F 'outcomeFieldsAllowedAsFeatures: false' "$table"
@@ -70,10 +75,17 @@ jobs:
           grep -F 'historicalPricesRequiredForSportingHitRateStudy: false' "$table"
           grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$table"
           grep -F 'ruleThresholdsMustComeFromDiscoveryOnly: true' "$pocket"
-          grep -F 'holdoutThresholdTuningAllowed: false' "$pocket"
+          grep -F 'holdoutThresholdTuningAllowed: false' "$pocket" "$validate"
           grep -F 'maximumAtomsPerRule: 3' "$pocket"
-          grep -F 'hitRateBandIsDescriptiveNotPromotion: true' "$pocket"
+          grep -F 'hitRateBandIsDescriptiveNotPromotion: true' "$pocket" "$validate"
           grep -F 'pocketsBelow80RemainResearchEligible: true' "$pocket"
+          grep -F 'lowerHitRateStableSignalsRemainResearchEligible: true' "$validate"
           grep -F 'sampleAndFrequencyAlwaysReported: true' "$pocket"
-          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table" "$pocket"
+          grep -F 'familywiseAlpha: 0.05' "$validate"
+          grep -F 'minimumHoldoutDecisiveRows: 30' "$validate"
+          grep -F 'minimumHoldoutUniqueDates: 20' "$validate"
+          grep -F 'maximumAbsoluteDiscoveryHoldoutDrift: 0.15' "$validate"
+          grep -F 'historicalPricesRequiredForSportingSupport: false' "$validate"
+          grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$validate"
+          ! grep -E 'stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table" "$pocket" "$validate"
           git diff --check
