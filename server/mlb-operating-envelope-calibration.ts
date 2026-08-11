@@ -180,7 +180,9 @@ function metrics(
     pushes,
     decisiveWinRate,
     meanModelWinProbability,
-    calibrationGap: decisiveWinRate != null && meanModelWinProbability != null ? decisiveWinRate - meanModelWinProbability : null,
+    calibrationGap: decisiveWinRate != null && meanModelWinProbability != null
+      ? Math.abs(decisiveWinRate - meanModelWinProbability)
+      : null,
     meanBrierScore: mean(brier),
     meanLogLoss: mean(logLoss),
     flatStakeRoiPct: selected.length ? (selected.reduce((sum, row) => sum + row.realizedProfitUnits, 0) / selected.length) * 100 : null,
