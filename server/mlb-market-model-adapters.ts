@@ -18,12 +18,16 @@ export const MLB_MARKET_MODEL_ADAPTER_MARKETS = [
   "F5_TOTAL",
 ] as const satisfies readonly MlbMarketEdgeSupportedMarket[];
 
-export type MlbCurrentPredictorProbabilityMetric =
-  | "ML_FINAL_SELECTED_PROBABILITY"
-  | "F5_ML_FINAL_SELECTED_PROBABILITY"
-  | "RUN_LINE_COVER_PROBABILITY"
-  | "TOTAL_MODEL_HIT_PROBABILITY"
-  | "F5_TOTAL_MODEL_HIT_PROBABILITY";
+export const MLB_CURRENT_PREDICTOR_PROBABILITY_METRICS = [
+  "ML_FINAL_SELECTED_PROBABILITY",
+  "F5_ML_FINAL_SELECTED_PROBABILITY",
+  "RUN_LINE_COVER_PROBABILITY",
+  "TOTAL_MODEL_HIT_PROBABILITY",
+  "F5_TOTAL_MODEL_HIT_PROBABILITY",
+] as const;
+
+export type MlbCurrentPredictorProbabilityMetric = typeof MLB_CURRENT_PREDICTOR_PROBABILITY_METRICS[number];
+export type MlbMarketModelAdapterStatus = "READY" | "UNAVAILABLE" | "INVALID_EVIDENCE";
 
 export interface MlbCurrentPredictorProbabilityEvidence {
   gamePk: number;
@@ -45,13 +49,14 @@ export interface MlbCurrentPredictorProbabilityEvidence {
 export interface MlbMarketModelAdapterResult {
   schemaVersion: typeof MLB_MARKET_MODEL_ADAPTER_SCHEMA;
   adapterVersion: typeof MLB_MARKET_MODEL_ADAPTER_VERSION;
-  assessment: MlbMarketProbabilityAssessment;
+  adapterStatus: MlbMarketModelAdapterStatus;
+  assessment: MlbMarketProbabilityAssessment | null;
   source: {
-    metric: MlbCurrentPredictorProbabilityMetric;
-    modelVersion: string;
-    generatedAt: string;
-    sourceEvidenceDigest: string;
-    probabilityUsesSportsbookPrice: boolean;
+    metric: string | null;
+    modelVersion: string | null;
+    generatedAt: string | null;
+    sourceEvidenceDigest: string | null;
+    probabilityUsesSportsbookPrice: boolean | null;
     projectedRuns: number | null;
   };
   blockers: readonly string[];
@@ -66,6 +71,8 @@ export interface MlbMarketModelAdapterResult {
     integerLinePushMayBeInvented: false;
     evidenceDigestRecomputedBeforeReady: true;
     priceDependenceFlagMustBeBoolean: true;
+    malformedEnvelopeCanThrow: false;
+    unsupportedMarketCanProduceAssessment: false;
     totalProbabilityRecomputedFromProjection: true;
     totalProbabilitySigmaRuns: typeof MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS;
     sourceReportedProbabilityMustMatchRecomputation: true;
@@ -87,6 +94,7 @@ export interface MlbMarketModelAdapterResult {
 const HEX_64 = /^[a-f0-9]{64}$/i;
 const EPS = 1e-9;
 const PROBABILITY_PARITY_TOLERANCE = 1e-10;
+const SIDES = ["HOME", "AWAY", "OVER", "UNDER"] as const;
 
 const EXPECTED_METRIC: Readonly<Record<MlbMarketEdgeSupportedMarket, MlbCurrentPredictorProbabilityMetric>> = Object.freeze({
   ML: "ML_FINAL_SELECTED_PROBABILITY",
@@ -111,6 +119,24 @@ export const MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY = Object.freeze({
   TOTAL: "PURE_MODEL_HALF_RUN_ONLY",
   F5_TOTAL: "PURE_MODEL_HALF_RUN_ONLY",
 } as const);
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function isSupportedMarket(value: unknown): value is MlbMarketEdgeSupportedMarket {
+  return typeof value === "string" && (MLB_MARKET_MODEL_ADAPTER_MARKETS as readonly string[]).includes(value);
+}
+
+function isSupportedMetric(value: unknown): value is MlbCurrentPredictorProbabilityMetric {
+  return typeof value === "string" && (MLB_CURRENT_PREDICTOR_PROBABILITY_METRICS as readonly string[]).includes(value);
+}
+
+function isSide(value: unknown): value is MlbCurrentPredictorProbabilityEvidence["side"] {
+  return typeof value === "string" && (SIDES as readonly string[]).includes(value);
+}
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -145,7 +171,7 @@ function sideValid(market: MlbMarketEdgeSupportedMarket, side: MlbCurrentPredict
   return side === "HOME" || side === "AWAY";
 }
 
-function lineIdentityValid(market: MlbMarketEdgeSupportedMarket, line: number | null): boolean {
+function lineIdentityValid(market: MlbMarketEdgeSupportedMarket, line: unknown): line is number | null {
   if (market === "ML" || market === "F5_ML") return line == null;
   return typeof line === "number" && Number.isFinite(line);
 }
@@ -218,6 +244,8 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     integerLinePushMayBeInvented: false,
     evidenceDigestRecomputedBeforeReady: true,
     priceDependenceFlagMustBeBoolean: true,
+    malformedEnvelopeCanThrow: false,
+    unsupportedMarketCanProduceAssessment: false,
     totalProbabilityRecomputedFromProjection: true,
     totalProbabilitySigmaRuns: MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS,
     sourceReportedProbabilityMustMatchRecomputation: true,
@@ -236,6 +264,31 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
   };
 }
 
+function sourceSummary(input: unknown): MlbMarketModelAdapterResult["source"] {
+  const value = record(input) ?? {};
+  return {
+    metric: typeof value.metric === "string" ? value.metric : null,
+    modelVersion: typeof value.modelVersion === "string" ? value.modelVersion : null,
+    generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : null,
+    sourceEvidenceDigest: typeof value.sourceEvidenceDigest === "string" ? value.sourceEvidenceDigest : null,
+    probabilityUsesSportsbookPrice: typeof value.probabilityUsesSportsbookPrice === "boolean" ? value.probabilityUsesSportsbookPrice : null,
+    projectedRuns: typeof value.projectedRuns === "number" && Number.isFinite(value.projectedRuns) ? value.projectedRuns : null,
+  };
+}
+
+function invalidResult(input: unknown, reason: string): MlbMarketModelAdapterResult {
+  return {
+    schemaVersion: MLB_MARKET_MODEL_ADAPTER_SCHEMA,
+    adapterVersion: MLB_MARKET_MODEL_ADAPTER_VERSION,
+    adapterStatus: "INVALID_EVIDENCE",
+    assessment: null,
+    source: sourceSummary(input),
+    blockers: [reason],
+    warnings: [],
+    policy: policy(),
+  };
+}
+
 function result(
   evidence: MlbCurrentPredictorProbabilityEvidence,
   assessment: MlbMarketProbabilityAssessment,
@@ -245,15 +298,9 @@ function result(
   return {
     schemaVersion: MLB_MARKET_MODEL_ADAPTER_SCHEMA,
     adapterVersion: MLB_MARKET_MODEL_ADAPTER_VERSION,
+    adapterStatus: assessment.status === "READY" ? "READY" : "UNAVAILABLE",
     assessment,
-    source: {
-      metric: evidence.metric,
-      modelVersion: String(evidence.modelVersion ?? ""),
-      generatedAt: String(evidence.generatedAt ?? ""),
-      sourceEvidenceDigest: String(evidence.sourceEvidenceDigest ?? ""),
-      probabilityUsesSportsbookPrice: evidence.probabilityUsesSportsbookPrice === true,
-      projectedRuns: typeof evidence.projectedRuns === "number" && Number.isFinite(evidence.projectedRuns) ? evidence.projectedRuns : null,
-    },
+    source: sourceSummary(evidence),
     blockers: [...new Set(blockers)],
     warnings: [...new Set(warnings)],
     policy: policy(),
@@ -262,30 +309,20 @@ function result(
 
 /**
  * Step 10 is an adapter, not a new sporting model.
- *
- * Current CourtEdge evidence audit (2026-08-11):
- * - ML/F5 ML final selected probabilities are market-regressed; F5 also needs
- *   explicit tie/push mass that the binary current model does not estimate.
- * - Run Line is derived from the already market-regressed full-game ML output.
- * - Total/F5 Total expose a pre-market modelHitProb derived from projected runs
- *   through the existing Normal CDF (sigma=3.5). Step 10 reproduces that exact
- *   pure probability and requires source parity before creating READY evidence.
- * - The A3A discrete distribution has exact settlement math but is explicitly
- *   EXPERIMENTAL_SHADOW/actionabilityAllowed=false and cannot be promoted here.
+ * Malformed/deserialized envelopes fail closed before any identity map lookup.
  */
-export function adaptMlbCurrentPredictorProbability(
-  evidence: MlbCurrentPredictorProbabilityEvidence,
-): MlbMarketModelAdapterResult {
-  if (!Number.isInteger(evidence.gamePk) || evidence.gamePk <= 0) {
-    const reason = "MODEL_EVIDENCE_GAME_ID_INVALID";
-    return result(evidence, unavailable(evidence, reason), [reason]);
-  }
+export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
+  const raw = record(input);
+  if (!raw) return invalidResult(input, "MODEL_EVIDENCE_ENVELOPE_INVALID");
+  if (!isSupportedMarket(raw.marketType)) return invalidResult(input, "MODEL_EVIDENCE_MARKET_UNSUPPORTED");
+  if (!isSupportedMetric(raw.metric)) return invalidResult(input, "MODEL_EVIDENCE_METRIC_UNSUPPORTED");
+  if (!isSide(raw.side)) return invalidResult(input, "MODEL_EVIDENCE_SIDE_INVALID");
+  if (!Number.isInteger(raw.gamePk) || Number(raw.gamePk) <= 0) return invalidResult(input, "MODEL_EVIDENCE_GAME_ID_INVALID");
+  if (!lineIdentityValid(raw.marketType, raw.line)) return invalidResult(input, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
+
+  const evidence = raw as unknown as MlbCurrentPredictorProbabilityEvidence;
   if (!sideValid(evidence.marketType, evidence.side)) {
     const reason = "MODEL_EVIDENCE_SIDE_MARKET_MISMATCH";
-    return result(evidence, unavailable(evidence, reason), [reason]);
-  }
-  if (!lineIdentityValid(evidence.marketType, evidence.line)) {
-    const reason = "MODEL_EVIDENCE_LINE_MARKET_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
   if (evidence.metric !== EXPECTED_METRIC[evidence.marketType]) {
@@ -326,7 +363,7 @@ export function adaptMlbCurrentPredictorProbability(
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
 
-  if (evidence.probabilityUsesSportsbookPrice) {
+  if (evidence.probabilityUsesSportsbookPrice !== false) {
     const reason = "MARKET_REGRESSED_PROBABILITY_REJECTED";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
