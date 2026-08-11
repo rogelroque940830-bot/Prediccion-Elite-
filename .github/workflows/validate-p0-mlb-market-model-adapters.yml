@@ -9,6 +9,7 @@ on:
       - 'server/mlb-market-model-adapters.ts'
       - 'server/mlb-market-model-adapters.test.ts'
       - 'server/mlb-market-edge.ts'
+      - 'server/mlb-market-edge-integrity.test.ts'
       - 'server/mlb-market-contract.ts'
       - 'frontend/client/src/lib/mlb-model.ts'
       - 'frontend/client/src/pages/mlb-predictor.tsx'
@@ -37,6 +38,7 @@ jobs:
         run: |
           npx tsx --test server/mlb-market-model-adapters.test.ts
           npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-market-edge-integrity.test.ts
 
       - name: Preserve modular backend
         run: |
@@ -49,12 +51,14 @@ jobs:
           set -euo pipefail
           adapter='server/mlb-market-model-adapters.ts'
           tests='server/mlb-market-model-adapters.test.ts'
+          edge='server/mlb-market-edge.ts'
           current_model='frontend/client/src/lib/mlb-model.ts'
           predictor='frontend/client/src/pages/mlb-predictor.tsx'
 
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$adapter"
           ! grep -F 'Math.round(value * 1e12) / 1e12' "$adapter"
           ! grep -F 'const EPS' "$adapter"
+          ! grep -F 'PROBABILITY_PARITY_TOLERANCE' "$adapter"
 
           grep -F 'courtedge-p0-mlb-market-model-adapters.v1' "$adapter"
           grep -F 'MLB_CURRENT_PREDICTOR_MODEL_VERSION = "predictor-full-snapshot-v2"' "$adapter"
@@ -71,6 +75,7 @@ jobs:
           grep -F 'unsupportedMarketCanProduceAssessment: false' "$adapter"
           grep -F 'totalProbabilityRecomputedFromProjection: true' "$adapter"
           grep -F 'sourceReportedProbabilityMustMatchRecomputation: true' "$adapter"
+          grep -F 'sourceReportedProbabilityMustMatchBitExactly: true' "$adapter"
           grep -F 'a3aExperimentalShadowCanBecomeReady: false' "$adapter"
           grep -F 'unsupportedChallengersCanBePromoted: false' "$adapter"
           grep -F 'MODEL_EVIDENCE_ENVELOPE_INVALID' "$adapter"
@@ -93,6 +98,7 @@ jobs:
           grep -F 'MODEL_EVIDENCE_DIGEST_MISMATCH' "$adapter"
           grep -F 'PURE_MODEL_SELECTED_SIDE_MISMATCH' "$adapter"
           grep -F 'PURE_MODEL_PROBABILITY_PARITY_MISMATCH' "$adapter"
+          grep -F 'if (reproduced.probability !== evidence.probability)' "$adapter"
           grep -F 'buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput)' "$adapter"
           grep -F 'reproduceMlbCurrentPredictorTotalModelHitProbability(evidence.projectedRuns, line)' "$adapter"
           grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$adapter"
@@ -106,6 +112,13 @@ jobs:
           grep -F 'theOddsApiCreditsConsumed: 0' "$adapter"
           grep -F 'automaticBetPlacement: false' "$adapter"
           grep -F 'realFinancialExposure: 0' "$adapter"
+
+          # Freeze Step 9 predecessor integrity required by Step 10 output.
+          grep -F 'losslessAssessmentIdentityKeyRequired: true' "$edge"
+          grep -F 'losslessModelAssessmentDigestRequired: true' "$edge"
+          grep -F 'MODEL_EXECUTION_LINE_IDENTITY_MISMATCH' "$edge"
+          grep -F 'buildMlbMarketProbabilityAssessmentIdentityKey' "$edge"
+          grep -F 'exactCanonicalAssessment(input)' "$edge"
 
           # Freeze parity with the current pure (pre-market) total probability formula.
           grep -F 'const modelOverProb = 1 - mlbNormCdf(line, estimated, 3.5);' "$current_model"
@@ -121,6 +134,7 @@ jobs:
           grep -F 'current F5 ML remains unavailable' "$tests"
           grep -F 'current Run Line remains unavailable' "$tests"
           grep -F 'source-reported total probability and selected side must match deterministic recomputation' "$tests"
+          grep -F 'source probability parity is bit-exact even inside the former 1e-10 tolerance' "$tests"
           grep -F 'malformed envelope, unsupported market or unsupported metric returns INVALID_EVIDENCE without throwing' "$tests"
           grep -F 'price-dependence flag must be explicitly boolean false for a READY total' "$tests"
 
