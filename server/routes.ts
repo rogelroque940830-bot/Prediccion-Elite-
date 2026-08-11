@@ -8,6 +8,7 @@ import { registerMlbEarlyRoutes } from "./mlb-early-routes";
 import { registerLegacyPicksV2Routes } from "./legacy-picks-v2-routes";
 import { registerNbaDataRoutes } from "./nba-data-routes";
 import { registerMlbP1DailySlateRoutes } from "./mlb-p1-daily-slate-routes";
+import { registerMlbCheapScreeningRoutes } from "./mlb-cheap-screening-routes";
 import { registerMlbP1PregameReadinessRoutes } from "./mlb-p1-pregame-readiness-routes";
 import { registerMlbP1ScientificCaptureRoutes } from "./mlb-p1-scientific-capture-routes";
 import { registerMlbP1EconomicReviewRoutes } from "./mlb-p1-economic-review-routes";
@@ -38,6 +39,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerLegacyPicksV2Routes(app);
   registerNbaDataRoutes(app);
   registerMlbP1DailySlateRoutes(app);
+  registerMlbCheapScreeningRoutes(app);
   registerMlbP1PregameReadinessRoutes(app);
   registerMlbP1ScientificCaptureRoutes(app);
   registerMlbP1EconomicReviewRoutes(app);
