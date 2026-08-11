@@ -25,6 +25,7 @@ def load(path):
 
 def canonical_rule(rule):
     return {
+        'hypothesisKey': rule['hypothesisKey'],
         'ruleKey': rule['ruleKey'],
         'horizon': rule['horizon'],
         'side': rule['side'],
@@ -161,12 +162,16 @@ def main():
 
     if candidates_manifest.get('schemaVersion') != CANDIDATE_SCHEMA:
         raise SystemExit('STEP12D_CANDIDATE_SCHEMA_INVALID')
+    if candidates_manifest.get('hypothesisIdentity') != 'HORIZON_PLUS_RULE_KEY':
+        raise SystemExit('STEP12D_HYPOTHESIS_IDENTITY_INVALID')
     family = candidates_manifest.get('frozenFamily', {})
     candidates = family.get('candidates', [])
     if family.get('candidateCount') != GLOBAL_FAMILY_SIZE or family.get('globalMultiplicityFamilySize') != GLOBAL_FAMILY_SIZE or len(candidates) != GLOBAL_FAMILY_SIZE:
         raise SystemExit('STEP12D_FROZEN_FAMILY_SIZE_INVALID')
-    if len({candidate['ruleKey'] for candidate in candidates}) != GLOBAL_FAMILY_SIZE:
-        raise SystemExit('STEP12D_RULE_KEYS_NOT_UNIQUE')
+    if len({candidate['hypothesisKey'] for candidate in candidates}) != GLOBAL_FAMILY_SIZE:
+        raise SystemExit('STEP12D_HYPOTHESIS_KEYS_NOT_UNIQUE')
+    if any(candidate.get('hypothesisKey') != f"{candidate.get('horizon')}:{candidate.get('ruleKey')}" for candidate in candidates):
+        raise SystemExit('STEP12D_HYPOTHESIS_KEY_PARITY_INVALID')
     if cohort_manifest.get('schemaVersion') != COHORT_SCHEMA:
         raise SystemExit('STEP12D_COHORT_SCHEMA_INVALID')
     frozen_range = cohort_manifest.get('frozenRange', {})
@@ -201,7 +206,7 @@ def main():
     for candidate in candidates:
         rule = canonical_rule(candidate)
         if rule['horizon'] not in ('FULL_GAME', 'FIRST_5'):
-            raise SystemExit(f"STEP12D_HORIZON_INVALID:{rule['ruleKey']}")
+            raise SystemExit(f"STEP12D_HORIZON_INVALID:{rule['hypothesisKey']}")
         current = metrics(rows, rule)
         home_baseline = baselines[rule['horizon']]['homeDecisiveHitRate']
         side_baseline = home_baseline if rule['side'] == 'HOME' else 1 - home_baseline
@@ -212,6 +217,7 @@ def main():
         frozen_holdout_rate = candidate.get('frozen2025Holdout', {}).get('decisiveHitRate')
         drift = abs(rate - frozen_holdout_rate) if rate is not None and isinstance(frozen_holdout_rate, (int, float)) else None
         results.append({
+            'hypothesisKey': rule['hypothesisKey'],
             'ruleKey': rule['ruleKey'],
             'horizon': rule['horizon'],
             'side': rule['side'],
@@ -270,6 +276,7 @@ def main():
             'cohortEndWasFrozenBeforeExternalResultsWereInspected': True,
             'repeatedSequentialRetestingAllowed': False,
         },
+        'hypothesisIdentity': 'HORIZON_PLUS_RULE_KEY',
         'multiplicity': {
             'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY',
             'familySize': GLOBAL_FAMILY_SIZE,
@@ -320,7 +327,7 @@ def main():
         'featureDates': len(row_dates),
         'statusCounts': report['statusCounts'],
         'topByForwardHitRate': sorted([
-            {'ruleKey': r['ruleKey'], 'horizon': r['horizon'], 'hitRate': r['forward2026']['decisiveHitRate'], 'decisiveRows': r['forward2026']['decisiveRows'], 'holmP': r['holmAdjustedGlobalFamilyPValue'], 'status': r['status']}
+            {'hypothesisKey': r['hypothesisKey'], 'ruleKey': r['ruleKey'], 'horizon': r['horizon'], 'hitRate': r['forward2026']['decisiveHitRate'], 'decisiveRows': r['forward2026']['decisiveRows'], 'holmP': r['holmAdjustedGlobalFamilyPValue'], 'status': r['status']}
             for r in results if r['forward2026']['decisiveHitRate'] is not None
         ], key=lambda x: (x['hitRate'], x['decisiveRows']), reverse=True)[:5],
         'researchOnly': True,
