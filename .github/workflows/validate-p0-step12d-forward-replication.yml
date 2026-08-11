@@ -85,13 +85,15 @@ jobs:
           with open(p, encoding='utf-8') as f: r=json.load(f)
           assert r['schemaVersion']=='courtedge-p0-step12d-independent-forward-validation.v1'
           assert r['evidenceStatus']=='STEP12D_RESEARCH_ONLY_NOT_BET_ELITE'
+          assert r['hypothesisIdentity']=='HORIZON_PLUS_RULE_KEY'
           assert r['multiplicity']['method']=='HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'
           assert r['multiplicity']['familySize']==20
           assert r['supportCriteria']['minimumForwardDecisiveRows']==80
           assert r['supportCriteria']['minimumForwardDecisiveDates']==30
           assert r['supportCriteria']['maximumAbsolute2025HoldoutForwardDrift']==0.15
           assert len(r['results'])==20
-          assert len({x['ruleKey'] for x in r['results']})==20
+          assert len({x['hypothesisKey'] for x in r['results']})==20
+          assert all(x['hypothesisKey']==f"{x['horizon']}:{x['ruleKey']}" for x in r['results'])
           assert r['policy']['externalThresholdTuningAllowed'] is False
           assert r['policy']['candidateAdditionAllowed'] is False
           assert r['policy']['candidateRemovalAllowed'] is False
@@ -120,6 +122,7 @@ jobs:
           acquire='scripts/p0-step12d-acquire-forward-cohort.mjs'
           validate='scripts/p0-step12d-independent-forward-validation.py'
           grep -F 'EXPECTED_PILOT_GIT_BLOB_SHA = "3988b0214284b7338be8aeb8102c57d98f88d7a1"' "$freeze"
+          grep -F 'hypothesisIdentity: "HORIZON_PLUS_RULE_KEY"' "$freeze"
           grep -F 'globalMultiplicityFamilySize: 20' "$freeze"
           grep -F 'externalThresholdTuningAllowed: false' "$freeze"
           grep -F 'candidateAdditionAllowed: false' "$freeze"
@@ -132,6 +135,7 @@ jobs:
           grep -F "MIN_DECISIVE_DATES = 30" "$validate"
           grep -F "GLOBAL_FAMILY_SIZE = 20" "$validate"
           grep -F "MAX_ABSOLUTE_2025_HOLDOUT_FORWARD_DRIFT = 0.15" "$validate"
+          grep -F "'hypothesisIdentity': 'HORIZON_PLUS_RULE_KEY'" "$validate"
           grep -F "'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'" "$validate"
           grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
           ! grep -E 'betElite(Label)?Produced:[[:space:]]*true|betEliteProduced[[:space:]]*=[[:space:]]*True|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate"
