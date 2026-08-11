@@ -1,0 +1,113 @@
+name: Validate P0 MLB Elite Evidence Ledger
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/validate-p0-mlb-elite-evidence-ledger.yml'
+      - 'server/mlb-elite-evidence-ledger.ts'
+      - 'server/mlb-elite-evidence-ledger.test.ts'
+      - 'server/mlb-operating-envelope.ts'
+      - 'server/mlb-operating-envelope-calibration.ts'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-elite-evidence-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Falsify Step 11C capture and settlement boundaries
+        run: |
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-selective-odds-acquisition.test.ts
+
+      - name: Type-check Step 11C boundary
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-elite-evidence-ledger.ts server/mlb-elite-evidence-ledger.test.ts
+
+      - name: Preserve modular backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Freeze capture-all research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ledger='server/mlb-elite-evidence-ledger.ts'
+          tests='server/mlb-elite-evidence-ledger.test.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$ledger"
+          ! grep -nE 'BET_ELITE|stakeAmount|kelly|recommendedBet|recommendsBet' "$ledger"
+
+          grep -F 'capturesEveryStep11aEliteCandidate: true' "$ledger"
+          grep -F 'additionalEligibilityFilterApplied: false' "$ledger"
+          grep -F 'silentCandidateDropAllowed: false' "$ledger"
+          grep -F 'step11aSummaryCountMustMatchRows: true' "$ledger"
+          grep -F 'exactStep9EvidenceParityRequired: true' "$ledger"
+          grep -F 'settlementOutcomeWhitelistRequired: true' "$ledger"
+          grep -F 'immutablePregameSnapshot: true' "$ledger"
+          grep -F 'settlementMutatesPregameSnapshot: false' "$ledger"
+          grep -F 'missingClosingLineBlocksCapture: false' "$ledger"
+          grep -F 'missingClosingLineBlocksSettlement: false' "$ledger"
+          grep -F 'closingLineRequiredForCalibration: false' "$ledger"
+          grep -F 'flatOneUnitSettlementOnly: true' "$ledger"
+          grep -F 'stakeCalculated: false' "$ledger"
+          grep -F 'betEliteLabelProduced: false' "$ledger"
+          grep -F 'finalBetRecommendationProduced: false' "$ledger"
+          grep -F 'automaticBetPlacement: false' "$ledger"
+          grep -F 'realFinancialExposure: 0' "$ledger"
+
+          grep -F 'validAmericanOdds' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_STEP9_GAME_IDENTITY_AMBIGUOUS' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_STEP9_MARKET_IDENTITY_AMBIGUOUS' "$ledger"
+          grep -F 'freezeCandidateSnapshot' "$ledger"
+          grep -F 'freezeLedgerEntry' "$ledger"
+          grep -F 'validatePersistedLedgerEntry' "$ledger"
+          grep -F 'validatePersistedLedger' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_SETTLEMENT_PROFIT_INVALID' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_PERSISTED_IDENTITY_MISMATCH' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_PERSISTED_SUMMARY_INVALID' "$ledger"
+          grep -F 'entries.length !== candidates.length' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_SILENT_CANDIDATE_DROP_DETECTED' "$ledger"
+
+          grep -F 'captures every Step 11A elite candidate with 100% retention and no extra filter' "$tests"
+          grep -F 'fails the whole capture instead of silently dropping a pick' "$tests"
+          grep -F 'truncated Step 11A rows cannot hide behind stale per-game or top-level candidate counts' "$tests"
+          grep -F 'Step 11A and Step 9 evidence must match exactly before capture' "$tests"
+          grep -F 'ambiguous duplicate Step 9 game or market identities fail closed before capture' "$tests"
+          grep -F 'nonstandard American odds fail closed before entering the pregame snapshot' "$tests"
+          grep -F 'impossible game dates fail closed instead of entering the prospective ledger' "$tests"
+          grep -F 'captured pregame evidence is deeply frozen against post-capture mutation' "$tests"
+          grep -F 'inconsistent settlement status and payload fail closed before Step 11B conversion' "$tests"
+          grep -F 'persisted ledger conversion rejects unknown status forged profit and impossible date' "$tests"
+          grep -F 'persisted ledger conversion rejects identity tampering and corrupt summary counts' "$tests"
+          grep -F 'unknown runtime settlement outcomes fail closed instead of being treated as wins' "$tests"
+          grep -F 'pregame snapshot preserves exact run game market side line price model and EV identity' "$tests"
+          grep -F 'settlement leaves immutable pregame evidence untouched and uses flat one-unit economics' "$tests"
+          grep -F 'positive American odds settle to the correct one-unit win profit' "$tests"
+          grep -F 'converts directly into Step 11B observations without a new selection filter' "$tests"
+
+          git diff --check
