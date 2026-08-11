@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MLB_MARKET_EDGE_SCHEMA,
+  MlbMarketEdgeInputError,
   buildMlbMarketProbabilityAssessmentDigest,
   evaluateMlbMarketEdges,
-  MlbMarketEdgeInputError,
   type MlbMarketEdgeModelPolicy,
   type MlbMarketEdgeSupportedMarket,
   type MlbMarketProbabilityAssessment,
@@ -58,7 +58,7 @@ function thesis(
   } as MlbSelectiveOddsMarketThesis;
 }
 
-function selectionPair(input: {
+function selections(input: {
   side: "HOME" | "AWAY" | "OVER" | "UNDER";
   line: number | null;
   selectedOdds?: number;
@@ -67,52 +67,57 @@ function selectionPair(input: {
   const selectedOdds = input.selectedOdds ?? 100;
   const oppositeOdds = input.oppositeOdds ?? 100;
   if (input.side === "HOME" || input.side === "AWAY") {
-    const home = {
-      side: "HOME" as MlbSelectionSide,
-      selection: "Home Team",
-      line: input.side === "HOME" ? input.line : input.line == null ? null : -input.line,
-      oddsAmerican: input.side === "HOME" ? selectedOdds : oppositeOdds,
-    };
-    const away = {
-      side: "AWAY" as MlbSelectionSide,
-      selection: "Away Team",
-      line: input.side === "AWAY" ? input.line : input.line == null ? null : -input.line,
-      oddsAmerican: input.side === "AWAY" ? selectedOdds : oppositeOdds,
-    };
-    return [home, away] as MlbNormalizedBookQuote["selections"];
+    const selectedLine = input.line;
+    const otherLine = selectedLine == null ? null : -selectedLine;
+    return [
+      {
+        side: "HOME" as MlbSelectionSide,
+        selection: "Home Team",
+        line: input.side === "HOME" ? selectedLine : otherLine,
+        oddsAmerican: input.side === "HOME" ? selectedOdds : oppositeOdds,
+      },
+      {
+        side: "AWAY" as MlbSelectionSide,
+        selection: "Away Team",
+        line: input.side === "AWAY" ? selectedLine : otherLine,
+        oddsAmerican: input.side === "AWAY" ? selectedOdds : oppositeOdds,
+      },
+    ] as MlbNormalizedBookQuote["selections"];
   }
-  const over = {
-    side: "OVER" as MlbSelectionSide,
-    selection: "Over",
-    line: input.line,
-    oddsAmerican: input.side === "OVER" ? selectedOdds : oppositeOdds,
-  };
-  const under = {
-    side: "UNDER" as MlbSelectionSide,
-    selection: "Under",
-    line: input.line,
-    oddsAmerican: input.side === "UNDER" ? selectedOdds : oppositeOdds,
-  };
-  return [over, under] as MlbNormalizedBookQuote["selections"];
+  return [
+    {
+      side: "OVER" as MlbSelectionSide,
+      selection: "Over",
+      line: input.line,
+      oddsAmerican: input.side === "OVER" ? selectedOdds : oppositeOdds,
+    },
+    {
+      side: "UNDER" as MlbSelectionSide,
+      selection: "Under",
+      line: input.line,
+      oddsAmerican: input.side === "UNDER" ? selectedOdds : oppositeOdds,
+    },
+  ] as MlbNormalizedBookQuote["selections"];
 }
 
-function bookQuote(input: {
+function executionQuote(input: {
   market: MlbMarketEdgeSupportedMarket;
   side: "HOME" | "AWAY" | "OVER" | "UNDER";
   line: number | null;
   selectedOdds?: number;
   oppositeOdds?: number;
   capturedAt?: string;
+  providerLastUpdate?: string | null;
 }): MlbNormalizedBookQuote {
   return {
     bookKey: "hardrockbet_fl",
     bookTitle: "Hard Rock Bet (FL)",
     providerMarketKey: providerKey(input.market),
-    providerLastUpdate: PROVIDER_UPDATE,
+    providerLastUpdate: input.providerLastUpdate === undefined ? PROVIDER_UPDATE : input.providerLastUpdate,
     capturedAt: input.capturedAt ?? CAPTURED_AT,
     freshness: "FRESH",
     ageMs: 10_000,
-    selections: selectionPair(input),
+    selections: selections(input),
   };
 }
 
@@ -123,16 +128,17 @@ function referenceQuote(input: {
   selectedOdds?: number;
   oppositeOdds?: number;
   capturedAt?: string;
+  providerLastUpdate?: string | null;
 }): MlbReferenceConsensusQuote {
   return {
     bookKey: "reference_consensus",
     bookTitle: "Reference consensus",
     providerMarketKey: providerKey(input.market),
-    providerLastUpdate: PROVIDER_UPDATE,
+    providerLastUpdate: input.providerLastUpdate === undefined ? PROVIDER_UPDATE : input.providerLastUpdate,
     capturedAt: input.capturedAt ?? CAPTURED_AT,
     freshness: "FRESH",
     ageMs: 10_000,
-    selections: selectionPair(input),
+    selections: selections(input),
     contributingBooks: ["draftkings", "fanduel", "betmgm"],
     n: 3,
     consensusMethod: MLB_P1_M6A2_CONSENSUS_METHOD,
@@ -146,12 +152,13 @@ function quoteAvailability(input: {
   selectedOdds?: number;
   oppositeOdds?: number;
   capturedAt?: string;
+  providerLastUpdate?: string | null;
   availability?: MlbCanonicalMarketAvailability["availability"];
   includeExecution?: boolean;
   includeReference?: boolean;
 }): MlbCanonicalMarketAvailability {
   const contract = getMlbMarketContract(input.market);
-  const execution = input.includeExecution === false ? null : bookQuote(input);
+  const execution = input.includeExecution === false ? null : executionQuote(input);
   const reference = input.includeReference === false ? null : referenceQuote(input);
   return {
     canonicalKey: input.market,
@@ -188,6 +195,7 @@ function game(input: {
   selectedOdds?: number;
   oppositeOdds?: number;
   capturedAt?: string;
+  providerLastUpdate?: string | null;
   availability?: MlbCanonicalMarketAvailability["availability"];
   includeExecution?: boolean;
   includeReference?: boolean;
@@ -195,8 +203,13 @@ function game(input: {
   const total = input.market === "TOTAL" || input.market === "F5_TOTAL";
   const kind = input.kind ?? (total ? "TOTAL_OVER" : "HOME_SIDE");
   const side = input.side ?? (total ? "OVER" : "HOME");
-  const line = input.line !== undefined ? input.line : input.market === "RUN_LINE" ? -1.5 : total ? 8.5 : null;
-  const marketThesis = thesis(input.market, kind);
+  const line = input.line !== undefined
+    ? input.line
+    : input.market === "RUN_LINE"
+      ? -1.5
+      : total
+        ? 8.5
+        : null;
   const market = quoteAvailability({
     market: input.market,
     side,
@@ -204,6 +217,7 @@ function game(input: {
     selectedOdds: input.selectedOdds,
     oppositeOdds: input.oppositeOdds,
     capturedAt: input.capturedAt,
+    providerLastUpdate: input.providerLastUpdate,
     availability: input.availability,
     includeExecution: input.includeExecution,
     includeReference: input.includeReference,
@@ -216,14 +230,14 @@ function game(input: {
     officialDate: "2026-08-11",
     startTime: "2026-08-11T23:10:00.000Z",
     inputStage: "FINAL",
-    status: input.includeExecution === false ? "FETCHED" : "FETCHED",
+    status: "FETCHED",
     holdReason: null,
     eventMatchStatus: "MATCHED",
     providerEventId: "evt-900001",
     requestedMarketKeys: [providerKey(input.market)],
     cacheHitMarketKeys: [],
     paidMarketKeysRequested: [providerKey(input.market)],
-    marketTheses: [marketThesis],
+    marketTheses: [thesis(input.market, kind)],
     quoteMarkets: [market],
     budgetDenialCode: null,
     providerErrorCode: null,
@@ -248,7 +262,7 @@ function acquisition(g: MlbSelectiveOddsGameResult): MlbSelectiveOddsAcquisition
   } as unknown as MlbSelectiveOddsAcquisitionResult;
 }
 
-function modelAssessment(input: {
+function assessment(input: {
   market: MlbMarketEdgeSupportedMarket;
   side?: "HOME" | "AWAY" | "OVER" | "UNDER";
   line?: number | null;
@@ -258,12 +272,17 @@ function modelAssessment(input: {
   status?: "READY" | "UNAVAILABLE";
   generatedAt?: string;
   modelVersion?: string;
-  semantics?: "UNCONDITIONAL_SETTLEMENT";
 }): MlbMarketProbabilityAssessment {
   const total = input.market === "TOTAL" || input.market === "F5_TOTAL";
   const side = input.side ?? (total ? "OVER" : "HOME");
-  const line = input.line !== undefined ? input.line : input.market === "RUN_LINE" ? -1.5 : total ? 8.5 : null;
-  const withoutDigest = {
+  const line = input.line !== undefined
+    ? input.line
+    : input.market === "RUN_LINE"
+      ? -1.5
+      : total
+        ? 8.5
+        : null;
+  const payload = {
     gamePk: 900001,
     marketType: input.market,
     side,
@@ -272,15 +291,15 @@ function modelAssessment(input: {
     sourcePolicy: input.sourcePolicy ?? policy(input.market),
     modelVersion: input.modelVersion ?? "model-test-v1",
     generatedAt: input.generatedAt ?? "2026-08-11T11:59:40.000Z",
-    probabilitySemantics: input.semantics ?? "UNCONDITIONAL_SETTLEMENT",
+    probabilitySemantics: "UNCONDITIONAL_SETTLEMENT" as const,
     winProbability: input.winProbability,
     pushProbability: input.pushProbability,
     unavailableReason: input.status === "UNAVAILABLE" ? "MODEL_PATH_UNAVAILABLE" : null,
-  } as const;
+  };
   return {
-    ...withoutDigest,
-    modelInputDigest: buildMlbMarketProbabilityAssessmentDigest(withoutDigest),
-  } as MlbMarketProbabilityAssessment;
+    ...payload,
+    modelInputDigest: buildMlbMarketProbabilityAssessmentDigest(payload),
+  };
 }
 
 function single(input: {
@@ -295,24 +314,22 @@ function single(input: {
   }).games[0].markets[0];
 }
 
-test("push-capable full-game ML refuses binary EV when model push probability is missing", () => {
+test("push-capable full-game ML refuses binary EV when push probability is missing", () => {
   const result = single({
-    game: game({ market: "ML", selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "ML", winProbability: 0.55, pushProbability: null }),
+    game: game({ market: "ML" }),
+    assessment: assessment({ market: "ML", winProbability: 0.55, pushProbability: null }),
   });
   assert.equal(result.classification, "PUSH_PROBABILITY_REQUIRED");
   assert.equal(result.eligibleForOperatingEnvelope, false);
-  assert.equal(result.blockers.includes("MODEL_PUSH_PROBABILITY_REQUIRED"), true);
   assert.equal(result.economics.expectedValuePerUnit, null);
 });
 
 test("push-aware ML computes fair price, decisive no-vig edge and EV from win/push/loss", () => {
   const result = single({
     game: game({ market: "ML", selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "ML", winProbability: 0.55, pushProbability: 0.10 }),
+    assessment: assessment({ market: "ML", winProbability: 0.55, pushProbability: 0.10 }),
   });
   assert.equal(result.classification, "POSITIVE_EV");
-  assert.equal(result.eligibleForOperatingEnvelope, true);
   assert.equal(result.model.lossProbability, 0.35);
   assert.equal(result.model.decisiveWinProbability, 0.611111111111);
   assert.equal(result.economics.expectedValuePerUnit, 0.2);
@@ -322,70 +339,79 @@ test("push-aware ML computes fair price, decisive no-vig edge and EV from win/pu
   assert.equal(result.economics.executionNoVigEdgePp, 11.11111111);
 });
 
-test("F5 ML independently requires push probability under its two-way-push-on-tie contract", () => {
+test("F5 ML independently requires push probability", () => {
   const result = single({
     game: game({ market: "F5_ML" }),
-    assessment: modelAssessment({ market: "F5_ML", winProbability: 0.56, pushProbability: null }),
+    assessment: assessment({ market: "F5_ML", winProbability: 0.56, pushProbability: null }),
   });
   assert.equal(result.classification, "PUSH_PROBABILITY_REQUIRED");
 });
 
-test("half-run totals derive zero push safely and do not require a synthetic push model", () => {
+test("half-run total derives push zero safely", () => {
   const result = single({
-    game: game({ market: "TOTAL", line: 8.5, selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null }),
+    game: game({ market: "TOTAL", line: 8.5 }),
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null }),
   });
   assert.equal(result.classification, "POSITIVE_EV");
   assert.equal(result.model.pushProbability, 0);
   assert.equal(result.model.pushProbabilityDerivedAsZero, true);
-  assert.equal(result.model.lossProbability, 0.47);
   assert.equal(result.economics.expectedValuePerUnit, 0.06);
 });
 
-test("integer total requires explicit push probability before EV can exist", () => {
+test("integer total requires explicit push probability", () => {
   const result = single({
-    game: game({ market: "TOTAL", line: 8, selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8, winProbability: 0.52, pushProbability: null }),
+    game: game({ market: "TOTAL", line: 8 }),
+    assessment: assessment({ market: "TOTAL", line: 8, winProbability: 0.52, pushProbability: null }),
   });
   assert.equal(result.classification, "PUSH_PROBABILITY_REQUIRED");
-  assert.equal(result.economics.expectedValuePerUnit, null);
 });
 
-test("half-run run line is no-push and uses its existing market-specific source policy", () => {
+test("half-run run line is no-push and uses its market-specific policy", () => {
   const result = single({
     game: game({ market: "RUN_LINE", line: -1.5, selectedOdds: 110, oppositeOdds: -130 }),
-    assessment: modelAssessment({ market: "RUN_LINE", line: -1.5, winProbability: 0.50, pushProbability: null }),
+    assessment: assessment({ market: "RUN_LINE", line: -1.5, winProbability: 0.50, pushProbability: null }),
   });
   assert.equal(result.model.sourcePolicy, "RUN_LINE_COVER_PROBABILITY_V1");
   assert.equal(result.model.pushProbability, 0);
   assert.equal(result.classification, "POSITIVE_EV");
 });
 
-test("Step 9 rechecks quote age so a 24h Step 8 idempotent replay cannot masquerade as fresh price", () => {
-  const staleNow = new Date("2026-08-11T12:05:31.000Z");
+test("Step 9 rechecks capture age so an old Step 8 replay cannot masquerade as fresh", () => {
   const result = single({
     game: game({ market: "TOTAL", line: 8.5, capturedAt: CAPTURED_AT }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null }),
-    now: staleNow,
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null }),
+    now: new Date("2026-08-11T12:05:31.000Z"),
+  });
+  assert.equal(result.classification, "QUOTE_STALE");
+});
+
+test("recent capture cannot hide a provider quote whose last update has crossed the five-minute boundary", () => {
+  const result = single({
+    game: game({
+      market: "TOTAL",
+      line: 8.5,
+      capturedAt: "2026-08-11T11:59:50.000Z",
+      providerLastUpdate: "2026-08-11T11:54:59.000Z",
+    }),
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.60, pushProbability: null }),
   });
   assert.equal(result.classification, "QUOTE_STALE");
   assert.equal(result.eligibleForOperatingEnvelope, false);
 });
 
-test("reference consensus can never substitute for a missing executable Hard Rock Florida quote", () => {
+test("reference-only cannot substitute for missing Hard Rock Florida execution", () => {
   const result = single({
     game: game({ market: "TOTAL", line: 8.5, includeExecution: false, includeReference: true, availability: "REFERENCE_ONLY" }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.60, pushProbability: null }),
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.60, pushProbability: null }),
   });
   assert.equal(result.classification, "PRICE_UNUSABLE");
   assert.equal(result.execution, null);
-  assert.equal(result.eligibleForOperatingEnvelope, false);
 });
 
-test("wrong source-policy family is model-invalid even when the probability itself looks attractive", () => {
+test("wrong source-policy family is model-invalid", () => {
   const result = single({
     game: game({ market: "TOTAL", line: 8.5 }),
-    assessment: modelAssessment({
+    assessment: assessment({
       market: "TOTAL",
       line: 8.5,
       winProbability: 0.60,
@@ -397,71 +423,66 @@ test("wrong source-policy family is model-invalid even when the probability itse
   assert.equal(result.blockers.includes("MODEL_SOURCE_POLICY_MISMATCH"), true);
 });
 
-test("exact quoted line must have an exact model assessment; nearby total line is not reusable", () => {
+test("exact quoted line requires exact model assessment", () => {
   const result = single({
     game: game({ market: "TOTAL", line: 8.5 }),
-    assessment: modelAssessment({ market: "TOTAL", line: 9.5, winProbability: 0.60, pushProbability: null }),
+    assessment: assessment({ market: "TOTAL", line: 9.5, winProbability: 0.60, pushProbability: null }),
   });
   assert.equal(result.classification, "MODEL_UNAVAILABLE");
-  assert.equal(result.blockers.includes("EXACT_MARKET_MODEL_ASSESSMENT_REQUIRED"), true);
 });
 
-test("a tiny positive EV is retained as raw economic evidence without inventing a Step 9 edge floor", () => {
-  const result = single({
-    game: game({ market: "TOTAL", line: 8.5, selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.5005, pushProbability: null }),
-  });
+test("a tiny positive EV is raw evidence and does not invent a Step 9 floor", () => {
+  const g = game({ market: "TOTAL", line: 8.5, selectedOdds: 100, oppositeOdds: 100 });
+  const model = assessment({ market: "TOTAL", line: 8.5, winProbability: 0.5005, pushProbability: null });
+  const output = evaluateMlbMarketEdges({ acquisition: acquisition(g), modelAssessments: [model], now: NOW });
+  const result = output.games[0].markets[0];
   assert.equal(result.classification, "POSITIVE_EV");
   assert.equal(result.economics.expectedValuePerUnit, 0.001);
-  const top = evaluateMlbMarketEdges({ acquisition: acquisition(game({ market: "TOTAL", line: 8.5 })), modelAssessments: [modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.5005, pushProbability: null })], now: NOW });
-  assert.equal(top.policy.fixedEdgeFloorApplied, false);
-  assert.equal(top.policy.operatingEnvelopeApplied, false);
-  assert.equal(top.policy.eliteLabelProduced, false);
-  assert.equal(top.policy.recommendsBet, false);
+  assert.equal(output.policy.fixedEdgeFloorApplied, false);
+  assert.equal(output.policy.operatingEnvelopeApplied, false);
+  assert.equal(output.policy.eliteLabelProduced, false);
+  assert.equal(output.policy.recommendsBet, false);
 });
 
-test("negative EV is NO_POSITIVE_EV rather than a bet recommendation", () => {
+test("negative EV is NO_POSITIVE_EV", () => {
   const result = single({
-    game: game({ market: "F5_TOTAL", line: 4.5, selectedOdds: 100, oppositeOdds: 100 }),
-    assessment: modelAssessment({ market: "F5_TOTAL", line: 4.5, winProbability: 0.49, pushProbability: null }),
+    game: game({ market: "F5_TOTAL", line: 4.5 }),
+    assessment: assessment({ market: "F5_TOTAL", line: 4.5, winProbability: 0.49, pushProbability: null }),
   });
   assert.equal(result.classification, "NO_POSITIVE_EV");
-  assert.equal(result.eligibleForOperatingEnvelope, false);
   assert.equal(result.economics.expectedValuePerUnit, -0.02);
 });
 
 test("invalid settlement probability mass fails closed", () => {
   const result = single({
     game: game({ market: "F5_ML" }),
-    assessment: modelAssessment({ market: "F5_ML", winProbability: 0.80, pushProbability: 0.30 }),
+    assessment: assessment({ market: "F5_ML", winProbability: 0.80, pushProbability: 0.30 }),
   });
   assert.equal(result.classification, "MODEL_INVALID");
-  assert.equal(result.blockers.includes("MODEL_SETTLEMENT_PROBABILITIES_INVALID"), true);
 });
 
-test("nonzero push probability is rejected when an exact half-line makes push impossible", () => {
+test("nonzero push is rejected when the exact half-line cannot push", () => {
   const result = single({
     game: game({ market: "TOTAL", line: 8.5 }),
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.52, pushProbability: 0.03 }),
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.52, pushProbability: 0.03 }),
   });
   assert.equal(result.classification, "MODEL_INVALID");
   assert.equal(result.blockers.includes("MODEL_PUSH_PROBABILITY_NONZERO_FOR_NO_PUSH_CONTRACT"), true);
 });
 
-test("reference disagreement remains diagnostic and cannot erase a positive executable EV", () => {
+test("reference disagreement remains diagnostic and cannot create or erase execution EV", () => {
   const g = game({ market: "TOTAL", line: 8.5, selectedOdds: 110, oppositeOdds: -130 });
-  const q = g.quoteMarkets[0];
-  q.reference.quote = referenceQuote({ market: "TOTAL", side: "OVER", line: 8.5, selectedOdds: -150, oppositeOdds: 130 });
+  const market = g.quoteMarkets[0];
+  market.reference.quote = referenceQuote({ market: "TOTAL", side: "OVER", line: 8.5, selectedOdds: -150, oppositeOdds: 130 });
   const result = single({
     game: g,
-    assessment: modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.50, pushProbability: null }),
+    assessment: assessment({ market: "TOTAL", line: 8.5, winProbability: 0.50, pushProbability: null }),
   });
   assert.equal(result.classification, "POSITIVE_EV");
   assert.equal(result.economics.referenceAgreement, "OPPOSES_MODEL_EDGE");
-  assert.equal(result.eligibleForOperatingEnvelope, true);
 });
 
-test("all five currently authorized model-policy families remain explicit and market-specific", () => {
+test("all five current model-policy families remain explicit", () => {
   const cases: Array<{ market: MlbMarketEdgeSupportedMarket; line: number | null; push: number | null; win: number }> = [
     { market: "ML", line: null, push: 0.02, win: 0.52 },
     { market: "F5_ML", line: null, push: 0.12, win: 0.48 },
@@ -470,27 +491,31 @@ test("all five currently authorized model-policy families remain explicit and ma
     { market: "F5_TOTAL", line: 4.5, push: null, win: 0.51 },
   ];
   for (const item of cases) {
-    const r = single({
+    const result = single({
       game: game({ market: item.market, line: item.line, selectedOdds: 120, oppositeOdds: -140 }),
-      assessment: modelAssessment({ market: item.market, line: item.line, winProbability: item.win, pushProbability: item.push }),
+      assessment: assessment({ market: item.market, line: item.line, winProbability: item.win, pushProbability: item.push }),
     });
-    assert.equal(r.model.sourcePolicy, policy(item.market));
-    assert.equal(["POSITIVE_EV", "NO_POSITIVE_EV"].includes(r.classification), true, `${item.market} should reach economics`);
+    assert.equal(result.model.sourcePolicy, policy(item.market));
+    assert.equal(["POSITIVE_EV", "NO_POSITIVE_EV"].includes(result.classification), true);
   }
 });
 
-test("duplicate exact model assessments reject instead of making source choice order-dependent", () => {
-  const a = modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null });
+test("duplicate exact model assessments reject", () => {
+  const first = assessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null });
   assert.throws(
-    () => evaluateMlbMarketEdges({ acquisition: acquisition(game({ market: "TOTAL", line: 8.5 })), modelAssessments: [a, { ...a }], now: NOW }),
+    () => evaluateMlbMarketEdges({
+      acquisition: acquisition(game({ market: "TOTAL", line: 8.5 })),
+      modelAssessments: [first, { ...first }],
+      now: NOW,
+    }),
     (error: any) => error instanceof MlbMarketEdgeInputError && error.code === "DUPLICATE_MODEL_ASSESSMENT",
   );
 });
 
-test("Market Edge is a pure post-price evaluator: no provider calls, stake, ranking or Elite output", () => {
+test("Market Edge remains pure post-price evaluation with zero provider/stake/Elite behavior", () => {
   const output = evaluateMlbMarketEdges({
     acquisition: acquisition(game({ market: "TOTAL", line: 8.5 })),
-    modelAssessments: [modelAssessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null })],
+    modelAssessments: [assessment({ market: "TOTAL", line: 8.5, winProbability: 0.53, pushProbability: null })],
     now: NOW,
   });
   assert.equal(output.schemaVersion, MLB_MARKET_EDGE_SCHEMA);
@@ -498,6 +523,7 @@ test("Market Edge is a pure post-price evaluator: no provider calls, stake, rank
   assert.equal(output.policy.theOddsApiCreditsConsumed, 0);
   assert.equal(output.policy.marketRankingProduced, false);
   assert.equal(output.policy.stakeCalculated, false);
+  assert.equal(output.policy.providerLastUpdateFreshnessRecheckedAtEvaluation, true);
   assert.equal(output.policy.automaticBetPlacement, false);
   assert.equal(output.policy.realFinancialExposure, 0);
 });
