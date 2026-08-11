@@ -17,17 +17,13 @@ import type {
   MlbIntrinsicEdgeResult,
   MlbIntrinsicGameProfile,
   MlbIntrinsicMarketSearchIntent,
+  MlbIntrinsicProjection,
+  MlbIntrinsicProjectionScope,
   MlbIntrinsicThesisKind,
 } from "./mlb-intrinsic-edge";
 
-export const MLB_MARKET_DISCOVERY_SCHEMA = "courtedge-p0-mlb-market-discovery.v2" as const;
+export const MLB_MARKET_DISCOVERY_SCHEMA = "courtedge-p0-mlb-market-discovery.v3" as const;
 
-/**
- * These are the only market families currently accepted by the existing P1-M2A
- * pregame-readiness contract. This is an analytical-maturity gate, not a market
- * preference. F3, F5 run line, first-inning and team-total contracts remain visible
- * as research-only until an equivalent analytical path exists.
- */
 export const MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS = [
   "ML",
   "F5_ML",
@@ -72,6 +68,7 @@ export interface MlbMarketDiscoveryPlannedMarket {
   family: MlbRegistryFamily;
   quoteShape: MlbRegistryQuoteShape;
   acquisition: MlbRegistryAcquisition;
+  intrinsicProjectionScope: MlbIntrinsicProjectionScope;
   thesisIntent: MlbIntrinsicMarketSearchIntent;
   intrinsicThesisKinds: readonly MlbIntrinsicThesisKind[];
   supportingComponents: readonly MlbIntrinsicComponent[];
@@ -90,8 +87,10 @@ export interface MlbMarketDiscoveryGamePlan {
   intrinsicRank: number;
   intrinsicResearchClassification: MlbIntrinsicGameProfile["researchClassification"];
   intrinsicResearchEliteCandidate: boolean;
-  researchEliteThesisKinds: readonly MlbIntrinsicThesisKind[];
-  marketSearchIntents: readonly MlbIntrinsicMarketSearchIntent[];
+  researchEliteThesisKindsByScope: {
+    fullGame: readonly MlbIntrinsicThesisKind[];
+    earlyWindow: readonly MlbIntrinsicThesisKind[];
+  };
   plannedMarkets: readonly MlbMarketDiscoveryPlannedMarket[];
   plannedProviderMarketKeys: readonly string[];
   paidLookupEligibleNow: boolean;
@@ -131,6 +130,8 @@ export interface MlbMarketDiscoveryResult {
     intrinsicThesisRequiredForPaidLookup: true;
     intrinsicThesisDirectionPreserved: true;
     intrinsicRankPreservedAcrossInputStage: true;
+    horizonScopedMarketThesisPlanning: true;
+    lateBullpenCanAuthorizeFirstFiveLookup: false;
     researchOnlyMarketsConsumeProviderCredits: false;
     playerPropsQueryEligible: false;
     threeWayCoercionAllowed: false;
@@ -151,22 +152,13 @@ function catalogStatus(entry: MlbMarketRegistryEntry): Pick<
   "catalogStatus" | "reasonCode"
 > {
   if (entry.canonicalMarketTypes.some((market) => CURRENT_ANALYTICAL_SET.has(market))) {
-    return {
-      catalogStatus: "CURRENT_PREGAME_PATH",
-      reasonCode: "CURRENT_PREGAME_ANALYTICAL_PATH",
-    };
+    return { catalogStatus: "CURRENT_PREGAME_PATH", reasonCode: "CURRENT_PREGAME_ANALYTICAL_PATH" };
   }
   if (entry.modelIntegrationStatus === "SUPPORTED") {
-    return {
-      catalogStatus: "RESEARCH_ONLY_ANALYTICAL_PATH_MISSING",
-      reasonCode: "ANALYTICAL_PATH_NOT_YET_IMPLEMENTED",
-    };
+    return { catalogStatus: "RESEARCH_ONLY_ANALYTICAL_PATH_MISSING", reasonCode: "ANALYTICAL_PATH_NOT_YET_IMPLEMENTED" };
   }
   if (entry.modelIntegrationStatus === "CONTRACT_MISMATCH") {
-    return {
-      catalogStatus: "BLOCKED_CONTRACT_MISMATCH",
-      reasonCode: "THREE_WAY_CONTRACT_MISMATCH",
-    };
+    return { catalogStatus: "BLOCKED_CONTRACT_MISMATCH", reasonCode: "THREE_WAY_CONTRACT_MISMATCH" };
   }
   return {
     catalogStatus: "CATALOG_ONLY_NOT_IMPLEMENTED",
@@ -221,19 +213,37 @@ function intentForMarket(market: MlbP1M2aMarket): MlbIntrinsicMarketSearchIntent
   return market === "TOTAL" || market === "F5_TOTAL" ? "TOTAL" : "SIDE";
 }
 
-function supportForIntent(
+function projectionScopeForMarket(market: MlbP1M2aMarket): MlbIntrinsicProjectionScope {
+  return market === "F5_ML" || market === "F5_TOTAL" ? "EARLY_WINDOW" : "FULL_GAME";
+}
+
+function projectionForScope(
   game: MlbIntrinsicGameProfile,
+  scope: MlbIntrinsicProjectionScope,
+): MlbIntrinsicProjection {
+  return scope === "EARLY_WINDOW" ? game.projections.earlyWindow : game.projections.fullGame;
+}
+
+function supportForIntent(
+  projection: MlbIntrinsicProjection,
   intent: MlbIntrinsicMarketSearchIntent,
 ): readonly MlbIntrinsicComponent[] {
-  return intent === "SIDE" ? game.marketSearchEvidence.side : game.marketSearchEvidence.total;
+  return intent === "SIDE" ? projection.marketSearchEvidence.side : projection.marketSearchEvidence.total;
 }
 
 function thesisKindsForIntent(
-  game: MlbIntrinsicGameProfile,
+  projection: MlbIntrinsicProjection,
   intent: MlbIntrinsicMarketSearchIntent,
 ): readonly MlbIntrinsicThesisKind[] {
-  return [...new Set(game.theses
+  return [...new Set(projection.theses
     .filter((thesis) => thesis.researchEliteEligible && thesis.marketSearchIntent === intent)
+    .map((thesis) => thesis.kind))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function eliteThesisKinds(projection: MlbIntrinsicProjection): readonly MlbIntrinsicThesisKind[] {
+  return [...new Set(projection.theses
+    .filter((thesis) => thesis.researchEliteEligible)
     .map((thesis) => thesis.kind))]
     .sort((left, right) => left.localeCompare(right));
 }
@@ -242,10 +252,12 @@ function plannedMarket(
   game: MlbIntrinsicGameProfile,
   market: MlbP1M2aMarket,
 ): MlbMarketDiscoveryPlannedMarket | null {
+  const scope = projectionScopeForMarket(market);
+  const projection = projectionForScope(game, scope);
   const intent = intentForMarket(market);
-  if (!game.researchEliteCandidate || !game.marketSearchIntents.includes(intent)) return null;
-  const support = supportForIntent(game, intent);
-  const thesisKinds = thesisKindsForIntent(game, intent);
+  if (!projection.researchEliteCandidate || !projection.marketSearchIntents.includes(intent)) return null;
+  const support = supportForIntent(projection, intent);
+  const thesisKinds = thesisKindsForIntent(projection, intent);
   if (support.length === 0 || thesisKinds.length === 0) return null;
   const entry = currentEntryForMarket(market);
   return {
@@ -256,6 +268,7 @@ function plannedMarket(
     family: entry.family,
     quoteShape: entry.quoteShape,
     acquisition: entry.acquisition,
+    intrinsicProjectionScope: scope,
     thesisIntent: intent,
     intrinsicThesisKinds: thesisKinds,
     supportingComponents: support,
@@ -274,13 +287,8 @@ function planForIntrinsicGame(
     .filter((market): market is MlbMarketDiscoveryPlannedMarket => market != null)
     .sort((left, right) => left.providerMarketKey.localeCompare(right.providerMarketKey));
   const plannedProviderMarketKeys = plannedMarkets.map((market) => market.providerMarketKey);
-  const researchEliteThesisKinds = [...new Set(game.theses
-    .filter((thesis) => thesis.researchEliteEligible)
-    .map((thesis) => thesis.kind))]
-    .sort((left, right) => left.localeCompare(right));
-
   const hasMarkets = plannedProviderMarketKeys.length > 0;
-  const paidLookupEligibleNow = game.inputStage === "FINAL" && game.researchEliteCandidate && hasMarkets;
+  const paidLookupEligibleNow = game.inputStage === "FINAL" && hasMarkets;
   const paidLookupHoldReason = !hasMarkets
     ? "NO_STRONG_INTRINSIC_MARKET_THESIS" as const
     : game.inputStage !== "FINAL"
@@ -301,8 +309,10 @@ function planForIntrinsicGame(
     intrinsicRank,
     intrinsicResearchClassification: game.researchClassification,
     intrinsicResearchEliteCandidate: game.researchEliteCandidate,
-    researchEliteThesisKinds,
-    marketSearchIntents: game.marketSearchIntents,
+    researchEliteThesisKindsByScope: {
+      fullGame: eliteThesisKinds(game.projections.fullGame),
+      earlyWindow: eliteThesisKinds(game.projections.earlyWindow),
+    },
     plannedMarkets,
     plannedProviderMarketKeys,
     paidLookupEligibleNow,
@@ -346,6 +356,8 @@ export function buildMlbMarketDiscovery(input: {
       intrinsicThesisRequiredForPaidLookup: true,
       intrinsicThesisDirectionPreserved: true,
       intrinsicRankPreservedAcrossInputStage: true,
+      horizonScopedMarketThesisPlanning: true,
+      lateBullpenCanAuthorizeFirstFiveLookup: false,
       researchOnlyMarketsConsumeProviderCredits: false,
       playerPropsQueryEligible: false,
       threeWayCoercionAllowed: false,
