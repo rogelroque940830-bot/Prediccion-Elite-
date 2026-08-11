@@ -5,6 +5,7 @@ import {
   isMlbClosingLineCaptureEnabled,
 } from "./odds-demand-policy";
 
+// Research-only deployment custody trigger after the lossless Market Edge identity hotfix.
 test("provider-consuming background work is disabled unless explicitly opted in", () => {
   assert.equal(explicitOptInEnabled(undefined), false);
   assert.equal(explicitOptInEnabled(""), false);
