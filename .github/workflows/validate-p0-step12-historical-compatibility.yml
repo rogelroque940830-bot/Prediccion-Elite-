@@ -13,6 +13,8 @@ on:
       - 'server/mlb-step12-pocket-evaluator.test.ts'
       - 'server/mlb-step12-pocket-validation.ts'
       - 'server/mlb-step12-pocket-validation.test.ts'
+      - 'scripts/p0-step12-validate-pocket-pilot.mjs'
+      - 'evidence/p0-step12/2025-pocket-pilot.json'
       - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
       - 'docs/P0_STEP12_ALIGNMENT_AUDIT.md'
       - '.github/workflows/validate-p0-step12-historical-compatibility.yml'
@@ -45,6 +47,11 @@ jobs:
           server/mlb-step12-historical-feature-table.ts server/mlb-step12-historical-feature-table.test.ts
           server/mlb-step12-pocket-evaluator.ts server/mlb-step12-pocket-evaluator.test.ts
           server/mlb-step12-pocket-validation.ts server/mlb-step12-pocket-validation.test.ts
+      - name: Materialize robust validation report from frozen 2025 pilot
+        run: >-
+          node --import tsx scripts/p0-step12-validate-pocket-pilot.mjs
+          --input evidence/p0-step12/2025-pocket-pilot.json
+          --out artifacts/p0-step12-pocket-validation/validation-report.json
       - name: Preserve backend regressions
         run: |
           npx tsx --test server/mlb-operating-envelope-calibration.test.ts
@@ -58,6 +65,7 @@ jobs:
           table='server/mlb-step12-historical-feature-table.ts'
           pocket='server/mlb-step12-pocket-evaluator.ts'
           validate='server/mlb-step12-pocket-validation.ts'
+          script='scripts/p0-step12-validate-pocket-pilot.mjs'
           grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$compat"
           grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$compat"
           grep -F 'highHitRatePocketsMayBeInvestigated: true' "$compat"
@@ -87,5 +95,14 @@ jobs:
           grep -F 'maximumAbsoluteDiscoveryHoldoutDrift: 0.15' "$validate"
           grep -F 'historicalPricesRequiredForSportingSupport: false' "$validate"
           grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$validate"
-          ! grep -E 'stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table" "$pocket" "$validate"
+          grep -F 'validationCriteriaWerePredeclaredBeforeThisReport: true' "$script"
+          ! grep -E 'stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table" "$pocket" "$validate" "$script"
           git diff --check
+      - name: Upload Step 12C robust validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12-pocket-validation
+          path: artifacts/p0-step12-pocket-validation/
+          if-no-files-found: error
+          retention-days: 30
