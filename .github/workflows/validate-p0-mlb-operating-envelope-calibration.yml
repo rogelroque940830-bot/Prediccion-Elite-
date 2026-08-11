@@ -1,0 +1,98 @@
+name: Validate P0 MLB Operating Envelope Calibration
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-mlb-operating-envelope-calibration.yml'
+      - 'server/mlb-operating-envelope-calibration.ts'
+      - 'server/mlb-operating-envelope-calibration.test.ts'
+      - 'server/mlb-operating-envelope.ts'
+      - 'server/mlb-p1-operating-envelope.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-operating-envelope-calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Falsify Step 11B quality-volume calibration boundaries
+        run: npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+
+      - name: Type-check Step 11B boundary
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-operating-envelope-calibration.ts server/mlb-operating-envelope-calibration.test.ts
+
+      - name: Preserve Step 11A and legacy P1-M3E regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npx tsx --test server/mlb-p1-operating-envelope.test.ts
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Freeze volume-aware research-only calibration boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          calibration='server/mlb-operating-envelope-calibration.ts'
+          tests='server/mlb-operating-envelope-calibration.test.ts'
+          legacy='server/mlb-p1-operating-envelope.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$calibration"
+          ! grep -nE 'BET_ELITE|stakeAmount|kelly|automaticBestRuleSelection: true|pointEstimateCanPromoteBetElite: true' "$calibration"
+
+          grep -F 'courtedge-p0-mlb-operating-envelope-calibration.v1' "$calibration"
+          grep -F 'MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS = 80' "$calibration"
+          grep -F 'MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES = 30' "$calibration"
+          grep -F 'qualityAndPickVolumeMeasuredTogether: true' "$calibration"
+          grep -F 'selectionRetentionAlwaysReported: true' "$calibration"
+          grep -F 'noPickDateRateAlwaysReported: true' "$calibration"
+          grep -F 'minimumSampleRequirementsAreResearchOnly: true' "$calibration"
+          grep -F 'minimumSampleRequirementsAreLivePickFilters: false' "$calibration"
+          grep -F 'researchSufficiencyUsesDecisiveOutcomesOnly: true' "$calibration"
+          grep -F 'decisiveObservations.length >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS' "$calibration"
+          grep -F 'decisiveDates >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES' "$calibration"
+          grep -F 'Math.abs(decisiveWinRate - meanModelWinProbability)' "$calibration"
+          grep -F 'ruleThresholdsHardCodedByRuntime: false' "$calibration"
+          grep -F 'automaticBestRuleSelection: false' "$calibration"
+          grep -F 'pointEstimateCanPromoteBetElite: false' "$calibration"
+          grep -F 'historicalP1M3eMinimumsPreserved: true' "$calibration"
+          grep -F 'liveOperatingEnvelopeChanged: false' "$calibration"
+          grep -F 'betEliteLabelProduced: false' "$calibration"
+          grep -F 'stakeCalculated: false' "$calibration"
+          grep -F 'automaticBetPlacement: false' "$calibration"
+          grep -F 'retentionPctOfBaselineCandidates' "$calibration"
+          grep -F 'activeDateCoveragePct' "$calibration"
+          grep -F 'noPickDatePct' "$calibration"
+          grep -F 'averagePicksPerActiveDate' "$calibration"
+
+          grep -F 'minimumTotalObservations: 80' "$legacy"
+          grep -F 'minimumTotalDates: 30' "$legacy"
+
+          grep -F 'baseline represents all current Step 11A candidates and preserves 100 percent pick volume' "$tests"
+          grep -F 'every candidate rule reports quality and exact pick-volume loss side by side' "$tests"
+          grep -F 'a rule that kills every pick is exposed explicitly instead of looking elite by absence' "$tests"
+          grep -F 'pushes are excluded from all binary calibration metrics but remain settlement-neutral in ROI' "$tests"
+          grep -F 'calibration gap is absolute so overconfidence cannot look artificially better' "$tests"
+          grep -F 'push-heavy cohorts cannot satisfy the 80 observation 30 date research gate' "$tests"
+          grep -F 'settlement-inconsistent outcomes or profit values fail closed' "$tests"
+          grep -F 'impossible calendar dates fail closed and cannot satisfy research date sufficiency' "$tests"
+          grep -F 'runtime does not hard-code a winning rule or auto-promote point estimates' "$tests"
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
