@@ -36,14 +36,11 @@ export interface MlbCurrentPredictorProbabilityEvidence {
   side: "HOME" | "AWAY" | "OVER" | "UNDER";
   line: number | null;
   metric: MlbCurrentPredictorProbabilityMetric;
-  /** Source-reported pure probability. Step 10 recomputes TOTAL/F5_TOTAL and requires parity. */
   probability: number | null;
-  /** Required for TOTAL/F5_TOTAL parity; null for currently blocked side markets. */
   projectedRuns: number | null;
   probabilityUsesSportsbookPrice: boolean;
   modelVersion: string;
   generatedAt: string;
-  /** SHA-256 of the fixed scalar evidence field-set excluding sourceEvidenceDigest. */
   sourceEvidenceDigest: string;
 }
 
@@ -77,6 +74,7 @@ export interface MlbMarketModelAdapterResult {
     exactEnvelopeFieldSetRequired: true;
     exactCurrentPredictorProvenanceRequired: true;
     exactHalfRunIdentityRequired: true;
+    positiveTotalLineRequired: true;
     priceDependenceFlagMustBeBoolean: true;
     malformedEnvelopeCanThrow: false;
     processingFailuresFailClosed: true;
@@ -213,6 +211,10 @@ function lineIdentityValid(market: MlbMarketEdgeSupportedMarket, line: unknown):
   return typeof line === "number" && Number.isFinite(line);
 }
 
+function totalLineIsPositive(market: MlbMarketEdgeSupportedMarket, line: number | null): boolean {
+  return (market !== "TOTAL" && market !== "F5_TOTAL") || (line != null && line > 0);
+}
+
 function isIntegerLine(line: number): boolean {
   return Number.isInteger(line);
 }
@@ -233,7 +235,7 @@ export function reproduceMlbCurrentPredictorTotalModelHitProbability(
   projectedRuns: number,
   line: number,
 ): { side: "OVER" | "UNDER"; probability: number } | null {
-  if (!Number.isFinite(projectedRuns) || projectedRuns < 0 || !Number.isFinite(line)) return null;
+  if (!Number.isFinite(projectedRuns) || projectedRuns < 0 || !Number.isFinite(line) || line <= 0) return null;
   const side: "OVER" | "UNDER" = projectedRuns - line > 0 ? "OVER" : "UNDER";
   const modelOverProbability = 1 - currentPredictorNormalCdf(line, projectedRuns, MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS);
   const probability = side === "OVER" ? modelOverProbability : 1 - modelOverProbability;
@@ -286,6 +288,7 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     exactEnvelopeFieldSetRequired: true,
     exactCurrentPredictorProvenanceRequired: true,
     exactHalfRunIdentityRequired: true,
+    positiveTotalLineRequired: true,
     priceDependenceFlagMustBeBoolean: true,
     malformedEnvelopeCanThrow: false,
     processingFailuresFailClosed: true,
@@ -381,6 +384,7 @@ function adaptValidatedMlbCurrentPredictorProbability(input: unknown): MlbMarket
   if (!isSide(raw.side)) return invalidResult(input, "MODEL_EVIDENCE_SIDE_INVALID");
   if (!Number.isInteger(raw.gamePk) || Number(raw.gamePk) <= 0) return invalidResult(input, "MODEL_EVIDENCE_GAME_ID_INVALID");
   if (!lineIdentityValid(raw.marketType, raw.line)) return invalidResult(input, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
+  if (!totalLineIsPositive(raw.marketType, raw.line as number | null)) return invalidResult(input, "MODEL_EVIDENCE_TOTAL_LINE_INVALID");
   if (!nullableFiniteNumber(raw.probability)) return invalidResult(input, "MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID");
   if (!nullableFiniteNumber(raw.projectedRuns)) return invalidResult(input, "MODEL_EVIDENCE_PROJECTED_RUNS_FIELD_INVALID");
   if (typeof raw.probabilityUsesSportsbookPrice !== "boolean") return invalidResult(input, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
@@ -499,7 +503,6 @@ function adaptValidatedMlbCurrentPredictorProbability(input: unknown): MlbMarket
   ]);
 }
 
-/** Step 10 adapts only the recognized scalar evidence envelope; malformed processing always fails closed. */
 export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
   try {
     return adaptValidatedMlbCurrentPredictorProbability(input);
