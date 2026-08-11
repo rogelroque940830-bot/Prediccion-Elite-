@@ -21,7 +21,7 @@ import {
 import { MLB_SHORTLIST_MAX_CANDIDATES } from "./mlb-shortlist";
 import { FL_TZ } from "./route-runtime";
 
-export const MLB_SELECTIVE_ODDS_ACQUISITION_SCHEMA = "courtedge-p0-mlb-selective-odds-acquisition.v3" as const;
+export const MLB_SELECTIVE_ODDS_ACQUISITION_SCHEMA = "courtedge-p0-mlb-selective-odds-acquisition.v4" as const;
 export const MLB_SELECTIVE_ODDS_CACHE_TTL_MS = MLB_P1_M6A2_MAX_QUOTE_AGE_MS;
 export const MLB_SELECTIVE_ODDS_REQUEST_TIMEOUT_MS = 15_000;
 export const MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS = 90 * 60 * 1000;
@@ -115,6 +115,7 @@ export interface MlbSelectiveOddsAcquisitionResult {
     timers: false;
     finalistGamesOnly: true;
     registryBackedPlanValidation: true;
+    thesisDirectionMustExistInScopedDiscoveryEvidence: true;
     exactDiscoveryMarketKeysOnly: true;
     duplicateMarketKeysAllowed: false;
     onePaidRequestPerGameMaximum: true;
@@ -134,6 +135,7 @@ export interface MlbSelectiveOddsAcquisitionResult {
     providerRequestTimeoutMs: number;
     automaticProviderRetries: false;
     eventMatchMaxStartDeltaMs: number;
+    paidPayloadMustMatchProbedCommenceTime: true;
     ambiguousEventIdentityCanSpendCredits: false;
     staleOrMissingExecutionQuoteCanBeRecommended: false;
     calculatesMarketEdge: false;
@@ -197,33 +199,42 @@ function expectedIntentForMarket(market: MlbMarketDiscoveryPlannedMarket["canoni
   return market === "TOTAL" || market === "F5_TOTAL" ? "TOTAL" : "SIDE";
 }
 
-function validatePlannedMarket(gamePk: number, market: MlbMarketDiscoveryPlannedMarket): void {
+function validatePlannedMarket(game: MlbMarketDiscoveryGamePlan, market: MlbMarketDiscoveryPlannedMarket): void {
   if (!CURRENT_ANALYTICAL_SET.has(market.canonicalMarketType)) {
-    throw new MlbSelectiveOddsPlanError("UNAUTHORIZED_ANALYTICAL_MARKET", `game ${gamePk} market ${market.canonicalMarketType} is not paid-authorized`);
+    throw new MlbSelectiveOddsPlanError("UNAUTHORIZED_ANALYTICAL_MARKET", `game ${game.gamePk} market ${market.canonicalMarketType} is not paid-authorized`);
   }
   const expectedProviderKey = CURRENT_REGISTRY_PAIR.get(market.canonicalMarketType);
   if (!expectedProviderKey || market.providerMarketKey !== expectedProviderKey) {
     throw new MlbSelectiveOddsPlanError(
       "REGISTRY_MARKET_MAPPING_MISMATCH",
-      `game ${gamePk} ${market.canonicalMarketType} must map to ${expectedProviderKey ?? "<missing>"}, not ${market.providerMarketKey}`,
+      `game ${game.gamePk} ${market.canonicalMarketType} must map to ${expectedProviderKey ?? "<missing>"}, not ${market.providerMarketKey}`,
     );
   }
   const expectedScope = expectedScopeForMarket(market.canonicalMarketType);
   if (market.intrinsicProjectionScope !== expectedScope) {
-    throw new MlbSelectiveOddsPlanError("MARKET_HORIZON_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} must use ${expectedScope}`);
+    throw new MlbSelectiveOddsPlanError("MARKET_HORIZON_MISMATCH", `game ${game.gamePk} ${market.canonicalMarketType} must use ${expectedScope}`);
   }
   const expectedIntent = expectedIntentForMarket(market.canonicalMarketType);
   if (market.thesisIntent !== expectedIntent) {
-    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_INTENT_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} must use ${expectedIntent}`);
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_INTENT_MISMATCH", `game ${game.gamePk} ${market.canonicalMarketType} must use ${expectedIntent}`);
   }
   if (market.intrinsicThesisKinds.length === 0 || market.supportingComponents.length === 0) {
-    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_EVIDENCE_MISSING", `game ${gamePk} ${market.canonicalMarketType} lacks thesis evidence`);
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_EVIDENCE_MISSING", `game ${game.gamePk} ${market.canonicalMarketType} lacks thesis evidence`);
   }
   const allowedKinds = expectedIntent === "SIDE"
     ? new Set(["HOME_SIDE", "AWAY_SIDE"])
     : new Set(["TOTAL_OVER", "TOTAL_UNDER"]);
   if (market.intrinsicThesisKinds.some((kind) => !allowedKinds.has(kind))) {
-    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_DIRECTION_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} has incompatible thesis direction`);
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_DIRECTION_MISMATCH", `game ${game.gamePk} ${market.canonicalMarketType} has incompatible thesis direction`);
+  }
+  const scopedKinds = market.intrinsicProjectionScope === "FULL_GAME"
+    ? game.researchEliteThesisKindsByScope.fullGame
+    : game.researchEliteThesisKindsByScope.earlyWindow;
+  if (market.intrinsicThesisKinds.some((kind) => !scopedKinds.includes(kind))) {
+    throw new MlbSelectiveOddsPlanError(
+      "MARKET_THESIS_NOT_AUTHORIZED_BY_SCOPE",
+      `game ${game.gamePk} ${market.canonicalMarketType} contains a thesis direction not present in scoped discovery evidence`,
+    );
   }
 }
 
@@ -258,7 +269,7 @@ function assertValidDiscoveryPlan(discovery: MlbMarketDiscoveryResult): void {
     ) {
       throw new MlbSelectiveOddsPlanError("DUPLICATE_MARKET_KEY", `game ${game.gamePk} contains duplicate market identity`);
     }
-    for (const market of game.plannedMarkets) validatePlannedMarket(game.gamePk, market);
+    for (const market of game.plannedMarkets) validatePlannedMarket(game, market);
     if (!sameStringSet(objectKeys, game.plannedProviderMarketKeys)) {
       throw new MlbSelectiveOddsPlanError("PLANNED_MARKET_KEY_MISMATCH", `game ${game.gamePk} market objects and key list disagree`);
     }
@@ -309,6 +320,7 @@ function stablePlanFingerprint(input: {
       stage: game.inputStage,
       paid: game.paidLookupEligibleNow,
       hold: game.paidLookupHoldReason,
+      scopedTheses: game.researchEliteThesisKindsByScope,
       keys: [...game.providerMarketKeysToRequestNow],
       markets: game.plannedMarkets.map((market) => ({
         key: market.providerMarketKey,
@@ -688,13 +700,16 @@ export class MlbSelectiveOddsAcquisitionService {
         continue;
       }
       const paidStartMs = Date.parse(String(paidPayload.commence_time ?? ""));
+      const matchedStartMs = Date.parse(String(matched.event?.commence_time ?? ""));
       const targetStartMs = Date.parse(String(game.startTime ?? ""));
       const identityMatches = String(paidPayload.id ?? "").trim() === matched.eventId
         && providerTeamEquivalent(game.homeTeam.name, paidPayload.home_team)
         && providerTeamEquivalent(game.awayTeam.name, paidPayload.away_team)
         && floridaDateFromIso(paidPayload.commence_time) === game.officialDate
         && Number.isFinite(paidStartMs)
+        && Number.isFinite(matchedStartMs)
         && Number.isFinite(targetStartMs)
+        && paidStartMs === matchedStartMs
         && Math.abs(paidStartMs - targetStartMs) <= MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS;
       if (!identityMatches) {
         results.set(game.gamePk, pendingResult(game, "PROVIDER_FAILED", "ODDS_EVENT_IDENTITY_MISMATCH", {
@@ -790,6 +805,7 @@ export class MlbSelectiveOddsAcquisitionService {
         timers: false,
         finalistGamesOnly: true,
         registryBackedPlanValidation: true,
+        thesisDirectionMustExistInScopedDiscoveryEvidence: true,
         exactDiscoveryMarketKeysOnly: true,
         duplicateMarketKeysAllowed: false,
         onePaidRequestPerGameMaximum: true,
@@ -809,6 +825,7 @@ export class MlbSelectiveOddsAcquisitionService {
         providerRequestTimeoutMs: this.requestTimeoutMs,
         automaticProviderRetries: false,
         eventMatchMaxStartDeltaMs: MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS,
+        paidPayloadMustMatchProbedCommenceTime: true,
         ambiguousEventIdentityCanSpendCredits: false,
         staleOrMissingExecutionQuoteCanBeRecommended: false,
         calculatesMarketEdge: false,
