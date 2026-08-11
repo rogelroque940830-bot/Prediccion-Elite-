@@ -34,6 +34,7 @@ test("11B keeps prior P1-M3E evidence minimums as research sufficiency only", ()
   assert.equal(report.state, "INSUFFICIENT_SAMPLE");
   assert.equal(report.policy.minimumSampleRequirementsAreResearchOnly, true);
   assert.equal(report.policy.minimumSampleRequirementsAreLivePickFilters, false);
+  assert.equal(report.policy.researchSufficiencyUsesDecisiveOutcomesOnly, true);
   assert.equal(report.policy.liveOperatingEnvelopeChanged, false);
 });
 
@@ -90,6 +91,21 @@ test("pushes are excluded from all binary calibration metrics but remain settlem
   assert.equal(report.baseline.calibrationGap, 0);
   assert.ok(Math.abs(report.baseline.meanBrierScore! - 0.16) < 1e-12);
   assert.ok(Math.abs(report.baseline.flatStakeRoiPct! - ((0.9 - 1 + 0) / 3) * 100) < 1e-12);
+});
+
+test("push-heavy cohorts cannot satisfy the 80 observation 30 date research gate", () => {
+  const observations = Array.from({ length: 80 }, (_, index) => row(index, {
+    outcome: index === 0 ? "WIN" : "PUSH",
+    realizedProfitUnits: index === 0 ? 0.9 : 0,
+  }));
+  const report = buildMlbOperatingEnvelopeCalibration({ observations, rules: [] });
+  assert.equal(report.baseline.observations, 80);
+  assert.equal(report.baseline.pushes, 79);
+  assert.equal(report.cohort.observations, 1);
+  assert.equal(report.cohort.dates, 1);
+  assert.equal(report.state, "INSUFFICIENT_SAMPLE");
+  assert.ok(report.blockers.includes("MINIMUM_OBSERVATIONS_NOT_REACHED"));
+  assert.ok(report.blockers.includes("MINIMUM_DATES_NOT_REACHED"));
 });
 
 test("settlement-inconsistent outcomes or profit values fail closed", () => {
