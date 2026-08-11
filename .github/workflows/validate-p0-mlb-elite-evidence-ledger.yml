@@ -1,0 +1,86 @@
+name: Validate P0 MLB Elite Evidence Ledger
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/validate-p0-mlb-elite-evidence-ledger.yml'
+      - 'server/mlb-elite-evidence-ledger.ts'
+      - 'server/mlb-elite-evidence-ledger.test.ts'
+      - 'server/mlb-operating-envelope.ts'
+      - 'server/mlb-operating-envelope-calibration.ts'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-elite-evidence-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Falsify Step 11C capture and settlement boundaries
+        run: |
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-selective-odds-acquisition.test.ts
+
+      - name: Type-check Step 11C boundary
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-elite-evidence-ledger.ts server/mlb-elite-evidence-ledger.test.ts
+
+      - name: Preserve modular backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Freeze capture-all research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ledger='server/mlb-elite-evidence-ledger.ts'
+          tests='server/mlb-elite-evidence-ledger.test.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$ledger"
+          ! grep -nE 'BET_ELITE|stakeAmount|kelly|recommendedBet|recommendsBet' "$ledger"
+
+          grep -F 'capturesEveryStep11aEliteCandidate: true' "$ledger"
+          grep -F 'additionalEligibilityFilterApplied: false' "$ledger"
+          grep -F 'silentCandidateDropAllowed: false' "$ledger"
+          grep -F 'immutablePregameSnapshot: true' "$ledger"
+          grep -F 'settlementMutatesPregameSnapshot: false' "$ledger"
+          grep -F 'missingClosingLineBlocksCapture: false' "$ledger"
+          grep -F 'missingClosingLineBlocksSettlement: false' "$ledger"
+          grep -F 'closingLineRequiredForCalibration: false' "$ledger"
+          grep -F 'flatOneUnitSettlementOnly: true' "$ledger"
+          grep -F 'stakeCalculated: false' "$ledger"
+          grep -F 'betEliteLabelProduced: false' "$ledger"
+          grep -F 'finalBetRecommendationProduced: false' "$ledger"
+          grep -F 'automaticBetPlacement: false' "$ledger"
+          grep -F 'realFinancialExposure: 0' "$ledger"
+
+          grep -F 'entries.length !== candidates.length' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_SILENT_CANDIDATE_DROP_DETECTED' "$ledger"
+          grep -F 'captures every Step 11A elite candidate with 100% retention and no extra filter' "$tests"
+          grep -F 'fails the whole capture instead of silently dropping a pick' "$tests"
+          grep -F 'pregame snapshot preserves exact run game market side line price model and EV identity' "$tests"
+          grep -F 'settlement leaves immutable pregame evidence untouched and uses flat one-unit economics' "$tests"
+          grep -F 'converts directly into Step 11B observations without a new selection filter' "$tests"
+
+          git diff --check
