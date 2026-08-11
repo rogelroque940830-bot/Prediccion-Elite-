@@ -1,0 +1,55 @@
+name: Validate P0 Step 12 Historical Compatibility
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-step12-historical-compatibility.ts'
+      - 'server/mlb-step12-historical-compatibility.test.ts'
+      - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
+      - 'docs/P0_STEP12_ALIGNMENT_AUDIT.md'
+      - '.github/workflows/validate-p0-step12-historical-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Test Step 12 compatibility boundaries
+        run: npx tsx --test server/mlb-step12-historical-compatibility.test.ts
+      - name: Type-check Step 12 compatibility surface
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-step12-historical-compatibility.ts server/mlb-step12-historical-compatibility.test.ts
+      - name: Preserve backend regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Freeze research-only and volume-preserving boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='server/mlb-step12-historical-compatibility.ts'
+          grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$file"
+          grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$file"
+          grep -F 'highHitRatePocketsMayBeInvestigated: true' "$file"
+          grep -F 'lowerHitRateStableSignalsRemainEligibleForResearch: true' "$file"
+          grep -F 'qualityAndFrequencyMustBeReportedTogether: true' "$file"
+          grep -F 'livePickFiltersChanged: false' "$file"
+          grep -F 'step11cCapturePopulationChanged: false' "$file"
+          grep -F 'betEliteLabelProduced: false' "$file"
+          grep -F 'automaticBetPlacement: false' "$file"
+          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$file"
+          git diff --check
