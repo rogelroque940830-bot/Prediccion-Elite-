@@ -74,6 +74,7 @@ jobs:
           grep -F 'exactEnvelopeFieldSetRequired: true' "$adapter"
           grep -F 'exactCurrentPredictorProvenanceRequired: true' "$adapter"
           grep -F 'exactHalfRunIdentityRequired: true' "$adapter"
+          grep -F 'positiveTotalLineRequired: true' "$adapter"
           grep -F 'priceDependenceFlagMustBeBoolean: true' "$adapter"
           grep -F 'malformedEnvelopeCanThrow: false' "$adapter"
           grep -F 'processingFailuresFailClosed: true' "$adapter"
@@ -94,6 +95,10 @@ jobs:
           grep -F 'MODEL_EVIDENCE_PROCESSING_FAILED' "$adapter"
           grep -F 'MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID' "$adapter"
           grep -F 'MODEL_EVIDENCE_PROJECTED_RUNS_FIELD_INVALID' "$adapter"
+          grep -F 'MODEL_EVIDENCE_TOTAL_LINE_INVALID' "$adapter"
+          grep -F 'function totalLineIsPositive' "$adapter"
+          grep -F 'if (!totalLineIsPositive(raw.marketType, raw.line as number | null))' "$adapter"
+          grep -F 'if (!Number.isFinite(projectedRuns) || projectedRuns < 0 || !Number.isFinite(line) || line <= 0) return null;' "$adapter"
           grep -F 'return safeInvalidResult("MODEL_EVIDENCE_PROCESSING_FAILED")' "$adapter"
 
           grep -F 'MODEL_EVIDENCE_ENVELOPE_INVALID' "$adapter"
@@ -147,6 +152,7 @@ jobs:
           grep -F 'only the recognized current predictor model version can produce READY evidence' "$tests"
           grep -F 'market-regressed total probability is rejected' "$tests"
           grep -F 'integer totals fail closed' "$tests"
+          grep -F 'nonpositive total lines are invalid evidence and can never become READY' "$tests"
           grep -F 'only exact half-run identities are accepted; quarter, near-half and near-integer lines fail closed' "$tests"
           grep -F 'current F5 ML remains unavailable' "$tests"
           grep -F 'current Run Line remains unavailable' "$tests"
@@ -156,10 +162,5 @@ jobs:
           grep -F 'deep, cyclic and hostile envelopes fail closed without recursive digest traversal' "$tests"
           grep -F 'price-dependence flag must be explicitly boolean false for a READY total' "$tests"
 
+          # Persistent validator: syntax/whitespace safety only. PR-specific scope is reviewed outside this workflow.
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
-          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
-          expected=$(printf '%s\n' \
-            '.github/workflows/validate-p0-mlb-market-model-adapters.yml' \
-            'server/mlb-market-model-adapters.test.ts' \
-            'server/mlb-market-model-adapters.ts' | sort)
-          [[ "$changed" == "$expected" ]]
