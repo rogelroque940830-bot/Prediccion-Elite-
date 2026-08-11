@@ -3,7 +3,7 @@ name: Validate P0 MLB Operating Envelope Calibration
 on:
   pull_request:
     branches:
-      - feature/p0-mlb-operating-envelope-20260811
+      - integration/p0-staging-secure
     paths:
       - '.github/workflows/validate-p0-mlb-operating-envelope-calibration.yml'
       - 'server/mlb-operating-envelope-calibration.ts'
@@ -85,6 +85,9 @@ jobs:
           grep -F 'baseline represents all current Step 11A candidates and preserves 100 percent pick volume' "$tests"
           grep -F 'every candidate rule reports quality and exact pick-volume loss side by side' "$tests"
           grep -F 'a rule that kills every pick is exposed explicitly instead of looking elite by absence' "$tests"
+          grep -F 'pushes are excluded from all binary calibration metrics but remain settlement-neutral in ROI' "$tests"
+          grep -F 'settlement-inconsistent outcomes or profit values fail closed' "$tests"
+          grep -F 'impossible calendar dates fail closed and cannot satisfy research date sufficiency' "$tests"
           grep -F 'runtime does not hard-code a winning rule or auto-promote point estimates' "$tests"
 
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
