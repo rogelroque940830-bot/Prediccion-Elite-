@@ -74,6 +74,7 @@ export interface MlbMarketModelAdapterResult {
     evidenceDigestRecomputedBeforeReady: true;
     evidenceDigestUsesLosslessNumericSerialization: true;
     exactCurrentPredictorProvenanceRequired: true;
+    exactHalfRunIdentityRequired: true;
     priceDependenceFlagMustBeBoolean: true;
     malformedEnvelopeCanThrow: false;
     unsupportedMarketCanProduceAssessment: false;
@@ -96,7 +97,6 @@ export interface MlbMarketModelAdapterResult {
 }
 
 const HEX_64 = /^[a-f0-9]{64}$/i;
-const EPS = 1e-9;
 const PROBABILITY_PARITY_TOLERANCE = 1e-10;
 const SIDES = ["HOME", "AWAY", "OVER", "UNDER"] as const;
 
@@ -188,11 +188,11 @@ function lineIdentityValid(market: MlbMarketEdgeSupportedMarket, line: unknown):
 }
 
 function isIntegerLine(line: number): boolean {
-  return Math.abs(line - Math.round(line)) <= EPS;
+  return Number.isInteger(line);
 }
 
 function isExactHalfRunLine(line: number): boolean {
-  return !isIntegerLine(line) && Math.abs(line * 2 - Math.round(line * 2)) <= EPS;
+  return Number.isSafeInteger(line * 2) && !Number.isInteger(line);
 }
 
 function currentPredictorNormalCdf(x: number, mean: number, std: number): number {
@@ -257,6 +257,7 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     evidenceDigestRecomputedBeforeReady: true,
     evidenceDigestUsesLosslessNumericSerialization: true,
     exactCurrentPredictorProvenanceRequired: true,
+    exactHalfRunIdentityRequired: true,
     priceDependenceFlagMustBeBoolean: true,
     malformedEnvelopeCanThrow: false,
     unsupportedMarketCanProduceAssessment: false,
