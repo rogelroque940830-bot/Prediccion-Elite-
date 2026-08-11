@@ -120,14 +120,17 @@ def selected(rows,atoms): return [r for r in rows if all(atom_mask(r,a) for a in
 
 def metrics(rows,atoms,target):
     sel=selected(rows,atoms); side=target['side']; horizon=target['horizon']; hits=losses=pushes=0
+    decisive_dates=set()
     for r in sel:
         outcome=r['fullResult'] if horizon=='FULL_GAME' else r['f5Result']
         if outcome=='PUSH': pushes+=1
-        elif outcome==side: hits+=1
-        else: losses+=1
+        else:
+            decisive_dates.add(r['officialDate'])
+            if outcome==side: hits+=1
+            else: losses+=1
     decisive=hits+losses; dates=len({r['officialDate'] for r in sel}); baseline_dates=len({r['officialDate'] for r in rows})
     return {'selectedRows':len(sel),'decisiveRows':decisive,'hits':hits,'losses':losses,'pushes':pushes,
-            'decisiveHitRate':hits/decisive if decisive else None,'uniqueDates':dates,
+            'decisiveHitRate':hits/decisive if decisive else None,'uniqueDates':dates,'decisiveUniqueDates':len(decisive_dates),
             'retentionPct':100*len(sel)/len(rows) if rows else 0,
             'noPickDatePct':100*(baseline_dates-dates)/baseline_dates if baseline_dates else 0}
 
