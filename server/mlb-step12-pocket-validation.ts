@@ -15,6 +15,7 @@ export interface MlbStep12PocketMetrics {
   pushes: number;
   selectedRows: number;
   uniqueDates: number;
+  decisiveUniqueDates?: number | null;
   retentionPct: number;
   noPickDatePct: number;
 }
@@ -64,18 +65,19 @@ export interface MlbStep12PocketValidationResult {
   baselineHitRateForSelectedSide: number;
   holdoutLiftVsBaseline: number | null;
   holdoutDecisiveRows: number;
-  holdoutUniqueDates: number;
+  holdoutDecisiveDates: number | null;
   familywiseAdjustedPValue: number | null;
   rawPValue: number | null;
   reasons: string[];
   policy: {
     researchOnly: true;
     familywiseAlpha: 0.05;
-    minimumHoldoutDecisiveRows: 30;
-    minimumHoldoutUniqueDates: 20;
+    minimumHoldoutDecisiveRows: 80;
+    minimumHoldoutDecisiveDates: 30;
     maximumAbsoluteDiscoveryHoldoutDrift: 0.15;
     exactHoldoutPValueRecomputedFromCounts: true;
     bonferroniParityRecomputedFromTopK: true;
+    decisiveDatesRequiredForSufficiency: true;
     hitRateBandIsDescriptiveNotPromotion: true;
     lowerHitRateStableSignalsRemainResearchEligible: true;
     historicalPricesRequiredForSportingSupport: false;
@@ -88,13 +90,24 @@ export interface MlbStep12PocketValidationResult {
 }
 
 const FAMILYWISE_ALPHA = 0.05;
-const MIN_HOLDOUT_DECISIVE_ROWS = 30;
-const MIN_HOLDOUT_UNIQUE_DATES = 20;
+const MIN_HOLDOUT_DECISIVE_ROWS = 80;
+const MIN_HOLDOUT_DECISIVE_DATES = 30;
 const MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT = 0.15;
 const P_VALUE_PARITY_TOLERANCE = 1e-10;
 
 function finiteProbability(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function decisiveDates(metrics: MlbStep12PocketMetrics): number | null {
+  if (metrics.decisiveUniqueDates != null) {
+    return Number.isInteger(metrics.decisiveUniqueDates) && metrics.decisiveUniqueDates >= 0
+      ? metrics.decisiveUniqueDates
+      : null;
+  }
+  // When there are no pushes, every selected date necessarily contains a decisive row.
+  // With pushes present, legacy pilot v1 cannot prove which dates were decisive, so fail closed.
+  return metrics.pushes === 0 ? metrics.uniqueDates : null;
 }
 
 function validateMetrics(metrics: MlbStep12PocketMetrics): boolean {
@@ -104,6 +117,10 @@ function validateMetrics(metrics: MlbStep12PocketMetrics): boolean {
   if (metrics.hits + metrics.losses !== metrics.decisiveRows) return false;
   if (metrics.decisiveRows + metrics.pushes !== metrics.selectedRows) return false;
   if (metrics.uniqueDates > metrics.selectedRows) return false;
+  if (metrics.decisiveUniqueDates != null) {
+    if (!Number.isInteger(metrics.decisiveUniqueDates) || metrics.decisiveUniqueDates < 0
+      || metrics.decisiveUniqueDates > metrics.uniqueDates || metrics.decisiveUniqueDates > metrics.decisiveRows) return false;
+  }
   if (metrics.decisiveRows === 0) return metrics.decisiveHitRate == null;
   return finiteProbability(metrics.decisiveHitRate)
     && Math.abs(metrics.decisiveHitRate - metrics.hits / metrics.decisiveRows) <= 1e-12;
@@ -144,10 +161,11 @@ function policy(): MlbStep12PocketValidationResult["policy"] {
     researchOnly: true,
     familywiseAlpha: FAMILYWISE_ALPHA,
     minimumHoldoutDecisiveRows: MIN_HOLDOUT_DECISIVE_ROWS,
-    minimumHoldoutUniqueDates: MIN_HOLDOUT_UNIQUE_DATES,
+    minimumHoldoutDecisiveDates: MIN_HOLDOUT_DECISIVE_DATES,
     maximumAbsoluteDiscoveryHoldoutDrift: MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT,
     exactHoldoutPValueRecomputedFromCounts: true,
     bonferroniParityRecomputedFromTopK: true,
+    decisiveDatesRequiredForSufficiency: true,
     hitRateBandIsDescriptiveNotPromotion: true,
     lowerHitRateStableSignalsRemainResearchEligible: true,
     historicalPricesRequiredForSportingSupport: false,
@@ -173,7 +191,7 @@ function invalidResult(rule: MlbStep12PocketRuleEvidence, horizon: string, basel
     baselineHitRateForSelectedSide: baseline,
     holdoutLiftVsBaseline: null,
     holdoutDecisiveRows: rule.holdout.decisiveRows,
-    holdoutUniqueDates: rule.holdout.uniqueDates,
+    holdoutDecisiveDates: decisiveDates(rule.holdout),
     familywiseAdjustedPValue: rule.holdoutBonferroniPValueTopK,
     rawPValue: rule.holdoutOneSidedPValueVsBaseline,
     reasons,
@@ -216,15 +234,18 @@ export function validateMlbStep12Pocket(
 
   const discoveryRate = rule.discovery.decisiveHitRate;
   const holdoutRate = rule.holdout.decisiveHitRate;
+  const holdoutDecisiveDates = decisiveDates(rule.holdout);
   const drift = discoveryRate == null || holdoutRate == null ? null : Math.abs(discoveryRate - holdoutRate);
   const lift = holdoutRate == null ? null : holdoutRate - selectedSideBaseline;
   const reasons: string[] = [];
 
   let status: MlbStep12PocketValidationStatus;
-  if (rule.holdout.decisiveRows < MIN_HOLDOUT_DECISIVE_ROWS || rule.holdout.uniqueDates < MIN_HOLDOUT_UNIQUE_DATES) {
+  if (rule.holdout.decisiveRows < MIN_HOLDOUT_DECISIVE_ROWS
+    || holdoutDecisiveDates == null || holdoutDecisiveDates < MIN_HOLDOUT_DECISIVE_DATES) {
     status = "INSUFFICIENT_HOLDOUT_SAMPLE";
-    if (rule.holdout.decisiveRows < MIN_HOLDOUT_DECISIVE_ROWS) reasons.push("DECISIVE_ROWS_BELOW_30");
-    if (rule.holdout.uniqueDates < MIN_HOLDOUT_UNIQUE_DATES) reasons.push("UNIQUE_DATES_BELOW_20");
+    if (rule.holdout.decisiveRows < MIN_HOLDOUT_DECISIVE_ROWS) reasons.push("DECISIVE_ROWS_BELOW_80");
+    if (holdoutDecisiveDates == null) reasons.push("DECISIVE_DATE_COUNT_UNAVAILABLE");
+    else if (holdoutDecisiveDates < MIN_HOLDOUT_DECISIVE_DATES) reasons.push("DECISIVE_DATES_BELOW_30");
   } else if (holdoutRate == null || holdoutRate <= selectedSideBaseline || drift == null || drift > MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT) {
     status = "UNSTABLE_HOLDOUT";
     if (holdoutRate == null) reasons.push("NO_HOLDOUT_DECISIVE_RATE");
@@ -232,7 +253,7 @@ export function validateMlbStep12Pocket(
     if (drift != null && drift > MAX_ABSOLUTE_DISCOVERY_HOLDOUT_DRIFT) reasons.push("DISCOVERY_HOLDOUT_DRIFT_GT_15PP");
   } else if ((rule.holdoutBonferroniPValueTopK as number) <= FAMILYWISE_ALPHA) {
     status = "OOS_SUPPORTED_HYPOTHESIS";
-    reasons.push("POSITIVE_HOLDOUT_LIFT", "FAMILYWISE_P_LE_0_05", "SAMPLE_AND_DATE_FLOORS_MET", "DISCOVERY_HOLDOUT_DRIFT_WITHIN_15PP");
+    reasons.push("POSITIVE_HOLDOUT_LIFT", "FAMILYWISE_P_LE_0_05", "80_DECISIVE_ROWS_AND_30_DECISIVE_DATES_MET", "DISCOVERY_HOLDOUT_DRIFT_WITHIN_15PP");
   } else {
     status = "PROMISING_NOT_FAMILYWISE_SUPPORTED";
     if ((rule.holdoutOneSidedPValueVsBaseline as number) <= FAMILYWISE_ALPHA) {
@@ -256,7 +277,7 @@ export function validateMlbStep12Pocket(
     baselineHitRateForSelectedSide: selectedSideBaseline,
     holdoutLiftVsBaseline: lift,
     holdoutDecisiveRows: rule.holdout.decisiveRows,
-    holdoutUniqueDates: rule.holdout.uniqueDates,
+    holdoutDecisiveDates,
     familywiseAdjustedPValue: rule.holdoutBonferroniPValueTopK,
     rawPValue: rule.holdoutOneSidedPValueVsBaseline,
     reasons,
