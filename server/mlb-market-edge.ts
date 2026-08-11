@@ -532,7 +532,7 @@ function evaluateMarket(
     decisiveWinProbability: null,
     pushProbabilityDerivedAsZero: false,
   };
-  if (!validation.ok) return blockedMarket(thesis, validation.classification, side, execution.line, validation.blocker, modelBase);
+  if (validation.ok === false) return blockedMarket(thesis, validation.classification, side, execution.line, validation.blocker, modelBase);
 
   const winProbability = assessment.winProbability!;
   const pushProbability = validation.pushProbability;

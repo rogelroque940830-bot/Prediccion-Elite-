@@ -123,4 +123,11 @@ jobs:
             '.github/workflows/validate-p0-mlb-market-edge.yml' \
             'server/mlb-market-edge.test.ts' \
             'server/mlb-market-edge.ts' | sort)
-          [[ "$changed" == "$expected_hotfix" || "$changed" == "$expected_core" ]]
+          expected_step11a_sanitation=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-edge.yml' \
+            '.github/workflows/validate-p0-mlb-operating-envelope.yml' \
+            'server/mlb-market-edge.ts' \
+            'server/mlb-operating-envelope.test.ts' \
+            'server/mlb-operating-envelope.ts' \
+            'server/mlb-selective-odds-acquisition.ts' | sort)
+          [[ "$changed" == "$expected_hotfix" || "$changed" == "$expected_core" || "$changed" == "$expected_step11a_sanitation" ]]
