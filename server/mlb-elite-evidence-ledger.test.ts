@@ -251,10 +251,7 @@ test("inconsistent settlement status and payload fail closed before Step 11B con
     ...ledger,
     entries: [{ ...first, settlementStatus: "SETTLED" as const, settlement: null }, ...ledger.entries.slice(1)],
   } as any;
-  assert.throws(
-    () => toMlbOperatingEnvelopeCalibrationObservations(settledWithoutPayload),
-    /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/,
-  );
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(settledWithoutPayload), /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/);
 
   const pendingWithPayload = {
     ...ledger,
@@ -270,10 +267,53 @@ test("inconsistent settlement status and payload fail closed before Step 11B con
       },
     }, ...ledger.entries.slice(1)],
   } as any;
-  assert.throws(
-    () => toMlbOperatingEnvelopeCalibrationObservations(pendingWithPayload),
-    /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/,
-  );
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(pendingWithPayload), /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/);
+});
+
+test("persisted ledger conversion rejects unknown status forged profit and impossible date", () => {
+  const ledger = capture();
+  const first = ledger.entries[0];
+
+  const unknownStatus = {
+    ...ledger,
+    entries: [{ ...first, settlementStatus: "VOIDED", settlement: null }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(unknownStatus), /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/);
+
+  const settled = settleMlbEliteEvidenceLedger({
+    ledger,
+    settlements: [{ predictionId: first.predictionId, outcome: "WIN", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-profit" }],
+  });
+  const forgedProfit = {
+    ...settled,
+    entries: [{
+      ...settled.entries[0],
+      settlement: { ...settled.entries[0].settlement!, realizedProfitUnits: -37 },
+    }, ...settled.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(forgedProfit), /MLB_ELITE_LEDGER_SETTLEMENT_PROFIT_INVALID/);
+
+  const impossibleDate = {
+    ...ledger,
+    entries: [{ ...first, candidate: { ...first.candidate, gameDate: "2026-02-30" } }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(impossibleDate), /MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID/);
+});
+
+test("persisted ledger conversion rejects identity tampering and corrupt summary counts", () => {
+  const ledger = capture();
+  const first = ledger.entries[0];
+  const identityTamper = {
+    ...ledger,
+    entries: [{ ...first, candidate: { ...first.candidate, selectedLine: 9.5 } }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(identityTamper), /MLB_ELITE_LEDGER_PERSISTED_IDENTITY_MISMATCH/);
+
+  const corruptSummary = {
+    ...ledger,
+    summary: { ...ledger.summary, capturedCandidates: 1 },
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(corruptSummary), /MLB_ELITE_LEDGER_PERSISTED_SUMMARY_INVALID/);
 });
 
 test("settlement leaves immutable pregame evidence untouched and uses flat one-unit economics", () => {
