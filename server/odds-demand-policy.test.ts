@@ -5,6 +5,7 @@ import {
   isMlbClosingLineCaptureEnabled,
 } from "./odds-demand-policy";
 
+// Research-only no-op comment: trigger the existing live deployment guard for the Step 8 merge.
 test("provider-consuming background work is disabled unless explicitly opted in", () => {
   assert.equal(explicitOptInEnabled(undefined), false);
   assert.equal(explicitOptInEnabled(""), false);
