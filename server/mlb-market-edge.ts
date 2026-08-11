@@ -167,6 +167,8 @@ export interface MlbMarketEdgeResult {
     priceCanCreateIntrinsicThesis: false;
     intrinsicThesisDirectionPreserved: true;
     exactExecutionLineMustMatchModelAssessment: true;
+    losslessAssessmentIdentityKeyRequired: true;
+    losslessModelAssessmentDigestRequired: true;
     executionBookMustBeFreshAndExecutable: true;
     executionQuoteIdentityRevalidated: true;
     referenceBooksCanSubstituteExecution: false;
@@ -212,14 +214,22 @@ function validIso(value: unknown): boolean {
 
 function sameLine(left: number | null, right: number | null): boolean {
   if (left == null || right == null) return left === right;
-  return Math.abs(left - right) <= 1e-9;
+  return Object.is(left, right) || left === right;
+}
+
+function exactNumberIdentity(value: number): string {
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Number.POSITIVE_INFINITY) return "+Infinity";
+  if (value === Number.NEGATIVE_INFINITY) return "-Infinity";
+  if (Object.is(value, -0)) return "-0";
+  return value.toString();
 }
 
 function lineKey(line: number | null): string {
-  return line == null ? "null" : round(line, 9).toFixed(9);
+  return line == null ? "null" : exactNumberIdentity(line);
 }
 
-function assessmentKey(input: {
+export function buildMlbMarketProbabilityAssessmentIdentityKey(input: {
   gamePk: number;
   marketType: MlbMarketEdgeSupportedMarket;
   side: string;
@@ -300,7 +310,7 @@ function marketCanPushAtLine(marketType: MlbMarketEdgeSupportedMarket, line: num
   const contract = getMlbMarketContract(marketType as MlbMarketType);
   if (contract.settlementRule === "TWO_WAY_PUSH_ON_TIE") return true;
   if (contract.settlementRule === "RUN_LINE" || contract.settlementRule === "TOTAL" || contract.settlementRule === "TEAM_TOTAL") {
-    return line != null && Math.abs(line - Math.round(line)) <= 1e-9;
+    return line != null && Number.isInteger(line);
   }
   return false;
 }
@@ -334,22 +344,23 @@ function expectedValuePerUnit(winProbability: number, pushProbability: number, o
   return round(winProbability * (decimal - 1) - Math.max(0, lossProbability), 10);
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.keys(value as Record<string, unknown>)
-        .sort()
-        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]),
-    );
+function exactCanonicalAssessment(value: unknown): string {
+  if (value === null) return "null;";
+  if (value === undefined) return "undefined;";
+  if (typeof value === "boolean") return value ? "bool:1;" : "bool:0;";
+  if (typeof value === "number") return `number:${exactNumberIdentity(value)};`;
+  if (typeof value === "string") return `string:${JSON.stringify(value)};`;
+  if (Array.isArray(value)) return `array:[${value.map(exactCanonicalAssessment).join("")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `object:{${entries.map(([key, child]) => `${JSON.stringify(key)}=${exactCanonicalAssessment(child)}`).join("")}}`;
   }
-  if (typeof value === "number") return Number.isFinite(value) ? round(value, 12) : null;
-  if (value === undefined) return null;
-  return value;
+  return `unsupported:${typeof value}:${JSON.stringify(String(value))};`;
 }
 
 export function buildMlbMarketProbabilityAssessmentDigest(input: Omit<MlbMarketProbabilityAssessment, "modelInputDigest">): string {
-  return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
+  return createHash("sha256").update(exactCanonicalAssessment(input)).digest("hex");
 }
 
 function assessmentValidation(
@@ -359,6 +370,9 @@ function assessmentValidation(
 ): { ok: true; pushProbability: number; derivedZero: boolean; lossProbability: number } | { ok: false; classification: MlbMarketEdgeClassification; blocker: string } {
   if (assessment.status !== "READY") {
     return { ok: false, classification: "MODEL_UNAVAILABLE", blocker: assessment.unavailableReason || "MODEL_ASSESSMENT_UNAVAILABLE" };
+  }
+  if (!sameLine(assessment.line, selectedLine)) {
+    return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_EXECUTION_LINE_IDENTITY_MISMATCH" };
   }
   if (assessment.sourcePolicy !== expectedModelPolicy(market)) {
     return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_SOURCE_POLICY_MISMATCH" };
@@ -500,8 +514,11 @@ function evaluateMarket(
   const execution = priceSnapshot(executionQuote, side);
   if (!execution) return blockedMarket(thesis, "PRICE_UNUSABLE", side, null, "EXECUTION_BILATERAL_PAIR_INVALID");
 
-  const assessment = assessments.get(assessmentKey({ gamePk: game.gamePk, marketType, side, line: execution.line }));
+  const assessment = assessments.get(buildMlbMarketProbabilityAssessmentIdentityKey({ gamePk: game.gamePk, marketType, side, line: execution.line }));
   if (!assessment) return blockedMarket(thesis, "MODEL_UNAVAILABLE", side, execution.line, "EXACT_MARKET_MODEL_ASSESSMENT_REQUIRED");
+  if (!sameLine(assessment.line, execution.line)) {
+    return blockedMarket(thesis, "MODEL_INVALID", side, execution.line, "MODEL_EXECUTION_LINE_IDENTITY_MISMATCH");
+  }
   const validation = assessmentValidation(assessment, marketType, execution.line);
   const modelBase: MlbMarketEdgeMarketResult["model"] = {
     status: assessment.status,
@@ -606,7 +623,7 @@ function validateAssessments(assessments: readonly MlbMarketProbabilityAssessmen
     if (!MLB_MARKET_EDGE_SUPPORTED_MARKETS.includes(assessment.marketType)) {
       throw new MlbMarketEdgeInputError("MODEL_MARKET_UNSUPPORTED", `unsupported model market ${assessment.marketType}`);
     }
-    const key = assessmentKey(assessment);
+    const key = buildMlbMarketProbabilityAssessmentIdentityKey(assessment);
     if (map.has(key)) throw new MlbMarketEdgeInputError("DUPLICATE_MODEL_ASSESSMENT", `duplicate model assessment ${key}`);
     map.set(key, assessment);
   }
@@ -664,6 +681,8 @@ export function evaluateMlbMarketEdges(input: {
       priceCanCreateIntrinsicThesis: false,
       intrinsicThesisDirectionPreserved: true,
       exactExecutionLineMustMatchModelAssessment: true,
+      losslessAssessmentIdentityKeyRequired: true,
+      losslessModelAssessmentDigestRequired: true,
       executionBookMustBeFreshAndExecutable: true,
       executionQuoteIdentityRevalidated: true,
       referenceBooksCanSubstituteExecution: false,
