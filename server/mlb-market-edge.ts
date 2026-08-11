@@ -171,6 +171,7 @@ export interface MlbMarketEdgeResult {
     referenceBooksCanSubstituteExecution: false;
     referenceConsensusIsDiagnosticOnly: true;
     quoteFreshnessRecheckedAtEvaluation: true;
+    providerLastUpdateFreshnessRecheckedAtEvaluation: true;
     marketRankingProduced: false;
     operatingEnvelopeApplied: false;
     eliteLabelProduced: false;
@@ -242,11 +243,20 @@ function thesisSide(thesis: MlbSelectiveOddsMarketThesis): Extract<MlbSelectionS
   return sides.size === 1 ? [...sides][0] : null;
 }
 
-function quoteStillFresh(capturedAt: string, now: Date): boolean {
-  const capturedMs = Date.parse(capturedAt);
-  if (!Number.isFinite(capturedMs)) return false;
-  const ageMs = now.getTime() - capturedMs;
-  return ageMs >= -60_000 && ageMs <= MLB_MARKET_EDGE_MAX_QUOTE_AGE_MS;
+function timestampStillFresh(value: string | null, now: Date, futureToleranceMs: number): boolean {
+  if (!value) return false;
+  const timestampMs = Date.parse(value);
+  if (!Number.isFinite(timestampMs)) return false;
+  const ageMs = now.getTime() - timestampMs;
+  return ageMs >= -futureToleranceMs && ageMs <= MLB_MARKET_EDGE_MAX_QUOTE_AGE_MS;
+}
+
+function quoteStillFresh(
+  quote: MlbNormalizedBookQuote | MlbReferenceConsensusQuote,
+  now: Date,
+): boolean {
+  return timestampStillFresh(quote.capturedAt, now, 60_000)
+    && timestampStillFresh(quote.providerLastUpdate, now, 120_000);
 }
 
 function findSelectionPair(
@@ -448,7 +458,7 @@ function evaluateMarket(
   if (!marketQuote || marketQuote.availability !== "EXECUTABLE" || marketQuote.execution.status !== "FRESH" || !marketQuote.execution.quote) {
     return blockedMarket(thesis, "PRICE_UNUSABLE", side, null, "FRESH_EXECUTABLE_HARDROCK_QUOTE_REQUIRED");
   }
-  if (!quoteStillFresh(marketQuote.execution.quote.capturedAt, now)) {
+  if (!quoteStillFresh(marketQuote.execution.quote, now)) {
     return blockedMarket(thesis, "QUOTE_STALE", side, null, "EXECUTION_QUOTE_EXPIRED_AT_MARKET_EDGE_EVALUATION");
   }
   const execution = priceSnapshot(marketQuote.execution.quote, side);
@@ -491,7 +501,7 @@ function evaluateMarket(
   let reference: MlbMarketEdgePriceSnapshot | null = null;
   let referenceNoVigEdgePp: number | null = null;
   const warnings: string[] = [];
-  if (marketQuote.reference.status === "FRESH" && marketQuote.reference.quote && quoteStillFresh(marketQuote.reference.quote.capturedAt, now)) {
+  if (marketQuote.reference.status === "FRESH" && marketQuote.reference.quote && quoteStillFresh(marketQuote.reference.quote, now)) {
     reference = priceSnapshot(marketQuote.reference.quote, side);
     if (reference && sameLine(reference.line, execution.line)) {
       referenceNoVigEdgePp = (decisiveWinProbability - reference.noVigDecisiveProbability) * 100;
@@ -620,6 +630,7 @@ export function evaluateMlbMarketEdges(input: {
       referenceBooksCanSubstituteExecution: false,
       referenceConsensusIsDiagnosticOnly: true,
       quoteFreshnessRecheckedAtEvaluation: true,
+      providerLastUpdateFreshnessRecheckedAtEvaluation: true,
       marketRankingProduced: false,
       operatingEnvelopeApplied: false,
       eliteLabelProduced: false,
