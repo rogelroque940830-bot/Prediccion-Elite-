@@ -1,0 +1,92 @@
+name: Validate P0 MLB Market Edge
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-mlb-market-edge.yml'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-market-edge.test.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+      - 'server/mlb-market-odds-normalizer.ts'
+      - 'server/mlb-market-contract.ts'
+      - 'server/mlb-p1-economic-decision-contract.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-market-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Run push-aware Market Edge falsification tests
+        run: npx tsx --test server/mlb-market-edge.test.ts
+
+      - name: Preserve quote, settlement and economic conversion regressions
+        run: |
+          npx tsx --test server/mlb-market-odds-normalizer.test.ts
+          npx tsx --test server/mlb-p1-economic-decision-contract.test.ts
+
+      - name: Preserve modular routes and production backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Prove Market Edge stays push-aware, threshold-free and post-price only
+        shell: bash
+        run: |
+          set -euo pipefail
+          edge='server/mlb-market-edge.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|register[A-Za-z]*Routes|process\.env' "$edge"
+          ! grep -F 'evaluateMlbP1M4aEconomicDecision' "$edge"
+          ! grep -F 'MLB_P1_M4A_BET_EDGE_FLOOR_PP' "$edge"
+          ! grep -F 'MLB_P1_M4A_LEAN_EDGE_FLOOR_PP' "$edge"
+          ! grep -F 'MLB_P1_M4A_BET_CONFIDENCE_FLOOR' "$edge"
+
+          grep -F 'courtedge-p0-mlb-market-edge.v1' "$edge"
+          grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$edge"
+          grep -F 'MODEL_PUSH_PROBABILITY_REQUIRED' "$edge"
+          grep -F 'winProbability * (decimal - 1) - Math.max(0, lossProbability)' "$edge"
+          grep -F 'const currentBreakEvenWinProbability = (1 - pushProbability) / currentDecimal' "$edge"
+          grep -F 'const decisiveWinProbability = decisiveDenominator > 0 ? winProbability / decisiveDenominator' "$edge"
+          grep -F 'quoteStillFresh(marketQuote.execution.quote.capturedAt, now)' "$edge"
+          grep -F 'marketQuote.availability !== "EXECUTABLE"' "$edge"
+          grep -F 'EXACT_MARKET_MODEL_ASSESSMENT_REQUIRED' "$edge"
+          grep -F 'MODEL_SOURCE_POLICY_MISMATCH' "$edge"
+          grep -F 'fixedEdgeFloorApplied: false' "$edge"
+          grep -F 'legacyM4aBetLeanThresholdsApplied: false' "$edge"
+          grep -F 'legacyBinaryEvAppliedToPushCapableMarkets: false' "$edge"
+          grep -F 'referenceBooksCanSubstituteExecution: false' "$edge"
+          grep -F 'referenceConsensusIsDiagnosticOnly: true' "$edge"
+          grep -F 'marketRankingProduced: false' "$edge"
+          grep -F 'operatingEnvelopeApplied: false' "$edge"
+          grep -F 'eliteLabelProduced: false' "$edge"
+          grep -F 'recommendsBet: false' "$edge"
+          grep -F 'stakeCalculated: false' "$edge"
+          grep -F 'callsTheOddsApi: false' "$edge"
+          grep -F 'theOddsApiCreditsConsumed: 0' "$edge"
+          grep -F 'automaticBetPlacement: false' "$edge"
+          grep -F 'realFinancialExposure: 0' "$edge"
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-edge.yml' \
+            'server/mlb-market-edge.test.ts' \
+            'server/mlb-market-edge.ts' | sort)
+          [[ "$changed" == "$expected" ]]
