@@ -10,6 +10,7 @@ on:
       - 'server/mlb-market-model-adapters.test.ts'
       - 'server/mlb-market-edge.ts'
       - 'server/mlb-market-contract.ts'
+      - 'frontend/client/src/lib/mlb-model.ts'
 
 permissions:
   contents: read
@@ -47,15 +48,19 @@ jobs:
           set -euo pipefail
           adapter='server/mlb-market-model-adapters.ts'
           tests='server/mlb-market-model-adapters.test.ts'
+          current_model='frontend/client/src/lib/mlb-model.ts'
 
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$adapter"
 
           grep -F 'courtedge-p0-mlb-market-model-adapters.v1' "$adapter"
+          grep -F 'MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS = 3.5' "$adapter"
           grep -F 'currentReadyMarkets: ["TOTAL", "F5_TOTAL"]' "$adapter"
           grep -F 'legacyMarketRegressedProbabilityAccepted: false' "$adapter"
           grep -F 'integerLinePushMayBeInvented: false' "$adapter"
           grep -F 'evidenceDigestRecomputedBeforeReady: true' "$adapter"
           grep -F 'priceDependenceFlagMustBeBoolean: true' "$adapter"
+          grep -F 'totalProbabilityRecomputedFromProjection: true' "$adapter"
+          grep -F 'sourceReportedProbabilityMustMatchRecomputation: true' "$adapter"
           grep -F 'a3aExperimentalShadowCanBecomeReady: false' "$adapter"
           grep -F 'unsupportedChallengersCanBePromoted: false' "$adapter"
           grep -F 'CURRENT_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
@@ -66,7 +71,10 @@ jobs:
           grep -F 'NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL' "$adapter"
           grep -F 'MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID' "$adapter"
           grep -F 'MODEL_EVIDENCE_DIGEST_MISMATCH' "$adapter"
+          grep -F 'PURE_MODEL_SELECTED_SIDE_MISMATCH' "$adapter"
+          grep -F 'PURE_MODEL_PROBABILITY_PARITY_MISMATCH' "$adapter"
           grep -F 'buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput)' "$adapter"
+          grep -F 'reproduceMlbCurrentPredictorTotalModelHitProbability(evidence.projectedRuns, line)' "$adapter"
           grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$adapter"
           grep -F 'buildMlbMarketProbabilityAssessmentDigest(input)' "$adapter"
           grep -F 'marketRankingProduced: false' "$adapter"
@@ -79,11 +87,16 @@ jobs:
           grep -F 'automaticBetPlacement: false' "$adapter"
           grep -F 'realFinancialExposure: 0' "$adapter"
 
+          # Freeze parity with the current pure (pre-market) total probability formula.
+          grep -F 'const modelOverProb = 1 - mlbNormCdf(line, estimated, 3.5);' "$current_model"
+          grep -F 'const modelHitProb = side === "OVER" ? modelOverProb : (1 - modelOverProb);' "$current_model"
+
           grep -F 'market-regressed total probability is rejected' "$tests"
           grep -F 'integer totals fail closed' "$tests"
           grep -F 'current F5 ML remains unavailable' "$tests"
           grep -F 'current Run Line remains unavailable' "$tests"
-          grep -F 'tampering or invalid pure probability never reaches READY' "$tests"
+          grep -F 'source-reported total probability and selected side must match deterministic recomputation' "$tests"
+          grep -F 'tampering or probability never reaches READY' "$tests"
           grep -F 'malformed price-dependence flag cannot masquerade as pure model evidence' "$tests"
 
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
