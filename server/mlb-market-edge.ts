@@ -168,10 +168,13 @@ export interface MlbMarketEdgeResult {
     intrinsicThesisDirectionPreserved: true;
     exactExecutionLineMustMatchModelAssessment: true;
     executionBookMustBeFreshAndExecutable: true;
+    executionQuoteIdentityRevalidated: true;
     referenceBooksCanSubstituteExecution: false;
     referenceConsensusIsDiagnosticOnly: true;
     quoteFreshnessRecheckedAtEvaluation: true;
     providerLastUpdateFreshnessRecheckedAtEvaluation: true;
+    modelInputDigestRecomputedBeforeEconomics: true;
+    missingModelProvenanceFailsClosedWithoutThrow: true;
     marketRankingProduced: false;
     operatingEnvelopeApplied: false;
     eliteLabelProduced: false;
@@ -331,6 +334,24 @@ function expectedValuePerUnit(winProbability: number, pushProbability: number, o
   return round(winProbability * (decimal - 1) - Math.max(0, lossProbability), 10);
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]),
+    );
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? round(value, 12) : null;
+  if (value === undefined) return null;
+  return value;
+}
+
+export function buildMlbMarketProbabilityAssessmentDigest(input: Omit<MlbMarketProbabilityAssessment, "modelInputDigest">): string {
+  return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
+}
+
 function assessmentValidation(
   assessment: MlbMarketProbabilityAssessment,
   market: MlbMarketEdgeSupportedMarket,
@@ -345,8 +366,19 @@ function assessmentValidation(
   if (assessment.probabilitySemantics !== "UNCONDITIONAL_SETTLEMENT") {
     return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_PROBABILITY_SEMANTICS_INVALID" };
   }
-  if (!assessment.modelVersion.trim() || !validIso(assessment.generatedAt) || !/^[a-f0-9]{64}$/i.test(assessment.modelInputDigest)) {
+  if (
+    typeof assessment.modelVersion !== "string"
+    || !assessment.modelVersion.trim()
+    || !validIso(assessment.generatedAt)
+    || typeof assessment.modelInputDigest !== "string"
+    || !/^[a-f0-9]{64}$/i.test(assessment.modelInputDigest)
+  ) {
     return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_PROVENANCE_INVALID" };
+  }
+  const { modelInputDigest: _suppliedDigest, ...digestInput } = assessment;
+  const expectedDigest = buildMlbMarketProbabilityAssessmentDigest(digestInput);
+  if (assessment.modelInputDigest.toLowerCase() !== expectedDigest) {
+    return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_INPUT_DIGEST_MISMATCH" };
   }
   if (!finiteProbability(assessment.winProbability) || assessment.winProbability <= 0 || assessment.winProbability >= 1) {
     return { ok: false, classification: "MODEL_INVALID", blocker: "MODEL_WIN_PROBABILITY_INVALID" };
@@ -458,10 +490,14 @@ function evaluateMarket(
   if (!marketQuote || marketQuote.availability !== "EXECUTABLE" || marketQuote.execution.status !== "FRESH" || !marketQuote.execution.quote) {
     return blockedMarket(thesis, "PRICE_UNUSABLE", side, null, "FRESH_EXECUTABLE_HARDROCK_QUOTE_REQUIRED");
   }
-  if (!quoteStillFresh(marketQuote.execution.quote, now)) {
+  const executionQuote = marketQuote.execution.quote;
+  if (executionQuote.bookKey !== "hardrockbet_fl" || executionQuote.providerMarketKey !== thesis.providerMarketKey) {
+    return blockedMarket(thesis, "PRICE_UNUSABLE", side, null, "EXECUTION_QUOTE_IDENTITY_MISMATCH");
+  }
+  if (!quoteStillFresh(executionQuote, now)) {
     return blockedMarket(thesis, "QUOTE_STALE", side, null, "EXECUTION_QUOTE_EXPIRED_AT_MARKET_EDGE_EVALUATION");
   }
-  const execution = priceSnapshot(marketQuote.execution.quote, side);
+  const execution = priceSnapshot(executionQuote, side);
   if (!execution) return blockedMarket(thesis, "PRICE_UNUSABLE", side, null, "EXECUTION_BILATERAL_PAIR_INVALID");
 
   const assessment = assessments.get(assessmentKey({ gamePk: game.gamePk, marketType, side, line: execution.line }));
@@ -470,9 +506,9 @@ function evaluateMarket(
   const modelBase: MlbMarketEdgeMarketResult["model"] = {
     status: assessment.status,
     sourcePolicy: assessment.sourcePolicy,
-    modelVersion: assessment.modelVersion,
-    generatedAt: assessment.generatedAt,
-    modelInputDigest: assessment.modelInputDigest,
+    modelVersion: typeof assessment.modelVersion === "string" ? assessment.modelVersion : null,
+    generatedAt: typeof assessment.generatedAt === "string" ? assessment.generatedAt : null,
+    modelInputDigest: typeof assessment.modelInputDigest === "string" ? assessment.modelInputDigest : null,
     winProbability: assessment.winProbability,
     pushProbability: assessment.pushProbability,
     lossProbability: null,
@@ -501,8 +537,14 @@ function evaluateMarket(
   let reference: MlbMarketEdgePriceSnapshot | null = null;
   let referenceNoVigEdgePp: number | null = null;
   const warnings: string[] = [];
-  if (marketQuote.reference.status === "FRESH" && marketQuote.reference.quote && quoteStillFresh(marketQuote.reference.quote, now)) {
-    reference = priceSnapshot(marketQuote.reference.quote, side);
+  const referenceQuote = marketQuote.reference.quote;
+  if (
+    marketQuote.reference.status === "FRESH"
+    && referenceQuote
+    && referenceQuote.providerMarketKey === thesis.providerMarketKey
+    && quoteStillFresh(referenceQuote, now)
+  ) {
+    reference = priceSnapshot(referenceQuote, side);
     if (reference && sameLine(reference.line, execution.line)) {
       referenceNoVigEdgePp = (decisiveWinProbability - reference.noVigDecisiveProbability) * 100;
     } else {
@@ -510,7 +552,7 @@ function evaluateMarket(
       warnings.push("REFERENCE_CONSENSUS_LINE_OR_PAIR_MISMATCH");
     }
   } else {
-    warnings.push("REFERENCE_CONSENSUS_UNAVAILABLE_OR_STALE");
+    warnings.push("REFERENCE_CONSENSUS_IDENTITY_OR_FRESHNESS_INVALID");
   }
 
   let referenceAgreement: MlbMarketEdgeReferenceAgreement = "UNAVAILABLE";
@@ -571,10 +613,6 @@ function validateAssessments(assessments: readonly MlbMarketProbabilityAssessmen
   return map;
 }
 
-export function buildMlbMarketProbabilityAssessmentDigest(input: Omit<MlbMarketProbabilityAssessment, "modelInputDigest">): string {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
-}
-
 export function evaluateMlbMarketEdges(input: {
   acquisition: MlbSelectiveOddsAcquisitionResult;
   modelAssessments: readonly MlbMarketProbabilityAssessment[];
@@ -583,7 +621,7 @@ export function evaluateMlbMarketEdges(input: {
   const now = input.now ?? new Date();
   const assessmentMap = validateAssessments(input.modelAssessments);
   const games = input.acquisition.games.map<MlbMarketEdgeGameResult>((game) => {
-    const markets = game.marketTheses.map((thesis) => evaluateMarket(game, thesis, assessmentMap, now));
+    const markets = game.marketTheses.map((marketThesis) => evaluateMarket(game, marketThesis, assessmentMap, now));
     return {
       gamePk: game.gamePk,
       intrinsicRank: game.intrinsicRank,
@@ -627,10 +665,13 @@ export function evaluateMlbMarketEdges(input: {
       intrinsicThesisDirectionPreserved: true,
       exactExecutionLineMustMatchModelAssessment: true,
       executionBookMustBeFreshAndExecutable: true,
+      executionQuoteIdentityRevalidated: true,
       referenceBooksCanSubstituteExecution: false,
       referenceConsensusIsDiagnosticOnly: true,
       quoteFreshnessRecheckedAtEvaluation: true,
       providerLastUpdateFreshnessRecheckedAtEvaluation: true,
+      modelInputDigestRecomputedBeforeEconomics: true,
+      missingModelProvenanceFailsClosedWithoutThrow: true,
       marketRankingProduced: false,
       operatingEnvelopeApplied: false,
       eliteLabelProduced: false,
