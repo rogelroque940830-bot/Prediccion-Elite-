@@ -74,6 +74,7 @@ export interface MlbOperatingEnvelopeCalibrationReport {
     noPickDateRateAlwaysReported: true;
     minimumSampleRequirementsAreResearchOnly: true;
     minimumSampleRequirementsAreLivePickFilters: false;
+    researchSufficiencyUsesDecisiveOutcomesOnly: true;
     ruleThresholdsHardCodedByRuntime: false;
     automaticBestRuleSelection: false;
     pointEstimateCanPromoteBetElite: false;
@@ -202,12 +203,13 @@ export function buildMlbOperatingEnvelopeCalibration(input: {
     seen.add(row.predictionId);
   }
   const observations = [...input.observations].sort((a, b) => a.gameDate.localeCompare(b.gameDate) || a.predictionId.localeCompare(b.predictionId));
-  const uniqueDates = new Set(observations.map((row) => row.gameDate)).size;
-  const enoughSample = observations.length >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS
-    && uniqueDates >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES;
+  const decisiveObservations = observations.filter((row) => row.outcome === "WIN" || row.outcome === "LOSS");
+  const decisiveDates = new Set(decisiveObservations.map((row) => row.gameDate)).size;
+  const enoughSample = decisiveObservations.length >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS
+    && decisiveDates >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES;
   const blockers: string[] = [];
-  if (observations.length < MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS) blockers.push("MINIMUM_OBSERVATIONS_NOT_REACHED");
-  if (uniqueDates < MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES) blockers.push("MINIMUM_DATES_NOT_REACHED");
+  if (decisiveObservations.length < MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS) blockers.push("MINIMUM_OBSERVATIONS_NOT_REACHED");
+  if (decisiveDates < MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES) blockers.push("MINIMUM_DATES_NOT_REACHED");
   const baseline = metrics(observations, observations);
   const rules = input.rules.map((rule) => ({
     rule,
@@ -217,8 +219,8 @@ export function buildMlbOperatingEnvelopeCalibration(input: {
     schemaVersion: MLB_OPERATING_ENVELOPE_CALIBRATION_SCHEMA,
     state: enoughSample ? "RESEARCH_METRICS_READY" : "INSUFFICIENT_SAMPLE",
     cohort: {
-      observations: observations.length,
-      dates: uniqueDates,
+      observations: decisiveObservations.length,
+      dates: decisiveDates,
       minimumObservations: MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS,
       minimumDates: MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES,
     },
@@ -232,6 +234,7 @@ export function buildMlbOperatingEnvelopeCalibration(input: {
       noPickDateRateAlwaysReported: true,
       minimumSampleRequirementsAreResearchOnly: true,
       minimumSampleRequirementsAreLivePickFilters: false,
+      researchSufficiencyUsesDecisiveOutcomesOnly: true,
       ruleThresholdsHardCodedByRuntime: false,
       automaticBestRuleSelection: false,
       pointEstimateCanPromoteBetElite: false,
