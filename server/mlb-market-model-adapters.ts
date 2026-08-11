@@ -8,6 +8,7 @@ import {
 
 export const MLB_MARKET_MODEL_ADAPTER_SCHEMA = "courtedge-p0-mlb-market-model-adapters.v1" as const;
 export const MLB_MARKET_MODEL_ADAPTER_VERSION = "mlb-current-predictor-model-adapter.v1" as const;
+export const MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS = 3.5 as const;
 
 export const MLB_MARKET_MODEL_ADAPTER_MARKETS = [
   "ML",
@@ -30,7 +31,10 @@ export interface MlbCurrentPredictorProbabilityEvidence {
   side: "HOME" | "AWAY" | "OVER" | "UNDER";
   line: number | null;
   metric: MlbCurrentPredictorProbabilityMetric;
+  /** Source-reported pure probability. Step 10 recomputes TOTAL/F5_TOTAL and requires parity. */
   probability: number | null;
+  /** Required for TOTAL/F5_TOTAL parity; null for currently blocked side markets. */
+  projectedRuns: number | null;
   probabilityUsesSportsbookPrice: boolean;
   modelVersion: string;
   generatedAt: string;
@@ -48,6 +52,7 @@ export interface MlbMarketModelAdapterResult {
     generatedAt: string;
     sourceEvidenceDigest: string;
     probabilityUsesSportsbookPrice: boolean;
+    projectedRuns: number | null;
   };
   blockers: readonly string[];
   warnings: readonly string[];
@@ -61,6 +66,9 @@ export interface MlbMarketModelAdapterResult {
     integerLinePushMayBeInvented: false;
     evidenceDigestRecomputedBeforeReady: true;
     priceDependenceFlagMustBeBoolean: true;
+    totalProbabilityRecomputedFromProjection: true;
+    totalProbabilitySigmaRuns: typeof MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS;
+    sourceReportedProbabilityMustMatchRecomputation: true;
     a3aExactSettlementMathAvailable: true;
     a3aExperimentalShadowCanBecomeReady: false;
     unsupportedChallengersCanBePromoted: false;
@@ -78,6 +86,7 @@ export interface MlbMarketModelAdapterResult {
 
 const HEX_64 = /^[a-f0-9]{64}$/i;
 const EPS = 1e-9;
+const PROBABILITY_PARITY_TOLERANCE = 1e-10;
 
 const EXPECTED_METRIC: Readonly<Record<MlbMarketEdgeSupportedMarket, MlbCurrentPredictorProbabilityMetric>> = Object.freeze({
   ML: "ML_FINAL_SELECTED_PROBABILITY",
@@ -149,6 +158,26 @@ function isExactHalfRunLine(line: number): boolean {
   return !isIntegerLine(line) && Math.abs(line * 2 - Math.round(line * 2)) <= EPS;
 }
 
+function currentPredictorNormalCdf(x: number, mean: number, std: number): number {
+  const z = (x - mean) / std;
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+
+export function reproduceMlbCurrentPredictorTotalModelHitProbability(
+  projectedRuns: number,
+  line: number,
+): { side: "OVER" | "UNDER"; probability: number } | null {
+  if (!Number.isFinite(projectedRuns) || projectedRuns < 0 || !Number.isFinite(line)) return null;
+  const side: "OVER" | "UNDER" = projectedRuns - line > 0 ? "OVER" : "UNDER";
+  const modelOverProbability = 1 - currentPredictorNormalCdf(line, projectedRuns, MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS);
+  const probability = side === "OVER" ? modelOverProbability : 1 - modelOverProbability;
+  if (!finiteProbability(probability)) return null;
+  return { side, probability };
+}
+
 function assessmentWithDigest(
   input: Omit<MlbMarketProbabilityAssessment, "modelInputDigest">,
 ): MlbMarketProbabilityAssessment {
@@ -189,6 +218,9 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     integerLinePushMayBeInvented: false,
     evidenceDigestRecomputedBeforeReady: true,
     priceDependenceFlagMustBeBoolean: true,
+    totalProbabilityRecomputedFromProjection: true,
+    totalProbabilitySigmaRuns: MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS,
+    sourceReportedProbabilityMustMatchRecomputation: true,
     a3aExactSettlementMathAvailable: true,
     a3aExperimentalShadowCanBecomeReady: false,
     unsupportedChallengersCanBePromoted: false,
@@ -220,6 +252,7 @@ function result(
       generatedAt: String(evidence.generatedAt ?? ""),
       sourceEvidenceDigest: String(evidence.sourceEvidenceDigest ?? ""),
       probabilityUsesSportsbookPrice: evidence.probabilityUsesSportsbookPrice === true,
+      projectedRuns: typeof evidence.projectedRuns === "number" && Number.isFinite(evidence.projectedRuns) ? evidence.projectedRuns : null,
     },
     blockers: [...new Set(blockers)],
     warnings: [...new Set(warnings)],
@@ -234,8 +267,9 @@ function result(
  * - ML/F5 ML final selected probabilities are market-regressed; F5 also needs
  *   explicit tie/push mass that the binary current model does not estimate.
  * - Run Line is derived from the already market-regressed full-game ML output.
- * - Total/F5 Total expose a pre-market modelHitProb. That probability may be
- *   adapted only on exact half-run lines, where an integer run total cannot push.
+ * - Total/F5 Total expose a pre-market modelHitProb derived from projected runs
+ *   through the existing Normal CDF (sigma=3.5). Step 10 reproduces that exact
+ *   pure probability and requires source parity before creating READY evidence.
  * - The A3A discrete distribution has exact settlement math but is explicitly
  *   EXPERIMENTAL_SHADOW/actionabilityAllowed=false and cannot be promoted here.
  */
@@ -300,6 +334,10 @@ export function adaptMlbCurrentPredictorProbability(
     const reason = "PURE_MODEL_PROBABILITY_INVALID";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
+  if (typeof evidence.projectedRuns !== "number" || !Number.isFinite(evidence.projectedRuns) || evidence.projectedRuns < 0) {
+    const reason = "PURE_MODEL_RUN_PROJECTION_INVALID";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
 
   const line = evidence.line as number;
   if (isIntegerLine(line)) {
@@ -311,6 +349,20 @@ export function adaptMlbCurrentPredictorProbability(
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
 
+  const reproduced = reproduceMlbCurrentPredictorTotalModelHitProbability(evidence.projectedRuns, line);
+  if (!reproduced) {
+    const reason = "PURE_MODEL_PROBABILITY_RECOMPUTATION_FAILED";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+  if (reproduced.side !== evidence.side) {
+    const reason = "PURE_MODEL_SELECTED_SIDE_MISMATCH";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+  if (Math.abs(reproduced.probability - evidence.probability) > PROBABILITY_PARITY_TOLERANCE) {
+    const reason = "PURE_MODEL_PROBABILITY_PARITY_MISMATCH";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+
   const assessment = assessmentWithDigest({
     gamePk: evidence.gamePk,
     marketType: evidence.marketType,
@@ -318,10 +370,10 @@ export function adaptMlbCurrentPredictorProbability(
     line,
     status: "READY",
     sourcePolicy: POLICY[evidence.marketType],
-    modelVersion: `${evidence.modelVersion}:${evidence.metric}`,
+    modelVersion: `${evidence.modelVersion}:${evidence.metric}:normal-sigma-${MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS}`,
     generatedAt: evidence.generatedAt,
     probabilitySemantics: "UNCONDITIONAL_SETTLEMENT",
-    winProbability: evidence.probability,
+    winProbability: reproduced.probability,
     pushProbability: null,
     unavailableReason: null,
   });
