@@ -43,7 +43,7 @@ export interface MlbCurrentPredictorProbabilityEvidence {
   probabilityUsesSportsbookPrice: boolean;
   modelVersion: string;
   generatedAt: string;
-  /** SHA-256 of an exact type-tagged serialization of this envelope excluding sourceEvidenceDigest. */
+  /** SHA-256 of the fixed scalar evidence field-set excluding sourceEvidenceDigest. */
   sourceEvidenceDigest: string;
 }
 
@@ -73,10 +73,13 @@ export interface MlbMarketModelAdapterResult {
     integerLinePushMayBeInvented: false;
     evidenceDigestRecomputedBeforeReady: true;
     evidenceDigestUsesLosslessNumericSerialization: true;
+    evidenceDigestRecursiveTraversalAllowed: false;
+    exactEnvelopeFieldSetRequired: true;
     exactCurrentPredictorProvenanceRequired: true;
     exactHalfRunIdentityRequired: true;
     priceDependenceFlagMustBeBoolean: true;
     malformedEnvelopeCanThrow: false;
+    processingFailuresFailClosed: true;
     unsupportedMarketCanProduceAssessment: false;
     totalProbabilityRecomputedFromProjection: true;
     totalProbabilitySigmaRuns: typeof MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS;
@@ -99,6 +102,19 @@ export interface MlbMarketModelAdapterResult {
 
 const HEX_64 = /^[a-f0-9]{64}$/i;
 const SIDES = ["HOME", "AWAY", "OVER", "UNDER"] as const;
+const EVIDENCE_DIGEST_FIELDS = [
+  "gamePk",
+  "marketType",
+  "side",
+  "line",
+  "metric",
+  "probability",
+  "projectedRuns",
+  "probabilityUsesSportsbookPrice",
+  "modelVersion",
+  "generatedAt",
+] as const;
+const EVIDENCE_ENVELOPE_FIELDS = [...EVIDENCE_DIGEST_FIELDS, "sourceEvidenceDigest"] as const;
 
 const EXPECTED_METRIC: Readonly<Record<MlbMarketEdgeSupportedMarket, MlbCurrentPredictorProbabilityMetric>> = Object.freeze({
   ML: "ML_FINAL_SELECTED_PROBABILITY",
@@ -142,7 +158,15 @@ function isSide(value: unknown): value is MlbCurrentPredictorProbabilityEvidence
   return typeof value === "string" && (SIDES as readonly string[]).includes(value);
 }
 
-function exactCanonicalEvidence(value: unknown): string {
+function hasExactEvidenceEnvelopeFields(value: Record<string, unknown>): boolean {
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key !== "string")) return false;
+  const actual = (keys as string[]).sort();
+  const expected = [...EVIDENCE_ENVELOPE_FIELDS].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function exactScalarEvidence(value: unknown): string {
   if (value === null) return "null;";
   if (value === undefined) return "undefined;";
   if (typeof value === "boolean") return value ? "bool:1;" : "bool:0;";
@@ -154,19 +178,17 @@ function exactCanonicalEvidence(value: unknown): string {
     return `number:${value.toString()};`;
   }
   if (typeof value === "string") return `string:${JSON.stringify(value)};`;
-  if (Array.isArray(value)) return `array:[${value.map(exactCanonicalEvidence).join("")}]`;
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right));
-    return `object:{${entries.map(([key, child]) => `${JSON.stringify(key)}=${exactCanonicalEvidence(child)}`).join("")}}`;
-  }
-  return `unsupported:${typeof value}:${JSON.stringify(String(value))};`;
+  return `unsupported:${typeof value};`;
 }
 
 export function buildMlbCurrentPredictorProbabilityEvidenceDigest(
   input: Omit<MlbCurrentPredictorProbabilityEvidence, "sourceEvidenceDigest">,
 ): string {
-  return createHash("sha256").update(exactCanonicalEvidence(input)).digest("hex");
+  const value = record(input) ?? {};
+  const material = EVIDENCE_DIGEST_FIELDS
+    .map((key) => `${key}=${exactScalarEvidence(value[key])}`)
+    .join("|");
+  return createHash("sha256").update(material).digest("hex");
 }
 
 function validIso(value: unknown): boolean {
@@ -175,6 +197,10 @@ function validIso(value: unknown): boolean {
 
 function finiteProbability(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 && value < 1;
+}
+
+function nullableFiniteNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
 }
 
 function sideValid(market: MlbMarketEdgeSupportedMarket, side: MlbCurrentPredictorProbabilityEvidence["side"]): boolean {
@@ -235,8 +261,8 @@ function unavailable(
     line: evidence.line,
     status: "UNAVAILABLE",
     sourcePolicy: POLICY[evidence.marketType],
-    modelVersion: String(evidence.modelVersion ?? ""),
-    generatedAt: String(evidence.generatedAt ?? ""),
+    modelVersion: evidence.modelVersion,
+    generatedAt: evidence.generatedAt,
     probabilitySemantics: "UNCONDITIONAL_SETTLEMENT",
     winProbability: null,
     pushProbability: null,
@@ -256,10 +282,13 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     integerLinePushMayBeInvented: false,
     evidenceDigestRecomputedBeforeReady: true,
     evidenceDigestUsesLosslessNumericSerialization: true,
+    evidenceDigestRecursiveTraversalAllowed: false,
+    exactEnvelopeFieldSetRequired: true,
     exactCurrentPredictorProvenanceRequired: true,
     exactHalfRunIdentityRequired: true,
     priceDependenceFlagMustBeBoolean: true,
     malformedEnvelopeCanThrow: false,
+    processingFailuresFailClosed: true,
     unsupportedMarketCanProduceAssessment: false,
     totalProbabilityRecomputedFromProjection: true,
     totalProbabilitySigmaRuns: MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS,
@@ -305,6 +334,26 @@ function invalidResult(input: unknown, reason: string): MlbMarketModelAdapterRes
   };
 }
 
+function safeInvalidResult(reason: string): MlbMarketModelAdapterResult {
+  return {
+    schemaVersion: MLB_MARKET_MODEL_ADAPTER_SCHEMA,
+    adapterVersion: MLB_MARKET_MODEL_ADAPTER_VERSION,
+    adapterStatus: "INVALID_EVIDENCE",
+    assessment: null,
+    source: {
+      metric: null,
+      modelVersion: null,
+      generatedAt: null,
+      sourceEvidenceDigest: null,
+      probabilityUsesSportsbookPrice: null,
+      projectedRuns: null,
+    },
+    blockers: [reason],
+    warnings: [],
+    policy: policy(),
+  };
+}
+
 function result(
   evidence: MlbCurrentPredictorProbabilityEvidence,
   assessment: MlbMarketProbabilityAssessment,
@@ -323,17 +372,42 @@ function result(
   };
 }
 
-/** Step 10 adapts only the explicitly recognized current predictor; it never promotes challengers. */
-export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
+function adaptValidatedMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
   const raw = record(input);
   if (!raw) return invalidResult(input, "MODEL_EVIDENCE_ENVELOPE_INVALID");
+  if (!hasExactEvidenceEnvelopeFields(raw)) return invalidResult(input, "MODEL_EVIDENCE_FIELDS_INVALID");
   if (!isSupportedMarket(raw.marketType)) return invalidResult(input, "MODEL_EVIDENCE_MARKET_UNSUPPORTED");
   if (!isSupportedMetric(raw.metric)) return invalidResult(input, "MODEL_EVIDENCE_METRIC_UNSUPPORTED");
   if (!isSide(raw.side)) return invalidResult(input, "MODEL_EVIDENCE_SIDE_INVALID");
   if (!Number.isInteger(raw.gamePk) || Number(raw.gamePk) <= 0) return invalidResult(input, "MODEL_EVIDENCE_GAME_ID_INVALID");
   if (!lineIdentityValid(raw.marketType, raw.line)) return invalidResult(input, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
+  if (!nullableFiniteNumber(raw.probability)) return invalidResult(input, "MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID");
+  if (!nullableFiniteNumber(raw.projectedRuns)) return invalidResult(input, "MODEL_EVIDENCE_PROJECTED_RUNS_FIELD_INVALID");
+  if (typeof raw.probabilityUsesSportsbookPrice !== "boolean") return invalidResult(input, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
+  if (
+    typeof raw.modelVersion !== "string"
+    || !raw.modelVersion.trim()
+    || !validIso(raw.generatedAt)
+    || typeof raw.sourceEvidenceDigest !== "string"
+    || !HEX_64.test(raw.sourceEvidenceDigest)
+  ) {
+    return invalidResult(input, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+  }
 
-  const evidence = raw as unknown as MlbCurrentPredictorProbabilityEvidence;
+  const evidence: MlbCurrentPredictorProbabilityEvidence = {
+    gamePk: raw.gamePk as number,
+    marketType: raw.marketType,
+    side: raw.side,
+    line: raw.line as number | null,
+    metric: raw.metric,
+    probability: raw.probability as number | null,
+    projectedRuns: raw.projectedRuns as number | null,
+    probabilityUsesSportsbookPrice: raw.probabilityUsesSportsbookPrice,
+    modelVersion: raw.modelVersion,
+    generatedAt: raw.generatedAt as string,
+    sourceEvidenceDigest: raw.sourceEvidenceDigest,
+  };
+
   if (!sideValid(evidence.marketType, evidence.side)) {
     const reason = "MODEL_EVIDENCE_SIDE_MARKET_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
@@ -342,20 +416,7 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
     const reason = "MODEL_EVIDENCE_METRIC_MARKET_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
-  if (
-    typeof evidence.modelVersion !== "string"
-    || !evidence.modelVersion.trim()
-    || !validIso(evidence.generatedAt)
-    || typeof evidence.sourceEvidenceDigest !== "string"
-    || !HEX_64.test(evidence.sourceEvidenceDigest)
-  ) {
-    const reason = "MODEL_EVIDENCE_PROVENANCE_INVALID";
-    return result(evidence, unavailable(evidence, reason), [reason]);
-  }
-  if (typeof evidence.probabilityUsesSportsbookPrice !== "boolean") {
-    const reason = "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID";
-    return result(evidence, unavailable(evidence, reason), [reason]);
-  }
+
   const { sourceEvidenceDigest: suppliedDigest, ...digestInput } = evidence;
   const expectedDigest = buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput);
   if (suppliedDigest.toLowerCase() !== expectedDigest) {
@@ -388,7 +449,7 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
     const reason = "PURE_MODEL_PROBABILITY_INVALID";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
-  if (typeof evidence.projectedRuns !== "number" || !Number.isFinite(evidence.projectedRuns) || evidence.projectedRuns < 0) {
+  if (evidence.projectedRuns == null || evidence.projectedRuns < 0) {
     const reason = "PURE_MODEL_RUN_PROJECTION_INVALID";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
@@ -436,4 +497,13 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
     "RAW_MODEL_EDGE_ONLY_OPERATING_ENVELOPE_STILL_REQUIRED",
     "PUSH_DERIVED_AS_ZERO_ONLY_BECAUSE_EXACT_HALF_RUN_LINE_CANNOT_PUSH",
   ]);
+}
+
+/** Step 10 adapts only the recognized scalar evidence envelope; malformed processing always fails closed. */
+export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
+  try {
+    return adaptValidatedMlbCurrentPredictorProbability(input);
+  } catch {
+    return safeInvalidResult("MODEL_EVIDENCE_PROCESSING_FAILED");
+  }
 }
