@@ -1,0 +1,265 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  captureMlbEliteEvidenceLedger,
+  settleMlbEliteEvidenceLedger,
+  toMlbOperatingEnvelopeCalibrationObservations,
+} from "./mlb-elite-evidence-ledger";
+
+function fixture() {
+  const sourceRunId = "run-11c-test";
+  const execution = (side: "OVER" | "UNDER", odds: number) => ({
+    bookKey: "hardrockbet",
+    bookTitle: "Hard Rock Bet",
+    selectedSide: side,
+    selectedSelection: side === "OVER" ? "Over" : "Under",
+    line: 8.5,
+    selectedOddsAmerican: odds,
+    oppositeOddsAmerican: -110,
+    selectedImpliedProbability: 0.5238,
+    oppositeImpliedProbability: 0.5238,
+    noVigDecisiveProbability: 0.5,
+    capturedAt: "2026-08-11T17:00:00.000Z",
+    providerLastUpdate: "2026-08-11T16:59:30.000Z",
+  });
+  const edgeMarket = (side: "OVER" | "UNDER", odds: number) => ({
+    marketType: "TOTAL",
+    providerMarketKey: "totals",
+    intrinsicProjectionScope: "FULL_GAME",
+    intrinsicThesisKinds: [side === "OVER" ? "TOTAL_OVER" : "TOTAL_UNDER"],
+    supportingComponents: ["TEAM_OFFENSE", "STARTING_PITCHER"],
+    selectedSide: side,
+    selectedLine: 8.5,
+    classification: "POSITIVE_EV",
+    eligibleForOperatingEnvelope: true,
+    model: {
+      status: "READY",
+      sourcePolicy: "TOTAL_RUN_DIFFERENTIAL_V1",
+      modelVersion: "predictor-full-snapshot-v2",
+      generatedAt: "2026-08-11T16:58:00.000Z",
+      modelInputDigest: `digest-${side}`,
+      winProbability: 0.58,
+      pushProbability: 0,
+      lossProbability: 0.42,
+      decisiveWinProbability: 0.58,
+      pushProbabilityDerivedAsZero: true,
+    },
+    execution: execution(side, odds),
+    reference: null,
+    economics: {
+      fairPrice: { decimal: 1.7241, american: -138.1, modelWinProbability: 0.58, modelPushProbability: 0 },
+      currentBreakEvenWinProbability: 0.5238,
+      executionEdgePp: 5.62,
+      executionNoVigEdgePp: 8.0,
+      referenceNoVigEdgePp: null,
+      expectedValuePerUnit: 0.1073,
+      referenceAgreement: "UNAVAILABLE",
+    },
+    blockers: [],
+    warnings: [],
+  });
+  const envelopeMarket = (side: "OVER" | "UNDER") => ({
+    marketType: "TOTAL",
+    providerMarketKey: "totals",
+    selectedSide: side,
+    selectedLine: 8.5,
+    classification: "ELITE_EVIDENCE_CANDIDATE",
+    eliteEvidenceCandidate: true,
+    intrinsicProjectionScope: "FULL_GAME",
+    intrinsicThesisKinds: [side === "OVER" ? "TOTAL_OVER" : "TOTAL_UNDER"],
+    supportingComponents: ["TEAM_OFFENSE", "STARTING_PITCHER"],
+    modelWinProbability: 0.58,
+    modelPushProbability: 0,
+    expectedValuePerUnit: 0.1073,
+    executionEdgePp: 5.62,
+    executionNoVigEdgePp: 8.0,
+    referenceNoVigEdgePp: null,
+    referenceAgreement: "UNAVAILABLE",
+    blockers: [],
+    warnings: [],
+  });
+  return {
+    operatingEnvelope: {
+      schemaVersion: "courtedge-p0-mlb-operating-envelope.v1",
+      generatedAt: "2026-08-11T17:00:05.000Z",
+      sourceMarketEdgeSchemaVersion: "courtedge-p0-mlb-market-edge.v1",
+      sourceRunId,
+      games: [{
+        gamePk: 999001,
+        intrinsicRank: 1,
+        homeTeam: { id: 1, name: "Home" },
+        awayTeam: { id: 2, name: "Away" },
+        markets: [envelopeMarket("OVER"), envelopeMarket("UNDER")],
+        summary: { eliteEvidenceCandidates: 2, positiveEvEnvelopeBlocked: 0, noPositiveEv: 0, upstreamBlocked: 0 },
+      }],
+      summary: { games: 1, markets: 2, eliteEvidenceCandidates: 2, positiveEvEnvelopeBlocked: 0, noPositiveEv: 0, upstreamBlocked: 0 },
+      policy: {},
+      safety: {},
+    } as any,
+    marketEdge: {
+      schemaVersion: "courtedge-p0-mlb-market-edge.v1",
+      generatedAt: "2026-08-11T17:00:00.000Z",
+      sourceSelectiveOddsSchemaVersion: "courtedge-p0-mlb-selective-odds-acquisition.v1",
+      sourceRunId,
+      games: [{
+        gamePk: 999001,
+        intrinsicRank: 1,
+        homeTeam: { id: 1, name: "Home" },
+        awayTeam: { id: 2, name: "Away" },
+        acquisitionStatus: "ACQUIRED",
+        markets: [edgeMarket("OVER", -110), edgeMarket("UNDER", 120)],
+        summary: { thesisMarkets: 2, positiveEvMarkets: 2, noPositiveEvMarkets: 0, blockedOrUnavailableMarkets: 0, operatingEnvelopeEligibleMarkets: 2 },
+      }],
+      summary: { games: 1, thesisMarkets: 2, positiveEvMarkets: 2, noPositiveEvMarkets: 0, blockedOrUnavailableMarkets: 0, operatingEnvelopeEligibleMarkets: 2 },
+      policy: {},
+      safety: {},
+    } as any,
+  };
+}
+
+test("captures every Step 11A elite candidate with 100% retention and no extra filter", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  assert.equal(ledger.entries.length, 2);
+  assert.equal(ledger.summary.step11aEliteCandidates, 2);
+  assert.equal(ledger.summary.capturedCandidates, 2);
+  assert.equal(ledger.summary.captureRetentionPct, 100);
+  assert.equal(ledger.policy.capturesEveryStep11aEliteCandidate, true);
+  assert.equal(ledger.policy.additionalEligibilityFilterApplied, false);
+  assert.equal(ledger.policy.silentCandidateDropAllowed, false);
+});
+
+test("pregame snapshot preserves exact run game market side line price model and EV identity", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  const over = ledger.entries.find((entry) => entry.candidate.selectedSide === "OVER")!;
+  assert.equal(over.candidate.sourceRunId, "run-11c-test");
+  assert.equal(over.candidate.gamePk, 999001);
+  assert.equal(over.candidate.marketType, "TOTAL");
+  assert.equal(over.candidate.providerMarketKey, "totals");
+  assert.equal(over.candidate.selectedLine, 8.5);
+  assert.equal(over.candidate.executionBookKey, "hardrockbet");
+  assert.equal(over.candidate.executionOddsAmerican, -110);
+  assert.equal(over.candidate.modelVersion, "predictor-full-snapshot-v2");
+  assert.equal(over.candidate.modelInputDigest, "digest-OVER");
+  assert.equal(over.candidate.expectedValuePerUnit, 0.1073);
+});
+
+test("malformed or missing exact upstream evidence fails the whole capture instead of silently dropping a pick", () => {
+  const source = fixture();
+  source.marketEdge.games[0].markets.splice(1, 1);
+  assert.throws(() => captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  }), /MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND/);
+});
+
+test("inconsistent Step 11A candidate flags fail closed instead of being undercounted", () => {
+  const source = fixture();
+  source.operatingEnvelope.games[0].markets[0].eliteEvidenceCandidate = false;
+  assert.throws(() => captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  }), /MLB_ELITE_LEDGER_INCONSISTENT_STEP11A_CANDIDATE/);
+});
+
+test("settlement leaves immutable pregame evidence untouched and uses flat one-unit economics", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  const before = JSON.stringify(ledger.entries.map((entry) => entry.candidate));
+  const [over, under] = ledger.entries;
+  const settled = settleMlbEliteEvidenceLedger({
+    ledger,
+    settlements: [
+      { predictionId: over.predictionId, outcome: "WIN", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-1" },
+      { predictionId: under.predictionId, outcome: "PUSH", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-2" },
+    ],
+  });
+  assert.equal(JSON.stringify(settled.entries.map((entry) => entry.candidate)), before);
+  assert.ok(Math.abs(settled.entries[0].settlement!.realizedProfitUnits - (100 / 110)) < 1e-12);
+  assert.equal(settled.entries[1].settlement!.realizedProfitUnits, 0);
+  assert.equal(settled.summary.settled, 2);
+  assert.equal(settled.policy.flatOneUnitSettlementOnly, true);
+  assert.equal(settled.policy.stakeCalculated, false);
+});
+
+test("loss settles at minus one unit and conflicting resettlement fails closed", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  const first = ledger.entries[0];
+  const settled = settleMlbEliteEvidenceLedger({
+    ledger,
+    settlements: [{ predictionId: first.predictionId, outcome: "LOSS", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-loss" }],
+  });
+  assert.equal(settled.entries[0].settlement!.realizedProfitUnits, -1);
+  assert.throws(() => settleMlbEliteEvidenceLedger({
+    ledger: settled,
+    settlements: [{ predictionId: first.predictionId, outcome: "WIN", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-loss" }],
+  }), /MLB_ELITE_LEDGER_CONFLICTING_SETTLEMENT/);
+});
+
+test("settled ledger converts directly into Step 11B observations without a new selection filter", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  const settled = settleMlbEliteEvidenceLedger({
+    ledger,
+    settlements: ledger.entries.map((entry, index) => ({
+      predictionId: entry.predictionId,
+      outcome: index === 0 ? "WIN" as const : "LOSS" as const,
+      settledAt: "2026-08-12T03:00:00.000Z",
+      officialEvidenceId: `official-${index}`,
+    })),
+  });
+  const observations = toMlbOperatingEnvelopeCalibrationObservations(settled);
+  assert.equal(observations.length, 2);
+  assert.deepEqual(observations.map((row) => row.predictionId).sort(), settled.entries.map((entry) => entry.predictionId).sort());
+  assert.equal(observations[0].gameDate, "2026-08-11");
+});
+
+test("closing line is deliberately absent from capture requirements and cannot block settlement/calibration", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  assert.equal(ledger.policy.missingClosingLineBlocksCapture, false);
+  assert.equal(ledger.policy.missingClosingLineBlocksSettlement, false);
+  assert.equal(ledger.policy.closingLineRequiredForCalibration, false);
+});
+
+test("Step 11C produces no BET_ELITE, ranking, stake or automatic wager behavior", () => {
+  const source = fixture();
+  const ledger = captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-08-11" },
+  });
+  assert.equal(ledger.policy.betEliteLabelProduced, false);
+  assert.equal(ledger.policy.finalBetRecommendationProduced, false);
+  assert.equal(ledger.policy.stakeCalculated, false);
+  assert.equal(ledger.policy.automaticBetPlacement, false);
+  assert.equal(ledger.policy.realFinancialExposure, 0);
+});
