@@ -1,3 +1,4 @@
+// Research-only trigger for post-Step-9 exact-deployment live custody proof. Do not merge.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
