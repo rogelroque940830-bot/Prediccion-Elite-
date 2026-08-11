@@ -150,6 +150,7 @@ export interface MlbIntrinsicEdgeResult {
     legacyCompositeModelsCountAsIndependentEvidence: false;
     sameUnderlyingEvidenceDoubleCountingAllowed: false;
     duplicateHorizonThesisKindsCountOnceInRank: true;
+    nonQualifyingSignalsAffectIntrinsicRank: false;
     contradictionsWithinQualifyingProjectionCanBeElite: false;
     requiresFinalInputsForResearchEliteCandidate: false;
     horizonScopedThesesRequired: true;
@@ -506,6 +507,13 @@ function eliteThesisCount(game: MlbIntrinsicGameProfile): number {
   return new Set(allEliteTheses(game).map((thesis) => thesis.kind)).size;
 }
 
+function maxQualifyingThesisNativeRunSignal(game: MlbIntrinsicGameProfile): number {
+  return allEliteTheses(game).reduce(
+    (maximum, thesis) => Math.max(maximum, thesis.maxAbsoluteNativeRunSignal),
+    0,
+  );
+}
+
 export function rankMlbIntrinsicGames(
   games: readonly MlbIntrinsicGameProfile[],
 ): MlbIntrinsicGameProfile[] {
@@ -515,8 +523,10 @@ export function rankMlbIntrinsicGames(
     if (maxSupportingComponentCount(right) !== maxSupportingComponentCount(left)) {
       return maxSupportingComponentCount(right) - maxSupportingComponentCount(left);
     }
-    if (right.maxAbsoluteNativeRunSignal !== left.maxAbsoluteNativeRunSignal) {
-      return right.maxAbsoluteNativeRunSignal - left.maxAbsoluteNativeRunSignal;
+    const rightQualifyingMagnitude = maxQualifyingThesisNativeRunSignal(right);
+    const leftQualifyingMagnitude = maxQualifyingThesisNativeRunSignal(left);
+    if (rightQualifyingMagnitude !== leftQualifyingMagnitude) {
+      return rightQualifyingMagnitude - leftQualifyingMagnitude;
     }
     return left.gamePk - right.gamePk;
   });
@@ -562,6 +572,7 @@ export function buildMlbIntrinsicEdge(input: {
       legacyCompositeModelsCountAsIndependentEvidence: false,
       sameUnderlyingEvidenceDoubleCountingAllowed: false,
       duplicateHorizonThesisKindsCountOnceInRank: true,
+      nonQualifyingSignalsAffectIntrinsicRank: false,
       contradictionsWithinQualifyingProjectionCanBeElite: false,
       requiresFinalInputsForResearchEliteCandidate: false,
       horizonScopedThesesRequired: true,
