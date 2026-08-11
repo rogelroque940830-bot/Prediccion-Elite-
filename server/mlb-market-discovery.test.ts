@@ -185,10 +185,11 @@ test("player props stay cataloged but never become paid-query eligible without d
   assert.equal(result.policy.playerPropsQueryEligible, false);
 });
 
-test("strong two-sided intrinsic SIDE thesis opens only mature side markets", () => {
+test("strong two-sided intrinsic SIDE thesis opens only mature side markets and preserves HOME direction", () => {
   const result = buildMlbMarketDiscovery({ intrinsic: intrinsic([strongHomeSide(101)]) });
   const plan = result.games[0];
   assert.equal(plan.intrinsicResearchEliteCandidate, true);
+  assert.deepEqual(plan.researchEliteThesisKinds, ["HOME_SIDE"]);
   assert.deepEqual(plan.marketSearchIntents, ["SIDE"]);
   assert.equal(plan.paidLookupEligibleNow, true);
   assert.equal(plan.paidLookupHoldReason, null);
@@ -199,12 +200,15 @@ test("strong two-sided intrinsic SIDE thesis opens only mature side markets", ()
   ]);
   assert.equal(plan.worstCaseCreditsPerOneBookmakerRegionEquivalentNow, 3);
   assert.ok(plan.plannedMarkets.every((market) => market.thesisIntent === "SIDE"));
+  assert.ok(plan.plannedMarkets.every((market) =>
+    market.intrinsicThesisKinds.length === 1 && market.intrinsicThesisKinds[0] === "HOME_SIDE"));
 });
 
-test("strong multi-axis TOTAL thesis opens only mature total markets", () => {
+test("strong multi-axis TOTAL thesis opens only mature total markets and preserves OVER direction", () => {
   const result = buildMlbMarketDiscovery({ intrinsic: intrinsic([strongTotalOver(102)]) });
   const plan = result.games[0];
   assert.equal(plan.intrinsicResearchEliteCandidate, true);
+  assert.deepEqual(plan.researchEliteThesisKinds, ["TOTAL_OVER"]);
   assert.deepEqual(plan.marketSearchIntents, ["TOTAL"]);
   assert.deepEqual([...plan.providerMarketKeysToRequestNow].sort(), [
     "totals",
@@ -212,6 +216,8 @@ test("strong multi-axis TOTAL thesis opens only mature total markets", () => {
   ]);
   assert.equal(plan.worstCaseCreditsPerOneBookmakerRegionEquivalentNow, 2);
   assert.ok(plan.plannedMarkets.every((market) => market.thesisIntent === "TOTAL"));
+  assert.ok(plan.plannedMarkets.every((market) =>
+    market.intrinsicThesisKinds.length === 1 && market.intrinsicThesisKinds[0] === "TOTAL_OVER"));
 });
 
 test("single-axis watch signal no longer opens a paid market bundle", () => {
@@ -225,17 +231,19 @@ test("single-axis watch signal no longer opens a paid market bundle", () => {
   const result = buildMlbMarketDiscovery({ intrinsic: intrinsic([watch]) });
   const plan = result.games[0];
   assert.equal(plan.intrinsicResearchClassification, "INTRINSIC_WATCH");
+  assert.deepEqual(plan.researchEliteThesisKinds, []);
   assert.equal(plan.plannedMarkets.length, 0);
   assert.equal(plan.paidLookupEligibleNow, false);
   assert.equal(plan.paidLookupHoldReason, "NO_STRONG_INTRINSIC_MARKET_THESIS");
   assert.equal(plan.worstCaseCreditsPerOneBookmakerRegionEquivalentNow, 0);
 });
 
-test("provisional intrinsic elite retains rank and market thesis but cannot authorize paid lookup", () => {
+test("provisional intrinsic elite retains rank, thesis direction and market plan but cannot authorize paid lookup", () => {
   const result = buildMlbMarketDiscovery({ intrinsic: intrinsic([strongHomeSide(104, false)]) });
   const plan = result.games[0];
   assert.equal(plan.intrinsicRank, 1);
   assert.equal(plan.inputStage, "PROVISIONAL");
+  assert.deepEqual(plan.researchEliteThesisKinds, ["HOME_SIDE"]);
   assert.equal(plan.plannedProviderMarketKeys.length, 3);
   assert.equal(plan.paidLookupEligibleNow, false);
   assert.equal(plan.paidLookupHoldReason, "OFFICIAL_FINAL_INPUTS_REQUIRED");
@@ -264,10 +272,12 @@ test("late provisional rank #1 remains rank #1 while an earlier final rank #2 ma
   assert.deepEqual(result.games.map((plan) => plan.gamePk), [111, 110]);
   assert.equal(result.games[0].intrinsicRank, 1);
   assert.equal(result.games[0].inputStage, "PROVISIONAL");
+  assert.deepEqual(result.games[0].researchEliteThesisKinds, ["HOME_SIDE"]);
   assert.equal(result.games[0].paidLookupEligibleNow, false);
   assert.equal(result.games[0].paidLookupHoldReason, "OFFICIAL_FINAL_INPUTS_REQUIRED");
   assert.equal(result.games[1].intrinsicRank, 2);
   assert.equal(result.games[1].inputStage, "FINAL");
+  assert.deepEqual(result.games[1].researchEliteThesisKinds, ["HOME_SIDE"]);
   assert.equal(result.games[1].paidLookupEligibleNow, true);
   assert.equal(result.policy.intrinsicRankPreservedAcrossInputStage, true);
 });
@@ -280,13 +290,14 @@ test("no intrinsic games means no market requests and zero planned provider cost
   assert.equal(result.summary.worstCaseCreditsPerOneBookmakerRegionEquivalentNow, 0);
 });
 
-test("market discovery is a pure zero-odds planner and requires intrinsic thesis before a future paid lookup", () => {
+test("market discovery is a pure zero-odds planner and preserves intrinsic direction before any future paid lookup", () => {
   const source = fs.readFileSync("server/mlb-market-discovery.ts", "utf8");
   assert.doesNotMatch(source, /\bfetch\s*\(|api\.the-odds-api\.com|ODDS_API_KEY|x-requests-|setInterval|setTimeout/i);
   assert.doesNotMatch(source, /PREMIUM|ULTRA|automaticBetPlacement|stake|sportsbook.*write/i);
   assert.match(source, /callsTheOddsApi: false/);
   assert.match(source, /theOddsApiCreditsConsumed: 0/);
   assert.match(source, /intrinsicThesisRequiredForPaidLookup: true/);
+  assert.match(source, /intrinsicThesisDirectionPreserved: true/);
   assert.match(source, /intrinsicRankPreservedAcrossInputStage: true/);
   assert.match(source, /firstThreeInningsPriority: false/);
   assert.match(source, /marketOrderCarriesPreference: false/);
