@@ -93,6 +93,8 @@ jobs:
           grep -F 'minimumHoldoutDecisiveRows: 30' "$validate"
           grep -F 'minimumHoldoutUniqueDates: 20' "$validate"
           grep -F 'maximumAbsoluteDiscoveryHoldoutDrift: 0.15' "$validate"
+          grep -F 'exactHoldoutPValueRecomputedFromCounts: true' "$validate"
+          grep -F 'bonferroniParityRecomputedFromTopK: true' "$validate"
           grep -F 'historicalPricesRequiredForSportingSupport: false' "$validate"
           grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$validate"
           grep -F 'validationCriteriaWerePredeclaredBeforeThisReport: true' "$script"
