@@ -189,6 +189,15 @@ test("Step 11A and Step 9 evidence must match exactly before capture", () => {
   assert.throws(() => capture(execution), /MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND|MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH/);
 });
 
+test("impossible game dates fail closed instead of entering the prospective ledger", () => {
+  const source = fixture();
+  assert.throws(() => captureMlbEliteEvidenceLedger({
+    ...source,
+    capturedAt: "2026-08-11T17:00:10.000Z",
+    gameDateByGamePk: { 999001: "2026-02-30" },
+  }), /MLB_ELITE_LEDGER_GAME_DATE_MISSING_OR_INVALID/);
+});
+
 test("settlement leaves immutable pregame evidence untouched and uses flat one-unit economics", () => {
   const ledger = capture();
   const before = JSON.stringify(ledger.entries.map((entry) => entry.candidate));
