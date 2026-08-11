@@ -77,6 +77,47 @@ test("a rule that kills every pick is exposed explicitly instead of looking elit
   assert.equal(metrics.flatStakeRoiPct, null);
 });
 
+test("pushes are excluded from all binary calibration metrics but remain settlement-neutral in ROI", () => {
+  const observations = [
+    row(1, { predictionId: "decisive-win", modelWinProbability: 0.6, outcome: "WIN", realizedProfitUnits: 0.9 }),
+    row(2, { predictionId: "decisive-loss", modelWinProbability: 0.4, outcome: "LOSS", realizedProfitUnits: -1 }),
+    row(3, { predictionId: "push-only", modelWinProbability: 0.99, outcome: "PUSH", realizedProfitUnits: 0 }),
+  ];
+  const report = buildMlbOperatingEnvelopeCalibration({ observations, rules: [] });
+  assert.equal(report.baseline.pushes, 1);
+  assert.equal(report.baseline.decisiveWinRate, 0.5);
+  assert.equal(report.baseline.meanModelWinProbability, 0.5);
+  assert.equal(report.baseline.calibrationGap, 0);
+  assert.ok(Math.abs(report.baseline.meanBrierScore! - 0.16) < 1e-12);
+  assert.ok(Math.abs(report.baseline.flatStakeRoiPct! - ((0.9 - 1 + 0) / 3) * 100) < 1e-12);
+});
+
+test("settlement-inconsistent outcomes or profit values fail closed", () => {
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(1, { outcome: "PUSH", realizedProfitUnits: 1 })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID/);
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(2, { outcome: "LOSS", realizedProfitUnits: 0.5 })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID/);
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(3, { outcome: "WIN", realizedProfitUnits: 0 })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID/);
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(4, { outcome: "VOID" as any, realizedProfitUnits: 0 })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_OUTCOME_INVALID/);
+});
+
+test("impossible calendar dates fail closed and cannot satisfy research date sufficiency", () => {
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(1, { gameDate: "2026-02-30" })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_IDENTITY_INVALID/);
+});
+
 test("runtime does not hard-code a winning rule or auto-promote point estimates", () => {
   const observations = Array.from({ length: 90 }, (_, index) => row(index));
   const report = buildMlbOperatingEnvelopeCalibration({
