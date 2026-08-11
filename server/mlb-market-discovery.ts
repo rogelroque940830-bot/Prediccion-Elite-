@@ -13,12 +13,13 @@ import {
 } from "./mlb-market-universe-registry";
 import { estimateMlbEventOddsWorstCaseCredits } from "./mlb-odds-budget-controller";
 import type {
-  MlbShortlistCandidate,
-  MlbShortlistComponent,
-  MlbShortlistResult,
-} from "./mlb-shortlist";
+  MlbIntrinsicComponent,
+  MlbIntrinsicEdgeResult,
+  MlbIntrinsicGameProfile,
+  MlbIntrinsicMarketSearchIntent,
+} from "./mlb-intrinsic-edge";
 
-export const MLB_MARKET_DISCOVERY_SCHEMA = "courtedge-p0-mlb-market-discovery.v1" as const;
+export const MLB_MARKET_DISCOVERY_SCHEMA = "courtedge-p0-mlb-market-discovery.v2" as const;
 
 /**
  * These are the only market families currently accepted by the existing P1-M2A
@@ -70,8 +71,9 @@ export interface MlbMarketDiscoveryPlannedMarket {
   family: MlbRegistryFamily;
   quoteShape: MlbRegistryQuoteShape;
   acquisition: MlbRegistryAcquisition;
-  supportingComponents: readonly MlbShortlistComponent[];
-  independentSupportingComponentCount: number;
+  thesisIntent: MlbIntrinsicMarketSearchIntent;
+  supportingComponents: readonly MlbIntrinsicComponent[];
+  supportingComponentCount: number;
   hardRockEvidenceStatus: MlbHardRockEvidenceStatus;
   liveHardRockFloridaDiscoveryRequired: true;
 }
@@ -80,14 +82,17 @@ export interface MlbMarketDiscoveryGamePlan {
   gamePk: number;
   officialDate: string;
   startTime: string | null;
-  homeTeam: MlbShortlistCandidate["homeTeam"];
-  awayTeam: MlbShortlistCandidate["awayTeam"];
-  finalInputsAvailable: boolean;
-  shortlistSignalComponents: readonly MlbShortlistComponent[];
+  homeTeam: MlbIntrinsicGameProfile["homeTeam"];
+  awayTeam: MlbIntrinsicGameProfile["awayTeam"];
+  inputStage: MlbIntrinsicGameProfile["inputStage"];
+  intrinsicRank: number;
+  intrinsicResearchClassification: MlbIntrinsicGameProfile["researchClassification"];
+  intrinsicResearchEliteCandidate: boolean;
+  marketSearchIntents: readonly MlbIntrinsicMarketSearchIntent[];
   plannedMarkets: readonly MlbMarketDiscoveryPlannedMarket[];
   plannedProviderMarketKeys: readonly string[];
   paidLookupEligibleNow: boolean;
-  paidLookupHoldReason: "OFFICIAL_FINAL_INPUTS_REQUIRED" | "NO_RELEVANT_CURRENT_ANALYTICAL_MARKET" | null;
+  paidLookupHoldReason: "OFFICIAL_FINAL_INPUTS_REQUIRED" | "NO_STRONG_INTRINSIC_MARKET_THESIS" | null;
   providerMarketKeysToRequestNow: readonly string[];
   worstCaseCreditsPerOneBookmakerRegionEquivalentNow: number;
 }
@@ -96,7 +101,8 @@ export interface MlbMarketDiscoveryResult {
   schemaVersion: typeof MLB_MARKET_DISCOVERY_SCHEMA;
   generatedAt: string;
   date: string;
-  sourceShortlistSchemaVersion: MlbShortlistResult["schemaVersion"];
+  sourceIntrinsicEdgeSchemaVersion: MlbIntrinsicEdgeResult["schemaVersion"];
+  sourceShortlistSchemaVersion: MlbIntrinsicEdgeResult["sourceShortlistSchemaVersion"];
   games: readonly MlbMarketDiscoveryGamePlan[];
   catalog: {
     currentPregamePath: readonly MlbMarketDiscoveryCatalogEntry[];
@@ -105,11 +111,12 @@ export interface MlbMarketDiscoveryResult {
     catalogOnlyNotImplemented: readonly MlbMarketDiscoveryCatalogEntry[];
   };
   summary: {
-    shortlistedGames: number;
+    intrinsicGames: number;
+    researchEliteCandidates: number;
     gamesWithDiscoveryPlan: number;
     gamesPaidLookupEligibleNow: number;
     gamesHeldForFinalInputs: number;
-    gamesWithNoRelevantCurrentAnalyticalMarket: number;
+    gamesWithNoStrongIntrinsicMarketThesis: number;
     providerMarketsPlannedNow: number;
     worstCaseCreditsPerOneBookmakerRegionEquivalentNow: number;
   };
@@ -118,6 +125,8 @@ export interface MlbMarketDiscoveryResult {
     firstThreeInningsPriority: false;
     marketOrderCarriesPreference: false;
     currentAnalyticalPathDefinesPaidEligibility: true;
+    intrinsicThesisRequiredForPaidLookup: true;
+    intrinsicRankPreservedAcrossInputStage: true;
     researchOnlyMarketsConsumeProviderCredits: false;
     playerPropsQueryEligible: false;
     threeWayCoercionAllowed: false;
@@ -126,18 +135,12 @@ export interface MlbMarketDiscoveryResult {
     hardRockFloridaAvailabilityAssumed: false;
     callsTheOddsApi: false;
     theOddsApiCreditsConsumed: 0;
-    predictsWinner: false;
     recommendsBet: false;
   };
-  safety: MlbShortlistResult["safety"];
+  safety: MlbIntrinsicEdgeResult["safety"];
 }
 
 const CURRENT_ANALYTICAL_SET = new Set<MlbMarketType>(MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS);
-const NON_TOTAL_SIGNAL_COMPONENTS = new Set<MlbShortlistComponent>([
-  "STATCAST_QUALITY",
-  "DISCIPLINE_SPEED",
-  "SOS",
-]);
 
 function catalogStatus(entry: MlbMarketRegistryEntry): Pick<
   MlbMarketDiscoveryCatalogEntry,
@@ -210,25 +213,24 @@ function currentEntryForMarket(market: MlbP1M2aMarket): MlbMarketRegistryEntry {
   return matches[0];
 }
 
-function activeSignalComponents(candidate: MlbShortlistCandidate): MlbShortlistComponent[] {
-  return [...new Set(candidate.signals.map((signal) => signal.component))]
-    .sort((left, right) => left.localeCompare(right));
+function intentForMarket(market: MlbP1M2aMarket): MlbIntrinsicMarketSearchIntent {
+  return market === "TOTAL" || market === "F5_TOTAL" ? "TOTAL" : "SIDE";
 }
 
-function supportingComponents(
-  candidate: MlbShortlistCandidate,
-  market: MlbP1M2aMarket,
-): MlbShortlistComponent[] {
-  const active = activeSignalComponents(candidate);
-  if (market === "TOTAL" || market === "F5_TOTAL") return active;
-  return active.filter((component) => NON_TOTAL_SIGNAL_COMPONENTS.has(component));
+function supportForIntent(
+  game: MlbIntrinsicGameProfile,
+  intent: MlbIntrinsicMarketSearchIntent,
+): readonly MlbIntrinsicComponent[] {
+  return intent === "SIDE" ? game.marketSearchEvidence.side : game.marketSearchEvidence.total;
 }
 
 function plannedMarket(
-  candidate: MlbShortlistCandidate,
+  game: MlbIntrinsicGameProfile,
   market: MlbP1M2aMarket,
 ): MlbMarketDiscoveryPlannedMarket | null {
-  const support = supportingComponents(candidate, market);
+  const intent = intentForMarket(market);
+  if (!game.researchEliteCandidate || !game.marketSearchIntents.includes(intent)) return null;
+  const support = supportForIntent(game, intent);
   if (support.length === 0) return null;
   const entry = currentEntryForMarket(market);
   return {
@@ -239,25 +241,29 @@ function plannedMarket(
     family: entry.family,
     quoteShape: entry.quoteShape,
     acquisition: entry.acquisition,
+    thesisIntent: intent,
     supportingComponents: support,
-    independentSupportingComponentCount: support.length,
+    supportingComponentCount: support.length,
     hardRockEvidenceStatus: entry.hardRockEvidenceStatus,
     liveHardRockFloridaDiscoveryRequired: true,
   };
 }
 
-function planForCandidate(candidate: MlbShortlistCandidate): MlbMarketDiscoveryGamePlan {
+function planForIntrinsicGame(
+  game: MlbIntrinsicGameProfile,
+  intrinsicRank: number,
+): MlbMarketDiscoveryGamePlan {
   const plannedMarkets = MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS
-    .map((market) => plannedMarket(candidate, market))
+    .map((market) => plannedMarket(game, market))
     .filter((market): market is MlbMarketDiscoveryPlannedMarket => market != null)
     .sort((left, right) => left.providerMarketKey.localeCompare(right.providerMarketKey));
   const plannedProviderMarketKeys = plannedMarkets.map((market) => market.providerMarketKey);
 
   const hasMarkets = plannedProviderMarketKeys.length > 0;
-  const paidLookupEligibleNow = candidate.finalInputsAvailable && hasMarkets;
+  const paidLookupEligibleNow = game.inputStage === "FINAL" && game.researchEliteCandidate && hasMarkets;
   const paidLookupHoldReason = !hasMarkets
-    ? "NO_RELEVANT_CURRENT_ANALYTICAL_MARKET" as const
-    : !candidate.finalInputsAvailable
+    ? "NO_STRONG_INTRINSIC_MARKET_THESIS" as const
+    : game.inputStage !== "FINAL"
       ? "OFFICIAL_FINAL_INPUTS_REQUIRED" as const
       : null;
   const providerMarketKeysToRequestNow = paidLookupEligibleNow ? plannedProviderMarketKeys : [];
@@ -266,13 +272,16 @@ function planForCandidate(candidate: MlbShortlistCandidate): MlbMarketDiscoveryG
     : 0;
 
   return {
-    gamePk: candidate.gamePk,
-    officialDate: candidate.officialDate,
-    startTime: candidate.startTime,
-    homeTeam: candidate.homeTeam,
-    awayTeam: candidate.awayTeam,
-    finalInputsAvailable: candidate.finalInputsAvailable,
-    shortlistSignalComponents: activeSignalComponents(candidate),
+    gamePk: game.gamePk,
+    officialDate: game.officialDate,
+    startTime: game.startTime,
+    homeTeam: game.homeTeam,
+    awayTeam: game.awayTeam,
+    inputStage: game.inputStage,
+    intrinsicRank,
+    intrinsicResearchClassification: game.researchClassification,
+    intrinsicResearchEliteCandidate: game.researchEliteCandidate,
+    marketSearchIntents: game.marketSearchIntents,
     plannedMarkets,
     plannedProviderMarketKeys,
     paidLookupEligibleNow,
@@ -283,23 +292,25 @@ function planForCandidate(candidate: MlbShortlistCandidate): MlbMarketDiscoveryG
 }
 
 export function buildMlbMarketDiscovery(input: {
-  shortlist: MlbShortlistResult;
+  intrinsic: MlbIntrinsicEdgeResult;
 }): MlbMarketDiscoveryResult {
-  const games = input.shortlist.selected.map(planForCandidate);
+  const games = input.intrinsic.rankedGames.map((game, index) => planForIntrinsicGame(game, index + 1));
   const catalog = buildCatalog();
   return {
     schemaVersion: MLB_MARKET_DISCOVERY_SCHEMA,
     generatedAt: new Date().toISOString(),
-    date: input.shortlist.date,
-    sourceShortlistSchemaVersion: input.shortlist.schemaVersion,
+    date: input.intrinsic.date,
+    sourceIntrinsicEdgeSchemaVersion: input.intrinsic.schemaVersion,
+    sourceShortlistSchemaVersion: input.intrinsic.sourceShortlistSchemaVersion,
     games,
     catalog,
     summary: {
-      shortlistedGames: input.shortlist.selected.length,
+      intrinsicGames: input.intrinsic.rankedGames.length,
+      researchEliteCandidates: input.intrinsic.summary.researchEliteCandidates,
       gamesWithDiscoveryPlan: games.filter((game) => game.plannedMarkets.length > 0).length,
       gamesPaidLookupEligibleNow: games.filter((game) => game.paidLookupEligibleNow).length,
       gamesHeldForFinalInputs: games.filter((game) => game.paidLookupHoldReason === "OFFICIAL_FINAL_INPUTS_REQUIRED").length,
-      gamesWithNoRelevantCurrentAnalyticalMarket: games.filter((game) => game.paidLookupHoldReason === "NO_RELEVANT_CURRENT_ANALYTICAL_MARKET").length,
+      gamesWithNoStrongIntrinsicMarketThesis: games.filter((game) => game.paidLookupHoldReason === "NO_STRONG_INTRINSIC_MARKET_THESIS").length,
       providerMarketsPlannedNow: games.reduce((sum, game) => sum + game.providerMarketKeysToRequestNow.length, 0),
       worstCaseCreditsPerOneBookmakerRegionEquivalentNow: games.reduce(
         (sum, game) => sum + game.worstCaseCreditsPerOneBookmakerRegionEquivalentNow,
@@ -311,6 +322,8 @@ export function buildMlbMarketDiscovery(input: {
       firstThreeInningsPriority: false,
       marketOrderCarriesPreference: false,
       currentAnalyticalPathDefinesPaidEligibility: true,
+      intrinsicThesisRequiredForPaidLookup: true,
+      intrinsicRankPreservedAcrossInputStage: true,
       researchOnlyMarketsConsumeProviderCredits: false,
       playerPropsQueryEligible: false,
       threeWayCoercionAllowed: false,
@@ -319,9 +332,8 @@ export function buildMlbMarketDiscovery(input: {
       hardRockFloridaAvailabilityAssumed: false,
       callsTheOddsApi: false,
       theOddsApiCreditsConsumed: 0,
-      predictsWinner: false,
       recommendsBet: false,
     },
-    safety: input.shortlist.safety,
+    safety: input.intrinsic.safety,
   };
 }
