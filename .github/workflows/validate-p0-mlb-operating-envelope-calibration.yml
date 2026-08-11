@@ -68,6 +68,7 @@ jobs:
           grep -F 'researchSufficiencyUsesDecisiveOutcomesOnly: true' "$calibration"
           grep -F 'decisiveObservations.length >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS' "$calibration"
           grep -F 'decisiveDates >= MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES' "$calibration"
+          grep -F 'Math.abs(decisiveWinRate - meanModelWinProbability)' "$calibration"
           grep -F 'ruleThresholdsHardCodedByRuntime: false' "$calibration"
           grep -F 'automaticBestRuleSelection: false' "$calibration"
           grep -F 'pointEstimateCanPromoteBetElite: false' "$calibration"
@@ -81,7 +82,6 @@ jobs:
           grep -F 'noPickDatePct' "$calibration"
           grep -F 'averagePicksPerActiveDate' "$calibration"
 
-          # Preserve the prior research discipline rather than relaxing it to manufacture a result.
           grep -F 'minimumTotalObservations: 80' "$legacy"
           grep -F 'minimumTotalDates: 30' "$legacy"
 
@@ -89,6 +89,7 @@ jobs:
           grep -F 'every candidate rule reports quality and exact pick-volume loss side by side' "$tests"
           grep -F 'a rule that kills every pick is exposed explicitly instead of looking elite by absence' "$tests"
           grep -F 'pushes are excluded from all binary calibration metrics but remain settlement-neutral in ROI' "$tests"
+          grep -F 'calibration gap is absolute so overconfidence cannot look artificially better' "$tests"
           grep -F 'push-heavy cohorts cannot satisfy the 80 observation 30 date research gate' "$tests"
           grep -F 'settlement-inconsistent outcomes or profit values fail closed' "$tests"
           grep -F 'impossible calendar dates fail closed and cannot satisfy research date sufficiency' "$tests"
