@@ -46,7 +46,7 @@ jobs:
           npm run test:s3-modularization
           npm run build:backend
 
-      - name: Prove Market Edge stays push-aware, fresh, threshold-free and post-price only
+      - name: Prove Market Edge stays push-aware, provenance-bound, fresh, threshold-free and post-price only
         shell: bash
         run: |
           set -euo pipefail
@@ -64,8 +64,14 @@ jobs:
           grep -F 'winProbability * (decimal - 1) - Math.max(0, lossProbability)' "$edge"
           grep -F 'const currentBreakEvenWinProbability = (1 - pushProbability) / currentDecimal' "$edge"
           grep -F 'const decisiveWinProbability = decisiveDenominator > 0 ? winProbability / decisiveDenominator' "$edge"
-          grep -F 'quoteStillFresh(marketQuote.execution.quote, now)' "$edge"
+          grep -F 'quoteStillFresh(executionQuote, now)' "$edge"
           grep -F 'timestampStillFresh(quote.providerLastUpdate, now, 120_000)' "$edge"
+          grep -F 'executionQuote.bookKey !== "hardrockbet_fl"' "$edge"
+          grep -F 'executionQuote.providerMarketKey !== thesis.providerMarketKey' "$edge"
+          grep -F 'EXECUTION_QUOTE_IDENTITY_MISMATCH' "$edge"
+          grep -F 'MODEL_INPUT_DIGEST_MISMATCH' "$edge"
+          grep -F 'buildMlbMarketProbabilityAssessmentDigest(digestInput)' "$edge"
+          grep -F 'typeof assessment.modelVersion !== "string"' "$edge"
           grep -F 'marketQuote.availability !== "EXECUTABLE"' "$edge"
           grep -F 'EXACT_MARKET_MODEL_ASSESSMENT_REQUIRED' "$edge"
           grep -F 'MODEL_SOURCE_POLICY_MISMATCH' "$edge"
@@ -76,6 +82,9 @@ jobs:
           grep -F 'referenceConsensusIsDiagnosticOnly: true' "$edge"
           grep -F 'quoteFreshnessRecheckedAtEvaluation: true' "$edge"
           grep -F 'providerLastUpdateFreshnessRecheckedAtEvaluation: true' "$edge"
+          grep -F 'modelInputDigestRecomputedBeforeEconomics: true' "$edge"
+          grep -F 'missingModelProvenanceFailsClosedWithoutThrow: true' "$edge"
+          grep -F 'executionQuoteIdentityRevalidated: true' "$edge"
           grep -F 'marketRankingProduced: false' "$edge"
           grep -F 'operatingEnvelopeApplied: false' "$edge"
           grep -F 'eliteLabelProduced: false' "$edge"
