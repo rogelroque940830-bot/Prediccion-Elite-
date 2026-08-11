@@ -104,6 +104,17 @@ test("positive EV cannot bypass upstream operating-envelope eligibility", () => 
   assert.equal(result.games[0].markets[0].classification, "POSITIVE_EV_ENVELOPE_BLOCKED");
 });
 
+test("upstream classification is independently required even when all other candidate fields look positive", () => {
+  const inconsistent = market({
+    classification: "NO_POSITIVE_EV",
+    eligibleForOperatingEnvelope: true,
+    economics: { ...market().economics, expectedValuePerUnit: 0.20 },
+  });
+  const result = buildMlbOperatingEnvelope({ marketEdge: input([inconsistent]) });
+  assert.equal(result.games[0].markets[0].classification, "NO_POSITIVE_EV");
+  assert.equal(result.games[0].markets[0].eliteEvidenceCandidate, false);
+});
+
 test("positive EV cannot become elite candidate with a missing model or execution price", () => {
   const missingModel = market({ model: { ...market().model, status: "UNAVAILABLE" } });
   const missingPrice = market({ execution: null });
@@ -140,6 +151,27 @@ test("reference consensus remains diagnostic and cannot create or veto an elite 
   const result = buildMlbOperatingEnvelope({ marketEdge: input([opposing, noPositiveEv]) });
   assert.equal(result.games[0].markets[0].classification, "ELITE_EVIDENCE_CANDIDATE");
   assert.equal(result.games[0].markets[1].classification, "NO_POSITIVE_EV");
+});
+
+test("source run, game and exact market identity are preserved into the operating envelope", () => {
+  const sourceMarket = market({
+    marketType: "F5_TOTAL",
+    providerMarketKey: "totals_1st_5_innings",
+    intrinsicProjectionScope: "EARLY_WINDOW",
+    selectedSide: "UNDER",
+    selectedLine: 4.5,
+  });
+  const source = input([sourceMarket]);
+  source.sourceRunId = "identity-run-42";
+  source.games[0].gamePk = 987654;
+  const result = buildMlbOperatingEnvelope({ marketEdge: source });
+  const output = result.games[0].markets[0];
+  assert.equal(result.sourceRunId, "identity-run-42");
+  assert.equal(result.games[0].gamePk, 987654);
+  assert.equal(output.marketType, "F5_TOTAL");
+  assert.equal(output.providerMarketKey, "totals_1st_5_innings");
+  assert.equal(output.selectedSide, "UNDER");
+  assert.equal(output.selectedLine, 4.5);
 });
 
 test("no fixed EV, probability, numeric Elite score, stake or automatic bet is introduced", () => {
