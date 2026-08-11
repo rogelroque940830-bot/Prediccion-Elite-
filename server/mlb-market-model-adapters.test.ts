@@ -134,6 +134,7 @@ test("a market-regressed total probability is rejected before numerical attracti
 test("integer totals fail closed because the current continuous model cannot supply push mass", () => {
   for (const [marketType, metric, line] of [
     ["TOTAL", "TOTAL_MODEL_HIT_PROBABILITY", 8],
+    ["TOTAL", "TOTAL_MODEL_HIT_PROBABILITY", 9],
     ["F5_TOTAL", "F5_TOTAL_MODEL_HIT_PROBABILITY", 4],
   ] as const) {
     const result = adaptMlbCurrentPredictorProbability(evidence({ marketType, metric, line }));
@@ -141,9 +142,23 @@ test("integer totals fail closed because the current continuous model cannot sup
   }
 });
 
-test("quarter-run and other non-half lines are not silently treated as no-push markets", () => {
-  const result = adaptMlbCurrentPredictorProbability(evidence({ line: 8.25 }));
-  assert.equal(assessment(result).unavailableReason, "NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL");
+test("only exact half-run identities are accepted; quarter, near-half and near-integer lines fail closed", () => {
+  for (const line of [8.25, 8.5000000001, 8.4999999999, 8.0000000001, 7.9999999999]) {
+    const result = adaptMlbCurrentPredictorProbability(evidence({ line }));
+    assert.equal(result.adapterStatus, "UNAVAILABLE");
+    assert.equal(assessment(result).unavailableReason, "NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL");
+  }
+
+  assert.equal(adaptMlbCurrentPredictorProbability(evidence({ line: 8.5 })).adapterStatus, "READY");
+  const f5 = adaptMlbCurrentPredictorProbability(evidence({
+    marketType: "F5_TOTAL",
+    side: "UNDER",
+    line: 4.5,
+    metric: "F5_TOTAL_MODEL_HIT_PROBABILITY",
+    probability: 0.5454945259558179,
+    projectedRuns: 4.1,
+  }));
+  assert.equal(f5.adapterStatus, "READY");
 });
 
 test("current full-game ML remains unavailable instead of reusing the market-regressed UI probability", () => {
@@ -269,6 +284,7 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.evidenceDigestRecomputedBeforeReady, true);
   assert.equal(first.policy.evidenceDigestUsesLosslessNumericSerialization, true);
   assert.equal(first.policy.exactCurrentPredictorProvenanceRequired, true);
+  assert.equal(first.policy.exactHalfRunIdentityRequired, true);
   assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
   assert.equal(first.policy.malformedEnvelopeCanThrow, false);
   assert.equal(first.policy.unsupportedMarketCanProduceAssessment, false);
