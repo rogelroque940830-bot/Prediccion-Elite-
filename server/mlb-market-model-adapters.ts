@@ -8,6 +8,7 @@ import {
 
 export const MLB_MARKET_MODEL_ADAPTER_SCHEMA = "courtedge-p0-mlb-market-model-adapters.v1" as const;
 export const MLB_MARKET_MODEL_ADAPTER_VERSION = "mlb-current-predictor-model-adapter.v1" as const;
+export const MLB_CURRENT_PREDICTOR_MODEL_VERSION = "predictor-full-snapshot-v2" as const;
 export const MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS = 3.5 as const;
 
 export const MLB_MARKET_MODEL_ADAPTER_MARKETS = [
@@ -42,7 +43,7 @@ export interface MlbCurrentPredictorProbabilityEvidence {
   probabilityUsesSportsbookPrice: boolean;
   modelVersion: string;
   generatedAt: string;
-  /** SHA-256 of this exact evidence envelope excluding sourceEvidenceDigest. */
+  /** SHA-256 of an exact type-tagged serialization of this envelope excluding sourceEvidenceDigest. */
   sourceEvidenceDigest: string;
 }
 
@@ -63,6 +64,7 @@ export interface MlbMarketModelAdapterResult {
   warnings: readonly string[];
   policy: {
     currentReadyMarkets: readonly ["TOTAL", "F5_TOTAL"];
+    currentPredictorModelVersion: typeof MLB_CURRENT_PREDICTOR_MODEL_VERSION;
     currentMoneylineReady: false;
     currentRunLineReady: false;
     currentTotalHalfRunReady: true;
@@ -70,6 +72,8 @@ export interface MlbMarketModelAdapterResult {
     legacyMarketRegressedProbabilityAccepted: false;
     integerLinePushMayBeInvented: false;
     evidenceDigestRecomputedBeforeReady: true;
+    evidenceDigestUsesLosslessNumericSerialization: true;
+    exactCurrentPredictorProvenanceRequired: true;
     priceDependenceFlagMustBeBoolean: true;
     malformedEnvelopeCanThrow: false;
     unsupportedMarketCanProduceAssessment: false;
@@ -138,24 +142,31 @@ function isSide(value: unknown): value is MlbCurrentPredictorProbabilityEvidence
   return typeof value === "string" && (SIDES as readonly string[]).includes(value);
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.keys(value as Record<string, unknown>)
-        .sort()
-        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]),
-    );
+function exactCanonicalEvidence(value: unknown): string {
+  if (value === null) return "null;";
+  if (value === undefined) return "undefined;";
+  if (typeof value === "boolean") return value ? "bool:1;" : "bool:0;";
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) return "number:NaN;";
+    if (value === Number.POSITIVE_INFINITY) return "number:+Infinity;";
+    if (value === Number.NEGATIVE_INFINITY) return "number:-Infinity;";
+    if (Object.is(value, -0)) return "number:-0;";
+    return `number:${value.toString()};`;
   }
-  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value * 1e12) / 1e12 : null;
-  if (value === undefined) return null;
-  return value;
+  if (typeof value === "string") return `string:${JSON.stringify(value)};`;
+  if (Array.isArray(value)) return `array:[${value.map(exactCanonicalEvidence).join("")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `object:{${entries.map(([key, child]) => `${JSON.stringify(key)}=${exactCanonicalEvidence(child)}`).join("")}}`;
+  }
+  return `unsupported:${typeof value}:${JSON.stringify(String(value))};`;
 }
 
 export function buildMlbCurrentPredictorProbabilityEvidenceDigest(
   input: Omit<MlbCurrentPredictorProbabilityEvidence, "sourceEvidenceDigest">,
 ): string {
-  return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
+  return createHash("sha256").update(exactCanonicalEvidence(input)).digest("hex");
 }
 
 function validIso(value: unknown): boolean {
@@ -236,6 +247,7 @@ function unavailable(
 function policy(): MlbMarketModelAdapterResult["policy"] {
   return {
     currentReadyMarkets: ["TOTAL", "F5_TOTAL"],
+    currentPredictorModelVersion: MLB_CURRENT_PREDICTOR_MODEL_VERSION,
     currentMoneylineReady: false,
     currentRunLineReady: false,
     currentTotalHalfRunReady: true,
@@ -243,6 +255,8 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     legacyMarketRegressedProbabilityAccepted: false,
     integerLinePushMayBeInvented: false,
     evidenceDigestRecomputedBeforeReady: true,
+    evidenceDigestUsesLosslessNumericSerialization: true,
+    exactCurrentPredictorProvenanceRequired: true,
     priceDependenceFlagMustBeBoolean: true,
     malformedEnvelopeCanThrow: false,
     unsupportedMarketCanProduceAssessment: false,
@@ -307,10 +321,7 @@ function result(
   };
 }
 
-/**
- * Step 10 is an adapter, not a new sporting model.
- * Malformed/deserialized envelopes fail closed before any identity map lookup.
- */
+/** Step 10 adapts only the explicitly recognized current predictor; it never promotes challengers. */
 export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketModelAdapterResult {
   const raw = record(input);
   if (!raw) return invalidResult(input, "MODEL_EVIDENCE_ENVELOPE_INVALID");
@@ -347,6 +358,10 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
   const expectedDigest = buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput);
   if (suppliedDigest.toLowerCase() !== expectedDigest) {
     const reason = "MODEL_EVIDENCE_DIGEST_MISMATCH";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+  if (evidence.modelVersion !== MLB_CURRENT_PREDICTOR_MODEL_VERSION) {
+    const reason = "MODEL_EVIDENCE_NOT_CURRENT_PREDICTOR";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
 
@@ -407,7 +422,7 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
     line,
     status: "READY",
     sourcePolicy: POLICY[evidence.marketType],
-    modelVersion: `${evidence.modelVersion}:${evidence.metric}:normal-sigma-${MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS}`,
+    modelVersion: `${MLB_CURRENT_PREDICTOR_MODEL_VERSION}:${evidence.metric}:normal-sigma-${MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS}`,
     generatedAt: evidence.generatedAt,
     probabilitySemantics: "UNCONDITIONAL_SETTLEMENT",
     winProbability: reproduced.probability,
