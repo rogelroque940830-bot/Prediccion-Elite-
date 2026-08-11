@@ -7,6 +7,8 @@ on:
     paths:
       - 'server/mlb-step12-historical-compatibility.ts'
       - 'server/mlb-step12-historical-compatibility.test.ts'
+      - 'server/mlb-step12-historical-feature-table.ts'
+      - 'server/mlb-step12-historical-feature-table.test.ts'
       - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
       - 'docs/P0_STEP12_ALIGNMENT_AUDIT.md'
       - '.github/workflows/validate-p0-step12-historical-compatibility.yml'
@@ -26,12 +28,15 @@ jobs:
           cache: npm
       - name: Install dependencies reproducibly
         run: npm ci
-      - name: Test Step 12 compatibility boundaries
-        run: npx tsx --test server/mlb-step12-historical-compatibility.test.ts
-      - name: Type-check Step 12 compatibility surface
+      - name: Test Step 12 compatibility and feature-table boundaries
+        run: |
+          npx tsx --test server/mlb-step12-historical-compatibility.test.ts
+          npx tsx --test server/mlb-step12-historical-feature-table.test.ts
+      - name: Type-check Step 12 research surface
         run: >-
           npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
           server/mlb-step12-historical-compatibility.ts server/mlb-step12-historical-compatibility.test.ts
+          server/mlb-step12-historical-feature-table.ts server/mlb-step12-historical-feature-table.test.ts
       - name: Preserve backend regressions
         run: |
           npx tsx --test server/mlb-operating-envelope-calibration.test.ts
@@ -41,15 +46,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          file='server/mlb-step12-historical-compatibility.ts'
-          grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$file"
-          grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$file"
-          grep -F 'highHitRatePocketsMayBeInvestigated: true' "$file"
-          grep -F 'lowerHitRateStableSignalsRemainEligibleForResearch: true' "$file"
-          grep -F 'qualityAndFrequencyMustBeReportedTogether: true' "$file"
-          grep -F 'livePickFiltersChanged: false' "$file"
-          grep -F 'step11cCapturePopulationChanged: false' "$file"
-          grep -F 'betEliteLabelProduced: false' "$file"
-          grep -F 'automaticBetPlacement: false' "$file"
-          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$file"
+          compat='server/mlb-step12-historical-compatibility.ts'
+          table='server/mlb-step12-historical-feature-table.ts'
+          grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$compat"
+          grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$compat"
+          grep -F 'highHitRatePocketsMayBeInvestigated: true' "$compat"
+          grep -F 'lowerHitRateStableSignalsRemainEligibleForResearch: true' "$compat"
+          grep -F 'qualityAndFrequencyMustBeReportedTogether: true' "$compat"
+          grep -F 'livePickFiltersChanged: false' "$compat" "$table"
+          grep -F 'step11cCapturePopulationChanged: false' "$compat"
+          grep -F 'betEliteLabelProduced: false' "$compat" "$table"
+          grep -F 'automaticBetPlacement: false' "$compat" "$table"
+          grep -F 'randomShuffleAllowed: false' "$table"
+          grep -F 'pregameAsOfRequired: true' "$table"
+          grep -F 'outcomeFieldsAllowedAsFeatures: false' "$table"
+          grep -F 'thresholdsLearnedFromHoldoutAllowed: false' "$table"
+          grep -F 'highHitRatePocketSearchAllowedInDiscovery: true' "$table"
+          grep -F 'historicalPricesRequiredForSportingHitRateStudy: false' "$table"
+          grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$table"
+          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table"
           git diff --check
