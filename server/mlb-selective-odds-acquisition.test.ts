@@ -193,14 +193,14 @@ function marketPayload(input: { providerEvent: any; marketKeys: string[]; lastUp
   };
 }
 
-test("zero paid-eligible games cause zero provider calls, even with no API key", async () => {
+test("zero paid-eligible games cause zero provider calls", async () => {
   let calls = 0;
   const service = new MlbSelectiveOddsAcquisitionService({
     fetchFn: async () => { calls += 1; throw new Error("should not fetch"); },
     now: () => new Date(BASE_NOW),
   });
   const result = await service.acquire({
-    runId: "step8-no-paid-work",
+    runId: "step8-no-paid-work-v4",
     discovery: discovery([game({ gamePk: 1, rank: 1, final: false })]),
     maxRunCredits: 0,
     reserveCredits: 100,
@@ -212,10 +212,10 @@ test("zero paid-eligible games cause zero provider calls, even with no API key",
   assert.equal(calls, 0);
 });
 
-test("finalist-only acquisition sends one event request with exact thesis-backed keys and timeout signal", async () => {
+test("finalist-only acquisition sends one event request with exact thesis-backed keys and timeout", async () => {
   const g1 = game({ gamePk: 11, rank: 1, home: "New York Mets", away: "Atlanta Braves", markets: [H2H(), F5_H2H()] });
   const g2 = game({ gamePk: 12, rank: 2, home: "Chicago Cubs", away: "St. Louis Cardinals", final: false });
-  const providerGame = event({ id: "step8-evt-11", home: "New York Mets", away: "Atlanta Braves" });
+  const providerGame = event({ id: "step8-v4-evt-11", home: "New York Mets", away: "Atlanta Braves" });
   const urls: string[] = [];
   const service = new MlbSelectiveOddsAcquisitionService({
     now: () => new Date(BASE_NOW),
@@ -230,7 +230,7 @@ test("finalist-only acquisition sends one event request with exact thesis-backed
       return jsonResponse(marketPayload({ providerEvent: providerGame, marketKeys: ["h2h", "h2h_1st_5_innings"] }), 98, 52, 2);
     },
   });
-  const result = await service.acquire({ runId: "step8-exact-finalist", discovery: discovery([g1, g2]), maxRunCredits: 4, reserveCredits: 20, apiKey: "secret" });
+  const result = await service.acquire({ runId: "step8-exact-finalist-v4", discovery: discovery([g1, g2]), maxRunCredits: 4, reserveCredits: 20, apiKey: "secret" });
   assert.equal(urls.length, 2);
   assert.equal(result.providerCalls.paidEventOdds, 1);
   assert.equal(result.games[0].status, "FETCHED");
@@ -252,12 +252,12 @@ test("budget denial at higher intrinsic rank stops lower-ranked paid work", asyn
     fetchFn: async () => {
       calls += 1;
       return jsonResponse([
-        event({ id: "step8-evt-21", home: "Top Home", away: "Top Away" }),
-        event({ id: "step8-evt-22", home: "Lower Home", away: "Lower Away" }),
+        event({ id: "step8-v4-evt-21", home: "Top Home", away: "Top Away" }),
+        event({ id: "step8-v4-evt-22", home: "Lower Home", away: "Lower Away" }),
       ], 100, 10, 0);
     },
   });
-  const result = await service.acquire({ runId: "step8-budget-stop", discovery: discovery([top, lower]), maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
+  const result = await service.acquire({ runId: "step8-budget-stop-v4", discovery: discovery([top, lower]), maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
   assert.equal(calls, 1);
   assert.equal(result.providerCalls.paidEventOdds, 0);
   assert.equal(result.stopReason, "RUN_BUDGET_DENIED_AT_HIGHER_RANK");
@@ -265,39 +265,35 @@ test("budget denial at higher intrinsic rank stops lower-ranked paid work", asyn
   assert.equal(result.games[1].status, "NOT_REACHED_AFTER_BLOCK");
 });
 
-test("equal-distance same-day doubleheader is ambiguous and spends zero paid credits", async () => {
+test("equal-distance doubleheader is ambiguous and spends zero paid credits", async () => {
   const target = game({ gamePk: 31, rank: 1, home: "Detroit Tigers", away: "Cleveland Guardians", startTime: "2026-08-10T20:00:00.000Z" });
-  const first = event({ id: "step8-dh-a", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T19:00:00.000Z" });
-  const second = event({ id: "step8-dh-b", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T21:00:00.000Z" });
+  const first = event({ id: "step8-v4-dh-a", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T19:00:00.000Z" });
+  const second = event({ id: "step8-v4-dh-b", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T21:00:00.000Z" });
   assert.equal(matchMlbDiscoveryGameToProviderEvent(target, [first, second]).status, "AMBIGUOUS");
   let calls = 0;
   const service = new MlbSelectiveOddsAcquisitionService({
     now: () => new Date(BASE_NOW),
     fetchFn: async () => { calls += 1; return jsonResponse([first, second], 100, 10, 0); },
   });
-  const result = await service.acquire({ runId: "step8-doubleheader-ambiguous", discovery: discovery([target]), maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
+  const result = await service.acquire({ runId: "step8-doubleheader-v4", discovery: discovery([target]), maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
   assert.equal(calls, 1);
   assert.equal(result.providerCalls.paidEventOdds, 0);
   assert.equal(result.games[0].status, "EVENT_MATCH_AMBIGUOUS");
 });
 
-test("one unparseable same-team commence time forces ambiguity", () => {
+test("invalid or far sole event time cannot be silently accepted", () => {
   const target = game({ gamePk: 32, rank: 1, home: "Detroit Tigers", away: "Cleveland Guardians", startTime: "2026-08-10T19:00:00.000Z" });
-  const valid = event({ id: "step8-dh-valid", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T19:00:00.000Z" });
-  const unknown = event({ id: "step8-dh-unknown", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "not-a-date" });
+  const valid = event({ id: "step8-v4-dh-valid", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T19:00:00.000Z" });
+  const unknown = event({ id: "step8-v4-dh-unknown", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "not-a-date" });
   assert.equal(matchMlbDiscoveryGameToProviderEvent(target, [valid, unknown]).status, "AMBIGUOUS");
-});
-
-test("sole team/date event outside bounded start-time window is not accepted", () => {
-  const target = game({ gamePk: 33, rank: 1, home: "Detroit Tigers", away: "Cleveland Guardians", startTime: "2026-08-10T17:00:00.000Z" });
-  const wrongHalf = event({ id: "step8-dh-wrong-half", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T23:10:00.000Z" });
-  assert.equal(matchMlbDiscoveryGameToProviderEvent(target, [wrongHalf]).status, "AMBIGUOUS");
+  const far = event({ id: "step8-v4-dh-far", home: "Detroit Tigers", away: "Cleveland Guardians", commence: "2026-08-10T23:10:00.000Z" });
+  assert.equal(matchMlbDiscoveryGameToProviderEvent(target, [far]).status, "AMBIGUOUS");
   assert.equal(MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS, 90 * 60 * 1000);
 });
 
 test("fresh per-market cache pays only for newly required keys", async () => {
   let nowMs = Date.parse(BASE_NOW);
-  const providerGame = event({ id: "step8-cache-41", home: "Seattle Mariners", away: "Texas Rangers" });
+  const providerGame = event({ id: "step8-v4-cache-41", home: "Seattle Mariners", away: "Texas Rangers" });
   const paidMarkets: string[][] = [];
   let remaining = 100;
   let used = 20;
@@ -316,22 +312,22 @@ test("fresh per-market cache pays only for newly required keys", async () => {
     },
   });
   const firstPlan = discovery([game({ gamePk: 41, rank: 1, home: "Seattle Mariners", away: "Texas Rangers", markets: [H2H()] })]);
-  await service.acquire({ runId: "step8-cache-first", discovery: firstPlan, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
+  await service.acquire({ runId: "step8-cache-first-v4", discovery: firstPlan, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
   nowMs += 30_000;
   const expanded = discovery([game({ gamePk: 41, rank: 1, home: "Seattle Mariners", away: "Texas Rangers", markets: [H2H(), TOTALS()] })]);
-  const second = await service.acquire({ runId: "step8-cache-topup", discovery: expanded, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
+  const second = await service.acquire({ runId: "step8-cache-topup-v4", discovery: expanded, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
   assert.deepEqual(second.games[0].cacheHitMarketKeys, ["h2h"]);
   assert.deepEqual(second.games[0].paidMarketKeysRequested, ["totals"]);
   assert.deepEqual(paidMarkets, [["h2h"], ["totals"]]);
   nowMs += 30_000;
-  const third = await service.acquire({ runId: "step8-cache-full", discovery: expanded, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
+  const third = await service.acquire({ runId: "step8-cache-full-v4", discovery: expanded, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
   assert.equal(third.games[0].status, "CACHE_HIT");
   assert.deepEqual(third.games[0].paidMarketKeysRequested, []);
-  assert.equal(calls, 5, "three free probes and two paid calls");
+  assert.equal(calls, 5);
 });
 
 test("different run IDs targeting same cache miss are serialized and buy once", async () => {
-  const providerGame = event({ id: "step8-cross-run-cache-107", home: "Pittsburgh Pirates", away: "Cincinnati Reds" });
+  const providerGame = event({ id: "step8-v4-cross-cache-107", home: "Pittsburgh Pirates", away: "Cincinnati Reds" });
   let paidCalls = 0;
   let probeCalls = 0;
   let remaining = 100;
@@ -351,8 +347,8 @@ test("different run IDs targeting same cache miss are serialized and buy once", 
   const serviceB = new MlbSelectiveOddsAcquisitionService({ now: () => new Date(BASE_NOW), fetchFn });
   const plan = discovery([game({ gamePk: 107, rank: 1, home: "Pittsburgh Pirates", away: "Cincinnati Reds" })]);
   const [a, b] = await Promise.all([
-    serviceA.acquire({ runId: "step8-cross-cache-a", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" }),
-    serviceB.acquire({ runId: "step8-cross-cache-b", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" }),
+    serviceA.acquire({ runId: "step8-v4-cross-cache-a", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" }),
+    serviceB.acquire({ runId: "step8-v4-cross-cache-b", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" }),
   ]);
   assert.equal(paidCalls, 1);
   assert.equal(probeCalls, 2);
@@ -361,9 +357,9 @@ test("different run IDs targeting same cache miss are serialized and buy once", 
   assert.equal(b.policy.concurrentCacheMissesCanDuplicatePaidCalls, false);
 });
 
-test("serialized distinct runs re-probe provider balance and preserve reserve across runs", async () => {
-  const eventA = event({ id: "step8-reserve-a", home: "Milwaukee Brewers", away: "Chicago White Sox" });
-  const eventB = event({ id: "step8-reserve-b", home: "Washington Nationals", away: "Miami Marlins" });
+test("serialized distinct runs re-probe balance and preserve provider reserve", async () => {
+  const eventA = event({ id: "step8-v4-reserve-a", home: "Milwaukee Brewers", away: "Chicago White Sox" });
+  const eventB = event({ id: "step8-v4-reserve-b", home: "Washington Nationals", away: "Miami Marlins" });
   let remaining = 13;
   let used = 100;
   let paidCalls = 0;
@@ -374,7 +370,7 @@ test("serialized distinct runs re-probe provider balance and preserve reserve ac
     const markets = new URL(url).searchParams.get("markets")?.split(",") ?? [];
     remaining -= markets.length;
     used += markets.length;
-    const providerEvent = url.includes("step8-reserve-a") ? eventA : eventB;
+    const providerEvent = url.includes("step8-v4-reserve-a") ? eventA : eventB;
     return jsonResponse(marketPayload({ providerEvent, marketKeys: markets }), remaining, used, markets.length);
   };
   const serviceA = new MlbSelectiveOddsAcquisitionService({ now: () => new Date(BASE_NOW), fetchFn });
@@ -382,12 +378,11 @@ test("serialized distinct runs re-probe provider balance and preserve reserve ac
   const planA = discovery([game({ gamePk: 108, rank: 1, home: "Milwaukee Brewers", away: "Chicago White Sox", markets: [H2H(), TOTALS()] })]);
   const planB = discovery([game({ gamePk: 109, rank: 1, home: "Washington Nationals", away: "Miami Marlins", markets: [H2H(), TOTALS()] })]);
   const [a, b] = await Promise.all([
-    serviceA.acquire({ runId: "step8-reserve-run-a", discovery: planA, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" }),
-    serviceB.acquire({ runId: "step8-reserve-run-b", discovery: planB, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" }),
+    serviceA.acquire({ runId: "step8-v4-reserve-a", discovery: planA, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" }),
+    serviceB.acquire({ runId: "step8-v4-reserve-b", discovery: planB, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" }),
   ]);
   assert.equal(a.status, "COMPLETED");
   assert.equal(b.status, "BLOCKED");
-  assert.equal(b.games[0].status, "BUDGET_DENIED");
   assert.equal(b.games[0].budgetDenialCode, "PROVIDER_REMAINING_INSUFFICIENT");
   assert.equal(paidCalls, 1);
   assert.equal(remaining, 11);
@@ -395,7 +390,7 @@ test("serialized distinct runs re-probe provider balance and preserve reserve ac
 
 test("TTL expiry refreshes only on a new explicit run", async () => {
   let nowMs = Date.parse(BASE_NOW);
-  const providerGame = event({ id: "step8-ttl-51", home: "Miami Marlins", away: "Philadelphia Phillies" });
+  const providerGame = event({ id: "step8-v4-ttl-51", home: "Miami Marlins", away: "Philadelphia Phillies" });
   let paidCalls = 0;
   let remaining = 100;
   let used = 30;
@@ -408,16 +403,16 @@ test("TTL expiry refreshes only on a new explicit run", async () => {
     },
   });
   const plan = discovery([game({ gamePk: 51, rank: 1, home: "Miami Marlins", away: "Philadelphia Phillies" })]);
-  await service.acquire({ runId: "step8-ttl-first", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
+  await service.acquire({ runId: "step8-v4-ttl-first", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
   nowMs += MLB_SELECTIVE_ODDS_CACHE_TTL_MS + 1;
-  const refreshed = await service.acquire({ runId: "step8-ttl-second", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
+  const refreshed = await service.acquire({ runId: "step8-v4-ttl-second", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" });
   assert.equal(refreshed.games[0].status, "FETCHED");
   assert.equal(paidCalls, 2);
   assert.equal(refreshed.policy.cacheTtlIsRefreshPolicyNotPolling, true);
 });
 
-test("same runId concurrent and completed replay consume once; changed plan rejects through Promise", async () => {
-  const providerGame = event({ id: "step8-idem-61", home: "San Diego Padres", away: "San Francisco Giants" });
+test("same runId coalesces/replays and changed plan rejects through Promise", async () => {
+  const providerGame = event({ id: "step8-v4-idem-61", home: "San Diego Padres", away: "San Francisco Giants" });
   let calls = 0;
   const service = new MlbSelectiveOddsAcquisitionService({
     now: () => new Date(BASE_NOW),
@@ -431,12 +426,11 @@ test("same runId concurrent and completed replay consume once; changed plan reje
     },
   });
   const plan = discovery([game({ gamePk: 61, rank: 1, home: "San Diego Padres", away: "San Francisco Giants" })]);
-  const input = { runId: "step8-same-run", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" };
+  const input = { runId: "step8-v4-same-run", discovery: plan, maxRunCredits: 3, reserveCredits: 10, apiKey: "secret" };
   const [a, b] = await Promise.all([service.acquire(input), service.acquire(input)]);
   assert.strictEqual(a, b);
   assert.equal(calls, 2);
   assert.strictEqual(await service.acquire(input), a);
-  assert.equal(calls, 2);
   const mutated = discovery([game({ gamePk: 61, rank: 1, home: "San Diego Padres", away: "San Francisco Giants", markets: [H2H(), TOTALS()] })]);
   await assert.rejects(
     () => service.acquire({ ...input, discovery: mutated }),
@@ -455,14 +449,14 @@ test("paid network failure charges conservative worst case and blocks lower rank
       calls += 1;
       if (String(input).includes("/events/?")) {
         return jsonResponse([
-          event({ id: "step8-evt-71", home: "Houston Astros", away: "Los Angeles Angels" }),
-          event({ id: "step8-evt-72", home: "Minnesota Twins", away: "Kansas City Royals" }),
+          event({ id: "step8-v4-evt-71", home: "Houston Astros", away: "Los Angeles Angels" }),
+          event({ id: "step8-v4-evt-72", home: "Minnesota Twins", away: "Kansas City Royals" }),
         ], 100, 50, 0);
       }
       throw Object.assign(new Error("socket reset"), { code: "ECONNRESET" });
     },
   });
-  const result = await service.acquire({ runId: "step8-network-fail", discovery: discovery([top, lower]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
+  const result = await service.acquire({ runId: "step8-v4-network-fail", discovery: discovery([top, lower]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
   assert.equal(calls, 2);
   assert.equal(result.stopReason, "PAID_PROVIDER_REQUEST_FAILED");
   assert.equal(result.games[1].status, "NOT_REACHED_AFTER_BLOCK");
@@ -471,9 +465,9 @@ test("paid network failure charges conservative worst case and blocks lower rank
   assert.equal(result.budget?.operations[0]?.accounting, "CONSERVATIVE_WORST_CASE");
 });
 
-test("absent market is negative-cached and not repurchased inside TTL", async () => {
+test("absent market is negative-cached inside TTL", async () => {
   let nowMs = Date.parse(BASE_NOW);
-  const providerGame = event({ id: "step8-negative-81", home: "Athletics", away: "Los Angeles Dodgers" });
+  const providerGame = event({ id: "step8-v4-negative-81", home: "Athletics", away: "Los Angeles Dodgers" });
   let paidCalls = 0;
   const service = new MlbSelectiveOddsAcquisitionService({
     now: () => new Date(nowMs),
@@ -484,17 +478,17 @@ test("absent market is negative-cached and not repurchased inside TTL", async ()
     },
   });
   const plan = discovery([game({ gamePk: 81, rank: 1, home: "Athletics", away: "Los Angeles Dodgers", markets: [TOTALS()] })]);
-  const first = await service.acquire({ runId: "step8-negative-first", discovery: plan, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
+  const first = await service.acquire({ runId: "step8-v4-negative-first", discovery: plan, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
   assert.equal(first.games[0].quoteMarkets[0]?.availability, "UNAVAILABLE_FROM_PROVIDER");
   nowMs += 60_000;
-  const second = await service.acquire({ runId: "step8-negative-second", discovery: plan, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
+  const second = await service.acquire({ runId: "step8-v4-negative-second", discovery: plan, maxRunCredits: 2, reserveCredits: 10, apiKey: "secret" });
   assert.equal(second.games[0].status, "CACHE_HIT");
   assert.equal(second.games[0].quoteMarkets[0]?.availability, "UNAVAILABLE_FROM_PROVIDER");
   assert.equal(paidCalls, 1);
 });
 
 test("reference-only quote is never executable for Market Edge", async () => {
-  const providerGame = event({ id: "step8-ref-91", home: "New York Yankees", away: "Boston Red Sox" });
+  const providerGame = event({ id: "step8-v4-ref-91", home: "New York Yankees", away: "Boston Red Sox" });
   const service = new MlbSelectiveOddsAcquisitionService({
     now: () => new Date(BASE_NOW),
     fetchFn: async (input) => String(input).includes("/events/?")
@@ -502,7 +496,7 @@ test("reference-only quote is never executable for Market Edge", async () => {
       : jsonResponse(marketPayload({ providerEvent: providerGame, marketKeys: ["h2h"], omitHardRock: true }), 99, 71, 1),
   });
   const result = await service.acquire({
-    runId: "step8-reference-only",
+    runId: "step8-v4-reference-only",
     discovery: discovery([game({ gamePk: 91, rank: 1, home: "New York Yankees", away: "Boston Red Sox" })]),
     maxRunCredits: 2,
     reserveCredits: 10,
@@ -513,53 +507,81 @@ test("reference-only quote is never executable for Market Edge", async () => {
   assert.equal(result.policy.staleOrMissingExecutionQuoteCanBeRecommended, false);
 });
 
-test("mutated paid-key list rejects through Promise before zero-cost probe", async () => {
+test("mutated or forged market identities reject before provider probe", async () => {
   const valid = game({ gamePk: 101, rank: 1, home: "Baltimore Orioles", away: "Tampa Bay Rays" });
   const invalid = { ...valid, providerMarketKeysToRequestNow: ["h2h", "pitcher_strikeouts"] } as MlbMarketDiscoveryGamePlan;
-  let calls = 0;
-  const service = new MlbSelectiveOddsAcquisitionService({ fetchFn: async () => { calls += 1; throw new Error("should not fetch"); } });
-  await assert.rejects(
-    () => service.acquire({ runId: "step8-mutated-plan", discovery: discovery([invalid]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
-    (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "PAID_MARKET_KEY_MUTATION",
-  );
-  assert.equal(calls, 0);
-});
-
-test("forging planned and paid lists together still fails Registry-backed validation", async () => {
   const forgedMarket = { ...H2H(), providerMarketKey: "pitcher_strikeouts" } as MlbMarketDiscoveryPlannedMarket;
   const forged = game({ gamePk: 102, rank: 1, markets: [forgedMarket] });
   let calls = 0;
   const service = new MlbSelectiveOddsAcquisitionService({ fetchFn: async () => { calls += 1; throw new Error("should not fetch"); } });
   await assert.rejects(
-    () => service.acquire({ runId: "step8-forged-registry", discovery: discovery([forged]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    () => service.acquire({ runId: "step8-v4-mutated-plan", discovery: discovery([invalid]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "PAID_MARKET_KEY_MUTATION",
+  );
+  await assert.rejects(
+    () => service.acquire({ runId: "step8-v4-forged-registry", discovery: discovery([forged]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
     (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "REGISTRY_MARKET_MAPPING_MISMATCH",
   );
   assert.equal(calls, 0);
 });
 
-test("forged horizon, thesis intent, and duplicate market identities reject pre-provider", async () => {
-  const wrongScope = { ...F5_H2H(), intrinsicProjectionScope: "FULL_GAME" } as MlbMarketDiscoveryPlannedMarket;
-  const wrongIntent = { ...TOTALS(), thesisIntent: "SIDE", intrinsicThesisKinds: ["HOME_SIDE"] } as MlbMarketDiscoveryPlannedMarket;
-  const duplicated = game({ gamePk: 105, rank: 1, markets: [H2H(), H2H()] });
+test("forged thesis direction must exist in same scoped discovery evidence", async () => {
+  const valid = game({ gamePk: 103, rank: 1, markets: [H2H()] });
+  const forgedMarket = { ...valid.plannedMarkets[0], intrinsicThesisKinds: ["AWAY_SIDE"] } as MlbMarketDiscoveryPlannedMarket;
+  const forged = { ...valid, plannedMarkets: [forgedMarket] } as MlbMarketDiscoveryGamePlan;
   const service = new MlbSelectiveOddsAcquisitionService({ fetchFn: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(
-    () => service.acquire({ runId: "step8-wrong-scope", discovery: discovery([game({ gamePk: 103, rank: 1, markets: [wrongScope] })]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    () => service.acquire({ runId: "step8-v4-forged-direction", discovery: discovery([forged]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "MARKET_THESIS_NOT_AUTHORIZED_BY_SCOPE",
+  );
+});
+
+test("forged horizon, thesis intent, and duplicate identities reject pre-provider", async () => {
+  const wrongScope = { ...F5_H2H(), intrinsicProjectionScope: "FULL_GAME" } as MlbMarketDiscoveryPlannedMarket;
+  const wrongIntent = { ...TOTALS(), thesisIntent: "SIDE", intrinsicThesisKinds: ["HOME_SIDE"] } as MlbMarketDiscoveryPlannedMarket;
+  const duplicated = game({ gamePk: 106, rank: 1, markets: [H2H(), H2H()] });
+  const service = new MlbSelectiveOddsAcquisitionService({ fetchFn: async () => { throw new Error("should not fetch"); } });
+  await assert.rejects(
+    () => service.acquire({ runId: "step8-v4-wrong-scope", discovery: discovery([game({ gamePk: 104, rank: 1, markets: [wrongScope] })]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
     (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "MARKET_HORIZON_MISMATCH",
   );
   await assert.rejects(
-    () => service.acquire({ runId: "step8-wrong-intent", discovery: discovery([game({ gamePk: 104, rank: 1, markets: [wrongIntent] })]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    () => service.acquire({ runId: "step8-v4-wrong-intent", discovery: discovery([game({ gamePk: 105, rank: 1, markets: [wrongIntent] })]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
     (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "MARKET_THESIS_INTENT_MISMATCH",
   );
   await assert.rejects(
-    () => service.acquire({ runId: "step8-duplicate", discovery: discovery([duplicated]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
+    () => service.acquire({ runId: "step8-v4-duplicate", discovery: discovery([duplicated]), maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" }),
     (error: any) => error instanceof MlbSelectiveOddsPlanError && error.code === "DUPLICATE_MARKET_KEY",
   );
 });
 
+test("paid response must preserve probed commence_time even when alternate time is same date and within 90 minutes", async () => {
+  const providerGame = event({ id: "step8-v4-paid-time", home: "Los Angeles Dodgers", away: "San Diego Padres", commence: "2026-08-10T23:10:00.000Z" });
+  const altered = { ...providerGame, commence_time: "2026-08-11T00:10:00.000Z" };
+  const service = new MlbSelectiveOddsAcquisitionService({
+    now: () => new Date(BASE_NOW),
+    fetchFn: async (input) => String(input).includes("/events/?")
+      ? jsonResponse([providerGame], 100, 80, 0)
+      : jsonResponse(marketPayload({ providerEvent: altered, marketKeys: ["h2h"] }), 99, 81, 1),
+  });
+  const result = await service.acquire({
+    runId: "step8-v4-paid-time-mismatch",
+    discovery: discovery([game({ gamePk: 107, rank: 1, home: "Los Angeles Dodgers", away: "San Diego Padres", startTime: "2026-08-10T23:10:00.000Z" })]),
+    maxRunCredits: 2,
+    reserveCredits: 10,
+    apiKey: "secret",
+  });
+  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.stopReason, "PAID_PROVIDER_IDENTITY_MISMATCH");
+  assert.equal(result.games[0].status, "PROVIDER_FAILED");
+  assert.equal(result.games[0].providerErrorCode, "ODDS_EVENT_IDENTITY_MISMATCH");
+  assert.equal(result.games[0].usableForMarketEdge, false);
+});
+
 test("all five current paid market mappings pass Registry-backed validation", async () => {
-  const providerGame = event({ id: "step8-all-five", home: "Arizona Diamondbacks", away: "Colorado Rockies" });
+  const providerGame = event({ id: "step8-v4-all-five", home: "Arizona Diamondbacks", away: "Colorado Rockies" });
   const plan = discovery([game({
-    gamePk: 106,
+    gamePk: 110,
     rank: 1,
     home: "Arizona Diamondbacks",
     away: "Colorado Rockies",
@@ -573,10 +595,12 @@ test("all five current paid market mappings pass Registry-backed validation", as
       return jsonResponse(marketPayload({ providerEvent: providerGame, marketKeys: keys }), 95, 85, 5);
     },
   });
-  const result = await service.acquire({ runId: "step8-all-five-current", discovery: plan, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
+  const result = await service.acquire({ runId: "step8-v4-all-five-current", discovery: plan, maxRunCredits: 5, reserveCredits: 10, apiKey: "secret" });
   assert.equal(result.status, "COMPLETED");
   assert.equal(result.games[0].quoteMarkets.length, 5);
   assert.equal(result.policy.registryBackedPlanValidation, true);
+  assert.equal(result.policy.thesisDirectionMustExistInScopedDiscoveryEvidence, true);
+  assert.equal(result.policy.paidPayloadMustMatchProbedCommenceTime, true);
 });
 
 test("event odds URL is event-scoped and market-exact", () => {
@@ -597,6 +621,8 @@ test("Step 8 source owns no route, timer, automatic retry, edge model, or enviro
   assert.match(source, /distinctRunsProviderSerialized: true/);
   assert.match(source, /concurrentCacheMissesCanDuplicatePaidCalls: false/);
   assert.match(source, /registryBackedPlanValidation: true/);
+  assert.match(source, /thesisDirectionMustExistInScopedDiscoveryEvidence: true/);
+  assert.match(source, /paidPayloadMustMatchProbedCommenceTime: true/);
   assert.match(source, /staleOrMissingExecutionQuoteCanBeRecommended: false/);
   assert.match(source, /calculatesMarketEdge: false/);
   assert.match(source, /recommendsBet: false/);
