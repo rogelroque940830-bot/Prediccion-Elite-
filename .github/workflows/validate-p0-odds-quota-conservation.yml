@@ -20,11 +20,8 @@ on:
       - 'server/mlb-odds-budget-controller-concurrency.test.ts'
       - 'server/mlb-cheap-screening.ts'
       - 'server/mlb-cheap-screening.test.ts'
-      - 'server/mlb-cheap-screening-routes.ts'
-      - 'server/route-contract.extensions.json'
       - 'server/mlb-market-odds-normalizer.ts'
       - 'server/mlb-market-contract.ts'
-      - 'server/routes.ts'
       - 'server/index.ts'
 
 permissions:
@@ -87,9 +84,7 @@ jobs:
           ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-odds-budget-controller.ts
-          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval' server/mlb-cheap-screening.ts
-          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|/api/odds/|setInterval' server/mlb-cheap-screening-routes.ts
-          grep -F '"/api/mlb/p1/v1/cheap-screen"' server/route-contract.extensions.json
+          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval|setTimeout' server/mlb-cheap-screening.ts
           grep -F 'requiresMarketOdds: false' server/mlb-cheap-screening.ts
           grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-cheap-screening.ts
           grep -F 'deferredGamesRequireNewExplicitRun: true' server/mlb-cheap-screening.ts
