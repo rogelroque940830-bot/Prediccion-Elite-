@@ -108,13 +108,23 @@ jobs:
           ! grep -F 'regions=' server/mlb-selective-odds-acquisition.ts
           grep -F 'endpoint: "EVENT_ODDS"' server/mlb-selective-odds-acquisition.ts
           grep -F 'MLB_SELECTIVE_ODDS_CACHE_TTL_MS = MLB_P1_M6A2_MAX_QUOTE_AGE_MS' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_REQUEST_TIMEOUT_MS = 15_000' server/mlb-selective-odds-acquisition.ts
+          grep -F 'AbortSignal.timeout' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_MARKET_UNIVERSE_REGISTRY' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS' server/mlb-selective-odds-acquisition.ts
+          grep -F 'REGISTRY_MARKET_MAPPING_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MARKET_HORIZON_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MARKET_THESIS_INTENT_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'DUPLICATE_MARKET_KEY' server/mlb-selective-odds-acquisition.ts
           grep -F 'PAID_MARKET_KEY_MUTATION' server/mlb-selective-odds-acquisition.ts
           grep -F 'RUN_ID_REUSED_WITH_DIFFERENT_PLAN' server/mlb-selective-odds-acquisition.ts
           grep -F 'explicitInvocationRequired: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'publicRouteRegistered: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'backgroundPolling: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'finalistGamesOnly: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'registryBackedPlanValidation: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'exactDiscoveryMarketKeysOnly: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'duplicateMarketKeysAllowed: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'onePaidRequestPerGameMaximum: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'paidRequestsSequentialByIntrinsicRank: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'lowerRankCannotBypassBudgetDeniedHigherRank: true' server/mlb-selective-odds-acquisition.ts
@@ -125,6 +135,8 @@ jobs:
           grep -F 'negativeMarketAvailabilityCachedWithinTtl: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'sameRunIdReplayConsumesPaidCredits: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'runIdPlanMutationAllowed: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'automaticProviderRetries: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'ambiguousEventIdentityCanSpendCredits: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'staleOrMissingExecutionQuoteCanBeRecommended: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'calculatesMarketEdge: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'recommendsBet: false' server/mlb-selective-odds-acquisition.ts
