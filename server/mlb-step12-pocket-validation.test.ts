@@ -8,16 +8,17 @@ import {
   type MlbStep12PocketTargetEvidence,
 } from "./mlb-step12-pocket-validation";
 
-function metrics(rate: number, decisiveRows: number, uniqueDates = 25) {
+function metrics(rate: number, decisiveRows: number, uniqueDates = 40, pushes = 0, decisiveUniqueDates?: number) {
   const hits = Math.round(rate * decisiveRows);
   return {
     decisiveHitRate: hits / decisiveRows,
     decisiveRows,
     hits,
     losses: decisiveRows - hits,
-    pushes: 0,
-    selectedRows: decisiveRows,
+    pushes,
+    selectedRows: decisiveRows + pushes,
     uniqueDates,
+    ...(decisiveUniqueDates == null ? {} : { decisiveUniqueDates }),
     retentionPct: 4,
     noPickDatePct: 55,
   };
@@ -41,9 +42,9 @@ function rule(overrides: Partial<Omit<MlbStep12PocketRuleEvidence, "holdoutOneSi
   return withPValues({
     ruleKey: "abc123",
     side: "HOME",
-    discovery: metrics(0.79, 62, 49),
-    discoveryWilsonLower95: 0.67,
-    holdout: metrics(25 / 30, 30, 25),
+    discovery: metrics(0.79, 120, 60),
+    discoveryWilsonLower95: 0.70,
+    holdout: metrics(0.83, 90, 45),
     ...overrides,
   }, baseline);
 }
@@ -58,19 +59,21 @@ function target(rules: MlbStep12PocketRuleEvidence[], baseline = 0.53, topK = 10
   };
 }
 
-test("classifies a strong frozen holdout pocket as OOS-supported without producing BET_ELITE", () => {
+test("classifies a strong 80/30 frozen holdout pocket as OOS-supported without producing BET_ELITE", () => {
   const evidence = rule();
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.equal(result.status, "OOS_SUPPORTED_HYPOTHESIS");
   assert.equal(result.descriptiveHitRateBand, "EXCEPTIONAL_80_PLUS");
-  assert.equal(result.policy.exactHoldoutPValueRecomputedFromCounts, true);
-  assert.equal(result.policy.bonferroniParityRecomputedFromTopK, true);
+  assert.equal(result.holdoutDecisiveRows, 90);
+  assert.equal(result.holdoutDecisiveDates, 45);
+  assert.equal(result.policy.minimumHoldoutDecisiveRows, 80);
+  assert.equal(result.policy.minimumHoldoutDecisiveDates, 30);
   assert.equal(result.policy.betEliteLabelProduced, false);
   assert.equal(result.policy.livePickFiltersChanged, false);
 });
 
 test("does not reject stable 70-80 percent pockets merely for being below 80", () => {
-  const evidence = rule({ discovery: metrics(0.76, 90, 55), holdout: metrics(0.75, 60, 40) });
+  const evidence = rule({ discovery: metrics(0.76, 150, 70), holdout: metrics(0.75, 100, 50) });
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.equal(result.status, "OOS_SUPPORTED_HYPOTHESIS");
   assert.equal(result.descriptiveHitRateBand, "STRONG_70_TO_80");
@@ -78,14 +81,36 @@ test("does not reject stable 70-80 percent pockets merely for being below 80", (
 });
 
 test("labels a tiny 90 percent pocket insufficient instead of promoting it", () => {
-  const evidence = rule({ discovery: metrics(0.92, 25, 18), holdout: metrics(0.90, 10, 8) });
+  const evidence = rule({ discovery: metrics(0.92, 40, 25), holdout: metrics(0.90, 20, 15) });
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.equal(result.status, "INSUFFICIENT_HOLDOUT_SAMPLE");
   assert.equal(result.descriptiveHitRateBand, "EXCEPTIONAL_80_PLUS");
+  assert.ok(result.reasons.includes("DECISIVE_ROWS_BELOW_80"));
+});
+
+test("requires 30 decisive dates, not dates that may contain only pushes", () => {
+  const evidence = rule({
+    discovery: metrics(0.80, 120, 60),
+    holdout: metrics(0.80, 90, 45, 10),
+  });
+  const result = validateMlbStep12Pocket(target([evidence]), evidence);
+  assert.equal(result.status, "INSUFFICIENT_HOLDOUT_SAMPLE");
+  assert.equal(result.holdoutDecisiveDates, null);
+  assert.ok(result.reasons.includes("DECISIVE_DATE_COUNT_UNAVAILABLE"));
+});
+
+test("accepts explicit decisive-date evidence when pushes are present", () => {
+  const evidence = rule({
+    discovery: metrics(0.80, 120, 60),
+    holdout: metrics(0.80, 90, 45, 10, 35),
+  });
+  const result = validateMlbStep12Pocket(target([evidence]), evidence);
+  assert.equal(result.holdoutDecisiveDates, 35);
+  assert.equal(result.status, "OOS_SUPPORTED_HYPOTHESIS");
 });
 
 test("keeps raw significance that fails Bonferroni as promising, not supported", () => {
-  const evidence = rule({ discovery: metrics(0.74, 80, 45), holdout: metrics(0.70, 40, 28) });
+  const evidence = rule({ discovery: metrics(0.67, 140, 65), holdout: metrics(0.6375, 80, 40) });
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.ok((result.rawPValue as number) <= 0.05);
   assert.ok((result.familywiseAdjustedPValue as number) > 0.05);
@@ -93,14 +118,14 @@ test("keeps raw significance that fails Bonferroni as promising, not supported",
 });
 
 test("flags a large discovery-to-holdout collapse as unstable even if holdout remains above baseline", () => {
-  const evidence = rule({ discovery: metrics(0.90, 70, 50), holdout: metrics(0.68, 50, 35) });
+  const evidence = rule({ discovery: metrics(0.90, 140, 65), holdout: metrics(0.65, 100, 50) });
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.equal(result.status, "UNSTABLE_HOLDOUT");
   assert.ok(result.reasons.includes("DISCOVERY_HOLDOUT_DRIFT_GT_15PP"));
 });
 
 test("flags no positive holdout lift as unstable", () => {
-  const evidence = rule({ discovery: metrics(0.65, 70, 45), holdout: metrics(0.50, 40, 30) });
+  const evidence = rule({ discovery: metrics(0.60, 140, 65), holdout: metrics(0.50, 100, 50) });
   const result = validateMlbStep12Pocket(target([evidence]), evidence);
   assert.equal(result.status, "UNSTABLE_HOLDOUT");
   assert.ok(result.reasons.includes("NO_POSITIVE_HOLDOUT_LIFT"));
@@ -108,10 +133,7 @@ test("flags no positive holdout lift as unstable", () => {
 
 test("fails closed on internally inconsistent metrics", () => {
   const valid = rule();
-  const broken = {
-    ...valid,
-    holdout: { ...valid.holdout, decisiveHitRate: 0.9 },
-  };
+  const broken = { ...valid, holdout: { ...valid.holdout, decisiveHitRate: 0.9 } };
   const result = validateMlbStep12Pocket(target([broken]), broken);
   assert.equal(result.status, "INVALID_EVIDENCE");
   assert.ok(result.reasons.includes("HOLDOUT_METRICS_INVALID"));
