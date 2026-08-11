@@ -45,21 +45,24 @@ function candidate(input: {
   };
 }
 
-function shortlist(selected: MlbShortlistCandidate[]): MlbShortlistResult {
+function shortlist(
+  candidates: MlbShortlistCandidate[],
+  selected: MlbShortlistCandidate[] = candidates,
+): MlbShortlistResult {
   return {
     schemaVersion: MLB_SHORTLIST_SCHEMA,
     generatedAt: "2026-08-10T14:00:00.000Z",
     date: "2026-08-10",
     sourceCheapScreenSchemaVersion: "courtedge-p0-mlb-cheap-screening.v1",
-    candidates: selected,
+    candidates,
     selected,
     summary: {
-      cheapScreenEligible: selected.length,
-      evaluated: selected.length,
-      qualified: selected.length,
+      cheapScreenEligible: candidates.length,
+      evaluated: candidates.length,
+      qualified: candidates.filter((item) => item.qualifiedForShortlist).length,
       selected: selected.length,
-      overflowQualified: 0,
-      noCertifiedSignal: 0,
+      overflowQualified: Math.max(0, candidates.filter((item) => item.qualifiedForShortlist).length - selected.length),
+      noCertifiedSignal: candidates.filter((item) => !item.qualifiedForShortlist).length,
     },
     policy: {
       marketAgnostic: true,
@@ -194,16 +197,10 @@ test("opposing certified directions conflict inside the qualifying projection an
 });
 
 test("certified bullpen is late-only: it may create full-game TOTAL_OVER but can never create early-window TOTAL_OVER", () => {
-  const base = candidate({
-    gamePk: 6,
-    signals: [signal("ADVANCED_CONTEXT", "totalAdjustment", 0.6)],
-  });
-  const bullpenByGame: Record<number, MlbIntrinsicBullpenPair> = {
-    6: { away: certifiedBullpen(0.5) },
-  };
+  const base = candidate({ gamePk: 6, signals: [signal("ADVANCED_CONTEXT", "totalAdjustment", 0.6)] });
+  const bullpenByGame: Record<number, MlbIntrinsicBullpenPair> = { 6: { away: certifiedBullpen(0.5) } };
   const result = buildMlbIntrinsicEdge({ shortlist: shortlist([base]), bullpenByGame });
   const profile = result.games[0];
-
   assert.equal(profile.projections.fullGame.theses.some((item) => item.kind === "TOTAL_OVER" && item.researchEliteEligible), true);
   assert.equal(profile.projections.earlyWindow.theses.some((item) => item.kind === "TOTAL_OVER" && item.researchEliteEligible), false);
   assert.equal(profile.projections.earlyWindow.signals.some((item) => item.component === "BULLPEN"), false);
@@ -212,19 +209,18 @@ test("certified bullpen is late-only: it may create full-game TOTAL_OVER but can
 });
 
 test("late bullpen conflict can invalidate full-game side while preserving an early HOME_SIDE thesis", () => {
-  const bullpenByGame: Record<number, MlbIntrinsicBullpenPair> = {
-    7: { home: certifiedBullpen(0.9) },
-  };
-  const result = buildMlbIntrinsicEdge({ shortlist: shortlist([strongHomeSide(7)]), bullpenByGame });
+  const result = buildMlbIntrinsicEdge({
+    shortlist: shortlist([strongHomeSide(7)]),
+    bullpenByGame: { 7: { home: certifiedBullpen(0.9) } },
+  });
   const profile = result.games[0];
-
   assert.equal(profile.projections.fullGame.pressures.awayRuns.state, "CONFLICTED");
   assert.equal(profile.projections.fullGame.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), false);
   assert.equal(profile.projections.earlyWindow.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), true);
   assert.equal(profile.researchEliteCandidate, true);
 });
 
-test("late bullpen can complete a full-game HOME_SIDE thesis without fabricating an early-window HOME_SIDE thesis", () => {
+test("late bullpen can complete full-game HOME_SIDE without fabricating early-window HOME_SIDE", () => {
   const base = candidate({
     gamePk: 8,
     signals: [
@@ -238,7 +234,6 @@ test("late bullpen can complete a full-game HOME_SIDE thesis without fabricating
     bullpenByGame: { 8: { away: certifiedBullpen(0.45) } },
   });
   const profile = result.games[0];
-
   assert.equal(profile.projections.fullGame.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), true);
   assert.equal(profile.projections.earlyWindow.theses.some((item) => item.kind === "HOME_SIDE" && item.researchEliteEligible), false);
 });
@@ -246,13 +241,29 @@ test("late bullpen can complete a full-game HOME_SIDE thesis without fabricating
 test("uncertified bullpen remains warning-only in every projection", () => {
   const result = buildMlbIntrinsicEdge({
     shortlist: shortlist([candidate({ gamePk: 9, signals: [signal("ADVANCED_CONTEXT", "totalAdjustment", 0.6)] })]),
-    bullpenByGame: {
-      9: { home: { sourceStatus: "DEGRADED", provenance: { status: "DEGRADED" }, runsAdjustment: 0.7 } },
-    },
+    bullpenByGame: { 9: { home: { sourceStatus: "DEGRADED", provenance: { status: "DEGRADED" }, runsAdjustment: 0.7 } } },
   });
   const profile = result.games[0];
   assert.equal(profile.signals.some((item) => item.component === "BULLPEN"), false);
   assert.deepEqual(profile.warnings, ["HOME_BULLPEN_DEGRADED"]);
+});
+
+test("duplicate HOME_SIDE across full and early projections counts once before support strength breaks ties", () => {
+  const duplicatedAcrossHorizons = strongHomeSide(20);
+  const strongerFullOnly = candidate({
+    gamePk: 21,
+    signals: [
+      signal("STATCAST_QUALITY", "awaySP.runsDelta", 0.31),
+      signal("STATCAST_QUALITY", "homeSP.runsDelta", -0.29),
+      signal("DISCIPLINE_SPEED", "awayRunsDelta", -0.18),
+    ],
+  });
+  const result = buildMlbIntrinsicEdge({
+    shortlist: shortlist([duplicatedAcrossHorizons, strongerFullOnly]),
+    bullpenByGame: { 21: { away: certifiedBullpen(0.45) } },
+  });
+  assert.deepEqual(result.rankedGames.map((game) => game.gamePk), [21, 20]);
+  assert.equal(result.policy.duplicateHorizonThesisKindsCountOnceInRank, true);
 });
 
 test("later PROVISIONAL game can rank above earlier FINAL game; time and stage do not affect intrinsic rank", () => {
@@ -270,7 +281,6 @@ test("later PROVISIONAL game can rank above earlier FINAL game; time and stage d
       signal("SOS", "away.adjustedRpgDelta", -0.4),
     ],
   });
-
   const result = buildMlbIntrinsicEdge({ shortlist: shortlist([earlyFinal, lateProvisional]) });
   assert.deepEqual(result.rankedGames.map((game) => game.gamePk), [71, 70]);
   assert.equal(result.rankedGames[0].inputStage, "PROVISIONAL");
@@ -278,6 +288,36 @@ test("later PROVISIONAL game can rank above earlier FINAL game; time and stage d
   assert.equal(result.policy.finalInputsAffectIntrinsicRank, false);
   assert.equal(result.policy.gameStartTimeAffectsIntrinsicRank, false);
   assert.deepEqual(rankMlbIntrinsicGames([...result.rankedGames].reverse()).map((game) => game.gamePk), [71, 70]);
+});
+
+test("upstream shortlist selected cap cannot exclude a coherent PROVISIONAL Elite thesis before intrinsic ranking", () => {
+  const upstreamSelected: MlbShortlistCandidate[] = Array.from({ length: 8 }, (_, index) => candidate({
+    gamePk: 200 + index,
+    final: true,
+    signals: [signal("STATCAST_QUALITY", "awaySP.runsDelta", 0.10 + index * 0.001)],
+  }));
+  const lateProvisionalElite = candidate({
+    gamePk: 299,
+    final: false,
+    startTime: "2026-08-11T01:40:00.000Z",
+    signals: [
+      signal("STATCAST_QUALITY", "awaySP.runsDelta", 0.42),
+      signal("DISCIPLINE_SPEED", "homeRunsDelta", 0.27),
+      signal("STATCAST_QUALITY", "homeSP.runsDelta", -0.37),
+      signal("DISCIPLINE_SPEED", "awayRunsDelta", -0.22),
+    ],
+  });
+  const allCandidates = [...upstreamSelected, lateProvisionalElite];
+  const result = buildMlbIntrinsicEdge({ shortlist: shortlist(allCandidates, upstreamSelected) });
+
+  assert.equal(result.summary.qualifiedInputCandidates, 9);
+  assert.equal(result.summary.selectedForMarketDiscovery, 8);
+  assert.equal(result.summary.overflowAfterIntrinsicRanking, 1);
+  assert.equal(result.rankedGames[0].gamePk, 299);
+  assert.equal(result.rankedGames[0].inputStage, "PROVISIONAL");
+  assert.equal(result.rankedGames.some((game) => game.gamePk === 299), true);
+  assert.equal(result.policy.upstreamShortlistSelectedCapAffectsIntrinsicPopulation, false);
+  assert.equal(result.policy.intrinsicCapAppliedAfterIntrinsicRanking, true);
 });
 
 test("provisional convergence may be research Elite while remaining explicitly not outcome-certified", () => {
@@ -290,7 +330,7 @@ test("provisional convergence may be research Elite while remaining explicitly n
   assert.equal(result.policy.requiresFinalInputsForResearchEliteCandidate, false);
 });
 
-test("intrinsic engine is zero-odds, unweighted, horizon-scoped, and excludes overlapping composite models", () => {
+test("intrinsic engine is zero-odds, unweighted, horizon-scoped, post-rank capped, and excludes overlapping composites", () => {
   const source = fs.readFileSync("server/mlb-intrinsic-edge.ts", "utf8");
   assert.doesNotMatch(source, /api\.the-odds-api\.com|ODDS_API_KEY|x-requests-|\bfetch\s*\(|setInterval|setTimeout/i);
   assert.doesNotMatch(source, /from\s+["']\.\/mlb-(ere|tesi|f5-unified|early-markets)/i);
@@ -301,8 +341,11 @@ test("intrinsic engine is zero-odds, unweighted, horizon-scoped, and excludes ov
   assert.match(source, /weightedScoreApplied: false/);
   assert.match(source, /legacyCompositeModelsCountAsIndependentEvidence: false/);
   assert.match(source, /sameUnderlyingEvidenceDoubleCountingAllowed: false/);
+  assert.match(source, /duplicateHorizonThesisKindsCountOnceInRank: true/);
   assert.match(source, /contradictionsWithinQualifyingProjectionCanBeElite: false/);
   assert.match(source, /horizonScopedThesesRequired: true/);
   assert.match(source, /lateBullpenEvidenceAllowedInEarlyWindow: false/);
+  assert.match(source, /upstreamShortlistSelectedCapAffectsIntrinsicPopulation: false/);
+  assert.match(source, /intrinsicCapAppliedAfterIntrinsicRanking: true/);
   assert.match(source, /researchOnlyNotOutcomeCertified: true/);
 });
