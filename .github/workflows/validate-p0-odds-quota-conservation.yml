@@ -96,7 +96,7 @@ jobs:
           ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval|setTimeout' server/mlb-cheap-screening.ts
           ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout' server/mlb-shortlist.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-intrinsic-edge.ts
-          ! grep -nE 'from[[:space:]]+["'"']\./mlb-(ere|tesi|f5-unified|early-markets)' server/mlb-intrinsic-edge.ts
+          ! grep -nE 'from[[:space:]]+.*\./mlb-(ere|tesi|f5-unified|early-markets)' server/mlb-intrinsic-edge.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-market-discovery.ts
 
           grep -F 'requiresMarketOdds: false' server/mlb-cheap-screening.ts
@@ -122,6 +122,7 @@ jobs:
           grep -F 'firstThreeInningsPriority: false' server/mlb-market-discovery.ts
           grep -F 'marketOrderCarriesPreference: false' server/mlb-market-discovery.ts
           grep -F 'intrinsicThesisRequiredForPaidLookup: true' server/mlb-market-discovery.ts
+          grep -F 'intrinsicThesisDirectionPreserved: true' server/mlb-market-discovery.ts
           grep -F 'intrinsicRankPreservedAcrossInputStage: true' server/mlb-market-discovery.ts
           grep -F 'researchOnlyMarketsConsumeProviderCredits: false' server/mlb-market-discovery.ts
           grep -F 'onlyFinalInputsMayAuthorizePaidLookup: true' server/mlb-market-discovery.ts
