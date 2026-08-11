@@ -293,6 +293,55 @@ test("deep, cyclic and hostile envelopes fail closed without recursive digest tr
   assert.equal(hostileResult.blockers.includes("MODEL_EVIDENCE_PROCESSING_FAILED"), true);
 });
 
+test("accessor-backed evidence fields are snapshotted exactly once before validation", () => {
+  const stable = evidence();
+  const envelope: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(stable)) {
+    if (key !== "gamePk" && key !== "generatedAt") {
+      Object.defineProperty(envelope, key, { enumerable: true, configurable: true, value });
+    }
+  }
+
+  let gamePkReads = 0;
+  let generatedAtReads = 0;
+  Object.defineProperty(envelope, "gamePk", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      gamePkReads += 1;
+      return gamePkReads === 1 ? 900001 : 0;
+    },
+  });
+  Object.defineProperty(envelope, "generatedAt", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      generatedAtReads += 1;
+      return generatedAtReads === 1 ? "2026-08-11T13:55:00.000Z" : "not-a-date";
+    },
+  });
+
+  const result = adaptMlbCurrentPredictorProbability(envelope);
+  assert.equal(result.adapterStatus, "READY");
+  assert.equal(assessment(result).gamePk, 900001);
+  assert.equal(assessment(result).generatedAt, "2026-08-11T13:55:00.000Z");
+  assert.equal(gamePkReads, 1);
+  assert.equal(generatedAtReads, 1);
+
+  const throwing = { ...stable } as any;
+  Object.defineProperty(throwing, "metric", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      throw new Error("getter failed");
+    },
+  });
+  const failed = adaptMlbCurrentPredictorProbability(throwing);
+  assert.equal(failed.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(failed.assessment, null);
+  assert.equal(failed.blockers.includes("MODEL_EVIDENCE_PROCESSING_FAILED"), true);
+});
+
 test("basic identity corruption returns INVALID_EVIDENCE before policy maps are used", () => {
   const badSide = adaptMlbCurrentPredictorProbability({ ...evidence(), side: "DRAW" });
   assert.equal(badSide.adapterStatus, "INVALID_EVIDENCE");
@@ -353,6 +402,8 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.evidenceDigestUsesLosslessNumericSerialization, true);
   assert.equal(first.policy.evidenceDigestRecursiveTraversalAllowed, false);
   assert.equal(first.policy.exactEnvelopeFieldSetRequired, true);
+  assert.equal(first.policy.envelopeFieldsSnapshottedExactlyOnce, true);
+  assert.equal(first.policy.rawEnvelopeNotReadAfterSnapshot, true);
   assert.equal(first.policy.exactCurrentPredictorProvenanceRequired, true);
   assert.equal(first.policy.exactHalfRunIdentityRequired, true);
   assert.equal(first.policy.positiveTotalLineRequired, true);
