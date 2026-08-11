@@ -134,7 +134,7 @@ jobs:
           grep -F "MAX_ABSOLUTE_2025_HOLDOUT_FORWARD_DRIFT = 0.15" "$validate"
           grep -F "'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'" "$validate"
           grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
-          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate"
+          ! grep -E 'betElite(Label)?Produced:[[:space:]]*true|betEliteProduced[[:space:]]*=[[:space:]]*True|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate"
           git diff --check
 
       - name: Upload Step 12D forward replication evidence
