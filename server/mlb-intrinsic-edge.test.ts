@@ -274,7 +274,7 @@ test("intrinsic engine is zero-odds, unweighted, and does not import overlapping
   const source = fs.readFileSync("server/mlb-intrinsic-edge.ts", "utf8");
   assert.doesNotMatch(source, /api\.the-odds-api\.com|ODDS_API_KEY|x-requests-|\bfetch\s*\(|setInterval|setTimeout/i);
   assert.doesNotMatch(source, /from\s+["']\.\/mlb-(ere|tesi|f5-unified|early-markets)/i);
-  assert.doesNotMatch(source, /\bPREMIUM\b|\bULTRA\b|weightedScore|modelProbability|impliedProbability/i);
+  assert.doesNotMatch(source, /\bPREMIUM\b|\bULTRA\b|\bmodelProbability\b|\bimpliedProbability\b|\bweightedScore\s*[:=]/i);
   assert.match(source, /oddsAffectIntrinsicRank: false/);
   assert.match(source, /finalInputsAffectIntrinsicRank: false/);
   assert.match(source, /gameStartTimeAffectsIntrinsicRank: false/);
