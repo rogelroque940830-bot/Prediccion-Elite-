@@ -189,6 +189,26 @@ test("Step 11A and Step 9 evidence must match exactly before capture", () => {
   assert.throws(() => capture(execution), /MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND|MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH/);
 });
 
+test("ambiguous duplicate Step 9 game or market identities fail closed before capture", () => {
+  const duplicateGame = fixture();
+  duplicateGame.marketEdge.games.push({ ...duplicateGame.marketEdge.games[0] });
+  assert.throws(() => capture(duplicateGame), /MLB_ELITE_LEDGER_STEP9_GAME_IDENTITY_AMBIGUOUS/);
+
+  const duplicateMarket = fixture();
+  duplicateMarket.marketEdge.games[0].markets.push({ ...duplicateMarket.marketEdge.games[0].markets[0] });
+  assert.throws(() => capture(duplicateMarket), /MLB_ELITE_LEDGER_STEP9_MARKET_IDENTITY_AMBIGUOUS/);
+});
+
+test("nonstandard American odds fail closed before entering the pregame snapshot", () => {
+  const shortNegative = fixture();
+  shortNegative.marketEdge.games[0].markets[0].execution.selectedOddsAmerican = -50;
+  assert.throws(() => capture(shortNegative), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID/);
+
+  const fractionalPositive = fixture();
+  fractionalPositive.marketEdge.games[0].markets[1].execution.selectedOddsAmerican = 110.5;
+  assert.throws(() => capture(fractionalPositive), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID/);
+});
+
 test("impossible game dates fail closed instead of entering the prospective ledger", () => {
   const source = fixture();
   assert.throws(() => captureMlbEliteEvidenceLedger({
