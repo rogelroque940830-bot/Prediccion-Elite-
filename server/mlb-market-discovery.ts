@@ -17,6 +17,7 @@ import type {
   MlbIntrinsicEdgeResult,
   MlbIntrinsicGameProfile,
   MlbIntrinsicMarketSearchIntent,
+  MlbIntrinsicThesisKind,
 } from "./mlb-intrinsic-edge";
 
 export const MLB_MARKET_DISCOVERY_SCHEMA = "courtedge-p0-mlb-market-discovery.v2" as const;
@@ -72,6 +73,7 @@ export interface MlbMarketDiscoveryPlannedMarket {
   quoteShape: MlbRegistryQuoteShape;
   acquisition: MlbRegistryAcquisition;
   thesisIntent: MlbIntrinsicMarketSearchIntent;
+  intrinsicThesisKinds: readonly MlbIntrinsicThesisKind[];
   supportingComponents: readonly MlbIntrinsicComponent[];
   supportingComponentCount: number;
   hardRockEvidenceStatus: MlbHardRockEvidenceStatus;
@@ -88,6 +90,7 @@ export interface MlbMarketDiscoveryGamePlan {
   intrinsicRank: number;
   intrinsicResearchClassification: MlbIntrinsicGameProfile["researchClassification"];
   intrinsicResearchEliteCandidate: boolean;
+  researchEliteThesisKinds: readonly MlbIntrinsicThesisKind[];
   marketSearchIntents: readonly MlbIntrinsicMarketSearchIntent[];
   plannedMarkets: readonly MlbMarketDiscoveryPlannedMarket[];
   plannedProviderMarketKeys: readonly string[];
@@ -126,6 +129,7 @@ export interface MlbMarketDiscoveryResult {
     marketOrderCarriesPreference: false;
     currentAnalyticalPathDefinesPaidEligibility: true;
     intrinsicThesisRequiredForPaidLookup: true;
+    intrinsicThesisDirectionPreserved: true;
     intrinsicRankPreservedAcrossInputStage: true;
     researchOnlyMarketsConsumeProviderCredits: false;
     playerPropsQueryEligible: false;
@@ -224,6 +228,16 @@ function supportForIntent(
   return intent === "SIDE" ? game.marketSearchEvidence.side : game.marketSearchEvidence.total;
 }
 
+function thesisKindsForIntent(
+  game: MlbIntrinsicGameProfile,
+  intent: MlbIntrinsicMarketSearchIntent,
+): readonly MlbIntrinsicThesisKind[] {
+  return [...new Set(game.theses
+    .filter((thesis) => thesis.researchEliteEligible && thesis.marketSearchIntent === intent)
+    .map((thesis) => thesis.kind))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 function plannedMarket(
   game: MlbIntrinsicGameProfile,
   market: MlbP1M2aMarket,
@@ -231,7 +245,8 @@ function plannedMarket(
   const intent = intentForMarket(market);
   if (!game.researchEliteCandidate || !game.marketSearchIntents.includes(intent)) return null;
   const support = supportForIntent(game, intent);
-  if (support.length === 0) return null;
+  const thesisKinds = thesisKindsForIntent(game, intent);
+  if (support.length === 0 || thesisKinds.length === 0) return null;
   const entry = currentEntryForMarket(market);
   return {
     providerMarketKey: entry.providerMarketKey,
@@ -242,6 +257,7 @@ function plannedMarket(
     quoteShape: entry.quoteShape,
     acquisition: entry.acquisition,
     thesisIntent: intent,
+    intrinsicThesisKinds: thesisKinds,
     supportingComponents: support,
     supportingComponentCount: support.length,
     hardRockEvidenceStatus: entry.hardRockEvidenceStatus,
@@ -258,6 +274,10 @@ function planForIntrinsicGame(
     .filter((market): market is MlbMarketDiscoveryPlannedMarket => market != null)
     .sort((left, right) => left.providerMarketKey.localeCompare(right.providerMarketKey));
   const plannedProviderMarketKeys = plannedMarkets.map((market) => market.providerMarketKey);
+  const researchEliteThesisKinds = [...new Set(game.theses
+    .filter((thesis) => thesis.researchEliteEligible)
+    .map((thesis) => thesis.kind))]
+    .sort((left, right) => left.localeCompare(right));
 
   const hasMarkets = plannedProviderMarketKeys.length > 0;
   const paidLookupEligibleNow = game.inputStage === "FINAL" && game.researchEliteCandidate && hasMarkets;
@@ -281,6 +301,7 @@ function planForIntrinsicGame(
     intrinsicRank,
     intrinsicResearchClassification: game.researchClassification,
     intrinsicResearchEliteCandidate: game.researchEliteCandidate,
+    researchEliteThesisKinds,
     marketSearchIntents: game.marketSearchIntents,
     plannedMarkets,
     plannedProviderMarketKeys,
@@ -323,6 +344,7 @@ export function buildMlbMarketDiscovery(input: {
       marketOrderCarriesPreference: false,
       currentAnalyticalPathDefinesPaidEligibility: true,
       intrinsicThesisRequiredForPaidLookup: true,
+      intrinsicThesisDirectionPreserved: true,
       intrinsicRankPreservedAcrossInputStage: true,
       researchOnlyMarketsConsumeProviderCredits: false,
       playerPropsQueryEligible: false,
