@@ -198,6 +198,64 @@ test("impossible game dates fail closed instead of entering the prospective ledg
   }), /MLB_ELITE_LEDGER_GAME_DATE_MISSING_OR_INVALID/);
 });
 
+test("captured pregame evidence is deeply frozen against post-capture mutation", () => {
+  const ledger = capture();
+  const first = ledger.entries[0];
+  const originalOdds = first.candidate.executionOddsAmerican;
+  const originalThesis = [...first.candidate.intrinsicThesisKinds];
+  assert.equal(Object.isFrozen(ledger), true);
+  assert.equal(Object.isFrozen(ledger.entries), true);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.candidate), true);
+  assert.equal(Object.isFrozen(first.candidate.intrinsicThesisKinds), true);
+  assert.equal(Object.isFrozen(first.candidate.supportingComponents), true);
+  assert.throws(() => { (first.candidate as any).executionOddsAmerican = 999; }, TypeError);
+  assert.throws(() => { (first as any).candidate = { ...first.candidate, executionOddsAmerican: 999 }; }, TypeError);
+  assert.throws(() => { (first.candidate.intrinsicThesisKinds as any).push("FORGED"); }, TypeError);
+  assert.equal(first.candidate.executionOddsAmerican, originalOdds);
+  assert.deepEqual(first.candidate.intrinsicThesisKinds, originalThesis);
+
+  const settled = settleMlbEliteEvidenceLedger({
+    ledger,
+    settlements: [{ predictionId: first.predictionId, outcome: "WIN", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-frozen" }],
+  });
+  assert.equal(Object.isFrozen(settled.entries[0].candidate), true);
+  assert.equal(Object.isFrozen(settled.entries[0].settlement), true);
+  assert.equal(settled.entries[0].candidate.executionOddsAmerican, originalOdds);
+});
+
+test("inconsistent settlement status and payload fail closed before Step 11B conversion", () => {
+  const ledger = capture();
+  const first = ledger.entries[0];
+  const settledWithoutPayload = {
+    ...ledger,
+    entries: [{ ...first, settlementStatus: "SETTLED" as const, settlement: null }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(
+    () => toMlbOperatingEnvelopeCalibrationObservations(settledWithoutPayload),
+    /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/,
+  );
+
+  const pendingWithPayload = {
+    ...ledger,
+    entries: [{
+      ...first,
+      settlementStatus: "PENDING" as const,
+      settlement: {
+        status: "SETTLED" as const,
+        outcome: "WIN" as const,
+        settledAt: "2026-08-12T03:00:00.000Z",
+        realizedProfitUnits: 0.9,
+        officialEvidenceId: "forged-pending",
+      },
+    }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(
+    () => toMlbOperatingEnvelopeCalibrationObservations(pendingWithPayload),
+    /MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID/,
+  );
+});
+
 test("settlement leaves immutable pregame evidence untouched and uses flat one-unit economics", () => {
   const ledger = capture();
   const before = JSON.stringify(ledger.entries.map((entry) => entry.candidate));
