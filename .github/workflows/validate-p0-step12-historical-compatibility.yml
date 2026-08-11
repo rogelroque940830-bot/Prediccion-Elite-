@@ -13,6 +13,7 @@ on:
       - 'server/mlb-step12-pocket-evaluator.test.ts'
       - 'server/mlb-step12-pocket-validation.ts'
       - 'server/mlb-step12-pocket-validation.test.ts'
+      - 'scripts/p0-step12-pocket-pilot.py'
       - 'scripts/p0-step12-validate-pocket-pilot.mjs'
       - 'evidence/p0-step12/2025-pocket-pilot.json'
       - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
@@ -40,6 +41,7 @@ jobs:
           npx tsx --test server/mlb-step12-historical-feature-table.test.ts
           npx tsx --test server/mlb-step12-pocket-evaluator.test.ts
           npx tsx --test server/mlb-step12-pocket-validation.test.ts
+          python -m py_compile scripts/p0-step12-pocket-pilot.py
       - name: Type-check Step 12 research surface
         run: >-
           npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
@@ -65,6 +67,7 @@ jobs:
           table='server/mlb-step12-historical-feature-table.ts'
           pocket='server/mlb-step12-pocket-evaluator.ts'
           validate='server/mlb-step12-pocket-validation.ts'
+          producer='scripts/p0-step12-pocket-pilot.py'
           script='scripts/p0-step12-validate-pocket-pilot.mjs'
           grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$compat"
           grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$compat"
@@ -93,6 +96,8 @@ jobs:
           grep -F 'minimumHoldoutDecisiveRows: 80' "$validate"
           grep -F 'minimumHoldoutDecisiveDates: 30' "$validate"
           grep -F 'decisiveDatesRequiredForSufficiency: true' "$validate"
+          grep -F 'decisiveUniqueDates' "$producer"
+          grep -F "decisive_dates.add(r['officialDate'])" "$producer"
           grep -F 'maximumAbsoluteDiscoveryHoldoutDrift: 0.15' "$validate"
           grep -F 'exactHoldoutPValueRecomputedFromCounts: true' "$validate"
           grep -F 'bonferroniParityRecomputedFromTopK: true' "$validate"
