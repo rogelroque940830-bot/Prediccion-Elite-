@@ -8,6 +8,10 @@ import {
 
 function fixture() {
   const sourceRunId = "run-11c-test";
+  const expectedEv = (odds: number) => {
+    const decimal = odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
+    return Math.round((0.58 * (decimal - 1) - 0.42) * 1e10) / 1e10;
+  };
   const execution = (side: "OVER" | "UNDER", odds: number) => ({
     bookKey: "hardrockbet",
     bookTitle: "Hard Rock Bet",
@@ -52,13 +56,13 @@ function fixture() {
       executionEdgePp: 5.62,
       executionNoVigEdgePp: 8.0,
       referenceNoVigEdgePp: null,
-      expectedValuePerUnit: 0.1073,
+      expectedValuePerUnit: expectedEv(odds),
       referenceAgreement: "UNAVAILABLE",
     },
     blockers: [],
     warnings: [],
   });
-  const envelopeMarket = (side: "OVER" | "UNDER") => ({
+  const envelopeMarket = (side: "OVER" | "UNDER", odds: number) => ({
     marketType: "TOTAL",
     providerMarketKey: "totals",
     selectedSide: side,
@@ -70,7 +74,7 @@ function fixture() {
     supportingComponents: ["TEAM_OFFENSE", "STARTING_PITCHER"],
     modelWinProbability: 0.58,
     modelPushProbability: 0,
-    expectedValuePerUnit: 0.1073,
+    expectedValuePerUnit: expectedEv(odds),
     executionEdgePp: 5.62,
     executionNoVigEdgePp: 8.0,
     referenceNoVigEdgePp: null,
@@ -89,7 +93,7 @@ function fixture() {
         intrinsicRank: 1,
         homeTeam: { id: 1, name: "Home" },
         awayTeam: { id: 2, name: "Away" },
-        markets: [envelopeMarket("OVER"), envelopeMarket("UNDER")],
+        markets: [envelopeMarket("OVER", -110), envelopeMarket("UNDER", 120)],
         summary: { eliteEvidenceCandidates: 2, positiveEvEnvelopeBlocked: 0, noPositiveEv: 0, upstreamBlocked: 0 },
       }],
       summary: { games: 1, markets: 2, eliteEvidenceCandidates: 2, positiveEvEnvelopeBlocked: 0, noPositiveEv: 0, upstreamBlocked: 0 },
@@ -150,7 +154,7 @@ test("pregame snapshot preserves exact run game market side line price model and
   assert.equal(over.candidate.executionOddsAmerican, -110);
   assert.equal(over.candidate.modelVersion, "predictor-full-snapshot-v2");
   assert.equal(over.candidate.modelInputDigest, "digest-OVER");
-  assert.equal(over.candidate.expectedValuePerUnit, 0.1073);
+  assert.equal(over.candidate.expectedValuePerUnit, 0.1072727273);
 });
 
 test("malformed or missing exact upstream evidence fails the whole capture instead of silently dropping a pick", () => {
@@ -178,11 +182,11 @@ test("inconsistent Step 11A candidate flags fail closed instead of being underco
 test("Step 11A and Step 9 evidence must match exactly before capture", () => {
   const probability = fixture();
   probability.marketEdge.games[0].markets[0].model.winProbability = 0.5800001;
-  assert.throws(() => capture(probability), /MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH/);
+  assert.throws(() => capture(probability), /MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH|MLB_ELITE_LEDGER_PUSH_AWARE_EV_MISMATCH/);
 
   const economics = fixture();
   economics.marketEdge.games[0].markets[0].economics.expectedValuePerUnit = 0.1074;
-  assert.throws(() => capture(economics), /MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH/);
+  assert.throws(() => capture(economics), /MLB_ELITE_LEDGER_PUSH_AWARE_EV_MISMATCH|MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH/);
 
   const execution = fixture();
   execution.marketEdge.games[0].markets[0].execution.line = 9.5;
@@ -207,6 +211,36 @@ test("nonstandard American odds fail closed before entering the pregame snapshot
   const fractionalPositive = fixture();
   fractionalPositive.marketEdge.games[0].markets[1].execution.selectedOddsAmerican = 110.5;
   assert.throws(() => capture(fractionalPositive), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID/);
+});
+
+test("impossible probability mass fails closed at capture", () => {
+  const source = fixture();
+  source.operatingEnvelope.games[0].markets[0].modelWinProbability = 0.8;
+  source.operatingEnvelope.games[0].markets[0].modelPushProbability = 0.2;
+  source.marketEdge.games[0].markets[0].model.winProbability = 0.8;
+  source.marketEdge.games[0].markets[0].model.pushProbability = 0.2;
+  assert.throws(() => capture(source), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID/);
+});
+
+test("push-aware EV must be recomputable exactly from probability and execution odds", () => {
+  const source = fixture();
+  source.operatingEnvelope.games[0].markets[0].expectedValuePerUnit = 0.5;
+  source.marketEdge.games[0].markets[0].economics.expectedValuePerUnit = 0.5;
+  assert.throws(() => capture(source), /MLB_ELITE_LEDGER_PUSH_AWARE_EV_MISMATCH/);
+});
+
+test("reference agreement must match reference edge availability and sign", () => {
+  const missingReference = fixture();
+  missingReference.operatingEnvelope.games[0].markets[0].referenceAgreement = "SUPPORTS_MODEL_EDGE";
+  missingReference.marketEdge.games[0].markets[0].economics.referenceAgreement = "SUPPORTS_MODEL_EDGE";
+  assert.throws(() => capture(missingReference), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID|MLB_ELITE_LEDGER_REFERENCE_EVIDENCE_INVALID/);
+
+  const wrongSign = fixture();
+  wrongSign.operatingEnvelope.games[0].markets[0].referenceNoVigEdgePp = 2;
+  wrongSign.operatingEnvelope.games[0].markets[0].referenceAgreement = "OPPOSES_MODEL_EDGE";
+  wrongSign.marketEdge.games[0].markets[0].economics.referenceNoVigEdgePp = 2;
+  wrongSign.marketEdge.games[0].markets[0].economics.referenceAgreement = "OPPOSES_MODEL_EDGE";
+  assert.throws(() => capture(wrongSign), /MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID|MLB_ELITE_LEDGER_REFERENCE_EVIDENCE_INVALID/);
 });
 
 test("impossible game dates fail closed instead of entering the prospective ledger", () => {
@@ -298,6 +332,29 @@ test("persisted ledger conversion rejects unknown status forged profit and impos
     entries: [{ ...first, candidate: { ...first.candidate, gameDate: "2026-02-30" } }, ...ledger.entries.slice(1)],
   } as any;
   assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(impossibleDate), /MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID/);
+});
+
+test("persisted ledger conversion revalidates probability mass EV and reference semantics", () => {
+  const ledger = capture();
+  const first = ledger.entries[0];
+
+  const impossibleMass = {
+    ...ledger,
+    entries: [{ ...first, candidate: { ...first.candidate, modelWinProbability: 0.8, modelPushProbability: 0.2 } }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(impossibleMass), /MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID/);
+
+  const forgedEv = {
+    ...ledger,
+    entries: [{ ...first, candidate: { ...first.candidate, expectedValuePerUnit: 0.5 } }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(forgedEv), /MLB_ELITE_LEDGER_PERSISTED_EV_INVALID/);
+
+  const badReference = {
+    ...ledger,
+    entries: [{ ...first, candidate: { ...first.candidate, referenceAgreement: "SUPPORTS_MODEL_EDGE", referenceNoVigEdgePp: null } }, ...ledger.entries.slice(1)],
+  } as any;
+  assert.throws(() => toMlbOperatingEnvelopeCalibrationObservations(badReference), /MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID/);
 });
 
 test("persisted ledger conversion rejects identity tampering and corrupt summary counts", () => {
