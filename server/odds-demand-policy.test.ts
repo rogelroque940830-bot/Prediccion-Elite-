@@ -20,3 +20,5 @@ test("MLB closing-line capture defaults OFF", () => {
   assert.equal(isMlbClosingLineCaptureEnabled({ MLB_CLOSING_LINE_CAPTURE: "false" }), false);
   assert.equal(isMlbClosingLineCaptureEnabled({ MLB_CLOSING_LINE_CAPTURE: "true" }), true);
 });
+
+// Research-only trigger for post-Step-7 deployment identity verification.
