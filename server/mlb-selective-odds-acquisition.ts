@@ -21,9 +21,10 @@ import {
 import { MLB_SHORTLIST_MAX_CANDIDATES } from "./mlb-shortlist";
 import { FL_TZ } from "./route-runtime";
 
-export const MLB_SELECTIVE_ODDS_ACQUISITION_SCHEMA = "courtedge-p0-mlb-selective-odds-acquisition.v2" as const;
+export const MLB_SELECTIVE_ODDS_ACQUISITION_SCHEMA = "courtedge-p0-mlb-selective-odds-acquisition.v3" as const;
 export const MLB_SELECTIVE_ODDS_CACHE_TTL_MS = MLB_P1_M6A2_MAX_QUOTE_AGE_MS;
 export const MLB_SELECTIVE_ODDS_REQUEST_TIMEOUT_MS = 15_000;
+export const MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS = 90 * 60 * 1000;
 
 export const MLB_SELECTIVE_ODDS_BOOKMAKERS = [
   ...MLB_EXECUTION_BOOK_PRIORITY,
@@ -94,12 +95,7 @@ export interface MlbSelectiveOddsAcquisitionResult {
   stopReason: MlbSelectiveOddsStopReason | null;
   games: readonly MlbSelectiveOddsGameResult[];
   budget: MlbOddsBudgetSnapshot | null;
-  providerCalls: {
-    zeroCostEventsProbe: number;
-    paidEventOdds: number;
-    eventMarkets: 0;
-    sportOdds: 0;
-  };
+  providerCalls: { zeroCostEventsProbe: number; paidEventOdds: number; eventMarkets: 0; sportOdds: 0 };
   summary: {
     discoveryGames: number;
     paidLookupEligibleGames: number;
@@ -123,6 +119,8 @@ export interface MlbSelectiveOddsAcquisitionResult {
     duplicateMarketKeysAllowed: false;
     onePaidRequestPerGameMaximum: true;
     paidRequestsSequentialByIntrinsicRank: true;
+    distinctRunsProviderSerialized: true;
+    concurrentCacheMissesCanDuplicatePaidCalls: false;
     lowerRankCannotBypassBudgetDeniedHigherRank: true;
     eventMarketsDiscoveryCalls: 0;
     sportOddsCalls: 0;
@@ -135,6 +133,7 @@ export interface MlbSelectiveOddsAcquisitionResult {
     runIdPlanMutationAllowed: false;
     providerRequestTimeoutMs: number;
     automaticProviderRetries: false;
+    eventMatchMaxStartDeltaMs: number;
     ambiguousEventIdentityCanSpendCredits: false;
     staleOrMissingExecutionQuoteCanBeRecommended: false;
     calculatesMarketEdge: false;
@@ -146,37 +145,15 @@ export interface MlbSelectiveOddsAcquisitionResult {
 }
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-type ServiceOptions = {
-  fetchFn?: FetchLike;
-  now?: () => Date;
-  cacheTtlMs?: number;
-  requestTimeoutMs?: number;
-};
-type ProviderEventCacheEntry = {
-  eventId: string;
-  providerEvent: any;
-  marketFetchedAtMs: Map<string, number>;
-};
+type ServiceOptions = { fetchFn?: FetchLike; now?: () => Date; cacheTtlMs?: number; requestTimeoutMs?: number };
+type ProviderEventCacheEntry = { eventId: string; providerEvent: any; marketFetchedAtMs: Map<string, number> };
 type RunMemoEntry = { fingerprint: string; result: MlbSelectiveOddsAcquisitionResult };
 type RunInFlightEntry = { fingerprint: string; promise: Promise<MlbSelectiveOddsAcquisitionResult> };
 type EventMatchResult =
   | { status: "MATCHED"; event: any; eventId: string }
   | { status: "NOT_FOUND" | "AMBIGUOUS"; event: null; eventId: null };
-
-type ExecutionInput = {
-  runId: string;
-  discovery: MlbMarketDiscoveryResult;
-  maxRunCredits: number;
-  reserveCredits: number;
-  apiKey: string;
-};
-
-type ProviderCalls = {
-  zeroCostEventsProbe: number;
-  paidEventOdds: number;
-  eventMarkets: 0;
-  sportOdds: 0;
-};
+type ExecutionInput = { runId: string; discovery: MlbMarketDiscoveryResult; maxRunCredits: number; reserveCredits: number; apiKey: string };
+type ProviderCalls = { zeroCostEventsProbe: number; paidEventOdds: number; eventMarkets: 0; sportOdds: 0 };
 
 export class MlbSelectiveOddsPlanError extends Error {
   readonly code: string;
@@ -208,9 +185,7 @@ const CURRENT_REGISTRY_PAIR = new Map<string, string>();
 for (const market of MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS) {
   const matches = MLB_MARKET_UNIVERSE_REGISTRY.filter((entry) =>
     entry.modelIntegrationStatus === "SUPPORTED" && entry.canonicalMarketTypes.includes(market));
-  if (matches.length !== 1) {
-    throw new Error(`MLB_SELECTIVE_ODDS_REGISTRY_MAPPING_INVALID:${market}:${matches.length}`);
-  }
+  if (matches.length !== 1) throw new Error(`MLB_SELECTIVE_ODDS_REGISTRY_MAPPING_INVALID:${market}:${matches.length}`);
   CURRENT_REGISTRY_PAIR.set(market, matches[0].providerMarketKey);
 }
 
@@ -224,10 +199,7 @@ function expectedIntentForMarket(market: MlbMarketDiscoveryPlannedMarket["canoni
 
 function validatePlannedMarket(gamePk: number, market: MlbMarketDiscoveryPlannedMarket): void {
   if (!CURRENT_ANALYTICAL_SET.has(market.canonicalMarketType)) {
-    throw new MlbSelectiveOddsPlanError(
-      "UNAUTHORIZED_ANALYTICAL_MARKET",
-      `game ${gamePk} market ${market.canonicalMarketType} is not in the current paid analytical path`,
-    );
+    throw new MlbSelectiveOddsPlanError("UNAUTHORIZED_ANALYTICAL_MARKET", `game ${gamePk} market ${market.canonicalMarketType} is not paid-authorized`);
   }
   const expectedProviderKey = CURRENT_REGISTRY_PAIR.get(market.canonicalMarketType);
   if (!expectedProviderKey || market.providerMarketKey !== expectedProviderKey) {
@@ -238,41 +210,26 @@ function validatePlannedMarket(gamePk: number, market: MlbMarketDiscoveryPlanned
   }
   const expectedScope = expectedScopeForMarket(market.canonicalMarketType);
   if (market.intrinsicProjectionScope !== expectedScope) {
-    throw new MlbSelectiveOddsPlanError(
-      "MARKET_HORIZON_MISMATCH",
-      `game ${gamePk} ${market.canonicalMarketType} must use ${expectedScope}`,
-    );
+    throw new MlbSelectiveOddsPlanError("MARKET_HORIZON_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} must use ${expectedScope}`);
   }
   const expectedIntent = expectedIntentForMarket(market.canonicalMarketType);
   if (market.thesisIntent !== expectedIntent) {
-    throw new MlbSelectiveOddsPlanError(
-      "MARKET_THESIS_INTENT_MISMATCH",
-      `game ${gamePk} ${market.canonicalMarketType} must use ${expectedIntent} thesis intent`,
-    );
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_INTENT_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} must use ${expectedIntent}`);
   }
   if (market.intrinsicThesisKinds.length === 0 || market.supportingComponents.length === 0) {
-    throw new MlbSelectiveOddsPlanError(
-      "MARKET_THESIS_EVIDENCE_MISSING",
-      `game ${gamePk} ${market.canonicalMarketType} requires thesis kind and supporting evidence`,
-    );
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_EVIDENCE_MISSING", `game ${gamePk} ${market.canonicalMarketType} lacks thesis evidence`);
   }
   const allowedKinds = expectedIntent === "SIDE"
     ? new Set(["HOME_SIDE", "AWAY_SIDE"])
     : new Set(["TOTAL_OVER", "TOTAL_UNDER"]);
   if (market.intrinsicThesisKinds.some((kind) => !allowedKinds.has(kind))) {
-    throw new MlbSelectiveOddsPlanError(
-      "MARKET_THESIS_DIRECTION_MISMATCH",
-      `game ${gamePk} ${market.canonicalMarketType} contains a thesis kind incompatible with ${expectedIntent}`,
-    );
+    throw new MlbSelectiveOddsPlanError("MARKET_THESIS_DIRECTION_MISMATCH", `game ${gamePk} ${market.canonicalMarketType} has incompatible thesis direction`);
   }
 }
 
 function assertValidDiscoveryPlan(discovery: MlbMarketDiscoveryResult): void {
   if (discovery.games.length > MLB_SHORTLIST_MAX_CANDIDATES) {
-    throw new MlbSelectiveOddsPlanError(
-      "DISCOVERY_GAME_CAP_EXCEEDED",
-      `market discovery produced ${discovery.games.length} games; hard maximum is ${MLB_SHORTLIST_MAX_CANDIDATES}`,
-    );
+    throw new MlbSelectiveOddsPlanError("DISCOVERY_GAME_CAP_EXCEEDED", `market discovery produced ${discovery.games.length} games; max ${MLB_SHORTLIST_MAX_CANDIDATES}`);
   }
   const seenGamePks = new Set<number>();
   const seenRanks = new Set<number>();
@@ -286,46 +243,34 @@ function assertValidDiscoveryPlan(discovery: MlbMarketDiscoveryResult): void {
       throw new MlbSelectiveOddsPlanError("INVALID_OR_DUPLICATE_INTRINSIC_RANK", `invalid or duplicate intrinsic rank ${game.intrinsicRank}`);
     }
     if (game.intrinsicRank <= previousRank) {
-      throw new MlbSelectiveOddsPlanError("INTRINSIC_RANK_ORDER_INVALID", "discovery games must be ordered by ascending intrinsic rank");
+      throw new MlbSelectiveOddsPlanError("INTRINSIC_RANK_ORDER_INVALID", "games must be ordered by ascending intrinsic rank");
     }
     seenRanks.add(game.intrinsicRank);
     previousRank = game.intrinsicRank;
 
-    const plannedKeysFromMarkets = game.plannedMarkets.map((market) => market.providerMarketKey);
-    const plannedCanonicalMarkets = game.plannedMarkets.map((market) => market.canonicalMarketType);
+    const objectKeys = game.plannedMarkets.map((market) => market.providerMarketKey);
+    const canonicalMarkets = game.plannedMarkets.map((market) => market.canonicalMarketType);
     if (
-      hasDuplicateStrings(plannedKeysFromMarkets)
-      || hasDuplicateStrings(plannedCanonicalMarkets)
+      hasDuplicateStrings(objectKeys)
+      || hasDuplicateStrings(canonicalMarkets)
       || hasDuplicateStrings(game.plannedProviderMarketKeys)
       || hasDuplicateStrings(game.providerMarketKeysToRequestNow)
     ) {
       throw new MlbSelectiveOddsPlanError("DUPLICATE_MARKET_KEY", `game ${game.gamePk} contains duplicate market identity`);
     }
     for (const market of game.plannedMarkets) validatePlannedMarket(game.gamePk, market);
-    if (!sameStringSet(plannedKeysFromMarkets, game.plannedProviderMarketKeys)) {
-      throw new MlbSelectiveOddsPlanError(
-        "PLANNED_MARKET_KEY_MISMATCH",
-        `game ${game.gamePk} planned market objects and provider-key list disagree`,
-      );
+    if (!sameStringSet(objectKeys, game.plannedProviderMarketKeys)) {
+      throw new MlbSelectiveOddsPlanError("PLANNED_MARKET_KEY_MISMATCH", `game ${game.gamePk} market objects and key list disagree`);
     }
     if (game.providerMarketKeysToRequestNow.length > 0) {
       if (!game.paidLookupEligibleNow || game.inputStage !== "FINAL" || game.paidLookupHoldReason != null) {
-        throw new MlbSelectiveOddsPlanError(
-          "PAID_LOOKUP_AUTHORIZATION_INVALID",
-          `game ${game.gamePk} exposes paid keys without FINAL discovery authorization`,
-        );
+        throw new MlbSelectiveOddsPlanError("PAID_LOOKUP_AUTHORIZATION_INVALID", `game ${game.gamePk} exposes paid keys without FINAL authorization`);
       }
       if (!sameStringSet(game.providerMarketKeysToRequestNow, game.plannedProviderMarketKeys)) {
-        throw new MlbSelectiveOddsPlanError(
-          "PAID_MARKET_KEY_MUTATION",
-          `game ${game.gamePk} paid keys must equal the exact discovery plan`,
-        );
+        throw new MlbSelectiveOddsPlanError("PAID_MARKET_KEY_MUTATION", `game ${game.gamePk} paid keys differ from discovery plan`);
       }
     } else if (game.paidLookupEligibleNow) {
-      throw new MlbSelectiveOddsPlanError(
-        "EMPTY_PAID_LOOKUP_PLAN",
-        `game ${game.gamePk} is marked paid-eligible with no provider market keys`,
-      );
+      throw new MlbSelectiveOddsPlanError("EMPTY_PAID_LOOKUP_PLAN", `game ${game.gamePk} is paid-eligible with no market keys`);
     }
   }
 }
@@ -347,10 +292,10 @@ function stablePlanFingerprint(input: {
   maxRunCredits: number;
   reserveCredits: number;
 }): string {
-  const payload = {
-    runId: String(input.runId ?? "").trim(),
+  return createHash("sha256").update(JSON.stringify({
+    runId: input.runId,
     date: input.discovery.date,
-    sourceSchema: input.discovery.schemaVersion,
+    schema: input.discovery.schemaVersion,
     maxRunCredits: input.maxRunCredits,
     reserveCredits: input.reserveCredits,
     bookmakers: [...MLB_SELECTIVE_ODDS_BOOKMAKERS],
@@ -359,23 +304,22 @@ function stablePlanFingerprint(input: {
       intrinsicRank: game.intrinsicRank,
       officialDate: game.officialDate,
       startTime: game.startTime,
-      homeTeam: game.homeTeam.name,
-      awayTeam: game.awayTeam.name,
-      inputStage: game.inputStage,
-      paidLookupEligibleNow: game.paidLookupEligibleNow,
-      holdReason: game.paidLookupHoldReason,
+      home: game.homeTeam.name,
+      away: game.awayTeam.name,
+      stage: game.inputStage,
+      paid: game.paidLookupEligibleNow,
+      hold: game.paidLookupHoldReason,
       keys: [...game.providerMarketKeysToRequestNow],
-      theses: game.plannedMarkets.map((market) => ({
+      markets: game.plannedMarkets.map((market) => ({
         key: market.providerMarketKey,
-        market: market.canonicalMarketType,
+        canonical: market.canonicalMarketType,
         scope: market.intrinsicProjectionScope,
         intent: market.thesisIntent,
         kinds: [...market.intrinsicThesisKinds].sort(),
         support: [...market.supportingComponents].sort(),
       })).sort((left, right) => left.key.localeCompare(right.key)),
     })),
-  };
-  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+  })).digest("hex");
 }
 
 export function buildMlbSelectiveEventsProbeUrl(apiKey: string): string {
@@ -385,7 +329,7 @@ export function buildMlbSelectiveEventsProbeUrl(apiKey: string): string {
 
 export function buildMlbSelectiveEventOddsUrl(eventId: string, apiKey: string, marketKeys: readonly string[]): string {
   const markets = sortedUnique(marketKeys);
-  if (!markets.length) throw new MlbSelectiveOddsPlanError("EMPTY_PAID_MARKET_SET", "paid event-odds request requires a market key");
+  if (!markets.length) throw new MlbSelectiveOddsPlanError("EMPTY_PAID_MARKET_SET", "paid event odds requires a market key");
   const params = new URLSearchParams({
     apiKey,
     bookmakers: MLB_SELECTIVE_ODDS_BOOKMAKERS.join(","),
@@ -434,44 +378,37 @@ export function matchMlbDiscoveryGameToProviderEvent(
   game: Pick<MlbMarketDiscoveryGamePlan, "officialDate" | "startTime" | "homeTeam" | "awayTeam">,
   providerEvents: readonly any[],
 ): EventMatchResult {
+  const targetMs = Date.parse(String(game.startTime ?? ""));
+  if (!Number.isFinite(targetMs)) return { status: "AMBIGUOUS", event: null, eventId: null };
   const teamMatches = providerEvents.filter((event) => {
-    const eventId = String(event?.id ?? "").trim();
-    return Boolean(eventId)
+    const id = String(event?.id ?? "").trim();
+    return Boolean(id)
       && providerTeamEquivalent(game.homeTeam.name, event?.home_team)
       && providerTeamEquivalent(game.awayTeam.name, event?.away_team);
   });
-  const datedMatches = teamMatches.filter((event) => floridaDateFromIso(event?.commence_time) === game.officialDate);
-  if (datedMatches.length === 0) return { status: "NOT_FOUND", event: null, eventId: null };
-  if (datedMatches.length === 1) {
-    if (teamMatches.length > 1 && teamMatches.some((event) => !Number.isFinite(Date.parse(String(event?.commence_time ?? ""))))) {
-      return { status: "AMBIGUOUS", event: null, eventId: null };
-    }
-    return { status: "MATCHED", event: datedMatches[0], eventId: String(datedMatches[0].id) };
-  }
-  if (datedMatches.some((event) => !Number.isFinite(Date.parse(String(event?.commence_time ?? ""))))) {
+  if (teamMatches.length === 0) return { status: "NOT_FOUND", event: null, eventId: null };
+  if (teamMatches.some((event) => !Number.isFinite(Date.parse(String(event?.commence_time ?? ""))))) {
     return { status: "AMBIGUOUS", event: null, eventId: null };
   }
-  const targetMs = Date.parse(String(game.startTime ?? ""));
-  if (!Number.isFinite(targetMs)) return { status: "AMBIGUOUS", event: null, eventId: null };
-  const ranked = datedMatches
+  const datedMatches = teamMatches.filter((event) => floridaDateFromIso(event.commence_time) === game.officialDate);
+  if (datedMatches.length === 0) return { status: "NOT_FOUND", event: null, eventId: null };
+  const withinWindow = datedMatches
     .map((event) => ({
       event,
       eventId: String(event.id),
       deltaMs: Math.abs(Date.parse(String(event.commence_time)) - targetMs),
     }))
+    .filter((entry) => entry.deltaMs <= MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS)
     .sort((left, right) => left.deltaMs - right.deltaMs || left.eventId.localeCompare(right.eventId));
-  if (!ranked[0] || (ranked[1] && ranked[0].deltaMs === ranked[1].deltaMs)) {
+  if (!withinWindow[0]) return { status: "AMBIGUOUS", event: null, eventId: null };
+  if (withinWindow[1] && withinWindow[0].deltaMs === withinWindow[1].deltaMs) {
     return { status: "AMBIGUOUS", event: null, eventId: null };
   }
-  return { status: "MATCHED", event: ranked[0].event, eventId: ranked[0].eventId };
+  return { status: "MATCHED", event: withinWindow[0].event, eventId: withinWindow[0].eventId };
 }
 
 async function safeJson(response: Response): Promise<any> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
+  try { return await response.json(); } catch { return null; }
 }
 
 function providerErrorCode(payload: any, fallback: string): string {
@@ -519,16 +456,11 @@ function gameResultBase(game: MlbMarketDiscoveryGamePlan): Omit<MlbSelectiveOdds
   };
 }
 
-function filterNormalizedMarkets(
-  game: MlbMarketDiscoveryGamePlan,
-  providerEvent: any,
-  capturedAt: string,
-): MlbCanonicalMarketAvailability[] {
+function filterNormalizedMarkets(game: MlbMarketDiscoveryGamePlan, providerEvent: any, capturedAt: string): MlbCanonicalMarketAvailability[] {
   const requestedPairs = new Set(game.plannedMarkets.map((market) => `${market.providerMarketKey}:${market.canonicalMarketType}`));
   return buildMlbMarketOddsUniverseGame(providerEvent, capturedAt, MLB_SELECTIVE_ODDS_CACHE_TTL_MS)
     .markets
-    .filter((market) => market.providerMarketKey != null
-      && requestedPairs.has(`${market.providerMarketKey}:${market.marketType}`));
+    .filter((market) => market.providerMarketKey != null && requestedPairs.has(`${market.providerMarketKey}:${market.marketType}`));
 }
 
 function usableQuoteCount(markets: readonly MlbCanonicalMarketAvailability[]): number {
@@ -562,50 +494,53 @@ export class MlbSelectiveOddsAcquisitionService {
   private readonly now: () => Date;
   private readonly cacheTtlMs: number;
   private readonly requestTimeoutMs: number;
-  private readonly eventCache = new Map<string, ProviderEventCacheEntry>();
-  private readonly completedRuns = new Map<string, RunMemoEntry>();
-  private readonly inFlightRuns = new Map<string, RunInFlightEntry>();
+  private static providerTail: Promise<void> = Promise.resolve();
+  private static readonly eventCache = new Map<string, ProviderEventCacheEntry>();
+  private static readonly completedRuns = new Map<string, RunMemoEntry>();
+  private static readonly inFlightRuns = new Map<string, RunInFlightEntry>();
 
   constructor(options: ServiceOptions = {}) {
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.now ?? (() => new Date());
     this.cacheTtlMs = options.cacheTtlMs ?? MLB_SELECTIVE_ODDS_CACHE_TTL_MS;
     this.requestTimeoutMs = options.requestTimeoutMs ?? MLB_SELECTIVE_ODDS_REQUEST_TIMEOUT_MS;
-    if (!Number.isFinite(this.cacheTtlMs) || this.cacheTtlMs <= 0) throw new Error("cacheTtlMs must be a positive finite number");
-    if (!Number.isFinite(this.requestTimeoutMs) || this.requestTimeoutMs <= 0) throw new Error("requestTimeoutMs must be a positive finite number");
+    if (!Number.isFinite(this.cacheTtlMs) || this.cacheTtlMs <= 0) throw new Error("cacheTtlMs must be positive");
+    if (!Number.isFinite(this.requestTimeoutMs) || this.requestTimeoutMs <= 0) throw new Error("requestTimeoutMs must be positive");
   }
 
   acquire(input: ExecutionInput): Promise<MlbSelectiveOddsAcquisitionResult> {
-    assertValidDiscoveryPlan(input.discovery);
+    try {
+      assertValidDiscoveryPlan(input.discovery);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     const runId = String(input.runId ?? "").trim();
-    if (!runId) throw new MlbSelectiveOddsPlanError("RUN_ID_REQUIRED", "runId is required");
-    const fingerprint = stablePlanFingerprint({
-      runId,
-      discovery: input.discovery,
-      maxRunCredits: input.maxRunCredits,
-      reserveCredits: input.reserveCredits,
-    });
-    const completed = this.completedRuns.get(runId);
+    if (!runId) return Promise.reject(new MlbSelectiveOddsPlanError("RUN_ID_REQUIRED", "runId is required"));
+    const fingerprint = stablePlanFingerprint({ runId, discovery: input.discovery, maxRunCredits: input.maxRunCredits, reserveCredits: input.reserveCredits });
+    const completed = MlbSelectiveOddsAcquisitionService.completedRuns.get(runId);
     if (completed) {
       if (completed.fingerprint !== fingerprint) {
-        throw new MlbSelectiveOddsPlanError("RUN_ID_REUSED_WITH_DIFFERENT_PLAN", `runId ${runId} is already bound to a different immutable plan`);
+        return Promise.reject(new MlbSelectiveOddsPlanError("RUN_ID_REUSED_WITH_DIFFERENT_PLAN", `runId ${runId} is bound to another plan`));
       }
       return Promise.resolve(completed.result);
     }
-    const inFlight = this.inFlightRuns.get(runId);
+    const inFlight = MlbSelectiveOddsAcquisitionService.inFlightRuns.get(runId);
     if (inFlight) {
       if (inFlight.fingerprint !== fingerprint) {
-        throw new MlbSelectiveOddsPlanError("RUN_ID_REUSED_WITH_DIFFERENT_PLAN", `runId ${runId} is already executing a different immutable plan`);
+        return Promise.reject(new MlbSelectiveOddsPlanError("RUN_ID_REUSED_WITH_DIFFERENT_PLAN", `runId ${runId} is executing another plan`));
       }
       return inFlight.promise;
     }
-    const promise = this.execute({ ...input, runId })
+
+    const promise = MlbSelectiveOddsAcquisitionService.providerTail
+      .then(() => this.execute({ ...input, runId }))
       .then((result) => {
-        this.completedRuns.set(runId, { fingerprint, result });
+        MlbSelectiveOddsAcquisitionService.completedRuns.set(runId, { fingerprint, result });
         return result;
-      })
-      .finally(() => this.inFlightRuns.delete(runId));
-    this.inFlightRuns.set(runId, { fingerprint, promise });
+      });
+    MlbSelectiveOddsAcquisitionService.providerTail = promise.then(() => undefined, () => undefined);
+    MlbSelectiveOddsAcquisitionService.inFlightRuns.set(runId, { fingerprint, promise });
+    void promise.finally(() => MlbSelectiveOddsAcquisitionService.inFlightRuns.delete(runId)).catch(() => undefined);
     return promise;
   }
 
@@ -631,12 +566,7 @@ export class MlbSelectiveOddsAcquisitionService {
       return this.finish({ input, generatedAt, status: "BLOCKED", stopReason: "ODDS_API_KEY_REQUIRED", results, budget: null, providerCalls });
     }
 
-    const budget = new MlbOddsRunBudgetController({
-      runId: input.runId,
-      maxRunCredits: input.maxRunCredits,
-      reserveCredits: input.reserveCredits,
-    });
-
+    const budget = new MlbOddsRunBudgetController({ runId: input.runId, maxRunCredits: input.maxRunCredits, reserveCredits: input.reserveCredits });
     let providerEvents: any;
     try {
       providerCalls.zeroCostEventsProbe += 1;
@@ -683,7 +613,7 @@ export class MlbSelectiveOddsAcquisitionService {
 
       const nowMs = this.now().getTime();
       const requestedKeys = [...game.providerMarketKeysToRequestNow];
-      const cacheEntry = this.eventCache.get(matched.eventId);
+      const cacheEntry = MlbSelectiveOddsAcquisitionService.eventCache.get(matched.eventId);
       const cacheHitKeys = requestedKeys.filter((key) => {
         const fetchedAt = cacheEntry?.marketFetchedAtMs.get(key);
         return fetchedAt != null && nowMs - fetchedAt < this.cacheTtlMs;
@@ -745,34 +675,30 @@ export class MlbSelectiveOddsAcquisitionService {
       const budgetAfterPaid = budget.settlePaidOperation(operationId, paidResponse.headers);
       if (!paidResponse.ok) {
         results.set(game.gamePk, pendingResult(game, "PROVIDER_FAILED", providerErrorCode(paidPayload, `ODDS_EVENT_HTTP_${paidResponse.status}`), {
-          eventMatchStatus: "MATCHED",
-          providerEventId: matched.eventId,
-          cacheHitMarketKeys: cacheHitKeys,
-          paidMarketKeysRequested: paidKeys,
+          eventMatchStatus: "MATCHED", providerEventId: matched.eventId, cacheHitMarketKeys: cacheHitKeys, paidMarketKeysRequested: paidKeys,
         }));
         stopReason = "PAID_PROVIDER_REQUEST_FAILED";
         continue;
       }
       if (!paidPayload || typeof paidPayload !== "object" || Array.isArray(paidPayload)) {
         results.set(game.gamePk, pendingResult(game, "PROVIDER_FAILED", "ODDS_EVENT_PAYLOAD_INVALID", {
-          eventMatchStatus: "MATCHED",
-          providerEventId: matched.eventId,
-          cacheHitMarketKeys: cacheHitKeys,
-          paidMarketKeysRequested: paidKeys,
+          eventMatchStatus: "MATCHED", providerEventId: matched.eventId, cacheHitMarketKeys: cacheHitKeys, paidMarketKeysRequested: paidKeys,
         }));
         stopReason = "PAID_PROVIDER_PAYLOAD_INVALID";
         continue;
       }
+      const paidStartMs = Date.parse(String(paidPayload.commence_time ?? ""));
+      const targetStartMs = Date.parse(String(game.startTime ?? ""));
       const identityMatches = String(paidPayload.id ?? "").trim() === matched.eventId
         && providerTeamEquivalent(game.homeTeam.name, paidPayload.home_team)
         && providerTeamEquivalent(game.awayTeam.name, paidPayload.away_team)
-        && floridaDateFromIso(paidPayload.commence_time) === game.officialDate;
+        && floridaDateFromIso(paidPayload.commence_time) === game.officialDate
+        && Number.isFinite(paidStartMs)
+        && Number.isFinite(targetStartMs)
+        && Math.abs(paidStartMs - targetStartMs) <= MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS;
       if (!identityMatches) {
         results.set(game.gamePk, pendingResult(game, "PROVIDER_FAILED", "ODDS_EVENT_IDENTITY_MISMATCH", {
-          eventMatchStatus: "MATCHED",
-          providerEventId: matched.eventId,
-          cacheHitMarketKeys: cacheHitKeys,
-          paidMarketKeysRequested: paidKeys,
+          eventMatchStatus: "MATCHED", providerEventId: matched.eventId, cacheHitMarketKeys: cacheHitKeys, paidMarketKeysRequested: paidKeys,
         }));
         stopReason = "PAID_PROVIDER_IDENTITY_MISMATCH";
         continue;
@@ -781,7 +707,7 @@ export class MlbSelectiveOddsAcquisitionService {
       const merged = mergeProviderEvent(cacheEntry?.providerEvent ?? null, paidPayload, paidKeys);
       const marketFetchedAtMs = new Map(cacheEntry?.marketFetchedAtMs ?? []);
       for (const key of paidKeys) marketFetchedAtMs.set(key, nowMs);
-      this.eventCache.set(matched.eventId, { eventId: matched.eventId, providerEvent: merged, marketFetchedAtMs });
+      MlbSelectiveOddsAcquisitionService.eventCache.set(matched.eventId, { eventId: matched.eventId, providerEvent: merged, marketFetchedAtMs });
 
       if (budgetAfterPaid.status !== "ACTIVE") {
         results.set(game.gamePk, pendingResult(game, "PROVIDER_ACCOUNTING_BLOCKED", budgetAfterPaid.blockReason, {
@@ -810,9 +736,7 @@ export class MlbSelectiveOddsAcquisitionService {
       });
     }
 
-    const ordered = input.discovery.games
-      .map((game) => results.get(game.gamePk))
-      .filter((game): game is MlbSelectiveOddsGameResult => game != null);
+    const ordered = input.discovery.games.map((game) => results.get(game.gamePk)).filter((game): game is MlbSelectiveOddsGameResult => game != null);
     const hasBlock = ordered.some((game) => ["BUDGET_DENIED", "PROVIDER_FAILED", "PROVIDER_ACCOUNTING_BLOCKED", "NOT_REACHED_AFTER_BLOCK"].includes(game.status));
     const hasUnresolved = ordered.some((game) => game.status === "EVENT_NOT_FOUND" || game.status === "EVENT_MATCH_AMBIGUOUS");
     return this.finish({
@@ -835,9 +759,7 @@ export class MlbSelectiveOddsAcquisitionService {
     budget: MlbOddsBudgetSnapshot | null;
     providerCalls: ProviderCalls;
   }): MlbSelectiveOddsAcquisitionResult {
-    const games = input.input.discovery.games
-      .map((game) => input.results.get(game.gamePk))
-      .filter((game): game is MlbSelectiveOddsGameResult => game != null);
+    const games = input.input.discovery.games.map((game) => input.results.get(game.gamePk)).filter((game): game is MlbSelectiveOddsGameResult => game != null);
     return {
       schemaVersion: MLB_SELECTIVE_ODDS_ACQUISITION_SCHEMA,
       generatedAt: input.generatedAt,
@@ -872,6 +794,8 @@ export class MlbSelectiveOddsAcquisitionService {
         duplicateMarketKeysAllowed: false,
         onePaidRequestPerGameMaximum: true,
         paidRequestsSequentialByIntrinsicRank: true,
+        distinctRunsProviderSerialized: true,
+        concurrentCacheMissesCanDuplicatePaidCalls: false,
         lowerRankCannotBypassBudgetDeniedHigherRank: true,
         eventMarketsDiscoveryCalls: 0,
         sportOddsCalls: 0,
@@ -884,6 +808,7 @@ export class MlbSelectiveOddsAcquisitionService {
         runIdPlanMutationAllowed: false,
         providerRequestTimeoutMs: this.requestTimeoutMs,
         automaticProviderRetries: false,
+        eventMatchMaxStartDeltaMs: MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS,
         ambiguousEventIdentityCanSpendCredits: false,
         staleOrMissingExecutionQuoteCanBeRecommended: false,
         calculatesMarketEdge: false,
