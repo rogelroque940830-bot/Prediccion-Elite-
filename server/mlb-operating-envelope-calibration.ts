@@ -87,7 +87,30 @@ export interface MlbOperatingEnvelopeCalibrationReport {
 }
 
 function validDate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`));
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
+function validateSettlement(row: MlbOperatingEnvelopeCalibrationObservation): void {
+  if (row.outcome !== "WIN" && row.outcome !== "LOSS" && row.outcome !== "PUSH") {
+    throw new Error("MLB_OPERATING_ENVELOPE_CALIBRATION_OUTCOME_INVALID");
+  }
+  if (row.outcome === "PUSH" && row.realizedProfitUnits !== 0) {
+    throw new Error("MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID");
+  }
+  if (row.outcome === "LOSS" && row.realizedProfitUnits !== -1) {
+    throw new Error("MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID");
+  }
+  if (row.outcome === "WIN" && (!Number.isFinite(row.realizedProfitUnits) || row.realizedProfitUnits <= 0)) {
+    throw new Error("MLB_OPERATING_ENVELOPE_CALIBRATION_SETTLEMENT_PROFIT_INVALID");
+  }
 }
 
 function validateObservation(row: MlbOperatingEnvelopeCalibrationObservation): void {
@@ -99,6 +122,7 @@ function validateObservation(row: MlbOperatingEnvelopeCalibrationObservation): v
     || !Number.isFinite(row.realizedProfitUnits)) {
     throw new Error("MLB_OPERATING_ENVELOPE_CALIBRATION_NUMERIC_INPUT_INVALID");
   }
+  validateSettlement(row);
 }
 
 function matchesAtom(row: MlbOperatingEnvelopeCalibrationObservation, atom: MlbOperatingEnvelopeCalibrationAtom): boolean {
@@ -131,20 +155,19 @@ function metrics(
   const wins = selected.filter((row) => row.outcome === "WIN").length;
   const losses = selected.filter((row) => row.outcome === "LOSS").length;
   const pushes = selected.filter((row) => row.outcome === "PUSH").length;
-  const decisive = wins + losses;
+  const decisiveRows = selected.filter((row) => row.outcome === "WIN" || row.outcome === "LOSS");
+  const decisive = decisiveRows.length;
   const decisiveWinRate = decisive > 0 ? wins / decisive : null;
-  const meanModelWinProbability = mean(selected.map((row) => row.modelWinProbability));
-  const brier = selected.map((row) => {
-    const y = row.outcome === "WIN" ? 1 : row.outcome === "LOSS" ? 0 : row.modelWinProbability;
+  const meanModelWinProbability = mean(decisiveRows.map((row) => row.modelWinProbability));
+  const brier = decisiveRows.map((row) => {
+    const y = row.outcome === "WIN" ? 1 : 0;
     return (row.modelWinProbability - y) ** 2;
   });
-  const logLoss = selected
-    .filter((row) => row.outcome !== "PUSH")
-    .map((row) => {
-      const y = row.outcome === "WIN" ? 1 : 0;
-      const p = Math.min(1 - 1e-12, Math.max(1e-12, row.modelWinProbability));
-      return -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
-    });
+  const logLoss = decisiveRows.map((row) => {
+    const y = row.outcome === "WIN" ? 1 : 0;
+    const p = Math.min(1 - 1e-12, Math.max(1e-12, row.modelWinProbability));
+    return -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+  });
   const noPickDates = Math.max(0, baselineDates.length - selectedDates.size);
   const retentionPct = baseline.length > 0 ? (selected.length / baseline.length) * 100 : 0;
   const activeDateCoveragePct = baselineDates.length > 0 ? (selectedDates.size / baselineDates.length) * 100 : 0;
