@@ -84,6 +84,7 @@ jobs:
           grep -F 'fails the whole capture instead of silently dropping a pick' "$tests"
           grep -F 'truncated Step 11A rows cannot hide behind stale per-game or top-level candidate counts' "$tests"
           grep -F 'Step 11A and Step 9 evidence must match exactly before capture' "$tests"
+          grep -F 'impossible game dates fail closed instead of entering the prospective ledger' "$tests"
           grep -F 'unknown runtime settlement outcomes fail closed instead of being treated as wins' "$tests"
           grep -F 'pregame snapshot preserves exact run game market side line price model and EV identity' "$tests"
           grep -F 'settlement leaves immutable pregame evidence untouched and uses flat one-unit economics' "$tests"
