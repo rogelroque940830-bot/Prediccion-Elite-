@@ -1,3 +1,4 @@
+// Research-only trigger for post-Step-7B deployment proof. Do not merge.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
