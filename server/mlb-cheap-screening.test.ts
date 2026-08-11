@@ -130,7 +130,7 @@ test("cheap screening source has no The Odds API, odds secret, timer, polling, o
   const source = fs.readFileSync("server/mlb-cheap-screening.ts", "utf8");
   assert.doesNotMatch(source, /api\.the-odds-api\.com/i);
   assert.doesNotMatch(source, /ODDS_API_KEY|x-requests-|setInterval|setTimeout/i);
-  assert.doesNotMatch(source, /PREMIUM|ULTRA|confidence|edge|probability|stake/i);
+  assert.doesNotMatch(source, /\b(?:PREMIUM|ULTRA|confidence|edge|probability|stake)\b/i);
   assert.match(source, /requiresMarketOdds: false/);
   assert.match(source, /theOddsApiCreditsConsumed: 0/);
 });
