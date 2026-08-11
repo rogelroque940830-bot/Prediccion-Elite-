@@ -4,16 +4,15 @@ import {
   MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY,
   MLB_MARKET_MODEL_ADAPTER_SCHEMA,
   adaptMlbCurrentPredictorProbability,
+  buildMlbCurrentPredictorProbabilityEvidenceDigest,
   type MlbCurrentPredictorProbabilityEvidence,
 } from "./mlb-market-model-adapters";
 import { buildMlbMarketProbabilityAssessmentDigest } from "./mlb-market-edge";
 
-const DIGEST = "a".repeat(64);
-
 function evidence(
   overrides: Partial<MlbCurrentPredictorProbabilityEvidence> = {},
 ): MlbCurrentPredictorProbabilityEvidence {
-  return {
+  const base: Omit<MlbCurrentPredictorProbabilityEvidence, "sourceEvidenceDigest"> = {
     gamePk: 900001,
     marketType: "TOTAL",
     side: "OVER",
@@ -23,8 +22,12 @@ function evidence(
     probabilityUsesSportsbookPrice: false,
     modelVersion: "predictor-full-snapshot-v2",
     generatedAt: "2026-08-11T13:55:00.000Z",
-    sourcePayloadDigest: DIGEST,
-    ...overrides,
+  };
+  const { sourceEvidenceDigest: suppliedDigest, ...rest } = overrides;
+  const payload = { ...base, ...rest } as Omit<MlbCurrentPredictorProbabilityEvidence, "sourceEvidenceDigest">;
+  return {
+    ...payload,
+    sourceEvidenceDigest: suppliedDigest ?? buildMlbCurrentPredictorProbabilityEvidenceDigest(payload),
   };
 }
 
@@ -147,14 +150,32 @@ test("side and line identity mismatches fail closed before probability adaptatio
   assert.equal(missingLine.assessment.unavailableReason, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
 });
 
-test("invalid provenance or invalid pure probability never reaches READY", () => {
-  const badDigest = adaptMlbCurrentPredictorProbability(evidence({ sourcePayloadDigest: "not-a-digest" }));
-  assert.equal(badDigest.assessment.status, "UNAVAILABLE");
-  assert.equal(badDigest.assessment.unavailableReason, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+test("invalid provenance, tampering or invalid pure probability never reaches READY", () => {
+  const malformedDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "not-a-digest" }));
+  assert.equal(malformedDigest.assessment.status, "UNAVAILABLE");
+  assert.equal(malformedDigest.assessment.unavailableReason, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+
+  const arbitraryDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "b".repeat(64) }));
+  assert.equal(arbitraryDigest.assessment.status, "UNAVAILABLE");
+  assert.equal(arbitraryDigest.assessment.unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
+
+  const tampered = evidence();
+  tampered.probability = 0.73;
+  const tamperedResult = adaptMlbCurrentPredictorProbability(tampered);
+  assert.equal(tamperedResult.assessment.status, "UNAVAILABLE");
+  assert.equal(tamperedResult.assessment.unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
 
   const badProbability = adaptMlbCurrentPredictorProbability(evidence({ probability: 1.2 }));
   assert.equal(badProbability.assessment.status, "UNAVAILABLE");
   assert.equal(badProbability.assessment.unavailableReason, "PURE_MODEL_PROBABILITY_INVALID");
+});
+
+test("malformed price-dependence flag cannot masquerade as pure model evidence", () => {
+  const input = evidence() as any;
+  input.probabilityUsesSportsbookPrice = "false";
+  const result = adaptMlbCurrentPredictorProbability(input);
+  assert.equal(result.assessment.status, "UNAVAILABLE");
+  assert.equal(result.assessment.unavailableReason, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
 });
 
 test("same evidence is deterministic and does not depend on market price, ranking or stake", () => {
@@ -165,6 +186,8 @@ test("same evidence is deterministic and does not depend on market price, rankin
   assert.equal(first.policy.currentReadyMarkets.join(","), "TOTAL,F5_TOTAL");
   assert.equal(first.policy.legacyMarketRegressedProbabilityAccepted, false);
   assert.equal(first.policy.integerLinePushMayBeInvented, false);
+  assert.equal(first.policy.evidenceDigestRecomputedBeforeReady, true);
+  assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
   assert.equal(first.policy.a3aExactSettlementMathAvailable, true);
   assert.equal(first.policy.a3aExperimentalShadowCanBecomeReady, false);
   assert.equal(first.policy.unsupportedChallengersCanBePromoted, false);
