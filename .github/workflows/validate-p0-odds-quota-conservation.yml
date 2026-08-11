@@ -20,6 +20,8 @@ on:
       - 'server/mlb-odds-budget-controller-concurrency.test.ts'
       - 'server/mlb-cheap-screening.ts'
       - 'server/mlb-cheap-screening.test.ts'
+      - 'server/mlb-shortlist.ts'
+      - 'server/mlb-shortlist.test.ts'
       - 'server/mlb-market-odds-normalizer.ts'
       - 'server/mlb-market-contract.ts'
       - 'server/index.ts'
@@ -44,7 +46,7 @@ jobs:
       - name: Install dependencies reproducibly
         run: npm ci
 
-      - name: Quota conservation, F5, registry, budget and cheap-screen falsification tests
+      - name: Quota conservation, F5, registry, budget, cheap-screen and shortlist falsification tests
         run: >-
           npx tsx --test
           server/mlb-odds-quota-conservation.test.ts
@@ -55,13 +57,14 @@ jobs:
           server/mlb-odds-budget-controller.test.ts
           server/mlb-odds-budget-controller-concurrency.test.ts
           server/mlb-cheap-screening.test.ts
+          server/mlb-shortlist.test.ts
 
       - name: Preserve modular routes and production bundle
         run: |
           npm run test:s3-modularization
           npm run build:backend
 
-      - name: Prove provider quota cannot be consumed by legacy/background/registry/budget/cheap-screen paths
+      - name: Prove provider quota cannot be consumed by legacy/background/registry/budget/cheap-screen/shortlist paths
         shell: bash
         run: |
           set -euo pipefail
@@ -85,9 +88,15 @@ jobs:
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-odds-budget-controller.ts
           ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval|setTimeout' server/mlb-cheap-screening.ts
+          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout' server/mlb-shortlist.ts
           grep -F 'requiresMarketOdds: false' server/mlb-cheap-screening.ts
           grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-cheap-screening.ts
           grep -F 'deferredGamesRequireNewExplicitRun: true' server/mlb-cheap-screening.ts
+          grep -F 'requiresMarketOdds: false' server/mlb-shortlist.ts
+          grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-shortlist.ts
+          grep -F 'weightsApplied: false' server/mlb-shortlist.ts
+          grep -F 'forcedQuota: false' server/mlb-shortlist.ts
+          grep -F 'MLB_SHORTLIST_MAX_CANDIDATES = 8' server/mlb-shortlist.ts
           grep -F 'PROVIDER_QUOTA_NOT_PROBED' server/mlb-odds-budget-controller.ts
           grep -F 'PROVIDER_REMAINING_INSUFFICIENT' server/mlb-odds-budget-controller.ts
           grep -F 'CONSERVATIVE_WORST_CASE' server/mlb-odds-budget-controller.ts
