@@ -1,0 +1,88 @@
+name: Validate P0 MLB Market Model Adapters
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-mlb-market-model-adapters.yml'
+      - 'server/mlb-market-model-adapters.ts'
+      - 'server/mlb-market-model-adapters.test.ts'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-market-contract.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-market-model-adapters:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Falsify Step 10 adapter boundaries
+        run: |
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+
+      - name: Preserve modular backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Freeze no-circular-probability and fail-closed boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          adapter='server/mlb-market-model-adapters.ts'
+          tests='server/mlb-market-model-adapters.test.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$adapter"
+
+          grep -F 'courtedge-p0-mlb-market-model-adapters.v1' "$adapter"
+          grep -F 'currentReadyMarkets: ["TOTAL", "F5_TOTAL"]' "$adapter"
+          grep -F 'legacyMarketRegressedProbabilityAccepted: false' "$adapter"
+          grep -F 'integerLinePushMayBeInvented: false' "$adapter"
+          grep -F 'a3aExperimentalShadowCanBecomeReady: false' "$adapter"
+          grep -F 'unsupportedChallengersCanBePromoted: false' "$adapter"
+          grep -F 'CURRENT_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
+          grep -F 'CURRENT_F5_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
+          grep -F 'CURRENT_RUN_LINE_PROBABILITY_DERIVED_FROM_MARKET_REGRESSED_ML' "$adapter"
+          grep -F 'MARKET_REGRESSED_PROBABILITY_REJECTED' "$adapter"
+          grep -F 'INTEGER_LINE_REQUIRES_DISCRETE_PUSH_MODEL' "$adapter"
+          grep -F 'NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL' "$adapter"
+          grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$adapter"
+          grep -F 'buildMlbMarketProbabilityAssessmentDigest(input)' "$adapter"
+          grep -F 'marketRankingProduced: false' "$adapter"
+          grep -F 'operatingEnvelopeApplied: false' "$adapter"
+          grep -F 'eliteLabelProduced: false' "$adapter"
+          grep -F 'recommendsBet: false' "$adapter"
+          grep -F 'stakeCalculated: false' "$adapter"
+          grep -F 'callsTheOddsApi: false' "$adapter"
+          grep -F 'theOddsApiCreditsConsumed: 0' "$adapter"
+          grep -F 'automaticBetPlacement: false' "$adapter"
+          grep -F 'realFinancialExposure: 0' "$adapter"
+
+          grep -F 'market-regressed total probability is rejected' "$tests"
+          grep -F 'integer totals fail closed' "$tests"
+          grep -F 'current F5 ML remains unavailable' "$tests"
+          grep -F 'current Run Line remains unavailable' "$tests"
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-model-adapters.yml' \
+            'server/mlb-market-model-adapters.test.ts' \
+            'server/mlb-market-model-adapters.ts' | sort)
+          [[ "$changed" == "$expected" ]]
