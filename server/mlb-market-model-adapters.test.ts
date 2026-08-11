@@ -8,8 +8,12 @@ import {
   buildMlbCurrentPredictorProbabilityEvidenceDigest,
   reproduceMlbCurrentPredictorTotalModelHitProbability,
   type MlbCurrentPredictorProbabilityEvidence,
+  type MlbMarketModelAdapterResult,
 } from "./mlb-market-model-adapters";
-import { buildMlbMarketProbabilityAssessmentDigest } from "./mlb-market-edge";
+import {
+  buildMlbMarketProbabilityAssessmentDigest,
+  type MlbMarketProbabilityAssessment,
+} from "./mlb-market-edge";
 
 function evidence(
   overrides: Partial<MlbCurrentPredictorProbabilityEvidence> = {},
@@ -34,8 +38,14 @@ function evidence(
   };
 }
 
-function assertDigestValid(result: ReturnType<typeof adaptMlbCurrentPredictorProbability>): void {
-  const { modelInputDigest, ...payload } = result.assessment;
+function assessment(result: MlbMarketModelAdapterResult): MlbMarketProbabilityAssessment {
+  assert.notEqual(result.assessment, null);
+  return result.assessment as MlbMarketProbabilityAssessment;
+}
+
+function assertDigestValid(result: MlbMarketModelAdapterResult): void {
+  const current = assessment(result);
+  const { modelInputDigest, ...payload } = current;
   assert.equal(modelInputDigest, buildMlbMarketProbabilityAssessmentDigest(payload));
 }
 
@@ -43,13 +53,15 @@ test("full-game total reproduces the current pure modelHitProb before adapting a
   const reproduced = reproduceMlbCurrentPredictorTotalModelHitProbability(9.2, 8.5);
   assert.deepEqual(reproduced, { side: "OVER", probability: 0.579259804182259 });
   const result = adaptMlbCurrentPredictorProbability(evidence());
+  const current = assessment(result);
   assert.equal(result.schemaVersion, MLB_MARKET_MODEL_ADAPTER_SCHEMA);
-  assert.equal(result.assessment.status, "READY");
-  assert.equal(result.assessment.marketType, "TOTAL");
-  assert.equal(result.assessment.sourcePolicy, "TOTAL_RUN_DIFFERENTIAL_V1");
-  assert.equal(result.assessment.winProbability, 0.579259804182259);
-  assert.equal(result.assessment.pushProbability, null);
-  assert.equal(result.assessment.probabilitySemantics, "UNCONDITIONAL_SETTLEMENT");
+  assert.equal(result.adapterStatus, "READY");
+  assert.equal(current.status, "READY");
+  assert.equal(current.marketType, "TOTAL");
+  assert.equal(current.sourcePolicy, "TOTAL_RUN_DIFFERENTIAL_V1");
+  assert.equal(current.winProbability, 0.579259804182259);
+  assert.equal(current.pushProbability, null);
+  assert.equal(current.probabilitySemantics, "UNCONDITIONAL_SETTLEMENT");
   assert.equal(result.blockers.length, 0);
   assertDigestValid(result);
 });
@@ -63,21 +75,20 @@ test("F5 total independently reproduces the same current pure Normal-CDF contrac
     probability: 0.5454945259558179,
     projectedRuns: 4.1,
   }));
-  assert.equal(result.assessment.status, "READY");
-  assert.equal(result.assessment.sourcePolicy, "F5_TOTAL_RUN_DIFFERENTIAL_V1");
-  assert.equal(result.assessment.side, "UNDER");
-  assert.equal(result.assessment.winProbability, 0.5454945259558179);
+  const current = assessment(result);
+  assert.equal(result.adapterStatus, "READY");
+  assert.equal(current.sourcePolicy, "F5_TOTAL_RUN_DIFFERENTIAL_V1");
+  assert.equal(current.side, "UNDER");
+  assert.equal(current.winProbability, 0.5454945259558179);
   assertDigestValid(result);
 });
 
 test("source-reported total probability and selected side must match deterministic recomputation", () => {
   const wrongProbability = adaptMlbCurrentPredictorProbability(evidence({ probability: 0.60 }));
-  assert.equal(wrongProbability.assessment.status, "UNAVAILABLE");
-  assert.equal(wrongProbability.assessment.unavailableReason, "PURE_MODEL_PROBABILITY_PARITY_MISMATCH");
+  assert.equal(assessment(wrongProbability).unavailableReason, "PURE_MODEL_PROBABILITY_PARITY_MISMATCH");
 
   const wrongSide = adaptMlbCurrentPredictorProbability(evidence({ side: "UNDER" }));
-  assert.equal(wrongSide.assessment.status, "UNAVAILABLE");
-  assert.equal(wrongSide.assessment.unavailableReason, "PURE_MODEL_SELECTED_SIDE_MISMATCH");
+  assert.equal(assessment(wrongSide).unavailableReason, "PURE_MODEL_SELECTED_SIDE_MISMATCH");
 });
 
 test("a market-regressed total probability is rejected before numerical attractiveness matters", () => {
@@ -85,9 +96,10 @@ test("a market-regressed total probability is rejected before numerical attracti
     probability: 0.72,
     probabilityUsesSportsbookPrice: true,
   }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, "MARKET_REGRESSED_PROBABILITY_REJECTED");
-  assert.equal(result.assessment.winProbability, null);
+  const current = assessment(result);
+  assert.equal(result.adapterStatus, "UNAVAILABLE");
+  assert.equal(current.unavailableReason, "MARKET_REGRESSED_PROBABILITY_REJECTED");
+  assert.equal(current.winProbability, null);
 });
 
 test("integer totals fail closed because the current continuous model cannot supply push mass", () => {
@@ -96,15 +108,13 @@ test("integer totals fail closed because the current continuous model cannot sup
     ["F5_TOTAL", "F5_TOTAL_MODEL_HIT_PROBABILITY", 4],
   ] as const) {
     const result = adaptMlbCurrentPredictorProbability(evidence({ marketType, metric, line }));
-    assert.equal(result.assessment.status, "UNAVAILABLE");
-    assert.equal(result.assessment.unavailableReason, "INTEGER_LINE_REQUIRES_DISCRETE_PUSH_MODEL");
+    assert.equal(assessment(result).unavailableReason, "INTEGER_LINE_REQUIRES_DISCRETE_PUSH_MODEL");
   }
 });
 
 test("quarter-run and other non-half lines are not silently treated as no-push markets", () => {
   const result = adaptMlbCurrentPredictorProbability(evidence({ line: 8.25 }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, "NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL");
+  assert.equal(assessment(result).unavailableReason, "NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL");
 });
 
 test("current full-game ML remains unavailable instead of reusing the market-regressed UI probability", () => {
@@ -117,8 +127,7 @@ test("current full-game ML remains unavailable instead of reusing the market-reg
     projectedRuns: null,
     probabilityUsesSportsbookPrice: true,
   }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.ML);
+  assert.equal(assessment(result).unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.ML);
 });
 
 test("current F5 ML remains unavailable because market regression and tie mass cannot be ignored", () => {
@@ -131,8 +140,7 @@ test("current F5 ML remains unavailable because market regression and tie mass c
     projectedRuns: null,
     probabilityUsesSportsbookPrice: true,
   }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.F5_ML);
+  assert.equal(assessment(result).unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.F5_ML);
 });
 
 test("current Run Line remains unavailable because its source probability inherits market-regressed ML", () => {
@@ -145,60 +153,79 @@ test("current Run Line remains unavailable because its source probability inheri
     projectedRuns: null,
     probabilityUsesSportsbookPrice: true,
   }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.RUN_LINE);
+  assert.equal(assessment(result).unavailableReason, MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY.RUN_LINE);
 });
 
-test("metric substitution across market families fails closed", () => {
+test("metric substitution across valid market families fails closed", () => {
   const result = adaptMlbCurrentPredictorProbability(evidence({
     marketType: "F5_TOTAL",
     line: 4.5,
     metric: "TOTAL_MODEL_HIT_PROBABILITY",
   }));
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, "MODEL_EVIDENCE_METRIC_MARKET_MISMATCH");
+  assert.equal(assessment(result).unavailableReason, "MODEL_EVIDENCE_METRIC_MARKET_MISMATCH");
 });
 
-test("basic side and line identity mismatches fail closed before probability adaptation", () => {
-  const wrongSideType = adaptMlbCurrentPredictorProbability(evidence({ side: "HOME" }));
-  assert.equal(wrongSideType.assessment.status, "UNAVAILABLE");
-  assert.equal(wrongSideType.assessment.unavailableReason, "MODEL_EVIDENCE_SIDE_MARKET_MISMATCH");
+test("malformed envelope, unsupported market or unsupported metric returns INVALID_EVIDENCE without throwing", () => {
+  for (const input of [null, undefined, 7, "bad", []]) {
+    const result = adaptMlbCurrentPredictorProbability(input);
+    assert.equal(result.adapterStatus, "INVALID_EVIDENCE");
+    assert.equal(result.assessment, null);
+    assert.equal(result.blockers.includes("MODEL_EVIDENCE_ENVELOPE_INVALID"), true);
+  }
 
-  const missingLine = adaptMlbCurrentPredictorProbability(evidence({ line: null }));
-  assert.equal(missingLine.assessment.status, "UNAVAILABLE");
-  assert.equal(missingLine.assessment.unavailableReason, "MODEL_EVIDENCE_LINE_MARKET_MISMATCH");
+  const unsupportedMarket = adaptMlbCurrentPredictorProbability({ ...evidence(), marketType: "OTHER" });
+  assert.equal(unsupportedMarket.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(unsupportedMarket.assessment, null);
+  assert.equal(unsupportedMarket.blockers.includes("MODEL_EVIDENCE_MARKET_UNSUPPORTED"), true);
+
+  const unsupportedMetric = adaptMlbCurrentPredictorProbability({ ...evidence(), metric: undefined });
+  assert.equal(unsupportedMetric.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(unsupportedMetric.assessment, null);
+  assert.equal(unsupportedMetric.blockers.includes("MODEL_EVIDENCE_METRIC_UNSUPPORTED"), true);
+});
+
+test("basic identity corruption returns INVALID_EVIDENCE before policy maps are used", () => {
+  const badSide = adaptMlbCurrentPredictorProbability({ ...evidence(), side: "DRAW" });
+  assert.equal(badSide.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(badSide.assessment, null);
+  assert.equal(badSide.blockers.includes("MODEL_EVIDENCE_SIDE_INVALID"), true);
+
+  const missingLine = adaptMlbCurrentPredictorProbability({ ...evidence(), line: null });
+  assert.equal(missingLine.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(missingLine.assessment, null);
+  assert.equal(missingLine.blockers.includes("MODEL_EVIDENCE_LINE_MARKET_MISMATCH"), true);
+
+  const badGame = adaptMlbCurrentPredictorProbability({ ...evidence(), gamePk: 0 });
+  assert.equal(badGame.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(badGame.assessment, null);
 });
 
 test("invalid projection, provenance, tampering or probability never reaches READY", () => {
   const badProjection = adaptMlbCurrentPredictorProbability(evidence({ projectedRuns: -1 }));
-  assert.equal(badProjection.assessment.status, "UNAVAILABLE");
-  assert.equal(badProjection.assessment.unavailableReason, "PURE_MODEL_RUN_PROJECTION_INVALID");
+  assert.equal(assessment(badProjection).unavailableReason, "PURE_MODEL_RUN_PROJECTION_INVALID");
 
   const malformedDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "not-a-digest" }));
-  assert.equal(malformedDigest.assessment.status, "UNAVAILABLE");
-  assert.equal(malformedDigest.assessment.unavailableReason, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+  assert.equal(assessment(malformedDigest).unavailableReason, "MODEL_EVIDENCE_PROVENANCE_INVALID");
 
   const arbitraryDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "b".repeat(64) }));
-  assert.equal(arbitraryDigest.assessment.status, "UNAVAILABLE");
-  assert.equal(arbitraryDigest.assessment.unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
+  assert.equal(assessment(arbitraryDigest).unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
 
   const tampered = evidence();
   tampered.projectedRuns = 11.2;
   const tamperedResult = adaptMlbCurrentPredictorProbability(tampered);
-  assert.equal(tamperedResult.assessment.status, "UNAVAILABLE");
-  assert.equal(tamperedResult.assessment.unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
+  assert.equal(assessment(tamperedResult).unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
 
   const badProbability = adaptMlbCurrentPredictorProbability(evidence({ probability: 1.2 }));
-  assert.equal(badProbability.assessment.status, "UNAVAILABLE");
-  assert.equal(badProbability.assessment.unavailableReason, "PURE_MODEL_PROBABILITY_INVALID");
+  assert.equal(assessment(badProbability).unavailableReason, "PURE_MODEL_PROBABILITY_INVALID");
 });
 
-test("malformed price-dependence flag cannot masquerade as pure model evidence", () => {
-  const input = evidence() as any;
-  input.probabilityUsesSportsbookPrice = "false";
-  const result = adaptMlbCurrentPredictorProbability(input);
-  assert.equal(result.assessment.status, "UNAVAILABLE");
-  assert.equal(result.assessment.unavailableReason, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
+test("price-dependence flag must be explicitly boolean false for a READY total", () => {
+  for (const malformed of [undefined, null, "false", 0, {}]) {
+    const input = { ...evidence(), probabilityUsesSportsbookPrice: malformed };
+    const result = adaptMlbCurrentPredictorProbability(input);
+    assert.equal(result.adapterStatus, "UNAVAILABLE");
+    assert.equal(assessment(result).unavailableReason, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
+  }
 });
 
 test("same evidence is deterministic and carries no ranking, envelope, stake or provider behavior", () => {
@@ -211,6 +238,8 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.integerLinePushMayBeInvented, false);
   assert.equal(first.policy.evidenceDigestRecomputedBeforeReady, true);
   assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
+  assert.equal(first.policy.malformedEnvelopeCanThrow, false);
+  assert.equal(first.policy.unsupportedMarketCanProduceAssessment, false);
   assert.equal(first.policy.totalProbabilityRecomputedFromProjection, true);
   assert.equal(first.policy.totalProbabilitySigmaRuns, MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS);
   assert.equal(first.policy.sourceReportedProbabilityMustMatchRecomputation, true);
