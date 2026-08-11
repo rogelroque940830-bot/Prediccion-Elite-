@@ -63,6 +63,9 @@ jobs:
           grep -F 'capturesEveryStep11aEliteCandidate: true' "$ledger"
           grep -F 'additionalEligibilityFilterApplied: false' "$ledger"
           grep -F 'silentCandidateDropAllowed: false' "$ledger"
+          grep -F 'step11aSummaryCountMustMatchRows: true' "$ledger"
+          grep -F 'exactStep9EvidenceParityRequired: true' "$ledger"
+          grep -F 'settlementOutcomeWhitelistRequired: true' "$ledger"
           grep -F 'immutablePregameSnapshot: true' "$ledger"
           grep -F 'settlementMutatesPregameSnapshot: false' "$ledger"
           grep -F 'missingClosingLineBlocksCapture: false' "$ledger"
@@ -79,8 +82,12 @@ jobs:
           grep -F 'MLB_ELITE_LEDGER_SILENT_CANDIDATE_DROP_DETECTED' "$ledger"
           grep -F 'captures every Step 11A elite candidate with 100% retention and no extra filter' "$tests"
           grep -F 'fails the whole capture instead of silently dropping a pick' "$tests"
+          grep -F 'truncated Step 11A rows cannot hide behind stale per-game or top-level candidate counts' "$tests"
+          grep -F 'Step 11A and Step 9 evidence must match exactly before capture' "$tests"
+          grep -F 'unknown runtime settlement outcomes fail closed instead of being treated as wins' "$tests"
           grep -F 'pregame snapshot preserves exact run game market side line price model and EV identity' "$tests"
           grep -F 'settlement leaves immutable pregame evidence untouched and uses flat one-unit economics' "$tests"
+          grep -F 'positive American odds settle to the correct one-unit win profit' "$tests"
           grep -F 'converts directly into Step 11B observations without a new selection filter' "$tests"
 
           git diff --check
