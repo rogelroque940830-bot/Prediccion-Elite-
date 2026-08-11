@@ -124,6 +124,12 @@ function finiteProbability(value: unknown): value is number {
   return finite(value) && value >= 0 && value <= 1;
 }
 
+function validAmericanOdds(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isInteger(value)
+    && (value <= -100 || value >= 100);
+}
+
 function exactNumber(value: number | null): string {
   if (value === null) return "null";
   if (Object.is(value, -0)) return "-0";
@@ -149,7 +155,7 @@ function isSettlementOutcome(value: unknown): value is MlbCalibrationOutcome {
 }
 
 function americanToDecimal(american: number): number {
-  if (!Number.isFinite(american) || american === 0) throw new Error("MLB_ELITE_LEDGER_EXECUTION_ODDS_INVALID");
+  if (!validAmericanOdds(american)) throw new Error("MLB_ELITE_LEDGER_EXECUTION_ODDS_INVALID");
   return american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
 }
 
@@ -188,7 +194,7 @@ function requireEdgeEvidence(candidate: MlbOperatingEnvelopeMarketResult, edge: 
     || !finite(candidate.expectedValuePerUnit) || candidate.expectedValuePerUnit <= 0
     || !finite(candidate.executionEdgePp) || !finite(candidate.executionNoVigEdgePp)
     || !edge.model.modelVersion || !edge.model.modelInputDigest
-    || !finite(edge.execution.selectedOddsAmerican) || !validIso(edge.execution.capturedAt)) {
+    || !validAmericanOdds(edge.execution.selectedOddsAmerican) || !validIso(edge.execution.capturedAt)) {
     throw new Error("MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID");
   }
 
@@ -256,9 +262,13 @@ export function captureMlbEliteEvidenceLedger(input: {
     if (market.classification !== "ELITE_EVIDENCE_CANDIDATE" || market.eliteEvidenceCandidate !== true) {
       throw new Error("MLB_ELITE_LEDGER_INCONSISTENT_STEP11A_CANDIDATE");
     }
-    const edgeGame = input.marketEdge.games.find((row) => row.gamePk === game.gamePk);
-    const edge = edgeGame?.markets.find((row) => exactMarketMatch(market, row));
-    if (!edge) throw new Error("MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND");
+    const edgeGames = input.marketEdge.games.filter((row) => row.gamePk === game.gamePk);
+    if (edgeGames.length === 0) throw new Error("MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND");
+    if (edgeGames.length !== 1) throw new Error(`MLB_ELITE_LEDGER_STEP9_GAME_IDENTITY_AMBIGUOUS:${game.gamePk}`);
+    const edgeMatches = edgeGames[0].markets.filter((row) => exactMarketMatch(market, row));
+    if (edgeMatches.length === 0) throw new Error("MLB_ELITE_LEDGER_EXACT_UPSTREAM_MARKET_NOT_FOUND");
+    if (edgeMatches.length !== 1) throw new Error(`MLB_ELITE_LEDGER_STEP9_MARKET_IDENTITY_AMBIGUOUS:${game.gamePk}:${market.providerMarketKey}`);
+    const edge = edgeMatches[0];
     requireEdgeEvidence(market, edge);
 
     const gameDate = input.gameDateByGamePk[game.gamePk];
