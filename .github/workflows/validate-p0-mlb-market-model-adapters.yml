@@ -54,6 +54,8 @@ jobs:
           grep -F 'currentReadyMarkets: ["TOTAL", "F5_TOTAL"]' "$adapter"
           grep -F 'legacyMarketRegressedProbabilityAccepted: false' "$adapter"
           grep -F 'integerLinePushMayBeInvented: false' "$adapter"
+          grep -F 'evidenceDigestRecomputedBeforeReady: true' "$adapter"
+          grep -F 'priceDependenceFlagMustBeBoolean: true' "$adapter"
           grep -F 'a3aExperimentalShadowCanBecomeReady: false' "$adapter"
           grep -F 'unsupportedChallengersCanBePromoted: false' "$adapter"
           grep -F 'CURRENT_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
@@ -62,6 +64,9 @@ jobs:
           grep -F 'MARKET_REGRESSED_PROBABILITY_REJECTED' "$adapter"
           grep -F 'INTEGER_LINE_REQUIRES_DISCRETE_PUSH_MODEL' "$adapter"
           grep -F 'NON_HALF_RUN_LINE_REQUIRES_EXPLICIT_SETTLEMENT_MODEL' "$adapter"
+          grep -F 'MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID' "$adapter"
+          grep -F 'MODEL_EVIDENCE_DIGEST_MISMATCH' "$adapter"
+          grep -F 'buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput)' "$adapter"
           grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$adapter"
           grep -F 'buildMlbMarketProbabilityAssessmentDigest(input)' "$adapter"
           grep -F 'marketRankingProduced: false' "$adapter"
@@ -78,6 +83,8 @@ jobs:
           grep -F 'integer totals fail closed' "$tests"
           grep -F 'current F5 ML remains unavailable' "$tests"
           grep -F 'current Run Line remains unavailable' "$tests"
+          grep -F 'tampering or invalid pure probability never reaches READY' "$tests"
+          grep -F 'malformed price-dependence flag cannot masquerade as pure model evidence' "$tests"
 
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
           changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
