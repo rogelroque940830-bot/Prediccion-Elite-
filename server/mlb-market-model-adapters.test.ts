@@ -236,6 +236,45 @@ test("malformed envelope, unsupported market or unsupported metric returns INVAL
   assert.equal(unsupportedMetric.blockers.includes("MODEL_EVIDENCE_METRIC_UNSUPPORTED"), true);
 });
 
+test("deep, cyclic and hostile envelopes fail closed without recursive digest traversal", () => {
+  const deep: any = {};
+  let cursor = deep;
+  for (let index = 0; index < 20_000; index += 1) {
+    cursor.next = {};
+    cursor = cursor.next;
+  }
+
+  const withDeepExtra = adaptMlbCurrentPredictorProbability({ ...evidence(), extra: deep });
+  assert.equal(withDeepExtra.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(withDeepExtra.assessment, null);
+  assert.equal(withDeepExtra.blockers.includes("MODEL_EVIDENCE_FIELDS_INVALID"), true);
+
+  const cyclic: any = {};
+  cyclic.self = cyclic;
+  const withCyclicExtra = adaptMlbCurrentPredictorProbability({ ...evidence(), extra: cyclic });
+  assert.equal(withCyclicExtra.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(withCyclicExtra.assessment, null);
+  assert.equal(withCyclicExtra.blockers.includes("MODEL_EVIDENCE_FIELDS_INVALID"), true);
+
+  const badKnownField = adaptMlbCurrentPredictorProbability({ ...evidence(), probability: deep });
+  assert.equal(badKnownField.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(badKnownField.assessment, null);
+  assert.equal(badKnownField.blockers.includes("MODEL_EVIDENCE_PROBABILITY_FIELD_INVALID"), true);
+
+  const { sourceEvidenceDigest: _digest, ...digestInput } = evidence();
+  assert.doesNotThrow(() => buildMlbCurrentPredictorProbabilityEvidenceDigest({ ...digestInput, probability: deep } as any));
+
+  const hostile = new Proxy({}, {
+    ownKeys() {
+      throw new RangeError("hostile ownKeys");
+    },
+  });
+  const hostileResult = adaptMlbCurrentPredictorProbability(hostile);
+  assert.equal(hostileResult.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(hostileResult.assessment, null);
+  assert.equal(hostileResult.blockers.includes("MODEL_EVIDENCE_PROCESSING_FAILED"), true);
+});
+
 test("basic identity corruption returns INVALID_EVIDENCE before policy maps are used", () => {
   const badSide = adaptMlbCurrentPredictorProbability({ ...evidence(), side: "DRAW" });
   assert.equal(badSide.adapterStatus, "INVALID_EVIDENCE");
@@ -257,7 +296,9 @@ test("invalid projection, provenance, tampering or probability never reaches REA
   assert.equal(assessment(badProjection).unavailableReason, "PURE_MODEL_RUN_PROJECTION_INVALID");
 
   const malformedDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "not-a-digest" }));
-  assert.equal(assessment(malformedDigest).unavailableReason, "MODEL_EVIDENCE_PROVENANCE_INVALID");
+  assert.equal(malformedDigest.adapterStatus, "INVALID_EVIDENCE");
+  assert.equal(malformedDigest.assessment, null);
+  assert.equal(malformedDigest.blockers.includes("MODEL_EVIDENCE_PROVENANCE_INVALID"), true);
 
   const arbitraryDigest = adaptMlbCurrentPredictorProbability(evidence({ sourceEvidenceDigest: "b".repeat(64) }));
   assert.equal(assessment(arbitraryDigest).unavailableReason, "MODEL_EVIDENCE_DIGEST_MISMATCH");
@@ -275,8 +316,9 @@ test("price-dependence flag must be explicitly boolean false for a READY total",
   for (const malformed of [undefined, null, "false", 0, {}]) {
     const input = { ...evidence(), probabilityUsesSportsbookPrice: malformed };
     const result = adaptMlbCurrentPredictorProbability(input);
-    assert.equal(result.adapterStatus, "UNAVAILABLE");
-    assert.equal(assessment(result).unavailableReason, "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID");
+    assert.equal(result.adapterStatus, "INVALID_EVIDENCE");
+    assert.equal(result.assessment, null);
+    assert.equal(result.blockers.includes("MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID"), true);
   }
 });
 
@@ -291,10 +333,13 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.integerLinePushMayBeInvented, false);
   assert.equal(first.policy.evidenceDigestRecomputedBeforeReady, true);
   assert.equal(first.policy.evidenceDigestUsesLosslessNumericSerialization, true);
+  assert.equal(first.policy.evidenceDigestRecursiveTraversalAllowed, false);
+  assert.equal(first.policy.exactEnvelopeFieldSetRequired, true);
   assert.equal(first.policy.exactCurrentPredictorProvenanceRequired, true);
   assert.equal(first.policy.exactHalfRunIdentityRequired, true);
   assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
   assert.equal(first.policy.malformedEnvelopeCanThrow, false);
+  assert.equal(first.policy.processingFailuresFailClosed, true);
   assert.equal(first.policy.unsupportedMarketCanProduceAssessment, false);
   assert.equal(first.policy.totalProbabilityRecomputedFromProjection, true);
   assert.equal(first.policy.totalProbabilitySigmaRuns, MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS);
