@@ -115,8 +115,10 @@ jobs:
           grep -F 'numericEliteScoreProduced: false' server/mlb-intrinsic-edge.ts
           grep -F 'legacyCompositeModelsCountAsIndependentEvidence: false' server/mlb-intrinsic-edge.ts
           grep -F 'sameUnderlyingEvidenceDoubleCountingAllowed: false' server/mlb-intrinsic-edge.ts
-          grep -F 'unresolvedContradictionsCanBeElite: false' server/mlb-intrinsic-edge.ts
+          grep -F 'contradictionsWithinQualifyingProjectionCanBeElite: false' server/mlb-intrinsic-edge.ts
           grep -F 'requiresFinalInputsForResearchEliteCandidate: false' server/mlb-intrinsic-edge.ts
+          grep -F 'horizonScopedThesesRequired: true' server/mlb-intrinsic-edge.ts
+          grep -F 'lateBullpenEvidenceAllowedInEarlyWindow: false' server/mlb-intrinsic-edge.ts
           grep -F 'researchOnlyNotOutcomeCertified: true' server/mlb-intrinsic-edge.ts
 
           grep -F 'firstThreeInningsPriority: false' server/mlb-market-discovery.ts
@@ -124,6 +126,8 @@ jobs:
           grep -F 'intrinsicThesisRequiredForPaidLookup: true' server/mlb-market-discovery.ts
           grep -F 'intrinsicThesisDirectionPreserved: true' server/mlb-market-discovery.ts
           grep -F 'intrinsicRankPreservedAcrossInputStage: true' server/mlb-market-discovery.ts
+          grep -F 'horizonScopedMarketThesisPlanning: true' server/mlb-market-discovery.ts
+          grep -F 'lateBullpenCanAuthorizeFirstFiveLookup: false' server/mlb-market-discovery.ts
           grep -F 'researchOnlyMarketsConsumeProviderCredits: false' server/mlb-market-discovery.ts
           grep -F 'onlyFinalInputsMayAuthorizePaidLookup: true' server/mlb-market-discovery.ts
           grep -F 'callsTheOddsApi: false' server/mlb-market-discovery.ts
