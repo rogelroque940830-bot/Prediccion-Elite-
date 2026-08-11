@@ -39,6 +39,11 @@ jobs:
           npx tsx --test server/mlb-market-edge.test.ts
           npx tsx --test server/mlb-market-model-adapters.test.ts
 
+      - name: Type-check Step 11 boundary
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext
+          server/mlb-operating-envelope.ts server/mlb-operating-envelope.test.ts
+
       - name: Preserve modular backend
         run: |
           npm run test:s3-modularization
@@ -59,6 +64,7 @@ jobs:
           grep -F 'courtedge-p0-mlb-operating-envelope.v1' "$envelope"
           grep -F '"ELITE_EVIDENCE_CANDIDATE"' "$envelope"
           grep -F 'positiveEvRequired: true' "$envelope"
+          grep -F 'const positiveEv = market.classification === "POSITIVE_EV";' "$envelope"
           grep -F 'upstreamOperatingEnvelopeEligibilityRequired: true' "$envelope"
           grep -F 'readyModelRequired: true' "$envelope"
           grep -F 'freshExecutablePriceRequired: true' "$envelope"
@@ -91,6 +97,8 @@ jobs:
 
           grep -F 'positive EV with intact certified upstream evidence becomes only an elite evidence candidate' "$tests"
           grep -F 'positive EV cannot bypass upstream operating-envelope eligibility' "$tests"
+          grep -F 'upstream classification is independently required even when all other candidate fields look positive' "$tests"
+          grep -F 'source run, game and exact market identity are preserved into the operating envelope' "$tests"
           grep -F 'reference consensus remains diagnostic and cannot create or veto an elite evidence candidate' "$tests"
           grep -F 'no fixed EV, probability, numeric Elite score, stake or automatic bet is introduced' "$tests"
 
