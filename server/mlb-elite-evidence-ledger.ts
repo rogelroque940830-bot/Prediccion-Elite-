@@ -10,6 +10,8 @@ import type {
 import type {
   MlbOperatingEnvelopeCalibrationObservation,
   MlbCalibrationOutcome,
+  MlbCalibrationMarket,
+  MlbCalibrationReferenceAgreement,
 } from "./mlb-operating-envelope-calibration";
 
 export const MLB_ELITE_EVIDENCE_LEDGER_SCHEMA = "courtedge-p0-mlb-elite-evidence-ledger.v1" as const;
@@ -101,7 +103,7 @@ export interface MlbEliteEvidenceSettlementInput {
 }
 
 function validIso(value: string): boolean {
-  return Number.isFinite(Date.parse(value));
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
 function validDate(value: string): boolean {
@@ -128,6 +130,14 @@ function validAmericanOdds(value: unknown): value is number {
   return typeof value === "number"
     && Number.isInteger(value)
     && (value <= -100 || value >= 100);
+}
+
+function isCalibrationMarket(value: unknown): value is MlbCalibrationMarket {
+  return value === "ML" || value === "F5_ML" || value === "RUN_LINE" || value === "TOTAL" || value === "F5_TOTAL";
+}
+
+function isCalibrationReferenceAgreement(value: unknown): value is MlbCalibrationReferenceAgreement {
+  return value === "SUPPORTS_MODEL_EDGE" || value === "OPPOSES_MODEL_EDGE" || value === "NEUTRAL" || value === "UNAVAILABLE";
 }
 
 function exactNumber(value: number | null): string {
@@ -414,33 +424,87 @@ export function settleMlbEliteEvidenceLedger(input: {
   return buildLedger(input.ledger.sourceRunId, input.ledger.capturedAt, entries, input.ledger.summary.step11aEliteCandidates);
 }
 
+function validatePersistedLedgerEntry(entry: MlbEliteEvidenceLedgerEntry, ledger: MlbEliteEvidenceLedger): void {
+  if (entry.schemaVersion !== MLB_ELITE_EVIDENCE_LEDGER_SCHEMA || !entry.predictionId) {
+    throw new Error("MLB_ELITE_LEDGER_PERSISTED_ENTRY_INVALID");
+  }
+  const candidate = entry.candidate;
+  if (!candidate || candidate.sourceRunId !== ledger.sourceRunId || !validDate(candidate.gameDate)
+    || !Number.isInteger(candidate.gamePk) || candidate.gamePk <= 0
+    || !isCalibrationMarket((candidate as { marketType?: unknown }).marketType)
+    || !candidate.providerMarketKey || !candidate.selectedSide
+    || !finiteProbability(candidate.modelWinProbability) || candidate.modelWinProbability <= 0 || candidate.modelWinProbability >= 1
+    || !finiteProbability(candidate.modelPushProbability)
+    || candidate.modelWinProbability + candidate.modelPushProbability > 1
+    || !candidate.modelVersion || !candidate.modelInputDigest
+    || !finite(candidate.expectedValuePerUnit) || candidate.expectedValuePerUnit <= 0
+    || !finite(candidate.executionNoVigEdgePp) || !validAmericanOdds(candidate.executionOddsAmerican)
+    || !isCalibrationReferenceAgreement((candidate as { referenceAgreement?: unknown }).referenceAgreement)
+    || !validIso(candidate.executionCapturedAt) || !validIso(candidate.capturedAt)
+    || candidate.capturedAt !== ledger.capturedAt) {
+    throw new Error(`MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID:${entry.predictionId}`);
+  }
+  const { capturedAt: _capturedAt, ...identitySnapshot } = candidate;
+  if (predictionIdentity(identitySnapshot) !== entry.predictionId) {
+    throw new Error(`MLB_ELITE_LEDGER_PERSISTED_IDENTITY_MISMATCH:${entry.predictionId}`);
+  }
+  if (entry.settlementStatus !== "PENDING" && entry.settlementStatus !== "SETTLED") {
+    throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
+  }
+  if (entry.settlementStatus === "PENDING") {
+    if (entry.settlement !== null) throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
+    return;
+  }
+  const settlement = entry.settlement;
+  if (!settlement || settlement.status !== "SETTLED"
+    || !isSettlementOutcome((settlement as { outcome?: unknown }).outcome)
+    || !validIso(settlement.settledAt) || !settlement.officialEvidenceId
+    || Date.parse(settlement.settledAt) < Date.parse(candidate.capturedAt)
+    || !finite(settlement.realizedProfitUnits)) {
+    throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
+  }
+  const expectedProfit = realizedProfitUnits(settlement.outcome, candidate.executionOddsAmerican);
+  if (Math.abs(settlement.realizedProfitUnits - expectedProfit) > 1e-12) {
+    throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_PROFIT_INVALID:${entry.predictionId}`);
+  }
+}
+
+function validatePersistedLedger(ledger: MlbEliteEvidenceLedger): void {
+  if (ledger.schemaVersion !== MLB_ELITE_EVIDENCE_LEDGER_SCHEMA || !ledger.sourceRunId || !validIso(ledger.capturedAt)) {
+    throw new Error("MLB_ELITE_LEDGER_PERSISTED_LEDGER_INVALID");
+  }
+  const seen = new Set<string>();
+  for (const entry of ledger.entries) {
+    if (seen.has(entry.predictionId)) throw new Error(`MLB_ELITE_LEDGER_DUPLICATE_CANDIDATE:${entry.predictionId}`);
+    seen.add(entry.predictionId);
+    validatePersistedLedgerEntry(entry, ledger);
+  }
+  const pending = ledger.entries.filter((entry) => entry.settlementStatus === "PENDING").length;
+  const settled = ledger.entries.filter((entry) => entry.settlementStatus === "SETTLED").length;
+  if (ledger.summary.step11aEliteCandidates !== ledger.entries.length
+    || ledger.summary.capturedCandidates !== ledger.entries.length
+    || ledger.summary.pending !== pending || ledger.summary.settled !== settled
+    || ledger.summary.captureRetentionPct !== 100) {
+    throw new Error("MLB_ELITE_LEDGER_PERSISTED_SUMMARY_INVALID");
+  }
+}
+
 export function toMlbOperatingEnvelopeCalibrationObservations(
   ledger: MlbEliteEvidenceLedger,
 ): MlbOperatingEnvelopeCalibrationObservation[] {
-  const settledEntries = ledger.entries.filter((entry): entry is MlbEliteEvidenceLedgerEntry & { settlement: MlbEliteEvidenceSettlement } => {
-    if (entry.settlementStatus === "SETTLED") {
-      if (!entry.settlement || entry.settlement.status !== "SETTLED"
-        || !isSettlementOutcome((entry.settlement as { outcome?: unknown }).outcome)
-        || !finite(entry.settlement.realizedProfitUnits)) {
-        throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
-      }
-      return true;
-    }
-    if (entry.settlement !== null) {
-      throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
-    }
-    return false;
-  });
-  return settledEntries.map((entry) => ({
-    predictionId: entry.predictionId,
-    gameDate: entry.candidate.gameDate,
-    gamePk: entry.candidate.gamePk,
-    marketType: entry.candidate.marketType,
-    expectedValuePerUnit: entry.candidate.expectedValuePerUnit,
-    executionNoVigEdgePp: entry.candidate.executionNoVigEdgePp,
-    modelWinProbability: entry.candidate.modelWinProbability,
-    referenceAgreement: entry.candidate.referenceAgreement,
-    outcome: entry.settlement.outcome,
-    realizedProfitUnits: entry.settlement.realizedProfitUnits,
-  }));
+  validatePersistedLedger(ledger);
+  return ledger.entries
+    .filter((entry): entry is MlbEliteEvidenceLedgerEntry & { settlement: MlbEliteEvidenceSettlement } => entry.settlementStatus === "SETTLED")
+    .map((entry) => ({
+      predictionId: entry.predictionId,
+      gameDate: entry.candidate.gameDate,
+      gamePk: entry.candidate.gamePk,
+      marketType: entry.candidate.marketType,
+      expectedValuePerUnit: entry.candidate.expectedValuePerUnit,
+      executionNoVigEdgePp: entry.candidate.executionNoVigEdgePp,
+      modelWinProbability: entry.candidate.modelWinProbability,
+      referenceAgreement: entry.candidate.referenceAgreement,
+      outcome: entry.settlement.outcome,
+      realizedProfitUnits: entry.settlement.realizedProfitUnits,
+    }));
 }
