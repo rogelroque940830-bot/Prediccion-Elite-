@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   buildMlbMarketProbabilityAssessmentDigest,
   type MlbMarketEdgeModelPolicy,
@@ -33,7 +34,8 @@ export interface MlbCurrentPredictorProbabilityEvidence {
   probabilityUsesSportsbookPrice: boolean;
   modelVersion: string;
   generatedAt: string;
-  sourcePayloadDigest: string;
+  /** SHA-256 of this exact evidence envelope excluding sourceEvidenceDigest. */
+  sourceEvidenceDigest: string;
 }
 
 export interface MlbMarketModelAdapterResult {
@@ -44,7 +46,7 @@ export interface MlbMarketModelAdapterResult {
     metric: MlbCurrentPredictorProbabilityMetric;
     modelVersion: string;
     generatedAt: string;
-    sourcePayloadDigest: string;
+    sourceEvidenceDigest: string;
     probabilityUsesSportsbookPrice: boolean;
   };
   blockers: readonly string[];
@@ -57,6 +59,8 @@ export interface MlbMarketModelAdapterResult {
     currentF5TotalHalfRunReady: true;
     legacyMarketRegressedProbabilityAccepted: false;
     integerLinePushMayBeInvented: false;
+    evidenceDigestRecomputedBeforeReady: true;
+    priceDependenceFlagMustBeBoolean: true;
     a3aExactSettlementMathAvailable: true;
     a3aExperimentalShadowCanBecomeReady: false;
     unsupportedChallengersCanBePromoted: false;
@@ -98,6 +102,26 @@ export const MLB_MARKET_MODEL_ADAPTER_CURRENT_BOUNDARY = Object.freeze({
   TOTAL: "PURE_MODEL_HALF_RUN_ONLY",
   F5_TOTAL: "PURE_MODEL_HALF_RUN_ONLY",
 } as const);
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]),
+    );
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value * 1e12) / 1e12 : null;
+  if (value === undefined) return null;
+  return value;
+}
+
+export function buildMlbCurrentPredictorProbabilityEvidenceDigest(
+  input: Omit<MlbCurrentPredictorProbabilityEvidence, "sourceEvidenceDigest">,
+): string {
+  return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
+}
 
 function validIso(value: unknown): boolean {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
@@ -163,6 +187,8 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     currentF5TotalHalfRunReady: true,
     legacyMarketRegressedProbabilityAccepted: false,
     integerLinePushMayBeInvented: false,
+    evidenceDigestRecomputedBeforeReady: true,
+    priceDependenceFlagMustBeBoolean: true,
     a3aExactSettlementMathAvailable: true,
     a3aExperimentalShadowCanBecomeReady: false,
     unsupportedChallengersCanBePromoted: false,
@@ -192,7 +218,7 @@ function result(
       metric: evidence.metric,
       modelVersion: String(evidence.modelVersion ?? ""),
       generatedAt: String(evidence.generatedAt ?? ""),
-      sourcePayloadDigest: String(evidence.sourcePayloadDigest ?? ""),
+      sourceEvidenceDigest: String(evidence.sourceEvidenceDigest ?? ""),
       probabilityUsesSportsbookPrice: evidence.probabilityUsesSportsbookPrice === true,
     },
     blockers: [...new Set(blockers)],
@@ -236,10 +262,20 @@ export function adaptMlbCurrentPredictorProbability(
     typeof evidence.modelVersion !== "string"
     || !evidence.modelVersion.trim()
     || !validIso(evidence.generatedAt)
-    || typeof evidence.sourcePayloadDigest !== "string"
-    || !HEX_64.test(evidence.sourcePayloadDigest)
+    || typeof evidence.sourceEvidenceDigest !== "string"
+    || !HEX_64.test(evidence.sourceEvidenceDigest)
   ) {
     const reason = "MODEL_EVIDENCE_PROVENANCE_INVALID";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+  if (typeof evidence.probabilityUsesSportsbookPrice !== "boolean") {
+    const reason = "MODEL_EVIDENCE_PRICE_DEPENDENCE_FLAG_INVALID";
+    return result(evidence, unavailable(evidence, reason), [reason]);
+  }
+  const { sourceEvidenceDigest: suppliedDigest, ...digestInput } = evidence;
+  const expectedDigest = buildMlbCurrentPredictorProbabilityEvidenceDigest(digestInput);
+  if (suppliedDigest.toLowerCase() !== expectedDigest) {
+    const reason = "MODEL_EVIDENCE_DIGEST_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
 
