@@ -811,7 +811,7 @@ export class MlbSelectiveOddsAcquisitionService {
         marketKeys: paidKeys,
         bookmakerCount: MLB_SELECTIVE_ODDS_BOOKMAKERS.length,
       });
-      if (!authorization.ok) {
+      if (authorization.ok === false) {
         results.set(game.gamePk, pendingResult(game, "BUDGET_DENIED", null, {
           eventMatchStatus: "MATCHED",
           providerEventId: matched.eventId,
