@@ -78,6 +78,9 @@ jobs:
           grep -F 'automaticBetPlacement: false' "$ledger"
           grep -F 'realFinancialExposure: 0' "$ledger"
 
+          grep -F 'validAmericanOdds' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_STEP9_GAME_IDENTITY_AMBIGUOUS' "$ledger"
+          grep -F 'MLB_ELITE_LEDGER_STEP9_MARKET_IDENTITY_AMBIGUOUS' "$ledger"
           grep -F 'freezeCandidateSnapshot' "$ledger"
           grep -F 'freezeLedgerEntry' "$ledger"
           grep -F 'MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID' "$ledger"
@@ -87,6 +90,8 @@ jobs:
           grep -F 'fails the whole capture instead of silently dropping a pick' "$tests"
           grep -F 'truncated Step 11A rows cannot hide behind stale per-game or top-level candidate counts' "$tests"
           grep -F 'Step 11A and Step 9 evidence must match exactly before capture' "$tests"
+          grep -F 'ambiguous duplicate Step 9 game or market identities fail closed before capture' "$tests"
+          grep -F 'nonstandard American odds fail closed before entering the pregame snapshot' "$tests"
           grep -F 'impossible game dates fail closed instead of entering the prospective ledger' "$tests"
           grep -F 'captured pregame evidence is deeply frozen against post-capture mutation' "$tests"
           grep -F 'inconsistent settlement status and payload fail closed before Step 11B conversion' "$tests"
