@@ -11,6 +11,7 @@ on:
       - 'server/mlb-market-edge.ts'
       - 'server/mlb-market-contract.ts'
       - 'frontend/client/src/lib/mlb-model.ts'
+      - 'frontend/client/src/pages/mlb-predictor.tsx'
 
 permissions:
   contents: read
@@ -49,15 +50,20 @@ jobs:
           adapter='server/mlb-market-model-adapters.ts'
           tests='server/mlb-market-model-adapters.test.ts'
           current_model='frontend/client/src/lib/mlb-model.ts'
+          predictor='frontend/client/src/pages/mlb-predictor.tsx'
 
           ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$adapter"
+          ! grep -F 'Math.round(value * 1e12) / 1e12' "$adapter"
 
           grep -F 'courtedge-p0-mlb-market-model-adapters.v1' "$adapter"
+          grep -F 'MLB_CURRENT_PREDICTOR_MODEL_VERSION = "predictor-full-snapshot-v2"' "$adapter"
           grep -F 'MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS = 3.5' "$adapter"
           grep -F 'currentReadyMarkets: ["TOTAL", "F5_TOTAL"]' "$adapter"
           grep -F 'legacyMarketRegressedProbabilityAccepted: false' "$adapter"
           grep -F 'integerLinePushMayBeInvented: false' "$adapter"
           grep -F 'evidenceDigestRecomputedBeforeReady: true' "$adapter"
+          grep -F 'evidenceDigestUsesLosslessNumericSerialization: true' "$adapter"
+          grep -F 'exactCurrentPredictorProvenanceRequired: true' "$adapter"
           grep -F 'priceDependenceFlagMustBeBoolean: true' "$adapter"
           grep -F 'malformedEnvelopeCanThrow: false' "$adapter"
           grep -F 'unsupportedMarketCanProduceAssessment: false' "$adapter"
@@ -68,8 +74,10 @@ jobs:
           grep -F 'MODEL_EVIDENCE_ENVELOPE_INVALID' "$adapter"
           grep -F 'MODEL_EVIDENCE_MARKET_UNSUPPORTED' "$adapter"
           grep -F 'MODEL_EVIDENCE_METRIC_UNSUPPORTED' "$adapter"
-          grep -F 'if (!isSupportedMarket(raw.marketType))' "$adapter"
-          grep -F 'if (!isSupportedMetric(raw.metric))' "$adapter"
+          grep -F 'MODEL_EVIDENCE_NOT_CURRENT_PREDICTOR' "$adapter"
+          grep -F 'if (evidence.modelVersion !== MLB_CURRENT_PREDICTOR_MODEL_VERSION)' "$adapter"
+          grep -F 'exactCanonicalEvidence(input)' "$adapter"
+          grep -F 'number:${value.toString()};' "$adapter"
           grep -F 'assessment: null' "$adapter"
           grep -F 'CURRENT_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
           grep -F 'CURRENT_F5_ML_PROBABILITY_MARKET_REGRESSED_AND_PUSH_VECTOR_UNAVAILABLE' "$adapter"
@@ -98,7 +106,11 @@ jobs:
           # Freeze parity with the current pure (pre-market) total probability formula.
           grep -F 'const modelOverProb = 1 - mlbNormCdf(line, estimated, 3.5);' "$current_model"
           grep -F 'const modelHitProb = side === "OVER" ? modelOverProb : (1 - modelOverProb);' "$current_model"
+          # Freeze the producer/version identity that Step 10 is explicitly authorized to adapt.
+          grep -F 'version: "predictor-full-snapshot-v2"' "$predictor"
 
+          grep -F 'evidence digest is lossless for tiny numeric mutations below the old 12-decimal rounding boundary' "$tests"
+          grep -F 'only the recognized current predictor model version can produce READY evidence' "$tests"
           grep -F 'market-regressed total probability is rejected' "$tests"
           grep -F 'integer totals fail closed' "$tests"
           grep -F 'current F5 ML remains unavailable' "$tests"
