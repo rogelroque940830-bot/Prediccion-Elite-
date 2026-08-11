@@ -1,0 +1,147 @@
+name: Validate P0 Step 12D Forward Replication
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12d-freeze-candidates.mjs'
+      - 'scripts/p0-step12d-acquire-forward-cohort.mjs'
+      - 'scripts/p0-step12d-independent-forward-validation.py'
+      - 'scripts/p0-step12-pocket-pilot.py'
+      - 'evidence/p0-step12/2025-pocket-pilot.json'
+      - 'server/mlb-market-historical-source.ts'
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-starting-pitcher-history.ts'
+      - 'server/mlb-market-pregame-lineup-history.ts'
+      - '.github/workflows/validate-p0-step12d-forward-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12d-forward-replication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Freeze exact 2025 candidate family before external evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_blob='3988b0214284b7338be8aeb8102c57d98f88d7a1'
+          actual_blob="$(git hash-object evidence/p0-step12/2025-pocket-pilot.json)"
+          test "$actual_blob" = "$expected_blob"
+          node scripts/p0-step12d-freeze-candidates.mjs \
+            --input evidence/p0-step12/2025-pocket-pilot.json \
+            --out artifacts/p0-step12d/frozen-candidates.json
+
+      - name: Syntax-check Step 12D research surface
+        run: |
+          node --check scripts/p0-step12d-freeze-candidates.mjs
+          node --check scripts/p0-step12d-acquire-forward-cohort.mjs
+          python -m py_compile scripts/p0-step12-pocket-pilot.py scripts/p0-step12d-independent-forward-validation.py
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node \
+            server/mlb-market-historical-source.ts \
+            server/mlb-market-historical-dataset.ts \
+            server/mlb-market-starting-pitcher-history.ts \
+            server/mlb-market-pregame-lineup-history.ts
+
+      - name: Acquire frozen untouched 2026 forward cohort from official MLB sources
+        run: >-
+          node --import tsx scripts/p0-step12d-acquire-forward-cohort.mjs
+          --start 2026-03-01
+          --end 2026-08-10
+          --concurrency 6
+          --out artifacts/p0-step12d/cohort-2026-forward
+
+      - name: Apply frozen 20-rule family without retuning
+        run: >-
+          python scripts/p0-step12d-independent-forward-validation.py
+          --candidates artifacts/p0-step12d/frozen-candidates.json
+          --dataset artifacts/p0-step12d/cohort-2026-forward/dataset.json
+          --starter-history artifacts/p0-step12d/cohort-2026-forward/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12d/cohort-2026-forward/pregame-lineup-history.json
+          --cohort-manifest artifacts/p0-step12d/cohort-2026-forward/cohort-manifest.json
+          --out artifacts/p0-step12d/forward-validation-report.json
+
+      - name: Validate 12D report contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12d/forward-validation-report.json'
+          with open(p, encoding='utf-8') as f: r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12d-independent-forward-validation.v1'
+          assert r['evidenceStatus']=='STEP12D_RESEARCH_ONLY_NOT_BET_ELITE'
+          assert r['multiplicity']['method']=='HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'
+          assert r['multiplicity']['familySize']==20
+          assert r['supportCriteria']['minimumForwardDecisiveRows']==80
+          assert r['supportCriteria']['minimumForwardDecisiveDates']==30
+          assert r['supportCriteria']['maximumAbsolute2025HoldoutForwardDrift']==0.15
+          assert len(r['results'])==20
+          assert len({x['ruleKey'] for x in r['results']})==20
+          assert r['policy']['externalThresholdTuningAllowed'] is False
+          assert r['policy']['candidateAdditionAllowed'] is False
+          assert r['policy']['candidateRemovalAllowed'] is False
+          assert r['policy']['atomMutationAllowed'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['historicalEvClaimProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['stakeCalculated'] is False
+          assert r['policy']['automaticBetPlacement'] is False
+          print(json.dumps({'statusCounts':r['statusCounts'],'cohortSummary':r['cohortSummary']}, indent=2))
+          PY
+
+      - name: Preserve live-model and evidence-ledger regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+
+      - name: Freeze Step 12D no-retuning and no-live-mutation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          freeze='scripts/p0-step12d-freeze-candidates.mjs'
+          acquire='scripts/p0-step12d-acquire-forward-cohort.mjs'
+          validate='scripts/p0-step12d-independent-forward-validation.py'
+          grep -F 'EXPECTED_PILOT_GIT_BLOB_SHA = "3988b0214284b7338be8aeb8102c57d98f88d7a1"' "$freeze"
+          grep -F 'globalMultiplicityFamilySize: 20' "$freeze"
+          grep -F 'externalThresholdTuningAllowed: false' "$freeze"
+          grep -F 'candidateAdditionAllowed: false' "$freeze"
+          grep -F 'candidateRemovalAllowed: false' "$freeze"
+          grep -F 'atomMutationAllowed: false' "$freeze"
+          grep -F 'FROZEN_START_DATE = "2026-03-01"' "$acquire"
+          grep -F 'FROZEN_END_DATE = "2026-08-10"' "$acquire"
+          grep -F 'usedFor2025CandidateDiscovery: false' "$acquire"
+          grep -F "MIN_DECISIVE_ROWS = 80" "$validate"
+          grep -F "MIN_DECISIVE_DATES = 30" "$validate"
+          grep -F "GLOBAL_FAMILY_SIZE = 20" "$validate"
+          grep -F "MAX_ABSOLUTE_2025_HOLDOUT_FORWARD_DRIFT = 0.15" "$validate"
+          grep -F "'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'" "$validate"
+          grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
+          ! grep -E 'BET_ELITE|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate"
+          git diff --check
+
+      - name: Upload Step 12D forward replication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12d-forward-replication
+          path: artifacts/p0-step12d/
+          if-no-files-found: error
+          retention-days: 30
