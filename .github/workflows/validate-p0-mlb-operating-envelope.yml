@@ -41,7 +41,7 @@ jobs:
 
       - name: Type-check Step 11 boundary
         run: >-
-          npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
           server/mlb-operating-envelope.ts server/mlb-operating-envelope.test.ts
 
       - name: Preserve modular backend
