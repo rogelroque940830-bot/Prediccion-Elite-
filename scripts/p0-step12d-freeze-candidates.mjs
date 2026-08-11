@@ -53,6 +53,7 @@ for (const target of pilot.targets) {
       }
     }
     candidates.push({
+      hypothesisKey: `${target.horizon}:${rule.ruleKey}`,
       ruleKey: rule.ruleKey,
       horizon: target.horizon,
       side: rule.side,
@@ -70,14 +71,20 @@ for (const target of pilot.targets) {
     });
   }
 }
-if (candidates.length !== 20 || new Set(candidates.map((candidate) => candidate.ruleKey)).size !== 20) {
-  throw new Error("STEP12D_FROZEN_FAMILY_MUST_CONTAIN_20_UNIQUE_RULES");
+if (candidates.length !== 20 || new Set(candidates.map((candidate) => candidate.hypothesisKey)).size !== 20) {
+  throw new Error("STEP12D_FROZEN_FAMILY_MUST_CONTAIN_20_UNIQUE_HYPOTHESES");
+}
+for (const horizon of ALLOWED_HORIZONS) {
+  if (candidates.filter((candidate) => candidate.horizon === horizon).length !== 10) {
+    throw new Error(`STEP12D_HORIZON_FAMILY_SIZE_INVALID:${horizon}`);
+  }
 }
 
-const familyDigest = sha256(canonical(candidates.map(({ ruleKey, horizon, side, atoms }) => ({ ruleKey, horizon, side, atoms }))));
+const familyDigest = sha256(canonical(candidates.map(({ hypothesisKey, ruleKey, horizon, side, atoms }) => ({ hypothesisKey, ruleKey, horizon, side, atoms }))));
 const manifest = {
   schemaVersion: MANIFEST_SCHEMA,
   frozenAtStep: "12D_BEFORE_EXTERNAL_COHORT_EVALUATION",
+  hypothesisIdentity: "HORIZON_PLUS_RULE_KEY",
   sourcePilot: {
     path: input,
     expectedGitBlobSha: EXPECTED_PILOT_GIT_BLOB_SHA,
@@ -115,4 +122,4 @@ const manifest = {
 
 await fs.mkdir(path.dirname(output), { recursive: true });
 await fs.writeFile(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-console.log(JSON.stringify({ ok: true, output, candidateCount: 20, familyDigest, expectedPilotGitBlobSha: EXPECTED_PILOT_GIT_BLOB_SHA }, null, 2));
+console.log(JSON.stringify({ ok: true, output, candidateCount: 20, hypothesisIdentity: manifest.hypothesisIdentity, familyDigest, expectedPilotGitBlobSha: EXPECTED_PILOT_GIT_BLOB_SHA }, null, 2));
