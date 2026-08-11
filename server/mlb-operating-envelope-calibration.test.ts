@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES,
+  MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS,
+  buildMlbOperatingEnvelopeCalibration,
+  type MlbOperatingEnvelopeCalibrationObservation,
+} from "./mlb-operating-envelope-calibration";
+
+function row(index: number, overrides: Partial<MlbOperatingEnvelopeCalibrationObservation> = {}): MlbOperatingEnvelopeCalibrationObservation {
+  const day = String((index % 30) + 1).padStart(2, "0");
+  return {
+    predictionId: `p-${index}`,
+    gameDate: `2026-07-${day}`,
+    gamePk: 100000 + index,
+    marketType: index % 2 === 0 ? "TOTAL" : "F5_TOTAL",
+    expectedValuePerUnit: index % 4 === 0 ? 0.12 : 0.04,
+    executionNoVigEdgePp: index % 4 === 0 ? 7 : 2,
+    modelWinProbability: 0.56,
+    referenceAgreement: index % 3 === 0 ? "SUPPORTS_MODEL_EDGE" : "NEUTRAL",
+    outcome: index % 5 === 0 ? "LOSS" : "WIN",
+    realizedProfitUnits: index % 5 === 0 ? -1 : 0.9,
+    ...overrides,
+  };
+}
+
+test("11B keeps prior P1-M3E evidence minimums as research sufficiency only", () => {
+  assert.equal(MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_OBSERVATIONS, 80);
+  assert.equal(MLB_OPERATING_ENVELOPE_CALIBRATION_MIN_DATES, 30);
+  const report = buildMlbOperatingEnvelopeCalibration({
+    observations: [row(1), row(2)],
+    rules: [{ ruleKey: "ev-positive", atoms: [{ kind: "MIN_EXPECTED_VALUE", value: 0.01 }] }],
+  });
+  assert.equal(report.state, "INSUFFICIENT_SAMPLE");
+  assert.equal(report.policy.minimumSampleRequirementsAreResearchOnly, true);
+  assert.equal(report.policy.minimumSampleRequirementsAreLivePickFilters, false);
+  assert.equal(report.policy.liveOperatingEnvelopeChanged, false);
+});
+
+test("baseline represents all current Step 11A candidates and preserves 100 percent pick volume", () => {
+  const observations = Array.from({ length: 10 }, (_, index) => row(index));
+  const report = buildMlbOperatingEnvelopeCalibration({ observations, rules: [] });
+  assert.equal(report.baseline.observations, 10);
+  assert.equal(report.baseline.retentionPctOfBaselineCandidates, 100);
+  assert.equal(report.baseline.activeDateCoveragePct, 100);
+  assert.equal(report.baseline.noPickDates, 0);
+  assert.equal(report.baseline.noPickDatePct, 0);
+});
+
+test("every candidate rule reports quality and exact pick-volume loss side by side", () => {
+  const observations = Array.from({ length: 20 }, (_, index) => row(index));
+  const report = buildMlbOperatingEnvelopeCalibration({
+    observations,
+    rules: [{ ruleKey: "ev-12pct", atoms: [{ kind: "MIN_EXPECTED_VALUE", value: 0.12 }] }],
+  });
+  const result = report.rules[0];
+  assert.equal(result.metrics.observations, 5);
+  assert.equal(result.metrics.retentionPctOfBaselineCandidates, 25);
+  assert.ok(result.metrics.activeDateCoveragePct < 100);
+  assert.ok(result.metrics.noPickDates > 0);
+  assert.ok(result.metrics.flatStakeRoiPct != null);
+  assert.ok(result.metrics.meanBrierScore != null);
+  assert.ok(result.metrics.meanLogLoss != null);
+});
+
+test("a rule that kills every pick is exposed explicitly instead of looking elite by absence", () => {
+  const observations = Array.from({ length: 12 }, (_, index) => row(index));
+  const report = buildMlbOperatingEnvelopeCalibration({
+    observations,
+    rules: [{ ruleKey: "impossible", atoms: [{ kind: "MIN_EXPECTED_VALUE", value: 99 }] }],
+  });
+  const metrics = report.rules[0].metrics;
+  assert.equal(metrics.observations, 0);
+  assert.equal(metrics.retentionPctOfBaselineCandidates, 0);
+  assert.equal(metrics.activeDateCoveragePct, 0);
+  assert.equal(metrics.noPickDatePct, 100);
+  assert.equal(metrics.flatStakeRoiPct, null);
+});
+
+test("runtime does not hard-code a winning rule or auto-promote point estimates", () => {
+  const observations = Array.from({ length: 90 }, (_, index) => row(index));
+  const report = buildMlbOperatingEnvelopeCalibration({
+    observations,
+    rules: [
+      { ruleKey: "ev-4", atoms: [{ kind: "MIN_EXPECTED_VALUE", value: 0.04 }] },
+      { ruleKey: "ev-12-and-support", atoms: [
+        { kind: "MIN_EXPECTED_VALUE", value: 0.12 },
+        { kind: "REFERENCE_IS", value: "SUPPORTS_MODEL_EDGE" },
+      ] },
+    ],
+  });
+  assert.equal(report.state, "RESEARCH_METRICS_READY");
+  assert.equal(report.rules.length, 2);
+  assert.equal(report.policy.ruleThresholdsHardCodedByRuntime, false);
+  assert.equal(report.policy.automaticBestRuleSelection, false);
+  assert.equal(report.policy.pointEstimateCanPromoteBetElite, false);
+  assert.equal(report.policy.betEliteLabelProduced, false);
+  assert.equal(report.policy.stakeCalculated, false);
+  assert.equal(report.policy.automaticBetPlacement, false);
+});
+
+test("duplicate prediction identity and malformed numeric evidence fail closed", () => {
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(1), row(1)],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_DUPLICATE/);
+  assert.throws(() => buildMlbOperatingEnvelopeCalibration({
+    observations: [row(2, { expectedValuePerUnit: Number.NaN })],
+    rules: [],
+  }), /MLB_OPERATING_ENVELOPE_CALIBRATION_NUMERIC_INPUT_INVALID/);
+});
