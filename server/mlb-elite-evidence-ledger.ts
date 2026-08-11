@@ -140,6 +140,11 @@ function isCalibrationReferenceAgreement(value: unknown): value is MlbCalibratio
   return value === "SUPPORTS_MODEL_EDGE" || value === "OPPOSES_MODEL_EDGE" || value === "NEUTRAL" || value === "UNAVAILABLE";
 }
 
+function round(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
 function exactNumber(value: number | null): string {
   if (value === null) return "null";
   if (Object.is(value, -0)) return "-0";
@@ -167,6 +172,22 @@ function isSettlementOutcome(value: unknown): value is MlbCalibrationOutcome {
 function americanToDecimal(american: number): number {
   if (!validAmericanOdds(american)) throw new Error("MLB_ELITE_LEDGER_EXECUTION_ODDS_INVALID");
   return american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
+}
+
+function pushAwareExpectedValue(winProbability: number, pushProbability: number, americanOdds: number): number | null {
+  if (!finiteProbability(winProbability) || !finiteProbability(pushProbability)) return null;
+  const lossProbability = 1 - winProbability - pushProbability;
+  if (lossProbability <= 0) return null;
+  const decimal = americanToDecimal(americanOdds);
+  return round(winProbability * (decimal - 1) - Math.max(0, lossProbability), 10);
+}
+
+function referenceAgreementMatches(edgePp: number | null, agreement: MlbCalibrationReferenceAgreement): boolean {
+  if (agreement === "UNAVAILABLE") return edgePp === null;
+  if (!finite(edgePp)) return false;
+  if (edgePp > 1e-12) return agreement === "SUPPORTS_MODEL_EDGE";
+  if (edgePp < -1e-12) return agreement === "OPPOSES_MODEL_EDGE";
+  return agreement === "NEUTRAL";
 }
 
 function predictionIdentity(snapshot: Omit<MlbEliteEvidenceCandidateSnapshot, "capturedAt">): string {
@@ -201,11 +222,29 @@ function requireEdgeEvidence(candidate: MlbOperatingEnvelopeMarketResult, edge: 
   if (edge.model.status !== "READY" || !edge.execution) throw new Error("MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_MISSING");
   if (!candidate.selectedSide || !finiteProbability(candidate.modelWinProbability)
     || !finiteProbability(candidate.modelPushProbability)
+    || candidate.modelWinProbability + candidate.modelPushProbability >= 1
     || !finite(candidate.expectedValuePerUnit) || candidate.expectedValuePerUnit <= 0
     || !finite(candidate.executionEdgePp) || !finite(candidate.executionNoVigEdgePp)
     || !edge.model.modelVersion || !edge.model.modelInputDigest
-    || !validAmericanOdds(edge.execution.selectedOddsAmerican) || !validIso(edge.execution.capturedAt)) {
+    || !validAmericanOdds(edge.execution.selectedOddsAmerican) || !validIso(edge.execution.capturedAt)
+    || !isCalibrationReferenceAgreement(candidate.referenceAgreement)
+    || !referenceAgreementMatches(candidate.referenceNoVigEdgePp, candidate.referenceAgreement)) {
     throw new Error("MLB_ELITE_LEDGER_REQUIRED_PREGAME_EVIDENCE_INVALID");
+  }
+
+  const recomputedEv = pushAwareExpectedValue(
+    candidate.modelWinProbability,
+    candidate.modelPushProbability,
+    edge.execution.selectedOddsAmerican,
+  );
+  if (recomputedEv === null
+    || candidate.expectedValuePerUnit !== recomputedEv
+    || edge.economics.expectedValuePerUnit !== recomputedEv) {
+    throw new Error("MLB_ELITE_LEDGER_PUSH_AWARE_EV_MISMATCH");
+  }
+  if (!isCalibrationReferenceAgreement(edge.economics.referenceAgreement)
+    || !referenceAgreementMatches(edge.economics.referenceNoVigEdgePp, edge.economics.referenceAgreement)) {
+    throw new Error("MLB_ELITE_LEDGER_REFERENCE_EVIDENCE_INVALID");
   }
 
   const parity = candidate.intrinsicProjectionScope === edge.intrinsicProjectionScope
@@ -435,14 +474,23 @@ function validatePersistedLedgerEntry(entry: MlbEliteEvidenceLedgerEntry, ledger
     || !candidate.providerMarketKey || !candidate.selectedSide
     || !finiteProbability(candidate.modelWinProbability) || candidate.modelWinProbability <= 0 || candidate.modelWinProbability >= 1
     || !finiteProbability(candidate.modelPushProbability)
-    || candidate.modelWinProbability + candidate.modelPushProbability > 1
+    || candidate.modelWinProbability + candidate.modelPushProbability >= 1
     || !candidate.modelVersion || !candidate.modelInputDigest
     || !finite(candidate.expectedValuePerUnit) || candidate.expectedValuePerUnit <= 0
     || !finite(candidate.executionNoVigEdgePp) || !validAmericanOdds(candidate.executionOddsAmerican)
     || !isCalibrationReferenceAgreement((candidate as { referenceAgreement?: unknown }).referenceAgreement)
+    || !referenceAgreementMatches(candidate.referenceNoVigEdgePp, candidate.referenceAgreement)
     || !validIso(candidate.executionCapturedAt) || !validIso(candidate.capturedAt)
     || candidate.capturedAt !== ledger.capturedAt) {
     throw new Error(`MLB_ELITE_LEDGER_PERSISTED_CANDIDATE_INVALID:${entry.predictionId}`);
+  }
+  const recomputedEv = pushAwareExpectedValue(
+    candidate.modelWinProbability,
+    candidate.modelPushProbability,
+    candidate.executionOddsAmerican,
+  );
+  if (recomputedEv === null || candidate.expectedValuePerUnit !== recomputedEv) {
+    throw new Error(`MLB_ELITE_LEDGER_PERSISTED_EV_INVALID:${entry.predictionId}`);
   }
   const { capturedAt: _capturedAt, ...identitySnapshot } = candidate;
   if (predictionIdentity(identitySnapshot) !== entry.predictionId) {
