@@ -207,6 +207,22 @@ function requireEdgeEvidence(candidate: MlbOperatingEnvelopeMarketResult, edge: 
   if (!parity) throw new Error("MLB_ELITE_LEDGER_STEP9_EVIDENCE_PARITY_MISMATCH");
 }
 
+function freezeCandidateSnapshot(snapshot: MlbEliteEvidenceCandidateSnapshot): MlbEliteEvidenceCandidateSnapshot {
+  return Object.freeze({
+    ...snapshot,
+    intrinsicThesisKinds: Object.freeze([...snapshot.intrinsicThesisKinds]),
+    supportingComponents: Object.freeze([...snapshot.supportingComponents]),
+  });
+}
+
+function freezeLedgerEntry(entry: MlbEliteEvidenceLedgerEntry): MlbEliteEvidenceLedgerEntry {
+  return Object.freeze({
+    ...entry,
+    candidate: freezeCandidateSnapshot(entry.candidate),
+    settlement: entry.settlement ? Object.freeze({ ...entry.settlement }) : null,
+  });
+}
+
 export function captureMlbEliteEvidenceLedger(input: {
   operatingEnvelope: MlbOperatingEnvelopeResult;
   marketEdge: MlbMarketEdgeResult;
@@ -304,40 +320,43 @@ function buildLedger(
   entries: readonly MlbEliteEvidenceLedgerEntry[],
   baselineCandidates: number,
 ): MlbEliteEvidenceLedger {
-  const pending = entries.filter((entry) => entry.settlementStatus === "PENDING").length;
-  const settled = entries.filter((entry) => entry.settlementStatus === "SETTLED").length;
-  return {
+  const immutableEntries = Object.freeze(entries.map((entry) => freezeLedgerEntry(entry)));
+  const pending = immutableEntries.filter((entry) => entry.settlementStatus === "PENDING").length;
+  const settled = immutableEntries.filter((entry) => entry.settlementStatus === "SETTLED").length;
+  const summary = Object.freeze({
+    step11aEliteCandidates: baselineCandidates,
+    capturedCandidates: immutableEntries.length,
+    pending,
+    settled,
+    captureRetentionPct: baselineCandidates > 0 ? (immutableEntries.length / baselineCandidates) * 100 : 100,
+  });
+  const policy = Object.freeze({
+    capturesEveryStep11aEliteCandidate: true as const,
+    additionalEligibilityFilterApplied: false as const,
+    silentCandidateDropAllowed: false as const,
+    step11aSummaryCountMustMatchRows: true as const,
+    exactStep9EvidenceParityRequired: true as const,
+    immutablePregameSnapshot: true as const,
+    settlementMutatesPregameSnapshot: false as const,
+    settlementOutcomeWhitelistRequired: true as const,
+    missingClosingLineBlocksCapture: false as const,
+    missingClosingLineBlocksSettlement: false as const,
+    closingLineRequiredForCalibration: false as const,
+    flatOneUnitSettlementOnly: true as const,
+    stakeCalculated: false as const,
+    betEliteLabelProduced: false as const,
+    finalBetRecommendationProduced: false as const,
+    automaticBetPlacement: false as const,
+    realFinancialExposure: 0 as const,
+  });
+  return Object.freeze({
     schemaVersion: MLB_ELITE_EVIDENCE_LEDGER_SCHEMA,
     sourceRunId,
     capturedAt,
-    entries,
-    summary: {
-      step11aEliteCandidates: baselineCandidates,
-      capturedCandidates: entries.length,
-      pending,
-      settled,
-      captureRetentionPct: baselineCandidates > 0 ? (entries.length / baselineCandidates) * 100 : 100,
-    },
-    policy: {
-      capturesEveryStep11aEliteCandidate: true,
-      additionalEligibilityFilterApplied: false,
-      silentCandidateDropAllowed: false,
-      step11aSummaryCountMustMatchRows: true,
-      exactStep9EvidenceParityRequired: true,
-      immutablePregameSnapshot: true,
-      settlementMutatesPregameSnapshot: false,
-      settlementOutcomeWhitelistRequired: true,
-      missingClosingLineBlocksCapture: false,
-      missingClosingLineBlocksSettlement: false,
-      closingLineRequiredForCalibration: false,
-      flatOneUnitSettlementOnly: true,
-      stakeCalculated: false,
-      betEliteLabelProduced: false,
-      finalBetRecommendationProduced: false,
-      automaticBetPlacement: false,
-      realFinancialExposure: 0,
-    },
-  };
+    entries: immutableEntries,
+    summary,
+    policy,
+  });
 }
 
 export function settleMlbEliteEvidenceLedger(input: {
@@ -388,18 +407,30 @@ export function settleMlbEliteEvidenceLedger(input: {
 export function toMlbOperatingEnvelopeCalibrationObservations(
   ledger: MlbEliteEvidenceLedger,
 ): MlbOperatingEnvelopeCalibrationObservation[] {
-  return ledger.entries
-    .filter((entry): entry is MlbEliteEvidenceLedgerEntry & { settlement: MlbEliteEvidenceSettlement } => entry.settlement !== null)
-    .map((entry) => ({
-      predictionId: entry.predictionId,
-      gameDate: entry.candidate.gameDate,
-      gamePk: entry.candidate.gamePk,
-      marketType: entry.candidate.marketType,
-      expectedValuePerUnit: entry.candidate.expectedValuePerUnit,
-      executionNoVigEdgePp: entry.candidate.executionNoVigEdgePp,
-      modelWinProbability: entry.candidate.modelWinProbability,
-      referenceAgreement: entry.candidate.referenceAgreement,
-      outcome: entry.settlement.outcome,
-      realizedProfitUnits: entry.settlement.realizedProfitUnits,
-    }));
+  const settledEntries = ledger.entries.filter((entry): entry is MlbEliteEvidenceLedgerEntry & { settlement: MlbEliteEvidenceSettlement } => {
+    if (entry.settlementStatus === "SETTLED") {
+      if (!entry.settlement || entry.settlement.status !== "SETTLED"
+        || !isSettlementOutcome((entry.settlement as { outcome?: unknown }).outcome)
+        || !finite(entry.settlement.realizedProfitUnits)) {
+        throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
+      }
+      return true;
+    }
+    if (entry.settlement !== null) {
+      throw new Error(`MLB_ELITE_LEDGER_SETTLEMENT_STATE_INVALID:${entry.predictionId}`);
+    }
+    return false;
+  });
+  return settledEntries.map((entry) => ({
+    predictionId: entry.predictionId,
+    gameDate: entry.candidate.gameDate,
+    gamePk: entry.candidate.gamePk,
+    marketType: entry.candidate.marketType,
+    expectedValuePerUnit: entry.candidate.expectedValuePerUnit,
+    executionNoVigEdgePp: entry.candidate.executionNoVigEdgePp,
+    modelWinProbability: entry.candidate.modelWinProbability,
+    referenceAgreement: entry.candidate.referenceAgreement,
+    outcome: entry.settlement.outcome,
+    realizedProfitUnits: entry.settlement.realizedProfitUnits,
+  }));
 }
