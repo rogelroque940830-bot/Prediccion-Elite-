@@ -5,12 +5,13 @@ import type {
   MlbShortlistResult,
 } from "./mlb-shortlist";
 
-export const MLB_INTRINSIC_EDGE_SCHEMA = "courtedge-p0-mlb-intrinsic-edge.v1" as const;
+export const MLB_INTRINSIC_EDGE_SCHEMA = "courtedge-p0-mlb-intrinsic-edge.v2" as const;
 
 export type MlbIntrinsicComponent = MlbShortlistComponent | "BULLPEN";
 export type MlbIntrinsicTarget = "HOME_RUNS" | "AWAY_RUNS" | "TOTAL_RUNS";
 export type MlbIntrinsicDirection = "UP" | "DOWN";
 export type MlbIntrinsicHorizon = "EARLY_STARTER" | "CROSS_HORIZON" | "LATE_BULLPEN";
+export type MlbIntrinsicProjectionScope = "FULL_GAME" | "EARLY_WINDOW";
 export type MlbIntrinsicPressureState =
   | "NONE"
   | "SINGLE_UP"
@@ -71,6 +72,26 @@ export interface MlbIntrinsicThesis {
   researchEliteEligible: boolean;
 }
 
+export interface MlbIntrinsicProjection {
+  scope: MlbIntrinsicProjectionScope;
+  includedHorizons: readonly MlbIntrinsicHorizon[];
+  signals: readonly MlbIntrinsicSignal[];
+  pressures: {
+    homeRuns: MlbIntrinsicPressure;
+    awayRuns: MlbIntrinsicPressure;
+    totalRuns: MlbIntrinsicPressure;
+  };
+  theses: readonly MlbIntrinsicThesis[];
+  marketSearchIntents: readonly MlbIntrinsicMarketSearchIntent[];
+  marketSearchEvidence: {
+    side: readonly MlbIntrinsicComponent[];
+    total: readonly MlbIntrinsicComponent[];
+  };
+  researchEliteCandidate: boolean;
+  researchClassification: MlbIntrinsicResearchClassification;
+  maxAbsoluteNativeRunSignal: number;
+}
+
 export interface MlbIntrinsicBullpenPair {
   home?: unknown;
   away?: unknown;
@@ -86,16 +107,9 @@ export interface MlbIntrinsicGameProfile {
   awayTeam: MlbShortlistCandidate["awayTeam"];
   inputStage: "FINAL" | "PROVISIONAL";
   signals: readonly MlbIntrinsicSignal[];
-  pressures: {
-    homeRuns: MlbIntrinsicPressure;
-    awayRuns: MlbIntrinsicPressure;
-    totalRuns: MlbIntrinsicPressure;
-  };
-  theses: readonly MlbIntrinsicThesis[];
-  marketSearchIntents: readonly MlbIntrinsicMarketSearchIntent[];
-  marketSearchEvidence: {
-    side: readonly MlbIntrinsicComponent[];
-    total: readonly MlbIntrinsicComponent[];
+  projections: {
+    fullGame: MlbIntrinsicProjection;
+    earlyWindow: MlbIntrinsicProjection;
   };
   researchEliteCandidate: boolean;
   researchClassification: MlbIntrinsicResearchClassification;
@@ -116,6 +130,8 @@ export interface MlbIntrinsicEdgeResult {
     researchEliteCandidates: number;
     provisionalResearchEliteCandidates: number;
     finalInputResearchEliteCandidates: number;
+    fullGameResearchEliteCandidates: number;
+    earlyWindowResearchEliteCandidates: number;
     intrinsicWatch: number;
     conflicted: number;
     noStrongThesis: number;
@@ -129,8 +145,10 @@ export interface MlbIntrinsicEdgeResult {
     numericEliteScoreProduced: false;
     legacyCompositeModelsCountAsIndependentEvidence: false;
     sameUnderlyingEvidenceDoubleCountingAllowed: false;
-    unresolvedContradictionsCanBeElite: false;
+    contradictionsWithinQualifyingProjectionCanBeElite: false;
     requiresFinalInputsForResearchEliteCandidate: false;
+    horizonScopedThesesRequired: true;
+    lateBullpenEvidenceAllowedInEarlyWindow: false;
     researchOnlyNotOutcomeCertified: true;
     automaticBetPlacement: false;
     automaticPromotionAllowed: false;
@@ -395,26 +413,77 @@ function marketSearchEvidence(
     .flatMap((thesis) => thesis.supportingComponents));
 }
 
-function evaluateCandidate(
-  candidate: MlbShortlistCandidate,
-  bullpen: MlbIntrinsicBullpenPair | undefined,
-): MlbIntrinsicGameProfile {
-  const collected = collectSignals(candidate, bullpen);
-  const homeRuns = pressureFromSignals(collected.signals, "HOME_RUNS");
-  const awayRuns = pressureFromSignals(collected.signals, "AWAY_RUNS");
-  const totalRuns = pressureFromSignals(collected.signals, "TOTAL_RUNS", true);
+function projectionClassification(
+  researchEliteCandidate: boolean,
+  pressures: MlbIntrinsicProjection["pressures"],
+  theses: readonly MlbIntrinsicThesis[],
+): MlbIntrinsicResearchClassification {
+  if (researchEliteCandidate) return "GAME_ELITE_RESEARCH_CANDIDATE";
+  if (Object.values(pressures).some((pressure) => pressure.state === "CONFLICTED")) {
+    return "CONFLICTED_EVIDENCE";
+  }
+  if (theses.length > 0) return "INTRINSIC_WATCH";
+  return "NO_STRONG_THESIS";
+}
+
+function buildProjection(
+  allSignals: readonly MlbIntrinsicSignal[],
+  scope: MlbIntrinsicProjectionScope,
+): MlbIntrinsicProjection {
+  const includedHorizons: readonly MlbIntrinsicHorizon[] = scope === "EARLY_WINDOW"
+    ? ["EARLY_STARTER", "CROSS_HORIZON"]
+    : ["EARLY_STARTER", "CROSS_HORIZON", "LATE_BULLPEN"];
+  const allowed = new Set<MlbIntrinsicHorizon>(includedHorizons);
+  const signals = allSignals.filter((signal) => allowed.has(signal.horizon));
+  const homeRuns = pressureFromSignals(signals, "HOME_RUNS");
+  const awayRuns = pressureFromSignals(signals, "AWAY_RUNS");
+  const totalRuns = pressureFromSignals(signals, "TOTAL_RUNS", true);
+  const pressures = { homeRuns, awayRuns, totalRuns };
   const theses = buildTheses(homeRuns, awayRuns, totalRuns);
   const marketSearchIntents = sortedUnique(theses
     .filter((thesis) => thesis.researchEliteEligible && thesis.marketSearchIntent != null)
     .map((thesis) => thesis.marketSearchIntent!));
   const researchEliteCandidate = marketSearchIntents.length > 0;
-  const hasConflict = [homeRuns, awayRuns, totalRuns].some((pressure) => pressure.state === "CONFLICTED");
-  const hasWatchThesis = theses.length > 0;
+
+  return {
+    scope,
+    includedHorizons,
+    signals,
+    pressures,
+    theses,
+    marketSearchIntents,
+    marketSearchEvidence: {
+      side: marketSearchEvidence(theses, "SIDE"),
+      total: marketSearchEvidence(theses, "TOTAL"),
+    },
+    researchEliteCandidate,
+    researchClassification: projectionClassification(researchEliteCandidate, pressures, theses),
+    maxAbsoluteNativeRunSignal: round3(signals.reduce(
+      (maximum, signal) => Math.max(maximum, signal.absoluteRuns),
+      0,
+    )),
+  };
+}
+
+function evaluateCandidate(
+  candidate: MlbShortlistCandidate,
+  bullpen: MlbIntrinsicBullpenPair | undefined,
+): MlbIntrinsicGameProfile {
+  const collected = collectSignals(candidate, bullpen);
+  const fullGame = buildProjection(collected.signals, "FULL_GAME");
+  const earlyWindow = buildProjection(collected.signals, "EARLY_WINDOW");
+  const researchEliteCandidate = fullGame.researchEliteCandidate || earlyWindow.researchEliteCandidate;
 
   let researchClassification: MlbIntrinsicResearchClassification = "NO_STRONG_THESIS";
   if (researchEliteCandidate) researchClassification = "GAME_ELITE_RESEARCH_CANDIDATE";
-  else if (hasConflict) researchClassification = "CONFLICTED_EVIDENCE";
-  else if (hasWatchThesis) researchClassification = "INTRINSIC_WATCH";
+  else if (
+    fullGame.researchClassification === "CONFLICTED_EVIDENCE"
+    || earlyWindow.researchClassification === "CONFLICTED_EVIDENCE"
+  ) researchClassification = "CONFLICTED_EVIDENCE";
+  else if (
+    fullGame.researchClassification === "INTRINSIC_WATCH"
+    || earlyWindow.researchClassification === "INTRINSIC_WATCH"
+  ) researchClassification = "INTRINSIC_WATCH";
 
   return {
     gamePk: candidate.gamePk,
@@ -424,13 +493,7 @@ function evaluateCandidate(
     awayTeam: candidate.awayTeam,
     inputStage: candidate.finalInputsAvailable ? "FINAL" : "PROVISIONAL",
     signals: collected.signals,
-    pressures: { homeRuns, awayRuns, totalRuns },
-    theses,
-    marketSearchIntents,
-    marketSearchEvidence: {
-      side: marketSearchEvidence(theses, "SIDE"),
-      total: marketSearchEvidence(theses, "TOTAL"),
-    },
+    projections: { fullGame, earlyWindow },
     researchEliteCandidate,
     researchClassification,
     certificationStatus: "RESEARCH_ONLY_NOT_OUTCOME_CERTIFIED",
@@ -442,12 +505,22 @@ function evaluateCandidate(
   };
 }
 
+function allEliteTheses(game: MlbIntrinsicGameProfile): MlbIntrinsicThesis[] {
+  return [
+    ...game.projections.fullGame.theses,
+    ...game.projections.earlyWindow.theses,
+  ].filter((thesis) => thesis.researchEliteEligible);
+}
+
 function maxSupportingComponentCount(game: MlbIntrinsicGameProfile): number {
-  return game.theses.reduce((maximum, thesis) => Math.max(maximum, thesis.supportingComponents.length), 0);
+  return allEliteTheses(game).reduce(
+    (maximum, thesis) => Math.max(maximum, thesis.supportingComponents.length),
+    0,
+  );
 }
 
 function eliteThesisCount(game: MlbIntrinsicGameProfile): number {
-  return game.theses.filter((thesis) => thesis.researchEliteEligible).length;
+  return allEliteTheses(game).length;
 }
 
 export function rankMlbIntrinsicGames(
@@ -490,6 +563,8 @@ export function buildMlbIntrinsicEdge(input: {
       researchEliteCandidates: games.filter((game) => game.researchEliteCandidate).length,
       provisionalResearchEliteCandidates: games.filter((game) => game.researchEliteCandidate && game.inputStage === "PROVISIONAL").length,
       finalInputResearchEliteCandidates: games.filter((game) => game.researchEliteCandidate && game.inputStage === "FINAL").length,
+      fullGameResearchEliteCandidates: games.filter((game) => game.projections.fullGame.researchEliteCandidate).length,
+      earlyWindowResearchEliteCandidates: games.filter((game) => game.projections.earlyWindow.researchEliteCandidate).length,
       intrinsicWatch: games.filter((game) => game.researchClassification === "INTRINSIC_WATCH").length,
       conflicted: games.filter((game) => game.researchClassification === "CONFLICTED_EVIDENCE").length,
       noStrongThesis: games.filter((game) => game.researchClassification === "NO_STRONG_THESIS").length,
@@ -503,8 +578,10 @@ export function buildMlbIntrinsicEdge(input: {
       numericEliteScoreProduced: false,
       legacyCompositeModelsCountAsIndependentEvidence: false,
       sameUnderlyingEvidenceDoubleCountingAllowed: false,
-      unresolvedContradictionsCanBeElite: false,
+      contradictionsWithinQualifyingProjectionCanBeElite: false,
       requiresFinalInputsForResearchEliteCandidate: false,
+      horizonScopedThesesRequired: true,
+      lateBullpenEvidenceAllowedInEarlyWindow: false,
       researchOnlyNotOutcomeCertified: true,
       automaticBetPlacement: false,
       automaticPromotionAllowed: false,
