@@ -165,7 +165,7 @@ test("truncated Step 11A rows cannot hide behind stale per-game or top-level can
   assert.throws(() => capture(perGame), /MLB_ELITE_LEDGER_STEP11A_GAME_SUMMARY_MISMATCH/);
 
   const topLevel = fixture();
-  topLevel.operatingEnvelope.games[0].summary.eliteEvidenceCandidates = 1;
+  topLevel.operatingEnvelope.summary.eliteEvidenceCandidates = 1;
   assert.throws(() => capture(topLevel), /MLB_ELITE_LEDGER_STEP11A_TOP_LEVEL_SUMMARY_MISMATCH/);
 });
 
@@ -215,7 +215,8 @@ test("positive American odds settle to the correct one-unit win profit", () => {
     ledger,
     settlements: [{ predictionId: under.predictionId, outcome: "WIN", settledAt: "2026-08-12T03:00:00.000Z", officialEvidenceId: "official-plus" }],
   });
-  assert.equal(settled.entries.find((entry) => entry.predictionId === under.predictionId)!.settlement!.realizedProfitUnits, 1.2);
+  const profit = settled.entries.find((entry) => entry.predictionId === under.predictionId)!.settlement!.realizedProfitUnits;
+  assert.ok(Math.abs(profit - 1.2) < 1e-12);
 });
 
 test("loss settles at minus one unit and conflicting resettlement fails closed", () => {
