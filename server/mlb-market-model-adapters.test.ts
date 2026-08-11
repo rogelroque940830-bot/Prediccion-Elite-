@@ -92,6 +92,14 @@ test("source-reported total probability and selected side must match determinist
   assert.equal(assessment(wrongSide).unavailableReason, "PURE_MODEL_SELECTED_SIDE_MISMATCH");
 });
 
+test("source probability parity is bit-exact even inside the former 1e-10 tolerance", () => {
+  for (const probability of [0.57925980418226, 0.5792598041822589, 0.579259804232259]) {
+    const result = adaptMlbCurrentPredictorProbability(evidence({ probability }));
+    assert.equal(result.adapterStatus, "UNAVAILABLE");
+    assert.equal(assessment(result).unavailableReason, "PURE_MODEL_PROBABILITY_PARITY_MISMATCH");
+  }
+});
+
 test("evidence digest is lossless for tiny numeric mutations below the old 12-decimal rounding boundary", () => {
   const input = evidence();
   input.probability += 1e-13;
@@ -291,6 +299,7 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.totalProbabilityRecomputedFromProjection, true);
   assert.equal(first.policy.totalProbabilitySigmaRuns, MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS);
   assert.equal(first.policy.sourceReportedProbabilityMustMatchRecomputation, true);
+  assert.equal(first.policy.sourceReportedProbabilityMustMatchBitExactly, true);
   assert.equal(first.policy.a3aExactSettlementMathAvailable, true);
   assert.equal(first.policy.a3aExperimentalShadowCanBecomeReady, false);
   assert.equal(first.policy.unsupportedChallengersCanBePromoted, false);
