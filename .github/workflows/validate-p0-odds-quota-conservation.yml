@@ -109,7 +109,10 @@ jobs:
           grep -F 'endpoint: "EVENT_ODDS"' server/mlb-selective-odds-acquisition.ts
           grep -F 'MLB_SELECTIVE_ODDS_CACHE_TTL_MS = MLB_P1_M6A2_MAX_QUOTE_AGE_MS' server/mlb-selective-odds-acquisition.ts
           grep -F 'MLB_SELECTIVE_ODDS_REQUEST_TIMEOUT_MS = 15_000' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_EVENT_MATCH_MAX_START_DELTA_MS = 90 * 60 * 1000' server/mlb-selective-odds-acquisition.ts
           grep -F 'AbortSignal.timeout' server/mlb-selective-odds-acquisition.ts
+          grep -F 'private static providerTail' server/mlb-selective-odds-acquisition.ts
+          grep -F 'private static readonly eventCache' server/mlb-selective-odds-acquisition.ts
           grep -F 'MLB_MARKET_UNIVERSE_REGISTRY' server/mlb-selective-odds-acquisition.ts
           grep -F 'MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS' server/mlb-selective-odds-acquisition.ts
           grep -F 'REGISTRY_MARKET_MAPPING_MISMATCH' server/mlb-selective-odds-acquisition.ts
@@ -127,6 +130,8 @@ jobs:
           grep -F 'duplicateMarketKeysAllowed: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'onePaidRequestPerGameMaximum: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'paidRequestsSequentialByIntrinsicRank: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'distinctRunsProviderSerialized: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'concurrentCacheMissesCanDuplicatePaidCalls: false' server/mlb-selective-odds-acquisition.ts
           grep -F 'lowerRankCannotBypassBudgetDeniedHigherRank: true' server/mlb-selective-odds-acquisition.ts
           grep -F 'eventMarketsDiscoveryCalls: 0' server/mlb-selective-odds-acquisition.ts
           grep -F 'sportOddsCalls: 0' server/mlb-selective-odds-acquisition.ts
