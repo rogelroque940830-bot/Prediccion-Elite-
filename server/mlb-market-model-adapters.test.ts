@@ -150,6 +150,24 @@ test("integer totals fail closed because the current continuous model cannot sup
   }
 });
 
+test("nonpositive total lines are invalid evidence and can never become READY", () => {
+  for (const [marketType, metric, line] of [
+    ["TOTAL", "TOTAL_MODEL_HIT_PROBABILITY", -0.5],
+    ["TOTAL", "TOTAL_MODEL_HIT_PROBABILITY", -8.5],
+    ["TOTAL", "TOTAL_MODEL_HIT_PROBABILITY", 0],
+    ["F5_TOTAL", "F5_TOTAL_MODEL_HIT_PROBABILITY", -0.5],
+    ["F5_TOTAL", "F5_TOTAL_MODEL_HIT_PROBABILITY", -4.5],
+    ["F5_TOTAL", "F5_TOTAL_MODEL_HIT_PROBABILITY", -0],
+  ] as const) {
+    const result = adaptMlbCurrentPredictorProbability(evidence({ marketType, metric, line }));
+    assert.equal(result.adapterStatus, "INVALID_EVIDENCE");
+    assert.equal(result.assessment, null);
+    assert.equal(result.blockers.includes("MODEL_EVIDENCE_TOTAL_LINE_INVALID"), true);
+  }
+  assert.equal(reproduceMlbCurrentPredictorTotalModelHitProbability(0, -0.5), null);
+  assert.equal(reproduceMlbCurrentPredictorTotalModelHitProbability(0, 0), null);
+});
+
 test("only exact half-run identities are accepted; quarter, near-half and near-integer lines fail closed", () => {
   for (const line of [8.25, 8.5000000001, 8.4999999999, 8.0000000001, 7.9999999999]) {
     const result = adaptMlbCurrentPredictorProbability(evidence({ line }));
@@ -337,6 +355,7 @@ test("same evidence is deterministic and carries no ranking, envelope, stake or 
   assert.equal(first.policy.exactEnvelopeFieldSetRequired, true);
   assert.equal(first.policy.exactCurrentPredictorProvenanceRequired, true);
   assert.equal(first.policy.exactHalfRunIdentityRequired, true);
+  assert.equal(first.policy.positiveTotalLineRequired, true);
   assert.equal(first.policy.priceDependenceFlagMustBeBoolean, true);
   assert.equal(first.policy.malformedEnvelopeCanThrow, false);
   assert.equal(first.policy.processingFailuresFailClosed, true);
