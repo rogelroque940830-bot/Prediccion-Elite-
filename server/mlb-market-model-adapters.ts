@@ -81,6 +81,7 @@ export interface MlbMarketModelAdapterResult {
     totalProbabilityRecomputedFromProjection: true;
     totalProbabilitySigmaRuns: typeof MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS;
     sourceReportedProbabilityMustMatchRecomputation: true;
+    sourceReportedProbabilityMustMatchBitExactly: true;
     a3aExactSettlementMathAvailable: true;
     a3aExperimentalShadowCanBecomeReady: false;
     unsupportedChallengersCanBePromoted: false;
@@ -97,7 +98,6 @@ export interface MlbMarketModelAdapterResult {
 }
 
 const HEX_64 = /^[a-f0-9]{64}$/i;
-const PROBABILITY_PARITY_TOLERANCE = 1e-10;
 const SIDES = ["HOME", "AWAY", "OVER", "UNDER"] as const;
 
 const EXPECTED_METRIC: Readonly<Record<MlbMarketEdgeSupportedMarket, MlbCurrentPredictorProbabilityMetric>> = Object.freeze({
@@ -264,6 +264,7 @@ function policy(): MlbMarketModelAdapterResult["policy"] {
     totalProbabilityRecomputedFromProjection: true,
     totalProbabilitySigmaRuns: MLB_CURRENT_TOTAL_MODEL_SIGMA_RUNS,
     sourceReportedProbabilityMustMatchRecomputation: true,
+    sourceReportedProbabilityMustMatchBitExactly: true,
     a3aExactSettlementMathAvailable: true,
     a3aExperimentalShadowCanBecomeReady: false,
     unsupportedChallengersCanBePromoted: false,
@@ -411,7 +412,7 @@ export function adaptMlbCurrentPredictorProbability(input: unknown): MlbMarketMo
     const reason = "PURE_MODEL_SELECTED_SIDE_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
-  if (Math.abs(reproduced.probability - evidence.probability) > PROBABILITY_PARITY_TOLERANCE) {
+  if (reproduced.probability !== evidence.probability) {
     const reason = "PURE_MODEL_PROBABILITY_PARITY_MISMATCH";
     return result(evidence, unavailable(evidence, reason), [reason]);
   }
