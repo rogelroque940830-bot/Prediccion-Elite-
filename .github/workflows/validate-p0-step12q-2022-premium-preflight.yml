@@ -25,26 +25,32 @@ jobs:
           cache: npm
       - name: Install dependencies reproducibly
         run: npm ci
-      - name: Validate frozen premium manifest before 2022 access
+      - name: Validate final frozen premium manifest before 2022 scoring
         run: |
           python - <<'PY'
           import json
           p='research/p0-step12q-premium-interactions-frozen.json'
           with open(p,encoding='utf-8') as f:m=json.load(f)
-          assert m['schemaVersion']=='courtedge-p0-step12q-premium-interactions-frozen.v1'
+          assert m['schemaVersion']=='courtedge-p0-step12q-premium-interactions-frozen.v2'
           assert m['primaryCandidateId']=='PREMIUM_FG_HOME_TRIPLE_A'
-          assert len(m['candidates'])==5
+          assert len(m['candidates'])==6
           assert all(len(c['atoms'])==3 for c in m['candidates'])
+          assert m['selectionHistory']['preflight2022UsedOutcomes'] is False
           assert m['interactionContract']['thresholdRetuningAllowedAfterFreeze'] is False
           assert m['interactionContract']['candidateSearchAllowedIn2022'] is False
           assert m['interactionContract']['betEliteAllowed'] is False
-          assert m['finalConfirmationPolicy']['season']==2022
-          assert m['finalConfirmationPolicy']['noThresholdChangesAfterSeeing2022'] is True
-          print('STEP12Q_PRE_2022_MANIFEST_FROZEN_OK')
+          p=m['finalConfirmationPolicy']
+          assert p['season']==2022 and p['familywiseCandidateCount']==6
+          assert p['minimumDecisiveRowsForPremium']==50
+          assert p['minimumDecisiveDatesForPremium']==35
+          assert p['minimumHitRateForPremium']==0.65
+          assert p['minimumLiftVsBaselineForPremium']==0.10
+          assert p['noThresholdChangesAfterSeeing2022'] is True
+          print('STEP12Q_FINAL_PRE_2022_MANIFEST_FROZEN_OK')
           PY
       - name: Syntax-check T-5 audit surface
         run: node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
-      - name: Audit virgin 2022 T-5 data availability only
+      - name: Audit 2022 T-5 data availability only
         run: >-
           node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
           --start 2022-03-01 --end 2022-10-06 --concurrency 6
