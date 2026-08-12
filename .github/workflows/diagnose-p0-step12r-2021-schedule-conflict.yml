@@ -1,0 +1,25 @@
+name: Diagnose P0 Step 12R 2021 Schedule Conflict
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12r-diagnose-2021-schedule-conflict.mjs'
+      - '.github/workflows/diagnose-p0-step12r-2021-schedule-conflict.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+      - name: Print identity-only schedule candidates for gamePk 633224
+        run: node scripts/p0-step12r-diagnose-2021-schedule-conflict.mjs
