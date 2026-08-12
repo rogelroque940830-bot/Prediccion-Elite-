@@ -1,0 +1,39 @@
+name: Validate P0 Step 12P Multi-Market Familywise Audit
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  validate-multimarket-familywise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check Step 12P
+        run: python -m py_compile scripts/p0-step12p-multimarket-familywise-audit.py
+      - name: Acquire frozen 2025 clean cohort
+        run: node --experimental-strip-types scripts/p0-step12i-acquire-2025-clean.ts --out-dir artifacts/p0-step12p
+      - name: Audit 2025 T-5 starter identities
+        run: python scripts/p0-step12h-t5-starter-identity-audit.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --lineup-history artifacts/p0-step12p/mlb-lineup-history-2025.json --starter-history artifacts/p0-step12p/mlb-starter-history-2025.json --out artifacts/p0-step12p/t5-audit.json
+      - name: Build clean T-5 feature table
+        run: python scripts/p0-step12i-clean-t5-feature-table.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --starter-history artifacts/p0-step12p/mlb-starter-history-2025.json --lineup-history artifacts/p0-step12p/mlb-lineup-history-2025.json --t5-audit artifacts/p0-step12p/t5-audit.json --out artifacts/p0-step12p/features.json
+      - name: Build multi-market target matrix
+        run: python scripts/p0-step12n-multimarket-target-matrix.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --features artifacts/p0-step12p/features.json --out artifacts/p0-step12p/matrix.json
+      - name: Freeze multi-market discovery family
+        run: python scripts/p0-step12o-multimarket-clean-discovery.py --matrix artifacts/p0-step12p/matrix.json --out artifacts/p0-step12p/discovery.json
+      - name: Audit multiplicity overlap and stability
+        run: python scripts/p0-step12p-multimarket-familywise-audit.py --matrix artifacts/p0-step12p/matrix.json --discovery artifacts/p0-step12p/discovery.json --out artifacts/p0-step12p/familywise.json
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-bet-elite-decision.test.ts
+          npx tsx --test server/mlb-shadow-mode.test.ts
+      - name: Upload Step 12P evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12p-multimarket-familywise
+          path: artifacts/p0-step12p/
