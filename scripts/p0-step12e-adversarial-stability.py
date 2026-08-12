@@ -7,7 +7,7 @@ import random
 import runpy
 from collections import Counter, defaultdict
 
-SCHEMA = 'courtedge-p0-step12e-adversarial-stability.v2'
+SCHEMA = 'courtedge-p0-step12e-adversarial-stability.v3'
 LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'
 EXPECTED_LEADER_RULE_KEY = '46a7cbb6ff5c2458'
 EXPECTED_LEADER_SIDE = 'HOME'
@@ -41,36 +41,45 @@ def lift(rows, baseline):
     return (rate - baseline) if rate is not None else None
 
 
-def grouped_stress(rows, key, baseline):
-    groups = defaultdict(list)
-    for row in rows:
-        groups[row[key]].append(row)
+def identity_stress(rows, left_key, right_key, baseline, identity_type):
+    identities = sorted({r[left_key] for r in rows} | {r[right_key] for r in rows})
     total = len(rows)
-    counts = Counter({str(k): len(v) for k, v in groups.items()})
-    ordered = sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))
+    occurrence_counts = Counter()
     leave_one = []
-    for value, cluster in ordered:
-        remaining = [r for r in rows if r[key] != value]
+    for identity in identities:
+        cluster = [r for r in rows if r[left_key] == identity or r[right_key] == identity]
+        occurrence_counts[str(identity)] = len(cluster)
+        remaining = [r for r in rows if r[left_key] != identity and r[right_key] != identity]
         leave_one.append({
-            'cluster': str(value),
+            'identity': str(identity),
             'removedRows': len(cluster),
             'removedShare': len(cluster) / total if total else 0,
             'remainingRows': len(remaining),
             'remainingHitRate': hit_rate(remaining),
             'remainingLiftVsBaseline': lift(remaining, baseline),
         })
-    top = ordered[0] if ordered else (None, [])
+    leave_one.sort(key=lambda x: (-x['removedRows'], x['identity']))
+    top = leave_one[0] if leave_one else None
     finite_lifts = [x['remainingLiftVsBaseline'] for x in leave_one if x['remainingLiftVsBaseline'] is not None]
+    # Every decisive row contributes one identity occurrence on each side, so the
+    # denominator below is exactly 2*N. This HHI is descriptive only; the gate is
+    # driven by the leave-one-identity-out lifts.
+    total_occurrences = sum(occurrence_counts.values())
+    hhi = sum((count / total_occurrences) ** 2 for count in occurrence_counts.values()) if total_occurrences else None
     return {
-        'clusterCount': len(groups),
-        'topCluster': str(top[0]) if top[0] is not None else None,
-        'topClusterRows': len(top[1]),
-        'topClusterShare': len(top[1]) / total if total else 0,
-        'effectiveClusterCountHhi': (1 / sum((c / total) ** 2 for c in counts.values())) if total else None,
-        'minimumLeaveOneClusterOutLiftVsBaseline': min(finite_lifts) if finite_lifts else None,
-        'maximumLeaveOneClusterOutLiftVsBaseline': max(finite_lifts) if finite_lifts else None,
-        'allLeaveOneClusterOutLiftsPositive': bool(finite_lifts) and min(finite_lifts) > 0,
-        'leaveOneClusterOut': leave_one,
+        'identityType': identity_type,
+        'rolesCollapsed': True,
+        'leftRoleField': left_key,
+        'rightRoleField': right_key,
+        'identityCount': len(identities),
+        'topIdentity': top['identity'] if top else None,
+        'topIdentityRows': top['removedRows'] if top else 0,
+        'topIdentityShare': top['removedShare'] if top else 0,
+        'effectiveIdentityCountHhi': (1 / hhi) if hhi and hhi > 0 else None,
+        'minimumLeaveOneIdentityOutLiftVsBaseline': min(finite_lifts) if finite_lifts else None,
+        'maximumLeaveOneIdentityOutLiftVsBaseline': max(finite_lifts) if finite_lifts else None,
+        'allLeaveOneIdentityOutLiftsPositive': bool(finite_lifts) and min(finite_lifts) > 0,
+        'leaveOneIdentityOut': leave_one,
     }
 
 
@@ -188,6 +197,8 @@ def main():
         sg = starters.get(row['gamePk'])
         if not game or not sg:
             raise SystemExit(f"STEP12E_JOIN_EVIDENCE_MISSING:{row['gamePk']}")
+        if int(sg['homeTeamId']) != int(game['homeTeamId']) or int(sg['awayTeamId']) != int(game['awayTeamId']):
+            raise SystemExit(f"STEP12E_TEAM_STARTER_IDENTITY_MISMATCH:{row['gamePk']}")
         decisive.append({
             'gamePk': row['gamePk'],
             'officialDate': row['officialDate'],
@@ -251,9 +262,9 @@ def main():
             'remainingLiftVsBaseline': lift(remaining, baseline),
         })
 
-    cluster_stress = {
-        key: grouped_stress(decisive, key, baseline)
-        for key in ('homeTeamId', 'awayTeamId', 'homeStarterId', 'awayStarterId')
+    identity_stress_results = {
+        'team': identity_stress(decisive, 'homeTeamId', 'awayTeamId', baseline, 'OFFICIAL_TEAM_ID_ACROSS_BOTH_ROLES'),
+        'pitcher': identity_stress(decisive, 'homeStarterId', 'awayStarterId', baseline, 'OFFICIAL_STARTER_ID_ACROSS_BOTH_ROLES'),
     }
     bootstrap = joint_date_cluster_bootstrap(decisive, eligible_baseline_decisive)
 
@@ -263,7 +274,7 @@ def main():
         'fullForwardLiftPositive': full_lift is not None and full_lift > 0,
         'everyLeaveOneMonthOutLiftPositive': bool(month_lifts) and min(month_lifts) > 0,
         'everyLeaveOneDateOutLiftPositive': bool(date_lifts) and min(date_lifts) > 0,
-        'everyLeaveOneClusterOutLiftPositive': all(v['allLeaveOneClusterOutLiftsPositive'] for v in cluster_stress.values()),
+        'everyLeaveOneIdentityOutLiftPositive': all(v['allLeaveOneIdentityOutLiftsPositive'] for v in identity_stress_results.values()),
         'jointDateClusterBootstrapPositiveLiftFractionAtLeast95Pct': bootstrap is not None and bootstrap['fractionReplicatesWithPositiveLift'] >= MIN_BOOTSTRAP_POSITIVE_LIFT_FRACTION,
     }
     stress_resilient = all(gates.values())
@@ -298,7 +309,7 @@ def main():
             'minimumLeaveOneMonthOutLiftVsBaseline': min(month_lifts) if month_lifts else None,
             'leaveOneDateOut': leave_one_date,
             'minimumLeaveOneDateOutLiftVsBaseline': min(date_lifts) if date_lifts else None,
-            'clusterConcentrationAndLeaveOneOut': cluster_stress,
+            'identityConcentrationAndLeaveOneOut': identity_stress_results,
             'jointEligibleCohortDateClusterBootstrap': bootstrap,
         },
         'stressGates': gates,
@@ -322,6 +333,7 @@ def main():
             'diagnosticOnly': True,
             'leaderDefinitionFrozenBeforeStressTesting': True,
             'leaderWasNotFrozenBefore12DResults': True,
+            'identitiesCollapsedAcrossHomeAwayRoles': True,
             'historicalPricesUsed': False,
             'historicalEvClaimProduced': False,
             'livePickFiltersChanged': False,
@@ -343,6 +355,8 @@ def main():
         'stressGates': report['stressGates'],
         'minimumLeaveOneMonthOutLiftVsBaseline': report['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
         'minimumLeaveOneDateOutLiftVsBaseline': report['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
+        'minimumLeaveOneTeamOutLiftVsBaseline': identity_stress_results['team']['minimumLeaveOneIdentityOutLiftVsBaseline'],
+        'minimumLeaveOnePitcherOutLiftVsBaseline': identity_stress_results['pitcher']['minimumLeaveOneIdentityOutLiftVsBaseline'],
         'bootstrapPositiveLiftFraction': bootstrap['fractionReplicatesWithPositiveLift'] if bootstrap else None,
         'bootstrapLiftPercentile025': bootstrap['liftPercentile025'] if bootstrap else None,
         'researchOnly': True,
