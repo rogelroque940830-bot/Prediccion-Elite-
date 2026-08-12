@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "courtedge-p0-step12m-frozen-survivors.v1",
+  "source": {
+    "cleanRediscoveryReportSha256": "5d863baddd6af19f731399d5076f2cda5f598a343c045a0164b6c030f542a2a9",
+    "overlapStabilityReportSha256": "66d45b5527b36471b86d9490bc552b43ab1b36e16b1d2ac7ee889a099066e7d2",
+    "sourceHeadSha": "83df81f5c0678f64a449f9764afb299f335ede85"
+  },
+  "policy": {
+    "thresholdRetuningAllowed": false,
+    "candidateSearchAllowed": false,
+    "allFourFamilyWiseSurvivorsCarriedForward": true,
+    "interpretAsThreeStructuralFamilies": true,
+    "betEliteProduced": false,
+    "livePickFiltersChanged": false
+  },
+  "rules": [
+    {
+      "hypothesisId": "FULL_GAME:02789d9148816c62",
+      "structuralFamily": "FG_STARTER_RUN_HR_STRICT",
+      "horizon": "FULL_GAME",
+      "side": "HOME",
+      "atoms": [
+        {"feature":"team_ra10_adv","operator":"GTE","threshold":1.2999999999999998},
+        {"feature":"starter_runrisk_adv","operator":"GTE","threshold":0.025528608314830684},
+        {"feature":"starter_hr_adv","operator":"GTE","threshold":0.006396103065164478}
+      ]
+    },
+    {
+      "hypothesisId": "FULL_GAME:80cf050cab873dcf",
+      "structuralFamily": "FG_STARTER_RUN_HR_BROAD",
+      "horizon": "FULL_GAME",
+      "side": "HOME",
+      "atoms": [
+        {"feature":"team_ra10_adv","operator":"GTE","threshold":1.2999999999999998},
+        {"feature":"starter_runrisk_adv","operator":"GTE","threshold":0.015382840768621358},
+        {"feature":"starter_hr_adv","operator":"GTE","threshold":0.006396103065164478}
+      ]
+    },
+    {
+      "hypothesisId": "FULL_GAME:dbbac26fc0456e84",
+      "structuralFamily": "FG_RD_RA_KBB",
+      "horizon": "FULL_GAME",
+      "side": "HOME",
+      "atoms": [
+        {"feature":"team_rd10_diff","operator":"GTE","threshold":1.2},
+        {"feature":"team_ra10_adv","operator":"GTE","threshold":2.0},
+        {"feature":"starter_kbb_adv","operator":"GTE","threshold":0.02481042579422841}
+      ]
+    },
+    {
+      "hypothesisId": "FIRST_5:de68896fb8545bb9",
+      "structuralFamily": "F5_RA_KBB_LINEUP_EXPOSURE",
+      "horizon": "FIRST_5",
+      "side": "HOME",
+      "atoms": [
+        {"feature":"team_ra10_adv","operator":"GTE","threshold":0.7999999999999998},
+        {"feature":"starter_kbb_adv","operator":"GTE","threshold":0.02481042579422841},
+        {"feature":"lineup_exposure_rate_adv","operator":"GTE","threshold":0.06336336336336329}
+      ]
+    }
+  ]
+}
