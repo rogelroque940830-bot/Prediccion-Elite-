@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, math, os, runpy
+import argparse, itertools, json, math, os, runpy
 from collections import defaultdict
 
 LEADER='FIRST_5:46a7cbb6ff5c2458'
@@ -14,6 +14,14 @@ def quantile(values, q):
     if lo==hi: return vals[lo]
     return vals[lo]*(hi-pos)+vals[hi]*(pos-lo)
 
+def subset_metrics(rows, atoms, atom_mask, baseline):
+    selected=[r for r in rows if all(atom_mask(r,a) for a in atoms)]
+    decisive=[r for r in selected if r['f5Result']!='PUSH']
+    hits=sum(1 for r in decisive if r['f5Result']=='HOME')
+    rate=hits/len(decisive) if decisive else None
+    return {'selectedRows':len(selected),'decisiveRows':len(decisive),'hits':hits,'losses':len(decisive)-hits,
+            'pushes':len(selected)-len(decisive),'hitRate':rate,'liftVsBaseline':rate-baseline if rate is not None else None}
+
 def season_summary(label, dataset, starter, lineup, leader, build_features, atom_mask):
     rows=build_features(dataset, starter, lineup)
     selected=[r for r in rows if all(atom_mask(r,a) for a in leader['atoms'])]
@@ -21,13 +29,21 @@ def season_summary(label, dataset, starter, lineup, leader, build_features, atom
     hits=sum(1 for r in decisive if r['f5Result']=='HOME')
     eligible=[r for r in rows if r['f5Result']!='PUSH']
     baseline=sum(1 for r in eligible if r['f5Result']=='HOME')/len(eligible)
-    months=defaultdict(lambda:{'selected':0,'decisive':0,'hits':0,'pushes':0})
-    for r in selected:
-        m=r['officialDate'][:7]; months[m]['selected']+=1
-        if r['f5Result']=='PUSH': months[m]['pushes']+=1
-        else:
-            months[m]['decisive']+=1
-            if r['f5Result']=='HOME': months[m]['hits']+=1
+    months=sorted({r['officialDate'][:7] for r in rows})
+    monthly=[]
+    for m in months:
+        month_rows=[r for r in rows if r['officialDate'][:7]==m]
+        month_sel=[r for r in selected if r['officialDate'][:7]==m]
+        month_dec=[r for r in month_sel if r['f5Result']!='PUSH']
+        month_elig=[r for r in month_rows if r['f5Result']!='PUSH']
+        mh=sum(1 for r in month_dec if r['f5Result']=='HOME')
+        mb=sum(1 for r in month_elig if r['f5Result']=='HOME')/len(month_elig) if month_elig else None
+        atom_pass={a['feature']:sum(1 for r in month_rows if atom_mask(r,a))/len(month_rows) if month_rows else None for a in leader['atoms']}
+        monthly.append({'month':m,'featureRows':len(month_rows),'selectedRows':len(month_sel),'decisiveRows':len(month_dec),
+                        'hits':mh,'losses':len(month_dec)-mh,'pushes':len(month_sel)-len(month_dec),
+                        'hitRate':mh/len(month_dec) if month_dec else None,'baselineHomeF5':mb,
+                        'liftVsBaseline':(mh/len(month_dec)-mb) if month_dec and mb is not None else None,
+                        'singleAtomPassPct':atom_pass})
     atoms=[]
     for a in leader['atoms']:
         vals=[r.get(a['feature']) for r in rows if isinstance(r.get(a['feature']),(int,float)) and math.isfinite(r.get(a['feature']))]
@@ -40,10 +56,11 @@ def season_summary(label, dataset, starter, lineup, leader, build_features, atom
             'selectedRowsQuantiles':{str(q):quantile(svals,q) for q in (0.1,0.25,0.5,0.7,0.8,0.9)},
             'selectedMedianExcessAboveThreshold':(quantile(svals,0.5)-a['threshold']) if svals else None,
         })
-    monthly=[]
-    for m in sorted(months):
-        x=months[m]
-        monthly.append({'month':m,**x,'hitRate':x['hits']/x['decisive'] if x['decisive'] else None})
+    interactions=[]
+    for k in range(1,len(leader['atoms'])+1):
+        for idxs in itertools.combinations(range(len(leader['atoms'])),k):
+            sub=[leader['atoms'][i] for i in idxs]
+            interactions.append({'features':[a['feature'] for a in sub],**subset_metrics(rows,sub,atom_mask,baseline)})
     return {
         'label':label,'featureRows':len(rows),'eligibleF5DecisiveRows':len(eligible),
         'selectedRows':len(selected),'selectionPct':len(selected)/len(rows) if rows else 0,
@@ -52,7 +69,7 @@ def season_summary(label, dataset, starter, lineup, leader, build_features, atom
         'liftVsBaseline':(hits/len(decisive)-baseline) if decisive else None,
         'selectedUniqueDates':len({r['officialDate'] for r in selected}),
         'decisiveUniqueDates':len({r['officialDate'] for r in decisive}),
-        'atoms':atoms,'monthly':monthly,
+        'atoms':atoms,'interactionDiagnostics':interactions,'monthlyDiagnostics':monthly,
     }
 
 def main():
@@ -74,8 +91,14 @@ def main():
     for x,y in zip(s24['atoms'],s26['atoms']):
         if x['feature']!=y['feature']: raise SystemExit('STEP12G_ATOM_ORDER_MISMATCH')
         atom_diffs.append({'feature':x['feature'],'singleAtomPassPctDiff2026Minus2024':y['singleAtomPassPct']-x['singleAtomPassPct']})
+    ix24={'+'.join(x['features']):x for x in s24['interactionDiagnostics']}; ix26={'+'.join(x['features']):x for x in s26['interactionDiagnostics']}
+    interaction_diffs=[]
+    for key in sorted(ix24):
+        x,y=ix24[key],ix26[key]
+        interaction_diffs.append({'features':x['features'],'lift2024':x['liftVsBaseline'],'lift2026':y['liftVsBaseline'],
+                                  'liftDiff2026Minus2024':(y['liftVsBaseline']-x['liftVsBaseline']) if x['liftVsBaseline'] is not None and y['liftVsBaseline'] is not None else None})
     report={
-        'schemaVersion':'courtedge-p0-step12g-regime-diagnostics.v1',
+        'schemaVersion':'courtedge-p0-step12g-regime-diagnostics.v2',
         'evidenceStatus':'DIAGNOSTIC_ONLY_NO_RETUNING_NO_PROMOTION',
         'leader':{'hypothesisKey':LEADER,'atoms':leader['atoms']},
         'season2024':s24,'season2026':s26,
@@ -84,10 +107,11 @@ def main():
             'hitRateDiff2026Minus2024':s26['hitRate']-s24['hitRate'],
             'liftDiff2026Minus2024':s26['liftVsBaseline']-s24['liftVsBaseline'],
             'baselineDiff2026Minus2024':s26['baselineHomeF5']-s24['baselineHomeF5'],
-            'atomPassRateDiffs':atom_diffs,
+            'atomPassRateDiffs':atom_diffs,'interactionLiftDiffs':interaction_diffs,
             'interpretation':{
                 'thresholdRetuningAllowed':False,'regimeExclusionAllowed':False,'monthDroppingAllowed':False,
-                'canProduceBetElite':False,'canChangeLiveFilters':False,'diagnosticDoesNotCreateIndependentEvidence':True
+                'canProduceBetElite':False,'canChangeLiveFilters':False,'diagnosticDoesNotCreateIndependentEvidence':True,
+                'calendarScaleDriftIsDiagnosticOnly':True,'interactionDriftIsDiagnosticOnly':True
             }
         }
     }
