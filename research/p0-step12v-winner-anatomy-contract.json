@@ -1,0 +1,91 @@
+{
+  "dataBoundary": {
+    "finalSeasonStatsMayBackfillEarlierGames": false,
+    "modelStateCarriesOnlyPriorOfficialDates": true,
+    "outcomeRole": "LABEL_ONLY_AFTER_PREDICTION",
+    "pregameSnapshot": "T5_PROBABLE_PITCHER_AND_PREGAME_LINEUP_HISTORY",
+    "sameDateOutcomeMayTrainSameDate": false,
+    "seasons": [
+      "2022_FULL_REGULAR",
+      "2023_FULL_REGULAR",
+      "2024_FULL_REGULAR",
+      "2025_FULL_REGULAR",
+      "2026_YTD_THROUGH_2026_08_10"
+    ],
+    "walkForwardOrder": "OFFICIAL_DATE_ASC_THEN_GAMEPK_ASC"
+  },
+  "evidenceStatus": "FROZEN_METHOD_BEFORE_WALK_FORWARD_RESULT_REVIEW",
+  "learningContract": {
+    "explanationDriversRequired": true,
+    "gameRoutingUsesOnlyPregameConfidence": true,
+    "marketSpecificModels": true,
+    "minimumRowsPerClass": 60,
+    "minimumTrainingDates": 30,
+    "minimumTrainingRows": 400,
+    "modelFamily": "SHRUNK_DIAGONAL_DISCRIMINANT_WITH_TRAINING_ONLY_DYNAMIC_FEATURE_SELECTION",
+    "outcomeCannotSelectMarketRetroactively": true,
+    "probabilityEstimateStatus": "RESEARCH_SCORE_TRANSFORM_NOT_YET_PRICE_AWARE_CALIBRATED",
+    "topKFeaturesPerTarget": 10,
+    "winnerPredictionForEveryScoreableFullGame": true
+  },
+  "marketScope": {
+    "first7Status": "DEFERRED_CURRENT_HISTORICAL_OUTCOME_DATASET_DOES_NOT_MATERIALIZE_FIRST_7",
+    "phaseA": {
+      "currentLiveAnalyticalPath": [
+        "ML",
+        "F5_ML",
+        "RUN_LINE",
+        "TOTAL",
+        "F5_TOTAL"
+      ],
+      "families": [
+        "MONEYLINE",
+        "RUN_LINE",
+        "TOTAL",
+        "TEAM_TOTAL"
+      ],
+      "periods": [
+        "FIRST_1",
+        "FIRST_3",
+        "FIRST_5",
+        "FULL_GAME"
+      ],
+      "researchOnlyExtensions": [
+        "F3_ML",
+        "F3_RUN_LINE",
+        "F5_RUN_LINE",
+        "F3_TOTAL",
+        "TEAM_TOTALS",
+        "NRFI_YRFI"
+      ],
+      "special": [
+        "NRFI",
+        "YRFI"
+      ]
+    },
+    "phaseB": {
+      "playerPropsRequired": true,
+      "reason": "Game-level Step12 features cannot validly model batter/pitcher props without player-specific pregame covariates and line contracts.",
+      "status": "DEFERRED_UNTIL_DEDICATED_PLAYER_PREGAME_HISTORY_TABLE_EXISTS"
+    }
+  },
+  "objective": "Learn game-by-game pregame winner and market-result structure instead of testing only hand-written Premium rules.",
+  "policy": {
+    "automaticBetPlacement": false,
+    "betEliteAllowed": false,
+    "favorableHistoricalResultRequiredForWorkflowSuccess": false,
+    "historicalEvOrRoiClaimAllowed": false,
+    "historicalPricesUsed": false,
+    "liveFilterChangeAllowed": false,
+    "stakeCalculated": false,
+    "step11cProspectiveValidationStillRequired": true
+  },
+  "researchQuestions": [
+    "Which pregame feature combinations distinguish the eventual full-game winner from the loser?",
+    "Are there multiple winner anatomies rather than one universal Premium rule?",
+    "Which market family expresses the strongest pregame separation for each game?",
+    "Do confidence bands correspond to increasing walk-forward accuracy?",
+    "Which features repeatedly drive correct versus incorrect predictions by market?"
+  ],
+  "schemaVersion": "courtedge-p0-step12v-winner-anatomy-contract.v1"
+}
