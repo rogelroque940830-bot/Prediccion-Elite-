@@ -23,7 +23,7 @@ jobs:
       - name: Build clean T-5 feature table
         run: python scripts/p0-step12i-clean-t5-feature-table.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --starter-history artifacts/p0-step12p/mlb-starter-history-2025.json --lineup-history artifacts/p0-step12p/mlb-lineup-history-2025.json --t5-audit artifacts/p0-step12p/t5-audit.json --out artifacts/p0-step12p/features.json
       - name: Build multi-market target matrix
-        run: python scripts/p0-step12n-multimarket-target-matrix.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --features artifacts/p0-step12p/features.json --out artifacts/p0-step12p/matrix.json
+        run: python scripts/p0-step12n-multimarket-target-matrix.py --dataset artifacts/p0-step12p/mlb-historical-dataset-2025.json --feature-table artifacts/p0-step12p/features.json --out artifacts/p0-step12p/matrix.json
       - name: Freeze multi-market discovery family
         run: python scripts/p0-step12o-multimarket-clean-discovery.py --matrix artifacts/p0-step12p/matrix.json --out artifacts/p0-step12p/discovery.json
       - name: Audit multiplicity overlap and stability
