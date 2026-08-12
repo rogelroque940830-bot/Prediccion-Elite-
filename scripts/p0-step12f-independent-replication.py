@@ -5,7 +5,7 @@ import math
 import os
 import runpy
 
-SCHEMA = 'courtedge-p0-step12f-independent-2024-replication.v1'
+SCHEMA = 'courtedge-p0-step12f-independent-2024-replication.v2'
 COHORT_SCHEMA = 'courtedge-p0-step12f-2024-replication-cohort.v1'
 CANDIDATE_SCHEMA = 'courtedge-p0-step12d-frozen-candidates.v1'
 LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'
@@ -24,6 +24,14 @@ MIN_DECISIVE_DATES = 30
 MAX_ABSOLUTE_2026_TO_2024_DRIFT = 0.15
 ALPHA = 0.05
 FROZEN_2026_FORWARD_HIT_RATE = 62 / 90
+
+KNOWN_METHODOLOGY_BLOCKERS = [
+    'TARGET_STARTER_IDENTITY_FROM_FINAL_BOXSCORE_NOT_T5_ASOF',
+    'INCOMPLETE_T5_LINEUPS_CAN_SILENTLY_CHANGE_ELIGIBLE_POPULATION',
+    '2024_AND_2026_CALENDAR_EXPOSURE_NOT_MATCHED_FOR_CUMULATIVE_LINEUP_FEATURE',
+    'PLUGIN_BINOMIAL_BASELINE_TREATS_SAME_COHORT_ESTIMATE_AS_FIXED',
+    'LEADER_DISCOVERY_ITSELF_USED_NON_T5_TARGET_STARTER_IDENTITY',
+]
 
 
 def load(path):
@@ -67,16 +75,8 @@ def main():
     frozen = cohort.get('frozenRange', {})
     if frozen.get('startDate') != FROZEN_START_DATE or frozen.get('endDate') != FROZEN_END_DATE:
         raise SystemExit('STEP12F_COHORT_RANGE_MUTATED')
-    policy = cohort.get('policy', {})
-    if policy.get('usedFor2025CandidateDiscovery') is not False or policy.get('usedFor2026LeaderSelection') is not False or policy.get('inspectedBeforeLeaderAndCriteriaFreeze') is not False:
-        raise SystemExit('STEP12F_COHORT_INDEPENDENCE_NOT_ASSERTED')
-    if any(policy.get(k) for k in (
-        'thresholdTuningAllowed', 'atomMutationAllowed', 'leaderReplacementAllowed', 'historicalPricesUsed',
-        'historicalEvClaimAllowed', 'livePickFiltersChanged', 'step11cCapturePopulationChanged',
-        'betEliteLabelProduced', 'automaticBetPlacement')):
-        raise SystemExit('STEP12F_RESEARCH_BOUNDARY_VIOLATION')
 
-    pilot = runpy.run_path('scripts/p0-step12-pocket-pilot.py', run_name='p0_step12f_feature_library')
+    pilot = runpy.run_path('scripts/p0-step12-pocket-pilot.py', run_name='p0_step12f_legacy_feature_library')
     build_features = pilot['build_features']
     atom_mask = pilot['atom_mask']
     binom_tail = pilot['binom_tail']
@@ -85,8 +85,6 @@ def main():
     if not rows:
         raise SystemExit('STEP12F_NO_FEATURE_ROWS')
     dates = sorted({r['officialDate'] for r in rows})
-    if dates[0] < FROZEN_START_DATE or dates[-1] > FROZEN_END_DATE:
-        raise SystemExit(f'STEP12F_FEATURE_DATE_ESCAPE:{dates[0]}:{dates[-1]}')
 
     selected = [r for r in rows if all(atom_mask(r, a) for a in leader['atoms'])]
     decisive = [r for r in selected if r['f5Result'] != 'PUSH']
@@ -94,44 +92,27 @@ def main():
     losses = len(decisive) - hits
     pushes = len(selected) - len(decisive)
     decisive_dates = len({r['officialDate'] for r in decisive})
-    selected_dates = len({r['officialDate'] for r in selected})
     rate = hits / len(decisive) if decisive else None
-
     eligible = [r for r in rows if r['f5Result'] != 'PUSH']
     baseline_hits = sum(1 for r in eligible if r['f5Result'] == EXPECTED_SIDE)
     baseline = baseline_hits / len(eligible) if eligible else None
     if baseline is None or rate is None:
         raise SystemExit('STEP12F_NO_DECISIVE_EVIDENCE')
-
     raw_p = binom_tail(hits, len(decisive), baseline)
     lo, hi = wilson(hits, len(decisive))
-    lift = rate - baseline
-    drift = abs(rate - FROZEN_2026_FORWARD_HIT_RATE)
-    sample_ok = len(decisive) >= MIN_DECISIVE_ROWS and decisive_dates >= MIN_DECISIVE_DATES
-    supported = sample_ok and lift > 0 and raw_p <= ALPHA and drift <= MAX_ABSOLUTE_2026_TO_2024_DRIFT
-
-    reasons = []
-    if len(decisive) < MIN_DECISIVE_ROWS: reasons.append('DECISIVE_ROWS_BELOW_80')
-    if decisive_dates < MIN_DECISIVE_DATES: reasons.append('DECISIVE_DATES_BELOW_30')
-    if lift <= 0: reasons.append('NO_POSITIVE_REPLICATION_LIFT')
-    if raw_p > ALPHA: reasons.append('EXACT_ONE_SIDED_P_GT_0_05')
-    if drift > MAX_ABSOLUTE_2026_TO_2024_DRIFT: reasons.append('ABSOLUTE_2026_TO_2024_DRIFT_GT_15PP')
-    if supported:
-        reasons = ['SAMPLE_AND_DATE_FLOORS_MET', 'POSITIVE_REPLICATION_LIFT', 'EXACT_ONE_SIDED_P_LE_0_05', 'DRIFT_WITHIN_15PP']
 
     report = {
         'schemaVersion': SCHEMA,
-        'evidenceStatus': 'STEP12F_INDEPENDENT_REPLICATION_RESEARCH_ONLY_NOT_BET_ELITE',
-        'design': {
-            'leaderFrozenFrom2025DiscoveryAnd2026ForwardWork': True,
-            'replicationSeason': 2024,
-            'replicationStartDate': FROZEN_START_DATE,
-            'replicationEndDate': FROZEN_END_DATE,
-            'replicationCohortInspectedBeforeFreeze': False,
-            'thresholdRetuningAllowed': False,
-            'leaderReplacementAllowed': False,
-            'singlePrespecifiedHypothesis': True,
-            'multiplicityCorrectionRequiredInside12F': False,
+        'evidenceStatus': 'STEP12F_LEGACY_DIAGNOSTIC_INVALID_FOR_CONFIRMATION',
+        'classification': 'METHODOLOGY_INVALID_PENDING_T5_REBUILD',
+        'knownMethodologyBlockers': KNOWN_METHODOLOGY_BLOCKERS,
+        'interpretationBoundary': {
+            'legacyMetricsMayBeUsedForDiagnosticsOnly': True,
+            'legacyMetricsMaySupportOrRejectHypothesis': False,
+            'freshIndependentConfirmationClaimAllowed': False,
+            'revised2024AnalysisWillRemainFreshConfirmation': False,
+            'reason2024NoLongerFreshAfterMethodInspection': '2024_OUTCOMES_AND_FAILURE_MODE_HAVE_NOW_BEEN_INSPECTED',
+            'newDiscoveryRequiredAfterT5StarterIdentityCorrection': True,
         },
         'leader': {
             'hypothesisKey': LEADER_HYPOTHESIS_KEY,
@@ -139,39 +120,32 @@ def main():
             'horizon': EXPECTED_HORIZON,
             'side': EXPECTED_SIDE,
             'atoms': leader['atoms'],
-            'frozen2026ForwardHitRate': FROZEN_2026_FORWARD_HIT_RATE,
         },
-        'supportCriteria': {
-            'minimumDecisiveRows': MIN_DECISIVE_ROWS,
-            'minimumDecisiveDates': MIN_DECISIVE_DATES,
-            'positiveLiftRequired': True,
-            'exactOneSidedBinomialPValueMax': ALPHA,
-            'maximumAbsolute2026To2024Drift': MAX_ABSOLUTE_2026_TO_2024_DRIFT,
-        },
-        'cohortSummary': {
+        'legacyDiagnosticMetrics': {
             'featureRows': len(rows),
             'featureDates': len(dates),
-            'firstFeatureDate': dates[0],
-            'lastFeatureDate': dates[-1],
-            'completeLineupCoveragePct': cohort.get('cohort', {}).get('completeLineupCoveragePct'),
-        },
-        'replication': {
             'selectedRows': len(selected),
             'decisiveRows': len(decisive),
             'decisiveUniqueDates': decisive_dates,
-            'selectedUniqueDates': selected_dates,
             'hits': hits,
             'losses': losses,
             'pushes': pushes,
             'decisiveHitRate': rate,
             'wilson95': {'lower': lo, 'upper': hi},
-            'selectedSideBaselineHitRate': baseline,
-            'liftVsBaseline': lift,
-            'exactOneSidedBinomialPValue': raw_p,
-            'absolute2026To2024HitRateDrift': drift,
+            'pluginSelectedSideBaselineHitRate': baseline,
+            'pluginLiftVsBaseline': rate - baseline,
+            'pluginOneSidedBinomialPValue': raw_p,
+            'absolute2026To2024HitRateDrift': abs(rate - FROZEN_2026_FORWARD_HIT_RATE),
+            'warning': 'THESE_METRICS_ARE_NOT_CONFIRMATORY_AFTER_P1_P2_METHODOLOGY_FINDINGS',
         },
-        'classification': 'INDEPENDENT_REPLICATION_SUPPORTED' if supported else ('PROMISING_NEEDS_MORE_SAMPLE' if not sample_ok and lift > 0 else 'INDEPENDENT_REPLICATION_NOT_SUPPORTED'),
-        'reasons': reasons,
+        'requiredRebuild': {
+            'targetStarterIdentityMustBeT5AsOf': True,
+            'completeT5LineupEligibilityMustBeExplicit': True,
+            'calendarExposureComparisonMustBeLikeForLike': True,
+            'selectedVsBaselineComparisonMustBeJointlyClustered': True,
+            'discoveryMustBeRerunFromCleanPregameFeatureTable': True,
+            'futureIndependentReplicationMustUseUninspectedCohort': True,
+        },
         'promotionBoundary': {
             'canProduceBetElite': False,
             'canChangeLiveFilters': False,
@@ -198,7 +172,8 @@ def main():
     print(json.dumps({
         'ok': True,
         'classification': report['classification'],
-        'replication': report['replication'],
+        'knownMethodologyBlockers': KNOWN_METHODOLOGY_BLOCKERS,
+        'legacyDiagnosticMetrics': report['legacyDiagnosticMetrics'],
         'researchOnly': True,
     }, indent=2))
 
