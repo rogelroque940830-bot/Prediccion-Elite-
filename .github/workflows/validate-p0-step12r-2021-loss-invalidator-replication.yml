@@ -117,10 +117,10 @@ jobs:
           assert t['schemaVersion']=='courtedge-p0-step12i-clean-t5-feature-table.v1'
           assert t['counts']['rows']>2400
           assert t['counts']['coreFeatureUsableRows']>0.90*t['counts']['rows']
-          assert t['policy']['outcomesUsedAsFeatures'] is False
+          assert t['featureContract']['outcomesUsedAsFeatures'] is False
           assert t['policy']['thresholdSearchPerformed'] is False
           assert t['policy']['betEliteProduced'] is False
-          print({'counts':t['counts'],'policy':t['policy']})
+          print({'counts':t['counts'],'policy':t['policy'],'featureContract':t['featureContract']})
           PY
 
       - name: Apply frozen VETO A B C and union to untouched 2021 outcomes
