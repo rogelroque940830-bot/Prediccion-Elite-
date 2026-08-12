@@ -1,0 +1,119 @@
+name: Validate P0 Step 12T 2024 ABC Cross-Signal Confirmation
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12-historical-elite-discovery
+    paths:
+      - 'research/p0-step12t-abc-cross-signals-frozen.json'
+      - 'scripts/p0-step12t-2024-abc-cross-confirmation.py'
+      - '.github/workflows/validate-p0-step12t-2024-abc-cross-confirmation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  confirm-frozen-cross-signals-2024:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Validate frozen Step 12T gate before 2024 outcome access
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12t-abc-cross-signals-frozen.json'))
+          assert m['schemaVersion']=='courtedge-p0-step12t-abc-cross-signals-frozen.v1'
+          s=m['selectionHistory']; p=m['external2024Policy']
+          assert s['externalJudge']=='2024_FULL_REGULAR_SEASON_CLEAN_T5_REBUILD'
+          assert s['legacy2024MethodologyUsableForConfirmation'] is False
+          assert s['legacy2024SportingOutcomesScoredForTheseCandidatesBeforeFreeze'] is False
+          assert s['thresholdRetuningAllowedAfterFreeze'] is False
+          assert s['candidateSearchAllowedIn2024'] is False
+          assert len(m['parentRules'])==3
+          assert len(m['frozenCandidates'])==6
+          assert p['candidateCountForMultiplicity']==6
+          assert p['noThresholdChangesAfterSeeing2024'] is True
+          assert p['newCandidateSearchIn2024Allowed'] is False
+          assert p['historicalPricesUsed'] is False
+          assert p['liveFilterChangeAllowed'] is False
+          assert p['betEliteAllowed'] is False
+          print('STEP12T_2024_GATE_LOCKED_BEFORE_OUTCOME_ACCESS')
+          PY
+      - name: Syntax-check clean T5 and frozen scorer chain
+        run: |
+          node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12n-multimarket-target-matrix.py scripts/p0-step12t-2024-abc-cross-confirmation.py
+      - name: Acquire clean external 2024 cohort
+        run: >-
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          --start 2024-03-01 --end 2024-10-01 --concurrency 6
+          --role EXTERNAL_ABC_CROSS_CONFIRMATION_2024
+          --out artifacts/p0-step12t/2024/cohort
+      - name: Audit 2024 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2024-03-01 --end 2024-10-01 --concurrency 6
+          --out artifacts/p0-step12t/2024/t5-audit
+      - name: Build clean 2024 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12t/2024/cohort/dataset.json
+          --starter-history artifacts/p0-step12t/2024/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12t/2024/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12t/2024/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12t/2024/feature-table.json
+      - name: Build 2024 multi-market target matrix
+        run: >-
+          python scripts/p0-step12n-multimarket-target-matrix.py
+          --feature-table artifacts/p0-step12t/2024/feature-table.json
+          --dataset artifacts/p0-step12t/2024/cohort/dataset.json
+          --out artifacts/p0-step12t/2024/target-matrix.json
+      - name: Score frozen A B C cross-signals without retuning
+        run: >-
+          python scripts/p0-step12t-2024-abc-cross-confirmation.py
+          --matrix artifacts/p0-step12t/2024/target-matrix.json
+          --manifest research/p0-step12t-abc-cross-signals-frozen.json
+          --out artifacts/p0-step12t/2024/confirmation-report.json
+      - name: Validate evidence boundary and clean 2024 execution
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('artifacts/p0-step12t/2024/t5-audit/t5-starter-identity-audit.json'))
+          f=json.load(open('artifacts/p0-step12t/2024/feature-table.json'))
+          r=json.load(open('artifacts/p0-step12t/2024/confirmation-report.json'))
+          assert a['counts']['bothProbableCoveragePct']>=95
+          assert a['counts']['completeLineupAndBothProbablesPct']>=95
+          assert f['counts']['coreFeatureUsableRows']>0.90*f['counts']['rows']
+          assert r['schemaVersion']=='courtedge-p0-step12t-2024-external-confirmation.v1'
+          assert len(r['parents'])==3
+          assert len(r['candidates'])==6
+          assert len(r['portfolios'])==2
+          assert r['policy']['thresholdRetuningPerformed'] is False
+          assert r['policy']['candidateSearchPerformedIn2024'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print({'coverage':a['counts'],'parents':r['parents'],'candidates':r['candidates'],'portfolios':r['portfolios']})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12T external 2024 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12t-2024-abc-cross-confirmation
+          path: artifacts/p0-step12t/
+          if-no-files-found: error
+          retention-days: 30
