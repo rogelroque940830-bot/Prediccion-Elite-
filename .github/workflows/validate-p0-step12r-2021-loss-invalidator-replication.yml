@@ -1,0 +1,183 @@
+name: Validate P0 Step 12R 2021 Loss Invalidator Replication
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'research/p0-step12r-loss-invalidators-frozen.json'
+      - 'scripts/p0-step12r-acquire-2021-clean-cohort.mjs'
+      - 'scripts/p0-step12r-2021-t5-audit.mjs'
+      - 'scripts/p0-step12r-loss-invalidator-replication.py'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - '.github/workflows/validate-p0-step12r-2021-loss-invalidator-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replicate-frozen-invalidators-2021:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Validate frozen hypotheses before 2021 outcome acquisition
+        run: |
+          python - <<'PY'
+          import json
+          with open('research/p0-step12r-loss-invalidators-frozen.json',encoding='utf-8') as f:m=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12r-loss-invalidators-frozen.v1'
+          assert set(m['baseRules'])=={'strict','broad'}
+          assert len(m['invalidatorHypotheses'])==3
+          assert [x['id'] for x in m['invalidatorHypotheses']]==[
+            'VETO_A_ROTATION_AND_BULLPEN_CONTEXT',
+            'VETO_B_RECENT_RUN_PREVENTION_AND_BORDERLINE_KBB',
+            'VETO_C_WEAK_RUN_DIFFERENTIAL_AND_LOW_STARTER_HISTORY'
+          ]
+          p=m['externalReplicationPolicy']
+          assert p['reservedSeason']==2021
+          assert p['thresholdRetuningAfterFreezeAllowed'] is False
+          assert p['newInvalidatorSearchIn2021Allowed'] is False
+          assert p['evaluateStrictAndBroad'] is True
+          assert p['evaluateEachInvalidatorSeparately'] is True
+          assert p['evaluateFrozenUnion'] is True
+          assert p['historicalPricesUsed'] is False
+          assert p['historicalEvClaimAllowed'] is False
+          assert p['liveFilterChangeAllowed'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['prospective11cValidationStillRequired'] is True
+          print('STEP12R_2021_FROZEN_HYPOTHESES_OK')
+          PY
+
+      - name: Syntax and adversarial normalizer tests
+        run: |
+          node --check scripts/p0-step12r-acquire-2021-clean-cohort.mjs
+          node --check scripts/p0-step12r-2021-t5-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12r-loss-invalidator-replication.py
+          node --import tsx scripts/p0-step12r-acquire-2021-clean-cohort.mjs --self-test
+          node --import tsx scripts/p0-step12r-2021-t5-audit.mjs --self-test
+
+      - name: Acquire clean frozen 2021 cohort with scoped schedule normalization
+        run: >-
+          node --import tsx scripts/p0-step12r-acquire-2021-clean-cohort.mjs
+          --start 2021-03-01 --end 2021-10-04 --concurrency 6
+          --role EXTERNAL_INVALIDATOR_REPLICATION_2021_FROZEN
+          --out artifacts/p0-step12r/2021/cohort
+
+      - name: Audit 2021 T-5 starter identities independently
+        run: >-
+          node --import tsx scripts/p0-step12r-2021-t5-audit.mjs
+          --start 2021-03-01 --end 2021-10-04 --concurrency 6
+          --out artifacts/p0-step12r/2021/t5-audit
+
+      - name: Cross-check acquisition against independent preflight semantics
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('artifacts/p0-step12r/2021/cohort/cohort-manifest.json'))
+          a=json.load(open('artifacts/p0-step12r/2021/t5-audit/t5-starter-identity-audit.json'))
+          cn=c['step12rScheduleNormalization']; an=a['step12rScheduleNormalization']
+          expected='REMOVE_ONLY_EXPLICITLY_OBSOLETE_ROWS_WHEN_REMAINING_ROWS_FORM_EXACT_SUSPENDED_ORIGINAL_RESUMED_PAIR'
+          assert c['schemaVersion']=='courtedge-p0-step12r-2021-clean-cohort.v1'
+          assert c['temporalRole']=='EXTERNAL_INVALIDATOR_REPLICATION_2021_FROZEN'
+          assert c['frozenRange']=={'startDate':'2021-03-01','endDate':'2021-10-04'}
+          assert cn['policy']==an['policy']==expected
+          assert cn['ambiguousFallbackAllowed'] is False and an['ambiguousFallbackAllowed'] is False
+          assert cn['normalizedGamePks']==an['normalizedGamePks']==[633224]
+          assert cn['removedRows']==an['removedRows']==1
+          assert c['cohort']['regularSeasonFinalGames']>2400
+          assert c['cohort']['completeLineupCoveragePct']>=95
+          assert a['counts']['bothProbableCoveragePct']>=95
+          assert a['counts']['completeLineupAndBothProbablesPct']>=95
+          print({'cohort':c['cohort'],'t5':a['counts'],'normalization':cn})
+          PY
+
+      - name: Build clean 2021 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12r/2021/cohort/dataset.json
+          --starter-history artifacts/p0-step12r/2021/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12r/2021/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12r/2021/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12r/2021/clean-t5-feature-table.json
+
+      - name: Validate clean feature table before frozen scoring
+        run: |
+          python - <<'PY'
+          import json
+          t=json.load(open('artifacts/p0-step12r/2021/clean-t5-feature-table.json'))
+          assert t['schemaVersion']=='courtedge-p0-step12i-clean-t5-feature-table.v1'
+          assert t['counts']['rows']>2400
+          assert t['counts']['coreFeatureUsableRows']>0.90*t['counts']['rows']
+          assert t['policy']['outcomesUsedAsFeatures'] is False
+          assert t['policy']['thresholdSearchPerformed'] is False
+          assert t['policy']['betEliteProduced'] is False
+          print({'counts':t['counts'],'policy':t['policy']})
+          PY
+
+      - name: Apply frozen VETO A B C and union to untouched 2021 outcomes
+        run: >-
+          python scripts/p0-step12r-loss-invalidator-replication.py
+          --feature-table artifacts/p0-step12r/2021/clean-t5-feature-table.json
+          --starter-history artifacts/p0-step12r/2021/cohort/starting-pitcher-history.json
+          --dataset artifacts/p0-step12r/2021/cohort/dataset.json
+          --manifest research/p0-step12r-loss-invalidators-frozen.json
+          --season 2021
+          --out artifacts/p0-step12r/2021/loss-invalidator-replication.json
+
+      - name: Validate external replication contract without outcome cherry-picking
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12r/2021/loss-invalidator-replication.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12r-loss-invalidator-replication.v1'
+          assert r['season']==2021
+          assert r['evidenceStatus']=='EXTERNAL_INVALIDATOR_REPLICATION_RESEARCH_ONLY_NO_LIVE_FILTER'
+          assert set(r['results'])=={'strict','broad'}
+          expected={
+            'VETO_A_ROTATION_AND_BULLPEN_CONTEXT',
+            'VETO_B_RECENT_RUN_PREVENTION_AND_BORDERLINE_KBB',
+            'VETO_C_WEAK_RUN_DIFFERENTIAL_AND_LOW_STARTER_HISTORY'
+          }
+          for name,x in r['results'].items():
+            assert {v['id'] for v in x['invalidators']}==expected
+            b=x['base']; u=x['unionRiskPocket']; k=x['retainedOutsideAllInvalidators']
+            assert b['rows']==u['rows']+k['rows']
+            assert b['wins']==u['wins']+k['wins']
+            assert b['losses']==u['losses']+k['losses']
+            assert x['lossesCapturedByUnion']==u['losses']
+            assert x['winsRemovedByUnion']==u['wins']
+            print(name,{'base':b,'unionRisk':u,'retained':k,'retainedVolumePct':x['retainedVolumePct'],'retainedLiftVsBase':x['retainedLiftVsBase'],'invalidators':x['invalidators']})
+          p=r['policy']
+          assert p['thresholdRetuningPerformed'] is False
+          assert p['newInvalidatorSearchPerformed'] is False
+          assert p['historicalPricesUsed'] is False
+          assert p['historicalEvClaimProduced'] is False
+          assert p['liveFilterChanged'] is False
+          assert p['betEliteProduced'] is False
+          assert p['prospective11cValidationStillRequired'] is True
+          print('STEP12R_2021_EXTERNAL_REPLICATION_CONTRACT_OK')
+          PY
+
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+
+      - name: Upload Step 12R 2021 external evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12r-2021-loss-invalidator-replication
+          path: artifacts/p0-step12r/2021/
+          if-no-files-found: error
+          retention-days: 30
