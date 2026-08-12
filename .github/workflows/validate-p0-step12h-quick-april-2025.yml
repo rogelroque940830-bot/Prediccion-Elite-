@@ -1,0 +1,43 @@
+name: Validate P0 Step 12H Quick April 2025
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - '.github/workflows/validate-p0-step12h-quick-april-2025.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quick-audit-april-2025:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - name: Audit April 2025 T-5 starter identity
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2025-04-01 --end 2025-04-30 --concurrency 6
+          --out artifacts/p0-step12h-quick/april-2025
+      - name: Print decisive coverage
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12h-quick/april-2025/t5-starter-identity-audit.json'
+          with open(p,encoding='utf-8') as f:r=json.load(f)
+          print(json.dumps({'counts':r['counts'],'mismatch_examples':r['mismatches'][:10]},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12h-quick-april-2025
+          path: artifacts/p0-step12h-quick/
+          retention-days: 7
