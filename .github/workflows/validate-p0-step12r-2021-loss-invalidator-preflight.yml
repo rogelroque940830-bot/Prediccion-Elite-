@@ -6,7 +6,7 @@ on:
       - integration/p0-staging-secure
     paths:
       - 'research/p0-step12r-loss-invalidators-frozen.json'
-      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - 'scripts/p0-step12r-2021-t5-audit.mjs'
       - '.github/workflows/validate-p0-step12r-2021-loss-invalidator-preflight.yml'
   workflow_dispatch:
 
@@ -41,11 +41,13 @@ jobs:
           assert m['externalReplicationPolicy']['betEliteAllowed'] is False
           print('STEP12R_2021_INVALIDATOR_FREEZE_OK')
           PY
-      - name: Syntax-check T-5 audit surface
-        run: node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+      - name: Syntax and adversarial self-test of 2021 schedule normalizer
+        run: |
+          node --check scripts/p0-step12r-2021-t5-audit.mjs
+          node --import tsx scripts/p0-step12r-2021-t5-audit.mjs --self-test
       - name: Audit untouched 2021 T-5 data availability only
         run: >-
-          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          node --import tsx scripts/p0-step12r-2021-t5-audit.mjs
           --start 2021-03-01 --end 2021-10-04 --concurrency 6
           --out artifacts/p0-step12r/2021-preflight
       - name: Validate 2021 preflight without invalidator scoring
@@ -61,7 +63,12 @@ jobs:
           assert r['counts']['validPregameSnapshots']>0
           assert r['counts']['bothProbableCoveragePct']>=95.0
           assert r['counts']['completeLineupAndBothProbablesPct']>=95.0
-          print({'ok':True,'counts':r['counts'],'invalidatorOutcomesEvaluated':False})
+          n=r['step12rScheduleNormalization']
+          assert n['ambiguousFallbackAllowed'] is False
+          assert n['policy']=='REMOVE_ONLY_EXPLICITLY_OBSOLETE_ROWS_WHEN_REMAINING_ROWS_FORM_EXACT_SUSPENDED_ORIGINAL_RESUMED_PAIR'
+          assert 633224 in n['normalizedGamePks']
+          assert n['removedRows']>=1
+          print({'ok':True,'counts':r['counts'],'normalization':n,'invalidatorOutcomesEvaluated':False})
           PY
       - name: Preserve live regressions
         run: |
