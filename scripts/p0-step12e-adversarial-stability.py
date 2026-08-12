@@ -7,7 +7,7 @@ import random
 import runpy
 from collections import Counter, defaultdict
 
-SCHEMA = 'courtedge-p0-step12e-adversarial-stability.v1'
+SCHEMA = 'courtedge-p0-step12e-adversarial-stability.v2'
 LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'
 EXPECTED_LEADER_RULE_KEY = '46a7cbb6ff5c2458'
 EXPECTED_LEADER_SIDE = 'HOME'
@@ -19,7 +19,7 @@ EXPECTED_ATOMS = (
 )
 BOOTSTRAP_SEED = 12051205
 BOOTSTRAP_REPLICATES = 10000
-MIN_BOOTSTRAP_POSITIVE_LIFT_PROBABILITY = 0.95
+MIN_BOOTSTRAP_POSITIVE_LIFT_FRACTION = 0.95
 
 
 def load(path):
@@ -74,41 +74,60 @@ def grouped_stress(rows, key, baseline):
     }
 
 
-def date_cluster_bootstrap(rows, baseline):
-    by_date = defaultdict(list)
-    for row in rows:
-        by_date[row['officialDate']].append(row)
-    dates = sorted(by_date)
+def joint_date_cluster_bootstrap(selected_rows, eligible_baseline_rows):
+    selected_by_date = defaultdict(list)
+    baseline_by_date = defaultdict(list)
+    for row in selected_rows:
+        selected_by_date[row['officialDate']].append(row)
+    for row in eligible_baseline_rows:
+        baseline_by_date[row['officialDate']].append(row)
+    dates = sorted(baseline_by_date)
     if not dates:
         return None
+    if any(row['officialDate'] not in baseline_by_date for row in selected_rows):
+        raise SystemExit('STEP12E_SELECTED_DATE_NOT_IN_BASELINE_COHORT')
+
     rng = random.Random(BOOTSTRAP_SEED)
     positive = 0
     lifts = []
+    valid = 0
     for _ in range(BOOTSTRAP_REPLICATES):
-        sampled = [rng.choice(dates) for _ in dates]
-        replicate = []
-        for d in sampled:
-            replicate.extend(by_date[d])
-        value = lift(replicate, baseline)
-        if value is None:
+        sampled_dates = [rng.choice(dates) for _ in dates]
+        selected_replicate = []
+        baseline_replicate = []
+        for date in sampled_dates:
+            selected_replicate.extend(selected_by_date.get(date, []))
+            baseline_replicate.extend(baseline_by_date[date])
+        selected_rate = hit_rate(selected_replicate)
+        baseline_rate = hit_rate(baseline_replicate)
+        if selected_rate is None or baseline_rate is None:
             continue
+        value = selected_rate - baseline_rate
         lifts.append(value)
+        valid += 1
         if value > 0:
             positive += 1
+
     ordered = sorted(lifts)
     def empirical(q):
         if not ordered:
             return None
         idx = min(len(ordered) - 1, max(0, int(math.floor(q * (len(ordered) - 1)))))
         return ordered[idx]
+
     return {
+        'method': 'JOINT_ELIGIBLE_COHORT_DATE_CLUSTER_BOOTSTRAP',
         'seed': BOOTSTRAP_SEED,
-        'replicates': len(lifts),
-        'dateClusters': len(dates),
-        'probabilityLiftGreaterThanZero': positive / len(lifts) if lifts else None,
+        'requestedReplicates': BOOTSTRAP_REPLICATES,
+        'validReplicates': valid,
+        'eligibleDateClusters': len(dates),
+        'selectedDecisiveDateClusters': len(selected_by_date),
+        'fractionReplicatesWithPositiveLift': positive / valid if valid else None,
         'liftPercentile025': empirical(0.025),
         'liftMedian': empirical(0.5),
         'liftPercentile975': empirical(0.975),
+        'baselineRecomputedInsideEveryReplicate': True,
+        'inferentialProbabilityClaimAllowed': False,
     }
 
 
@@ -180,6 +199,16 @@ def main():
             'awayStarterId': int(sg['awayStarter']['pitcherId']),
         })
 
+    eligible_baseline_decisive = [
+        {
+            'gamePk': row['gamePk'],
+            'officialDate': row['officialDate'],
+            'hit': row['f5Result'] == EXPECTED_LEADER_SIDE,
+        }
+        for row in rows
+        if row['f5Result'] != 'PUSH'
+    ]
+
     expected = forward_leader['forward2026']
     hits = sum(1 for r in decisive if r['hit'])
     losses = len(decisive) - hits
@@ -187,6 +216,10 @@ def main():
         raise SystemExit('STEP12E_12D_METRIC_PARITY_FAILURE')
 
     baseline = float(forward_leader['selectedSideBaselineHitRate'])
+    recomputed_baseline = hit_rate(eligible_baseline_decisive)
+    if recomputed_baseline is None or abs(recomputed_baseline - baseline) > 1e-15:
+        raise SystemExit(f'STEP12E_BASELINE_PARITY_FAILURE:{recomputed_baseline}:{baseline}')
+
     full_rate = hit_rate(decisive)
     full_lift = lift(decisive, baseline)
 
@@ -222,7 +255,7 @@ def main():
         key: grouped_stress(decisive, key, baseline)
         for key in ('homeTeamId', 'awayTeamId', 'homeStarterId', 'awayStarterId')
     }
-    bootstrap = date_cluster_bootstrap(decisive, baseline)
+    bootstrap = joint_date_cluster_bootstrap(decisive, eligible_baseline_decisive)
 
     month_lifts = [x['remainingLiftVsBaseline'] for x in leave_one_month if x['remainingLiftVsBaseline'] is not None]
     date_lifts = [x['remainingLiftVsBaseline'] for x in leave_one_date if x['remainingLiftVsBaseline'] is not None]
@@ -231,7 +264,7 @@ def main():
         'everyLeaveOneMonthOutLiftPositive': bool(month_lifts) and min(month_lifts) > 0,
         'everyLeaveOneDateOutLiftPositive': bool(date_lifts) and min(date_lifts) > 0,
         'everyLeaveOneClusterOutLiftPositive': all(v['allLeaveOneClusterOutLiftsPositive'] for v in cluster_stress.values()),
-        'dateClusterBootstrapPositiveLiftProbabilityAtLeast95Pct': bootstrap is not None and bootstrap['probabilityLiftGreaterThanZero'] >= MIN_BOOTSTRAP_POSITIVE_LIFT_PROBABILITY,
+        'jointDateClusterBootstrapPositiveLiftFractionAtLeast95Pct': bootstrap is not None and bootstrap['fractionReplicatesWithPositiveLift'] >= MIN_BOOTSTRAP_POSITIVE_LIFT_FRACTION,
     }
     stress_resilient = all(gates.values())
 
@@ -257,6 +290,7 @@ def main():
             'pushes': pushes,
             'decisiveHitRate': full_rate,
             'selectedSideBaselineHitRate': baseline,
+            'eligibleBaselineDecisiveRows': len(eligible_baseline_decisive),
             'liftVsBaseline': full_lift,
         },
         'adversarialDiagnostics': {
@@ -265,10 +299,17 @@ def main():
             'leaveOneDateOut': leave_one_date,
             'minimumLeaveOneDateOutLiftVsBaseline': min(date_lifts) if date_lifts else None,
             'clusterConcentrationAndLeaveOneOut': cluster_stress,
-            'dateClusterBootstrap': bootstrap,
+            'jointEligibleCohortDateClusterBootstrap': bootstrap,
         },
         'stressGates': gates,
         'classification': 'PROMISING_STRESS_RESILIENT_NOT_STATISTICALLY_SUPPORTED' if stress_resilient else 'PROMISING_BUT_FRAGILE_NOT_STATISTICALLY_SUPPORTED',
+        'interpretationBoundary': {
+            'leaderWasSelectedAfterInspecting12DResults': True,
+            'stressTestsReuseSame2026CohortAs12D': True,
+            'stressClassificationIsIndependentReplicationEvidence': False,
+            'bootstrapFractionIsPosteriorOrFrequentistProbabilityOfTrueEdge': False,
+            'stressClassificationCanOnlyDescribeOrDegradeRobustness': True,
+        },
         'promotionBoundary': {
             'canUpgrade12DStatisticalStatus': False,
             'canProduceBetElite': False,
@@ -280,6 +321,7 @@ def main():
         'policy': {
             'diagnosticOnly': True,
             'leaderDefinitionFrozenBeforeStressTesting': True,
+            'leaderWasNotFrozenBefore12DResults': True,
             'historicalPricesUsed': False,
             'historicalEvClaimProduced': False,
             'livePickFiltersChanged': False,
@@ -301,7 +343,8 @@ def main():
         'stressGates': report['stressGates'],
         'minimumLeaveOneMonthOutLiftVsBaseline': report['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
         'minimumLeaveOneDateOutLiftVsBaseline': report['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
-        'bootstrapPositiveLiftProbability': bootstrap['probabilityLiftGreaterThanZero'] if bootstrap else None,
+        'bootstrapPositiveLiftFraction': bootstrap['fractionReplicatesWithPositiveLift'] if bootstrap else None,
+        'bootstrapLiftPercentile025': bootstrap['liftPercentile025'] if bootstrap else None,
         'researchOnly': True,
     }, indent=2))
 
