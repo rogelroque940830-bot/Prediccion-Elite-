@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "courtedge-p0-step12s-risk-candidate-frozen.v1",
+  "evidenceStatus": "DEVELOPMENT_ONLY_FROZEN_FOR_PROSPECTIVE_SHADOW_VALIDATION",
+  "sourceHeadSha": "cf5a1ca2d39e3d5bb26d0eaf84836ae3aec7d8e2",
+  "candidate": {
+    "id": "RISK_S1_WEAK_RUN_PREVENTION_AND_BORDERLINE_KBB",
+    "scope": "ONLY_WHEN_PREMIUM_FG_HOME_TRIPLE_A_OR_BROAD_ALREADY_TRUE",
+    "all": [
+      {"feature": "team_ra10_adv", "operator": "LTE", "threshold": 0.8},
+      {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": 0.05}
+    ],
+    "interpretation": "Within an already-qualified Premium home side, the recent run-prevention advantage is not strong enough while the starter K/BB advantage is only borderline.",
+    "liveAction": "SHADOW_FLAG_ONLY_DO_NOT_SKIP_DO_NOT_CHANGE_STAKE"
+  },
+  "developmentContract": {
+    "seasons": [2022, 2023, 2025, "2026_YTD"],
+    "calendarMatchedThroughMonthDay": "08-10",
+    "searchFeatures": [
+      "team_rd10_diff", "team_win10_diff", "team_rs10_diff", "team_ra10_adv",
+      "starter_runrisk_adv", "starter_kbb_adv", "starter_hr_adv",
+      "lineup_exposure_rate_adv", "lineup_continuity_rate_adv"
+    ],
+    "exploratoryTailQuantiles": [0.15, 0.25, 0.35, 0.65, 0.75, 0.85],
+    "maxAtomsPerRiskPocket": 2,
+    "candidateDescriptorsPerPremiumVariant": 1350,
+    "multiplicityAdjustedConfirmationClaimAllowed": false,
+    "reason": "The large development search makes this a shadow candidate, not a certified veto."
+  },
+  "policy": {
+    "use2021ForSearchOrRetuning": false,
+    "reason2021Excluded": "2021 was already opened as the Step 12R external judge and cannot be reused to rescue or retune a new veto.",
+    "use2024AsConfirmation": false,
+    "reason2024Excluded": "Legacy 2024 Step 12F methodology was invalidated pending a clean T-5 rebuild.",
+    "thresholdRetuningAfterFreezeAllowed": false,
+    "newRiskConditionSearchDuringProspectiveGateAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteProduced": false,
+    "prospective11cValidationRequired": true
+  },
+  "prospectiveGate": {
+    "primaryPopulation": "PREMIUM_FG_HOME_TRIPLE_A_STRICT",
+    "secondaryPopulation": "PREMIUM_FG_HOME_TRIPLE_A_BROAD",
+    "minimumRiskPocketDecisiveRows": 20,
+    "minimumRetainedDecisiveRows": 80,
+    "minimumDistinctCalendarMonths": 2,
+    "minimumRetainedLift": 0.02,
+    "minimumRiskVsRetainedHitRateGap": 0.10,
+    "minimumLossCaptureMinusWinSacrifice": 0.08,
+    "requirePositiveLeaveOneMonthOutRetainedLift": true,
+    "promotionIfGatePasses": "ELIGIBLE_FOR_SEPARATE_REVIEW_ONLY_NOT_AUTOMATIC_LIVE_VETO"
+  }
+}
