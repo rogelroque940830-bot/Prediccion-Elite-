@@ -46,7 +46,7 @@ jobs:
           node --import tsx scripts/p0-step12d-acquire-forward-cohort.mjs
           --start 2026-03-01 --end 2026-08-10 --concurrency 6
           --out artifacts/p0-step12g/cohort-2026
-      - name: Compare feature distributions and outcome conversion without retuning
+      - name: Compare feature distributions interactions and outcome conversion without retuning
         run: >-
           python scripts/p0-step12g-regime-diagnostics.py
           --candidates artifacts/p0-step12g/frozen-candidates.json
@@ -62,9 +62,12 @@ jobs:
           python - <<'PY'
           import json
           with open('artifacts/p0-step12g/regime-diagnostics.json',encoding='utf-8') as f:r=json.load(f)
-          assert r['schemaVersion']=='courtedge-p0-step12g-regime-diagnostics.v1'
+          assert r['schemaVersion']=='courtedge-p0-step12g-regime-diagnostics.v2'
           assert r['evidenceStatus']=='DIAGNOSTIC_ONLY_NO_RETUNING_NO_PROMOTION'
           assert r['leader']['hypothesisKey']=='FIRST_5:46a7cbb6ff5c2458'
+          assert len(r['season2024']['interactionDiagnostics'])==7
+          assert len(r['season2026']['interactionDiagnostics'])==7
+          assert len(r['comparison']['interactionLiftDiffs'])==7
           b=r['comparison']['interpretation']
           assert b['thresholdRetuningAllowed'] is False
           assert b['regimeExclusionAllowed'] is False
@@ -72,6 +75,8 @@ jobs:
           assert b['canProduceBetElite'] is False
           assert b['canChangeLiveFilters'] is False
           assert b['diagnosticDoesNotCreateIndependentEvidence'] is True
+          assert b['calendarScaleDriftIsDiagnosticOnly'] is True
+          assert b['interactionDriftIsDiagnosticOnly'] is True
           print(json.dumps({'comparison':r['comparison'],'season2024':r['season2024'],'season2026':r['season2026']},indent=2))
           PY
       - name: Preserve live regressions
