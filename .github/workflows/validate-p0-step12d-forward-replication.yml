@@ -65,6 +65,33 @@ jobs:
           --concurrency 6
           --out artifacts/p0-step12d/cohort-2026-forward
 
+      - name: Validate official-final cohort identity before pocket evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          root='artifacts/p0-step12d/cohort-2026-forward'
+          with open(f'{root}/cohort-manifest.json', encoding='utf-8') as f: m=json.load(f)
+          with open(f'{root}/pregame-lineup-history.json', encoding='utf-8') as f: l=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12d-forward-cohort.v1'
+          assert m['cohort']['regularSeasonFinalGames']==m['cohort']['starterGames']==m['cohort']['lineupSnapshotsFetched']
+          assert l['schemaVersion']=='courtedge-p0-step12d-cohort-pregame-lineups.v1'
+          assert l['cohortDefinition']=='OFFICIAL_FINAL_GAME_PK_INTERSECTION'
+          assert l['officialFinalGames']==l['snapshotsFetched']==m['cohort']['regularSeasonFinalGames']
+          assert m['policy']['lineupScheduleExtrasAreExcludedByOfficialFinalGamePk'] is True
+          assert m['policy']['officialFinalLineupSnapshotCoverageMustBeComplete'] is True
+          assert m['cohort']['excludedNonCohortLineupScheduleSnapshots']>=0
+          assert len(l['upstreamSchedule']['excludedSnapshots'])==m['cohort']['excludedNonCohortLineupScheduleSnapshots']
+          print(json.dumps({
+            'officialFinalGames':m['cohort']['regularSeasonFinalGames'],
+            'lineupSnapshotsFetched':m['cohort']['lineupSnapshotsFetched'],
+            'completeLineupGames':m['cohort']['completeLineupGames'],
+            'completeLineupCoveragePct':m['cohort']['completeLineupCoveragePct'],
+            'excludedNonCohortLineupScheduleSnapshots':m['cohort']['excludedNonCohortLineupScheduleSnapshots'],
+          }, indent=2))
+          PY
+
       - name: Apply frozen 20-rule family without retuning
         run: >-
           python scripts/p0-step12d-independent-forward-validation.py
@@ -130,6 +157,9 @@ jobs:
           grep -F 'atomMutationAllowed: false' "$freeze"
           grep -F 'FROZEN_START_DATE = "2026-03-01"' "$acquire"
           grep -F 'FROZEN_END_DATE = "2026-08-10"' "$acquire"
+          grep -F 'cohortDefinition: "OFFICIAL_FINAL_GAME_PK_INTERSECTION"' "$acquire"
+          grep -F 'lineupScheduleExtrasAreExcludedByOfficialFinalGamePk: true' "$acquire"
+          grep -F 'officialFinalLineupSnapshotCoverageMustBeComplete: true' "$acquire"
           grep -F 'usedFor2025CandidateDiscovery: false' "$acquire"
           grep -F "MIN_DECISIVE_ROWS = 80" "$validate"
           grep -F "MIN_DECISIVE_DATES = 30" "$validate"
