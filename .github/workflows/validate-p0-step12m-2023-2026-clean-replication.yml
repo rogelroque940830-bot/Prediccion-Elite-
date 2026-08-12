@@ -1,0 +1,129 @@
+name: Validate P0 Step 12M 2023 2026 Clean Replication
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'research/p0-step12m-frozen-survivors.json'
+      - 'scripts/p0-step12m-acquire-clean-replication-cohort.mjs'
+      - 'scripts/p0-step12m-replicate-frozen-survivors.py'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - '.github/workflows/validate-p0-step12m-2023-2026-clean-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replicate-2023-2026-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check Step 12M surfaces
+        run: |
+          node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12m-replicate-frozen-survivors.py
+      - name: Validate frozen survivor manifest before external data
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12m-frozen-survivors.json'))
+          assert m['schemaVersion']=='courtedge-p0-step12m-frozen-survivors.v1'
+          assert len(m['rules'])==4
+          assert m['policy']['thresholdRetuningAllowed'] is False
+          assert m['policy']['candidateSearchAllowed'] is False
+          assert m['policy']['interpretAsThreeStructuralFamilies'] is True
+          assert m['source']['cleanRediscoveryReportSha256']=='5d863baddd6af19f731399d5076f2cda5f598a343c045a0164b6c030f542a2a9'
+          assert m['source']['overlapStabilityReportSha256']=='66d45b5527b36471b86d9490bc552b43ab1b36e16b1d2ac7ee889a099066e7d2'
+          print('STEP12M_FROZEN_MANIFEST_OK')
+          PY
+      - name: Acquire clean 2023 external cohort
+        run: >-
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          --start 2023-03-01 --end 2023-10-01 --concurrency 6
+          --role EXTERNAL_CLEAN_REPLICATION_2023
+          --out artifacts/p0-step12m/2023/cohort
+      - name: Audit 2023 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2023-03-01 --end 2023-10-01 --concurrency 6
+          --out artifacts/p0-step12m/2023/t5-audit
+      - name: Build clean 2023 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12m/2023/cohort/dataset.json
+          --starter-history artifacts/p0-step12m/2023/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12m/2023/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12m/2023/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12m/2023/clean-t5-feature-table.json
+      - name: Replicate frozen survivors in 2023
+        run: >-
+          python scripts/p0-step12m-replicate-frozen-survivors.py
+          --feature-table artifacts/p0-step12m/2023/clean-t5-feature-table.json
+          --manifest research/p0-step12m-frozen-survivors.json --season 2023
+          --out artifacts/p0-step12m/2023/replication-report.json
+      - name: Acquire clean 2026 YTD cohort
+        run: >-
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          --start 2026-03-01 --end 2026-08-10 --concurrency 6
+          --role CONTEMPORARY_CLEAN_REPLICATION_2026_YTD_NOT_VIRGIN
+          --out artifacts/p0-step12m/2026/cohort
+      - name: Audit 2026 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2026-03-01 --end 2026-08-10 --concurrency 6
+          --out artifacts/p0-step12m/2026/t5-audit
+      - name: Build clean 2026 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12m/2026/cohort/dataset.json
+          --starter-history artifacts/p0-step12m/2026/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12m/2026/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12m/2026/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12m/2026/clean-t5-feature-table.json
+      - name: Replicate frozen survivors in 2026 YTD
+        run: >-
+          python scripts/p0-step12m-replicate-frozen-survivors.py
+          --feature-table artifacts/p0-step12m/2026/clean-t5-feature-table.json
+          --manifest research/p0-step12m-frozen-survivors.json --season 2026_YTD
+          --out artifacts/p0-step12m/2026/replication-report.json
+      - name: Validate replication contracts and coverage
+        run: |
+          python - <<'PY'
+          import json
+          for s in ('2023','2026'):
+            a=json.load(open(f'artifacts/p0-step12m/{s}/t5-audit/t5-starter-identity-audit.json'))
+            t=json.load(open(f'artifacts/p0-step12m/{s}/clean-t5-feature-table.json'))
+            r=json.load(open(f'artifacts/p0-step12m/{s}/replication-report.json'))
+            assert a['counts']['bothProbableCoveragePct']>=95
+            assert t['counts']['coreFeatureUsableRows']>0.90*t['counts']['rows']
+            assert r['ruleCount']==4 and r['familyCountInterpretation']==3
+            assert r['rulesFrozenBeforeSeasonEvaluation'] is True
+            assert r['policy']['thresholdRetuningPerformed'] is False
+            assert r['policy']['candidateSearchPerformed'] is False
+            assert r['policy']['betEliteProduced'] is False
+            print(s, a['counts'], t['counts'], [(x['hypothesisId'],x['metrics']['decisiveHitRate'],x['metrics']['decisiveRows'],x['metrics']['liftVsBaseline']) for x in r['results']])
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12M evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12m-2023-2026-clean-replication
+          path: artifacts/p0-step12m/
+          if-no-files-found: error
+          retention-days: 30
