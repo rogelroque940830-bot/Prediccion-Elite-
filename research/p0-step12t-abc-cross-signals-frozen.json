@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "courtedge-p0-step12t-abc-cross-signals-frozen.v1",
+  "evidenceStatus": "FROZEN_AFTER_2022_2023_2025_2026_DEVELOPMENT_BEFORE_2024_OUTCOME_SCORING",
+  "selectionHistory": {
+    "developmentSeasons": ["2022", "2023", "2025", "2026_YTD_THROUGH_2026_08_10"],
+    "externalJudge": "2024_FULL_REGULAR_SEASON_CLEAN_T5_REBUILD",
+    "legacy2024MethodologyUsableForConfirmation": false,
+    "legacy2024SportingOutcomesScoredForTheseCandidatesBeforeFreeze": false,
+    "thresholdRetuningAllowedAfterFreeze": false,
+    "candidateSearchAllowedIn2024": false
+  },
+  "parentRules": [
+    {
+      "id": "A_PREMIUM_FG_HOME_STRICT",
+      "target": "FULL_GAME:RESULT:HOME",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554}
+      ]
+    },
+    {
+      "id": "B_PREMIUM_F3_HOME_ORIGINAL",
+      "target": "FIRST_3:RESULT:HOME",
+      "atoms": [
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.015382840768621358},
+        {"feature": "starter_hr_adv", "operator": "GTE", "threshold": 0.006396103065164477},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329}
+      ]
+    },
+    {
+      "id": "C_PREMIUM_F5_OVER45_ORIGINAL",
+      "target": "FIRST_5:TOTAL:4.5:OVER",
+      "atoms": [
+        {"feature": "team_rs10_diff", "operator": "LTE", "threshold": -0.8999999999999995},
+        {"feature": "starter_runrisk_adv", "operator": "LTE", "threshold": -0.02507565174873708},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": -0.026169596279787495}
+      ]
+    }
+  ],
+  "frozenCandidates": [
+    {
+      "id": "A_FG_HOME_C1_COMPLEMENT",
+      "parent": "A_PREMIUM_FG_HOME_STRICT",
+      "target": "FULL_GAME:RESULT:HOME",
+      "role": "GENTLE_A_REFINEMENT_HIGH_VOLUME",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554},
+        {"feature": "team_rs10_diff", "operator": "GT", "threshold": -0.8999999999999995}
+      ]
+    },
+    {
+      "id": "B_F3_HOME_VOLUME_CROSS_A",
+      "parent": "B_PREMIUM_F3_HOME_ORIGINAL",
+      "target": "FIRST_3:RESULT:HOME",
+      "role": "VOLUME_PRESERVING_B_RECOMBINATION",
+      "atoms": [
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.015382840768621358},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329},
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998}
+      ]
+    },
+    {
+      "id": "B_F3_HOME_BALANCED_CROSS_ABC",
+      "parent": "B_PREMIUM_F3_HOME_ORIGINAL",
+      "target": "FIRST_3:RESULT:HOME",
+      "role": "PRIMARY_QUALITY_VOLUME_CROSS_SIGNAL",
+      "atoms": [
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.015382840768621358},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329},
+        {"feature": "lineup_exposure_rate_adv", "operator": "LT", "threshold": 0.09876543209876554},
+        {"feature": "team_rs10_diff", "operator": "GT", "threshold": -0.8999999999999995}
+      ]
+    },
+    {
+      "id": "B_F3_HOME_SELECTIVE_CROSS_ABC",
+      "parent": "B_PREMIUM_F3_HOME_ORIGINAL",
+      "target": "FIRST_3:RESULT:HOME",
+      "role": "HIGH_SELECTIVITY_DIAGNOSTIC_NOT_PRIMARY",
+      "atoms": [
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.015382840768621358},
+        {"feature": "starter_hr_adv", "operator": "GTE", "threshold": 0.006396103065164477},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329},
+        {"feature": "lineup_exposure_rate_adv", "operator": "LT", "threshold": 0.09876543209876554},
+        {"feature": "team_rs10_diff", "operator": "GT", "threshold": -0.8999999999999995}
+      ]
+    },
+    {
+      "id": "C_F5_OVER45_GENTLE_CROSS_AB",
+      "parent": "C_PREMIUM_F5_OVER45_ORIGINAL",
+      "target": "FIRST_5:TOTAL:4.5:OVER",
+      "role": "GENTLE_C_REFINEMENT_HIGH_VOLUME",
+      "atoms": [
+        {"feature": "team_rs10_diff", "operator": "LTE", "threshold": -0.8999999999999995},
+        {"feature": "starter_runrisk_adv", "operator": "LTE", "threshold": -0.02507565174873708},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": -0.026169596279787495},
+        {"feature": "starter_hr_adv", "operator": "LT", "threshold": 0.006396103065164477}
+      ]
+    },
+    {
+      "id": "C_F5_OVER45_BALANCED_CROSS_AB",
+      "parent": "C_PREMIUM_F5_OVER45_ORIGINAL",
+      "target": "FIRST_5:TOTAL:4.5:OVER",
+      "role": "BALANCED_C_REFINEMENT",
+      "atoms": [
+        {"feature": "team_rs10_diff", "operator": "LTE", "threshold": -0.8999999999999995},
+        {"feature": "starter_runrisk_adv", "operator": "LTE", "threshold": -0.02507565174873708},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": -0.026169596279787495},
+        {"feature": "starter_hr_adv", "operator": "LT", "threshold": 0.006396103065164477},
+        {"feature": "lineup_exposure_rate_adv", "operator": "LT", "threshold": 0.06336336336336329}
+      ]
+    }
+  ],
+  "developmentSummary": {
+    "parents": {
+      "A_PREMIUM_FG_HOME_STRICT": {"full": {"n": 412, "w": 299, "l": 113, "hit": 0.7257281553398058}, "matchedAug10": {"n": 260, "w": 183, "l": 77, "hit": 0.7038461538461539}},
+      "B_PREMIUM_F3_HOME_ORIGINAL": {"full": {"n": 448, "w": 304, "l": 144, "hit": 0.6785714285714286}, "matchedAug10": {"n": 315, "w": 207, "l": 108, "hit": 0.6571428571428571}},
+      "C_PREMIUM_F5_OVER45_ORIGINAL": {"full": {"n": 357, "w": 221, "l": 136, "hit": 0.6190476190476191}, "matchedAug10": {"n": 261, "w": 159, "l": 102, "hit": 0.6091954022988506}}
+    },
+    "candidates": {
+      "A_FG_HOME_C1_COMPLEMENT": {"full": {"n": 393, "w": 287, "l": 106, "hit": 0.7302798982188295, "seasonHitRange": [0.6923076923, 0.7904761905]}, "matchedAug10": {"n": 247, "w": 176, "l": 71, "hit": 0.7125506072874493}},
+      "B_F3_HOME_VOLUME_CROSS_A": {"full": {"n": 455, "w": 310, "l": 145, "hit": 0.6813186813186813, "seasonHitRange": [0.6371681416, 0.7073170732]}, "matchedAug10": {"n": 316, "w": 214, "l": 102, "hit": 0.6772151898734177}},
+      "B_F3_HOME_BALANCED_CROSS_ABC": {"full": {"n": 152, "w": 112, "l": 40, "hit": 0.7368421052631579, "seasonHitRange": [0.6842105263, 0.7647058824]}, "matchedAug10": {"n": 120, "w": 91, "l": 29, "hit": 0.7583333333333333}},
+      "B_F3_HOME_SELECTIVE_CROSS_ABC": {"full": {"n": 88, "w": 71, "l": 17, "hit": 0.8068181818181818, "seasonHitRange": [0.76, 0.8695652174]}, "matchedAug10": {"n": 73, "w": 59, "l": 14, "hit": 0.8082191780821918}},
+      "C_F5_OVER45_GENTLE_CROSS_AB": {"full": {"n": 330, "w": 208, "l": 122, "hit": 0.6303030303030303, "seasonHitRange": [0.58, 0.6511627907]}, "matchedAug10": {"n": 239, "w": 149, "l": 90, "hit": 0.6234309623430963}},
+      "C_F5_OVER45_BALANCED_CROSS_AB": {"full": {"n": 276, "w": 177, "l": 99, "hit": 0.6413043478260869, "seasonHitRange": [0.5853658537, 0.6829268293]}, "matchedAug10": {"n": 198, "w": 125, "l": 73, "hit": 0.6313131313131313}}
+    }
+  },
+  "portfolios": [
+    {
+      "id": "PORTFOLIO_AB_QUALITY_VOLUME",
+      "role": "PRIMARY_CROSS_MARKET_ROUTING_HYPOTHESIS",
+      "routes": [
+        {"ruleId": "A_PREMIUM_FG_HOME_STRICT", "target": "FULL_GAME:RESULT:HOME"},
+        {"ruleId": "B_F3_HOME_BALANCED_CROSS_ABC", "target": "FIRST_3:RESULT:HOME"}
+      ],
+      "mutualExclusivityExpected": true,
+      "developmentFull": {"selectedRows": 602, "decisiveRows": 564, "wins": 411, "losses": 153, "pushes": 38, "decisiveHitRate": 0.7287234042553191, "bySeasonHitRate": {"2022": 0.6982, "2023": 0.7075, "2025": 0.7785, "2026_YTD": 0.7333}},
+      "interpretation": "Mixed sporting targets; hit rate is descriptive and is not a price/EV/ROI claim."
+    },
+    {
+      "id": "PORTFOLIO_ABC_EXPANDED",
+      "role": "SECONDARY_MAX_OPPORTUNITY_ROUTING_HYPOTHESIS",
+      "routes": [
+        {"ruleId": "A_PREMIUM_FG_HOME_STRICT", "target": "FULL_GAME:RESULT:HOME"},
+        {"ruleId": "B_F3_HOME_BALANCED_CROSS_ABC", "target": "FIRST_3:RESULT:HOME"},
+        {"ruleId": "C_F5_OVER45_BALANCED_CROSS_AB", "target": "FIRST_5:TOTAL:4.5:OVER"}
+      ],
+      "mutualExclusivityExpected": true,
+      "developmentFull": {"selectedRows": 878, "decisiveRows": 840, "wins": 588, "losses": 252, "pushes": 38, "decisiveHitRate": 0.7, "bySeasonHitRate": {"2022": 0.6803, "2023": 0.68, "2025": 0.7458, "2026_YTD": 0.687}},
+      "interpretation": "Mixed sporting targets; hit rate is descriptive and is not a price/EV/ROI claim."
+    }
+  ],
+  "external2024Policy": {
+    "rebuildCleanT5": true,
+    "evaluateParents": true,
+    "evaluateAllFrozenCandidates": true,
+    "evaluatePortfolios": true,
+    "candidateCountForMultiplicity": 6,
+    "holmAlpha": 0.05,
+    "minimumDecisiveRowsForFormalSupport": 50,
+    "minimumDecisiveDatesForFormalSupport": 35,
+    "requirePositiveDirectionVsParentWhereComparable": true,
+    "noThresholdChangesAfterSeeing2024": true,
+    "newCandidateSearchIn2024Allowed": false,
+    "historicalPricesUsed": false,
+    "historicalEvOrRoiClaimAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "step11cProspectiveValidationStillRequired": true
+  },
+  "policy": {
+    "historicalPricesUsed": false,
+    "historicalEvOrRoiClaimAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacement": false,
+    "step11cProspectiveValidationStillRequired": true
+  }
+}
