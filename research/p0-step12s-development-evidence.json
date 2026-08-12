@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "courtedge-p0-step12s-development-evidence.v1",
+  "evidenceStatus": "DEVELOPMENT_CROSS_SEASON_SHADOW_CANDIDATE_NOT_LIVE_VETO",
+  "sourceHeadSha": "cf5a1ca2d39e3d5bb26d0eaf84836ae3aec7d8e2",
+  "sourceFeatureTableSha256": {
+    "2022": "3784bf1051a79fedbcdd00142a42fc83e9dd95abed1f99b1dd64a628b741ab10",
+    "2023": "067070654925c440b633c73d04442afc7864a61418beb8682c0beff1c81e5221",
+    "2025": "f24998612079f5b2fb47819be345e5723c848ed479f3126fd70372ac5e1a7224",
+    "2026_YTD": "b4f78acb34578203bd7986f4111d5d7832319d1437bb24150acf6df8a765a3d3"
+  },
+  "developmentSearch": {
+    "seasons": [2022, 2023, 2025, "2026_YTD"],
+    "calendarMatchedThroughMonthDay": "08-10",
+    "candidateDescriptorsPerPremiumVariant": 1350,
+    "maxAtoms": 2,
+    "candidateId": "RISK_S1_WEAK_RUN_PREVENTION_AND_BORDERLINE_KBB",
+    "candidate": [
+      {"feature": "team_ra10_adv", "operator": "LTE", "threshold": 0.8},
+      {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": 0.05}
+    ],
+    "confirmatoryMultiplicityClaim": false
+  },
+  "matchedCalendarResults": {
+    "strict": {
+      "base": {"rows": 260, "wins": 183, "losses": 77, "hitRate": 0.7038461538461539},
+      "riskPocket": {"rows": 40, "wins": 20, "losses": 20, "hitRate": 0.5},
+      "retained": {"rows": 220, "wins": 163, "losses": 57, "hitRate": 0.740909090909091, "volumePct": 84.61538461538461},
+      "retainedLift": 0.03706293706293706,
+      "lossCaptureRate": 0.2597402597402597,
+      "winSacrificeRate": 0.1092896174863388,
+      "lossCaptureMinusWinSacrifice": 0.1504506422539209,
+      "bySeasonRetainedLift": {"2022": 0.0401785714285714, "2023": 0.06381766381766374, "2025": 0.030322580645161246, "2026_YTD": 0.014880952380952328},
+      "adversarialDeletionMinRetainedLift": {
+        "leaveOneSeasonOut": 0.028143342601173904,
+        "leaveOneMonthOut": 0.029021747366825723,
+        "leaveOneHomeTeamOut": 0.029393775858967408,
+        "leaveOneHomeProbablePitcherOut": 0.03155482117157926
+      },
+      "exploratoryCmhRiskVsLoss": {"z": 3.1233568179596665, "oneSidedP": 0.0008940041892159659, "confirmatory": false}
+    },
+    "broad": {
+      "base": {"rows": 356, "wins": 244, "losses": 112, "hitRate": 0.6853932584269663},
+      "riskPocket": {"rows": 63, "wins": 35, "losses": 28, "hitRate": 0.5555555555555556},
+      "retained": {"rows": 293, "wins": 209, "losses": 84, "hitRate": 0.7133105802047781, "volumePct": 82.30337078651685},
+      "retainedLift": 0.02791732177781181,
+      "lossCaptureRate": 0.25,
+      "winSacrificeRate": 0.14344262295081966,
+      "lossCaptureMinusWinSacrifice": 0.10655737704918034,
+      "bySeasonRetainedLift": {"2022": 0.02499999999999991, "2023": 0.03921568627450989, "2025": 0.03431521409049498, "2026_YTD": 0.012345679012345623},
+      "adversarialDeletionMinRetainedLift": {
+        "leaveOneSeasonOut": 0.02437908496732022,
+        "leaveOneMonthOut": 0.023429323440722127,
+        "leaveOneHomeTeamOut": 0.022258355558640197,
+        "leaveOneHomeProbablePitcherOut": 0.02394349800147455
+      },
+      "exploratoryCmhRiskVsLoss": {"z": 2.4794942319915423, "oneSidedP": 0.0065784429024842005, "confirmatory": false}
+    }
+  },
+  "fullAvailableSeasonDiagnostic": {
+    "strictRetainedLift": {"2022": 0.0183, "2023": 0.0344, "2025": 0.0186, "2026_YTD": 0.0149},
+    "broadRetainedLift": {"2022": 0.0093, "2023": 0.0185, "2025": 0.0316, "2026_YTD": 0.0123}
+  },
+  "decision": {
+    "hardVetoPromoted": false,
+    "shadowCandidateFrozen": true,
+    "use2021ForRetuning": false,
+    "use2024ForConfirmation": false,
+    "livePickPopulationChanged": false,
+    "stakeChanged": false,
+    "prospective11cRequired": true
+  }
+}
