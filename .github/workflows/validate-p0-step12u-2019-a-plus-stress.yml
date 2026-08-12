@@ -1,0 +1,108 @@
+name: Validate P0 Step 12U 2019 A Plus Stress
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12t-abc-cross-signals-2024
+    paths:
+      - 'research/p0-step12u-a-plus-frozen.json'
+      - 'scripts/p0-step12u-2019-a-plus-stress.py'
+      - '.github/workflows/validate-p0-step12u-2019-a-plus-stress.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stress-frozen-a-plus-2019:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Validate frozen Step 12U gate before 2019 outcome access
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12u-a-plus-frozen.json'))
+          assert m['schemaVersion']=='courtedge-p0-step12u-a-plus-frozen.v1'
+          s=m['selectionHistory'];p=m['external2019StressPolicy']
+          assert s['externalStressJudge']=='2019_FULL_REGULAR_SEASON_CLEAN_T5_REBUILD'
+          assert s['2019OutcomesOpenedBeforeFreeze'] is False
+          assert s['candidateSearchAllowedIn2019'] is False
+          assert s['thresholdRetuningAllowedAfter2019'] is False
+          assert len(m['frozenCandidates'])==2
+          assert p['newCandidateSearchIn2019Allowed'] is False
+          assert p['noThresholdChangesAfterSeeing2019'] is True
+          assert p['historicalPricesUsed'] is False
+          assert p['liveFilterChangeAllowed'] is False
+          assert p['betEliteAllowed'] is False
+          print('STEP12U_2019_GATE_LOCKED_BEFORE_OUTCOME_ACCESS')
+          PY
+      - name: Syntax-check clean T5 and frozen scorer chain
+        run: |
+          node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12u-2019-a-plus-stress.py
+      - name: Acquire clean external 2019 cohort
+        run: >-
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          --start 2019-03-01 --end 2019-09-30 --concurrency 6
+          --role EXTERNAL_A_PLUS_STRESS_2019
+          --out artifacts/p0-step12u/2019/cohort
+      - name: Audit 2019 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2019-03-01 --end 2019-09-30 --concurrency 6
+          --out artifacts/p0-step12u/2019/t5-audit
+      - name: Build clean 2019 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12u/2019/cohort/dataset.json
+          --starter-history artifacts/p0-step12u/2019/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12u/2019/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12u/2019/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12u/2019/feature-table.json
+      - name: Score frozen A plus regimes without retuning
+        run: >-
+          python scripts/p0-step12u-2019-a-plus-stress.py
+          --feature-table artifacts/p0-step12u/2019/feature-table.json
+          --manifest research/p0-step12u-a-plus-frozen.json
+          --out artifacts/p0-step12u/2019/a-plus-stress-report.json
+      - name: Validate evidence boundary and clean 2019 execution
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('artifacts/p0-step12u/2019/t5-audit/t5-starter-identity-audit.json'))
+          f=json.load(open('artifacts/p0-step12u/2019/feature-table.json'))
+          r=json.load(open('artifacts/p0-step12u/2019/a-plus-stress-report.json'))
+          assert a['counts']['bothProbableCoveragePct']>=90
+          assert a['counts']['completeLineupAndBothProbablesPct']>=90
+          assert f['counts']['coreFeatureUsableRows']>0.85*f['counts']['rows']
+          assert r['schemaVersion']=='courtedge-p0-step12u-2019-a-plus-stress.v1'
+          assert len(r['candidates'])==2
+          assert r['policy']['thresholdRetuningPerformed'] is False
+          assert r['policy']['candidateSearchPerformedIn2019'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print({'coverage':a['counts'],'aCore':r['aCore'],'candidates':r['candidates']})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12U external 2019 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12u-2019-a-plus-stress
+          path: artifacts/p0-step12u/
+          if-no-files-found: error
+          retention-days: 30
