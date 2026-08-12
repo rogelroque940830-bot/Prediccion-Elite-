@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, hashlib, json, math, os, random
+import argparse, json, math, os, random
 from collections import defaultdict
 
 SCHEMA='courtedge-p0-step12p-multimarket-familywise-audit.v1'
@@ -16,16 +16,20 @@ def atom_ok(r,a):
     if v is None or not math.isfinite(float(v)):return False
     return float(v)>=a['threshold'] if a['operator']=='GTE' else float(v)<=a['threshold']
 
-def target_outcome(r,target):
-    t=r['targets']
+def target_outcome_from_targets(t,target):
     if target.endswith(':RESULT:HOME'):
-        return 'WIN' if t[target[:-5]]=='HOME' else ('PUSH' if t[target[:-5]]=='TIE' else 'LOSS')
+        key=target[:-5]
+        return 'WIN' if t[key]=='HOME' else ('PUSH' if t[key]=='TIE' else 'LOSS')
     if target.endswith(':RESULT:AWAY'):
-        return 'WIN' if t[target[:-5]]=='AWAY' else ('PUSH' if t[target[:-5]]=='TIE' else 'LOSS')
+        key=target[:-5]
+        return 'WIN' if t[key]=='AWAY' else ('PUSH' if t[key]=='TIE' else 'LOSS')
     return t[target]
 
-def selected(rows,rule):
-    return [r for r in rows if all(atom_ok(r,a) for a in rule['atoms'])]
+def target_outcome(r,target):
+    return target_outcome_from_targets(r['targets'],target)
+
+def selected_indices(rows,rule):
+    return [i for i,r in enumerate(rows) if all(atom_ok(r,a) for a in rule['atoms'])]
 
 def jaccard(a,b):
     a=set(a);b=set(b)
@@ -36,41 +40,58 @@ def zscore(h,n,p):
     if n<=0 or p<=0 or p>=1:return 0.0
     return (h-n*p)/math.sqrt(n*p*(1-p))
 
-def leave_group_lifts(sel,target,group_key,baseline_rows):
-    groups=sorted({r[group_key] for r in sel})
+def metrics_from_indices(rows,idxs,target,target_vectors=None):
+    outs=[]
+    for idx in idxs:
+        t=(target_vectors[idx] if target_vectors is not None else rows[idx]['targets'])
+        outs.append(target_outcome_from_targets(t,target))
+    dec=[o for o in outs if o!='PUSH']
+    hits=sum(o=='WIN' for o in dec)
+    return {'selectedRows':len(idxs),'decisiveRows':len(dec),'hits':hits,'losses':len(dec)-hits,'pushes':len(outs)-len(dec),'hitRate':hits/len(dec) if dec else None}
+
+def baseline(rows,target):
+    outs=[target_outcome(r,target) for r in rows]
+    dec=[o for o in outs if o!='PUSH']
+    return sum(o=='WIN' for o in dec)/len(dec) if dec else None
+
+def leave_group_lifts(rows,idxs,target,group_key):
+    selected_groups=sorted({rows[i][group_key] for i in idxs})
     vals=[]
-    for g in groups:
-        s=[r for r in sel if r[group_key]!=g]
-        b=[r for r in baseline_rows if r[group_key]!=g]
-        so=[target_outcome(r,target) for r in s];bo=[target_outcome(r,target) for r in b]
-        sd=[o for o in so if o!='PUSH'];bd=[o for o in bo if o!='PUSH']
-        if not sd or not bd:continue
-        sr=sum(o=='WIN' for o in sd)/len(sd);br=sum(o=='WIN' for o in bd)/len(bd)
-        vals.append(sr-br)
+    for g in selected_groups:
+        sidx=[i for i in idxs if rows[i][group_key]!=g]
+        brow=[r for r in rows if r[group_key]!=g]
+        sm=metrics_from_indices(rows,sidx,target)
+        bp=baseline(brow,target)
+        if sm['decisiveRows'] and bp is not None:
+            vals.append(sm['hitRate']-bp)
     return min(vals) if vals else None
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--matrix',required=True);ap.add_argument('--discovery',required=True);ap.add_argument('--out',required=True);a=ap.parse_args()
     m=load(a.matrix);d=load(a.discovery)
-    rows=m['rows'];hold=[r for r in rows if r['officialDate']>d['split']['discoveryEndDate']]
+    rows=[dict(r) for r in m['rows'] if r['officialDate']>d['split']['discoveryEndDate']]
     family=d['family']
-    if not hold or not family:raise SystemExit('STEP12P_INPUTS_EMPTY')
-    # Month key is diagnostic only and derived from date, never used for rule selection.
-    for r in hold:r['month']=r['officialDate'][:7]
-    by_target=defaultdict(list)
-    for r in hold:
-        for t in d['searchContract']['targets']:
-            o=target_outcome(r,t)
-            if o!='PUSH':by_target[t].append((r,o))
-    audits=[];sel_ids=[]
+    if not rows or not family:raise SystemExit('STEP12P_INPUTS_EMPTY')
+    for r in rows:r['month']=r['officialDate'][:7]
+
+    targets=d['searchContract']['targets']
+    baselines={t:baseline(rows,t) for t in targets}
+    rule_indices=[];audits=[];selection_game_pks=[]
     for rule in family:
-        s=selected(hold,rule);ids=[r['gamePk'] for r in s];sel_ids.append(ids)
-        outs=[target_outcome(r,rule['target']) for r in s];dec=[o for o in outs if o!='PUSH'];h=sum(o=='WIN' for o in dec)
-        base=[o for _,o in by_target[rule['target']]];p=sum(o=='WIN' for o in base)/len(base) if base else 0.5
-        audits.append({'ruleKey':rule['ruleKey'],'target':rule['target'],'atoms':rule['atoms'],'selectedRows':len(s),'decisiveRows':len(dec),'hits':h,'losses':len(dec)-h,'pushes':len(outs)-len(dec),'hitRate':h/len(dec) if dec else None,'baseline':p,'lift':h/len(dec)-p if dec else None,'zObserved':zscore(h,len(dec),p),'uniqueDates':len({r['officialDate'] for r in s}),'minLeaveOneDateLift':leave_group_lifts(s,rule['target'],'officialDate',hold),'minLeaveOneMonthLift':leave_group_lifts(s,rule['target'],'month',hold)})
-    # Overlap graph: same-game selection overlap, independent of outcome labels/market line.
-    edges=[]
-    parent=list(range(len(family)))
+        idxs=selected_indices(rows,rule);rule_indices.append(idxs);selection_game_pks.append([rows[i]['gamePk'] for i in idxs])
+        mtr=metrics_from_indices(rows,idxs,rule['target']);p=baselines[rule['target']]
+        hit=mtr['hitRate'];lift=(hit-p) if hit is not None and p is not None else None
+        audits.append({
+            'ruleKey':rule['ruleKey'],'target':rule['target'],'atoms':rule['atoms'],'atomCount':len(rule['atoms']),
+            **mtr,'baseline':p,'lift':lift,'zObserved':zscore(mtr['hits'],mtr['decisiveRows'],p) if p is not None else 0.0,
+            'uniqueDates':len({rows[i]['officialDate'] for i in idxs}),
+            'minLeaveOneDateLift':leave_group_lifts(rows,idxs,rule['target'],'officialDate'),
+            'minLeaveOneMonthLift':leave_group_lifts(rows,idxs,rule['target'],'month'),
+        })
+
+    # Cluster by same-game condition overlap, regardless of market label. This identifies
+    # repeated A+B+C game states that manifest in multiple correlated markets/horizons.
+    parent=list(range(len(family)));edges=[]
     def find(x):
         while parent[x]!=x:parent[x]=parent[parent[x]];x=parent[x]
         return x
@@ -79,45 +100,56 @@ def main():
         if x!=y:parent[y]=x
     for i in range(len(family)):
         for j in range(i+1,len(family)):
-            jac=jaccard(sel_ids[i],sel_ids[j])
+            jac=jaccard(selection_game_pks[i],selection_game_pks[j])
             if jac>=JACCARD_CLUSTER_THRESHOLD:
                 union(i,j);edges.append({'a':family[i]['ruleKey'],'b':family[j]['ruleKey'],'jaccard':jac})
     clusters=defaultdict(list)
     for i,r in enumerate(family):clusters[find(i)].append(r['ruleKey'])
-    # Date-clustered randomization. Within each date and target, shuffle WIN/LOSS labels among decisive rows.
-    rng=random.Random(SEED);exceed=[0]*len(family);max_exceed=[0]*len(family)
-    # Precompute decisive selected indices by rule and target/date pools.
-    row_index={id(r):i for i,r in enumerate(hold)}
-    rule_indices=[]
-    for rule in family:
-        rule_indices.append([row_index[id(r)] for r in selected(hold,rule) if target_outcome(r,rule['target'])!='PUSH'])
-    target_date=defaultdict(lambda:defaultdict(list))
-    for t in d['searchContract']['targets']:
-        for idx,r in enumerate(hold):
-            o=target_outcome(r,t)
-            if o!='PUSH':target_date[t][r['officialDate']].append((idx,1 if o=='WIN' else 0))
+
+    # Joint date-block randomization: shuffle the ENTIRE outcome vector among games on the
+    # same date. This preserves cross-market/horizon dependence (F3/F5/FG totals, winner,
+    # NRFI/YRFI) and lets ties/pushes move naturally under the null.
+    date_indices=defaultdict(list)
+    for i,r in enumerate(rows):date_indices[r['officialDate']].append(i)
+    rng=random.Random(SEED);raw_exceed=[0]*len(family);max_exceed=[0]*len(family)
+    original_vectors=[r['targets'] for r in rows]
     for _ in range(PERMUTATIONS):
-        perm_by_target={}
-        for t,dates in target_date.items():
-            labels={}
-            for date,pairs in dates.items():
-                vals=[v for _,v in pairs];rng.shuffle(vals)
-                for (idx,_),v in zip(pairs,vals):labels[idx]=v
-            perm_by_target[t]=labels
+        perm_vectors=[None]*len(rows)
+        for _,idxs in date_indices.items():
+            donors=list(idxs);rng.shuffle(donors)
+            for dest,src in zip(idxs,donors):perm_vectors[dest]=original_vectors[src]
         zs=[]
         for k,rule in enumerate(family):
-            idxs=rule_indices[k];h=sum(perm_by_target[rule['target']][idx] for idx in idxs);p=audits[k]['baseline'];z=zscore(h,len(idxs),p);zs.append(z)
-            if z>=audits[k]['zObserved']-1e-12:exceed[k]+=1
-        mx=max(zs) if zs else 0
-        for k in range(len(family)):
-            if mx>=audits[k]['zObserved']-1e-12:max_exceed[k]+=1
+            pm=metrics_from_indices(rows,rule_indices[k],rule['target'],perm_vectors)
+            p=baselines[rule['target']]
+            z=zscore(pm['hits'],pm['decisiveRows'],p) if p is not None else 0.0
+            zs.append(z)
+            if z>=audits[k]['zObserved']-1e-12:raw_exceed[k]+=1
+        mx=max(zs) if zs else 0.0
+        for k,aud in enumerate(audits):
+            if mx>=aud['zObserved']-1e-12:max_exceed[k]+=1
+
     for k,aud in enumerate(audits):
-        aud['pRandomization']=(exceed[k]+1)/(PERMUTATIONS+1)
+        aud['pRandomization']=(raw_exceed[k]+1)/(PERMUTATIONS+1)
         aud['pWestfallYoungMaxT']=(max_exceed[k]+1)/(PERMUTATIONS+1)
         aud['familywise05']=aud['pWestfallYoungMaxT']<=0.05
-        aud['stablePositiveLift']=aud['lift'] is not None and aud['lift']>0 and (aud['minLeaveOneDateLift'] is None or aud['minLeaveOneDateLift']>0) and (aud['minLeaveOneMonthLift'] is None or aud['minLeaveOneMonthLift']>0)
-    survivors=[a for a in audits if a['familywise05'] and a['stablePositiveLift']]
-    report={'schemaVersion':SCHEMA,'evidenceStatus':'MULTIMARKET_FAMILYWISE_AUDIT_RESEARCH_ONLY_NO_CERTIFICATION','permutations':PERMUTATIONS,'seed':SEED,'jaccardClusterThreshold':JACCARD_CLUSTER_THRESHOLD,'familySize':len(family),'clusterCount':len(clusters),'clusters':list(clusters.values()),'highOverlapEdges':edges,'rules':audits,'survivors':survivors,'policy':{'thresholdRetuning':False,'holdoutSelection':False,'historicalPricesUsed':False,'betEliteProduced':False,'livePickFiltersChanged':False}}
+        aud['stablePositiveLift']=bool(aud['lift'] is not None and aud['lift']>0 and (aud['minLeaveOneDateLift'] is None or aud['minLeaveOneDateLift']>0) and (aud['minLeaveOneMonthLift'] is None or aud['minLeaveOneMonthLift']>0))
+        aud['survivesStep12P']=aud['familywise05'] and aud['stablePositiveLift']
+    survivors=[x for x in audits if x['survivesStep12P']]
+
+    # Summarize each latent A+B+C state across every market in which it survived.
+    by_key={a['ruleKey']:a for a in audits};cluster_summaries=[]
+    for keys in clusters.values():
+        surv=[by_key[k] for k in keys if by_key[k]['survivesStep12P']]
+        cluster_summaries.append({'ruleKeys':keys,'survivorCount':len(surv),'survivorTargets':[x['target'] for x in surv],'bestAdjustedP':min((x['pWestfallYoungMaxT'] for x in surv),default=None),'maxHitRate':max((x['hitRate'] for x in surv if x['hitRate'] is not None),default=None),'maxLift':max((x['lift'] for x in surv if x['lift'] is not None),default=None)})
+
+    report={
+        'schemaVersion':SCHEMA,'evidenceStatus':'MULTIMARKET_FAMILYWISE_AUDIT_RESEARCH_ONLY_NO_CERTIFICATION',
+        'randomizationContract':{'permutations':PERMUTATIONS,'seed':SEED,'unit':'WHOLE_GAME_OUTCOME_VECTOR_WITHIN_OFFICIAL_DATE','crossMarketDependencePreserved':True,'tiesAndPushesReassignedWithOutcomeVector':True,'westfallYoungMaxTAcrossFullFrozenFamily':True},
+        'permutations':PERMUTATIONS,'seed':SEED,'jaccardClusterThreshold':JACCARD_CLUSTER_THRESHOLD,
+        'familySize':len(family),'clusterCount':len(clusters),'clusters':list(clusters.values()),'clusterSummaries':cluster_summaries,'highOverlapEdges':edges,'rules':audits,'survivors':survivors,
+        'policy':{'thresholdRetuning':False,'holdoutSelection':False,'historicalPricesUsed':False,'betEliteProduced':False,'livePickFiltersChanged':False}
+    }
     os.makedirs(os.path.dirname(a.out) or '.',exist_ok=True)
     with open(a.out,'w',encoding='utf-8') as f:json.dump(report,f,indent=2,sort_keys=True);f.write('\n')
     print(json.dumps({'ok':True,'familySize':len(family),'clusters':len(clusters),'survivors':len(survivors)},indent=2))
