@@ -8,6 +8,7 @@ on:
       - 'scripts/p0-step12d-freeze-candidates.mjs'
       - 'scripts/p0-step12d-acquire-forward-cohort.mjs'
       - 'scripts/p0-step12d-independent-forward-validation.py'
+      - 'scripts/p0-step12e-adversarial-stability.py'
       - 'scripts/p0-step12-pocket-pilot.py'
       - 'evidence/p0-step12/2025-pocket-pilot.json'
       - 'server/mlb-market-historical-source.ts'
@@ -46,11 +47,14 @@ jobs:
             --input evidence/p0-step12/2025-pocket-pilot.json \
             --out artifacts/p0-step12d/frozen-candidates.json
 
-      - name: Syntax-check Step 12D research surface
+      - name: Syntax-check Step 12D and 12E research surface
         run: |
           node --check scripts/p0-step12d-freeze-candidates.mjs
           node --check scripts/p0-step12d-acquire-forward-cohort.mjs
-          python -m py_compile scripts/p0-step12-pocket-pilot.py scripts/p0-step12d-independent-forward-validation.py
+          python -m py_compile \
+            scripts/p0-step12-pocket-pilot.py \
+            scripts/p0-step12d-independent-forward-validation.py \
+            scripts/p0-step12e-adversarial-stability.py
           npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node \
             server/mlb-market-historical-source.ts \
             server/mlb-market-historical-dataset.ts \
@@ -135,19 +139,73 @@ jobs:
           print(json.dumps({'statusCounts':r['statusCounts'],'cohortSummary':r['cohortSummary']}, indent=2))
           PY
 
+      - name: Adversarial stress-test frozen leading hypothesis without rescue tuning
+        run: >-
+          python scripts/p0-step12e-adversarial-stability.py
+          --candidates artifacts/p0-step12d/frozen-candidates.json
+          --forward-report artifacts/p0-step12d/forward-validation-report.json
+          --dataset artifacts/p0-step12d/cohort-2026-forward/dataset.json
+          --starter-history artifacts/p0-step12d/cohort-2026-forward/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12d/cohort-2026-forward/pregame-lineup-history.json
+          --out artifacts/p0-step12d/adversarial-stability-report.json
+
+      - name: Validate 12E diagnostic-only contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12d/adversarial-stability-report.json'
+          with open(p, encoding='utf-8') as f: r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v1'
+          assert r['evidenceStatus']=='STEP12E_DIAGNOSTIC_ONLY_CANNOT_PROMOTE_BET_ELITE'
+          assert r['leader']['hypothesisKey']=='FIRST_5:46a7cbb6ff5c2458'
+          assert r['leader']['forward2026Status']=='PROMISING_NOT_HOLM_SUPPORTED'
+          assert r['leader']['forward2026HolmAdjustedGlobalFamilyPValue']>0.05
+          assert r['forwardParity']['selectedRows']==100
+          assert r['forwardParity']['decisiveRows']==90
+          assert r['forwardParity']['hits']==62
+          assert r['forwardParity']['losses']==28
+          assert r['forwardParity']['pushes']==10
+          assert r['promotionBoundary']['canUpgrade12DStatisticalStatus'] is False
+          assert r['promotionBoundary']['canProduceBetElite'] is False
+          assert r['promotionBoundary']['canChangeLiveFilters'] is False
+          assert r['promotionBoundary']['canTuneAtomsOrThresholds'] is False
+          assert r['promotionBoundary']['canDropBadMonthsTeamsPitchersOrDates'] is False
+          assert r['promotionBoundary']['canRecomputeMultiplicityOnReducedFamily'] is False
+          assert r['policy']['diagnosticOnly'] is True
+          assert r['policy']['leaderDefinitionFrozenBeforeStressTesting'] is True
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['historicalEvClaimProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['stakeCalculated'] is False
+          assert r['policy']['automaticBetPlacement'] is False
+          print(json.dumps({
+            'classification':r['classification'],
+            'stressGates':r['stressGates'],
+            'forwardParity':r['forwardParity'],
+            'minimumLeaveOneMonthOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
+            'minimumLeaveOneDateOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
+            'dateClusterBootstrap':r['adversarialDiagnostics']['dateClusterBootstrap'],
+          }, indent=2))
+          PY
+
       - name: Preserve live-model and evidence-ledger regressions
         run: |
           npx tsx --test server/mlb-operating-envelope-calibration.test.ts
           npx tsx --test server/mlb-elite-evidence-ledger.test.ts
           npm run build:backend
 
-      - name: Freeze Step 12D no-retuning and no-live-mutation boundary
+      - name: Freeze Step 12D/12E no-retuning and no-live-mutation boundary
         shell: bash
         run: |
           set -euo pipefail
           freeze='scripts/p0-step12d-freeze-candidates.mjs'
           acquire='scripts/p0-step12d-acquire-forward-cohort.mjs'
           validate='scripts/p0-step12d-independent-forward-validation.py'
+          stress='scripts/p0-step12e-adversarial-stability.py'
           grep -F 'EXPECTED_PILOT_GIT_BLOB_SHA = "3988b0214284b7338be8aeb8102c57d98f88d7a1"' "$freeze"
           grep -F 'hypothesisIdentity: "HORIZON_PLUS_RULE_KEY"' "$freeze"
           grep -F 'globalMultiplicityFamilySize: 20' "$freeze"
@@ -168,10 +226,17 @@ jobs:
           grep -F "'hypothesisIdentity': 'HORIZON_PLUS_RULE_KEY'" "$validate"
           grep -F "'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'" "$validate"
           grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
-          ! grep -E 'betElite(Label)?Produced:[[:space:]]*true|betEliteProduced[[:space:]]*=[[:space:]]*True|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate"
+          grep -F "LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'" "$stress"
+          grep -F "BOOTSTRAP_REPLICATES = 10000" "$stress"
+          grep -F "MIN_BOOTSTRAP_POSITIVE_LIFT_PROBABILITY = 0.95" "$stress"
+          grep -F "'canUpgrade12DStatisticalStatus': False" "$stress"
+          grep -F "'canProduceBetElite': False" "$stress"
+          grep -F "'canTuneAtomsOrThresholds': False" "$stress"
+          grep -F "'canDropBadMonthsTeamsPitchersOrDates': False" "$stress"
+          ! grep -E 'betElite(Label)?Produced:[[:space:]]*true|betEliteProduced[[:space:]]*=[[:space:]]*True|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate" "$stress"
           git diff --check
 
-      - name: Upload Step 12D forward replication evidence
+      - name: Upload Step 12D/12E forward research evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
