@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "courtedge-p0-step12u-a-plus-frozen.v1",
+  "evidenceStatus": "FROZEN_AFTER_2022_2026_DEVELOPMENT_BEFORE_2019_OUTCOME_ACCESS",
+  "objective": "Identify higher-confidence regimes inside Premium A without replacing or filtering the A core population.",
+  "selectionHistory": {
+    "developmentSeasons": ["2022", "2023", "2024", "2025", "2026_YTD_THROUGH_2026_08_10"],
+    "externalStressJudge": "2019_FULL_REGULAR_SEASON_CLEAN_T5_REBUILD",
+    "candidateSearchAllowedIn2019": false,
+    "thresholdRetuningAllowedAfter2019": false,
+    "2019OutcomesOpenedBeforeFreeze": false
+  },
+  "aCore": {
+    "id": "A_PREMIUM_FG_HOME_STRICT",
+    "target": "FULL_GAME:RESULT:HOME",
+    "atoms": [
+      {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+      {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+      {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554}
+    ]
+  },
+  "frozenCandidates": [
+    {
+      "id": "A_ENHANCED_STARTER_SAMPLE_RELIABILITY",
+      "role": "QUALITY_VOLUME_TIER_NOT_LIVE_FILTER",
+      "additionalAtoms": [
+        {"feature": "home_probable_prior_bf", "operator": "GTE", "threshold": 209},
+        {"feature": "away_probable_prior_bf", "operator": "GTE", "threshold": 163}
+      ],
+      "interpretation": "The measured starter edge is supported by a non-trivial prior batters-faced sample for both probable starters."
+    },
+    {
+      "id": "A_PLUS_PITCHER_DOMINANCE",
+      "role": "HIGH_CONFIDENCE_TIER_NOT_LIVE_FILTER",
+      "additionalAtoms": [
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.06430968266653156},
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.020426575464657704}
+      ],
+      "interpretation": "The A profile is accompanied by a materially stronger K-BB edge and run-prevention edge for the home probable starter."
+    }
+  ],
+  "developmentSummary": {
+    "aCore": {
+      "rows": 510,
+      "wins": 365,
+      "losses": 145,
+      "hitRate": 0.7156862745098039
+    },
+    "A_ENHANCED_STARTER_SAMPLE_RELIABILITY": {
+      "rows": 213,
+      "wins": 161,
+      "losses": 52,
+      "hitRate": 0.755868544600939,
+      "retainedVolumePctOfA": 41.76470588235294,
+      "liftVsA": 0.040182270091135064,
+      "bySeason": {
+        "2022": {"rows": 68, "hitRate": 0.75, "liftVsA": 0.06578947368421051},
+        "2023": {"rows": 42, "hitRate": 0.7619047619047619, "liftVsA": 0.046308431629532465},
+        "2024": {"rows": 34, "hitRate": 0.7058823529411765, "liftVsA": 0.032412965186074505},
+        "2025": {"rows": 42, "hitRate": 0.8095238095238095, "liftVsA": 0.020050125313283207},
+        "2026_YTD": {"rows": 27, "hitRate": 0.7407407407407407, "liftVsA": 0.026455026455026398}
+      },
+      "adversarialDeletionMinLiftVsA": {
+        "leaveOneSeasonOut": 0.03183023872679036,
+        "leaveOneMonthOut": 0.03159746657283602,
+        "leaveOneHomeTeamOut": 0.03325791855203619,
+        "leaveOneHomeProbablePitcherOut": 0.03422141224796782
+      }
+    },
+    "A_PLUS_PITCHER_DOMINANCE": {
+      "rows": 129,
+      "wins": 102,
+      "losses": 27,
+      "hitRate": 0.7906976744186046,
+      "retainedVolumePctOfA": 25.294117647058822,
+      "liftVsA": 0.07501139990880068,
+      "bySeason": {
+        "2022": {"rows": 39, "hitRate": 0.717948717948718, "liftVsA": 0.03373819163292846},
+        "2023": {"rows": 29, "hitRate": 0.8275862068965517, "liftVsA": 0.11198987662132232},
+        "2024": {"rows": 21, "hitRate": 0.8095238095238095, "liftVsA": 0.13605442176870752},
+        "2025": {"rows": 21, "hitRate": 0.8095238095238095, "liftVsA": 0.020050125313283207},
+        "2026_YTD": {"rows": 19, "hitRate": 0.8421052631578947, "liftVsA": 0.1278195488721804}
+      },
+      "adversarialDeletionMinLiftVsA": {
+        "leaveOneSeasonOut": 0.061308881697231254,
+        "leaveOneMonthOut": 0.06388861459464801,
+        "leaveOneHomeTeamOut": 0.06069879144716461,
+        "leaveOneHomeProbablePitcherOut": 0.0672656788987811
+      }
+    }
+  },
+  "external2019StressPolicy": {
+    "rebuildCleanT5": true,
+    "evaluateACore": true,
+    "evaluateAllFrozenCandidates": true,
+    "candidateCount": 2,
+    "minimumLiftVsACore": 0.02,
+    "minimumCandidateVolumePctOfA": {
+      "A_ENHANCED_STARTER_SAMPLE_RELIABILITY": 25.0,
+      "A_PLUS_PITCHER_DOMINANCE": 15.0
+    },
+    "minimumDecisiveRows": {
+      "A_ENHANCED_STARTER_SAMPLE_RELIABILITY": 30,
+      "A_PLUS_PITCHER_DOMINANCE": 20
+    },
+    "requirePositiveCandidateVsAOutside": true,
+    "requirePositiveLeaveOneMonthOutLiftVsACore": true,
+    "noThresholdChangesAfterSeeing2019": true,
+    "newCandidateSearchIn2019Allowed": false,
+    "historicalPricesUsed": false,
+    "historicalEvOrRoiClaimAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "step11cProspectiveValidationStillRequired": true
+  },
+  "policy": {
+    "aCorePopulationChanged": false,
+    "historicalPricesUsed": false,
+    "historicalEvOrRoiClaimAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacement": false,
+    "step11cProspectiveValidationStillRequired": true
+  }
+}
