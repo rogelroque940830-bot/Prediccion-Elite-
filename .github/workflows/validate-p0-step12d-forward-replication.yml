@@ -157,7 +157,7 @@ jobs:
           import json
           p='artifacts/p0-step12d/adversarial-stability-report.json'
           with open(p, encoding='utf-8') as f: r=json.load(f)
-          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v1'
+          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v2'
           assert r['evidenceStatus']=='STEP12E_DIAGNOSTIC_ONLY_CANNOT_PROMOTE_BET_ELITE'
           assert r['leader']['hypothesisKey']=='FIRST_5:46a7cbb6ff5c2458'
           assert r['leader']['forward2026Status']=='PROMISING_NOT_HOLM_SUPPORTED'
@@ -167,6 +167,15 @@ jobs:
           assert r['forwardParity']['hits']==62
           assert r['forwardParity']['losses']==28
           assert r['forwardParity']['pushes']==10
+          b=r['adversarialDiagnostics']['jointEligibleCohortDateClusterBootstrap']
+          assert b['method']=='JOINT_ELIGIBLE_COHORT_DATE_CLUSTER_BOOTSTRAP'
+          assert b['baselineRecomputedInsideEveryReplicate'] is True
+          assert b['inferentialProbabilityClaimAllowed'] is False
+          assert b['requestedReplicates']==10000
+          assert r['interpretationBoundary']['leaderWasSelectedAfterInspecting12DResults'] is True
+          assert r['interpretationBoundary']['stressTestsReuseSame2026CohortAs12D'] is True
+          assert r['interpretationBoundary']['stressClassificationIsIndependentReplicationEvidence'] is False
+          assert r['interpretationBoundary']['bootstrapFractionIsPosteriorOrFrequentistProbabilityOfTrueEdge'] is False
           assert r['promotionBoundary']['canUpgrade12DStatisticalStatus'] is False
           assert r['promotionBoundary']['canProduceBetElite'] is False
           assert r['promotionBoundary']['canChangeLiveFilters'] is False
@@ -175,6 +184,7 @@ jobs:
           assert r['promotionBoundary']['canRecomputeMultiplicityOnReducedFamily'] is False
           assert r['policy']['diagnosticOnly'] is True
           assert r['policy']['leaderDefinitionFrozenBeforeStressTesting'] is True
+          assert r['policy']['leaderWasNotFrozenBefore12DResults'] is True
           assert r['policy']['historicalPricesUsed'] is False
           assert r['policy']['historicalEvClaimProduced'] is False
           assert r['policy']['livePickFiltersChanged'] is False
@@ -188,7 +198,7 @@ jobs:
             'forwardParity':r['forwardParity'],
             'minimumLeaveOneMonthOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
             'minimumLeaveOneDateOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
-            'dateClusterBootstrap':r['adversarialDiagnostics']['dateClusterBootstrap'],
+            'jointEligibleCohortDateClusterBootstrap':b,
           }, indent=2))
           PY
 
@@ -228,7 +238,12 @@ jobs:
           grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
           grep -F "LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'" "$stress"
           grep -F "BOOTSTRAP_REPLICATES = 10000" "$stress"
-          grep -F "MIN_BOOTSTRAP_POSITIVE_LIFT_PROBABILITY = 0.95" "$stress"
+          grep -F "MIN_BOOTSTRAP_POSITIVE_LIFT_FRACTION = 0.95" "$stress"
+          grep -F "'method': 'JOINT_ELIGIBLE_COHORT_DATE_CLUSTER_BOOTSTRAP'" "$stress"
+          grep -F "'baselineRecomputedInsideEveryReplicate': True" "$stress"
+          grep -F "'inferentialProbabilityClaimAllowed': False" "$stress"
+          grep -F "'leaderWasSelectedAfterInspecting12DResults': True" "$stress"
+          grep -F "'stressClassificationIsIndependentReplicationEvidence': False" "$stress"
           grep -F "'canUpgrade12DStatisticalStatus': False" "$stress"
           grep -F "'canProduceBetElite': False" "$stress"
           grep -F "'canTuneAtomsOrThresholds': False" "$stress"
