@@ -157,7 +157,7 @@ jobs:
           import json
           p='artifacts/p0-step12d/adversarial-stability-report.json'
           with open(p, encoding='utf-8') as f: r=json.load(f)
-          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v2'
+          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v3'
           assert r['evidenceStatus']=='STEP12E_DIAGNOSTIC_ONLY_CANNOT_PROMOTE_BET_ELITE'
           assert r['leader']['hypothesisKey']=='FIRST_5:46a7cbb6ff5c2458'
           assert r['leader']['forward2026Status']=='PROMISING_NOT_HOLM_SUPPORTED'
@@ -172,6 +172,12 @@ jobs:
           assert b['baselineRecomputedInsideEveryReplicate'] is True
           assert b['inferentialProbabilityClaimAllowed'] is False
           assert b['requestedReplicates']==10000
+          ids=r['adversarialDiagnostics']['identityConcentrationAndLeaveOneOut']
+          assert ids['team']['identityType']=='OFFICIAL_TEAM_ID_ACROSS_BOTH_ROLES'
+          assert ids['team']['rolesCollapsed'] is True
+          assert ids['pitcher']['identityType']=='OFFICIAL_STARTER_ID_ACROSS_BOTH_ROLES'
+          assert ids['pitcher']['rolesCollapsed'] is True
+          assert r['policy']['identitiesCollapsedAcrossHomeAwayRoles'] is True
           assert r['interpretationBoundary']['leaderWasSelectedAfterInspecting12DResults'] is True
           assert r['interpretationBoundary']['stressTestsReuseSame2026CohortAs12D'] is True
           assert r['interpretationBoundary']['stressClassificationIsIndependentReplicationEvidence'] is False
@@ -198,6 +204,8 @@ jobs:
             'forwardParity':r['forwardParity'],
             'minimumLeaveOneMonthOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
             'minimumLeaveOneDateOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
+            'teamIdentityStress':ids['team'],
+            'pitcherIdentityStress':ids['pitcher'],
             'jointEligibleCohortDateClusterBootstrap':b,
           }, indent=2))
           PY
@@ -244,6 +252,9 @@ jobs:
           grep -F "'inferentialProbabilityClaimAllowed': False" "$stress"
           grep -F "'leaderWasSelectedAfterInspecting12DResults': True" "$stress"
           grep -F "'stressClassificationIsIndependentReplicationEvidence': False" "$stress"
+          grep -F "'identitiesCollapsedAcrossHomeAwayRoles': True" "$stress"
+          grep -F "'identityType': identity_type" "$stress"
+          grep -F "'rolesCollapsed': True" "$stress"
           grep -F "'canUpgrade12DStatisticalStatus': False" "$stress"
           grep -F "'canProduceBetElite': False" "$stress"
           grep -F "'canTuneAtomsOrThresholds': False" "$stress"
