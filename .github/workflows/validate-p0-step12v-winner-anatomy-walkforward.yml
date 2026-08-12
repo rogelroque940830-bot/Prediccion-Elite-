@@ -1,0 +1,160 @@
+name: Validate P0 Step 12V Winner Anatomy Walk-Forward
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12t-abc-cross-signals-2024
+    paths:
+      - 'research/p0-step12v-winner-anatomy-contract.json'
+      - 'scripts/p0-step12v-game-anatomy-feature-table.py'
+      - 'scripts/p0-step12v-winner-anatomy-walkforward.py'
+      - '.github/workflows/validate-p0-step12v-winner-anatomy-walkforward.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  winner-anatomy-walk-forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Validate Step 12V method freeze before result review
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12v-winner-anatomy-contract.json'))
+          assert m['schemaVersion']=='courtedge-p0-step12v-winner-anatomy-contract.v1'
+          d=m['dataBoundary']; l=m['learningContract']; p=m['policy']
+          assert len(d['seasons'])==5
+          assert d['sameDateOutcomeMayTrainSameDate'] is False
+          assert d['finalSeasonStatsMayBackfillEarlierGames'] is False
+          assert d['outcomeRole']=='LABEL_ONLY_AFTER_PREDICTION'
+          assert d['modelStateCarriesOnlyPriorOfficialDates'] is True
+          assert l['marketSpecificModels'] is True
+          assert l['winnerPredictionForEveryScoreableFullGame'] is True
+          assert l['outcomeCannotSelectMarketRetroactively'] is True
+          assert p['historicalPricesUsed'] is False
+          assert p['liveFilterChangeAllowed'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['favorableHistoricalResultRequiredForWorkflowSuccess'] is False
+          print('STEP12V_METHOD_FROZEN_BEFORE_WALK_FORWARD_RESULT_REVIEW')
+          PY
+
+      - name: Syntax-check Step 12V chain
+        run: |
+          node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12v-game-anatomy-feature-table.py scripts/p0-step12v-winner-anatomy-walkforward.py
+
+      - name: Materialize clean T-5 game anatomy tables 2022-2026
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_season () {
+            label="$1"
+            start="$2"
+            end="$3"
+            root="artifacts/p0-step12v/${label}"
+            echo "=== STEP12V BUILD ${label} ${start}..${end} ==="
+
+            node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs \
+              --start "${start}" --end "${end}" --concurrency 6 \
+              --role "STEP12V_WINNER_ANATOMY_${label}" \
+              --out "${root}/cohort"
+
+            node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs \
+              --start "${start}" --end "${end}" --concurrency 6 \
+              --out "${root}/t5-audit"
+
+            python scripts/p0-step12v-game-anatomy-feature-table.py \
+              --dataset "${root}/cohort/dataset.json" \
+              --starter-history "${root}/cohort/starting-pitcher-history.json" \
+              --lineup-history "${root}/cohort/pregame-lineup-history.json" \
+              --t5-audit "${root}/t5-audit/t5-starter-identity-audit.json" \
+              --season "${label}" \
+              --out "${root}/game-anatomy-feature-table.json"
+          }
+
+          build_season 2022 2022-03-01 2022-10-06
+          build_season 2023 2023-03-01 2023-10-01
+          build_season 2024 2024-03-01 2024-10-01
+          build_season 2025 2025-03-01 2025-10-01
+          build_season 2026_YTD 2026-03-01 2026-08-10
+
+      - name: Run date-by-date winner anatomy and multi-market learning
+        run: >-
+          python scripts/p0-step12v-winner-anatomy-walkforward.py
+          --season-table 2022=artifacts/p0-step12v/2022/game-anatomy-feature-table.json
+          --season-table 2023=artifacts/p0-step12v/2023/game-anatomy-feature-table.json
+          --season-table 2024=artifacts/p0-step12v/2024/game-anatomy-feature-table.json
+          --season-table 2025=artifacts/p0-step12v/2025/game-anatomy-feature-table.json
+          --season-table 2026_YTD=artifacts/p0-step12v/2026_YTD/game-anatomy-feature-table.json
+          --out artifacts/p0-step12v/winner-anatomy-walkforward-report.json
+
+      - name: Validate leakage boundary, market breadth and non-cherry-pick execution
+        run: |
+          python - <<'PY'
+          import json
+          seasons=('2022','2023','2024','2025','2026_YTD')
+          for s in seasons:
+            a=json.load(open(f'artifacts/p0-step12v/{s}/t5-audit/t5-starter-identity-audit.json'))
+            t=json.load(open(f'artifacts/p0-step12v/{s}/game-anatomy-feature-table.json'))
+            assert t['schemaVersion']=='courtedge-p0-step12v-game-anatomy-feature-table.v1'
+            assert t['featureContract']['sameDateHistoryAllowed'] is False
+            assert t['featureContract']['currentGameOutcomeUsedAsFeature'] is False
+            assert t['featureContract']['finalSeasonStatsUsedForEarlierGames'] is False
+            assert t['featureContract']['teamHistoryUpdatesAfterWholeDateScored'] is True
+            assert a['counts']['bothProbableCoveragePct']>=95
+            assert t['counts']['coreFeatureUsableRows']>0.85*t['counts']['rows']
+
+          r=json.load(open('artifacts/p0-step12v/winner-anatomy-walkforward-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v-winner-anatomy-walkforward.v1'
+          assert r['method']['sameDateTrainingLeakageAllowed'] is False
+          assert r['method']['futureSeasonStatsAllowed'] is False
+          assert r['method']['onlineTrainingStateCarriesOnlyPriorDates'] is True
+          assert r['marketUniverse']['targetCount']>=50
+          assert set(r['marketUniverse']['coveredFamilies'])=={'MONEYLINE','RUN_LINE','TEAM_TOTAL','TOTAL'}
+          assert r['winnerAnatomy']['winnerPredictionCount']>1000
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['marketSelectionUsesOutcomeAfterPrediction'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          # Deliberately no accuracy threshold: weak evidence must remain visible
+          # instead of failing CI and inviting post-hoc retuning.
+          print(json.dumps({
+            'winner': r['winnerAnatomy']['fullGameWinnerTarget']['metrics'],
+            'bestCurrentPath': r['marketLearning']['bestCurrentAnalyticalPathSignal'],
+            'bestAllResearch': r['marketLearning']['bestAllResearchSignal'],
+            'topTargets': [
+              {'target': x['target']['id'], **{k:x['metrics'][k] for k in ('scoreablePredictions','accuracy','liftVsMajorityBaseline')}}
+              for x in r['marketLearning']['targets'][:15]
+            ]
+          }, indent=2))
+          PY
+
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+
+      - name: Upload Step 12V evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v/
+          if-no-files-found: error
+          retention-days: 30
