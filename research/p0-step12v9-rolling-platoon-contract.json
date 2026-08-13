@@ -2,91 +2,16 @@
   "schemaVersion":"courtedge-p0-step12v9-rolling-platoon-contract.v1",
   "scientificStatus":"ORTHOGONAL_ROLLING_PLATOON_DISCOVERY_NOT_EXTERNAL_CONFIRMATION",
   "objective":"Measure whether prior-date team offensive performance versus pitcher handedness explains Premium A/A+ outcomes beyond simple lineup hand composition.",
-  "parentEvidence":{
-    "step12v3WorkflowRunId":31659518059,
-    "step12v3ArtifactId":9166442982,
-    "step12v8WorkflowRunId":31666193156,
-    "step12v8ArtifactId":9168043658
-  },
+  "parentEvidence":{"step12v3WorkflowRunId":31659518059,"step12v3ArtifactId":9166442982,"step12v8WorkflowRunId":31666193156,"step12v8ArtifactId":9168043658},
   "seasons":["2024","2025","2026_YTD"],
-  "acquisition":{
-    "source":"MLB_STATS_API_FINAL_PLAY_BY_PLAY",
-    "gameUniverse":"CANONICAL_STEP12V3_GAMES_ONLY",
-    "rebuildSchedule":false,
-    "maxConcurrency":6,
-    "maxAttempts":3,
-    "pitcherHandSource":"matchup.pitchHand.code",
-    "validPitcherHands":["R","L"],
-    "battingTeamFromHalfInning":true,
-    "retainOnlyPerGameTeamHandAggregates":true
-  },
-  "chronology":{
-    "sameDateOutcomeMayTrainSameDate":false,
-    "featuresComputedBeforeApplyingAnyGamesFromThatOfficialDate":true,
-    "seasonAccumulatorResetsAtSeasonBoundary":true,
-    "futureSeasonStatsAllowed":false
-  },
-  "counts":{
-    "pa":"all completed play-by-play plate appearances with valid batter, pitcher hand and top/bottom half inning",
-    "hits":["single","double","triple","home_run"],
-    "totalBases":{"single":1,"double":2,"triple":3,"home_run":4},
-    "walks":["walk","intent_walk"],
-    "hitByPitch":["hit_by_pitch"],
-    "strikeouts":["strikeout","strikeout_double_play"],
-    "sacrificeFlies":["sac_fly","sac_fly_double_play"],
-    "nonAtBatEvents":["walk","intent_walk","hit_by_pitch","sac_bunt","sac_bunt_double_play","sac_fly","sac_fly_double_play","catcher_interf"]
-  },
-  "derivedRates":{
-    "avg":"H/AB",
-    "obp":"(H+BB+HBP)/(AB+BB+HBP+SF)",
-    "slg":"TB/AB",
-    "ops":"OBP+SLG",
-    "onbase_pa":"(H+BB+HBP)/PA",
-    "tb_pa":"TB/PA",
-    "hr_pa":"HR/PA",
-    "xbh_pa":"(2B+3B+HR)/PA",
-    "bb_pa":"BB/PA",
-    "k_pa":"SO/PA",
-    "bb_minus_k_pa":"(BB-SO)/PA"
-  },
-  "matchupFeatures":{
-    "homeRequiredSplit":"home offense vs away probable starter hand",
-    "awayRequiredSplit":"away offense vs home probable starter hand",
-    "advantageDirection":"home rate minus away rate except k_pa where away minus home is favorable to home",
-    "metrics":["ops","obp","slg","hr_pa","xbh_pa","bb_minus_k_pa"]
-  },
-  "reliability":{
-    "minimumPriorPaPerRequiredHandPrimary":50,
-    "highReliabilityPriorPaPerRequiredHand":100,
-    "noMissingSplitImputation":true
-  },
-  "inferentialFamily":{
-    "populations":["A_PLUS","A_NONPLUS"],
-    "metrics":["ops_adv","obp_adv","slg_adv","hr_pa_adv","xbh_pa_adv","bb_minus_k_pa_adv"],
-    "test":"TWO_SIDED_MANN_WHITNEY_WINNERS_VS_LOSERS",
-    "effectSize":"CLIFFS_DELTA_FROM_U",
-    "multipleTesting":"HOLM_ACROSS_12_PREDECLARED_TESTS",
-    "signBinsDescriptiveOnly":true,
-    "noOutcomeBasedThresholdSearch":true
-  },
-  "diagnostics":{
-    "reportEligibleCoverage":true,
-    "reportBySeason":true,
-    "reportHighReliabilitySubset":true,
-    "reportSignBinHitRates":true,
-    "reportWinnerLoserMeansMedians":true,
-    "reportMinimumPriorPa":true
-  },
-  "policy":{
-    "researchOnly":true,
-    "sameDateOutcomeLeakageAllowed":false,
-    "futureSeasonStatsAllowed":false,
-    "historicalPricesUsed":false,
-    "liveFilterChangeAllowed":false,
-    "rankingChangeAllowed":false,
-    "stakeChangeAllowed":false,
-    "betEliteAllowed":false,
-    "premiumAPicksMayBeRemoved":false,
-    "prospective11cRequiredBeforePromotion":true
-  }
+  "acquisition":{"source":"MLB_STATS_API_FINAL_PLAY_BY_PLAY","gameUniverse":"CANONICAL_STEP12V3_GAMES_ONLY","rebuildSchedule":false,"maxConcurrency":6,"maxAttempts":3,"pitcherHandSource":"matchup.pitchHand.code","validPitcherHands":["R","L"],"battingTeamFromHalfInning":true,"retainOnlyPerGameTeamHandAggregates":true},
+  "chronology":{"sameDateOutcomeMayTrainSameDate":false,"featuresComputedBeforeApplyingAnyGamesFromThatOfficialDate":true,"seasonAccumulatorResetsAtSeasonBoundary":true,"futureSeasonStatsAllowed":false},
+  "counts":{"pa":"all completed play-by-play plate appearances with valid batter, pitcher hand and top/bottom half inning","hits":["single","double","triple","home_run"],"totalBases":{"single":1,"double":2,"triple":3,"home_run":4},"walks":["walk","intent_walk"],"hitByPitch":["hit_by_pitch"],"strikeouts":["strikeout","strikeout_double_play"],"sacrificeFlies":["sac_fly","sac_fly_double_play"],"nonAtBatEvents":["walk","intent_walk","hit_by_pitch","sac_bunt","sac_bunt_double_play","sac_fly","sac_fly_double_play","catcher_interf"]},
+  "derivedRates":{"avg":"H/AB","obp":"(H+BB+HBP)/(AB+BB+HBP+SF)","slg":"TB/AB","ops":"OBP+SLG","onbase_pa":"(H+BB+HBP)/PA","tb_pa":"TB/PA","hr_pa":"HR/PA","xbh_pa":"(2B+3B+HR)/PA","bb_pa":"BB/PA","k_pa":"SO/PA","bb_minus_k_pa":"(BB-SO)/PA"},
+  "matchupFeatures":{"homeRequiredSplit":"home offense vs away probable starter hand","awayRequiredSplit":"away offense vs home probable starter hand","advantageDirection":"home rate minus away rate except k_pa where away minus home is favorable to home","metrics":["ops","obp","slg","hr_pa","xbh_pa","bb_minus_k_pa"]},
+  "reliability":{"minimumPriorPaPerRequiredHandPrimary":50,"highReliabilityPriorPaPerRequiredHand":100,"noMissingSplitImputation":true},
+  "coverageGate":{"minimumPremiumAEligibleShare":0.60,"minimumAPlusEligibleShare":0.60,"belowGateClassification":"INSUFFICIENT_ROLLING_PLATOON_COVERAGE"},
+  "inferentialFamily":{"populations":["A_PLUS","A_NONPLUS"],"metrics":["ops_adv","obp_adv","slg_adv","hr_pa_adv","xbh_pa_adv","bb_minus_k_pa_adv"],"test":"TWO_SIDED_MANN_WHITNEY_WINNERS_VS_LOSERS","effectSize":"CLIFFS_DELTA_FROM_U","multipleTesting":"HOLM_ACROSS_12_PREDECLARED_TESTS","signBinsDescriptiveOnly":true,"noOutcomeBasedThresholdSearch":true},
+  "diagnostics":{"reportEligibleCoverage":true,"reportBySeason":true,"reportHighReliabilitySubset":true,"reportSignBinHitRates":true,"reportWinnerLoserMeansMedians":true,"reportMinimumPriorPa":true},
+  "policy":{"researchOnly":true,"sameDateOutcomeLeakageAllowed":false,"futureSeasonStatsAllowed":false,"historicalPricesUsed":false,"liveFilterChangeAllowed":false,"rankingChangeAllowed":false,"stakeChangeAllowed":false,"betEliteAllowed":false,"premiumAPicksMayBeRemoved":false,"prospective11cRequiredBeforePromotion":true}
 }
