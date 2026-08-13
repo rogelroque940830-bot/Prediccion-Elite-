@@ -1,0 +1,92 @@
+name: Validate P0 Step 12V10 Platoon Precision Volume Frontier
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v9-rolling-platoon-performance
+    paths:
+      - 'research/p0-step12v10-platoon-precision-volume-contract.json'
+      - 'scripts/p0-step12v10-platoon-precision-volume-frontier.py'
+      - '.github/workflows/validate-p0-step12v10-platoon-precision-volume.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  precision-volume-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+      - name: Validate frozen V10 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v10-platoon-precision-volume-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v10-platoon-precision-volume-contract.v1'
+          assert c['population']['expectedRows']==95
+          assert len(c['signals'])==3
+          assert len(c['cohorts'])==9
+          assert c['inferentialFamily']['noOutcomeBasedThresholdSearch'] is True
+          assert c['inferentialFamily']['noAdditionalCohortsAfterResults'] is True
+          assert c['frontier']['doNotChooseByHitRateAlone'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V10_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check
+        run: python -m py_compile scripts/p0-step12v10-platoon-precision-volume-frontier.py
+      - name: Download canonical Step 12V9 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v9-rolling-platoon-performance
+          path: artifacts/p0-step12v9
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31666803576
+      - name: Run frozen precision-volume frontier
+        run: >-
+          python scripts/p0-step12v10-platoon-precision-volume-frontier.py
+          --v9-report artifacts/p0-step12v9/rolling-platoon-report.json
+          --contract research/p0-step12v10-platoon-precision-volume-contract.json
+          --out artifacts/p0-step12v10/precision-volume-frontier-report.json
+      - name: Validate evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v10/precision-volume-frontier-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v10-platoon-precision-volume-frontier.v1'
+          assert r['baselineAPlus']['rows']==95
+          assert len(r['cohorts'])==9
+          assert len(r['inferentialTests'])==9
+          assert r['policy']['liveFilterChangeAllowed'] is False
+          assert r['policy']['rankingChangeAllowed'] is False
+          assert r['policy']['stakeChangeAllowed'] is False
+          assert r['policy']['betEliteAllowed'] is False
+          print(json.dumps({'baseline':r['baselineAPlus'],'frontier':r['paretoEfficientCohorts'],'cohorts':r['cohorts'],'tests':r['inferentialTests'],'redundancy':r['signalRedundancy']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v10-platoon-precision-volume-frontier
+          path: artifacts/p0-step12v10/
+          if-no-files-found: error
+          retention-days: 30
