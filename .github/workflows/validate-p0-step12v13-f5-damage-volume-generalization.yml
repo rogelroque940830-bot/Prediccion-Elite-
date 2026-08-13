@@ -1,0 +1,143 @@
+name: Validate P0 Step 12V13 F5 Damage Volume Generalization
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v12-pitchmix-lineup-matchup
+    paths:
+      - 'research/p0-step12v13-f5-damage-volume-generalization-contract.json'
+      - 'scripts/p0-step12v13-f5-damage-volume-generalization.py'
+      - '.github/workflows/validate-p0-step12v13-f5-damage-volume-generalization.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen V13 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v13-f5-damage-volume-generalization-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v13-f5-damage-volume-generalization-contract.v1'
+          assert c['dataBoundary']['reuseStep12v12PitchPacksOnly'] is True
+          assert c['dataBoundary']['newMlbAcquisitionAllowed'] is False
+          assert c['dataBoundary']['sameDateOutcomeLeakageAllowed'] is False
+          assert len(c['predeclaredGeneralizations'])==6
+          assert c['statistics']['noNumericThresholdSearch'] is True
+          assert c['statistics']['noAdditionalCohortsAfterResults'] is True
+          assert c['volumePolicy']['coreMinimumDecisiveRows']==50
+          assert c['candidateRubric']['coreGeneralizationCandidate']['minimumLiftVsEligibleBaselinePp']==2.0
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V13_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check V13 scorer
+        run: python -m py_compile scripts/p0-step12v13-f5-damage-volume-generalization.py
+
+  damage-volume-study:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependency
+        run: python -m pip install --disable-pip-version-check 'scipy==1.18.0'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download frozen Step 12V7 F5 route
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v7-f5-elite-route-anatomy
+          path: artifacts/p0-step12v7
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31665659665
+      - name: Download canonical V12 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-lineup-matchup
+          path: artifacts/p0-step12v12-report
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+      - name: Download canonical V12 pitch-mix packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v12-pitchmix-*
+          path: artifacts/p0-step12v12-pitchmix
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+      - name: Validate immutable parent evidence
+        run: |
+          test -s artifacts/p0-step12v12-report/pitchmix-lineup-matchup-report.json
+          test -s artifacts/p0-step12v7/f5-route-report.json
+          for s in 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v12-pitchmix/pitchmix-${s}.json"
+          done
+      - name: Run frozen V13 damage-volume generalization
+        run: |
+          mkdir -p artifacts/p0-step12v13
+          python scripts/p0-step12v13-f5-damage-volume-generalization.py \
+            --root artifacts/p0-step12v3 \
+            --pitch-dir artifacts/p0-step12v12-pitchmix \
+            --v7-report artifacts/p0-step12v7/f5-route-report.json \
+            --a-contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --v12-contract research/p0-step12v12-pitchmix-lineup-matchup-contract.json \
+            --v12-report artifacts/p0-step12v12-report/pitchmix-lineup-matchup-report.json \
+            --contract research/p0-step12v13-f5-damage-volume-generalization-contract.json \
+            --out artifacts/p0-step12v13/f5-damage-volume-generalization-report.json
+      - name: Validate scientific boundary and decision table
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v13/f5-damage-volume-generalization-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v13-f5-damage-volume-generalization.v1'
+          assert len(r['generalizations'])==6
+          assert len(r['fisherTests'])==6
+          f=r['frozenBaseline'];e=r['eligibleBaseline']
+          assert (f['selectedRows'],f['decisiveRows'],f['wins'],f['losses'],f['pushes'])==(79,67,49,18,12)
+          assert (e['selectedRows'],e['decisiveRows'],e['wins'],e['losses'],e['pushes'])==(72,61,45,16,11)
+          assert (r['reproducedV12Anchors']['HRPA_POS']['wins'],r['reproducedV12Anchors']['HRPA_POS']['losses'])==(28,4)
+          assert r['policy']['newMlbAcquisitionUsed'] is False
+          assert r['policy']['liveFilterChangeAllowed'] is False
+          assert r['policy']['betEliteAllowed'] is False
+          print(json.dumps({'classification':r['classification'],'eligibleBaseline':e,'generalizations':r['generalizations'],'tests':r['fisherTests'],'pareto':r['paretoEfficientGeneralizations']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V13 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v13-f5-damage-volume-generalization
+          path: artifacts/p0-step12v13/
+          if-no-files-found: error
+          retention-days: 30
