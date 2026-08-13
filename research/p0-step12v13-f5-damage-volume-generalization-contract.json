@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "courtedge-p0-step12v13-f5-damage-volume-generalization-contract.v1",
+  "scientificStatus": "POST_V12_DAMAGE_GENERALIZATION_DISCOVERY_NOT_CONFIRMATION",
+  "objective": "Test whether the three Pareto-efficient Step 12V12 F5 outside-Premium-A pitch-mix signals can be generalized by predeclared logical unions to cross the operational 50-decision floor while retaining a meaningful precision improvement.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v7WorkflowRunId": 31665659665,
+    "step12v12WorkflowRunId": 31669146698,
+    "step12v12ReportArtifactId": 9169138109,
+    "step12v12ReportDigest": "sha256:7409a03808286f5d6a14c22a78f56558d11592b2e4b16d67d66314d9ec3131d1",
+    "aPlusContract": "research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json"
+  },
+  "dataBoundary": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "rollingLookbackDays": 365,
+    "reuseStep12v12PitchPacksOnly": true,
+    "newMlbAcquisitionAllowed": false,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGamePitchDataAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "historicalPricesUsed": false
+  },
+  "frozenPopulation": {
+    "name": "F5_CONSENSUS_OUTSIDE_PREMIUM_A",
+    "target": "FIRST_5:RESULT:HOME",
+    "frozenBaseline": {"selectedRows": 79, "decisiveRows": 67, "wins": 49, "losses": 18, "pushes": 12, "hitRate": 0.7313432835820896},
+    "pitchmixEligibleBaseline": {"selectedRows": 72, "decisiveRows": 61, "wins": 45, "losses": 16, "pushes": 11, "hitRate": 0.7377049180327869},
+    "expectedEligibleShare": 0.9113924050632911
+  },
+  "frozenV12Anchors": {
+    "HRPA_POS": {"selectedRows": 38, "decisiveRows": 32, "wins": 28, "losses": 4, "pushes": 6, "hitRate": 0.875},
+    "TBPA_POS": {"selectedRows": 41, "decisiveRows": 35, "wins": 28, "losses": 7, "pushes": 6, "hitRate": 0.8},
+    "AT_LEAST_2_OF_4": {"selectedRows": 56, "decisiveRows": 47, "wins": 36, "losses": 11, "pushes": 9, "hitRate": 0.7659574468085106}
+  },
+  "predeclaredGeneralizations": {
+    "DAMAGE_ANY_POS": "HRPA_POS OR TBPA_POS",
+    "HRPA_OR_AT2": "HRPA_POS OR AT_LEAST_2_OF_4",
+    "TBPA_OR_AT2": "TBPA_POS OR AT_LEAST_2_OF_4",
+    "PARETO_UNION": "HRPA_POS OR TBPA_POS OR AT_LEAST_2_OF_4",
+    "DAMAGE_AND_AT2": "(HRPA_POS OR TBPA_POS) AND AT_LEAST_2_OF_4",
+    "HRPA_AND_TBPA": "HRPA_POS AND TBPA_POS"
+  },
+  "statistics": {
+    "exactlySixGeneralizations": true,
+    "noAdditionalCohortsAfterResults": true,
+    "noNumericThresholdSearch": true,
+    "fisherExactSelectedVsEligibleComplement": true,
+    "holmCorrectionAcrossSixTests": true,
+    "reportWilson95": true,
+    "reportBySeason": true,
+    "reportLeaveOneMonthOut": true,
+    "reportPrecisionVolumeFrontier": true,
+    "reportLiftVsFrozenAndEligibleBaseline": true,
+    "reportPrecisionGainPer10PctEligibleVolumeLost": true
+  },
+  "volumePolicy": {
+    "coreMinimumDecisiveRows": 50,
+    "selectiveShadowMinimumDecisiveRows": 35,
+    "doNotChooseByHitRateAlone": true,
+    "minimumCoreRetainedPctOfEligibleDecisions": 81.0
+  },
+  "candidateRubric": {
+    "coreGeneralizationCandidate": {
+      "minimumDecisiveRows": 50,
+      "minimumLiftVsEligibleBaselinePp": 2.0,
+      "minimumHitRateEverySeason": 0.65,
+      "minimumLeaveOneMonthOutHitRate": 0.70
+    },
+    "coreVolumeOnly": "Meets the 50-decision floor but misses one or more quality gates.",
+    "selectiveShadowOnly": "Has 35-49 decisive rows regardless of retrospective hit rate.",
+    "tooThin": "Has fewer than 35 decisive rows."
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "premiumAOrAPlusPicksMayBeRemoved": false,
+    "prospective11cRequiredBeforePromotion": true
+  }
+}
