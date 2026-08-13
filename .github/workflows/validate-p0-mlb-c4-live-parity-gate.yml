@@ -1,0 +1,122 @@
+name: Validate P0 MLB C4 Live Parity Gate
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-step10-v16-pure-settlement-adapter
+    paths:
+      - 'research/p0-mlb-c4-live-parity-contract.json'
+      - 'server/mlb-c4-live-feature-producer.ts'
+      - 'scripts/p0-mlb-c4-live-parity-replay.ts'
+      - '.github/workflows/validate-p0-mlb-c4-live-parity-gate.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate frozen parity contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-mlb-c4-live-parity-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-mlb-c4-live-parity-contract.v1'
+          assert c['parent']['headSha']=='495c98e1e9385090cc845dbe88485b8a64dac940'
+          assert c['canonicalSource']['featureBuilderBlobSha']=='577dcb95da6f593cb6d6643f8a2272bd59820a21'
+          assert c['canonicalSource']['artifactWorkflowRun']==31649438822
+          assert c['frozenC4']['features']==['lineup_exposure_rate_adv','starter_kbb_adv','combined_team_rs10','team_rd10_diff']
+          assert c['chronology']['sameDateOutcomeMayAffectFeature'] is False
+          assert c['chronology']['sameDateGameMayTrainAnotherSameDateGame'] is False
+          assert c['replay']['numericAbsoluteTolerance']==1e-12
+          assert c['passGate']['requiredFeaturesPassing']==4
+          assert c['passGate']['allowedMissingnessMismatches']==0
+          assert c['passGate']['allowedNumericMismatches']==0
+          assert c['runtimeBoundary']['v16MayConsumeLiveC4BeforeGatePasses'] is False
+          assert c['scientificBoundary']['retunesV16'] is False
+          print('C4_LIVE_PARITY_CONTRACT_LOCKED')
+          PY
+      - name: Compile producer and replay harness
+        run: |
+          npx esbuild server/mlb-c4-live-feature-producer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/c4-producer.cjs
+          npx esbuild scripts/p0-mlb-c4-live-parity-replay.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/c4-replay.cjs
+
+  canonical-replay:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Download immutable canonical Step12V source snapshots
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Verify required replay inputs
+        run: |
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v/${s}/cohort/dataset.json"
+            test -s "artifacts/p0-step12v/${s}/cohort/starting-pitcher-history.json"
+            test -s "artifacts/p0-step12v/${s}/cohort/pregame-lineup-history.json"
+            test -s "artifacts/p0-step12v/${s}/t5-audit/t5-starter-identity-audit.json"
+            test -s "artifacts/p0-step12v/${s}/game-anatomy-feature-table.json"
+          done
+      - name: Replay production C4 producer against canonical rows
+        run: |
+          mkdir -p artifacts/p0-c4-live-parity
+          npx tsx scripts/p0-mlb-c4-live-parity-replay.ts \
+            --root artifacts/p0-step12v \
+            --contract research/p0-mlb-c4-live-parity-contract.json \
+            --out artifacts/p0-c4-live-parity/c4-live-parity-report.json
+      - name: Enforce four-of-four parity and zero row drift
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-c4-live-parity/c4-live-parity-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-mlb-c4-live-parity-report.v1'
+          assert r['classification']=='TECHNICAL_LIVE_PARITY_GATE_NOT_SCIENTIFIC_EVIDENCE'
+          assert r['allPassed'] is True
+          assert r['counts']['featuresPassing']==4
+          assert r['counts']['featuresRequired']==4
+          assert r['counts']['rowIdentityMismatches']==0
+          assert r['counts']['canonicalRows']==r['counts']['replayRows']
+          for name, x in r['byFeature'].items():
+            assert x['passed'] is True, (name,x)
+            assert x['missingnessMismatches']==0, (name,x)
+            assert x['numericMismatches']==0, (name,x)
+            assert x['maxAbsError']<=1e-12, (name,x)
+          assert r['policy']['scientificEvidenceCreated'] is False
+          assert r['policy']['liveRecommendationChanged'] is False
+          print(json.dumps({'counts':r['counts'],'byFeature':r['byFeature']},indent=2))
+          PY
+      - name: Preserve V16, Step 9, Step 11A and backend regressions
+        run: |
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npm run build:backend
+      - name: Upload C4 parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-mlb-c4-live-parity-gate
+          path: artifacts/p0-c4-live-parity/
+          if-no-files-found: error
+          retention-days: 30

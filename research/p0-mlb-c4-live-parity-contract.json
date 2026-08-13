@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "courtedge-p0-mlb-c4-live-parity-contract.v1",
+  "objective": "Prove that the production-oriented C4 pregame feature producer reproduces the canonical Step12V C4 feature values and missingness on identical historical pregame snapshots before V16 can be wired into the live runner.",
+  "classification": "TECHNICAL_LIVE_PARITY_GATE_NOT_SCIENTIFIC_EVIDENCE",
+  "parent": {
+    "pr": 535,
+    "headSha": "495c98e1e9385090cc845dbe88485b8a64dac940"
+  },
+  "canonicalSource": {
+    "pr": 516,
+    "headSha": "074453445ef8f2a1152149d52eadd519e28a3a71",
+    "featureBuilderPath": "scripts/p0-step12v-game-anatomy-feature-table.py",
+    "featureBuilderBlobSha": "577dcb95da6f593cb6d6643f8a2272bd59820a21",
+    "artifactWorkflowRun": 31649438822,
+    "artifactName": "p0-step12v-winner-anatomy-walkforward",
+    "featureTableSchema": "courtedge-p0-step12v-game-anatomy-feature-table.v1"
+  },
+  "frozenC4": {
+    "features": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "combined_team_rs10",
+      "team_rd10_diff"
+    ],
+    "homeAwaySignConvention": "ADVANTAGES_AND_DIFFERENCES_ARE_HOME_MINUS_AWAY_EXCEPT_NOT_APPLICABLE_TO_COMBINED_TEAM_RS10",
+    "lineup_exposure_rate_adv": {
+      "formula": "mean(home_lineup_player_prior_apps / home_team_prior_games) - mean(away_lineup_player_prior_apps / away_team_prior_games)",
+      "lineupSize": 9,
+      "playerPriorAppsIncrement": "ONE_PER_COMPLETE_VALID_PREGAME_LINEUP_APPEARANCE",
+      "minimumTeamPriorGames": 1,
+      "requiresAuditValid": true,
+      "requiresCompleteLineup": true,
+      "missingPlayerPriorApps": 0,
+      "imputationInsideFeatureProducer": false
+    },
+    "starter_kbb_adv": {
+      "formula": "home_shrunk_kbb_per_bf - away_shrunk_kbb_per_bf",
+      "starterShrunkKbbFormula": "(starter_prior_SO_minus_BB + 72 * prior_league_SO_minus_BB_per_BF) / (starter_prior_BF + 72)",
+      "priorBattersFaced": 72,
+      "leagueRateFormula": "sum(prior_pitcher_SO_minus_BB) / sum(prior_pitcher_BF)",
+      "leagueLinesRequirePositiveBattersFaced": true,
+      "starterHistoryLinesRequirePositiveBattersFaced": true,
+      "currentStarterIdentity": "T5_PROBABLE_PITCHER_ID_FROM_CANONICAL_AUDIT",
+      "historicalPitcherUpdatesUse": "ACTUAL_FINAL_STARTER_LINES_AFTER_WHOLE_OFFICIAL_DATE",
+      "requiresAuditValid": true,
+      "requiresBothProbablesKnown": true,
+      "imputationInsideFeatureProducer": false
+    },
+    "combined_team_rs10": {
+      "formula": "mean(home_runs_scored_over_most_recent_up_to_10_prior_games) + mean(away_runs_scored_over_most_recent_up_to_10_prior_games)",
+      "windowMaximumGames": 10,
+      "minimumPriorGamesPerTeam": 5,
+      "imputationInsideFeatureProducer": false
+    },
+    "team_rd10_diff": {
+      "formula": "mean(home_RS_minus_RA_over_most_recent_up_to_10_prior_games) - mean(away_RS_minus_RA_over_most_recent_up_to_10_prior_games)",
+      "windowMaximumGames": 10,
+      "minimumPriorGamesPerTeam": 5,
+      "imputationInsideFeatureProducer": false
+    }
+  },
+  "chronology": {
+    "featureStateMayUseOnlyPriorOfficialDates": true,
+    "sameDateOutcomeMayAffectFeature": false,
+    "sameDateGameMayTrainAnotherSameDateGame": false,
+    "wholeOfficialDateUpdatesOnlyAfterAllGamesOnDateAreScored": true,
+    "futureSeasonStatsAllowed": false,
+    "currentGameOutcomeAllowedAsFeature": false,
+    "doubleheaderIsolationByOfficialDate": true
+  },
+  "auditValidity": {
+    "requiresAll": [
+      "identityOk",
+      "sourceHistorical",
+      "pregame"
+    ],
+    "probableBothKnownIsAdditionalRequirementForStarterFeature": true,
+    "noCurrentMetadataFallback": true,
+    "noStarterHandOrIdentityImputation": true
+  },
+  "replay": {
+    "seasons": [
+      "2022",
+      "2023",
+      "2024",
+      "2025",
+      "2026_YTD"
+    ],
+    "inputsPerSeason": [
+      "cohort/dataset.json",
+      "cohort/starting-pitcher-history.json",
+      "cohort/pregame-lineup-history.json",
+      "t5-audit/t5-starter-identity-audit.json"
+    ],
+    "canonicalReferencePerSeason": "game-anatomy-feature-table.json",
+    "compareEveryCanonicalRow": true,
+    "compareMissingness": true,
+    "numericAbsoluteTolerance": 1e-12,
+    "toleranceFrozenBeforeReplay": true
+  },
+  "passGate": {
+    "requiredFeaturesPassing": 4,
+    "totalFeatures": 4,
+    "requiredRowCoveragePct": 100,
+    "allowedMissingnessMismatches": 0,
+    "allowedNumericMismatches": 0,
+    "failClosedIfCanonicalRowMissing": true,
+    "failClosedIfUnexpectedReplayRow": true,
+    "failClosedIfSourceSchemaDrifts": true
+  },
+  "runtimeBoundary": {
+    "liveC4MayBeMarkedParityReadyOnlyAfterGatePasses": true,
+    "v16MayConsumeLiveC4BeforeGatePasses": false,
+    "missingOrUnverifiedC4MustFailClosed": true,
+    "legacyProbabilityEvidenceMayBeReclassified": false,
+    "step11aPopulationMayChange": false,
+    "step11cPopulationMayChange": false,
+    "frozenResearchRoutesMayChange": false,
+    "liveRankingMayChange": false,
+    "stakeMayChange": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "scientificBoundary": {
+    "createsNewHistoricalHypothesis": false,
+    "createsIndependentConfirmation": false,
+    "retunesV16": false,
+    "retunesAPlus": false,
+    "retunesAnyHistoricalThreshold": false,
+    "purpose": "TECHNICAL_REPRODUCTION_AND_CHAIN_OF_CUSTODY_ONLY"
+  }
+}
