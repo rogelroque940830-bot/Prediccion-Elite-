@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "courtedge-p0-step12v5-compact-interaction-contract.v1",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v4WorkflowRunId": 31663188622,
+    "step12v4ArtifactId": 9166990594
+  },
+  "scientificStatus": "SECONDARY_DISCOVERY_AFTER_V4_NOT_EXTERNAL_CONFIRMATION",
+  "dataBoundary": {
+    "trainingSeason": "2022",
+    "thresholdSelectionSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeMayTrainSameDate": false,
+    "futureSeasonStatsAllowed": false,
+    "historicalPricesUsed": false,
+    "noThresholdRetuningAfter2023": true
+  },
+  "baseline": {"name": "BASE44", "featureCount": 44},
+  "families": {
+    "TEAM_LAST5": ["team_win5_diff", "team_rs5_diff", "team_ra5_adv", "team_rd5_diff"],
+    "BULLPEN_OUTS_PROXY": ["bullpen_outs_adv_1d", "bullpen_outs_adv_2d", "bullpen_outs_adv_3d"],
+    "STARTER_REST": ["home_starter_rest_days", "away_starter_rest_days", "starter_rest_adv"],
+    "STARTER_RECENT_L3": [
+      "starter_l3_kbb_adv", "starter_l3_erbf_adv", "starter_l3_hrbf_adv", "starter_l3_hbbbf_adv",
+      "starter_l3_strike_rate_adv", "starter_l3_pitches_per_bf_adv", "starter_l3_outs_per_bf_adv", "starter_l3_outs_per_start_adv"
+    ],
+    "VENUE_LAST5": ["venue_win5_diff", "venue_rs5_diff", "venue_ra5_adv", "venue_rd5_diff"]
+  },
+  "frozenCandidates": {
+    "C01_TEAM5": ["TEAM_LAST5"],
+    "C02_TEAM5_BP": ["TEAM_LAST5", "BULLPEN_OUTS_PROXY"],
+    "C03_TEAM5_REST": ["TEAM_LAST5", "STARTER_REST"],
+    "C04_TEAM5_L3": ["TEAM_LAST5", "STARTER_RECENT_L3"],
+    "C05_TEAM5_VENUE5": ["TEAM_LAST5", "VENUE_LAST5"],
+    "C06_TEAM5_BP_REST": ["TEAM_LAST5", "BULLPEN_OUTS_PROXY", "STARTER_REST"],
+    "C07_TEAM5_BP_L3": ["TEAM_LAST5", "BULLPEN_OUTS_PROXY", "STARTER_RECENT_L3"],
+    "C08_TEAM5_REST_L3": ["TEAM_LAST5", "STARTER_REST", "STARTER_RECENT_L3"],
+    "C09_TEAM5_BP_REST_L3": ["TEAM_LAST5", "BULLPEN_OUTS_PROXY", "STARTER_REST", "STARTER_RECENT_L3"],
+    "C10_TEAM5_BP_REST_VENUE5": ["TEAM_LAST5", "BULLPEN_OUTS_PROXY", "STARTER_REST", "VENUE_LAST5"]
+  },
+  "model": {
+    "family": "XGBOOST_BINARY",
+    "nEstimators": 180,
+    "maxDepth": 2,
+    "learningRate": 0.04,
+    "subsample": 0.8,
+    "colsampleBytree": 0.7,
+    "regLambda": 4.0,
+    "regAlpha": 0.5,
+    "minChildWeight": 8.0,
+    "randomState": 42
+  },
+  "selection": {
+    "thresholdGrid": [0.60,0.62,0.64,0.65,0.66,0.67,0.68,0.69,0.70,0.71,0.72,0.73,0.74,0.75],
+    "minimumDevelopmentRows": 80,
+    "qualityThresholdRule": "MAX_WILSON_LOWER_THEN_VOLUME",
+    "alsoReportVolumeMatchedToBase44": true
+  },
+  "ranking": {
+    "primary": "REPLICATION_WILSON_LOWER",
+    "tieBreakers": ["MIN_SEASON_LIFT", "VOLUME_RATIO", "AUC_DELTA", "FEWER_ADDED_FEATURES"],
+    "doNotPromoteFromThisStudy": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "premiumAPicksMayBeRemoved": false,
+    "prospective11cRequiredBeforeOperationalPromotion": true
+  }
+}
