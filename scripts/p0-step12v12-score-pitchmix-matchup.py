@@ -157,7 +157,8 @@ def main():
             num+=w*(tr-lr);coverage+=w
         return {'value':num/coverage if coverage>0 else None,'coverage':coverage,'starter':sm}
 
-    # Recreate frozen target populations exactly.
+    # Recreate frozen target populations exactly. Missing probable-starter IDs remain
+    # in the frozen population and are handled later as ineligible matchup rows.
     rows=[]
     thresholds=v7['thresholdSelection2023'];m1=v7['fitted2022Models']['F5_C4'];m2=v7['fitted2022Models']['F5_FULL13']
     for s in EVAL:
@@ -168,7 +169,8 @@ def main():
             f=r['features'];A=is_a(f,ac);Aplus=is_aplus(f,ac)
             p1=frozen_v7_prob(f,m1);p2=frozen_v7_prob(f,m2);F5route=p1>=float(thresholds['c4']) and p2>=float(thresholds['full13'])
             fg=r['outcomes']['FULL_GAME'];f5=r['outcomes']['FIRST_5'];f5y=None if f5['homeRuns']==f5['awayRuns'] else int(f5['homeRuns']>f5['awayRuns'])
-            rows.append({'season':s,'date':r['officialDate'],'gamePk':int(r['gamePk']),'homeTeamId':int(r['homeTeamId']),'awayTeamId':int(r['awayTeamId']),'homeStarterId':int(r['t5HomeProbablePitcherId']),'awayStarterId':int(r['t5AwayProbablePitcherId']),'A':A,'Aplus':Aplus,'F5route':F5route,'fgy':int(fg['homeRuns']>fg['awayRuns']),'f5y':f5y})
+            hp=r.get('t5HomeProbablePitcherId');ap_=r.get('t5AwayProbablePitcherId')
+            rows.append({'season':s,'date':r['officialDate'],'gamePk':int(r['gamePk']),'homeTeamId':int(r['homeTeamId']),'awayTeamId':int(r['awayTeamId']),'homeStarterId':int(hp) if hp is not None else None,'awayStarterId':int(ap_) if ap_ is not None else None,'A':A,'Aplus':Aplus,'F5route':F5route,'fgy':int(fg['homeRuns']>fg['awayRuns']),'f5y':f5y})
     aplus=[x for x in rows if x['Aplus']];f5out=[x for x in rows if x['F5route'] and not x['A']]
     fp=c['frozenPopulations']
     if len(aplus)!=int(fp['A_PLUS_FULL_GAME_HOME']['expectedSelectedRows']):raise SystemExit(f'STEP12V12_APLUS_COUNT:{len(aplus)}')
@@ -179,7 +181,13 @@ def main():
 
     reasons=Counter()
     def enrich(x):
-        target=date.fromisoformat(x['date']);hs=starter_mix(x['homeStarterId'],target);aws=starter_mix(x['awayStarterId'],target)
+        target=date.fromisoformat(x['date'])
+        if x['homeStarterId'] is None or x['awayStarterId'] is None:
+            vals={m:None for m in METRICS};x=dict(x);x.update(vals);x['eligible']=False;x['eligibilityReasons']=['STARTER_ID_MISSING'];x['positiveCount']=0
+            x['diagnostic']={'homeStarterAllPitches':None,'awayStarterAllPitches':None,'homeStarterCategorizedShare':None,'awayStarterCategorizedShare':None,'metricCoverage':{k:{'home':0.0,'away':0.0} for k in ('CONTACT','WHIFF','TBPA','HRPA')}}
+            reasons['STARTER_ID_MISSING']+=1
+            return x
+        hs=starter_mix(x['homeStarterId'],target);aws=starter_mix(x['awayStarterId'],target)
         reason=[]
         for label,sm in (('HOME_STARTER',hs),('AWAY_STARTER',aws)):
             if sm['allPitches']<float(rel['minimumStarterAllPitches365d']):reason.append(label+'_LOW_PITCHES')
