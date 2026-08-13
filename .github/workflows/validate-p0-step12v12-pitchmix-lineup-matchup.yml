@@ -1,0 +1,175 @@
+name: Validate P0 Step 12V12 Pitch-Mix Lineup Matchup
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v11-f5-independent-platoon-route
+    paths:
+      - 'research/p0-step12v12-pitchmix-lineup-matchup-contract.json'
+      - 'scripts/p0-step12v12-acquire-pitchmix.py'
+      - 'scripts/p0-step12v12-score-pitchmix-matchup.py'
+      - '.github/workflows/validate-p0-step12v12-pitchmix-lineup-matchup.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen V12 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v12-pitchmix-lineup-matchup-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v12-pitchmix-lineup-matchup-contract.v1'
+          assert c['dataBoundary']['warmupSeason']=='2023'
+          assert c['dataBoundary']['rollingLookbackDays']==365
+          assert c['dataBoundary']['sameDateOutcomeLeakageAllowed'] is False
+          assert len(c['rollingMetrics'])==4
+          assert len(c['predeclaredSignCohorts'])==6
+          codes=[]
+          for v in c['pitchFamilies'].values(): codes.extend(v)
+          assert len(codes)==len(set(codes))
+          assert c['statistics']['noNumericThresholdSearch'] is True
+          assert c['statistics']['noAdditionalCohortsAfterResults'] is True
+          assert c['volumePolicy']['doNotChooseByHitRateAlone'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V12_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check V12 scripts
+        run: |
+          python -m py_compile scripts/p0-step12v12-acquire-pitchmix.py
+          python -m py_compile scripts/p0-step12v12-score-pitchmix-matchup.py
+
+  acquire-pitchmix:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        season: [2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Acquire pitch-event summaries
+        run: |
+          mkdir -p artifacts/p0-step12v12-${{ matrix.season }}
+          python scripts/p0-step12v12-acquire-pitchmix.py \
+            --season '${{ matrix.season }}' \
+            --table 'artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json' \
+            --contract research/p0-step12v12-pitchmix-lineup-matchup-contract.json \
+            --out 'artifacts/p0-step12v12-${{ matrix.season }}/pitchmix-${{ matrix.season }}.json' \
+            --workers 6
+      - name: Upload season pitch-mix pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-${{ matrix.season }}
+          path: artifacts/p0-step12v12-${{ matrix.season }}/pitchmix-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  pitchmix-matchup-study:
+    needs: acquire-pitchmix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download frozen Step 12V7 F5 route
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v7-f5-elite-route-anatomy
+          path: artifacts/p0-step12v7
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31665659665
+      - name: Download V12 pitch-mix season packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v12-pitchmix-*
+          path: artifacts/p0-step12v12-pitchmix
+          merge-multiple: true
+      - name: Validate parent evidence
+        run: |
+          for s in 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v12-pitchmix/pitchmix-${s}.json"
+          done
+          test -s artifacts/p0-step12v7/f5-route-report.json
+          test -s research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json
+      - name: Run frozen V12 pitch-mix matchup study
+        run: |
+          mkdir -p artifacts/p0-step12v12
+          python scripts/p0-step12v12-score-pitchmix-matchup.py \
+            --root artifacts/p0-step12v3 \
+            --pitch-dir artifacts/p0-step12v12-pitchmix \
+            --v7-report artifacts/p0-step12v7/f5-route-report.json \
+            --a-contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --contract research/p0-step12v12-pitchmix-lineup-matchup-contract.json \
+            --out artifacts/p0-step12v12/pitchmix-lineup-matchup-report.json
+      - name: Validate scientific boundary and print decision table
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v12/pitchmix-lineup-matchup-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v12-pitchmix-lineup-matchup.v1'
+          assert len(r['continuousTests'])==8
+          assert len(r['signCohorts']['A_PLUS_FULL_GAME_HOME'])==6
+          assert len(r['signCohorts']['F5_CONSENSUS_OUTSIDE_A'])==6
+          assert r['populations']['A_PLUS_FULL_GAME_HOME']['frozenBaseline']['selectedRows']==95
+          f=r['populations']['F5_CONSENSUS_OUTSIDE_A']['frozenBaseline']
+          assert f['selectedRows']==79 and f['decisiveRows']==67 and f['wins']==49 and f['losses']==18 and f['pushes']==12
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['liveFilterChangeAllowed'] is False
+          assert r['policy']['betEliteAllowed'] is False
+          print(json.dumps({'classification':r['classification'],'coverage':r['coverage'],'populations':r['populations'],'tests':r['continuousTests'],'cohorts':r['signCohorts'],'pareto':r['paretoEfficientCohorts']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V12 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-lineup-matchup
+          path: artifacts/p0-step12v12/
+          if-no-files-found: error
+          retention-days: 30
