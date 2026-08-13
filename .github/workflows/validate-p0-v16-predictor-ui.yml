@@ -5,8 +5,11 @@ on:
     branches:
       - feature/p0-c4-live-parity-gate
     paths:
+      - 'server/mlb-unified-v16-live-input-assembler.ts'
+      - 'server/mlb-unified-v16-live-input-assembler.test.ts'
       - 'server/mlb-unified-v16-ui-routes.ts'
       - 'server/mlb-unified-v16-ui-routes.test.ts'
+      - 'server/mlb-unified-v16-ui-orchestration.test.ts'
       - 'server/routes.ts'
       - 'frontend/client/src/components/mlb-unified-v16-control.tsx'
       - 'frontend/client/src/pages/mlb-predictor-v16.tsx'
@@ -27,8 +30,10 @@ jobs:
           node-version: 24.18.0
           cache: npm
       - run: npm ci
-      - name: Validate V16 UI command boundary
-        run: npx tsx --test server/mlb-unified-v16-ui-routes.test.ts
+      - name: Validate V16 certified assembly and UI command boundaries
+        run: npx tsx --test server/mlb-unified-v16-live-input-assembler.test.ts server/mlb-unified-v16-ui-routes.test.ts server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Compile V16 live input assembler
+        run: npx esbuild server/mlb-unified-v16-live-input-assembler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-live-input-assembler.cjs
       - name: Compile UI command route
         run: npx esbuild server/mlb-unified-v16-ui-routes.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-ui-route.cjs
       - name: Preserve priced V16 runner
