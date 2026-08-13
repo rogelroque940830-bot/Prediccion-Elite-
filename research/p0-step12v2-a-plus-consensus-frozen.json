@@ -1,0 +1,70 @@
+{
+  "dataBoundary": {
+    "futureSeasonStatsAllowed": false,
+    "historicalPricesUsed": false,
+    "modelWeightDiscoverySeason": 2022,
+    "retrospectiveReplicationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateLeakageAllowed": false,
+    "thresholdSelectionSeason": 2023
+  },
+  "evidenceStatus": "FROZEN_POSTHOC_STRONG_DISCOVERY_REQUIRES_PROSPECTIVE_CONFIRMATION",
+  "frozenConsensus": {
+    "A_PLUS_CONSENSUS_V1": {"requires": ["PREMIUM_A", "ML_HOME_CONSENSUS_V1"]},
+    "ML_HOME_CONSENSUS_V1": {
+      "requires": [
+        {"model": "ML_C4_2022_FROZEN", "pHomeGTE": 0.69},
+        {"model": "ML_FULL13_2022_FROZEN", "pHomeGTE": 0.64}
+      ]
+    }
+  },
+  "models": {
+    "ML_C4_2022_FROZEN": {
+      "features": [
+        {"coef": 0.18718356825590396, "mean": 0.0014746687094488085, "medianImpute": 0.0, "name": "lineup_exposure_rate_adv", "scale": 0.13755882386676263},
+        {"coef": 0.22693050925842057, "mean": 0.00027511303638506223, "medianImpute": 0.0, "name": "starter_kbb_adv", "scale": 0.06102601114606269},
+        {"coef": 0.10094756294462916, "mean": 8.598868294362662, "medianImpute": 8.5, "name": "combined_team_rs10", "scale": 1.4990281969726007},
+        {"coef": 0.14240502027486293, "mean": -0.05057330260709487, "medianImpute": 0.0, "name": "team_rd10_diff", "scale": 2.495698473834091}
+      ],
+      "homeProbabilityBands": [0.68, 0.70, 0.72],
+      "intercept": 0.13346732838304923,
+      "target": "FULL_GAME_HOME_WIN"
+    },
+    "ML_FULL13_2022_FROZEN": {
+      "features": [
+        {"coef": 0.0469514416835648, "mean": -0.05057330260709487, "medianImpute": 0.0, "name": "team_rd10_diff", "scale": 2.495698473834091},
+        {"coef": 0.0199400427127508, "mean": -0.006691399964241014, "medianImpute": 0.0, "name": "team_win10_diff", "scale": 0.27436112618719666},
+        {"coef": 0.16540832130511177, "mean": 0.00027511303638506223, "medianImpute": 0.0, "name": "starter_kbb_adv", "scale": 0.06102601114606269},
+        {"coef": 0.08194226081992839, "mean": -0.03913406970353152, "medianImpute": 0.0, "name": "team_ra10_adv", "scale": 1.5960174523670227},
+        {"coef": 0.22223301323120748, "mean": 0.0014746687094488085, "medianImpute": 0.0, "name": "lineup_exposure_rate_adv", "scale": 0.13755882386676263},
+        {"coef": 0.14500677939327994, "mean": 9.29388447975137e-05, "medianImpute": 0.0, "name": "starter_runrisk_adv", "scale": 0.029292588166369173},
+        {"coef": -0.008978746354314622, "mean": -0.011439232903563317, "medianImpute": 0.0, "name": "team_rs10_diff", "scale": 1.5152045134325847},
+        {"coef": -0.06350707350801672, "mean": 0.00006483154569761516, "medianImpute": 0.0, "name": "starter_hr_adv", "scale": 0.012709709463485909},
+        {"coef": 0.04225737996347226, "mean": 175.0892782644973, "medianImpute": 130.0, "name": "min_probable_prior_bf", "scale": 161.02465094549933},
+        {"coef": -0.1003125744872183, "mean": -0.0011125017382839666, "medianImpute": 0.0, "name": "lineup_continuity_rate_adv", "scale": 0.16897625165242633},
+        {"coef": -0.07009043223475815, "mean": 0.28028306727454666, "medianImpute": 0.27669490811376757, "name": "combined_starter_kbb", "scale": 0.061174323511824585},
+        {"coef": 0.10351059776752332, "mean": 8.598868294362662, "medianImpute": 8.5, "name": "combined_team_rs10", "scale": 1.4990281969726007},
+        {"coef": 0.03366602543099145, "mean": 8.594272768208938, "medianImpute": 8.5, "name": "combined_team_ra10", "scale": 1.5244708797348414}
+      ],
+      "intercept": 0.1346743267263629,
+      "target": "FULL_GAME_HOME_WIN"
+    }
+  },
+  "objective": "Freeze the first winner-anatomy consensus regimes before any further threshold or feature retuning.",
+  "policy": {
+    "aPlusIsLabelOnlyUntilPromotionReview": true,
+    "betEliteAllowed": false,
+    "furtherRetuningOn2024To2026Allowed": false,
+    "liveHardFilterAllowed": false,
+    "prospective11cShadowRequired": true,
+    "stakeChangeAllowed": false
+  },
+  "premiumA": {
+    "all": [
+      {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+      {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+      {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554}
+    ],
+    "market": "FULL_GAME:RESULT:HOME"
+  },
+  "schemaVersion": "courtedge-p0-step12v2-a-plus-consensus-freeze.v1"
+}
