@@ -1,0 +1,63 @@
+{
+  "schemaVersion":"courtedge-p0-step12v15-aplus-fg-f5-router-freeze-contract.v1",
+  "scientificStatus":"POST_V14_SINGLE_ROUTER_FREEZE_DISCOVERY_NOT_CONFIRMATION",
+  "objective":"Freeze and quantify one post-V14 A+ market-routing hypothesis without searching alternative bullpen thresholds or routing variants.",
+  "parentEvidence":{
+    "step12v14Pr":530,
+    "step12v14WorkflowRunId":31672480680,
+    "step12v14ArtifactId":9170281714,
+    "step12v14ArtifactDigest":"sha256:35968f8d41151eacc56519b062735450c6bee1d76d05e799276eb63c72a74929",
+    "step12v3WorkflowRunId":31659518059
+  },
+  "frozenPopulation":{
+    "name":"A_PLUS_FULL_GAME_HOME",
+    "expectedSelectedRows":95,
+    "fullGameBaseline":{"wins":77,"losses":18,"decisiveRows":95,"hitRate":0.8105263157894737},
+    "sameGameF5Baseline":{"wins":71,"losses":14,"pushes":10,"decisiveRows":85,"selectedRows":95,"hitRate":0.8352941176470589}
+  },
+  "v14Anchor":{
+    "cohort":"PITCHES_1D_POS",
+    "definition":"bullpen_pitches_1d_adv > 0",
+    "selectedRows":49,
+    "fullGame":{"wins":38,"losses":11,"decisiveRows":49,"hitRate":0.7755102040816326},
+    "first5":{"wins":37,"losses":7,"pushes":5,"decisiveRows":44,"selectedRows":49,"hitRate":0.8409090909090909},
+    "complementFullGame":{"wins":39,"losses":7,"decisiveRows":46,"hitRate":0.8478260869565217}
+  },
+  "router":{
+    "id":"A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1",
+    "rules":[
+      {"when":"bullpen_pitches_1d_adv > 0","market":"FIRST_5:RESULT:HOME"},
+      {"when":"bullpen_pitches_1d_adv <= 0","market":"FULL_GAME:RESULT:HOME"}
+    ],
+    "alternativeRoutersAllowed":false,
+    "numericThresholdSearchAllowed":false,
+    "threshold":0,
+    "thresholdMeaning":"Natural sign boundary inherited from the predeclared V14 PITCHES_1D_POS cohort"
+  },
+  "dataBoundary":{
+    "evaluationSeasons":["2024","2025","2026_YTD"],
+    "reuseV14BullpenPacksOnly":true,
+    "newMlbAcquisitionAllowed":false,
+    "sameDateOutcomeLeakageAllowed":false,
+    "currentMetadataFallbackAllowed":false,
+    "historicalPricesUsed":false
+  },
+  "prospectiveCandidateDiagnostics":{
+    "minimumSelectedRows":95,
+    "minimumDecisiveRows":85,
+    "minimumLiftVsFrozenFullGameBaselinePp":2.0,
+    "minimumEverySeasonHitRate":0.75,
+    "minimumLeaveOneMonthOutHitRate":0.78,
+    "allGatesRequired":true
+  },
+  "policy":{
+    "researchOnly":true,
+    "liveFilterChangeAllowed":false,
+    "rankingChangeAllowed":false,
+    "stakeChangeAllowed":false,
+    "betEliteAllowed":false,
+    "aPlusOpportunityMayBeRemoved":false,
+    "prospective11cRequiredBeforePromotion":true,
+    "automaticWagerAllowed":false
+  }
+}
