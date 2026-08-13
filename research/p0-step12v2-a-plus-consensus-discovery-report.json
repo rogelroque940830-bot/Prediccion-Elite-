@@ -42,8 +42,12 @@
       },
       "hitRate": 0.8160919540229885,
       "losses": 16,
+      "minimumLeaveOneMonthHitRate": 0.8024691358024691,
+      "minimumLeaveOneMonthRemoved": "2026-06",
       "rows": 87,
       "shareOfPremiumA": 0.41626794258373206,
+      "uniqueDates": 77,
+      "wilson95": {"lower": 0.721943165293875, "upper": 0.8835063204043074},
       "wins": 71
     },
     "premiumA": {"hitRate": 0.7272727272727273, "losses": 57, "rows": 209, "wins": 152},
