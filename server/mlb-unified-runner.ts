@@ -15,13 +15,15 @@ import { buildMlbMarketDiscovery, type MlbMarketDiscoveryResult } from "./mlb-ma
 import {
   captureMlbFrozenResearchRouteLedger,
   MLB_FROZEN_RESEARCH_ROUTE_IDS,
+  MLB_FROZEN_RESEARCH_ROUTER_IDS,
   type MlbFrozenResearchRouteAssessment,
   type MlbFrozenResearchRouteLedger,
   type MlbFrozenResearchRouteState,
+  type MlbFrozenResearchRouterDecision,
 } from "./mlb-frozen-research-route-ledger";
 
-export const MLB_UNIFIED_RUNNER_SCHEMA = "courtedge-p0-mlb-unified-runner.preprice-step11c.v1" as const;
-export const MLB_UNIFIED_RUNNER_PROVISIONAL_SCORER_VERSION = "mlb-frozen-routes-provisional-not-evaluated.v1" as const;
+export const MLB_UNIFIED_RUNNER_SCHEMA = "courtedge-p0-mlb-unified-runner.preprice-step11c.v2" as const;
+export const MLB_UNIFIED_RUNNER_PROVISIONAL_SCORER_VERSION = "mlb-frozen-routes-routers-provisional-not-evaluated.v2" as const;
 
 export interface MlbUnifiedRunnerInput {
   runId: string;
@@ -58,13 +60,16 @@ export interface MlbUnifiedRunnerResult {
     officialSlateUsed: true;
     provisionalGamesPreserved: true;
     provisionalGamesCanCreateFinalRouteMatch: false;
+    provisionalGamesCanCreateRouterDecision: false;
     finalGamesRequireFrozenRouteAssessment: true;
+    finalAPlusGamesRequireFrozenRouterDecision: true;
     intrinsicRankIndependentOfGameStartTime: true;
     priceBoundaryCrossed: false;
     callsTheOddsApi: false;
     theOddsApiCreditsConsumed: 0;
     originalStep11cPopulationChanged: false;
     frozenRouteLedgerChangesRecommendation: false;
+    frozenRouterDecisionChangesRecommendation: false;
     betEliteProduced: false;
     finalBetRecommendationProduced: false;
     automaticBetPlacement: false;
@@ -110,10 +115,17 @@ function provisionalDigest(game: MlbP1SlateGame): string {
   return createHash("sha256").update(canonical(material)).digest("hex");
 }
 
-function allNotEvaluated(): Record<(typeof MLB_FROZEN_RESEARCH_ROUTE_IDS)[number], MlbFrozenResearchRouteState> {
+function allRoutesNotEvaluated(): Record<(typeof MLB_FROZEN_RESEARCH_ROUTE_IDS)[number], MlbFrozenResearchRouteState> {
   return Object.fromEntries(MLB_FROZEN_RESEARCH_ROUTE_IDS.map((routeId) => [routeId, "NOT_EVALUATED"])) as Record<
     (typeof MLB_FROZEN_RESEARCH_ROUTE_IDS)[number],
     MlbFrozenResearchRouteState
+  >;
+}
+
+function allRoutersNotEvaluated(): Record<(typeof MLB_FROZEN_RESEARCH_ROUTER_IDS)[number], MlbFrozenResearchRouterDecision> {
+  return Object.fromEntries(MLB_FROZEN_RESEARCH_ROUTER_IDS.map((routerId) => [routerId, "NOT_EVALUATED"])) as Record<
+    (typeof MLB_FROZEN_RESEARCH_ROUTER_IDS)[number],
+    MlbFrozenResearchRouterDecision
   >;
 }
 
@@ -172,7 +184,8 @@ function buildRouteAssessments(input: {
         finalInputs: false,
         featureSnapshotDigest: provisionalDigest(game),
         scorerVersion: MLB_UNIFIED_RUNNER_PROVISIONAL_SCORER_VERSION,
-        routes: allNotEvaluated(),
+        routes: allRoutesNotEvaluated(),
+        routers: allRoutersNotEvaluated(),
       };
     }
 
@@ -191,14 +204,8 @@ export function runMlbUnifiedPrepriceStep11c(input: MlbUnifiedRunnerInput): MlbU
   const generatedAt = now.toISOString();
 
   const cheapScreen = screenMlbDailySlateCheap(input.slate);
-  const shortlist = buildMlbShortlist({
-    cheapScreen,
-    evidenceByGame: input.shortlistEvidenceByGame,
-  });
-  const intrinsic = buildMlbIntrinsicEdge({
-    shortlist,
-    bullpenByGame: input.bullpenByGame,
-  });
+  const shortlist = buildMlbShortlist({ cheapScreen, evidenceByGame: input.shortlistEvidenceByGame });
+  const intrinsic = buildMlbIntrinsicEdge({ shortlist, bullpenByGame: input.bullpenByGame });
   const discovery = buildMlbMarketDiscovery({ intrinsic });
 
   const routeAssessments = buildRouteAssessments({
@@ -250,13 +257,16 @@ export function runMlbUnifiedPrepriceStep11c(input: MlbUnifiedRunnerInput): MlbU
       officialSlateUsed: true,
       provisionalGamesPreserved: true,
       provisionalGamesCanCreateFinalRouteMatch: false,
+      provisionalGamesCanCreateRouterDecision: false,
       finalGamesRequireFrozenRouteAssessment: true,
+      finalAPlusGamesRequireFrozenRouterDecision: true,
       intrinsicRankIndependentOfGameStartTime: true,
       priceBoundaryCrossed: false,
       callsTheOddsApi: false,
       theOddsApiCreditsConsumed: 0,
       originalStep11cPopulationChanged: false,
       frozenRouteLedgerChangesRecommendation: false,
+      frozenRouterDecisionChangesRecommendation: false,
       betEliteProduced: false,
       finalBetRecommendationProduced: false,
       automaticBetPlacement: false,
