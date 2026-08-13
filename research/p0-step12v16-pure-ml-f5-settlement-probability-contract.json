@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "courtedge-p0-step12v16-pure-ml-f5-settlement-probability-contract.v1",
+  "scientificStatus": "PURE_SETTLEMENT_PROBABILITY_DISCOVERY_NOT_PROSPECTIVE_CONFIRMATION",
+  "objective": "Build odds-independent per-game settlement probabilities for Full Game ML and First-5 ML so Step 9 can compute push-aware fair price, break-even and EV without using market-regressed predictor probabilities.",
+  "parentEvidence": {
+    "winnerAnatomyRunId": 31649438822,
+    "winnerAnatomyArtifactId": 9162508658,
+    "winnerAnatomyArtifactDigest": "sha256:3b650cadb489d06715ce98d91c3c6981c52d77d2aaec05bf042a2b2ba6df05b8",
+    "aPlusFreeze": "research/p0-step12v2-a-plus-consensus-frozen.json",
+    "f5Freeze": "research/p0-step12v7-f5-elite-route-contract.json"
+  },
+  "dataBoundary": {
+    "trainingSeason": "2022",
+    "calibrationAndModelSelectionSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureSeasonStatsAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsAllowedAsFeature": false,
+    "currentMetadataFallbackAllowed": false,
+    "evaluationOutcomesMayChangeModel": false,
+    "evaluationOutcomesMayChangeCalibration": false,
+    "evaluationOutcomesMayChangeFeatureSet": false
+  },
+  "population": {
+    "rowEligibility": "t5PregameValid == true",
+    "opportunityFilteringAllowed": false,
+    "medianImputation": "2022_ONLY",
+    "standardization": "2022_ONLY"
+  },
+  "candidateFeatureSets": {
+    "C4": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
+    "FULL13": ["team_rd10_diff", "team_win10_diff", "starter_kbb_adv", "team_ra10_adv", "lineup_exposure_rate_adv", "starter_runrisk_adv", "team_rs10_diff", "starter_hr_adv", "min_probable_prior_bf", "lineup_continuity_rate_adv", "combined_starter_kbb", "combined_team_rs10", "combined_team_ra10"]
+  },
+  "fullGameModel": {
+    "target": "FULL_GAME_HOME_WIN",
+    "classes": ["HOME", "AWAY"],
+    "family": "STANDARDIZED_L2_LOGISTIC_REGRESSION",
+    "l2Strength": 1.0,
+    "optimizer": "L_BFGS_B",
+    "calibration": "2023_AFFINE_LOGIT_PLATT_WITH_POSITIVE_SLOPE",
+    "settlementVector": ["HOME_WIN", "PUSH", "AWAY_WIN"],
+    "pushProbability": 0.0
+  },
+  "first5Model": {
+    "target": "FIRST_5_RESULT",
+    "classes": ["HOME", "AWAY", "TIE"],
+    "family": "STANDARDIZED_L2_MULTINOMIAL_LOGISTIC_REGRESSION_AWAY_REFERENCE",
+    "l2Strength": 1.0,
+    "optimizer": "L_BFGS_B",
+    "calibration": "2023_TEMPERATURE_PLUS_HOME_TIE_BIAS_AWAY_REFERENCE",
+    "settlementVector": ["HOME_WIN", "PUSH_TIE", "AWAY_WIN"],
+    "tieMustRemainExplicit": true
+  },
+  "modelSelection": {
+    "season": "2023",
+    "primaryMetric": "LOG_LOSS_MIN",
+    "tieBreaker1": "BRIER_MIN",
+    "tieBreaker2": "FEWER_FEATURES",
+    "evaluationSeasonsMaySelectModel": false,
+    "expectedCandidates": ["C4", "FULL13"]
+  },
+  "validationGates": {
+    "minimumEvaluationCoverageShare": 0.99,
+    "fullGameCombinedLogLossMustBeat2023Prior": true,
+    "fullGameCombinedBrierMustBeat2023Prior": true,
+    "fullGameCombinedEce10Max": 0.05,
+    "fullGameEverySeasonLogLossMaxPriorPlus": 0.03,
+    "first5CombinedLogLossMustBeat2023ClassPrior": true,
+    "first5CombinedBrierMustBeat2023ClassPrior": true,
+    "first5CombinedMaxClassMeanCalibrationGap": 0.04,
+    "first5CombinedTieMeanCalibrationGapMax": 0.03,
+    "first5EverySeasonLogLossMaxPriorPlus": 0.04,
+    "probabilitiesMustSumToOneTolerance": 1e-12,
+    "allProbabilitiesFiniteAndUnitInterval": true,
+    "allGatesRequiredForRuntimeResearchAdapter": true
+  },
+  "reporting": {
+    "reportDevelopmentCandidates": true,
+    "reportByEvaluationSeason": true,
+    "reportCombinedEvaluation": true,
+    "reportProperScores": true,
+    "reportCalibration": true,
+    "reportClassRates": true,
+    "reportSelectedModelManifest": true,
+    "reportManifestSha256": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "legacyMarketRegressedMlMayBeReclassifiedReady": false,
+    "legacyMarketRegressedF5MayBeReclassifiedReady": false,
+    "cohortHitRateMayBeUsedAsPerGameProbability": false,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacement": false,
+    "prospective11cRequiredBeforePromotion": true
+  }
+}

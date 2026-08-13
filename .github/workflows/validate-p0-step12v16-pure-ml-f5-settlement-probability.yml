@@ -1,0 +1,118 @@
+name: Validate P0 Step 12V16 Pure ML-F5 Settlement Probability
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v15-aplus-fg-f5-router-freeze
+    paths:
+      - 'research/p0-step12v16-pure-ml-f5-settlement-probability-contract.json'
+      - 'scripts/p0-step12v16-pure-settlement-probability.py'
+      - '.github/workflows/validate-p0-step12v16-pure-ml-f5-settlement-probability.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen V16 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v16-pure-ml-f5-settlement-probability-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v16-pure-ml-f5-settlement-probability-contract.v1'
+          assert c['dataBoundary']['trainingSeason']=='2022'
+          assert c['dataBoundary']['calibrationAndModelSelectionSeason']=='2023'
+          assert c['dataBoundary']['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert c['dataBoundary']['sameDateOutcomeLeakageAllowed'] is False
+          assert c['dataBoundary']['historicalPricesUsed'] is False
+          assert c['dataBoundary']['marketOddsAllowedAsFeature'] is False
+          assert c['dataBoundary']['evaluationOutcomesMayChangeModel'] is False
+          assert list(c['candidateFeatureSets'])==['C4','FULL13']
+          assert c['first5Model']['tieMustRemainExplicit'] is True
+          assert c['modelSelection']['evaluationSeasonsMaySelectModel'] is False
+          assert c['policy']['cohortHitRateMayBeUsedAsPerGameProbability'] is False
+          assert c['policy']['legacyMarketRegressedMlMayBeReclassifiedReady'] is False
+          assert c['policy']['legacyMarketRegressedF5MayBeReclassifiedReady'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V16_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/p0-step12v16-pure-settlement-probability.py
+
+  settlement-model:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.17.0'
+      - name: Download canonical 2022-2026 pregame feature tables
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Validate immutable source tables
+        run: |
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v/${s}/game-anatomy-feature-table.json"
+          done
+      - name: Train 2022 calibrate-select 2023 then evaluate frozen 2024-2026
+        run: |
+          mkdir -p artifacts/p0-step12v16
+          python scripts/p0-step12v16-pure-settlement-probability.py \
+            --root artifacts/p0-step12v \
+            --contract research/p0-step12v16-pure-ml-f5-settlement-probability-contract.json \
+            --out artifacts/p0-step12v16/pure-settlement-probability-report.json \
+            --manifest-out artifacts/p0-step12v16/pure-settlement-model-manifest.json
+      - name: Validate probability and scientific boundary
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          r=json.load(open('artifacts/p0-step12v16/pure-settlement-probability-report.json'))
+          m=json.load(open('artifacts/p0-step12v16/pure-settlement-model-manifest.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v16-pure-ml-f5-settlement-probability.v1'
+          assert m['schemaVersion']=='courtedge-p0-step12v16-pure-settlement-model-manifest.v1'
+          assert m['modelVersion']=='rogel-pure-settlement-ml-f5-v1'
+          assert m['priceIndependent'] is True
+          assert m['policy']['sportsbookPriceInputs'] is False
+          assert m['policy']['marketOddsInputs'] is False
+          assert m['policy']['cohortHitRateAsProbability'] is False
+          assert m['policy']['first5TieMassExplicit'] is True
+          assert r['development']['selectionUsedEvaluationSeasons'] is False
+          assert r['policy']['legacyMarketRegressedMlReclassifiedReady'] is False
+          assert r['policy']['legacyMarketRegressedF5ReclassifiedReady'] is False
+          assert r['policy']['first5TieProbabilityExplicit'] is True
+          assert r['allValidationGatesPassed'] is True, r['validationChecks']
+          raw=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(raw).hexdigest()==r['manifest']['sha256']
+          print(json.dumps({'classification':r['classification'],'sourceRows':r['sourceRows'],'development':r['development'],'combined':r['combinedEvaluation'],'checks':r['validationChecks'],'manifest':r['manifest']},indent=2))
+          PY
+      - name: Preserve live probability adapter and Step 9 regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npm run build:backend
+      - name: Upload V16 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/p0-step12v16/
+          if-no-files-found: error
+          retention-days: 30
