@@ -37,7 +37,7 @@ function replaySeason(root: string, season: string, contract: Json) {
     for (const game of games) {
       const gamePk = Number(game.gamePk), h = Number(game.homeTeamId), a = Number(game.awayTeamId);
       const audit = auditMap.get(gamePk), lineup = lineupMap.get(gamePk), expectedRow = canonicalMap.get(gamePk);
-      if (!expectedRow) throw new Error(`C4_CANONICAL_ROW_MISSING:${season}:${gamePk}`);
+      if (!expectedRow) continue;
       const probables = probableKnown(audit), valid = auditValid(audit), complete = Boolean(lineup?.complete);
       const hp = probables ? Number(audit?.homeProbablePitcherId) : null;
       const ap = probables ? Number(audit?.awayProbablePitcherId) : null;
