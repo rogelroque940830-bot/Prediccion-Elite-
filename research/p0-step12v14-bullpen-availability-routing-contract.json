@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "courtedge-p0-step12v14-bullpen-availability-routing-contract.v1",
+  "scientificStatus": "ORTHOGONAL_BULLPEN_AVAILABILITY_ROUTING_DISCOVERY_NOT_CONFIRMATION",
+  "objective": "Test whether strictly pregame bullpen workload and core-reliever availability add orthogonal information inside frozen Premium A/A+ and help route the same sporting edge between Full Game and First 5 without deleting picks.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "aPlusContract": "research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json",
+    "step12v13Pr": 528
+  },
+  "dataBoundary": {
+    "warmupSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "source": "MLB_ARCHIVED_BOXSCORE",
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "historicalPricesUsed": false
+  },
+  "frozenPopulations": {
+    "PREMIUM_A_FULL_GAME_HOME": {"expectedSelectedRows": 268, "target": "FULL_GAME:RESULT:HOME"},
+    "A_PLUS_FULL_GAME_HOME": {"expectedSelectedRows": 95, "target": "FULL_GAME:RESULT:HOME"}
+  },
+  "rollingDefinitions": {
+    "priorDay": "officialDate exactly D-1",
+    "priorThreeDays": "officialDate in [D-3,D)",
+    "coreRelieverLookbackDays": 30,
+    "coreRelieverCount": 3,
+    "coreRelieverWorkloadDays": 2,
+    "backToBackDefinition": "same reliever appeared on both D-1 and D-2",
+    "starterIdentity": "frozen T-5 probable pitcher ID from canonical Step12V3 table; no inference or current fallback"
+  },
+  "metrics": [
+    "bullpen_pitches_1d_adv",
+    "bullpen_pitches_3d_adv",
+    "bullpen_core3_pitches_2d_adv",
+    "bullpen_b2b_arms_adv"
+  ],
+  "metricDefinitions": {
+    "positiveConvention": "away workload minus home workload; positive means the home side has the fresher bullpen profile",
+    "bullpen_pitches_1d_adv": "Away bullpen pitches on D-1 minus home bullpen pitches on D-1.",
+    "bullpen_pitches_3d_adv": "Away bullpen pitches over D-3 through D-1 minus home bullpen pitches over the same dates.",
+    "bullpen_core3_pitches_2d_adv": "Away minus home pitches over D-2 through D-1 by each club's three highest-workload relievers identified only from the prior 30-day pregame window.",
+    "bullpen_b2b_arms_adv": "Away minus home count of relievers who appeared on both D-1 and D-2."
+  },
+  "reliability": {
+    "minimumPriorBullpenGames30dPerTeam": 3,
+    "minimumCoreRelieverPool": 3,
+    "minimumPremiumAEligibleShare": 0.9,
+    "minimumAPlusEligibleShare": 0.9,
+    "belowCoverageClassification": "BULLPEN_AVAILABILITY_INSUFFICIENT_COVERAGE"
+  },
+  "predeclaredSignCohorts": {
+    "PITCHES_1D_POS": {"feature": "bullpen_pitches_1d_adv", "operator": "GT", "threshold": 0},
+    "PITCHES_3D_POS": {"feature": "bullpen_pitches_3d_adv", "operator": "GT", "threshold": 0},
+    "CORE3_2D_POS": {"feature": "bullpen_core3_pitches_2d_adv", "operator": "GT", "threshold": 0},
+    "B2B_ARMS_POS": {"feature": "bullpen_b2b_arms_adv", "operator": "GT", "threshold": 0},
+    "AT_LEAST_2_OF_4": {"positiveCountGTE": 2},
+    "AT_LEAST_3_OF_4": {"positiveCountGTE": 3}
+  },
+  "routingDiagnostics": {
+    "compareFullGameVsFirst5OnSameSelectedGames": true,
+    "f5TiesArePushes": true,
+    "minimumF5DecisiveRowsForRoutingShadow": 35,
+    "minimumF5DecisiveRowsForRoutingCore": 50,
+    "minimumAbsoluteF5MinusFullGameLiftPpForRouterCandidate": 3.0,
+    "noOutcomeSelectedMarketAfterGame": true
+  },
+  "statistics": {
+    "continuousTests": "Mann-Whitney two-sided plus Cliffs delta for each of 4 metrics in Premium A and A+ Full Game winner/loss groups",
+    "holmCorrectionAcrossContinuousTests": true,
+    "signCohortsAreDescriptiveOnly": true,
+    "noNumericThresholdSearch": true,
+    "noAdditionalCohortsAfterResults": true,
+    "reportWilson95": true,
+    "reportBySeason": true,
+    "reportLeaveOneMonthOut": true,
+    "reportPrecisionVolumeFrontier": true
+  },
+  "volumePolicy": {
+    "doNotChooseByHitRateAlone": true,
+    "premiumACoreMinimumSelectedRows": 180,
+    "aPlusCoreMinimumSelectedRows": 70,
+    "premiumAOrAPlusPicksMayBeRemoved": false,
+    "marketRoutingMayBeStudiedWithoutDeletingGameOpportunity": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "prospective11cRequiredBeforePromotion": true
+  }
+}
