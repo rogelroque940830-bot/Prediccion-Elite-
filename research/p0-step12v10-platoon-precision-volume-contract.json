@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "courtedge-p0-step12v10-platoon-precision-volume-contract.v1",
+  "scientificStatus": "POST_V9_PRECISION_VOLUME_DISCOVERY_NOT_CONFIRMATION",
+  "objective": "Measure redundancy and the precision-versus-volume frontier of the three strongest V9 rolling platoon sign signals inside frozen A+ without searching new numeric thresholds.",
+  "parentEvidence": {
+    "step12v9WorkflowRunId": 31666803576,
+    "step12v9ArtifactId": 9168284731
+  },
+  "population": {
+    "primary": "A_PLUS_PRIMARY_ELIGIBLE",
+    "expectedRows": 95,
+    "baselineWins": 77,
+    "baselineLosses": 18,
+    "baselineHitRate": 0.8105263157894737
+  },
+  "signals": {
+    "OPS_POS": {"feature": "ops_adv", "operator": "GT", "threshold": 0.0},
+    "SLG_POS": {"feature": "slg_adv", "operator": "GT", "threshold": 0.0},
+    "HR_POS": {"feature": "hr_pa_adv", "operator": "GT", "threshold": 0.0}
+  },
+  "cohorts": {
+    "OPS_POS": {"rule": "OPS_POS"},
+    "SLG_POS": {"rule": "SLG_POS"},
+    "HR_POS": {"rule": "HR_POS"},
+    "ANY_1_OF_3": {"minimumPositiveSignals": 1},
+    "AT_LEAST_2_OF_3": {"minimumPositiveSignals": 2},
+    "ALL_3_POS": {"minimumPositiveSignals": 3},
+    "OPS_AND_SLG": {"allSignals": ["OPS_POS", "SLG_POS"]},
+    "OPS_AND_HR": {"allSignals": ["OPS_POS", "HR_POS"]},
+    "SLG_AND_HR": {"allSignals": ["SLG_POS", "HR_POS"]}
+  },
+  "volumeInterpretation": {
+    "coreFriendlyMinimumShare": 0.75,
+    "selectiveMinimumShare": 0.50,
+    "belowSelectiveLabel": "MICRO_POCKET_ONLY",
+    "reportRowsBySeason": true,
+    "reportActiveMonths": true,
+    "reportMedianGamesPerActiveMonth": true,
+    "reportVolumeLostPp": true,
+    "reportPrecisionGainPer10PctVolumeLost": true
+  },
+  "stability": {
+    "reportWilson95": true,
+    "reportMinimumLeaveOneMonthOutHitRate": true,
+    "reportMinimumSeasonHitRate": true,
+    "reportMinimumSeasonRows": true,
+    "reportPairwiseSignalJaccard": true,
+    "reportContinuousFeatureCorrelation": true
+  },
+  "inferentialFamily": {
+    "comparison": "SELECTED_VS_COMPLEMENT_WITHIN_A_PLUS",
+    "test": "TWO_SIDED_FISHER_EXACT",
+    "multipleTesting": "HOLM_ACROSS_9_FROZEN_COHORTS",
+    "noOutcomeBasedThresholdSearch": true,
+    "noAdditionalCohortsAfterResults": true
+  },
+  "frontier": {
+    "definition": "A cohort is Pareto-efficient when no other frozen cohort has both equal-or-higher retained volume and equal-or-higher hit rate with at least one strict improvement.",
+    "doNotChooseByHitRateAlone": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureSeasonStatsAllowed": false,
+    "historicalPricesUsed": false,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "premiumAPicksMayBeRemoved": false,
+    "aPlusDefinitionMayChange": false,
+    "prospective11cRequiredBeforePromotion": true
+  }
+}
