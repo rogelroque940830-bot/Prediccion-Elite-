@@ -1,0 +1,46 @@
+name: Validate P0 V16 Predictor UI
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-c4-live-parity-gate
+    paths:
+      - 'server/mlb-unified-v16-ui-routes.ts'
+      - 'server/mlb-unified-v16-ui-routes.test.ts'
+      - 'server/routes.ts'
+      - 'frontend/client/src/components/mlb-unified-v16-control.tsx'
+      - 'frontend/client/src/pages/mlb-predictor-v16.tsx'
+      - 'frontend/client/src/App.tsx'
+      - '.github/workflows/validate-p0-v16-predictor-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate V16 UI command boundary
+        run: npx tsx --test server/mlb-unified-v16-ui-routes.test.ts
+      - name: Compile UI command route
+        run: npx esbuild server/mlb-unified-v16-ui-routes.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-ui-route.cjs
+      - name: Preserve priced V16 runner
+        run: npx esbuild server/mlb-unified-priced-v16-runner.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-priced-runner.cjs
+      - name: Backend build
+        run: npm run build:backend
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: npm run check
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
