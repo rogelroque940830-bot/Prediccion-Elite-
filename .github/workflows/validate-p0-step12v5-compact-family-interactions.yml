@@ -1,0 +1,98 @@
+name: Validate P0 Step 12V5 Compact Family Interactions
+
+on:
+  pull_request:
+    paths:
+      - 'research/p0-step12v5-compact-interaction-contract.json'
+      - 'scripts/p0-step12v5-compact-family-interactions.py'
+      - '.github/workflows/validate-p0-step12v5-compact-family-interactions.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compact-interaction-study:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0' 'xgboost==3.1.3'
+      - name: Validate frozen V5 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v5-compact-interaction-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v5-compact-interaction-contract.v1'
+          assert c['scientificStatus']=='SECONDARY_DISCOVERY_AFTER_V4_NOT_EXTERNAL_CONFIRMATION'
+          assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
+          assert c['parentEvidence']['step12v3ArtifactId']==9166442982
+          assert len(c['families'])==5
+          assert len(c['frozenCandidates'])==10
+          assert all('TEAM_LAST5' in x for x in c['frozenCandidates'].values())
+          assert c['dataBoundary']['noThresholdRetuningAfter2023'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V5_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/p0-step12v5-compact-family-interactions.py
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Validate parent evidence
+        run: |
+          for label in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${label}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${label}/cohort/starting-pitcher-history.json"
+          done
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v3/expanded-regime-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v3-expanded-regime-study.v1'
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['futureSeasonStatsAllowed'] is False
+          print('STEP12V5_PARENT_VERIFIED')
+          PY
+      - name: Run frozen compact interaction study
+        run: python scripts/p0-step12v5-compact-family-interactions.py --root artifacts/p0-step12v3 --contract research/p0-step12v5-compact-interaction-contract.json --out artifacts/p0-step12v5/compact-interaction-report.json
+      - name: Validate evidence boundary and print ranking
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v5/compact-interaction-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v5-compact-family-interactions.v1'
+          assert r['classification']=='SECONDARY_INTERACTION_DISCOVERY_NOT_EXTERNAL_CONFIRMATION'
+          assert len(r['candidates'])==10
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['futureSeasonStatsAllowed'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print(json.dumps({'baseline':r['baseline'],'ranking':r['ranking']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V5 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v5-compact-family-interactions
+          path: artifacts/p0-step12v5/
+          if-no-files-found: error
+          retention-days: 30
