@@ -18,6 +18,7 @@ import {
   type MlbUnifiedV16LiveEvidenceProviders,
   type MlbUnifiedV16LiveInputAssemblyResult,
 } from "./mlb-unified-v16-live-input-assembler";
+import { createMlbUnifiedV16DefaultLiveEvidenceProviders } from "./mlb-unified-v16-live-providers";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
 export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v2" as const;
@@ -210,10 +211,15 @@ export function registerMlbUnifiedV16UiRoutes(
   app: Express,
   deps: MlbUnifiedV16UiCommandDependencies = {},
 ): void {
+  const registeredDeps: MlbUnifiedV16UiCommandDependencies = {
+    ...deps,
+    liveEvidenceProviders: deps.liveEvidenceProviders ?? createMlbUnifiedV16DefaultLiveEvidenceProviders(),
+  };
+
   app.post(MLB_UNIFIED_V16_UI_ROUTE, async (req: Request, res: Response) => {
     try {
       const date = bodyDate(req);
-      const response = await executeMlbUnifiedV16UiCommand(date, deps);
+      const response = await executeMlbUnifiedV16UiCommand(date, registeredDeps);
       return res.status(response.httpStatus).json(response.body);
     } catch (error) {
       if (error instanceof MlbUnifiedPricedV16RuntimeConfigError) {
