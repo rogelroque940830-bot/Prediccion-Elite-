@@ -1,0 +1,55 @@
+name: Validate P0 MLB Unified Runner Step11C Slice
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-step11c-frozen-route-prospective-ledger
+    paths:
+      - 'server/mlb-unified-runner.ts'
+      - 'server/mlb-unified-runner.test.ts'
+      - '.github/workflows/validate-p0-mlb-unified-runner-step11c.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate unified pre-price runner
+        run: npx tsx --test server/mlb-unified-runner.test.ts
+      - name: Preserve Step 11C companion ledger
+        run: npx tsx --test server/mlb-frozen-research-route-ledger.test.ts
+      - name: Preserve original Step 11C ledger
+        run: npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+      - name: Preserve Step 11B calibration
+        run: npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+      - name: Backend build
+        run: npm run build:backend
+      - name: Static orchestration safety boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('server/mlb-unified-runner.ts').read_text()
+          required=[
+            'priceBoundaryCrossed: false',
+            'callsTheOddsApi: false',
+            'theOddsApiCreditsConsumed: 0',
+            'originalStep11cPopulationChanged: false',
+            'frozenRouteLedgerChangesRecommendation: false',
+            'betEliteProduced: false',
+            'automaticBetPlacement: false',
+            'realFinancialExposure: 0',
+          ]
+          for x in required: assert x in p, x
+          forbidden=['ODDS_API_KEY','fetch("https://api.the-odds-api.com','BET_ELITE']
+          for x in forbidden: assert x not in p, x
+          print('UNIFIED_RUNNER_STEP11C_PREPRICE_BOUNDARY_LOCKED')
+          PY
