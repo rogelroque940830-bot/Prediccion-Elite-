@@ -1,0 +1,96 @@
+name: Validate P0 Step 12V6 A TEAM5 REST Cross Anatomy
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v5-compact-family-interactions
+    paths:
+      - 'research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json'
+      - 'scripts/p0-step12v6-a-team5-rest-cross-anatomy.py'
+      - '.github/workflows/validate-p0-step12v6-a-team5-rest-cross-anatomy.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  cross-anatomy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'xgboost==3.1.3'
+      - name: Validate frozen V6 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v6-a-team5-rest-cross-anatomy-contract.v1'
+          assert c['scientificStatus']=='CROSS_ANATOMY_DISCOVERY_AFTER_V5_NOT_EXTERNAL_CONFIRMATION'
+          assert c['team5Rest']['candidate']=='C03_TEAM5_REST'
+          assert c['team5Rest']['frozenThreshold']==0.71
+          assert c['policy']['noThresholdSearch'] is True
+          assert c['policy']['noFeatureSearch'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V6_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/p0-step12v6-a-team5-rest-cross-anatomy.py
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Validate parent evidence pack
+        run: |
+          for label in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${label}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${label}/cohort/starting-pitcher-history.json"
+          done
+      - name: Run frozen cross-anatomy study
+        run: |
+          python scripts/p0-step12v6-a-team5-rest-cross-anatomy.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --out artifacts/p0-step12v6/cross-anatomy-report.json
+      - name: Validate evidence boundary and print decision table
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v6/cross-anatomy-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v6-a-team5-rest-cross-anatomy.v1'
+          assert r['classification']=='CROSS_ANATOMY_DISCOVERY_NOT_EXTERNAL_CONFIRMATION'
+          assert r['cohorts']['TEAM5_REST']['rows']==195
+          assert r['cohorts']['TEAM5_REST']['wins']==137
+          assert r['policy']['noThresholdSearch'] is True
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['futureSeasonStatsAllowed'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print(json.dumps({'cohorts':r['cohorts'],'contrasts':r['contrasts']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V6 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v6-a-team5-rest-cross-anatomy
+          path: artifacts/p0-step12v6/
+          if-no-files-found: error
+          retention-days: 30
