@@ -54,7 +54,6 @@ def main():
             rows.append(f)
     df=pd.DataFrame(rows)
 
-    # Premium A and frozen A+ are copied only from the already frozen V6 contract.
     am=np.ones(len(df),dtype=bool)
     for rule in ac['premiumA']['all']:
         am &= pd.to_numeric(df[rule['feature']],errors='coerce').to_numpy(float)>=float(rule['threshold'])
@@ -62,7 +61,6 @@ def main():
     apc=ac['aPlusConsensus'];p1=frozen_prob(df,apc['models']['ML_C4_2022_FROZEN']);p2=frozen_prob(df,apc['models']['ML_FULL13_2022_FROZEN'])
     df['Aplus']=am&(p1>=float(apc['thresholds']['c4PHomeGTE']))&(p2>=float(apc['thresholds']['full13PHomeGTE']))
 
-    # Train the two F5 models on 2022 decisive F5 outcomes only.
     models={};probs={}
     tr=df[(df.season=='2022')&df.f5y.notna()].copy();ytr=tr.f5y.astype(int).to_numpy()
     for name,spec in c['models'].items():
@@ -74,14 +72,12 @@ def main():
         probs[name]=lr.predict_proba(sc.transform(imp.transform(df[cols])))[:,1]
     df['pC4']=probs['F5_C4'];df['pFull13']=probs['F5_FULL13']
 
-    # Threshold selection is confined to 2023 by the predeclared rule.
     dv=df[(df.season=='2023')&df.f5y.notna()].copy();grid=[float(x) for x in c['selection']['thresholdGrid']];best=None
     for t1 in grid:
         for t2 in grid:
             m=(dv.pC4>=t1)&(dv.pFull13>=t2);n=int(m.sum())
             if n<int(c['selection']['minimumDevelopmentDecisiveRows']):continue
-            w=int(dv.loc[m,'f5y'].sum());wi=wilson(w,n)
-            key=(wi['lower'],n,t1+t2,t1,t2)
+            w=int(dv.loc[m,'f5y'].sum());wi=wilson(w,n);key=(wi['lower'],n,t1+t2,t1,t2)
             if best is None or key>best['key']:
                 best={'key':key,'c4':t1,'full13':t2,'rows':n,'wins':w,'losses':n-w,'hitRate':w/n,'wilson95':wi}
     if best is None:raise SystemExit('STEP12V7_NO_DEVELOPMENT_THRESHOLD')
@@ -108,18 +104,15 @@ def main():
             vals=[]
             for mon in sorted(months.unique()):
                 q=dec[months!=mon];nn=len(q);ww=int(q.f5y.sum());vals.append((ww/nn if nn else 0,mon,nn,ww))
-            hr,mon,nn,ww=min(vals)
-            loo={'removedMonth':mon,'decisiveRows':nn,'wins':ww,'hitRate':hr}
-        team=Counter(z.homeTeamId.astype(int));pitch=Counter(int(x) for x in z.homePitcherId.dropna())
-        fgN=len(z);fgW=int(z.fgy.sum()) if fgN else 0
-        return {'selectedRows':len(z),'decisiveRows':n,'pushes':len(z)-n,'wins':w,'losses':n-w,'hitRate':w/n if n else None,'wilson95':wilson(w,n),'fullGameWinsSameSelected':fgW,'fullGameLossesSameSelected':fgN-fgW,'fullGameHitRateSameSelected':fgW/fgN if fgN else None,'bySeason':by,'uniqueDates':int(z.date.nunique()),'uniqueMonths':int(z.date.astype(str).str[:7].nunique()),'minimumLeaveOneMonth':loo,'concentration':{'uniqueHomeTeams':len(team),'maxHomeTeamShare':max(team.values())/len(z) if z.size and team else None,'uniqueHomePitchers':len(pitch),'maxHomePitcherShare':max(pitch.values())/len(z) if z.size and pitch else None}}
+            hr,mon,nn,ww=min(vals);loo={'removedMonth':mon,'decisiveRows':nn,'wins':ww,'hitRate':hr}
+        team=Counter(z.homeTeamId.astype(int));pitch=Counter(int(x) for x in z.homePitcherId.dropna());fgN=len(z);fgW=int(z.fgy.sum()) if fgN else 0
+        return {'selectedRows':len(z),'decisiveRows':n,'pushes':len(z)-n,'wins':w,'losses':n-w,'hitRate':w/n if n else None,'wilson95':wilson(w,n),'fullGameWinsSameSelected':fgW,'fullGameLossesSameSelected':fgN-fgW,'fullGameHitRateSameSelected':fgW/fgN if fgN else None,'bySeason':by,'uniqueDates':int(z.date.nunique()),'uniqueMonths':int(z.date.astype(str).str[:7].nunique()),'minimumLeaveOneMonth':loo,'concentration':{'uniqueHomeTeams':len(team),'maxHomeTeamShare':max(team.values())/len(z) if len(z) and team else None,'uniqueHomePitchers':len(pitch),'maxHomePitcherShare':max(pitch.values())/len(z) if len(z) and pitch else None}}
     cohorts={k:cohort(v) for k,v in masks.items()}
 
     def table(left,right,target):
         l=ev[masks[left]];r=ev[masks[right]]
         if target=='f5y':l=l[l.f5y.notna()];r=r[r.f5y.notna()]
-        ly=l[target].astype(int);ry=r[target].astype(int)
-        a1=int(ly.sum());b1=len(ly)-a1;a2=int(ry.sum());b2=len(ry)-a2
+        ly=l[target].astype(int);ry=r[target].astype(int);a1=int(ly.sum());b1=len(ly)-a1;a2=int(ry.sum());b2=len(ry)-a2
         p=float(fisher_exact([[a1,b1],[a2,b2]],alternative='two-sided').pvalue)
         return {'left':left,'right':right,'target':target,'leftRows':len(ly),'rightRows':len(ry),'leftHitRate':a1/len(ly) if len(ly) else None,'rightHitRate':a2/len(ry) if len(ry) else None,'hitRateDiffPp':((a1/len(ly))-(a2/len(ry)))*100 if len(ly) and len(ry) else None,'rawFisherP':p}
     contrasts=[
