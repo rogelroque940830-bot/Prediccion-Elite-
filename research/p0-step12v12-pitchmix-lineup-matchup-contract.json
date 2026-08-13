@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "courtedge-p0-step12v12-pitchmix-lineup-matchup-contract.v1",
+  "scientificStatus": "ORTHOGONAL_PITCH_MIX_MATCHUP_DISCOVERY_NOT_CONFIRMATION",
+  "objective": "Test whether rolling starter pitch mix crossed with rolling team performance by pitch family separates A+ wins/losses and/or strengthens the frozen F5 consensus outside Premium A without sacrificing operational volume.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v7WorkflowRunId": 31665659665,
+    "step12v7ArtifactId": 9167853706,
+    "step12v11WorkflowRunId": 31668038028,
+    "step12v11ArtifactId": 9168701928,
+    "aPlusContract": "research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json"
+  },
+  "dataBoundary": {
+    "warmupSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "rollingLookbackDays": 365,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGamePitchDataAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "historicalPricesUsed": false
+  },
+  "pitchFamilies": {
+    "FASTBALL": ["FF", "SI", "FC", "FA", "FT"],
+    "BREAKING": ["SL", "ST", "CU", "KC", "SV"],
+    "OFFSPEED": ["CH", "FS", "FO", "SC"]
+  },
+  "rollingMetrics": [
+    "pitchmix_rel_contact_adv",
+    "pitchmix_rel_whiff_adv",
+    "pitchmix_rel_tbpa_adv",
+    "pitchmix_rel_hrpa_adv"
+  ],
+  "metricDefinitions": {
+    "pitchmix_rel_contact_adv": "Home offense weighted relative contact rate versus away starter pitch mix minus away offense weighted relative contact rate versus home starter pitch mix.",
+    "pitchmix_rel_whiff_adv": "Away offense weighted relative whiff rate versus home starter pitch mix minus home offense weighted relative whiff rate versus away starter pitch mix; positive favors home.",
+    "pitchmix_rel_tbpa_adv": "Home minus away weighted relative terminal total-bases per plate appearance, each weighted by opposing starter pitch mix.",
+    "pitchmix_rel_hrpa_adv": "Home minus away weighted relative terminal home-run per plate appearance, each weighted by opposing starter pitch mix.",
+    "relativeToLeague": "For every pitch family and date, team rate is centered on the MLB league rate from the same rolling pregame window before starter-mix weighting."
+  },
+  "reliability": {
+    "minimumStarterAllPitches365d": 250,
+    "minimumStarterCategorizedShare": 0.90,
+    "minimumTeamSwingsPerPitchFamily": 20,
+    "minimumTeamTerminalPaPerPitchFamily": 20,
+    "minimumWeightedMetricCoverageShare": 0.80,
+    "minimumAPlusEligibleShare": 0.90,
+    "minimumF5OutsideASelectedEligibleShare": 0.90,
+    "belowCoverageClassification": "PITCH_MIX_MATCHUP_INSUFFICIENT_COVERAGE"
+  },
+  "frozenPopulations": {
+    "A_PLUS_FULL_GAME_HOME": {
+      "expectedSelectedRows": 95,
+      "target": "FULL_GAME:RESULT:HOME",
+      "pushPolicy": "No pushes"
+    },
+    "F5_CONSENSUS_OUTSIDE_A": {
+      "expectedSelectedRows": 79,
+      "expectedDecisiveRows": 67,
+      "expectedWins": 49,
+      "expectedLosses": 18,
+      "expectedPushes": 12,
+      "target": "FIRST_5:RESULT:HOME",
+      "pushPolicy": "Ties are pushes and excluded from binary hit rate"
+    }
+  },
+  "predeclaredSignCohorts": {
+    "CONTACT_POS": {"feature": "pitchmix_rel_contact_adv", "operator": "GT", "threshold": 0.0},
+    "WHIFF_POS": {"feature": "pitchmix_rel_whiff_adv", "operator": "GT", "threshold": 0.0},
+    "TBPA_POS": {"feature": "pitchmix_rel_tbpa_adv", "operator": "GT", "threshold": 0.0},
+    "HRPA_POS": {"feature": "pitchmix_rel_hrpa_adv", "operator": "GT", "threshold": 0.0},
+    "AT_LEAST_2_OF_4": {"positiveCountGTE": 2},
+    "AT_LEAST_3_OF_4": {"positiveCountGTE": 3}
+  },
+  "statistics": {
+    "continuousTests": "Mann-Whitney two-sided plus Cliffs delta for each of 4 metrics in each of 2 frozen populations",
+    "holmCorrectionAcrossContinuousTests": true,
+    "signCohortsAreDescriptiveOnly": true,
+    "noNumericThresholdSearch": true,
+    "noAdditionalCohortsAfterResults": true,
+    "reportWilson95": true,
+    "reportBySeason": true,
+    "reportLeaveOneMonthOut": true,
+    "reportPrecisionVolumeFrontier": true
+  },
+  "volumePolicy": {
+    "doNotChooseByHitRateAlone": true,
+    "aPlusCoreMinimumSelectedRows": 70,
+    "f5OutsideACoreMinimumDecisiveRows": 50,
+    "selectiveShadowMinimumDecisiveRows": 35,
+    "reportPrecisionGainPer10PctVolumeLost": true,
+    "premiumAOrAPlusPicksMayBeRemoved": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "prospective11cRequiredBeforePromotion": true
+  }
+}
