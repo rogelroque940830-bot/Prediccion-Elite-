@@ -1,0 +1,57 @@
+{
+  "classification": "POSTHOC_STRONG_DISCOVERY_NOT_CONFIRMATORY",
+  "interpretation": {
+    "mainFinding": "Consensus sharply separates Premium A into a high-strength A+ pocket and a materially weaker residual A pocket.",
+    "nextUse": "Freeze as prospective shadow label while continuing independent variable-family research for away sides, totals, NRFI and player props.",
+    "notAClaim": "Because the A intersection was examined after the 2024-2026 replication results were available, 81.61% is discovery evidence and must not be described as independent confirmation."
+  },
+  "mlConsensus": {
+    "development2023": {"hitRate": 0.7603305785123967, "losses": 29, "rows": 121, "wins": 92},
+    "replication2024to2026": {
+      "bySeason": {
+        "2024": {"hitRate": 0.7931034482758621, "rows": 58, "wins": 46},
+        "2025": {"hitRate": 0.7126436781609196, "rows": 87, "wins": 62},
+        "2026_YTD": {"hitRate": 0.8095238095238095, "rows": 42, "wins": 34}
+      },
+      "combined": {"hitRate": 0.7593582887700535, "losses": 45, "rows": 187, "wins": 142}
+    },
+    "thresholds": {"c4PHomeGTE": 0.69, "full13PHomeGTE": 0.64}
+  },
+  "mlHomeConfidenceBandsFrozen2022Model": {
+    "pHomeGTE0.68": {
+      "development2023": {"hitRate": 0.7215189873417721, "rows": 158, "wins": 114},
+      "replication2024to2026": {"hitRate": 0.7174721189591078, "losses": 76, "rows": 269, "wins": 193}
+    },
+    "pHomeGTE0.70": {
+      "development2023": {"hitRate": 0.75, "rows": 100, "wins": 75},
+      "replication2024to2026": {"hitRate": 0.7793103448275862, "losses": 32, "rows": 145, "wins": 113}
+    },
+    "pHomeGTE0.72": {
+      "development2023": {"hitRate": 0.7931034482758621, "rows": 58, "wins": 46},
+      "replication2024to2026": {"hitRate": 0.8208955223880597, "losses": 12, "rows": 67, "wins": 55}
+    }
+  },
+  "premiumAOverlap": {
+    "consensus": {"hitRate": 0.7593582887700535, "losses": 45, "rows": 187, "wins": 142},
+    "consensusOutsideA": {"hitRate": 0.71, "losses": 29, "rows": 100, "wins": 71},
+    "intersectionAPlusConsensus": {
+      "bySeason": {
+        "2024": {"hitRate": 0.8148148148148148, "rows": 27, "wins": 22},
+        "2025": {"hitRate": 0.775, "rows": 40, "wins": 31},
+        "2026_YTD": {"hitRate": 0.9, "rows": 20, "wins": 18}
+      },
+      "hitRate": 0.8160919540229885,
+      "losses": 16,
+      "minimumLeaveOneMonthHitRate": 0.8024691358024691,
+      "minimumLeaveOneMonthRemoved": "2026-06",
+      "rows": 87,
+      "shareOfPremiumA": 0.41626794258373206,
+      "uniqueDates": 77,
+      "wilson95": {"lower": 0.721943165293875, "upper": 0.8835063204043074},
+      "wins": 71
+    },
+    "premiumA": {"hitRate": 0.7272727272727273, "losses": 57, "rows": 209, "wins": 152},
+    "premiumAOutsideConsensus": {"hitRate": 0.6639344262295082, "losses": 41, "rows": 122, "wins": 81}
+  },
+  "schemaVersion": "courtedge-p0-step12v2-a-plus-consensus-discovery-report.v1"
+}
