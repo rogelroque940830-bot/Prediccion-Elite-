@@ -1,0 +1,39 @@
+name: Validate P0 Unified Priced V16 Route
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-c4-live-parity-gate
+    paths:
+      - 'server/mlb-unified-priced-v16-routes.ts'
+      - 'server/mlb-unified-priced-v16-routes.test.ts'
+      - 'server/mlb-unified-priced-v16-runner.ts'
+      - 'server/mlb-selective-odds-sqlite-coordinator.ts'
+      - 'server/routes.ts'
+      - '.env.example'
+      - '.github/workflows/validate-p0-unified-priced-v16-route.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate route config boundary
+        run: npx tsx --test server/mlb-unified-priced-v16-routes.test.ts
+      - name: Preserve durable odds coordinator
+        run: npx tsx --test server/mlb-selective-odds-sqlite-coordinator.test.ts
+      - name: Compile route and runner
+        run: |
+          npx esbuild server/mlb-unified-priced-v16-routes.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-priced-route.cjs
+          npx esbuild server/mlb-unified-priced-v16-runner.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-priced-runner.cjs
+      - name: Backend build
+        run: npm run build:backend
