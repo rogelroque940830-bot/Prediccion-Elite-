@@ -14,22 +14,17 @@ permissions:
   contents: read
 
 jobs:
-  expanded-regime-study:
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v5
         with:
           node-version: '24.18.0'
-          cache: npm
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          npm ci
-          python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0' 'xgboost==3.1.3'
       - name: Validate frozen V3 contract
         run: |
           python - <<'PY'
@@ -49,21 +44,98 @@ jobs:
           python -m py_compile scripts/p0-step12v3-expanded-regime-study.py scripts/p0-step12v-game-anatomy-feature-table.py
           node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
           node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
-      - name: Rebuild clean T-5 anatomy tables 2022-2026
+
+  rebuild-season:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - label: '2022'
+            start: '2022-03-01'
+            end: '2022-10-06'
+          - label: '2023'
+            start: '2023-03-01'
+            end: '2023-10-01'
+          - label: '2024'
+            start: '2024-03-01'
+            end: '2024-10-01'
+          - label: '2025'
+            start: '2025-03-01'
+            end: '2025-10-01'
+          - label: '2026_YTD'
+            start: '2026-03-01'
+            end: '2026-08-10'
+    name: rebuild-${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install acquisition dependency tree
+        run: npm ci
+      - name: Rebuild clean T-5 anatomy table
         shell: bash
         run: |
           set -euo pipefail
-          build () {
-            label="$1"; start="$2"; end="$3"; root="artifacts/p0-step12v3/${label}"
-            node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs --start "$start" --end "$end" --concurrency 6 --role "STEP12V3_${label}" --out "${root}/cohort"
-            node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs --start "$start" --end "$end" --concurrency 6 --out "${root}/t5-audit"
-            python scripts/p0-step12v-game-anatomy-feature-table.py --dataset "${root}/cohort/dataset.json" --starter-history "${root}/cohort/starting-pitcher-history.json" --lineup-history "${root}/cohort/pregame-lineup-history.json" --t5-audit "${root}/t5-audit/t5-starter-identity-audit.json" --season "$label" --out "${root}/game-anatomy-feature-table.json"
-          }
-          build 2022 2022-03-01 2022-10-06
-          build 2023 2023-03-01 2023-10-01
-          build 2024 2024-03-01 2024-10-01
-          build 2025 2025-03-01 2025-10-01
-          build 2026_YTD 2026-03-01 2026-08-10
+          label='${{ matrix.label }}'
+          start='${{ matrix.start }}'
+          end='${{ matrix.end }}'
+          root="artifacts/p0-step12v3/${label}"
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs --start "$start" --end "$end" --concurrency 3 --role "STEP12V3_${label}" --out "${root}/cohort"
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs --start "$start" --end "$end" --concurrency 3 --out "${root}/t5-audit"
+          python scripts/p0-step12v-game-anatomy-feature-table.py --dataset "${root}/cohort/dataset.json" --starter-history "${root}/cohort/starting-pitcher-history.json" --lineup-history "${root}/cohort/pregame-lineup-history.json" --t5-audit "${root}/t5-audit/t5-starter-identity-audit.json" --season "$label" --out "${root}/game-anatomy-feature-table.json"
+          mkdir -p artifacts/p0-step12v3-packs
+          tar -czf "artifacts/p0-step12v3-packs/${label}.tgz" -C artifacts/p0-step12v3 "$label"
+      - name: Upload season evidence pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v3-season-${{ matrix.label }}
+          path: artifacts/p0-step12v3-packs/${{ matrix.label }}.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+  expanded-regime-study:
+    needs: rebuild-season
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: |
+          npm ci
+          python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0' 'xgboost==3.1.3'
+      - name: Download all season evidence packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v3-season-*
+          path: artifacts/p0-step12v3-packs
+          merge-multiple: true
+      - name: Reassemble canonical V3 root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v3
+          for pack in artifacts/p0-step12v3-packs/*.tgz; do
+            tar -xzf "$pack" -C artifacts/p0-step12v3
+          done
+          for label in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${label}/game-anatomy-feature-table.json"
+          done
       - name: Run expanded pregame regime study
         run: >-
           python scripts/p0-step12v3-expanded-regime-study.py
