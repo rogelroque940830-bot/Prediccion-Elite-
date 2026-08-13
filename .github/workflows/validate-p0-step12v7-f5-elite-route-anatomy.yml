@@ -1,0 +1,93 @@
+name: Validate P0 Step 12V7 F5 Elite Route Anatomy
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v6-a-team5-rest-cross-anatomy
+    paths:
+      - 'research/p0-step12v7-f5-elite-route-contract.json'
+      - 'scripts/p0-step12v7-f5-elite-route-anatomy.py'
+      - '.github/workflows/validate-p0-step12v7-f5-elite-route-anatomy.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  f5-route-anatomy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Validate frozen V7 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v7-f5-elite-route-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v7-f5-elite-route-contract.v1'
+          assert c['dataBoundary']['modelTrainingSeason']=='2022'
+          assert c['dataBoundary']['thresholdSelectionSeason']=='2023'
+          assert c['selection']['noEvaluationSeasonThresholdSearch'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V7_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/p0-step12v7-f5-elite-route-anatomy.py
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Validate parent evidence pack
+        run: |
+          for label in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${label}/game-anatomy-feature-table.json"
+          done
+          test -s research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json
+      - name: Run frozen F5 route study
+        run: |
+          python scripts/p0-step12v7-f5-elite-route-anatomy.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v7-f5-elite-route-contract.json \
+            --a-contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --out artifacts/p0-step12v7/f5-route-report.json
+      - name: Validate evidence boundary and print decision table
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v7/f5-route-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v7-f5-elite-route-anatomy.v1'
+          assert r['classification']=='F5_ROUTE_DISCOVERY_NOT_EXTERNAL_CONFIRMATION'
+          assert r['thresholdSelection2023']['rows'] >= 50
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['futureSeasonStatsAllowed'] is False
+          assert r['policy']['liveFilterChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print(json.dumps({'thresholds':r['thresholdSelection2023'],'cohorts':r['cohorts'],'contrasts':r['contrasts']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V7 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v7-f5-elite-route-anatomy
+          path: artifacts/p0-step12v7/
+          if-no-files-found: error
+          retention-days: 30
