@@ -1,0 +1,97 @@
+name: Validate P0 C4 Live Parity Gate
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-step10-v16-pure-settlement-adapter
+    paths:
+      - 'server/mlb-c4-live-feature-builder.ts'
+      - 'server/mlb-c4-live-feature-builder.test.ts'
+      - 'scripts/p0-c4-live-parity-state.ts'
+      - 'scripts/p0-c4-live-parity-replay.ts'
+      - 'research/p0-c4-live-parity-contract.json'
+      - '.github/workflows/validate-p0-c4-live-parity-gate.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+
+      - name: Lock C4 contract and canonical artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const c=require('./research/p0-c4-live-parity-contract.json');
+          if (JSON.stringify(c.features)!==JSON.stringify(['lineup_exposure_rate_adv','starter_kbb_adv','combined_team_rs10','team_rd10_diff'])) throw new Error('C4_FEATURE_SET_DRIFT');
+          if (c.formulaLock.starterKbbShrinkagePriorBattersFaced!==72) throw new Error('C4_SHRINKAGE_DRIFT');
+          if (c.formulaLock.sameDateHistoryAllowed!==false || c.formulaLock.seasonHistoryReset!==true) throw new Error('C4_TEMPORAL_BOUNDARY_DRIFT');
+          if (c.policy.v16LiveProbabilityAllowedBeforeParityPass!==false) throw new Error('C4_PREMATURE_V16_UNLOCK');
+          NODE
+          actual=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31659518059/artifacts" --jq '.artifacts[] | select(.name=="p0-step12v3-expanded-regimes") | .digest')
+          test "$actual" = "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+          echo "C4_CANONICAL_ARTIFACT_LOCKED=$actual"
+
+      - name: Unit-test canonical C4 live builder
+        run: npx tsx --test server/mlb-c4-live-feature-builder.test.ts
+
+      - name: Download canonical V3 evidence pack
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3-canonical
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Replay runtime builder against canonical historical rows
+        run: >-
+          npx tsx scripts/p0-c4-live-parity-replay.ts
+          --root artifacts/p0-step12v3-canonical
+          --contract research/p0-c4-live-parity-contract.json
+          --out artifacts/p0-c4-live-parity/c4-live-parity-report.json
+
+      - name: Enforce 4-of-4 zero-mismatch gate
+        run: |
+          node - <<'NODE'
+          const r=require('./artifacts/p0-c4-live-parity/c4-live-parity-report.json');
+          if (r.classification!=='C4_LIVE_PARITY_GATE_PASS') throw new Error('C4_PARITY_NOT_PASS');
+          if (r.rowsCompared<10000) throw new Error('C4_PARITY_INSUFFICIENT_ROWS');
+          if (r.mismatchCount!==0) throw new Error('C4_PARITY_MISMATCH');
+          for (const [name,s] of Object.entries(r.featureTotals)) {
+            if (s.mismatches!==0) throw new Error(`C4_FEATURE_MISMATCH:${name}`);
+            if (s.checks!==r.rowsCompared) throw new Error(`C4_FEATURE_COVERAGE_DRIFT:${name}`);
+          }
+          if (r.policy.v16LiveProbabilityUnlocked!==true) throw new Error('C4_V16_NOT_UNLOCKED');
+          if (r.policy.priceInputsUsed!==false || r.policy.sameDateHistoryAllowed!==false) throw new Error('C4_BOUNDARY_DRIFT');
+          console.log(JSON.stringify({classification:r.classification,rowsCompared:r.rowsCompared,featureTotals:r.featureTotals},null,2));
+          NODE
+
+      - name: Preserve V16 and downstream regressions
+        run: |
+          npx esbuild server/mlb-pure-settlement-evidence-adapter.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-adapter.cjs
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npm run build:backend
+
+      - name: Upload parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-c4-live-parity-gate
+          path: artifacts/p0-c4-live-parity/
+          if-no-files-found: warn
+          retention-days: 30
