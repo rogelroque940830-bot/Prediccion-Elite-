@@ -1,0 +1,131 @@
+name: Validate P0 Step 12V15 A+ FG-F5 Router Freeze
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v14-bullpen-availability-routing
+    paths:
+      - 'research/p0-step12v15-aplus-fg-f5-router-freeze-contract.json'
+      - 'scripts/p0-step12v15-score-aplus-fg-f5-router.py'
+      - '.github/workflows/validate-p0-step12v15-aplus-fg-f5-router-freeze.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen V15 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v15-aplus-fg-f5-router-freeze-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v15-aplus-fg-f5-router-freeze-contract.v1'
+          assert c['frozenPopulation']['expectedSelectedRows']==95
+          assert c['router']['id']=='A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1'
+          assert len(c['router']['rules'])==2
+          assert c['router']['alternativeRoutersAllowed'] is False
+          assert c['router']['numericThresholdSearchAllowed'] is False
+          assert c['dataBoundary']['newMlbAcquisitionAllowed'] is False
+          assert c['dataBoundary']['sameDateOutcomeLeakageAllowed'] is False
+          assert c['policy']['aPlusOpportunityMayBeRemoved'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V15_SINGLE_ROUTER_LOCKED')
+          PY
+      - name: Syntax check V15 scorer
+        run: python -m py_compile scripts/p0-step12v15-score-aplus-fg-f5-router.py
+
+  router-study:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download canonical V14 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v14-bullpen-availability-routing
+          path: artifacts/p0-step12v14-report
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31672480680
+      - name: Download canonical V14 bullpen packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v14-bullpen-*
+          path: artifacts/p0-step12v14-bullpen
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31672480680
+      - name: Validate immutable parent inputs
+        run: |
+          test -s artifacts/p0-step12v14-report/bullpen-availability-routing-report.json
+          for s in 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v14-bullpen/bullpen-${s}.json"
+          done
+      - name: Score exactly one frozen router
+        run: |
+          mkdir -p artifacts/p0-step12v15
+          python scripts/p0-step12v15-score-aplus-fg-f5-router.py \
+            --root artifacts/p0-step12v3 \
+            --bullpen-dir artifacts/p0-step12v14-bullpen \
+            --a-contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --v14-contract research/p0-step12v14-bullpen-availability-routing-contract.json \
+            --v14-report artifacts/p0-step12v14-report/bullpen-availability-routing-report.json \
+            --contract research/p0-step12v15-aplus-fg-f5-router-freeze-contract.json \
+            --out artifacts/p0-step12v15/aplus-fg-f5-router-report.json
+      - name: Validate router scientific boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v15/aplus-fg-f5-router-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v15-aplus-fg-f5-router-freeze.v1'
+          assert r['population']['selectedRows']==95
+          assert sum(r['population']['routeCounts'].values())==95
+          assert r['router']['opportunityRetentionPct']==100.0
+          assert r['policy']['singleFrozenRouterOnly'] is True
+          assert r['policy']['numericThresholdSearchAllowed'] is False
+          assert r['policy']['alternativeRoutersAllowed'] is False
+          assert r['policy']['newMlbAcquisitionUsed'] is False
+          assert r['policy']['aPlusOpportunityMayBeRemoved'] is False
+          assert r['policy']['liveFilterChangeAllowed'] is False
+          assert r['policy']['betEliteAllowed'] is False
+          print(json.dumps(r,indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npm run build:backend
+      - name: Upload V15 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v15-aplus-fg-f5-router-freeze
+          path: artifacts/p0-step12v15/
+          if-no-files-found: error
+          retention-days: 30
