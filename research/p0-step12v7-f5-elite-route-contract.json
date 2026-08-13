@@ -1,0 +1,18 @@
+{
+  "schemaVersion":"courtedge-p0-step12v7-f5-elite-route-contract.v1",
+  "scientificStatus":"SECONDARY_F5_ROUTE_DISCOVERY_NOT_EXTERNAL_CONFIRMATION",
+  "objective":"Test whether a frozen F5 Home consensus is a distinct high-strength route and whether it improves market selection inside Premium A/A+.",
+  "parentEvidence":{"step12v3WorkflowRunId":31659518059,"step12v3ArtifactId":9166442982,"aPlusContract":"research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json"},
+  "dataBoundary":{"modelTrainingSeason":"2022","thresholdSelectionSeason":"2023","evaluationSeasons":["2024","2025","2026_YTD"],"sameDateOutcomeLeakageAllowed":false,"futureSeasonStatsAllowed":false,"historicalPricesUsed":false},
+  "target":{"market":"FIRST_5:RESULT:HOME","pushPolicy":"F5 ties are retained as pushes and excluded from binary hit-rate denominators"},
+  "models":{
+    "F5_C4":{"features":["lineup_exposure_rate_adv","starter_kbb_adv","combined_team_rs10","team_rd10_diff"]},
+    "F5_FULL13":{"features":["team_rd10_diff","team_win10_diff","starter_kbb_adv","team_ra10_adv","lineup_exposure_rate_adv","starter_runrisk_adv","team_rs10_diff","starter_hr_adv","min_probable_prior_bf","lineup_continuity_rate_adv","combined_starter_kbb","combined_team_rs10","combined_team_ra10"]},
+    "family":"STANDARDIZED_LOGISTIC_REGRESSION","imputation":"2022_MEDIAN_ONLY","randomState":42
+  },
+  "selection":{"thresholdGrid":[0.58,0.59,0.60,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.70,0.71,0.72,0.73,0.74,0.75],"minimumDevelopmentDecisiveRows":50,"rule":"MAX_DEVELOPMENT_WILSON_LOWER_THEN_DECISIVE_VOLUME_THEN_HIGHER_COMBINED_THRESHOLD","noEvaluationSeasonThresholdSearch":true},
+  "predeclaredCohorts":["F5_CONSENSUS","F5_CONSENSUS_OUTSIDE_A","A_INTERSECT_F5_CONSENSUS","A_PLUS_INTERSECT_F5_CONSENSUS","A_PLUS_OUTSIDE_F5_CONSENSUS","F5_CONSENSUS_OUTSIDE_A_PLUS"],
+  "predeclaredContrasts":["A_STATUS_WITHIN_F5_ROUTE","F5_ROUTE_WITHIN_A_PLUS_F5_TARGET","F5_ROUTE_WITHIN_A_PLUS_FULL_GAME_TARGET"],
+  "diagnostics":{"reportBySeason":true,"wilson95":true,"leaveOneMonthOut":true,"teamPitcherConcentration":true,"sameGameF5VsFullGame":true,"holmCorrectionAcrossContrasts":true},
+  "policy":{"researchOnly":true,"liveFilterChangeAllowed":false,"rankingChangeAllowed":false,"stakeChangeAllowed":false,"betEliteAllowed":false,"premiumAPicksMayBeRemoved":false,"prospective11cRequiredBeforePromotion":true}
+}
