@@ -1,0 +1,111 @@
+name: Validate P0 Step 12V8 Handedness Platoon Anatomy
+
+on:
+  pull_request:
+    branches:
+      - research/p0-step12v7-f5-elite-route-anatomy
+    paths:
+      - 'research/p0-step12v8-handedness-platoon-contract.json'
+      - 'scripts/p0-step12v8-handedness-platoon-anatomy.py'
+      - '.github/workflows/validate-p0-step12v8-handedness-platoon-anatomy.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  handedness-platoon-anatomy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+      - name: Validate frozen V8 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v8-handedness-platoon-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v8-handedness-platoon-contract.v1'
+          assert c['population']['premiumAOnly'] is True
+          assert c['population']['expectedPremiumARows']==268
+          assert c['population']['expectedAPlusRows']==95
+          assert len(c['predeclaredBins'])==8
+          assert len(c['inferentialTests']['primaryBins'])==4
+          assert len(c['inferentialTests']['secondaryBins'])==4
+          assert c['historicalIdentity']['allowCurrentPlayerMetadataFallback'] is False
+          assert c['historicalIdentity']['allowMissingHandImputation'] is False
+          assert c['policy']['noThresholdSearch'] is True
+          assert c['policy']['noFeatureSearch'] is True
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          print('STEP12V8_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/p0-step12v8-handedness-platoon-anatomy.py
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Validate canonical parent inputs
+        run: |
+          for label in 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${label}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${label}/cohort/pregame-lineup-history.json"
+          done
+          test -s research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json
+      - name: Acquire exact T-5 hands and run frozen anatomy study
+        run: |
+          python scripts/p0-step12v8-handedness-platoon-anatomy.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v8-handedness-platoon-contract.json \
+            --a-contract research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json \
+            --workers 6 \
+            --out artifacts/p0-step12v8/handedness-platoon-report.json
+      - name: Validate temporal identity and evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v8/handedness-platoon-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v8-handedness-platoon-anatomy.v1'
+          assert r['coverage']['premiumA']['expected']==268
+          assert r['coverage']['aPlus']['expected']==95
+          assert len(r['inferentialTests'])==8
+          for x in r['snapshots']:
+            if not x['usable']: continue
+            assert x['sourceMetadataTimecode'] <= x['requestedTimecode']
+            assert len(x['homeBatterSides'])==9 and len(x['awayBatterSides'])==9
+            assert x['homeStarterHand'] in ('R','L') and x['awayStarterHand'] in ('R','L')
+            assert all(v in ('R','L','S') for v in x['homeBatterSides']+x['awayBatterSides'])
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['futureSeasonStatsAllowed'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['liveFilterChangeAllowed'] is False
+          assert r['policy']['betEliteAllowed'] is False
+          print(json.dumps({'classification':r['classification'],'coverage':r['coverage'],'baselines':r['baselines'],'tests':r['inferentialTests'],'anatomy':r['winnerLoserFeatureAnatomy'],'handPairs':r['starterHandPairStats']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload V8 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v8-handedness-platoon-anatomy
+          path: artifacts/p0-step12v8/
+          if-no-files-found: error
+          retention-days: 30

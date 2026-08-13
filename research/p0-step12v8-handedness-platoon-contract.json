@@ -1,0 +1,86 @@
+{
+  "schemaVersion":"courtedge-p0-step12v8-handedness-platoon-contract.v1",
+  "scientificStatus":"ORTHOGONAL_FAMILY_DISCOVERY_NOT_EXTERNAL_CONFIRMATION",
+  "objective":"Determine whether exact T-5 starter/batter handedness geometry explains Premium A/A+ wins and losses without retuning existing A/A+ definitions.",
+  "parentEvidence":{
+    "step12v3WorkflowRunId":31659518059,
+    "step12v3ArtifactId":9166442982,
+    "aPlusContract":"research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json",
+    "step12v7Pr":522
+  },
+  "population":{
+    "evaluationSeasons":["2024","2025","2026_YTD"],
+    "premiumAOnly":true,
+    "expectedPremiumARows":268,
+    "expectedAPlusRows":95,
+    "noSeasonRebuild":true
+  },
+  "historicalIdentity":{
+    "source":"MLB_STATS_API_TIMECODE_FEED",
+    "useCanonicalRequestedTimecode":true,
+    "requireExactCanonicalBattingOrderMatch":true,
+    "requireGameAndTeamIdentityMatch":true,
+    "requireSourceMetadataAtOrBeforeRequestedTimecode":true,
+    "allowCurrentPlayerMetadataFallback":false,
+    "allowMissingHandImputation":false
+  },
+  "handDefinitions":{
+    "validPitcherHands":["R","L"],
+    "validBatterSides":["R","L","S"],
+    "naturalOppositeHand":"L batter vs R pitcher OR R batter vs L pitcher",
+    "sameHand":"R batter vs R pitcher OR L batter vs L pitcher",
+    "switch":"S batter, retained as a separate class",
+    "flexiblePlatoon":"naturalOppositeHand + switch"
+  },
+  "features":[
+    "home_natural_opp_count","away_natural_opp_count","natural_opp_diff",
+    "home_switch_count","away_switch_count","switch_diff",
+    "home_same_hand_count","away_same_hand_count","same_hand_diff",
+    "home_flexible_count","away_flexible_count","flexible_diff",
+    "starter_hand_pair"
+  ],
+  "predeclaredBins":{
+    "FLEX_ADV_GE1":{"feature":"flexible_diff","operator":"GTE","threshold":1},
+    "FLEX_ADV_GE2":{"feature":"flexible_diff","operator":"GTE","threshold":2},
+    "FLEX_DISADV_LE_NEG1":{"feature":"flexible_diff","operator":"LTE","threshold":-1},
+    "FLEX_DISADV_LE_NEG2":{"feature":"flexible_diff","operator":"LTE","threshold":-2},
+    "NATURAL_ADV_GE1":{"feature":"natural_opp_diff","operator":"GTE","threshold":1},
+    "NATURAL_ADV_GE2":{"feature":"natural_opp_diff","operator":"GTE","threshold":2},
+    "NATURAL_DISADV_LE_NEG1":{"feature":"natural_opp_diff","operator":"LTE","threshold":-1},
+    "NATURAL_DISADV_LE_NEG2":{"feature":"natural_opp_diff","operator":"LTE","threshold":-2}
+  },
+  "inferentialTests":{
+    "primaryPopulation":"A_PLUS",
+    "primaryBins":["FLEX_ADV_GE1","FLEX_DISADV_LE_NEG1","NATURAL_ADV_GE1","NATURAL_DISADV_LE_NEG1"],
+    "secondaryPopulation":"A_NONPLUS",
+    "secondaryBins":["FLEX_ADV_GE1","FLEX_DISADV_LE_NEG1","NATURAL_ADV_GE1","NATURAL_DISADV_LE_NEG1"],
+    "test":"TWO_SIDED_FISHER_EXACT_CONDITION_VS_COMPLEMENT",
+    "multipleTesting":"HOLM_ACROSS_8_PREDECLARED_TESTS",
+    "strictBinsAreDescriptiveOnly":true
+  },
+  "coverageGate":{
+    "minimumPremiumAUsableShare":0.90,
+    "minimumAPlusUsableShare":0.90,
+    "belowGateClassification":"INSUFFICIENT_HANDEDNESS_COVERAGE"
+  },
+  "diagnostics":{
+    "reportBySeason":true,
+    "reportWinnerVsLoserFeatureMeans":true,
+    "reportStarterHandPair":true,
+    "reportLeaveOneMonthOutForPromisingBins":true,
+    "reportTeamPitcherConcentration":true
+  },
+  "policy":{
+    "noThresholdSearch":true,
+    "noFeatureSearch":true,
+    "sameDateOutcomeLeakageAllowed":false,
+    "futureSeasonStatsAllowed":false,
+    "historicalPricesUsed":false,
+    "liveFilterChangeAllowed":false,
+    "rankingChangeAllowed":false,
+    "stakeChangeAllowed":false,
+    "betEliteAllowed":false,
+    "premiumAPicksMayBeRemoved":false,
+    "prospective11cRequiredBeforePromotion":true
+  }
+}
