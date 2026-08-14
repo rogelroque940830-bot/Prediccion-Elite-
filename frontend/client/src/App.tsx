@@ -13,7 +13,7 @@ import Dashboard from "@/pages/dashboard";
 import Predictor from "@/pages/predictor";
 import CalculatorPage from "@/pages/calculator";
 import HistoryPage from "@/pages/history";
-import MLBPredictor from "@/pages/mlb-predictor";
+import MLBPredictor from "@/pages/mlb-predictor-v16";
 import MLBHistory from "@/pages/mlb-history";
 import WNBAPredictor from "@/pages/wnba-predictor";
 import WNBAHistory from "@/pages/wnba-history";
