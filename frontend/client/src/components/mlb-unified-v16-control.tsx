@@ -79,7 +79,7 @@ function blockerLabel(blocker: unknown): string {
     if (message) return message;
   }
   try {
-    return JSON.stringify(blocker);
+    return JSON.stringify(blocker) ?? "Bloqueo certificado no identificado";
   } catch {
     return "Bloqueo certificado no identificado";
   }
