@@ -71,6 +71,39 @@ function publicGames(slate: MlbP1DailySlate) {
     }));
 }
 
+function publicEliteCandidates(result: MlbUnifiedPricedV16RunnerResult, slate: MlbP1DailySlate) {
+  const teamsByGame = new Map(
+    slate.games.map((game) => [game.gamePk, { awayTeam: game.awayTeam.name, homeTeam: game.homeTeam.name }]),
+  );
+
+  return result.eliteEvidenceLedger.entries.map((entry) => {
+    const candidate = entry.candidate;
+    const teams = teamsByGame.get(candidate.gamePk);
+    return {
+      predictionId: entry.predictionId,
+      gamePk: candidate.gamePk,
+      awayTeam: teams?.awayTeam ?? "Away",
+      homeTeam: teams?.homeTeam ?? "Home",
+      marketType: candidate.marketType,
+      selectedSide: candidate.selectedSide,
+      selectedLine: candidate.selectedLine,
+      modelWinProbability: candidate.modelWinProbability,
+      modelPushProbability: candidate.modelPushProbability,
+      expectedValuePerUnit: candidate.expectedValuePerUnit,
+      executionEdgePp: candidate.executionEdgePp,
+      executionNoVigEdgePp: candidate.executionNoVigEdgePp,
+      referenceNoVigEdgePp: candidate.referenceNoVigEdgePp,
+      referenceAgreement: candidate.referenceAgreement,
+      executionBookTitle: candidate.executionBookTitle,
+      executionOddsAmerican: candidate.executionOddsAmerican,
+      executionCapturedAt: candidate.executionCapturedAt,
+      intrinsicProjectionScope: candidate.intrinsicProjectionScope,
+      intrinsicThesisKinds: candidate.intrinsicThesisKinds,
+      supportingComponents: candidate.supportingComponents,
+    };
+  });
+}
+
 export interface MlbUnifiedV16UiCommandDependencies {
   buildSlate?: typeof buildMlbP1DailySlate;
   assembleLiveInput?: typeof assembleMlbUnifiedV16LiveInput;
@@ -189,8 +222,9 @@ export async function executeMlbUnifiedV16UiCommand(
         schemaVersion: result.schemaVersion,
         summary: result.summary,
         prepriceSummary: result.preprice.summary,
+        eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. No stake or final bet recommendation is produced by this slice.",
+      nextBoundary: "Priced V16 evidence run completed. Elite candidate rows are pregame evidence only; no stake or final bet recommendation is produced by this slice.",
       policy: {
         explicitInvocationRequired: true,
         certifiedServerAssemblyComplete: true,
