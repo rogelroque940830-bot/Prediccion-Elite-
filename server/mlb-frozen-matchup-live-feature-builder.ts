@@ -293,7 +293,7 @@ export function buildMlbFrozenMatchupLiveFeatures(
   const awayHand = slgAggregate(input.handSplitGames, input.officialDate, input.awayTeamId, input.homeStarterHand);
   const minimumPriorPa = Math.min(homeHand.pa, awayHand.pa);
   const slgEligible = homeHand.slg !== null && awayHand.slg !== null && minimumPriorPa >= MLB_FROZEN_MATCHUP_SLG_MIN_PRIOR_PA;
-  const slgAdv = slgEligible ? (homeHand.slg as number) - (awayHand.slg as number) : null;
+  const slgAdv = homeHand.slg !== null && awayHand.slg !== null ? homeHand.slg - awayHand.slg : null;
 
   const lowerDate = dateMinusDays(input.officialDate, MLB_FROZEN_MATCHUP_PITCHMIX_LOOKBACK_DAYS);
   const homePitcher = pitcherAggregate(input.pitchmixGames, lowerDate, input.officialDate, input.homeStarterId);
@@ -338,9 +338,7 @@ export function buildMlbFrozenMatchupLiveFeatures(
   };
   if (Object.values(values).some((value) => value === null || !Number.isFinite(value))) reasons.push("METRIC_VALUE_MISSING");
   const pitchmixEligible = reasons.length === 0;
-  const positiveCount = pitchmixEligible
-    ? Object.values(values).filter((value) => (value as number) > 0).length
-    : 0;
+  const positiveCount = Object.values(values).filter((value) => value !== null && Number.isFinite(value) && value > 0).length;
 
   const pitchmixPriorGames = input.pitchmixGames.filter((game) => game.officialDate >= lowerDate && game.officialDate < input.officialDate).length;
   const handSplitPriorSeasonGames = input.handSplitGames.filter((game) => game.officialDate < input.officialDate && game.officialDate.slice(0, 4) === input.officialDate.slice(0, 4)).length;
@@ -358,10 +356,10 @@ export function buildMlbFrozenMatchupLiveFeatures(
     }),
     pitchmix: Object.freeze({
       eligible: pitchmixEligible,
-      contactAdv: pitchmixEligible ? values.contactAdv : null,
-      whiffAdv: pitchmixEligible ? values.whiffAdv : null,
-      tbpaAdv: pitchmixEligible ? values.tbpaAdv : null,
-      hrpaAdv: pitchmixEligible ? values.hrpaAdv : null,
+      contactAdv: values.contactAdv,
+      whiffAdv: values.whiffAdv,
+      tbpaAdv: values.tbpaAdv,
+      hrpaAdv: values.hrpaAdv,
       positiveCount,
     }),
     diagnostics: Object.freeze({
