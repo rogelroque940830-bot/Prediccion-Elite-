@@ -1,0 +1,104 @@
+name: Validate P0 V17 Frozen Matchup Historical Parity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-frozen-matchup-live-feature-builder.ts'
+      - 'scripts/p0-v17-verify-frozen-matchup-parity.ts'
+      - '.github/workflows/validate-p0-v17-frozen-matchup-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  frozen-v9-v12-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Verify immutable research artifact custody
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          check_digest() {
+            local run_id="$1" name="$2" expected="$3"
+            actual=$(gh api "repos/${REPO}/actions/runs/${run_id}/artifacts" --paginate --jq ".artifacts[] | select(.name == \"${name}\") | .digest" | head -n1)
+            [[ "$actual" == "$expected" ]] || { echo "Artifact digest drift for ${name}: ${actual}" >&2; exit 1; }
+          }
+          check_digest 31659518059 p0-step12v3-expanded-regimes sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26
+          check_digest 31665659665 p0-step12v7-f5-elite-route-anatomy sha256:f7195ad7603ee54d142c07a2811843a0e08ecb74e013451112fb9045f5cfeb37
+          check_digest 31666803576 p0-step12v9-rolling-platoon-performance sha256:f08523c486d086bfe082a950a341811249d37113a557cdb91da314337bf2fffa
+          check_digest 31666803576 p0-step12v9-hand-splits-2024 sha256:66525c58827e52155122c02321c1d4aae194b3f5f9fb31af0b3215fed96bbd6f
+          check_digest 31666803576 p0-step12v9-hand-splits-2025 sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425
+          check_digest 31666803576 p0-step12v9-hand-splits-2026_YTD sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48
+          check_digest 31669146698 p0-step12v12-pitchmix-lineup-matchup sha256:7409a03808286f5d6a14c22a78f56558d11592b2e4b16d67d66314d9ec3131d1
+          check_digest 31669146698 p0-step12v12-pitchmix-2023 sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92
+          check_digest 31669146698 p0-step12v12-pitchmix-2024 sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231
+          check_digest 31669146698 p0-step12v12-pitchmix-2025 sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2
+          check_digest 31669146698 p0-step12v12-pitchmix-2026_YTD sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7
+      - name: Download frozen V3/V7/V9/V12 evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p0-v17/{v3,v7,v9-report,v9-splits,v12-report,v12-pitch}
+          gh run download 31659518059 --repo "$REPO" --name p0-step12v3-expanded-regimes --dir /tmp/p0-v17/v3
+          gh run download 31665659665 --repo "$REPO" --name p0-step12v7-f5-elite-route-anatomy --dir /tmp/p0-v17/v7
+          gh run download 31666803576 --repo "$REPO" --name p0-step12v9-rolling-platoon-performance --dir /tmp/p0-v17/v9-report
+          gh run download 31666803576 --repo "$REPO" --name p0-step12v9-hand-splits-2024 --dir /tmp/p0-v17/v9-splits
+          gh run download 31666803576 --repo "$REPO" --name p0-step12v9-hand-splits-2025 --dir /tmp/p0-v17/v9-splits
+          gh run download 31666803576 --repo "$REPO" --name p0-step12v9-hand-splits-2026_YTD --dir /tmp/p0-v17/v9-splits
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-lineup-matchup --dir /tmp/p0-v17/v12-report
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2023 --dir /tmp/p0-v17/v12-pitch
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2024 --dir /tmp/p0-v17/v12-pitch
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2025 --dir /tmp/p0-v17/v12-pitch
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2026_YTD --dir /tmp/p0-v17/v12-pitch
+      - name: Recover immutable frozen A/A+ contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin research/p0-step12v12-pitchmix-lineup-matchup
+          git show FETCH_HEAD:research/p0-step12v6-a-team5-rest-cross-anatomy-contract.json > /tmp/p0-v17/a-contract.json
+          grep -F 'courtedge-p0-step12v6-a-team5-rest-cross-anatomy-contract.v1' /tmp/p0-v17/a-contract.json
+      - name: Prove exact V9 SLG and V12 cohort parity
+        run: |
+          mkdir -p /tmp/p0-v17/out
+          npx tsx scripts/p0-v17-verify-frozen-matchup-parity.ts \
+            --v3-root /tmp/p0-v17/v3 \
+            --v7-report /tmp/p0-v17/v7/f5-route-report.json \
+            --a-contract /tmp/p0-v17/a-contract.json \
+            --v9-report /tmp/p0-v17/v9-report/rolling-platoon-report.json \
+            --v9-split-dir /tmp/p0-v17/v9-splits \
+            --v12-report /tmp/p0-v17/v12-report/pitchmix-lineup-matchup-report.json \
+            --v12-pitch-dir /tmp/p0-v17/v12-pitch \
+            --out /tmp/p0-v17/out/frozen-matchup-parity-report.json
+      - name: Upload parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-v17-frozen-matchup-parity
+          path: /tmp/p0-v17/out/frozen-matchup-parity-report.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve parity-gate scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'thresholdSearchPerformed: false' scripts/p0-v17-verify-frozen-matchup-parity.ts
+          grep -F 'outcomeBasedRetuningPerformed: false' scripts/p0-v17-verify-frozen-matchup-parity.ts
+          ! grep -E 'sportsbook|stake|BET_ELITE|automaticBetPlacement|appendPrediction\(|appendSettlement\(' scripts/p0-v17-verify-frozen-matchup-parity.ts
