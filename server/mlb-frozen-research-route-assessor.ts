@@ -27,6 +27,7 @@ export interface MlbFrozenRouteClassifierSnapshot {
     hrpaAdv: number | null;
   };
   f5Consensus: boolean;
+  bullpenD1Eligible: boolean;
   bullpenPitches1dAdv: number | null;
 }
 
@@ -97,6 +98,9 @@ function assertClassifierConsistency(snapshot: MlbFrozenRouteClassifierSnapshot)
   }
   if (snapshot.slg.eligible && !finite(snapshot.slg.adv)) {
     throw new Error("MLB_FROZEN_ROUTE_SLG_ADV_REQUIRED");
+  }
+  if (snapshot.aPlus && !snapshot.bullpenD1Eligible) {
+    throw new Error("MLB_FROZEN_ROUTE_BULLPEN_D1_INELIGIBLE_FOR_APLUS");
   }
   if (snapshot.aPlus && !finite(snapshot.bullpenPitches1dAdv)) {
     throw new Error("MLB_FROZEN_ROUTE_BULLPEN_D1_REQUIRED_FOR_APLUS");
