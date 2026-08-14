@@ -1,0 +1,38 @@
+name: Validate P0 Unified Priced V16 Runner
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-c4-live-parity-gate
+    paths:
+      - 'server/mlb-unified-priced-v16-runner.ts'
+      - '.github/workflows/validate-p0-unified-priced-v16-runner.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Compile priced V16 runner
+        run: npx esbuild server/mlb-unified-priced-v16-runner.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-unified-priced-v16-runner.cjs
+      - name: Preserve V16 runtime scorer
+        run: npx tsx --test server/mlb-pure-settlement-scorer.test.ts
+      - name: Preserve Step 8 selective odds acquisition
+        run: npx tsx --test server/mlb-selective-odds-acquisition.test.ts
+      - name: Preserve Step 9 market edge
+        run: npx tsx --test server/mlb-market-edge.test.ts
+      - name: Preserve Step 11A operating envelope
+        run: npx tsx --test server/mlb-operating-envelope.test.ts
+      - name: Preserve Step 11C elite evidence ledger
+        run: npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+      - name: Backend build
+        run: npm run build:backend

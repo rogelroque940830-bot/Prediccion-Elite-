@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "courtedge-p0-c4-live-parity-contract.v1",
+  "objective": "Prove that the runtime C4 builder reproduces the canonical historical C4 features exactly before V16 may produce live settlement probabilities.",
+  "canonicalSource": {
+    "workflowRun": 31659518059,
+    "artifactName": "p0-step12v3-expanded-regimes",
+    "artifactSha256": "6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "featureSchema": "courtedge-p0-step12v-game-anatomy-feature-table.v1"
+  },
+  "features": [
+    "lineup_exposure_rate_adv",
+    "starter_kbb_adv",
+    "combined_team_rs10",
+    "team_rd10_diff"
+  ],
+  "formulaLock": {
+    "teamWindow": 10,
+    "minimumTeamHistoryGames": 5,
+    "starterKbbShrinkagePriorBattersFaced": 72,
+    "starterLeaguePrior": "ALL_COMPLETED_PRIOR_DATE_STARTER_LINES_IN_CURRENT_SEASON",
+    "lineupExposure": "MEAN_OF_TEAM_SPECIFIC_PRIOR_COMPLETE_LINEUP_APPEARANCES_PER_CURRENT_BATTER_DIVIDED_BY_ALL_TEAM_PRIOR_GAMES",
+    "seasonHistoryReset": true,
+    "sameDateHistoryAllowed": false
+  },
+  "parityGate": {
+    "requiredFeatureMatches": "4_OF_4",
+    "maximumNumericAbsoluteDifference": 1e-12,
+    "maximumMismatches": 0,
+    "minimumRowsComparedAcrossAllSeasons": 10000,
+    "seasons": ["2022", "2023", "2024", "2025", "2026_YTD"]
+  },
+  "forbiddenRuntimeInputs": [
+    "sportsbookOdds",
+    "americanOdds",
+    "decimalOdds",
+    "impliedProbability",
+    "vig",
+    "ev",
+    "roi",
+    "currentGameOutcome",
+    "sameDateCompletedGameOutcome"
+  ],
+  "policy": {
+    "v16LiveProbabilityAllowedBeforeParityPass": false,
+    "legacyMarketRegressedProbabilityReclassified": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "stakeChangeAllowed": false,
+    "automaticBetPlacementAllowed": false
+  }
+}
