@@ -1,0 +1,68 @@
+name: Validate P0 V22 Team Total Shadow Capture
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/mlb-team-total-shadow-capture.ts'
+      - 'server/mlb-team-total-shadow-capture.test.ts'
+      - 'server/mlb-team-total-shadow-sqlite-store.ts'
+      - 'server/mlb-team-total-shadow-sqlite-store.test.ts'
+      - 'server/mlb-team-total-shadow-routes.ts'
+      - 'server/mlb-team-total-shadow-routes.test.ts'
+      - 'server/routes.ts'
+      - '.github/workflows/validate-p0-v22-team-total-shadow-capture.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+
+      - name: Run V22 shadow capture, custody, and route tests
+        run: |
+          npx tsx --test \
+            server/mlb-team-total-shadow-capture.test.ts \
+            server/mlb-team-total-shadow-sqlite-store.test.ts \
+            server/mlb-team-total-shadow-routes.test.ts \
+            server/mlb-team-total-count-model.test.ts \
+            server/mlb-market-odds-normalizer.test.ts \
+            server/mlb-odds-budget-controller.test.ts
+
+      - name: Compile V22 modules
+        run: |
+          npx esbuild server/mlb-team-total-shadow-capture.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-team-total-shadow-capture.cjs
+          npx esbuild server/mlb-team-total-shadow-sqlite-store.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-team-total-shadow-sqlite-store.cjs
+          npx esbuild server/mlb-team-total-shadow-routes.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-team-total-shadow-routes.cjs
+
+      - name: Preserve explicit paid-credit and shadow boundaries
+        run: |
+          grep -n 'MLB_TEAM_TOTAL_SHADOW_MAX_GAMES_PER_RUN = 5' server/mlb-team-total-shadow-capture.ts
+          grep -n 'MLB_TEAM_TOTAL_SHADOW_PROVIDER_MARKET_KEY = "team_totals"' server/mlb-team-total-shadow-capture.ts
+          grep -n 'changesProductionLookupAuthorization: false' server/mlb-team-total-shadow-capture.ts
+          grep -n 'changesEliteCandidates: false' server/mlb-team-total-shadow-capture.ts
+          grep -n 'automaticPolling: false' server/mlb-team-total-shadow-capture.ts
+          grep -n 'automaticBetPlacement: false' server/mlb-team-total-shadow-capture.ts
+          grep -n 'realFinancialExposure: 0' server/mlb-team-total-shadow-capture.ts
+          grep -n 'registerMlbTeamTotalShadowRoutes(app)' server/routes.ts
+          ! grep -n 'team-total-shadow' frontend/client/src/components/mlb-unified-v16-control.tsx
+
+      - name: Preserve production V16 regressions
+        run: |
+          npx tsx --test \
+            server/mlb-unified-v16-ui-orchestration.test.ts \
+            server/mlb-unified-v16-live-providers.test.ts \
+            server/mlb-selective-odds-acquisition.test.ts
+
+      - name: Backend build
+        run: npm run build:backend
