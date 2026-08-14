@@ -1,0 +1,74 @@
+name: Materialize P0 V17 Frozen Matchup Seed
+
+on:
+  push:
+    branches:
+      - feature/p0-v17-certified-slg-pitchmix-materializer
+    paths:
+      - 'scripts/p0-v17-generate-matchup-seed.mjs'
+      - '.github/workflows/materialize-p0-v17-matchup-seed.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  materialize-canonical-seed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/p0-v17-certified-slg-pitchmix-materializer
+          fetch-depth: 0
+      - name: Verify frozen artifact custody
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          check_digest() {
+            local run_id="$1" name="$2" expected="$3"
+            actual=$(gh api "repos/${REPO}/actions/runs/${run_id}/artifacts" --paginate --jq ".artifacts[] | select(.name == \"${name}\") | .digest" | head -n1)
+            [[ "$actual" == "$expected" ]] || { echo "Artifact digest drift for ${name}: ${actual}" >&2; exit 1; }
+          }
+          check_digest 31666803576 p0-step12v9-hand-splits-2026_YTD sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48
+          check_digest 31669146698 p0-step12v12-pitchmix-2025 sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2
+          check_digest 31669146698 p0-step12v12-pitchmix-2026_YTD sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7
+      - name: Download immutable V9/V12 artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v9 /tmp/v12-2025 /tmp/v12-2026
+          gh run download 31666803576 --repo "$REPO" --name p0-step12v9-hand-splits-2026_YTD --dir /tmp/v9
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2025 --dir /tmp/v12-2025
+          gh run download 31669146698 --repo "$REPO" --name p0-step12v12-pitchmix-2026_YTD --dir /tmp/v12-2026
+          test -f /tmp/v9/hand-splits-2026_YTD.json
+          test -f /tmp/v12-2025/pitchmix-2025.json
+          test -f /tmp/v12-2026/pitchmix-2026_YTD.json
+      - name: Generate compact canonical seed
+        run: |
+          node scripts/p0-v17-generate-matchup-seed.mjs \
+            --v9-2026 /tmp/v9/hand-splits-2026_YTD.json \
+            --v12-2025 /tmp/v12-2025/pitchmix-2025.json \
+            --v12-2026 /tmp/v12-2026/pitchmix-2026_YTD.json \
+            --out server/mlb-frozen-matchup-canonical-seed.generated.ts
+      - name: Commit generated custody if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          if git diff --quiet -- server/mlb-frozen-matchup-canonical-seed.generated.ts; then
+            echo 'Canonical seed already matches frozen artifacts.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/mlb-frozen-matchup-canonical-seed.generated.ts
+          git commit -m 'P0 V17: materialize frozen V9/V12 matchup seed'
+          git push origin HEAD:feature/p0-v17-certified-slg-pitchmix-materializer
