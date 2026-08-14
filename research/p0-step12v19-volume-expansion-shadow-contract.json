@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "courtedge-p0-step12v19-volume-expansion-shadow-contract.v1",
+  "scientificStatus": "SHADOW_VOLUME_EXPANSION_FROM_FROZEN_PRIOR_ROUTES_NOT_PROMOTION",
+  "objective": "Measure how much daily MLB opportunity volume can be recovered by portfolio unions of already-frozen Premium A and F5 research routes before inventing new markets or relaxing any threshold.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v7WorkflowRunId": 31665659665,
+    "step12v7ArtifactId": 9167853706,
+    "step12v7ArtifactDigest": "sha256:f7195ad7603ee54d142c07a2811843a0e08ecb74e013451112fb9045f5cfeb37",
+    "step12v9WorkflowRunId": 31666803576,
+    "step12v9ReportArtifactId": 9168284731,
+    "step12v9ReportDigest": "sha256:f08523c486d086bfe082a950a341811249d37113a557cdb91da314337bf2fffa",
+    "step12v12WorkflowRunId": 31669146698,
+    "step12v13WorkflowRunId": 31670045506,
+    "step12v13ArtifactId": 9169387579,
+    "step12v13ArtifactDigest": "sha256:53e667ef13324fc2b8f89a8bf54c8671354de4a5ff01e161758d0f10d548bed2"
+  },
+  "dataBoundary": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "pitchmixWarmupSeason": "2023",
+    "rollingPitchmixLookbackDays": 365,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "historicalPricesUsed": false,
+    "targetOutcomeUsedToCreateRoute": false
+  },
+  "frozenPremiumA": {
+    "all": [
+      {"feature": "team_win10_diff", "threshold": 0.09999999999999998},
+      {"feature": "starter_kbb_adv", "threshold": 0.02481042579422841},
+      {"feature": "lineup_exposure_rate_adv", "threshold": 0.09876543209876554}
+    ]
+  },
+  "frozenF5Consensus": {
+    "modelSource": "Step12V7 fitted2022Models",
+    "thresholdSource": "Step12V7 thresholdSelection2023",
+    "expectedThresholds": {"c4": 0.71, "full13": 0.69}
+  },
+  "frozenPitchmix": {
+    "families": ["FASTBALL", "BREAKING", "OFFSPEED"],
+    "minimumStarterAllPitches365d": 250,
+    "minimumStarterCategorizedShare": 0.90,
+    "minimumTeamSwingsPerPitchFamily": 20,
+    "minimumTeamTerminalPaPerPitchFamily": 20,
+    "minimumWeightedMetricCoverageShare": 0.80,
+    "routes": {
+      "HRPA_OR_AT2": "F5_CONSENSUS AND NOT PREMIUM_A AND PITCHMIX_ELIGIBLE AND (HRPA_ADV_POS OR POSITIVE_COUNT_GTE_2)",
+      "PARETO_UNION": "F5_CONSENSUS AND NOT PREMIUM_A AND PITCHMIX_ELIGIBLE AND (HRPA_ADV_POS OR TBPA_ADV_POS OR POSITIVE_COUNT_GTE_2)"
+    }
+  },
+  "frozenAnchors": {
+    "PREMIUM_A_FG": {"selectedRows": 268, "decisiveRows": 268, "wins": 196, "losses": 72, "pushes": 0},
+    "F5_CONSENSUS": {"selectedRows": 124, "decisiveRows": 109, "wins": 87, "losses": 22, "pushes": 15},
+    "A_INTERSECT_F5_CONSENSUS": {"selectedRows": 45, "decisiveRows": 42, "wins": 38, "losses": 4, "pushes": 3},
+    "F5_CONSENSUS_OUTSIDE_A": {"selectedRows": 79, "decisiveRows": 67, "wins": 49, "losses": 18, "pushes": 12},
+    "F5_OUTSIDE_A_HRPA_OR_AT2": {"selectedRows": 59, "decisiveRows": 50, "wins": 39, "losses": 11, "pushes": 9},
+    "F5_OUTSIDE_A_PARETO_UNION": {"selectedRows": 61, "decisiveRows": 52, "wins": 40, "losses": 12, "pushes": 9}
+  },
+  "predeclaredPortfolios": {
+    "PREMIUM_A_FG_ONLY": "One FULL_GAME_HOME_ML opportunity for each frozen Premium A game.",
+    "F5_CONSENSUS_ALL": "One FIRST_5_HOME_ML opportunity for each frozen F5 Consensus game.",
+    "PREMIUM_A_ROUTE_SWITCH": "For Premium A games, use FIRST_5_HOME_ML when F5 Consensus also matches; otherwise FULL_GAME_HOME_ML. At most one opportunity per game.",
+    "PREMIUM_A_PLUS_OUTSIDE_HRPA_OR_AT2": "Premium A FULL_GAME_HOME_ML plus non-Premium-A F5 HRPA_OR_AT2. At most one opportunity per game.",
+    "PREMIUM_A_PLUS_OUTSIDE_PARETO": "Premium A FULL_GAME_HOME_ML plus non-Premium-A F5 PARETO_UNION. At most one opportunity per game.",
+    "ROUTE_SWITCH_PLUS_OUTSIDE_HRPA_OR_AT2": "Premium A route switch plus non-Premium-A F5 HRPA_OR_AT2. At most one opportunity per game.",
+    "ROUTE_SWITCH_PLUS_OUTSIDE_PARETO": "Premium A route switch plus non-Premium-A F5 PARETO_UNION. At most one opportunity per game.",
+    "MULTI_MARKET_HRPA_OR_AT2": "Premium A FULL_GAME_HOME_ML, plus FIRST_5_HOME_ML on Premium-A/F5 intersections, plus non-Premium-A F5 HRPA_OR_AT2. Allows two correlated markets on the same game and reports that correlation explicitly.",
+    "MULTI_MARKET_PARETO": "Premium A FULL_GAME_HOME_ML, plus FIRST_5_HOME_ML on Premium-A/F5 intersections, plus non-Premium-A F5 PARETO_UNION. Allows two correlated markets on the same game and reports that correlation explicitly.",
+    "MAX_EXISTING_ROUTE_UNION": "Premium A FULL_GAME_HOME_ML plus every F5 Consensus FIRST_5_HOME_ML. Descriptive upper bound from existing frozen route families; allows same-game correlation and does not imply promotion."
+  },
+  "reporting": {
+    "denominator": "All evaluation dates with at least one t5PregameValid canonical game-anatomy row.",
+    "reportOpportunityCount": true,
+    "reportUniqueGameCount": true,
+    "reportSameGameMultiMarketCount": true,
+    "reportMeanOpportunitiesPerEligibleSlateDay": true,
+    "reportMedianOpportunitiesPerEligibleSlateDay": true,
+    "reportPctDaysWithZero": true,
+    "reportPctDaysWithAtLeast1": true,
+    "reportPctDaysWithAtLeast2": true,
+    "reportPctDaysWithAtLeast3": true,
+    "reportBySeason": true,
+    "reportWilson95": true,
+    "operationalTargetsAreDiagnosticsNotSelectionObjectives": true
+  },
+  "operationalDiagnostics": {
+    "primaryTargetMeanOpportunitiesPerEligibleSlateDay": 1.0,
+    "stretchMeanOpportunitiesPerEligibleSlateDay": [2.0, 3.0]
+  },
+  "statistics": {
+    "noNumericThresholdSearch": true,
+    "noFeatureSearch": true,
+    "noAdditionalPortfolioAfterResults": true,
+    "doNotChoosePortfolioByHitRateAlone": true,
+    "doNotChoosePortfolioByVolumeAlone": true,
+    "mixedMarketRowsAreNotAssumedIndependent": true,
+    "historicalHitRateDoesNotEstablishPositiveEvWithoutPrices": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "shadowOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectiveStep11cRequiredBeforePromotion": true
+  }
+}
