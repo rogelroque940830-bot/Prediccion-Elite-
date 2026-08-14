@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "courtedge-p0-step12v16-pure-settlement-model-manifest.v1",
+  "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+  "manifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+  "sourceWorkflowRun": 31704085189,
+  "priceIndependent": true,
+  "trainingSeason": "2022",
+  "calibrationSeason": "2023",
+  "selectionSeason": "2023",
+  "features": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
+  "preprocessor": {
+    "mean": [0.0014282576209765502, 0.0002749983103482041, 8.598701960628567, -0.04855054476614112],
+    "medianImpute": [0.0, 0.0, 8.5, 0.0],
+    "scale": [0.13754890844331727, 0.06101328572182062, 1.4987377310177847, 2.4971425547182764]
+  },
+  "fullGame": {
+    "intercept": 0.1352480105191782,
+    "coefficients": [0.18692160183674042, 0.22772115196081583, 0.1013213063064697, 0.14470684957750546],
+    "calibrationSlope": 0.7493426069804996,
+    "calibrationIntercept": -0.04291166046773749,
+    "pushProbability": 0.0
+  },
+  "first5": {
+    "homeIntercept": 0.1269821500426285,
+    "awayIntercept": 0.0,
+    "tieIntercept": -0.767640130539062,
+    "homeCoefficients": [0.1156133299872011, 0.32496678819857117, 0.0858036644380019, 0.12037914761617022],
+    "awayCoefficients": [0.0, 0.0, 0.0, 0.0],
+    "tieCoefficients": [0.038912866443574126, 0.17663822535955867, 0.06809298555168213, 0.04394372987158844],
+    "temperature": 1.407198157140183,
+    "homeBias": -0.006417595835653408,
+    "awayBias": 0.0,
+    "tieBias": -0.45360555077244363,
+    "tieIsPush": true
+  },
+  "policy": {
+    "sportsbookPriceInputs": false,
+    "marketOddsInputs": false,
+    "cohortHitRateAsProbability": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

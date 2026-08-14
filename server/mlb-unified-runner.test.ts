@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import { runMlbUnifiedPrepriceStep11c } from "./mlb-unified-runner";
-import { MLB_FROZEN_RESEARCH_ROUTE_IDS } from "./mlb-frozen-research-route-ledger";
+import {
+  MLB_FROZEN_RESEARCH_ROUTE_IDS,
+  MLB_FROZEN_RESEARCH_ROUTER_IDS,
+} from "./mlb-frozen-research-route-ledger";
 import type { MlbP1DailySlate, MlbP1SlateGame } from "./mlb-p1-daily-slate";
 
 const NOW = new Date("2026-08-13T14:00:00.000Z");
@@ -64,6 +67,7 @@ function slate(): MlbP1DailySlate {
 
 function finalAssessment(gamePk = 1001) {
   const routes = Object.fromEntries(MLB_FROZEN_RESEARCH_ROUTE_IDS.map((id, index) => [id, index < 2 ? "MATCH" : "NO_MATCH"]));
+  const routers = Object.fromEntries(MLB_FROZEN_RESEARCH_ROUTER_IDS.map((id) => [id, "FIRST_5_HOME"]));
   return {
     gamePk,
     gameDate: "2026-08-13",
@@ -71,8 +75,9 @@ function finalAssessment(gamePk = 1001) {
     evaluatedAt: "2026-08-13T13:58:30.000Z",
     finalInputs: true,
     featureSnapshotDigest: createHash("sha256").update(`final-${gamePk}`).digest("hex"),
-    scorerVersion: "frozen-route-scorer.v1",
+    scorerVersion: "frozen-route-router-scorer.v2",
     routes,
+    routers,
   } as any;
 }
 
@@ -96,16 +101,19 @@ test("runner preserves final plus provisional games in Step11C companion ledger"
   assert.equal(final.finalInputs, true);
   assert.equal(final.routes.PREMIUM_A_HOME_ML, "MATCH");
   assert.equal(final.routes.A_PLUS_HOME_ML, "MATCH");
+  assert.equal(final.routers.A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1, "FIRST_5_HOME");
 
   const provisional = result.frozenRouteLedger.entries.find((row) => row.gamePk === 1002)!;
   assert.equal(provisional.finalInputs, false);
   for (const routeId of MLB_FROZEN_RESEARCH_ROUTE_IDS) assert.equal(provisional.routes[routeId], "NOT_EVALUATED");
+  for (const routerId of MLB_FROZEN_RESEARCH_ROUTER_IDS) assert.equal(provisional.routers[routerId], "NOT_EVALUATED");
   assert.equal(result.policy.provisionalGamesPreserved, true);
+  assert.equal(result.policy.provisionalGamesCanCreateRouterDecision, false);
   assert.equal(result.policy.priceBoundaryCrossed, false);
   assert.equal(result.policy.callsTheOddsApi, false);
 });
 
-test("missing final frozen-route assessment fails closed instead of silently dropping the game", () => {
+test("missing final frozen-route/router assessment fails closed instead of silently dropping the game", () => {
   assert.throws(() => runMlbUnifiedPrepriceStep11c({
     runId: "run-missing-final",
     slate: slate(),
@@ -115,7 +123,7 @@ test("missing final frozen-route assessment fails closed instead of silently dro
   }), /MLB_UNIFIED_RUNNER_FINAL_ROUTE_ASSESSMENT_REQUIRED:1001/);
 });
 
-test("provisional caller-supplied route assessment is forbidden", () => {
+test("provisional caller-supplied route or router assessment is forbidden", () => {
   const provisional = {
     ...finalAssessment(1002),
     scheduledStartTime: "2026-08-14T01:00:00.000Z",
@@ -130,7 +138,7 @@ test("provisional caller-supplied route assessment is forbidden", () => {
   }), /MLB_UNIFIED_RUNNER_PROVISIONAL_ROUTE_ASSESSMENT_FORBIDDEN:1002/);
 });
 
-test("final route identity and temporal custody are exact", () => {
+test("final route/router identity and temporal custody are exact", () => {
   const wrongIdentity = finalAssessment();
   wrongIdentity.gameDate = "2026-08-12";
   assert.throws(() => runMlbUnifiedPrepriceStep11c({
@@ -152,7 +160,7 @@ test("final route identity and temporal custody are exact", () => {
   }), /MLB_UNIFIED_RUNNER_FINAL_ROUTE_EVALUATED_AFTER_CAPTURE:1001/);
 });
 
-test("deferred games are not fabricated into prospective route observations", () => {
+test("deferred games are not fabricated into prospective route/router observations", () => {
   const result = runMlbUnifiedPrepriceStep11c({
     runId: "run-deferred",
     slate: slate(),
@@ -187,4 +195,5 @@ test("runner ranks no game merely because it starts earlier and crosses no paid 
   assert.equal(result.discovery.games.find((row) => row.gamePk === 1002)?.paidLookupEligibleNow, false);
   assert.equal(result.policy.intrinsicRankIndependentOfGameStartTime, true);
   assert.equal(result.policy.theOddsApiCreditsConsumed, 0);
+  assert.equal(result.policy.frozenRouterDecisionChangesRecommendation, false);
 });

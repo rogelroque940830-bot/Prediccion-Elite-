@@ -1,0 +1,48 @@
+name: Validate P0 Step 10 V16 Evidence Adapter
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-step11c-v15-router-prospective-capture
+    paths:
+      - 'server/mlb-pure-settlement-model-manifest.json'
+      - 'server/mlb-pure-settlement-evidence-adapter.ts'
+      - '.github/workflows/validate-p0-step10-v16-evidence-adapter.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Compile V16 adapter module
+        run: npx esbuild server/mlb-pure-settlement-evidence-adapter.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-adapter.cjs
+      - name: Preserve existing Step 10 boundary
+        run: npx tsx --test server/mlb-market-model-adapters.test.ts
+      - name: Preserve Step 9 settlement economics
+        run: npx tsx --test server/mlb-market-edge.test.ts
+      - name: Preserve Step 11A operating envelope
+        run: npx tsx --test server/mlb-operating-envelope.test.ts
+      - name: Backend build
+        run: npm run build:backend
+      - name: Static V16 provenance boundary
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('server/mlb-pure-settlement-model-manifest.json'))
+          assert m['manifestSha256']=='059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb'
+          assert m['sourceWorkflowRun']==31704085189
+          assert m['priceIndependent'] is True
+          assert m['policy']['sportsbookPriceInputs'] is False
+          assert m['policy']['marketOddsInputs'] is False
+          assert m['policy']['automaticBetPlacement'] is False
+          print('V16_RUNTIME_EVIDENCE_BOUNDARY_LOCKED')
+          PY
