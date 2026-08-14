@@ -85,7 +85,7 @@ test("persistent login survives server and database restart", async () => {
   await withTestEnvironment(async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "courtedge-auth-routes-"));
     const filename = path.join(directory, "auth.sqlite");
-    const password = "admin-password-123";
+    const password = "test-admin-password-123";
 
     const firstDatabase = new AuthDatabase(filename);
     firstDatabase.ensureBootstrapAdmin("rogel-admin", hashPassword(password));
@@ -116,7 +116,7 @@ test("roles isolate administration and private reads require a session", async (
   await withTestEnvironment(async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "courtedge-auth-roles-"));
     const database = new AuthDatabase(path.join(directory, "auth.sqlite"));
-    const adminPassword = "admin-password-123";
+    const adminPassword = "test-admin-password-123";
     database.ensureBootstrapAdmin("rogel-admin", hashPassword(adminPassword));
     const app = await startAuthApp(database);
 
@@ -132,7 +132,7 @@ test("roles isolate administration and private reads require a session", async (
       },
       body: JSON.stringify({
         username: "analyst.one",
-        password: "analyst-password-123",
+        password: "test-analyst-password-123",
         role: "analyst",
       }),
     });
@@ -140,7 +140,7 @@ test("roles isolate administration and private reads require a session", async (
     assert.equal(created.body.data.role, "analyst");
     assert.equal("passwordHash" in created.body.data, false);
 
-    const analyst = await login(app.baseUrl, "analyst.one", "analyst-password-123");
+    const analyst = await login(app.baseUrl, "analyst.one", "test-analyst-password-123");
     assert.equal(analyst.body.role, "analyst");
     assert.notEqual(analyst.cookie, admin.cookie);
     assert.notEqual(analyst.csrfToken, admin.csrfToken);
@@ -161,7 +161,7 @@ test("roles isolate administration and private reads require a session", async (
         cookie: admin.cookie,
         "x-courtedge-csrf": analyst.csrfToken,
       },
-      body: JSON.stringify({ username: "viewer.one", password: "viewer-password-123", role: "viewer" }),
+      body: JSON.stringify({ username: "viewer.one", password: "test-viewer-password-123", role: "viewer" }),
     });
     assert.equal(crossCsrf.status, 403);
     assert.equal(crossCsrf.body.error, "Invalid CSRF token");
@@ -185,7 +185,7 @@ test("failed login is generic and does not create a session", async () => {
   await withTestEnvironment(async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "courtedge-auth-failed-"));
     const database = new AuthDatabase(path.join(directory, "auth.sqlite"));
-    database.ensureBootstrapAdmin("rogel-admin", hashPassword("admin-password-123"));
+    database.ensureBootstrapAdmin("rogel-admin", hashPassword("test-admin-password-123"));
     const app = await startAuthApp(database);
 
     const response = await requestJson(app.baseUrl, "/api/auth/login", {
