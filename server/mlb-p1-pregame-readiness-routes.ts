@@ -7,6 +7,7 @@ import {
 import type { MlbP1M2aMarket } from "./mlb-p1-pregame-readiness-contract";
 import { registerMlbP1AdvancedComponentCertificationMiddleware } from "./mlb-p1-advanced-component-certification-routes";
 import { registerMlbStatcastCertifierSourceAlignmentMiddleware } from "./mlb-statcast-certifier-source-alignment-routes";
+import { registerMlbP1BoundedF5OddsRoutes } from "./mlb-p1-bounded-f5-odds-routes";
 
 const MARKET_ALIASES: Record<string, MlbP1M2aMarket> = {
   ML: "ML",
@@ -64,6 +65,9 @@ export function registerMlbP1PregameReadinessRoutes(app: Express): void {
   // GET-only certification interceptors before legacy MLB core routes are added.
   registerMlbStatcastCertifierSourceAlignmentMiddleware(app);
   registerMlbP1AdvancedComponentCertificationMiddleware(app);
+  // P0 on-demand odds: bounded F5 acquisition is available as an internal/read-only
+  // building block before M2B is switched from date-wide F5 provider fanout.
+  registerMlbP1BoundedF5OddsRoutes(app);
 
   app.get("/api/mlb/p1/v1/pregame-readiness", async (req, res) => {
     const gamePk = Number(req.query.gamePk);
