@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 const origin = "http://localhost:5173";
 const username = "integration-admin";
-const password = "integration-password-2026";
+const password = "test-integration-password-2026";
 const salt = Buffer.from("0123456789abcdef0123456789abcdef", "hex");
 const hash = crypto.scryptSync(password, salt, 64).toString("hex");
 const originalCwd = process.cwd();
@@ -17,7 +17,7 @@ const isolatedDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "courtedge-integr
 process.chdir(isolatedDataRoot);
 process.env.NODE_ENV = "test";
 process.env.COURTEDGE_ALLOWED_ORIGINS = origin;
-process.env.COURTEDGE_SESSION_SECRET = "integration-session-secret-with-more-than-32-characters";
+process.env.COURTEDGE_SESSION_SECRET = "test-integration-session-secret-with-more-than-32-characters";
 process.env.COURTEDGE_ADMIN_USERNAME = username;
 process.env.COURTEDGE_ADMIN_PASSWORD_SCRYPT = `scrypt$${salt.toString("hex")}$${hash}`;
 process.env.ALLOW_LEGACY_PICKS_SYNC = "false";
