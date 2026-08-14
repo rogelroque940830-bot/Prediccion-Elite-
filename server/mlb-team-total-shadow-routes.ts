@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { buildMlbP1DailySlate, isValidMlbP1Date, type MlbP1DailySlate } from "./mlb-p1-daily-slate";
+import { buildMlbP1DailySlate, isValidMlbP1Date, type MlbP1DailySlate, type MlbP1SlateGame } from "./mlb-p1-daily-slate";
 import { resolveMlbUnifiedPricedV16RuntimeConfig } from "./mlb-unified-priced-v16-routes";
 import { MlbSelectiveOddsSqliteCoordinator } from "./mlb-selective-odds-sqlite-coordinator";
 import {
@@ -12,6 +12,8 @@ import { MlbTeamTotalShadowSqliteStore } from "./mlb-team-total-shadow-sqlite-st
 
 export const MLB_TEAM_TOTAL_SHADOW_CAPTURE_ROUTE = "/api/mlb/team-total-shadow/capture" as const;
 export const MLB_TEAM_TOTAL_SHADOW_ROUTE_SCHEMA = "courtedge-p0-mlb-team-total-shadow-command.v1" as const;
+
+type FinalPregameGame = MlbP1SlateGame & { startTime: string };
 
 export interface MlbTeamTotalShadowRouteDependencies {
   buildSlate?: typeof buildMlbP1DailySlate;
@@ -44,6 +46,15 @@ function bodyMaxGames(req: Request): number {
   return parsed;
 }
 
+function isFinalPregame(game: MlbP1SlateGame, nowMs: number): game is FinalPregameGame {
+  return game.analysisAllowed
+    && game.analysisStage === "FINAL"
+    && typeof game.startTime === "string"
+    && game.startTime.trim().length > 0
+    && Number.isFinite(Date.parse(game.startTime))
+    && Date.parse(game.startTime) > nowMs;
+}
+
 export async function executeMlbTeamTotalShadowCaptureCommand(
   input: { date: string; maxGames: number },
   deps: MlbTeamTotalShadowRouteDependencies,
@@ -56,11 +67,7 @@ export async function executeMlbTeamTotalShadowCaptureCommand(
   if (!Number.isFinite(now.getTime())) throw new Error("MLB_TEAM_TOTAL_SHADOW_NOW_INVALID");
   const buildSlate = deps.buildSlate ?? buildMlbP1DailySlate;
   const slate = await buildSlate({ date: input.date, now });
-  const finalPregame = slate.games.filter((game) =>
-    game.analysisAllowed
-    && game.analysisStage === "FINAL"
-    && Number.isFinite(Date.parse(game.startTime))
-    && Date.parse(game.startTime) > now.getTime());
+  const finalPregame = slate.games.filter((game): game is FinalPregameGame => isFinalPregame(game, now.getTime()));
 
   if (!finalPregame.length) {
     return {
@@ -85,10 +92,11 @@ export async function executeMlbTeamTotalShadowCaptureCommand(
     };
   }
 
+  if (!deps.capture) throw new Error("MLB_TEAM_TOTAL_SHADOW_CAPTURE_DEPENDENCY_REQUIRED");
   const runtime = (deps.resolveRuntime ?? resolveMlbUnifiedPricedV16RuntimeConfig)();
   const runId = String(deps.runIdFactory?.() ?? `mlb-team-total-shadow-${input.date}-${randomUUID()}`).trim();
   if (!runId) throw new Error("MLB_TEAM_TOTAL_SHADOW_RUN_ID_REQUIRED");
-  const result = await deps.capture!({
+  const result = await deps.capture({
     runId,
     date: input.date,
     games: finalPregame,
