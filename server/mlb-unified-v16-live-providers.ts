@@ -1,6 +1,17 @@
 import type { C4LiveFeatureAssessment } from "./mlb-c4-live-feature-builder";
 import { MlbC4CertifiedMaterializer } from "./mlb-c4-certified-materializer";
 import {
+  classifyMlbFrozenAPlusAndF5,
+  type MlbFrozenAPlusClassifierResult,
+  type MlbFrozenClassifierFeatureSnapshot,
+} from "./mlb-frozen-a-plus-classifier";
+import { MlbFrozenMatchupCertifiedMaterializer } from "./mlb-frozen-matchup-certified-materializer";
+import {
+  assessMlbFrozenResearchRoutes,
+  type MlbFrozenRouteAssessmentInput,
+} from "./mlb-frozen-research-route-assessor";
+import type { MlbFrozenResearchRouteAssessment } from "./mlb-frozen-research-route-ledger";
+import {
   getBullpenStatus,
   type BullpenRuntime,
   type BullpenStatus,
@@ -18,6 +29,7 @@ import type {
   MlbUnifiedV16LiveEvidenceProvider,
   MlbUnifiedV16LiveEvidenceProviders,
 } from "./mlb-unified-v16-live-input-assembler";
+import { MlbV15BullpenD1Materializer } from "./mlb-v15-bullpen-d1-materializer";
 
 export const MLB_UNIFIED_V16_LIVE_PROVIDERS_SCHEMA =
   "courtedge-p0-mlb-unified-v16-live-providers.v1" as const;
@@ -33,6 +45,14 @@ interface BullpenProviderDependencies {
     teamName: string,
     runtime?: BullpenRuntime,
   ) => Promise<BullpenStatus>;
+}
+
+interface FrozenRouteProviderDependencies {
+  full13Materializer?: Pick<MlbC4CertifiedMaterializer, "assessFull13Game">;
+  matchupMaterializer?: Pick<MlbFrozenMatchupCertifiedMaterializer, "assessGame">;
+  bullpenD1Materializer?: Pick<MlbV15BullpenD1Materializer, "assessGame">;
+  classify?: (features: MlbFrozenClassifierFeatureSnapshot) => MlbFrozenAPlusClassifierResult;
+  assessRoutes?: (input: MlbFrozenRouteAssessmentInput) => MlbFrozenResearchRouteAssessment;
 }
 
 export function createMlbUnifiedV16CertifiedShortlistProvider(
@@ -168,10 +188,109 @@ export function createMlbUnifiedV16CertifiedC4Provider(
   };
 }
 
+export function createMlbUnifiedV16CertifiedFrozenRouteProvider(
+  deps: FrozenRouteProviderDependencies = {},
+): MlbUnifiedV16LiveEvidenceProvider<Readonly<Record<number, MlbFrozenResearchRouteAssessment | undefined>>> {
+  const full13Materializer = deps.full13Materializer ?? new MlbC4CertifiedMaterializer();
+  const matchupMaterializer = deps.matchupMaterializer ?? new MlbFrozenMatchupCertifiedMaterializer();
+  const bullpenD1Materializer = deps.bullpenD1Materializer ?? new MlbV15BullpenD1Materializer();
+  const classify = deps.classify ?? classifyMlbFrozenAPlusAndF5;
+  const assessRoutes = deps.assessRoutes ?? assessMlbFrozenResearchRoutes;
+
+  return async (context) => {
+    if (context.finalEligibleGamePks.length === 0) return { value: {} };
+    const gameByPk = new Map(context.slate.games.map((game) => [game.gamePk, game]));
+    const evidence: Record<number, MlbFrozenResearchRouteAssessment> = {};
+    const failures: Array<{ gamePk: number; message: string }> = [];
+
+    await Promise.all(context.finalEligibleGamePks.map(async (gamePk) => {
+      const game = gameByPk.get(gamePk);
+      if (!game) {
+        failures.push({ gamePk, message: "slate entry missing" });
+        return;
+      }
+      try {
+        const [full13, matchup, bullpenD1] = await Promise.all([
+          full13Materializer.assessFull13Game(game),
+          matchupMaterializer.assessGame(game),
+          bullpenD1Materializer.assessGame({
+            gamePk: game.gamePk,
+            officialDate: game.officialDate,
+            homeTeamId: game.homeTeam.id,
+            awayTeamId: game.awayTeam.id,
+            now: context.now,
+          }),
+        ]);
+        if (matchup.sourceStatus !== "CERTIFIED" || matchup.provenance.targetOutcomeUsed || matchup.provenance.sportsbookPriceUsed) {
+          throw new Error("FROZEN_ROUTE_MATCHUP_CERTIFIED_PROVENANCE_REQUIRED");
+        }
+        if (
+          bullpenD1.provenance.status !== "CERTIFIED_PROSPECTIVE_OPERATIONAL"
+          || bullpenD1.provenance.targetGameOutcomeUsed
+          || bullpenD1.provenance.sameDateDataUsed
+          || bullpenD1.provenance.futureGameDataUsed
+          || bullpenD1.provenance.thresholdSearchUsed
+        ) {
+          throw new Error("FROZEN_ROUTE_BULLPEN_D1_CERTIFIED_PROVENANCE_REQUIRED");
+        }
+
+        const classification = classify(full13.featureVector as MlbFrozenClassifierFeatureSnapshot);
+        evidence[gamePk] = assessRoutes({
+          gamePk: game.gamePk,
+          gameDate: game.officialDate,
+          scheduledStartTime: game.startTime,
+          evaluatedAt: context.now.toISOString(),
+          finalInputs: true,
+          classifiers: {
+            premiumA: classification.premiumA,
+            aPlus: classification.aPlus,
+            f5Consensus: classification.f5Consensus,
+            slg: {
+              eligible: matchup.featureAssessment.slg.eligible,
+              adv: matchup.featureAssessment.slg.adv,
+            },
+            pitchmix: {
+              eligible: matchup.featureAssessment.pitchmix.eligible,
+              contactAdv: matchup.featureAssessment.pitchmix.contactAdv,
+              whiffAdv: matchup.featureAssessment.pitchmix.whiffAdv,
+              tbpaAdv: matchup.featureAssessment.pitchmix.tbpaAdv,
+              hrpaAdv: matchup.featureAssessment.pitchmix.hrpaAdv,
+            },
+            bullpenD1Eligible: bullpenD1.eligible,
+            bullpenPitches1dAdv: bullpenD1.bullpenPitches1dAdv,
+          },
+        });
+      } catch (error) {
+        failures.push({
+          gamePk,
+          message: error instanceof Error ? error.message : "materialization failed",
+        });
+      }
+    }));
+
+    if (failures.length > 0) {
+      failures.sort((a, b) => a.gamePk - b.gamePk);
+      return {
+        blockers: [{
+          code: "FROZEN_ROUTE_ASSESSMENT_UNAVAILABLE",
+          gamePks: failures.map((failure) => failure.gamePk),
+          message: `Certified frozen-route materialization failed closed: ${failures.map((failure) => `${failure.gamePk}:${failure.message}`).join(" | ")}`,
+        }],
+      };
+    }
+
+    return { value: Object.freeze(evidence) };
+  };
+}
+
 export function createMlbUnifiedV16DefaultLiveEvidenceProviders(): MlbUnifiedV16LiveEvidenceProviders {
+  const sharedClassifierMaterializer = new MlbC4CertifiedMaterializer();
   return Object.freeze({
     shortlistEvidence: createMlbUnifiedV16CertifiedShortlistProvider(),
     bullpenEvidence: createMlbUnifiedV16CertifiedBullpenProvider(),
-    c4Assessments: createMlbUnifiedV16CertifiedC4Provider(),
+    frozenRouteAssessments: createMlbUnifiedV16CertifiedFrozenRouteProvider({
+      full13Materializer: sharedClassifierMaterializer,
+    }),
+    c4Assessments: createMlbUnifiedV16CertifiedC4Provider(sharedClassifierMaterializer),
   });
 }
