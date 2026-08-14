@@ -1,0 +1,65 @@
+name: Validate P0 V21 Team Total Live Model
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/mlb-team-total-count-model.ts'
+      - 'server/mlb-team-total-count-model.test.ts'
+      - '.github/workflows/validate-p0-v21-team-total-live-model.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+
+      - name: Download certified V20 model evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v20-team-total-count-model
+          path: artifacts/p0-step12v20
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31838474790
+
+      - name: Verify V20 custody and candidate boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('artifacts/p0-step12v20/team-total-count-model-report.json','utf8'));
+          if(r.schemaVersion!=='courtedge-p0-step12v20-team-total-count-model.v1') throw new Error('V20_SCHEMA_DRIFT');
+          if(r.classification!=='PROSPECTIVE_TEAM_TOTAL_PRICE_CAPTURE_CANDIDATE') throw new Error('V20_NOT_CAPTURE_CANDIDATE');
+          if(r.candidateRubricPassed!==true) throw new Error('V20_RUBRIC_NOT_PASSED');
+          if(r.marketBoundary.historicalTeamTotalPricesUsed!==false) throw new Error('V20_PRICE_BOUNDARY_DRIFT');
+          if(r.marketBoundary.positiveEvEstablished!==false) throw new Error('V20_FALSE_EV');
+          if(r.policy.realFinancialExposure!==0 || r.policy.betEliteAllowed!==false) throw new Error('V20_SAFETY_DRIFT');
+          console.log('V20_CUSTODY_VERIFIED');
+          NODE
+
+      - name: Run V21 exact parity and settlement tests
+        run: npx tsx --test server/mlb-team-total-count-model.test.ts server/mlb-full13-live-feature-builder.test.ts
+
+      - name: Compile V21 live model
+        run: npx esbuild server/mlb-team-total-count-model.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-team-total-count-model.cjs
+
+      - name: Preserve price-independent safety boundary
+        run: |
+          ! grep -nE 'fetch\(|apiKey|MlbSelectiveOddsAcquisitionService|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' server/mlb-team-total-count-model.ts
+          grep -n 'historicalTeamTotalPricesUsed: false' server/mlb-team-total-count-model.ts
+          grep -n 'positiveEvEstablished: false' server/mlb-team-total-count-model.ts
+          grep -n 'recommendsBet: false' server/mlb-team-total-count-model.ts
+
+      - name: Backend build
+        run: npm run build:backend
