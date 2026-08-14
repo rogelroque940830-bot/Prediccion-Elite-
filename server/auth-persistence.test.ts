@@ -63,7 +63,7 @@ test("users persist with roles and password hashes never appear in public record
   const database = new AuthDatabase(filename);
   const analyst = database.createUser({
     username: "analyst.one",
-    password: "analyst-password-123",
+    password: "test-analyst-password-123",
     role: "analyst",
   });
 
@@ -71,7 +71,7 @@ test("users persist with roles and password hashes never appear in public record
   assert.equal("passwordHash" in analyst, false);
   assert.equal(database.findUserByUsername("ANALYST.ONE")?.id, analyst.id);
   assert.throws(
-    () => database.createUser({ username: "analyst.one", password: "another-password-123", role: "viewer" }),
+    () => database.createUser({ username: "analyst.one", password: "test-another-password-123", role: "viewer" }),
     /UNIQUE constraint failed/i,
   );
 

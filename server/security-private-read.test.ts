@@ -58,7 +58,7 @@ test("operational ledger status and shared sharp reads remain public", async () 
 
 test("service token can read private endpoints without a browser session", async () => {
   const previous = process.env.COURTEDGE_WRITE_TOKEN;
-  process.env.COURTEDGE_WRITE_TOKEN = "service-token-for-private-read-test";
+  process.env.COURTEDGE_WRITE_TOKEN = "test-service-token-for-private-read";
 
   try {
     await withServer(async (baseUrl) => {
@@ -69,7 +69,7 @@ test("service token can read private endpoints without a browser session", async
         "/api/wnba/predictor-shadow/v1/report",
       ]) {
         const response = await fetch(`${baseUrl}${pathname}`, {
-          headers: { authorization: "Bearer service-token-for-private-read-test" },
+          headers: { authorization: "Bearer test-service-token-for-private-read" },
         });
         assert.equal(response.status, 200, pathname);
       }

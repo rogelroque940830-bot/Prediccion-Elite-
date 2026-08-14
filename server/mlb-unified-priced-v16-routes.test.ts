@@ -10,13 +10,13 @@ test("priced V16 route remains explicit and server-side configured", () => {
   assert.equal(MLB_UNIFIED_PRICED_V16_ROUTE, "/api/mlb/unified-v16/run");
   const config = resolveMlbUnifiedPricedV16RuntimeConfig({
     MLB_ODDS_PROVIDER_ACCOUNT_SCOPE_KEY: "provider-account-main",
-    ODDS_API_KEY: "secret-key-not-returned-to-browser",
+    ODDS_API_KEY: "test-secret-key-not-returned-to-browser",
     MLB_ODDS_MAX_RUN_CREDITS: "6",
     MLB_ODDS_RESERVE_CREDITS: "30",
   });
   assert.deepEqual(config, {
     providerAccountScopeKey: "provider-account-main",
-    apiKey: "secret-key-not-returned-to-browser",
+    apiKey: "test-secret-key-not-returned-to-browser",
     maxRunCredits: 6,
     reserveCredits: 30,
   });
