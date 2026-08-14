@@ -21,7 +21,11 @@ jobs:
           ref: fix/p0-mlb-ere-pitcher-source-integrity
           fetch-depth: 0
       - name: Apply exact source patch
-        run: python3 scripts/apply-mlb-ere-pitcher-integrity-fix.py
+        shell: bash
+        run: |
+          sed -i 's/if count != 2:/if count != 3:/' scripts/apply-mlb-ere-pitcher-integrity-fix.py
+          sed -i 's/Expected two inning result types/Expected three inning result types/' scripts/apply-mlb-ere-pitcher-integrity-fix.py
+          python3 scripts/apply-mlb-ere-pitcher-integrity-fix.py
       - name: Commit patched ERE source
         shell: bash
         run: |
