@@ -3,6 +3,7 @@ import test from "node:test";
 import type { C4LiveFeatureAssessment } from "./mlb-c4-live-feature-builder";
 import type { MlbP1DailySlate } from "./mlb-p1-daily-slate";
 import {
+  createMlbUnifiedV16CertifiedBullpenProvider,
   createMlbUnifiedV16CertifiedC4Provider,
   createMlbUnifiedV16DefaultLiveEvidenceProviders,
 } from "./mlb-unified-v16-live-providers";
@@ -59,9 +60,98 @@ function slate(): MlbP1DailySlate {
   };
 }
 
-test("default provider set includes certified C4", () => {
+function liveContext() {
+  const daily = slate();
+  return {
+    runId: "ready",
+    slate: daily,
+    now: new Date("2026-08-13T17:01:00.000Z"),
+    analysisEligibleGamePks: [123],
+    finalEligibleGamePks: [123],
+  };
+}
+
+function certifiedBullpen(teamId: number, teamName: string) {
+  return {
+    teamId,
+    teamName,
+    closer: null,
+    setupMen: [],
+    middleRelievers: [],
+    closerAvailable: true,
+    setupAvailable: 2,
+    bullpenCompromised: false,
+    predictedCloser: null,
+    runsAdjustment: 0,
+    signal: "certified",
+    sourceStatus: "CERTIFIED",
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    provenance: {
+      schemaVersion: "courtedge-mlb-bullpen-evidence.v1",
+      status: "CERTIFIED",
+      generatedAt: "2026-08-13T17:01:00.000Z",
+      roster: { source: "MLB_STATS_ACTIVE_ROSTER", pitchersObserved: 8, cacheMaxAgeSeconds: 1800 },
+      seasonStats: { source: "MLB_STATS_SEASON", pitchersRequested: 8, pitchersVerified: 8, cacheMaxAgeSeconds: 86400 },
+      recentUsage: { source: "MLB_STATS_SCHEDULE_AND_FEED_LIVE", lookbackDays: 3, finalGamesVerified: 3, boxscoresVerified: 3 },
+      failureDisposition: "THROW_FAIL_CLOSED",
+    },
+  } as any;
+}
+
+test("default provider set includes certified bullpen and C4", () => {
   const providers = createMlbUnifiedV16DefaultLiveEvidenceProviders();
+  assert.equal(typeof providers.bullpenEvidence, "function");
   assert.equal(typeof providers.c4Assessments, "function");
+});
+
+test("certified bullpen provider materializes both official MLB team sides", async () => {
+  const calls: Array<{ teamId: number; teamName: string; now: string }> = [];
+  const provider = createMlbUnifiedV16CertifiedBullpenProvider({
+    getStatus: async (teamId, teamName, runtime) => {
+      calls.push({ teamId, teamName, now: runtime?.now?.().toISOString() ?? "missing" });
+      return certifiedBullpen(teamId, teamName);
+    },
+  });
+
+  const result = await provider(liveContext());
+  assert.equal(result.blockers, undefined);
+  assert.equal((result.value?.[123]?.home as any)?.teamId, 1);
+  assert.equal((result.value?.[123]?.away as any)?.teamId, 2);
+  assert.deepEqual(calls.map((call) => [call.teamId, call.teamName]), [[1, "Home"], [2, "Away"]]);
+  assert.equal(calls.every((call) => call.now === "2026-08-13T17:01:00.000Z"), true);
+});
+
+test("certified bullpen provider fails closed when an official MLB source fails", async () => {
+  const provider = createMlbUnifiedV16CertifiedBullpenProvider({
+    getStatus: async (teamId, teamName) => {
+      if (teamId === 2) throw new Error("BULLPEN_SOURCE_HTTP_503");
+      return certifiedBullpen(teamId, teamName);
+    },
+  });
+
+  const result = await provider(liveContext());
+  assert.equal(result.value, undefined);
+  assert.equal(result.blockers?.[0].code, "BULLPEN_EVIDENCE_UNAVAILABLE");
+  assert.deepEqual(result.blockers?.[0].gamePks, [123]);
+  assert.match(result.blockers?.[0].message ?? "", /BULLPEN_SOURCE_HTTP_503/);
+});
+
+test("certified bullpen provider rejects degraded provenance instead of leaking it into V16", async () => {
+  const provider = createMlbUnifiedV16CertifiedBullpenProvider({
+    getStatus: async (teamId, teamName) => {
+      const value = certifiedBullpen(teamId, teamName);
+      if (teamId === 2) {
+        value.sourceStatus = "DEGRADED";
+        value.provenance.status = "DEGRADED";
+      }
+      return value;
+    },
+  });
+
+  const result = await provider(liveContext());
+  assert.equal(result.value, undefined);
+  assert.equal(result.blockers?.[0].code, "BULLPEN_EVIDENCE_UNAVAILABLE");
+  assert.match(result.blockers?.[0].message ?? "", /BULLPEN_CERTIFIED_PROVENANCE_REQUIRED/);
 });
 
 test("certified C4 provider returns canonical materialized evidence", async () => {
