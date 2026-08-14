@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   integrity:
+    # Final proof intentionally exercises the cleaned product slice plus live official MLB custody.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
