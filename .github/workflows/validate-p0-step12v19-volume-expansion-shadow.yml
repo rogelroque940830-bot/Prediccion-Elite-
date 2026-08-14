@@ -1,0 +1,157 @@
+name: Validate P0 Step 12V19 Volume Expansion Shadow
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v19-volume-expansion-shadow-contract.json'
+      - 'scripts/p0-step12v19-volume-expansion-shadow.py'
+      - '.github/workflows/validate-p0-step12v19-volume-expansion-shadow.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen V19 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v19-volume-expansion-shadow-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v19-volume-expansion-shadow-contract.v1'
+          assert c['dataBoundary']['sameDateOutcomeLeakageAllowed'] is False
+          assert c['dataBoundary']['futureGameDataAllowed'] is False
+          assert c['dataBoundary']['historicalPricesUsed'] is False
+          assert c['statistics']['noNumericThresholdSearch'] is True
+          assert c['statistics']['noFeatureSearch'] is True
+          assert c['statistics']['noAdditionalPortfolioAfterResults'] is True
+          assert len(c['predeclaredPortfolios'])==10
+          assert c['policy']['liveLookupAuthorizationChangeAllowed'] is False
+          assert c['policy']['liveFilterChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('STEP12V19_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check V19 scorer
+        run: python -m py_compile scripts/p0-step12v19-volume-expansion-shadow.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download frozen Step 12V7 F5 route
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v7-f5-elite-route-anatomy
+          path: artifacts/p0-step12v7
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31665659665
+
+      - name: Download canonical V12 pitch-mix packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v12-pitchmix-*
+          path: artifacts/p0-step12v12-pitchmix
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+
+      - name: Validate immutable parent evidence
+        run: |
+          test -s artifacts/p0-step12v7/f5-route-report.json
+          for s in 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+          done
+          for s in 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v12-pitchmix/pitchmix-${s}.json"
+          done
+
+      - name: Run frozen V19 volume expansion shadow study
+        run: |
+          mkdir -p artifacts/p0-step12v19
+          python scripts/p0-step12v19-volume-expansion-shadow.py \
+            --root artifacts/p0-step12v3 \
+            --pitch-dir artifacts/p0-step12v12-pitchmix \
+            --v7-report artifacts/p0-step12v7/f5-route-report.json \
+            --contract research/p0-step12v19-volume-expansion-shadow-contract.json \
+            --out artifacts/p0-step12v19/volume-expansion-shadow-report.json
+
+      - name: Validate anchors, volume ceiling, and safety boundary
+        run: |
+          python - <<'PY'
+          import json, math
+          r=json.load(open('artifacts/p0-step12v19/volume-expansion-shadow-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v19-volume-expansion-shadow.v1'
+          assert r['classification']=='SHADOW_VOLUME_EXPANSION_FROM_FROZEN_PRIOR_ROUTES_NOT_PROMOTION'
+          assert r['eligibleSlateDays']==505
+          expected={
+            'PREMIUM_A_FG':(268,268,196,72,0),
+            'F5_CONSENSUS':(124,109,87,22,15),
+            'A_INTERSECT_F5_CONSENSUS':(45,42,38,4,3),
+            'F5_CONSENSUS_OUTSIDE_A':(79,67,49,18,12),
+            'F5_OUTSIDE_A_HRPA_OR_AT2':(59,50,39,11,9),
+            'F5_OUTSIDE_A_PARETO_UNION':(61,52,40,12,9),
+          }
+          for name,exp in expected.items():
+            a=r['anchors'][name]
+            got=tuple(a[k] for k in ('selectedRows','decisiveRows','wins','losses','pushes'))
+            assert got==exp,(name,got,exp)
+          mx=r['portfolios']['MAX_EXISTING_ROUTE_UNION']
+          assert mx['opportunities']==392
+          assert mx['uniqueGames']==347
+          assert mx['sameGameMultiMarketGames']==45
+          assert math.isclose(mx['meanOpportunitiesPerEligibleSlateDay'],392/505,rel_tol=0,abs_tol=1e-15)
+          assert math.isclose(mx['pctDaysWithAtLeast1'],100*243/505,rel_tol=0,abs_tol=1e-12)
+          assert all(not x['meetsPrimaryMeanOnePerDayDiagnostic'] for x in r['comparisons'].values())
+          assert r['diagnosis']['historicalPricesUsed'] is False
+          assert r['diagnosis']['positiveEvEstablished'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['thresholdSearchUsed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveFilterChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacement'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'eligibleSlateDays':r['eligibleSlateDays'],
+            'premiumA':r['portfolios']['PREMIUM_A_FG_ONLY'],
+            'exclusivePareto':r['portfolios']['PREMIUM_A_PLUS_OUTSIDE_PARETO'],
+            'maxExistingUnion':mx,
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve frozen-route live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-frozen-research-route-assessor.test.ts server/mlb-unified-v16-live-providers.test.ts
+          npm run build:backend
+
+      - name: Upload V19 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v19-volume-expansion-shadow
+          path: artifacts/p0-step12v19/
+          if-no-files-found: error
+          retention-days: 30
