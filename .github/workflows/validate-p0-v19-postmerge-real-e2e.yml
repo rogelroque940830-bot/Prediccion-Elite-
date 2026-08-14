@@ -1,0 +1,66 @@
+name: Validate P0 V19 Post-Merge Real E2E
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-v19-postmerge-real-e2e.mjs'
+      - '.github/workflows/validate-p0-v19-postmerge-real-e2e.yml'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Optional MLB official date YYYY-MM-DD; blank uses current Florida date'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  real-postmerge-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      API_BASE: https://web-p0-integration.up.railway.app
+      EXPECTED_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+      MLB_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.date || '' }}
+      V19_OUTPUT_DIR: artifacts/p0-v19-real-e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      - name: Validate V19 probe syntax
+        run: node --check scripts/p0-v19-postmerge-real-e2e.mjs
+      - name: Verify V19 safety and exact slice scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe='scripts/p0-v19-postmerge-real-e2e.mjs'
+          grep -F '/api/mlb/unified-v16/ui-run' "$probe"
+          grep -F 'REAL_POSTMERGE_FULL_CHAIN_PASS' "$probe"
+          ! grep -E 'automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]|appendPrediction\(|appendSettlement\(|placeBet\(|wager\(' "$probe"
+          if [[ "${{ github.event_name }}" == 'pull_request' ]]; then
+            base='${{ github.event.pull_request.base.sha }}'
+            head='${{ github.event.pull_request.head.sha }}'
+            git diff --check "$base...$head"
+            changed=$(git diff --name-only "$base...$head" | sort)
+            expected=$(printf '%s\n' \
+              '.github/workflows/validate-p0-v19-postmerge-real-e2e.yml' \
+              'scripts/p0-v19-postmerge-real-e2e.mjs' | sort)
+            [[ "$changed" == "$expected" ]]
+          fi
+      - name: Execute one real post-merge MLB V16 command
+        id: real_e2e
+        run: node scripts/p0-v19-postmerge-real-e2e.mjs
+      - name: Upload V19 real evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-v19-postmerge-real-e2e
+          path: artifacts/p0-v19-real-e2e/
+          if-no-files-found: error
+          retention-days: 30
