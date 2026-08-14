@@ -1,0 +1,44 @@
+name: Validate P0 V16 Runtime Scorer
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-c4-live-parity-gate
+    paths:
+      - 'server/mlb-pure-settlement-scorer.ts'
+      - 'server/mlb-pure-settlement-scorer.test.ts'
+      - 'scripts/p0-v16-runtime-lock-check.ts'
+      - '.github/workflows/validate-p0-v16-runtime-scorer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Preserve certified C4 builder
+        run: npx tsx --test server/mlb-c4-live-feature-builder.test.ts
+      - name: Validate V16 runtime reference vectors
+        run: npx tsx --test server/mlb-pure-settlement-scorer.test.ts
+      - name: Validate exact frozen manifest lock
+        run: npx tsx scripts/p0-v16-runtime-lock-check.ts
+      - name: Compile scorer and adapter
+        run: |
+          npx esbuild server/mlb-pure-settlement-scorer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-scorer.cjs
+          npx esbuild server/mlb-pure-settlement-evidence-adapter.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-adapter.cjs
+      - name: Preserve Step 10 legacy boundary
+        run: npx tsx --test server/mlb-market-model-adapters.test.ts
+      - name: Preserve Step 9 settlement economics
+        run: npx tsx --test server/mlb-market-edge.test.ts
+      - name: Preserve Step 11A operating envelope
+        run: npx tsx --test server/mlb-operating-envelope.test.ts
+      - name: Backend build
+        run: npm run build:backend

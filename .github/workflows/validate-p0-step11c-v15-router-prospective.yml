@@ -1,0 +1,61 @@
+name: Validate P0 Step 11C V15 Router Prospective Capture
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-mlb-unified-runner-step11c-slice1
+    paths:
+      - 'server/mlb-frozen-research-route-ledger.ts'
+      - 'server/mlb-frozen-research-route-ledger.test.ts'
+      - 'server/mlb-unified-runner.ts'
+      - 'server/mlb-unified-runner.test.ts'
+      - '.github/workflows/validate-p0-step11c-v15-router-prospective.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate V15 router prospective custody
+        run: npx tsx --test server/mlb-frozen-research-route-ledger.test.ts
+      - name: Validate runner preserves V15 router prospectively
+        run: npx tsx --test server/mlb-unified-runner.test.ts
+      - name: Preserve original Step 11C ledger
+        run: npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+      - name: Preserve Step 11B calibration
+        run: npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+      - name: Backend build
+        run: npm run build:backend
+      - name: Static prospective-only router boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ledger=Path('server/mlb-frozen-research-route-ledger.ts').read_text()
+          runner=Path('server/mlb-unified-runner.ts').read_text()
+          for x in [
+            'A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1',
+            'routerDecisionCanRemoveOpportunity: false',
+            'routerDecisionChangesLiveRecommendation: false',
+            'routerDecisionProspectiveOnly: true',
+            'betEliteAllowed: false',
+            'automaticBetPlacement: false',
+            'realFinancialExposure: 0',
+          ]: assert x in ledger, x
+          for x in [
+            'provisionalGamesCanCreateRouterDecision: false',
+            'finalAPlusGamesRequireFrozenRouterDecision: true',
+            'frozenRouterDecisionChangesRecommendation: false',
+            'priceBoundaryCrossed: false',
+            'callsTheOddsApi: false',
+          ]: assert x in runner, x
+          print('STEP11C_V15_ROUTER_PROSPECTIVE_BOUNDARY_LOCKED')
+          PY
