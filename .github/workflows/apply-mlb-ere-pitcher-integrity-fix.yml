@@ -5,7 +5,7 @@ on:
     branches:
       - fix/p0-mlb-ere-pitcher-source-integrity
     paths:
-      - "scripts/apply-mlb-ere-pitcher-integrity-fix.mjs"
+      - "scripts/apply-mlb-ere-pitcher-integrity-fix.py"
       - ".github/workflows/apply-mlb-ere-pitcher-integrity-fix.yml"
 
 permissions:
@@ -20,11 +20,8 @@ jobs:
         with:
           ref: fix/p0-mlb-ere-pitcher-source-integrity
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
       - name: Apply exact source patch
-        run: node scripts/apply-mlb-ere-pitcher-integrity-fix.mjs
+        run: python3 scripts/apply-mlb-ere-pitcher-integrity-fix.py
       - name: Commit patched ERE source
         shell: bash
         run: |
