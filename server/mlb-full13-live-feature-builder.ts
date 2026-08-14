@@ -59,7 +59,7 @@ export interface MlbFull13LiveFeatureAssessment {
     homePriorCompleteLineups: number;
     awayPriorCompleteLineups: number;
     starterShrinkagePriorBattersFaced: typeof C4_STARTER_SHRINKAGE_PRIOR_BF;
-    canonicalStep12VFormulaParityClaimed: true;
+    canonicalStep12VFormulaContractFrozen: true;
   };
 }
 
@@ -140,7 +140,8 @@ function continuityRate(
   currentOrder: number[] | null,
 ): number | null {
   if (currentOrder === null || priorLineups.length === 0) return null;
-  const previous = sorted(priorLineups).at(-1);
+  const ordered = sorted(priorLineups);
+  const previous = ordered[ordered.length - 1];
   if (!previous) return null;
   const priorPlayers = new Set(previous.battingOrder);
   return currentOrder.reduce((count, playerId) => count + (priorPlayers.has(playerId) ? 1 : 0), 0) / 9;
@@ -211,7 +212,7 @@ export function buildMlbFull13LiveFeatures(
       homePriorCompleteLineups: c4Assessment.diagnostics.homePriorCompleteLineups,
       awayPriorCompleteLineups: c4Assessment.diagnostics.awayPriorCompleteLineups,
       starterShrinkagePriorBattersFaced: C4_STARTER_SHRINKAGE_PRIOR_BF,
-      canonicalStep12VFormulaParityClaimed: true,
+      canonicalStep12VFormulaContractFrozen: true,
     }),
   });
 }
