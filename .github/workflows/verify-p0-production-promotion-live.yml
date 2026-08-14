@@ -1,0 +1,52 @@
+name: Verify P0 Production Promotion Live
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/verify-p0-production-promotion-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      API_BASE: https://web-production-7067b.up.railway.app
+      EXPECTED_COMMIT: 646ddd7eca6788e0fd0fc03ae7a6823ce416e9ab
+    steps:
+      - name: Wait for exact production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f production-health.json
+          for attempt in $(seq 1 30); do
+            echo "Production health attempt ${attempt}/30"
+            if curl --fail --silent --show-error --max-time 20 \
+              "${API_BASE}/health" -o production-health.json; then
+              status=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('production-health.json','utf8'));process.stdout.write(String(j.status||''))")
+              commit=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('production-health.json','utf8'));process.stdout.write(String(j.commit||''))")
+              environment=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('production-health.json','utf8'));process.stdout.write(String(j.environment||''))")
+              echo "status=${status} commit=${commit} environment=${environment}"
+              if [[ "${status}" == "healthy" && "${commit}" == "${EXPECTED_COMMIT}" ]]; then
+                echo "PASS: Railway production serves the exact promoted main commit"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "FAIL: production did not report expected commit ${EXPECTED_COMMIT} within bounded wait" >&2
+          if [[ -f production-health.json ]]; then cat production-health.json; fi
+          exit 1
+
+      - name: Upload production health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-production-promotion-health
+          path: production-health.json
+          if-no-files-found: warn
+          retention-days: 30
