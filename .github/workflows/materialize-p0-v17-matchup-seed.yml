@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          if git diff --quiet -- server/mlb-frozen-matchup-canonical-seed.generated.ts; then
+          if [[ -z "$(git status --porcelain -- server/mlb-frozen-matchup-canonical-seed.generated.ts)" ]]; then
             echo 'Canonical seed already matches frozen artifacts.'
             exit 0
           fi
