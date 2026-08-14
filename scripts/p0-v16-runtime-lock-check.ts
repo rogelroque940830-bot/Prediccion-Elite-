@@ -1,0 +1,12 @@
+import fs from "node:fs";
+import { MLB_V16_RUNTIME_MODEL_LOCK as r } from "../server/mlb-pure-settlement-scorer";
+const m=JSON.parse(fs.readFileSync("server/mlb-pure-settlement-model-manifest.json","utf8"));
+const same=(a:unknown,b:unknown,n:string)=>{if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`V16_LOCK_DRIFT:${n}`)};
+same(r.modelVersion,m.modelVersion,"version");
+same(r.manifestSha256,m.manifestSha256,"sha");
+same([...r.featureNames],m.features,"features");
+same(r.preprocessor,m.preprocessor,"preprocessor");
+same(r.fullGame,{intercept:m.fullGame.intercept,coefficients:m.fullGame.coefficients,calibrationSlope:m.fullGame.calibrationSlope,calibrationIntercept:m.fullGame.calibrationIntercept},"fg");
+same(r.first5,{homeIntercept:m.first5.homeIntercept,awayIntercept:m.first5.awayIntercept,tieIntercept:m.first5.tieIntercept,homeCoefficients:m.first5.homeCoefficients,awayCoefficients:m.first5.awayCoefficients,tieCoefficients:m.first5.tieCoefficients,temperature:m.first5.temperature,homeBias:m.first5.homeBias,awayBias:m.first5.awayBias,tieBias:m.first5.tieBias},"f5");
+if(!m.priceIndependent||m.policy.sportsbookPriceInputs||m.policy.marketOddsInputs)throw new Error("V16_PRICE_BOUNDARY_DRIFT");
+console.log("V16_RUNTIME_LOCK_PASS");

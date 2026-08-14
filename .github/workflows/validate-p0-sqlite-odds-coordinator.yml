@@ -1,0 +1,41 @@
+name: Validate P0 SQLite Odds Coordinator
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-c4-live-parity-gate
+    paths:
+      - 'server/mlb-selective-odds-sqlite-coordinator.ts'
+      - 'server/mlb-selective-odds-sqlite-coordinator.test.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+      - 'server/mlb-unified-priced-v16-runner.ts'
+      - '.github/workflows/validate-p0-sqlite-odds-coordinator.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate durable SQLite coordinator
+        run: npx tsx --test server/mlb-selective-odds-sqlite-coordinator.test.ts
+      - name: Preserve Step 8 selective odds acquisition
+        run: npx tsx --test server/mlb-selective-odds-acquisition.test.ts
+      - name: Compile coordinator and priced runner
+        run: |
+          npx esbuild server/mlb-selective-odds-sqlite-coordinator.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-odds-coordinator.cjs
+          npx esbuild server/mlb-unified-priced-v16-runner.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-priced-runner.cjs
+      - name: Preserve market edge and operating envelope
+        run: |
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-operating-envelope.test.ts
+      - name: Backend build
+        run: npm run build:backend

@@ -19,6 +19,8 @@ import { registerMlbOfficialInjurySupplementMiddleware } from "./mlb-injury-offi
 import { registerMlbCoreRoutes } from "./mlb-core-routes";
 import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
 import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe-odds-routes";
+import { registerMlbUnifiedPricedV16Routes } from "./mlb-unified-priced-v16-routes";
+import { registerMlbUnifiedV16UiRoutes } from "./mlb-unified-v16-ui-routes";
 import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
 import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
@@ -56,6 +58,12 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbCoreRoutes(app);
   registerMlbF5OddsProtectionRoutes(app);
   registerMlbP1M6a2MarketUniverseOddsRoutes(app);
+  // Browser-facing explicit preflight: verifies the official slate and server custody without
+  // crossing the paid odds boundary or accepting forged certified sporting inputs from the UI.
+  registerMlbUnifiedV16UiRoutes(app);
+  // Explicit command route for the full V16 priced runner. It is auth-protected by the global
+  // private-read/write middleware registered before domain routes and never polls or self-triggers.
+  registerMlbUnifiedPricedV16Routes(app);
   // S6B registers the resilient versions first; legacy duplicates remain only
   // for source compatibility and are not reached once S6B sends a response.
   registerWnbaS6bRoutes(app);
