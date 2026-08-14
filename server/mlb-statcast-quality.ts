@@ -6,9 +6,34 @@
 // Cache 6h porque Savant actualiza diariamente y son leaderboards.
 
 type CsvRow = Record<string, string>;
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 interface CacheEntry<T> { ts: number; data: T; }
 const CACHE_TTL = 6 * 60 * 60 * 1000;
+
+export const MLB_STATCAST_QUALITY_EVIDENCE_SCHEMA = "courtedge-mlb-statcast-quality-evidence.v1" as const;
+
+export interface StatcastQualityRuntime {
+  fetchImpl?: FetchLike;
+  now?: () => Date;
+}
+
+export interface StatcastQualityEvidenceProvenance {
+  schemaVersion: typeof MLB_STATCAST_QUALITY_EVIDENCE_SCHEMA;
+  status: "CERTIFIED";
+  generatedAt: string;
+  sources: {
+    expectedPitchers: "BASEBALL_SAVANT_EXPECTED_STATISTICS";
+    pitcherQuality: "BASEBALL_SAVANT_STATCAST";
+    expectedBatters: "BASEBALL_SAVANT_EXPECTED_STATISTICS";
+  };
+  cacheMaxAgeSeconds: 21_600;
+  pitcherCacheHit: boolean;
+  batterCacheHit: boolean;
+  pitcherCacheAgeSeconds: number;
+  batterCacheAgeSeconds: number;
+  failureDisposition: "THROW_FAIL_CLOSED";
+}
 
 const pitcherCache: { current: CacheEntry<Record<number, PitcherQuality>> | null } = { current: null };
 const batterCache: { current: CacheEntry<Record<number, BatterQuality>> | null } = { current: null };
@@ -34,6 +59,29 @@ export interface BatterQuality {
   wOBA: number;
   xwOBA: number;
   luckDelta: number;            // wOBA - xwOBA; positivo = suertudo, negativo = subbatando
+}
+
+export interface StatcastQualityCertifiedSnapshot {
+  sourceStatus: "CERTIFIED";
+  generatedAt: string;
+  pitcherMap: Record<number, PitcherQuality>;
+  batterMap: Record<number, BatterQuality>;
+  provenance: StatcastQualityEvidenceProvenance;
+}
+
+interface CertifiedMapResult<T> {
+  data: T;
+  observedAtMs: number;
+  cacheHit: boolean;
+  cacheAgeSeconds: number;
+}
+
+function runtimeNow(runtime: StatcastQualityRuntime): Date {
+  return runtime.now ? runtime.now() : new Date();
+}
+
+function runtimeFetch(runtime: StatcastQualityRuntime): FetchLike {
+  return runtime.fetchImpl ?? ((input, init) => fetch(input, init));
 }
 
 function parseCsv(text: string): CsvRow[] {
@@ -67,12 +115,21 @@ function num(s: string | undefined, def = 0): number {
   return isNaN(n) ? def : n;
 }
 
-async function fetchExpectedPitchers(): Promise<Record<number, Partial<PitcherQuality>>> {
+async function fetchCsv(url: string, source: string, fetchImpl: FetchLike): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetchImpl(url);
+  } catch (error: any) {
+    throw new Error(`STATCAST_QUALITY_SOURCE_FETCH_FAILED:${source}:${String(error?.message || error || "UNKNOWN")}`);
+  }
+  if (!res.ok) throw new Error(`STATCAST_QUALITY_SOURCE_HTTP_${res.status}:${source}`);
+  return res.text();
+}
+
+async function fetchExpectedPitchers(fetchImpl: FetchLike = fetch): Promise<Record<number, Partial<PitcherQuality>>> {
   const yr = new Date().getFullYear();
   const url = `https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=${yr}&min=q&csv=true`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Savant expected pitchers ${res.status}`);
-  const text = await res.text();
+  const text = await fetchCsv(url, "EXPECTED_PITCHERS", fetchImpl);
   const rows = parseCsv(text);
   const map: Record<number, Partial<PitcherQuality>> = {};
   for (const r of rows) {
@@ -93,12 +150,10 @@ async function fetchExpectedPitchers(): Promise<Record<number, Partial<PitcherQu
   return map;
 }
 
-async function fetchQualityPitchers(): Promise<Record<number, { hardHitPct: number; barrelPct: number }>> {
+async function fetchQualityPitchers(fetchImpl: FetchLike = fetch): Promise<Record<number, { hardHitPct: number; barrelPct: number }>> {
   const yr = new Date().getFullYear();
   const url = `https://baseballsavant.mlb.com/leaderboard/statcast?type=pitcher&year=${yr}&min=q&csv=true`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Savant quality pitchers ${res.status}`);
-  const text = await res.text();
+  const text = await fetchCsv(url, "PITCHER_QUALITY", fetchImpl);
   const rows = parseCsv(text);
   const map: Record<number, { hardHitPct: number; barrelPct: number }> = {};
   for (const r of rows) {
@@ -112,12 +167,10 @@ async function fetchQualityPitchers(): Promise<Record<number, { hardHitPct: numb
   return map;
 }
 
-async function fetchExpectedBatters(): Promise<Record<number, BatterQuality>> {
+async function fetchExpectedBatters(fetchImpl: FetchLike = fetch): Promise<Record<number, BatterQuality>> {
   const yr = new Date().getFullYear();
   const url = `https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=batter&year=${yr}&min=q&csv=true`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Savant expected batters ${res.status}`);
-  const text = await res.text();
+  const text = await fetchCsv(url, "EXPECTED_BATTERS", fetchImpl);
   const rows = parseCsv(text);
   const map: Record<number, BatterQuality> = {};
   for (const r of rows) {
@@ -136,32 +189,114 @@ async function fetchExpectedBatters(): Promise<Record<number, BatterQuality>> {
   return map;
 }
 
-export async function getPitcherQualityMap(): Promise<Record<number, PitcherQuality>> {
-  if (pitcherCache.current && Date.now() - pitcherCache.current.ts < CACHE_TTL) {
-    return pitcherCache.current.data;
+function mergePitcherQuality(
+  expected: Record<number, Partial<PitcherQuality>>,
+  quality: Record<number, { hardHitPct: number; barrelPct: number }>,
+): Record<number, PitcherQuality> {
+  const merged: Record<number, PitcherQuality> = {};
+  for (const id in expected) {
+    const e = expected[id];
+    const q = quality[parseInt(id)] || { hardHitPct: 0, barrelPct: 0 };
+    merged[parseInt(id)] = {
+      playerId: e.playerId!,
+      name: e.name!,
+      pa: e.pa ?? 0,
+      era: e.era ?? 0,
+      xera: e.xera ?? 0,
+      eraMinusXeraDiff: e.eraMinusXeraDiff ?? 0,
+      wOBA: e.wOBA ?? 0,
+      xwOBA: e.xwOBA ?? 0,
+      xwobaMinusWobaDiff: e.xwobaMinusWobaDiff ?? 0,
+      hardHitPct: q.hardHitPct,
+      barrelPct: q.barrelPct,
+    };
   }
+  return merged;
+}
+
+async function loadPitcherQualityCertified(runtime: StatcastQualityRuntime): Promise<CertifiedMapResult<Record<number, PitcherQuality>>> {
+  const nowMs = runtimeNow(runtime).getTime();
+  const cached = pitcherCache.current;
+  if (cached && nowMs - cached.ts < CACHE_TTL) {
+    return {
+      data: cached.data,
+      observedAtMs: cached.ts,
+      cacheHit: true,
+      cacheAgeSeconds: Math.max(0, Math.round((nowMs - cached.ts) / 1000)),
+    };
+  }
+
+  const fetchImpl = runtimeFetch(runtime);
+  const [expected, quality] = await Promise.all([
+    fetchExpectedPitchers(fetchImpl),
+    fetchQualityPitchers(fetchImpl),
+  ]);
+  if (!Object.keys(expected).length) throw new Error("STATCAST_QUALITY_EXPECTED_PITCHERS_EMPTY");
+  if (!Object.keys(quality).length) throw new Error("STATCAST_QUALITY_PITCHER_QUALITY_EMPTY");
+  const merged = mergePitcherQuality(expected, quality);
+  if (!Object.keys(merged).length) throw new Error("STATCAST_QUALITY_PITCHER_MAP_EMPTY");
+  pitcherCache.current = { ts: nowMs, data: merged };
+  return { data: merged, observedAtMs: nowMs, cacheHit: false, cacheAgeSeconds: 0 };
+}
+
+async function loadBatterQualityCertified(runtime: StatcastQualityRuntime): Promise<CertifiedMapResult<Record<number, BatterQuality>>> {
+  const nowMs = runtimeNow(runtime).getTime();
+  const cached = batterCache.current;
+  if (cached && nowMs - cached.ts < CACHE_TTL) {
+    return {
+      data: cached.data,
+      observedAtMs: cached.ts,
+      cacheHit: true,
+      cacheAgeSeconds: Math.max(0, Math.round((nowMs - cached.ts) / 1000)),
+    };
+  }
+
+  const data = await fetchExpectedBatters(runtimeFetch(runtime));
+  if (!Object.keys(data).length) throw new Error("STATCAST_QUALITY_EXPECTED_BATTERS_EMPTY");
+  batterCache.current = { ts: nowMs, data };
+  return { data, observedAtMs: nowMs, cacheHit: false, cacheAgeSeconds: 0 };
+}
+
+export async function getStatcastQualityCertifiedSnapshot(
+  runtime: StatcastQualityRuntime = {},
+): Promise<StatcastQualityCertifiedSnapshot> {
+  const [pitchers, batters] = await Promise.all([
+    loadPitcherQualityCertified(runtime),
+    loadBatterQualityCertified(runtime),
+  ]);
+  const generatedAt = new Date(Math.min(pitchers.observedAtMs, batters.observedAtMs)).toISOString();
+  return {
+    sourceStatus: "CERTIFIED",
+    generatedAt,
+    pitcherMap: pitchers.data,
+    batterMap: batters.data,
+    provenance: {
+      schemaVersion: MLB_STATCAST_QUALITY_EVIDENCE_SCHEMA,
+      status: "CERTIFIED",
+      generatedAt,
+      sources: {
+        expectedPitchers: "BASEBALL_SAVANT_EXPECTED_STATISTICS",
+        pitcherQuality: "BASEBALL_SAVANT_STATCAST",
+        expectedBatters: "BASEBALL_SAVANT_EXPECTED_STATISTICS",
+      },
+      cacheMaxAgeSeconds: 21_600,
+      pitcherCacheHit: pitchers.cacheHit,
+      batterCacheHit: batters.cacheHit,
+      pitcherCacheAgeSeconds: pitchers.cacheAgeSeconds,
+      batterCacheAgeSeconds: batters.cacheAgeSeconds,
+      failureDisposition: "THROW_FAIL_CLOSED",
+    },
+  };
+}
+
+export function resetStatcastQualityCachesForTests(): void {
+  pitcherCache.current = null;
+  batterCache.current = null;
+}
+
+export async function getPitcherQualityMap(): Promise<Record<number, PitcherQuality>> {
   try {
-    const [expected, quality] = await Promise.all([fetchExpectedPitchers(), fetchQualityPitchers()]);
-    const merged: Record<number, PitcherQuality> = {};
-    for (const id in expected) {
-      const e = expected[id];
-      const q = quality[parseInt(id)] || { hardHitPct: 0, barrelPct: 0 };
-      merged[parseInt(id)] = {
-        playerId: e.playerId!,
-        name: e.name!,
-        pa: e.pa ?? 0,
-        era: e.era ?? 0,
-        xera: e.xera ?? 0,
-        eraMinusXeraDiff: e.eraMinusXeraDiff ?? 0,
-        wOBA: e.wOBA ?? 0,
-        xwOBA: e.xwOBA ?? 0,
-        xwobaMinusWobaDiff: e.xwobaMinusWobaDiff ?? 0,
-        hardHitPct: q.hardHitPct,
-        barrelPct: q.barrelPct,
-      };
-    }
-    pitcherCache.current = { ts: Date.now(), data: merged };
-    return merged;
+    return (await loadPitcherQualityCertified({})).data;
   } catch (err) {
     console.error("[statcast-quality] pitcher fetch failed:", err);
     return pitcherCache.current?.data ?? {};
@@ -169,13 +304,8 @@ export async function getPitcherQualityMap(): Promise<Record<number, PitcherQual
 }
 
 export async function getBatterQualityMap(): Promise<Record<number, BatterQuality>> {
-  if (batterCache.current && Date.now() - batterCache.current.ts < CACHE_TTL) {
-    return batterCache.current.data;
-  }
   try {
-    const data = await fetchExpectedBatters();
-    batterCache.current = { ts: Date.now(), data };
-    return data;
+    return (await loadBatterQualityCertified({})).data;
   } catch (err) {
     console.error("[statcast-quality] batter fetch failed:", err);
     return batterCache.current?.data ?? {};
@@ -250,7 +380,7 @@ export interface BatterLuckCorrection {
   name: string;
   wOBA: number;
   xwOBA: number;
-  luckDelta: number;        // wOBA - xwOBA
+  luckDelta: number;        // wOBA - xwOBA; positivo = suertudo, negativo = subbatando
   correctedWoba: number;    // = xwOBA (lo que MERECE)
   tier: "OVERPERFORMING" | "UNDERPERFORMING" | "REAL";
   signal: string;

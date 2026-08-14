@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/american-odds.ts",
+    "server/mlb-bullpen.ts",
+    "server/mlb-bullpen.test.ts",
+    "server/mlb-p1-daily-slate.ts",
+    "server/mlb-p1-pregame-readiness-contract.ts",
+    "server/mlb-p1-pregame-readiness-service.ts",
+    "server/mlb-p1-bullpen-readiness-integration.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "p1-m3f2b-injury-partial-cause.v1",
+  "generatedAt": "2026-08-07T23:48:30.985Z",
+  "backendCommit": "0e3f39d790a6011f27e3384e74228b62fa9d7a0e",
+  "environment": "p0-integration",
+  "auditDate": "2026-08-07",
+  "gameState": "PREGAME",
+  "sides": [
+    {
+      "side": "home",
+      "status": "VERIFIED",
+      "officialValidationStatus": "VERIFIED",
+      "stale": false,
+      "sourceErrorCount": 0,
+      "rejectedCount": 0,
+      "officialOnly": 0,
+      "phaseBCoverage": "FULL",
+      "phaseBAutoApplyAllowed": true,
+      "phaseBCandidateCount": 2,
+      "anomalous": false,
+      "count": 11
+    },
+    {
+      "side": "away",
+      "status": "PARTIAL",
+      "officialValidationStatus": "VERIFIED",
+      "stale": false,
+      "sourceErrorCount": 0,
+      "rejectedCount": 1,
+      "officialOnly": 5,
+      "phaseBCoverage": "PARTIAL",
+      "phaseBAutoApplyAllowed": false,
+      "phaseBCandidateCount": 1,
+      "anomalous": false,
+      "count": 5
+    }
+  ],
+  "aggregateCause": {
+    "anyRejectedIdentity": true,
+    "anyOfficialOnlyCoverageGap": true,
+    "bothExternalAndOfficialVerified": true,
+    "allPartial": false
+  },
+  "interpretationBoundary": {
+    "changesInjuryLogic": false,
+    "changesReadinessPolicy": false,
+    "changesModel": false,
+    "authorizesPromotion": false
+  },
+  "safety": {
+    "publicReadOnly": true,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "realFinancialExposure": 0
+  }
+}

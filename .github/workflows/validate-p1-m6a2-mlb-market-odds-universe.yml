@@ -1,0 +1,221 @@
+name: Validate P1-M6A2 MLB Market Odds Universe
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-odds-normalizer.ts'
+      - 'server/mlb-market-odds-normalizer.test.ts'
+      - 'server/mlb-market-universe-odds-routes.ts'
+      - 'server/mlb-market-universe-odds-routes.test.ts'
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/route-contract.extensions.json'
+      - 'server/routes.ts'
+      - 'tsconfig.p1-m6a2-market-odds.json'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
+      - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
+      - 'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
+      - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
+      - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M6A2 market-odds surface
+        run: npx tsc -p tsconfig.p1-m6a2-market-odds.json
+      - name: Run P1-M6A2 normalization and provider-request tests
+        run: |
+          npx tsx --test \
+            server/mlb-market-odds-normalizer.test.ts \
+            server/mlb-market-universe-odds-routes.test.ts \
+            server/mlb-f5-odds-routes.test.ts
+      - name: Preserve P1-M6A1 ledger and settlement contracts
+        run: npm run test:mlb-ledger
+      - name: Preserve modular route contract and production backend build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Preserve real-save and shadow scientific gates
+        run: |
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify P1-M6A2 fail-closed safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          normalizer='server/mlb-market-odds-normalizer.ts'
+          route='server/mlb-market-universe-odds-routes.ts'
+          docs='docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md'
+          grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' "$normalizer"
+          grep -F 'MLB_EXECUTION_BOOK_PRIORITY' "$normalizer"
+          grep -F '"hardrockbet_fl"' "$normalizer"
+          ! grep -F '"hardrockbet",' "$normalizer"
+          ! grep -F '"hardrockbet_az",' "$normalizer"
+          grep -F 'reference_consensus' "$normalizer"
+          grep -F 'F5_TEAM_TOTAL_NOT_DOCUMENTED_BY_PROVIDER' "$normalizer"
+          grep -F 'F3_TEAM_TOTAL_NOT_DOCUMENTED_BY_PROVIDER' "$normalizer"
+          grep -F 'pair[0].line !== 0.5' "$normalizer"
+          grep -F 'h2h_3_way_1st_3_innings' "$normalizer"
+          grep -F 'FRESH_EXECUTION_BOOK_QUOTE_REQUIRED' "$normalizer"
+          grep -F 'referenceQuotesExecutable: false' "$route"
+          grep -F 'undocumentedMarketsInvented: false' "$route"
+          grep -F 'threeWayCoercedToTwoWay: false' "$route"
+          grep -F 'partialSlateCached: false' "$route"
+          grep -F 'x-requests-last' "$route"
+          grep -F 'if (complete)' "$route"
+          grep -Fi 'reference consensus is analytical price evidence only' "$docs"
+          grep -Fi 'never caches partial coverage' "$docs"
+          grep -Fi 'verified Florida-specific Hard Rock Bet bookmaker key' "$docs"
+          grep -F 'registerMlbP1M6a2MarketUniverseOddsRoutes(app)' server/routes.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$normalizer" "$route"
+      - name: Verify P1-M6A2 route precedes legacy market support
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('server/routes.ts', 'utf8');
+          const universe = source.indexOf('registerMlbP1M6a2MarketUniverseOddsRoutes(app)');
+          const legacy = source.indexOf('registerMarketSupportRoutes(app)');
+          if (universe < 0 || legacy < 0 || universe >= legacy) {
+            throw new Error('P1-M6A2 market-universe route must be registered before legacy market support');
+          }
+          NODE
+          grep -F 'courtedge-p1-m6a2-mlb-market-odds-universe.v1' dist/index.cjs
+          grep -F '/api/mlb/p1/v1/market-universe-odds' dist/index.cjs
+      - name: Verify exact protected P1-M6A2 or analytical successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+
+          workflow_only=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' | sort)
+
+          m6a2_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
+            'docs/P1_M6A2_MLB_MARKET_ODDS_UNIVERSE.md' \
+            'server/mlb-market-odds-normalizer.test.ts' \
+            'server/mlb-market-odds-normalizer.ts' \
+            'server/mlb-market-universe-odds-routes.test.ts' \
+            'server/mlb-market-universe-odds-routes.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m6a2-market-odds.json' | sort)
+
+          m3e_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            'docs/P1_M3E_MLB_OPERATING_ENVELOPE_READONLY.md' \
+            'server/mlb-p1-operating-envelope-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e-operating-envelope.json' | sort)
+
+          premium_no_ultra_readonly=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
+
+          compatibility_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' | sort)
+
+          b5_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3f3b5-vsteam-identity.json' | sort)
+
+          b5b_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' | sort)
+
+          m3e5_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-live.ts' \
+            'server/mlb-p1-operating-envelope-frozen-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
+
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          if [[ "$changed" != "$workflow_only" \
+            && "$changed" != "$m6a2_package" \
+            && "$changed" != "$m3e_successor" \
+            && "$changed" != "$premium_no_ultra_readonly" \
+            && "$changed" != "$compatibility_package" \
+            && "$changed" != "$b5_successor" \
+            && "$changed" != "$b5b_successor"  \
+            && "$changed" != "$m3e5_successor" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
+            echo 'P1-M6A2 scope rejected. Diff must be an exact registered package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi

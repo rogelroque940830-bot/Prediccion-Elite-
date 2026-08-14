@@ -1,0 +1,71 @@
+name: Validate S6H Backend Market Integrity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/american-odds.ts'
+      - 'server/mlb-f5-odds-routes.ts'
+      - 'server/mlb-f5-odds-routes.test.ts'
+      - 'server/mlb-s5c-shadow-ingestion.ts'
+      - 'server/mlb-s5c-shadow-ingestion.test.ts'
+      - 'server/mlb-ledger-history-view.ts'
+      - 'server/mlb-ledger-history-view.test.ts'
+      - 'server/routes.ts'
+      - 'tsconfig.s6h-market-integrity.json'
+      - 'docs/S6H_PHASE3_BACKEND_MARKET_PROVENANCE.md'
+      - '.github/workflows/validate-s6h-backend-market-integrity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install backend dependencies reproducibly
+        run: npm ci
+      - name: Run S6H market-integrity tests
+        run: |
+          npx tsx --test \
+            server/mlb-f5-odds-routes.test.ts \
+            server/mlb-s5c-shadow-ingestion.test.ts \
+            server/mlb-ledger-history-view.test.ts
+      - name: Type-check S6H backend surface
+        run: npx tsc -p tsconfig.s6h-market-integrity.json
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Verify market-integrity safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'median_implied_probability' server/mlb-f5-odds-routes.ts
+          grep -F 'consensusAmericanOdds' server/mlb-f5-odds-routes.ts
+          grep -F 'selectConsensusLine' server/mlb-f5-odds-routes.ts
+          grep -F 'normalizeStandardAmericanOdds' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'Rejected invalid American odds' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'marketProvenance' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'priceCapturedAt' server/mlb-ledger-history-view.ts
+          grep -F 'registerMlbF5OddsProtectionRoutes(app)' server/routes.ts
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const routes = fs.readFileSync('server/routes.ts', 'utf8');
+          const protectedIndex = routes.indexOf('registerMlbF5OddsProtectionRoutes(app)');
+          const legacyIndex = routes.indexOf('registerMarketSupportRoutes(app)');
+          if (protectedIndex < 0 || legacyIndex < 0 || protectedIndex >= legacyIndex) {
+            throw new Error('Protected F5 route must be registered before legacy market-support routes');
+          }
+          NODE
+          grep -F 'mlb-f5-odds-consensus.v2' dist/index.cjs
+          grep -F 'median_implied_probability' dist/index.cjs

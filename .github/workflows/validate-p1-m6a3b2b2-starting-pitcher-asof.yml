@@ -1,0 +1,129 @@
+name: Validate P1-M6A3B2B2 Starting Pitcher As-Of OOS
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-starting-pitcher-asof.ts'
+      - 'server/mlb-market-starting-pitcher-asof.test.ts'
+      - 'scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs'
+      - 'docs/P1_M6A3B2B2_MLB_STARTING_PITCHER_ASOF.md'
+      - 'tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json'
+      - '.github/workflows/validate-p1-m6a3b2b2-starting-pitcher-asof.yml'
+      - 'server/mlb-market-starting-pitcher-inference.ts'
+      - 'server/mlb-market-starting-pitcher-inference.test.ts'
+      - 'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md'
+      - 'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json'
+      - '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b2b2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned B2B2A surface
+        run: npx tsc -p tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json
+      - name: Run strict as-of pitcher falsification tests
+        run: npx tsx --test server/mlb-market-starting-pitcher-asof.test.ts
+      - name: Preserve B2B1, B2A, B1 and A3A statistical contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-starting-pitcher-history.test.ts \
+            server/mlb-market-team-strength.test.ts \
+            server/mlb-market-team-strength-inference.test.ts \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-fit.test.ts \
+            server/mlb-market-run-distribution.test.ts \
+            server/mlb-market-calibration.test.ts
+      - name: Preserve ledger, backend and scientific regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify B2B2A time, null-model and no-promotion boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          model='server/mlb-market-starting-pitcher-asof.ts'
+          script='scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs'
+          docs='docs/P1_M6A3B2B2_MLB_STARTING_PITCHER_ASOF.md'
+          evidence='evidence/p1-m6a3b2b1/2025-starting-pitcher-history.json'
+          grep -F 'NB2_TEAM_PLUS_STARTER_ER_PER_BF_SHRINKAGE' "$model"
+          grep -F 'line.officialDate < cutoffDateExclusive' "$model"
+          grep -F 'P1_M6A3B2B2_ASOF_TIME_LEAKAGE_DETECTED' "$model"
+          grep -F 'P1_M6A3B2B2_INNER_PITCHER_TIME_LEAKAGE_DETECTED' "$model"
+          grep -F 'P1_M6A3B2B2_OUTER_PITCHER_TIME_LEAKAGE_DETECTED' "$model"
+          grep -F 'DEFAULT_PITCHER_EFFECT_GRID = [0, 0.25, 0.5, 0.75, 1]' "$model"
+          grep -F 'teamMinusPitcherCountNll' "$model" "$script"
+          grep -F 'leagueMinusPitcherCountNll' "$model" "$script"
+          grep -F 'P1_M6A3B2B2_PAIRED_INFERENCE_REQUIRED' "$model" "$docs"
+          grep -F 'P1_M6A3B2B2_FROZEN_OUTCOME_DIGEST_MISMATCH' "$script"
+          grep -F 'P1_M6A3B2B2_FROZEN_STARTER_HISTORY_DIGEST_MISMATCH' "$script"
+          grep -F '"starterHistoryDigest": "2ae7b52b671f84fdecbc802b7891a03b66e768178bc6add177be5116c9426efa"' "$evidence"
+          grep -Fi 'strictly precedes the inner validation block' "$docs"
+          grep -F 'actionabilityAllowed: false' "$model" "$script"
+          grep -F 'automaticModelSelectionAllowed: false' "$model" "$script"
+          grep -F 'automaticPromotionAllowed: false' "$model" "$script"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$model" "$script"
+      - name: Verify bounded B2B2A and paired-inference successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          [[ -n "$changed" ]]
+          allowed=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a3b2b2-starting-pitcher-asof.yml' \
+            '.github/workflows/validate-p1-m6a3b2b2b-starting-pitcher-inference.yml' \
+            'docs/P1_M6A3B2B2_MLB_STARTING_PITCHER_ASOF.md' \
+            'docs/P1_M6A3B2B2B_MLB_STARTING_PITCHER_PAIRED_INFERENCE.md' \
+            'scripts/p1-m6a3b2b2-starting-pitcher-oos.mjs' \
+            'server/mlb-market-starting-pitcher-asof.test.ts' \
+            'server/mlb-market-starting-pitcher-asof.ts' \
+            'server/mlb-market-starting-pitcher-inference.test.ts' \
+            'server/mlb-market-starting-pitcher-inference.ts' \
+            'tsconfig.p1-m6a3b2b2-starting-pitcher-asof.json' \
+            'tsconfig.p1-m6a3b2b2b-starting-pitcher-inference.json' | sort)
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            grep -Fxq "$file" <<< "$allowed"
+          done <<< "$changed"
+
+          asof_source=$(grep -Fx 'server/mlb-market-starting-pitcher-asof.ts' <<< "$changed" || true)
+          asof_test=$(grep -Fx 'server/mlb-market-starting-pitcher-asof.test.ts' <<< "$changed" || true)
+          if [[ -n "$asof_source" && -z "$asof_test" ]] || [[ -z "$asof_source" && -n "$asof_test" ]]; then
+            echo 'B2B2A source and falsification test must change together' >&2
+            exit 1
+          fi
+
+          inference_source=$(grep -Fx 'server/mlb-market-starting-pitcher-inference.ts' <<< "$changed" || true)
+          inference_test=$(grep -Fx 'server/mlb-market-starting-pitcher-inference.test.ts' <<< "$changed" || true)
+          if [[ -n "$inference_source" && -z "$inference_test" ]] || [[ -z "$inference_source" && -n "$inference_test" ]]; then
+            echo 'B2B2B inference source and falsification test must change together' >&2
+            exit 1
+          fi

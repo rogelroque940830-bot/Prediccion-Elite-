@@ -1,0 +1,86 @@
+name: Validate P1-M3E.3 MLB Operating Envelope Freeze
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-operating-envelope-freeze.ts'
+      - 'server/mlb-p1-operating-envelope-freeze.test.ts'
+      - 'docs/P1_M3E3_MLB_OPERATING_ENVELOPE_FREEZE.md'
+      - 'tsconfig.p1-m3e3-operating-envelope-freeze.json'
+      - '.github/workflows/validate-p1-m3e3-operating-envelope-freeze.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3e3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned P1-M3E.3 surface
+        run: npx tsc -p tsconfig.p1-m3e3-operating-envelope-freeze.json
+      - name: Run P1-M3E.3 falsification tests
+        run: npx tsx --test server/mlb-p1-operating-envelope-freeze.test.ts
+      - name: Preserve P1-M3E.2 and P1-M3E predecessor behavior
+        run: npx tsx --test server/mlb-p1-operating-envelope-stability.test.ts server/mlb-p1-operating-envelope.test.ts
+      - name: Build production backend without integrating research freeze module
+        run: npm run build:backend
+      - name: Verify outcome-blind immutable-freeze and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-p1-operating-envelope-freeze.ts'
+          tests='server/mlb-p1-operating-envelope-freeze.test.ts'
+          docs='docs/P1_M3E3_MLB_OPERATING_ENVELOPE_FREEZE.md'
+
+          grep -F 'courtedge-p1-m3e3-operating-envelope-freeze.v1' "$source"
+          grep -F 'minimumPregameDecisions: 120' "$source"
+          grep -F 'minimumDistinctDates: 36' "$source"
+          grep -F 'futureRowsMayMoveBoundary: false' "$source"
+          grep -F 'outcomesUsedToChooseFreezeBoundary: false' "$source"
+          grep -F 'economicProfitabilityCertified: false' "$source"
+          grep -F 'operationalRecommendationGateAllowed: false' "$source"
+          grep -F 'bettingRecommendationAllowed: false' "$source"
+          grep -F 'stakeChangesAllowed: false' "$source"
+          grep -F 'automaticBettingAllowed: false' "$source"
+          grep -F 'premiumNoUltraProspectiveHypothesisChanged: false' "$source"
+          grep -F 'appending future decisions cannot move the frozen cutoff' "$tests"
+          grep -F 'outcomes, settlement, proper scores, profit, closing price and CLV cannot alter freeze identity' "$tests"
+          grep -F 'P1-M3E.2 is a fixed-dataset stability test' "$docs"
+
+          selector=$(sed -n '/function freezeEligible/,/^}/p' "$source")
+          ! grep -E 'result|settledAt|brierScore|logLoss|flatProfitUnits|policyProfitUnits|closingOddsAmerican|clvPp' <<< "$selector"
+
+          ! grep -E 'app\.(post|put|patch|delete|get)\(' "$source"
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$source"
+          ! grep -E 'operationalRecommendationGateAllowed:[[:space:]]*true|bettingRecommendationAllowed:[[:space:]]*true|stakeChangesAllowed:[[:space:]]*true|automaticBettingAllowed:[[:space:]]*true|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$source"
+      - name: Verify exact isolated P1-M3E.3 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e3-operating-envelope-freeze.yml' \
+            'docs/P1_M3E3_MLB_OPERATING_ENVELOPE_FREEZE.md' \
+            'server/mlb-p1-operating-envelope-freeze.test.ts' \
+            'server/mlb-p1-operating-envelope-freeze.ts' \
+            'tsconfig.p1-m3e3-operating-envelope-freeze.json' | sort)
+          if [[ "$changed" != "$expected" ]]; then
+            echo 'P1-M3E.3 scope rejected: expected exact five-file isolated research package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi

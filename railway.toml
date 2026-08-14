@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "node scripts/storage-retention-guard.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 

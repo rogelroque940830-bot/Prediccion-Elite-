@@ -1,0 +1,163 @@
+name: Court Edge P0 Frontend Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/p0-frontend-session
+      - integration/p0-staging-secure
+    paths:
+      - 'server/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/integration-p0-frontend.yml'
+  pull_request:
+    branches:
+      - security/p0-remediation
+    paths:
+      - 'server/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.mlb-ledger.json'
+      - '.github/workflows/integration-p0-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current integration revision
+        uses: actions/checkout@v4
+
+      - name: Verify imported frontend types are reconciled
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/fix-integration-frontend-types.py
+          git diff --exit-code -- frontend/client/src
+
+  backend:
+    needs: source-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout current integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Type-check MLB scientific ledger
+        run: npm run typecheck:mlb-ledger
+
+      - name: Test MLB scientific ledger and settlement worker
+        run: npm run test:mlb-ledger
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Run P0 middleware smoke test
+        run: npx tsx scripts/p0-security-smoke.ts
+
+      - name: Run session and CSRF integration smoke test
+        run: npx tsx scripts/integration-auth-smoke.ts
+
+  frontend:
+    needs: source-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout current integration revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Static frontend audit
+        id: static_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run audit:static 2>&1 | tee frontend-static-audit.txt
+
+      - name: Upload frontend audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-static-audit
+          path: frontend/frontend-static-audit.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce static audit result
+        if: ${{ steps.static_audit.outcome == 'failure' }}
+        run: exit 1
+
+      - name: TypeScript type-check
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee frontend-typecheck.txt
+
+      - name: Upload TypeScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-typecheck
+          path: frontend/frontend-typecheck.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce TypeScript result
+        if: ${{ steps.typecheck.outcome == 'failure' }}
+        run: exit 1
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: npm run build
+
+      - name: Distribution smoke test
+        id: dist_smoke
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check:dist 2>&1 | tee frontend-dist-smoke.txt
+
+      - name: Upload distribution diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-smoke
+          path: frontend/frontend-dist-smoke.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce distribution smoke result
+        if: ${{ steps.dist_smoke.outcome == 'failure' }}
+        run: exit 1

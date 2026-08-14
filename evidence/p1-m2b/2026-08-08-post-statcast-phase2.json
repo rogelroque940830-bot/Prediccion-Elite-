@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "p1-m2b-post-statcast-phase2-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "2d6d8956d75adf38338e90eca8e48318224e9ed3",
+    "researchPr": 413,
+    "workflowRun": 31274035183,
+    "artifactId": 9026532805,
+    "rawIdentityPersisted": false
+  },
+  "sample": {
+    "sampledPregameGames": 4,
+    "confirmedSlateLineups": 4,
+    "measuredLineupSides": 8,
+    "nineOfNineDirectSides": 4
+  },
+  "statcast": {
+    "CERTIFIED": 0,
+    "DEGRADED": 4,
+    "generatedAtObserved": false,
+    "fullVisibleCoverageGameObserved": true,
+    "fullVisibleCoverageBlocker": "STATCAST_CERT_STARTER_XWOBA_MISMATCH"
+  },
+  "readiness": {
+    "advancedFiveOfFiveGames": 0,
+    "advancedFourOfFiveGames": 3,
+    "advancedThreeOfFiveGames": 1,
+    "readyFinalObserved": false,
+    "injuriesDegradedGames": 4,
+    "gateStatusAtMeasurement": "BLOCKED_4_OF_4"
+  },
+  "interpretation": {
+    "phase2PreventedFalseCertification": true,
+    "sourceAlignmentAloneWasInsufficient": true,
+    "remainingMismatchClass": "STARTER_XWOBA_REPRODUCTION",
+    "likelyParityBoundary": "DIRECT_INCLUSIVE_ROWS_VS_QUALIFIED_TEAM_PROXY_ROWS",
+    "certifierToleranceShouldBeRelaxed": false,
+    "nextAction": "VERIFY_OVERLAPPING_INCLUSIVE_AND_QUALIFIED_SAVANT_ROW_VALUE_PARITY_THEN_SEPARATE_DIRECT_AND_PROXY_SOURCE_ELIGIBILITY_INSIDE_SUCCESSOR_PROVIDER_WITHOUT_EDITING_B5B_RULES"
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "rawIdentityPersisted": false
+  }
+}

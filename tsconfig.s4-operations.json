@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/operational-backup.ts",
+    "server/operational-backup-worker.ts",
+    "server/operational-routes.ts",
+    "server/operational-backup.test.ts",
+    "server/user-data-context.ts",
+    "server/operational-restore-drill.ts",
+    "server/operational-restore-routes.ts",
+    "server/operational-restore-drill.test.ts",
+    "server/operational-observability.ts",
+    "server/operational-diagnostics.ts",
+    "server/operational-alerts.ts",
+    "server/operational-alert-worker.ts",
+    "server/operational-observability-routes.ts",
+    "server/operational-observability.test.ts",
+    "server/operational-diagnostics.test.ts",
+    "server/operational-alerts.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}

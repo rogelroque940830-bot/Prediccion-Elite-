@@ -1,29 +1,56 @@
 // Bullpen Availability System (MLB)
-// Mira los últimos 3 días de bullpen para cada equipo y predice quién está disponible HOY
-// Las casas casi nunca ajustan por bullpen fatigue — aquí está nuestro edge.
+// Mira los últimos 3 días de bullpen para cada equipo y predice quién está disponible HOY.
+// P1-M3F1: la evidencia temporal solo se certifica cuando los inputs críticos
+// usados por este mismo cálculo están completos. Los fallos ya no equivalen a []/descanso.
 
 const MLB_BASE = "https://statsapi.mlb.com/api/v1";
+const MLB_BASE_V11 = "https://statsapi.mlb.com/api/v1.1";
+const BULLPEN_ROSTER_TTL_MS = 30 * 60 * 1000;
+const BULLPEN_SEASON_STATS_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const MLB_BULLPEN_EVIDENCE_SCHEMA = "courtedge-mlb-bullpen-evidence.v1" as const;
 
 export interface BullpenPitcher {
   id: number;
   name: string;
   hand?: "L" | "R";
-  // Stats season para identificar rol
   saves?: number;
   holds?: number;
   era?: number;
   whip?: number;
   k9?: number;
-  // Uso reciente
   daysWorked: { date: string; pitches: number; battersFaced: number; inningsPitched: number }[];
-  // Análisis derivado
   role: "CLOSER" | "SETUP" | "MIDDLE" | "LONG" | "UNKNOWN";
   availability: "DISPONIBLE" | "RIESGO" | "NO_DISPONIBLE";
-  availabilityProb: number;        // 0-1
+  availabilityProb: number;
   reason: string;
   totalPitchesLast3Days: number;
   consecutiveDays: number;
   lastUsed?: string;
+}
+
+export interface BullpenEvidenceProvenance {
+  schemaVersion: typeof MLB_BULLPEN_EVIDENCE_SCHEMA;
+  status: "CERTIFIED";
+  generatedAt: string;
+  roster: {
+    source: "MLB_STATS_ACTIVE_ROSTER";
+    pitchersObserved: number;
+    cacheMaxAgeSeconds: 1800;
+  };
+  seasonStats: {
+    source: "MLB_STATS_SEASON";
+    pitchersRequested: number;
+    pitchersVerified: number;
+    cacheMaxAgeSeconds: 86400;
+  };
+  recentUsage: {
+    source: "MLB_STATS_SCHEDULE_AND_FEED_LIVE";
+    lookbackDays: 3;
+    finalGamesVerified: number;
+    boxscoresVerified: number;
+  };
+  failureDisposition: "THROW_FAIL_CLOSED";
 }
 
 export interface BullpenStatus {
@@ -32,121 +59,165 @@ export interface BullpenStatus {
   closer: BullpenPitcher | null;
   setupMen: BullpenPitcher[];
   middleRelievers: BullpenPitcher[];
-  // Análisis general
   closerAvailable: boolean;
-  setupAvailable: number;     // cuántos setup hombres disponibles
-  bullpenCompromised: boolean; // top 3 todos NO disponibles
-  predictedCloser: BullpenPitcher | null;  // quién va a cerrar hoy
-  // Ajuste sugerido
-  runsAdjustment: number;     // runs extra que el rival va a anotar tarde por bullpen débil
+  setupAvailable: number;
+  bullpenCompromised: boolean;
+  predictedCloser: BullpenPitcher | null;
+  runsAdjustment: number;
   signal: string;
+  sourceStatus: "CERTIFIED";
+  generatedAt: string;
+  provenance: BullpenEvidenceProvenance;
 }
 
-// Cache
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+export interface BullpenRuntime {
+  fetchImpl?: FetchLike;
+  now?: () => Date;
+}
+
+type SourceResult<T> = {
+  data: T;
+  cacheHit: boolean;
+  cacheAgeSeconds: number;
+};
+
 const teamRosterCache: Record<number, { ts: number; data: any[] }> = {};
 const seasonStatsCache: Record<number, { ts: number; data: any }> = {};
-const usageCache: Record<number, { ts: number; data: BullpenPitcher["daysWorked"] }> = {};
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+function runtimeNow(runtime: BullpenRuntime): Date {
+  return runtime.now ? runtime.now() : new Date();
+}
+
+function runtimeFetch(runtime: BullpenRuntime): FetchLike {
+  return runtime.fetchImpl ?? ((input, init) => fetch(input, init));
+}
+
+async function fetchJson(url: string, runtime: BullpenRuntime): Promise<any> {
+  let response: Response;
+  try {
+    response = await runtimeFetch(runtime)(url, { headers: { accept: "application/json" } });
+  } catch (error: any) {
+    throw new Error(`BULLPEN_SOURCE_FETCH_FAILED:${url}:${String(error?.message || error || "UNKNOWN")}`);
+  }
+  if (!response.ok) throw new Error(`BULLPEN_SOURCE_HTTP_${response.status}:${url}`);
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(`BULLPEN_SOURCE_INVALID_JSON:${url}`);
+  }
+}
+
 function parseIP(ip: string | undefined): number {
   if (!ip) return 0;
   const parts = String(ip).split(".");
   return parseInt(parts[0]) + (parseInt(parts[1] || "0") / 3);
 }
 
-// Fechas: hoy y los 3 días previos en formato YYYY-MM-DD (Florida TZ)
-function dateNDaysAgo(n: number): string {
-  const d = new Date();
+function dateNDaysAgo(n: number, now: Date): string {
+  const d = new Date(now.getTime());
   d.setDate(d.getDate() - n);
   return d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 }
 
-// ─── GET BULLPEN ROSTER ─────────────────────────────────────────────────────
-async function getBullpenRoster(teamId: number): Promise<any[]> {
+async function getBullpenRoster(teamId: number, runtime: BullpenRuntime): Promise<SourceResult<any[]>> {
+  const nowMs = runtimeNow(runtime).getTime();
   const cached = teamRosterCache[teamId];
-  if (cached && Date.now() - cached.ts < 12 * 3600 * 1000) return cached.data;
-  try {
-    const r: any = await (await fetch(`${MLB_BASE}/teams/${teamId}/roster?rosterType=Active`)).json();
-    const pitchers = (r.roster ?? []).filter((p: any) => p.position?.code === "1");
-    // Filtrar pitchers que NO sean los probable starters (los abridores no son del bullpen normalmente)
-    teamRosterCache[teamId] = { ts: Date.now(), data: pitchers };
-    return pitchers;
-  } catch {
-    return [];
+  if (cached && nowMs - cached.ts <= BULLPEN_ROSTER_TTL_MS) {
+    return {
+      data: cached.data,
+      cacheHit: true,
+      cacheAgeSeconds: Math.max(0, Math.round((nowMs - cached.ts) / 1000)),
+    };
   }
+
+  const url = `${MLB_BASE}/teams/${teamId}/roster?rosterType=Active`;
+  const payload = await fetchJson(url, runtime);
+  if (!Array.isArray(payload?.roster)) throw new Error(`BULLPEN_ROSTER_SHAPE_INVALID:${teamId}`);
+  const pitchers = payload.roster.filter((p: any) => p.position?.code === "1" && Number.isInteger(Number(p.person?.id)));
+  if (!pitchers.length) throw new Error(`BULLPEN_ROSTER_EMPTY:${teamId}`);
+  teamRosterCache[teamId] = { ts: nowMs, data: pitchers };
+  return { data: pitchers, cacheHit: false, cacheAgeSeconds: 0 };
 }
 
-// ─── GET SEASON STATS ───────────────────────────────────────────────────────
-async function getPitcherSeasonStats(pitcherId: number): Promise<any | null> {
+async function getPitcherSeasonStats(pitcherId: number, runtime: BullpenRuntime): Promise<SourceResult<any>> {
+  const now = runtimeNow(runtime);
+  const nowMs = now.getTime();
   const cached = seasonStatsCache[pitcherId];
-  if (cached && Date.now() - cached.ts < 24 * 3600 * 1000) return cached.data;
-  try {
-    let stats: any = null;
-    const j2026: any = await (await fetch(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=2026`)).json();
-    stats = j2026.stats?.[0]?.splits?.[0]?.stat;
-    if (!stats || !stats.era) {
-      const j2025: any = await (await fetch(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=2025`)).json();
-      stats = j2025.stats?.[0]?.splits?.[0]?.stat ?? stats;
-    }
-    seasonStatsCache[pitcherId] = { ts: Date.now(), data: stats };
-    return stats;
-  } catch {
-    return null;
+  if (cached && nowMs - cached.ts <= BULLPEN_SEASON_STATS_TTL_MS) {
+    return {
+      data: cached.data,
+      cacheHit: true,
+      cacheAgeSeconds: Math.max(0, Math.round((nowMs - cached.ts) / 1000)),
+    };
   }
+
+  const currentSeason = now.getFullYear();
+  const previousSeason = currentSeason - 1;
+  const loadSeason = async (season: number) => {
+    const payload = await fetchJson(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=${season}`, runtime);
+    return payload?.stats?.[0]?.splits?.[0]?.stat ?? null;
+  };
+
+  let stats = await loadSeason(currentSeason);
+  if (!stats || !stats.era) stats = await loadSeason(previousSeason);
+  if (!stats) throw new Error(`BULLPEN_SEASON_STATS_UNAVAILABLE:${pitcherId}`);
+  seasonStatsCache[pitcherId] = { ts: nowMs, data: stats };
+  return { data: stats, cacheHit: false, cacheAgeSeconds: 0 };
 }
 
-// ─── GET TEAM GAME LOG (last N days) ────────────────────────────────────────
-// Trae las gamePks de los últimos 3 días para un equipo
-async function getRecentGamePks(teamId: number, daysBack: number = 3): Promise<{ gamePk: number; date: string }[]> {
-  const today = dateNDaysAgo(0);
-  const start = dateNDaysAgo(daysBack);
-  try {
-    const r: any = await (await fetch(`${MLB_BASE}/schedule?sportId=1&teamId=${teamId}&startDate=${start}&endDate=${today}`)).json();
-    const games: { gamePk: number; date: string }[] = [];
-    for (const dt of (r.dates ?? [])) {
-      for (const g of (dt.games ?? [])) {
-        if (g.status?.codedGameState === "F" || g.status?.detailedState === "Final") {
-          games.push({ gamePk: g.gamePk, date: dt.date });
-        }
+async function getRecentGamePks(
+  teamId: number,
+  daysBack: number,
+  runtime: BullpenRuntime,
+): Promise<{ gamePk: number; date: string }[]> {
+  const now = runtimeNow(runtime);
+  const today = dateNDaysAgo(0, now);
+  const start = dateNDaysAgo(daysBack, now);
+  const payload = await fetchJson(`${MLB_BASE}/schedule?sportId=1&teamId=${teamId}&startDate=${start}&endDate=${today}`, runtime);
+  if (!Array.isArray(payload?.dates)) throw new Error(`BULLPEN_RECENT_SCHEDULE_SHAPE_INVALID:${teamId}`);
+  const games: { gamePk: number; date: string }[] = [];
+  for (const dt of payload.dates) {
+    for (const game of (Array.isArray(dt?.games) ? dt.games : [])) {
+      if (game.status?.codedGameState === "F" || game.status?.detailedState === "Final") {
+        const gamePk = Number(game.gamePk);
+        if (!Number.isInteger(gamePk) || gamePk <= 0) throw new Error(`BULLPEN_RECENT_GAME_PK_INVALID:${teamId}`);
+        games.push({ gamePk, date: String(dt.date) });
       }
     }
-    return games;
-  } catch {
-    return [];
   }
+  return games;
 }
 
-// ─── GET BULLPEN USAGE FROM BOXSCORE ────────────────────────────────────────
-// Para un gamePk dado, devuelve qué pitchers del equipo lanzaron y cuántos pitches
-async function getBoxscorePitchers(gamePk: number, teamId: number): Promise<{ id: number; name: string; pitches: number; bf: number; ip: number }[]> {
-  try {
-    const j: any = await (await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`)).json();
-    const boxscore = j.liveData?.boxscore ?? {};
-    for (const side of ["home", "away"]) {
-      const team = boxscore.teams?.[side] ?? {};
-      if (team.team?.id === teamId) {
-        const pitcherIds: number[] = team.pitchers ?? [];
-        const players = team.players ?? {};
-        return pitcherIds.map((pid: number) => {
-          const p = players[`ID${pid}`] ?? {};
-          const stats = p.stats?.pitching ?? {};
-          return {
-            id: pid,
-            name: p.person?.fullName ?? "?",
-            pitches: parseInt(stats.pitchesThrown ?? "0") || 0,
-            bf: parseInt(stats.battersFaced ?? "0") || 0,
-            ip: parseIP(stats.inningsPitched),
-          };
-        });
-      }
-    }
-    return [];
-  } catch {
-    return [];
+async function getBoxscorePitchers(
+  gamePk: number,
+  teamId: number,
+  runtime: BullpenRuntime,
+): Promise<{ id: number; name: string; pitches: number; bf: number; ip: number }[]> {
+  const payload = await fetchJson(`${MLB_BASE_V11}/game/${gamePk}/feed/live`, runtime);
+  const boxscore = payload?.liveData?.boxscore;
+  if (!boxscore?.teams) throw new Error(`BULLPEN_BOXSCORE_SHAPE_INVALID:${gamePk}`);
+  for (const side of ["home", "away"] as const) {
+    const team = boxscore.teams?.[side];
+    if (team?.team?.id !== teamId) continue;
+    const pitcherIds = Array.isArray(team.pitchers) ? team.pitchers : null;
+    if (!pitcherIds?.length) throw new Error(`BULLPEN_BOXSCORE_PITCHERS_MISSING:${gamePk}:${teamId}`);
+    const players = team.players ?? {};
+    return pitcherIds.map((pid: number) => {
+      const player = players[`ID${pid}`] ?? {};
+      const stats = player.stats?.pitching ?? {};
+      return {
+        id: pid,
+        name: player.person?.fullName ?? "?",
+        pitches: parseInt(stats.pitchesThrown ?? "0") || 0,
+        bf: parseInt(stats.battersFaced ?? "0") || 0,
+        ip: parseIP(stats.inningsPitched),
+      };
+    });
   }
+  throw new Error(`BULLPEN_TEAM_NOT_FOUND_IN_BOXSCORE:${gamePk}:${teamId}`);
 }
 
-// ─── DETERMINE ROLE ─────────────────────────────────────────────────────────
 function determineRole(stats: any): BullpenPitcher["role"] {
   if (!stats) return "UNKNOWN";
   const saves = parseInt(stats.saves ?? "0") || 0;
@@ -161,25 +232,21 @@ function determineRole(stats: any): BullpenPitcher["role"] {
   return "UNKNOWN";
 }
 
-// ─── ANALYZE AVAILABILITY ───────────────────────────────────────────────────
-function analyzeAvailability(daysWorked: BullpenPitcher["daysWorked"]): {
+function analyzeAvailability(daysWorked: BullpenPitcher["daysWorked"], now: Date): {
   availability: BullpenPitcher["availability"];
   availabilityProb: number;
   reason: string;
   consecutiveDays: number;
   totalPitchesLast3Days: number;
 } {
-  const today = dateNDaysAgo(0);
-  const yesterday = dateNDaysAgo(1);
-  const dayBefore = dateNDaysAgo(2);
-
-  const yesterdayWork = daysWorked.find(d => d.date === yesterday);
-  const dayBeforeWork = daysWorked.find(d => d.date === dayBefore);
-  const threeDaysAgoWork = daysWorked.find(d => d.date === dateNDaysAgo(3));
-
+  const yesterday = dateNDaysAgo(1, now);
+  const dayBefore = dateNDaysAgo(2, now);
+  const threeDaysAgo = dateNDaysAgo(3, now);
+  const yesterdayWork = daysWorked.find((d) => d.date === yesterday);
+  const dayBeforeWork = daysWorked.find((d) => d.date === dayBefore);
+  const threeDaysAgoWork = daysWorked.find((d) => d.date === threeDaysAgo);
   const totalPitchesLast3Days = (yesterdayWork?.pitches ?? 0) + (dayBeforeWork?.pitches ?? 0) + (threeDaysAgoWork?.pitches ?? 0);
 
-  // Consecutive days
   let consecutive = 0;
   if (yesterdayWork && yesterdayWork.pitches > 0) {
     consecutive = 1;
@@ -189,7 +256,6 @@ function analyzeAvailability(daysWorked: BullpenPitcher["daysWorked"]): {
     }
   }
 
-  // Reglas
   if (consecutive >= 3) {
     return {
       availability: "NO_DISPONIBLE",
@@ -200,54 +266,46 @@ function analyzeAvailability(daysWorked: BullpenPitcher["daysWorked"]): {
     };
   }
 
-  const yp = yesterdayWork?.pitches ?? 0;
-
-  if (yp >= 36) {
+  const yesterdayPitches = yesterdayWork?.pitches ?? 0;
+  if (yesterdayPitches >= 36) {
     return {
       availability: "NO_DISPONIBLE",
       availabilityProb: 0.15,
-      reason: `Lanzó ${yp} pitches ayer (extended outing)`,
+      reason: `Lanzó ${yesterdayPitches} pitches ayer (extended outing)`,
       consecutiveDays: consecutive,
       totalPitchesLast3Days,
     };
   }
-
-  if (yp >= 26) {
-    const probBase = 0.50;
-    const prob = consecutive === 2 ? Math.max(0.20, probBase - 0.30) : probBase;
+  if (yesterdayPitches >= 26) {
+    const probability = consecutive === 2 ? 0.20 : 0.50;
     return {
-      availability: prob < 0.40 ? "NO_DISPONIBLE" : "RIESGO",
-      availabilityProb: prob,
-      reason: `Lanzó ${yp} pitches ayer${consecutive === 2 ? " + back-to-back" : ""}`,
+      availability: probability < 0.40 ? "NO_DISPONIBLE" : "RIESGO",
+      availabilityProb: probability,
+      reason: `Lanzó ${yesterdayPitches} pitches ayer${consecutive === 2 ? " + back-to-back" : ""}`,
       consecutiveDays: consecutive,
       totalPitchesLast3Days,
     };
   }
-
-  if (yp >= 16) {
-    const probBase = 0.75;
-    const prob = consecutive === 2 ? Math.max(0.40, probBase - 0.30) : probBase;
+  if (yesterdayPitches >= 16) {
+    const probability = consecutive === 2 ? 0.45 : 0.75;
     return {
       availability: consecutive === 2 ? "RIESGO" : "DISPONIBLE",
-      availabilityProb: prob,
-      reason: `Lanzó ${yp} pitches ayer${consecutive === 2 ? " + back-to-back" : ""}`,
+      availabilityProb: probability,
+      reason: `Lanzó ${yesterdayPitches} pitches ayer${consecutive === 2 ? " + back-to-back" : ""}`,
       consecutiveDays: consecutive,
       totalPitchesLast3Days,
     };
   }
-
-  if (yp >= 1) {
-    const probBase = 0.90;
-    const prob = consecutive === 2 ? Math.max(0.55, probBase - 0.30) : probBase;
+  if (yesterdayPitches >= 1) {
+    const probability = consecutive === 2 ? 0.60 : 0.90;
     return {
       availability: "DISPONIBLE",
-      availabilityProb: prob,
-      reason: `Lanzó ${yp} pitches ayer (1 inning ligero)${consecutive === 2 ? " + back-to-back" : ""}`,
+      availabilityProb: probability,
+      reason: `Lanzó ${yesterdayPitches} pitches ayer (1 inning ligero)${consecutive === 2 ? " + back-to-back" : ""}`,
       consecutiveDays: consecutive,
       totalPitchesLast3Days,
     };
   }
-
   return {
     availability: "DISPONIBLE",
     availabilityProb: 0.95,
@@ -257,108 +315,102 @@ function analyzeAvailability(daysWorked: BullpenPitcher["daysWorked"]): {
   };
 }
 
-// ─── MAIN: GET BULLPEN STATUS ───────────────────────────────────────────────
-export async function getBullpenStatus(teamId: number, teamName: string): Promise<BullpenStatus> {
-  // 1. Roster + season stats
-  const roster = await getBullpenRoster(teamId);
+export async function getBullpenStatus(
+  teamId: number,
+  teamName: string,
+  runtime: BullpenRuntime = {},
+): Promise<BullpenStatus> {
+  const rosterResult = await getBullpenRoster(teamId, runtime);
+  const roster = rosterResult.data.slice(0, 18);
 
-  // 2. Para cada pitcher, traer season stats y construir BullpenPitcher
-  const allPitchers: BullpenPitcher[] = await Promise.all(
-    roster.slice(0, 18).map(async (p: any) => {
-      const pid = p.person?.id;
-      const name = p.person?.fullName ?? "?";
-      const stats = await getPitcherSeasonStats(pid);
-      const role = determineRole(stats);
-      // No incluir abridores (gamesStarted alto)
-      const gs = parseInt(stats?.gamesStarted ?? "0") || 0;
-      const ip = parseIP(stats?.inningsPitched);
-      const isStarter = gs >= 5 && ip >= 30 && (ip / Math.max(gs, 1)) >= 4.5;
-      if (isStarter) return null;
-      return {
-        id: pid,
-        name,
-        saves: parseInt(stats?.saves ?? "0") || 0,
-        holds: parseInt(stats?.holds ?? "0") || 0,
-        era: parseFloat(stats?.era) || undefined,
-        whip: parseFloat(stats?.whip) || undefined,
-        k9: parseFloat(stats?.strikeoutsPer9Inn) || undefined,
-        role,
-        daysWorked: [],
-        availability: "DISPONIBLE",
-        availabilityProb: 0.95,
-        reason: "",
-        totalPitchesLast3Days: 0,
-        consecutiveDays: 0,
-      } as BullpenPitcher;
-    }),
-  ).then(arr => arr.filter(Boolean) as BullpenPitcher[]);
+  const pitcherEntries = await Promise.all(roster.map(async (item: any) => {
+    const pitcherId = Number(item.person?.id);
+    if (!Number.isInteger(pitcherId) || pitcherId <= 0) throw new Error(`BULLPEN_PITCHER_ID_INVALID:${teamId}`);
+    const statsResult = await getPitcherSeasonStats(pitcherId, runtime);
+    const stats = statsResult.data;
+    const gamesStarted = parseInt(stats?.gamesStarted ?? "0") || 0;
+    const inningsPitched = parseIP(stats?.inningsPitched);
+    const isStarter = gamesStarted >= 5 && inningsPitched >= 30 && (inningsPitched / Math.max(gamesStarted, 1)) >= 4.5;
+    if (isStarter) return null;
+    return {
+      id: pitcherId,
+      name: item.person?.fullName ?? "?",
+      saves: parseInt(stats?.saves ?? "0") || 0,
+      holds: parseInt(stats?.holds ?? "0") || 0,
+      era: parseFloat(stats?.era) || undefined,
+      whip: parseFloat(stats?.whip) || undefined,
+      k9: parseFloat(stats?.strikeoutsPer9Inn) || undefined,
+      role: determineRole(stats),
+      daysWorked: [],
+      availability: "DISPONIBLE",
+      availabilityProb: 0.95,
+      reason: "",
+      totalPitchesLast3Days: 0,
+      consecutiveDays: 0,
+    } as BullpenPitcher;
+  }));
+  const allPitchers = pitcherEntries.filter((value): value is BullpenPitcher => value != null);
+  if (!allPitchers.length) throw new Error(`BULLPEN_RELIEVERS_EMPTY:${teamId}`);
 
-  // 3. Traer uso de los últimos 3 días
-  const recentGames = await getRecentGamePks(teamId, 3);
-  for (const game of recentGames) {
-    const pitchersUsed = await getBoxscorePitchers(game.gamePk, teamId);
-    for (const used of pitchersUsed) {
-      const pitcher = allPitchers.find(p => p.id === used.id);
-      if (pitcher) {
-        pitcher.daysWorked.push({
-          date: game.date,
-          pitches: used.pitches,
-          battersFaced: used.bf,
-          inningsPitched: used.ip,
-        });
-      }
+  const recentGames = await getRecentGamePks(teamId, 3, runtime);
+  const usage = await Promise.all(recentGames.map(async (game) => ({
+    game,
+    pitchers: await getBoxscorePitchers(game.gamePk, teamId, runtime),
+  })));
+  for (const item of usage) {
+    for (const used of item.pitchers) {
+      const pitcher = allPitchers.find((candidate) => candidate.id === used.id);
+      if (!pitcher) continue;
+      pitcher.daysWorked.push({
+        date: item.game.date,
+        pitches: used.pitches,
+        battersFaced: used.bf,
+        inningsPitched: used.ip,
+      });
     }
   }
 
-  // 4. Analizar disponibilidad de cada uno
-  for (const p of allPitchers) {
-    const analysis = analyzeAvailability(p.daysWorked);
-    p.availability = analysis.availability;
-    p.availabilityProb = analysis.availabilityProb;
-    p.reason = analysis.reason;
-    p.consecutiveDays = analysis.consecutiveDays;
-    p.totalPitchesLast3Days = analysis.totalPitchesLast3Days;
-    if (p.daysWorked.length > 0) {
-      const sorted = [...p.daysWorked].sort((a, b) => b.date.localeCompare(a.date));
-      p.lastUsed = sorted[0]?.date;
+  const now = runtimeNow(runtime);
+  for (const pitcher of allPitchers) {
+    const analysis = analyzeAvailability(pitcher.daysWorked, now);
+    pitcher.availability = analysis.availability;
+    pitcher.availabilityProb = analysis.availabilityProb;
+    pitcher.reason = analysis.reason;
+    pitcher.consecutiveDays = analysis.consecutiveDays;
+    pitcher.totalPitchesLast3Days = analysis.totalPitchesLast3Days;
+    if (pitcher.daysWorked.length > 0) {
+      const sorted = [...pitcher.daysWorked].sort((left, right) => right.date.localeCompare(left.date));
+      pitcher.lastUsed = sorted[0]?.date;
     }
   }
 
-  // 5. Identificar closer y setup men
-  const closer = [...allPitchers].sort((a, b) => (b.saves ?? 0) - (a.saves ?? 0))[0] ?? null;
-  if (closer && (closer.saves ?? 0) === 0) {
-    // Sin closer claro
-  }
+  const closer = [...allPitchers].sort((left, right) => (right.saves ?? 0) - (left.saves ?? 0))[0] ?? null;
   const setupMen = allPitchers
-    .filter(p => p.id !== closer?.id && p.role === "SETUP")
-    .sort((a, b) => (b.holds ?? 0) - (a.holds ?? 0))
+    .filter((pitcher) => pitcher.id !== closer?.id && pitcher.role === "SETUP")
+    .sort((left, right) => (right.holds ?? 0) - (left.holds ?? 0))
     .slice(0, 3);
   const middleRelievers = allPitchers
-    .filter(p => p.id !== closer?.id && !setupMen.includes(p))
+    .filter((pitcher) => pitcher.id !== closer?.id && !setupMen.includes(pitcher))
     .slice(0, 4);
 
-  // 6. Análisis general
   const closerAvailable = closer ? closer.availability !== "NO_DISPONIBLE" : false;
-  const setupAvailable = setupMen.filter(p => p.availability !== "NO_DISPONIBLE").length;
+  const setupAvailable = setupMen.filter((pitcher) => pitcher.availability !== "NO_DISPONIBLE").length;
   const bullpenCompromised = !closerAvailable && setupAvailable === 0;
 
-  // 7. Predecir quién cerrará
   let predictedCloser: BullpenPitcher | null = null;
   if (closer && closer.availability === "DISPONIBLE") {
     predictedCloser = closer;
   } else {
-    // Buscar el setup man con mejor stats que esté disponible
-    const candidates = [...setupMen, ...middleRelievers].filter(p => p.availability === "DISPONIBLE");
-    candidates.sort((a, b) => (a.era ?? 5.0) - (b.era ?? 5.0));
+    const candidates = [...setupMen, ...middleRelievers].filter((pitcher) => pitcher.availability === "DISPONIBLE");
+    candidates.sort((left, right) => (left.era ?? 5.0) - (right.era ?? 5.0));
     predictedCloser = candidates[0] ?? null;
   }
 
-  // 8. Calcular ajuste de runs
   let runsAdjustment = 0;
   let signal = "";
   if (bullpenCompromised) {
     runsAdjustment = 0.7;
-    signal = `🚨 Bullpen comprometido — top 3 (closer + 2 setup) NO disponibles. Rival anotará más en 7-9.`;
+    signal = "🚨 Bullpen comprometido — top 3 (closer + 2 setup) NO disponibles. Rival anotará más en 7-9.";
   } else if (!closerAvailable && setupAvailable <= 1) {
     runsAdjustment = 0.5;
     signal = `⚠️ Closer NO disponible y solo ${setupAvailable} setup disponible. Cerrará probablemente ${predictedCloser?.name ?? "relevista débil"}.`;
@@ -372,6 +424,7 @@ export async function getBullpenStatus(teamId: number, teamName: string): Promis
     signal = `✅ Bullpen completo. ${closer?.name ?? "Closer"} disponible.`;
   }
 
+  const generatedAt = runtimeNow(runtime).toISOString();
   return {
     teamId,
     teamName,
@@ -384,5 +437,35 @@ export async function getBullpenStatus(teamId: number, teamName: string): Promis
     predictedCloser,
     runsAdjustment,
     signal,
+    sourceStatus: "CERTIFIED",
+    generatedAt,
+    provenance: {
+      schemaVersion: MLB_BULLPEN_EVIDENCE_SCHEMA,
+      status: "CERTIFIED",
+      generatedAt,
+      roster: {
+        source: "MLB_STATS_ACTIVE_ROSTER",
+        pitchersObserved: roster.length,
+        cacheMaxAgeSeconds: 1800,
+      },
+      seasonStats: {
+        source: "MLB_STATS_SEASON",
+        pitchersRequested: roster.length,
+        pitchersVerified: roster.length,
+        cacheMaxAgeSeconds: 86400,
+      },
+      recentUsage: {
+        source: "MLB_STATS_SCHEDULE_AND_FEED_LIVE",
+        lookbackDays: 3,
+        finalGamesVerified: recentGames.length,
+        boxscoresVerified: usage.length,
+      },
+      failureDisposition: "THROW_FAIL_CLOSED",
+    },
   };
+}
+
+export function resetMlbBullpenCachesForTests(): void {
+  for (const key of Object.keys(teamRosterCache)) delete teamRosterCache[Number(key)];
+  for (const key of Object.keys(seasonStatsCache)) delete seasonStatsCache[Number(key)];
 }

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "p1-m2b-four-of-five-advanced-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "af6a711e5f73d84395cdbb86d13501afd6ebf48c",
+    "researchPr": 403,
+    "workflowRun": 31272186139,
+    "artifactId": 9025940449,
+    "rawIdentityPersisted": false
+  },
+  "sample": {
+    "market": "ML",
+    "sampledPregameGames": 3,
+    "READY_FINAL": 0,
+    "READY_PROVISIONAL": 3
+  },
+  "advancedFactors": {
+    "state": "DEGRADED",
+    "quality": "ADVANCED_COMPONENT_NOT_CERTIFIED",
+    "certifiedComponentsObserved": "4/5",
+    "consistentAcrossSamples": true,
+    "components": {
+      "QUALITY": { "certified": "3/3", "fresh": "3/3", "timed": "3/3" },
+      "STATCAST_MATCHUP": { "certified": "0/3", "sourceStatus": "DEGRADED", "fresh": "0/3", "timed": "0/3" },
+      "DISCIPLINE_SPEED": { "certified": "3/3", "fresh": "3/3", "timed": "3/3" },
+      "SOS": { "certified": "3/3", "fresh": "3/3", "timed": "3/3" },
+      "ADVANCED_CONTEXT": { "certified": "3/3", "fresh": "3/3", "timed": "3/3" }
+    }
+  },
+  "injuries": {
+    "state": "DEGRADED",
+    "observed": "3/3",
+    "sourceStatus": "PARTIAL+PARTIAL"
+  },
+  "interpretation": {
+    "qualityWiringValidatedLive": true,
+    "advancedContextWiringValidatedLive": true,
+    "disciplineSpeedWiringStillValidatedLive": true,
+    "sosWiringStillValidatedLive": true,
+    "advancedCoverageImprovedFrom": "2/5",
+    "advancedCoverageImprovedTo": "4/5",
+    "onlyRemainingAdvancedComponent": "STATCAST_MATCHUP",
+    "readyFinalObserved": false,
+    "gateShouldBeRelaxed": false,
+    "nextAction": "DIAGNOSE_STATCAST_MATCHUP_STRICT_CERTIFIER_BLOCKERS_WITHOUT_RELAXING_CERTIFICATION"
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "sportsbookCallsPerformedByResearchRunner": 0,
+    "rawIdentityPersisted": false
+  }
+}

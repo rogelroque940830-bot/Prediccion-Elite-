@@ -1,0 +1,114 @@
+name: Validate P0 V16 FULL13 Live Parity Gate
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-full13-live-parity-state.ts'
+      - 'scripts/p0-full13-live-parity-replay.ts'
+      - 'research/p0-full13-live-parity-contract.json'
+      - '.github/workflows/validate-p0-v16-full13-live-parity-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+
+      - name: Lock FULL13 contract and canonical artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const c=require('./research/p0-full13-live-parity-contract.json');
+          const expected=['team_rd10_diff','team_win10_diff','starter_kbb_adv','team_ra10_adv','lineup_exposure_rate_adv','starter_runrisk_adv','team_rs10_diff','starter_hr_adv','min_probable_prior_bf','lineup_continuity_rate_adv','combined_starter_kbb','combined_team_rs10','combined_team_ra10'];
+          if (JSON.stringify(c.features)!==JSON.stringify(expected)) throw new Error('FULL13_FEATURE_SET_DRIFT');
+          if (c.formulaLock.starterShrinkagePriorBattersFaced!==72) throw new Error('FULL13_SHRINKAGE_DRIFT');
+          if (c.formulaLock.sameDateHistoryAllowed!==false || c.formulaLock.seasonHistoryReset!==true) throw new Error('FULL13_TEMPORAL_BOUNDARY_DRIFT');
+          if (c.policy.frozenClassifierLiveInputAllowedBeforeParityPass!==false) throw new Error('FULL13_PREMATURE_CLASSIFIER_UNLOCK');
+          NODE
+          actual=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31659518059/artifacts" --jq '.artifacts[] | select(.name=="p0-step12v3-expanded-regimes") | .digest')
+          test "$actual" = "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+          echo "FULL13_CANONICAL_ARTIFACT_LOCKED=$actual"
+
+      - name: Unit-test FULL13 formula contract
+        run: npx tsx --test server/mlb-full13-live-feature-builder.test.ts
+
+      - name: Download canonical V3 evidence pack
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3-canonical
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Replay FULL13 runtime builder against canonical historical rows
+        run: >-
+          npx tsx scripts/p0-full13-live-parity-replay.ts
+          --root artifacts/p0-step12v3-canonical
+          --contract research/p0-full13-live-parity-contract.json
+          --out artifacts/p0-full13-live-parity/full13-live-parity-report.json
+
+      - name: Enforce 13-of-13 zero-mismatch gate
+        run: |
+          node - <<'NODE'
+          const r=require('./artifacts/p0-full13-live-parity/full13-live-parity-report.json');
+          if (r.classification!=='FULL13_LIVE_PARITY_GATE_PASS') throw new Error('FULL13_PARITY_NOT_PASS');
+          if (r.rowsCompared<10000) throw new Error('FULL13_PARITY_INSUFFICIENT_ROWS');
+          if (r.mismatchCount!==0) throw new Error('FULL13_PARITY_MISMATCH');
+          if (Object.keys(r.featureTotals).length!==13) throw new Error('FULL13_FEATURE_COUNT_DRIFT');
+          for (const [name,s] of Object.entries(r.featureTotals)) {
+            if (s.mismatches!==0) throw new Error(`FULL13_FEATURE_MISMATCH:${name}`);
+            if (s.checks!==r.rowsCompared) throw new Error(`FULL13_FEATURE_COVERAGE_DRIFT:${name}`);
+          }
+          if (r.policy.frozenClassifierLiveInputUnlocked!==true) throw new Error('FULL13_CLASSIFIER_NOT_UNLOCKED');
+          if (r.policy.priceInputsUsed!==false || r.policy.sameDateHistoryAllowed!==false) throw new Error('FULL13_BOUNDARY_DRIFT');
+          if (r.policy.recommendationChanged!==false || r.policy.automaticBetPlacement!==false) throw new Error('FULL13_SAFETY_DRIFT');
+          console.log(JSON.stringify({classification:r.classification,rowsCompared:r.rowsCompared,featureChecks:r.featureChecks,featureTotals:r.featureTotals},null,2));
+          NODE
+
+      - name: Preserve classifier, C4 and backend regressions
+        run: |
+          npx tsx --test server/mlb-frozen-a-plus-classifier.test.ts server/mlb-c4-live-feature-builder.test.ts
+          npx esbuild server/mlb-full13-live-feature-builder.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/full13-builder.cjs
+          npm run build:backend
+
+      - name: Verify exact parity slice scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-v16-full13-live-parity-gate.yml' \
+            'research/p0-full13-live-parity-contract.json' \
+            'scripts/p0-full13-live-parity-replay.ts' \
+            'scripts/p0-full13-live-parity-state.ts' | sort)
+          [[ "$changed" == "$expected" ]]
+
+      - name: Upload FULL13 parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-full13-live-parity-gate
+          path: artifacts/p0-full13-live-parity/
+          if-no-files-found: warn
+          retention-days: 30

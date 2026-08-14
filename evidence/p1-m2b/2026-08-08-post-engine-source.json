@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "p1-m2b-post-engine-source-evidence.v1",
+  "generatedAt": "2026-08-08",
+  "chainOfCustody": {
+    "deployedCommit": "76f11bea340812a5209d3c37e497daa17b4bf55e",
+    "researchPr": 409,
+    "workflowRun": 31273299436,
+    "artifactId": 9026264408,
+    "rawIdentityPersisted": false
+  },
+  "sample": {
+    "sampledPregameGames": 3,
+    "measuredLineupSides": 6,
+    "confirmedLineupSides": 5
+  },
+  "engineCoverage": {
+    "priorDirectTotal": 13,
+    "postPhase1DirectTotal": 49,
+    "postPhase1ProxyTotal": 5,
+    "nineOfNineDirectSides": 3
+  },
+  "strictCertifier": {
+    "CERTIFIED": 0,
+    "DEGRADED": 3,
+    "generatedAtObserved": false,
+    "failClosedPreserved": true,
+    "advancedReproductionReached": true,
+    "advancedReproductionBlockerObserved": "STATCAST_CERT_STARTER_XWOBA_MISMATCH"
+  },
+  "interpretation": {
+    "engineSourceAcquisitionImprovedDirectCoverage": true,
+    "phase1CreatedFalseCertification": false,
+    "phase2Needed": true,
+    "phase2Action": "ALIGN_STRICT_CERTIFIER_BATTER_SOURCE_WITH_SHARED_OFFICIAL_SAVANT_SOURCE_WHILE_PRESERVING_9_OF_9_DIRECT_AND_EXACT_REPRODUCTION_RULES"
+  },
+  "safety": {
+    "writesPerformed": 0,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "rawIdentityPersisted": false
+  }
+}

@@ -1,0 +1,105 @@
+name: Validate P0 MLB Operating Envelope
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-mlb-operating-envelope.yml'
+      - 'server/mlb-operating-envelope.ts'
+      - 'server/mlb-operating-envelope.test.ts'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-market-model-adapters.ts'
+      - 'server/mlb-market-discovery.ts'
+      - 'server/mlb-intrinsic-edge.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-operating-envelope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Falsify Step 11 operating-envelope boundaries
+        run: |
+          npx tsx --test server/mlb-operating-envelope.test.ts
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-market-model-adapters.test.ts
+
+      - name: Type-check Step 11 boundary
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-operating-envelope.ts server/mlb-operating-envelope.test.ts
+
+      - name: Preserve modular backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Freeze evidence-only Elite boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          envelope='server/mlb-operating-envelope.ts'
+          tests='server/mlb-operating-envelope.test.ts'
+          discovery='server/mlb-market-discovery.ts'
+          edge='server/mlb-market-edge.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|process\.env' "$envelope"
+          ! grep -nE 'BET_ELITE|recommend(ed|s)?Bet|stakeAmount|kelly' "$envelope"
+
+          grep -F 'courtedge-p0-mlb-operating-envelope.v1' "$envelope"
+          grep -F '"ELITE_EVIDENCE_CANDIDATE"' "$envelope"
+          grep -F 'positiveEvRequired: true' "$envelope"
+          grep -F 'const positiveEv = market.classification === "POSITIVE_EV";' "$envelope"
+          grep -F 'upstreamOperatingEnvelopeEligibilityRequired: true' "$envelope"
+          grep -F 'readyModelRequired: true' "$envelope"
+          grep -F 'freshExecutablePriceRequired: true' "$envelope"
+          grep -F 'intrinsicResearchEliteThesisRequiredUpstream: true' "$envelope"
+          grep -F 'noUpstreamBlockersRequired: true' "$envelope"
+          grep -F 'positiveExpectedValueMustBeFinite: true' "$envelope"
+          grep -F 'fixedEvThresholdApplied: false' "$envelope"
+          grep -F 'fixedProbabilityThresholdApplied: false' "$envelope"
+          grep -F 'referenceConsensusCanCreateEliteCandidate: false' "$envelope"
+          grep -F 'referenceConsensusCanVetoEliteCandidate: false' "$envelope"
+          grep -F 'referenceConsensusRemainsDiagnosticOnly: true' "$envelope"
+          grep -F 'marketRankingProduced: false' "$envelope"
+          grep -F 'numericEliteScoreProduced: false' "$envelope"
+          grep -F 'outcomeProfitabilityCertified: false' "$envelope"
+          grep -F 'finalBetRecommendationProduced: false' "$envelope"
+          grep -F 'betEliteLabelProduced: false' "$envelope"
+          grep -F 'stakeCalculated: false' "$envelope"
+          grep -F 'callsTheOddsApi: false' "$envelope"
+          grep -F 'automaticBetPlacement: false' "$envelope"
+          grep -F 'realFinancialExposure: 0' "$envelope"
+
+          # Upstream proof: planned markets already require research-Elite thesis eligibility.
+          grep -F '.filter((thesis) => thesis.researchEliteEligible && thesis.marketSearchIntent === intent)' "$discovery"
+          grep -F 'if (!projection.researchEliteCandidate || !projection.marketSearchIntents.includes(intent)) return null;' "$discovery"
+
+          # Step 9 remains the sole raw positive-EV producer and does not itself apply Elite.
+          grep -F 'eligibleForOperatingEnvelope: boolean' "$edge"
+          grep -F 'operatingEnvelopeApplied: false' "$edge"
+          grep -F 'eliteLabelProduced: false' "$edge"
+
+          grep -F 'positive EV with intact certified upstream evidence becomes only an elite evidence candidate' "$tests"
+          grep -F 'positive EV cannot bypass upstream operating-envelope eligibility' "$tests"
+          grep -F 'upstream classification is independently required even when all other candidate fields look positive' "$tests"
+          grep -F 'source run, game and exact market identity are preserved into the operating envelope' "$tests"
+          grep -F 'reference consensus remains diagnostic and cannot create or veto an elite evidence candidate' "$tests"
+          grep -F 'no fixed EV, probability, numeric Elite score, stake or automatic bet is introduced' "$tests"
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"

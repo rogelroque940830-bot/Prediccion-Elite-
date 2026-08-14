@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/operational-sla-alerts.ts",
+    "server/operational-sla-alerts.test.ts",
+    "server/operational-sla-alert-routes.ts",
+    "server/operational-sla-alert-worker.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

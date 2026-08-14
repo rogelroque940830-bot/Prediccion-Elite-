@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-market-probability-contract.ts",
+    "server/mlb-market-calibration.ts",
+    "server/mlb-market-run-distribution.ts",
+    "server/mlb-market-historical-dataset.ts",
+    "server/mlb-market-historical-fit.ts",
+    "server/mlb-market-team-strength.ts",
+    "server/mlb-market-team-strength-inference.ts",
+    "server/mlb-market-pregame-lineup-history.ts",
+    "server/mlb-market-lineup-asof.ts",
+    "server/mlb-market-lineup-asof.test.ts",
+    "server/mlb-market-lineup-inference.ts",
+    "server/mlb-market-lineup-inference.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

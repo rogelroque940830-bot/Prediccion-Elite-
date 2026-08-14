@@ -1,0 +1,107 @@
+name: Validate P1-M2B Statcast Certifier Source Alignment
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-statcast-certifier-source-alignment-routes.ts'
+      - 'server/mlb-statcast-certifier-source-alignment-routes.test.ts'
+      - 'server/mlb-p1-pregame-readiness-routes.ts'
+      - 'docs/P1_M2B_STATCAST_CERTIFIER_SOURCE_ALIGNMENT.md'
+      - '.github/workflows/validate-p1-m2b-statcast-certifier-source-alignment.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-statcast-certifier-source-alignment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck successor surface
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --esModuleInterop --skipLibCheck --types node server/mlb-statcast-certifier-source-alignment-routes.ts server/mlb-statcast-certifier-source-alignment-routes.test.ts server/mlb-p1-pregame-readiness-routes.ts
+      - name: Run successor source-alignment falsifications
+        run: |
+          npx tsx --test server/mlb-statcast-certifier-source-alignment-routes.test.ts
+          npx tsx --test server/mlb-statcast-savant-source.test.ts
+          npx tsx --test server/mlb-statcast-matchup-certifier.test.ts
+          npx tsx --test server/mlb-statcast-matchup-identity-routes.test.ts
+          npx tsx --test server/mlb-statcast-matchup-coverage.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Verify modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify unchanged strict-certification boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='server/mlb-statcast-certifier-source-alignment-routes.ts'
+          readiness='server/mlb-p1-pregame-readiness-routes.ts'
+          testfile='server/mlb-statcast-certifier-source-alignment-routes.test.ts'
+          docs='docs/P1_M2B_STATCAST_CERTIFIER_SOURCE_ALIGNMENT.md'
+
+          grep -F 'createStatcastIdentityRouteService' "$module"
+          grep -F 'registerMlbStatcastCertifierSourceAlignmentMiddleware(app);' "$readiness"
+          grep -F '9/9 DIRECT batter coverage' "$docs"
+          grep -F 'exact reproduction' "$docs"
+
+          if grep -Fq 'maskInclusiveBatterCsvForQualifiedTeamProxy' "$module"; then
+            grep -F 'coverage: role === "batter" ? batterCoverage : "QUALIFIED"' "$module"
+            grep -F 'maskInclusiveBatterCsvForQualifiedTeamProxy' "$module"
+            grep -F 'Inclusive-only batter rows remain available for DIRECT but lose TEAM_PROXY eligibility' "$testfile"
+            grep -F 'Qualified batter source failure fails closed' "$testfile"
+          else
+            grep -F 'coverage: role === "batter" ? "INCLUSIVE" : "QUALIFIED"' "$module"
+            grep -F 'source alignment must not mutate engine numbers' "$testfile"
+          fi
+
+          ! grep -Ei 'appendPrediction|appendSettlement|placeBet|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticPromotionAllowed:[[:space:]]*true' "$module" "$readiness"
+      - name: Verify exact protected successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+
+          original=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-statcast-certifier-source-alignment.yml' \
+            'docs/P1_M2B_STATCAST_CERTIFIER_SOURCE_ALIGNMENT.md' \
+            'server/mlb-p1-pregame-readiness-routes.ts' \
+            'server/mlb-statcast-certifier-source-alignment-routes.test.ts' \
+            'server/mlb-statcast-certifier-source-alignment-routes.ts' | sort)
+
+          split_provider=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-statcast-split-source-provider.yml' \
+            'docs/P1_M2B_STATCAST_SPLIT_SOURCE_PROVIDER.md' \
+            'server/mlb-statcast-certifier-source-alignment-routes.test.ts' \
+            'server/mlb-statcast-certifier-source-alignment-routes.ts' | sort)
+
+          scope_guard_only='.github/workflows/validate-p1-m2b-statcast-certifier-source-alignment.yml'
+
+          if [[ "$changed" != "$original" && "$changed" != "$split_provider" && "$changed" != "$scope_guard_only" ]]; then
+            echo 'P1-M2B Statcast certifier source-alignment scope rejected.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+
+          ! grep -Fxq 'server/mlb-statcast-matchup-certifier.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup-certifier.test.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup.ts' <<< "$changed"
+          ! grep -Fxq 'server/mlb-statcast-matchup-identity-routes.ts' <<< "$changed"

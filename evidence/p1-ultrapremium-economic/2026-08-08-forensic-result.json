@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "p1-ultrapremium-economic-forensic-evidence.v1",
+  "research": {
+    "pr": 371,
+    "headSha": "2d1be81b4c8f0c80f0c189b7126436850839d64b",
+    "workflowRunId": 31239533368,
+    "workflowJobId": 93058057257,
+    "backendCommit": "a56374d3b9bdd345c5b8c993119e406e2efbfb76",
+    "artifactId": 9016549309,
+    "artifactName": "p1-ultrapremium-economic-forensic-aggregate",
+    "artifactZipSha256": "85937162c79e3745e3345beab969409e0fb33070beafdd5f5991c1d6ddc20f62",
+    "artifactFiles": {
+      "result.json": "97b79efa7959042043e0449b797b6117ec690cec55ef81964663c578c4eab13a",
+      "cohort-integrity.json": "3c3600cc6f0525d27d66b34fe826149425fa4ea72f40327c1cc0b21a4fcde949",
+      "premium-independent.json": "e104622a80100c3e2e5196ca88b8d2003fe9c458e881d8a5b6f61ca147b0efca"
+    }
+  },
+  "sourceIntegrity": {
+    "ownerScopedImmutableLedger": true,
+    "exportedPredictions": 2532,
+    "rawOwnerExportUploaded": false,
+    "readOnly": true,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "realFinancialExposure": 0
+  },
+  "historicalReconstruction": {
+    "ttStrongEarlyPremium": {
+      "historicalDevelopmentClaim": "95.5% TEST hit rate on n=22, displayed as 96% historical hit",
+      "calibratedProbabilityClaim": false,
+      "prospectiveLedgerRowsAvailable": 0
+    },
+    "f5Premium": {
+      "historicalRule": "Among surviving F5 filters, PREMIUM when ERE_diff>=20 OR ERE_pick>=65",
+      "historicalDevelopmentClaim": "Each reported TEST bucket was 6/6",
+      "calibratedProbabilityClaim": false
+    },
+    "f5Ultra": {
+      "historicalRule": "ULTRA when 2+ boost signals among IMPLOSION, ERA_DECLINE, QUALITY_BAD, H2H_STRUGGLE, SOS_INFLATED",
+      "historicalCombinedUltraHitRateReportedByDefiningCommit": false,
+      "note": "The defining commit reported individual boost hit rates, not a combined 2+ boost ULTRA hit rate."
+    }
+  },
+  "ultraCohortIntegrity": {
+    "rawUltraCaptures": 99,
+    "uniqueGames": 12,
+    "gamesWithMultipleUltraCaptures": 9,
+    "rawCaptureResult": {
+      "wins": 67,
+      "losses": 32,
+      "roiPct": 18.652
+    },
+    "earliestUltraPerGame": {
+      "games": 12,
+      "wins": 7,
+      "losses": 5,
+      "roiPct": -3.406,
+      "meanClvPp": 0.449
+    },
+    "latestUltraPerGame": {
+      "games": 12,
+      "wins": 7,
+      "losses": 5,
+      "roiPct": -4.984,
+      "meanClvPp": 0.0816
+    },
+    "terminalF5PerGameRemainingUltra": {
+      "games": 8,
+      "wins": 3,
+      "losses": 5,
+      "roiPct": -38.368,
+      "meanClvPp": 0.4808
+    },
+    "conclusion": "RAW_CAPTURE_ROI_INVALID_AS_INDEPENDENT_SAMPLE_AND_ULTRA_NOT_ECONOMICALLY_VALIDATED"
+  },
+  "premiumPrimaryIndependentTest": {
+    "unit": "latest pregame app F5_ML decision per game after 2026-07-11T03:50:43Z",
+    "labelScope": "selected decision / selectedLane / finalRecommendation only; alternatives excluded",
+    "premium": {
+      "games": 20,
+      "settled": 19,
+      "uniqueDates": 10,
+      "wins": 14,
+      "losses": 5,
+      "hitRatePct": 73.684,
+      "winRateWilson95Pct": [51.21, 88.19],
+      "profitUnits": 4.3561,
+      "roiPct": 22.927,
+      "meanEntryImpliedPct": 60.477,
+      "medianOddsAmerican": -145,
+      "meanModelProbabilityPct": 70.016,
+      "brier": 0.209713,
+      "logLoss": 0.610212,
+      "meanClvPp": 0.0957,
+      "positiveClvPct": 42.11,
+      "julyRoiPct": -1.64,
+      "augustRoiPct": 37.26
+    },
+    "nonPremiumControl": {
+      "games": 85,
+      "settled": 78,
+      "uniqueDates": 12,
+      "wins": 38,
+      "losses": 29,
+      "hitRatePct": 56.716,
+      "profitUnits": -1.5331,
+      "roiPct": -1.966,
+      "brier": 0.247049,
+      "logLoss": 0.689771,
+      "meanClvPp": 0.3187
+    },
+    "dateClusterBootstrap": {
+      "replicates": 5000,
+      "dateClusters": 12,
+      "premiumRoiPct95": [-4.482, 55.444],
+      "premiumMinusControlRoiPp95": [-5.744, 58.789],
+      "premiumMinusControlHitRatePp95": [-1.626, 37.726],
+      "premiumMinusControlClvPp95": [-0.835025, 0.409675],
+      "controlMinusPremiumBrier95": [-0.024251, 0.116489],
+      "controlMinusPremiumLogLoss95": [-0.055443, 0.259877]
+    },
+    "registeredCriteria": {
+      "minimumPremiumGames50": false,
+      "minimumPremiumDates20": false,
+      "premiumRoiLower95Positive": false,
+      "premiumMinusControlRoiLower95Positive": false,
+      "meanClvPositive": true,
+      "properScoringNotWorse": true
+    },
+    "decision": "PREMIUM_ECONOMIC_EDGE_NOT_CERTIFIED"
+  },
+  "descriptiveOnlyPostHocSignal": {
+    "name": "PREMIUM_WITHOUT_ULTRA",
+    "games": 18,
+    "settled": 17,
+    "wins": 13,
+    "losses": 4,
+    "hitRatePct": 76.471,
+    "roiPct": 28.046,
+    "julyRoiPct": 14.75,
+    "augustRoiPct": 35.3,
+    "brier": 0.198369,
+    "logLoss": 0.586506,
+    "meanClvPp": 0.0292,
+    "status": "POST_HOC_CANDIDATE_REQUIRES_NEW_PROSPECTIVE_CONFIRMATION"
+  },
+  "scientificDecision": {
+    "ultraMoneyGateAllowed": false,
+    "premiumMoneyGateAllowed": false,
+    "automaticThresholdChangeAllowed": false,
+    "automaticModelChangeAllowed": false,
+    "automaticPromotionAllowed": false,
+    "nextHypothesis": "Prospectively freeze and evaluate selected terminal F5 PREMIUM_WITHOUT_ULTRA on new games only, one game counted once, with unchanged economic criteria and no retrospective threshold search."
+  }
+}

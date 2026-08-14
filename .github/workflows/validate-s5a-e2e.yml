@@ -1,0 +1,72 @@
+name: Validate S5A Real-Save E2E
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/s5a-mlb-real-save-e2e.mjs'
+      - '.github/workflows/validate-s5a-e2e.yml'
+      - 'server/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5a-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-s5a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout S5A branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Run existing regression gates
+        run: |
+          npm run typecheck:s1-auth
+          npm run test:s1-auth
+          npm run typecheck:s2-multiuser
+          npm run test:s2-multiuser
+          npm run typecheck:s3-modularization
+          npm run test:s3-modularization
+          npm run typecheck:s4-operations
+          npm run test:s4-operations
+          npm run typecheck:mlb-ledger
+          npm run test:mlb-ledger
+
+      - name: Build production backend bundle
+        run: npm run build:backend
+
+      - name: Execute isolated S5A real-save E2E
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:s5a-e2e 2>&1 | tee s5a-e2e-run.log
+
+      - name: Upload S5A evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5a-real-save-e2e-evidence
+          path: |
+            artifacts/s5a-e2e/
+            s5a-e2e-run.log
+          if-no-files-found: warn
+          retention-days: 30

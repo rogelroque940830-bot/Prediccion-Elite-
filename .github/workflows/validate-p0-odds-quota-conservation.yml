@@ -1,0 +1,208 @@
+name: Validate P0 Odds Quota Conservation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-odds-quota-conservation.yml'
+      - 'server/legacy-picks-routes.ts'
+      - 'server/mlb-odds-quota-conservation.test.ts'
+      - 'server/mlb-f5-odds-routes.ts'
+      - 'server/mlb-s5c-shadow-ingestion.ts'
+      - 'server/mlb-s5e-coverage-service.ts'
+      - 'server/mlb-closing-line-worker.ts'
+      - 'server/odds-demand-policy.ts'
+      - 'server/mlb-market-universe-registry.ts'
+      - 'server/mlb-market-universe-registry.test.ts'
+      - 'server/mlb-odds-budget-controller.ts'
+      - 'server/mlb-odds-budget-controller.test.ts'
+      - 'server/mlb-odds-budget-controller-concurrency.test.ts'
+      - 'server/mlb-cheap-screening.ts'
+      - 'server/mlb-cheap-screening.test.ts'
+      - 'server/mlb-shortlist.ts'
+      - 'server/mlb-shortlist.test.ts'
+      - 'server/mlb-intrinsic-edge.ts'
+      - 'server/mlb-intrinsic-edge.test.ts'
+      - 'server/mlb-market-discovery.ts'
+      - 'server/mlb-market-discovery.test.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+      - 'server/mlb-selective-odds-acquisition.test.ts'
+      - 'server/mlb-market-odds-normalizer.ts'
+      - 'server/mlb-market-contract.ts'
+      - 'server/index.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Quota conservation and MLB unified-runner falsification tests
+        run: >-
+          npx tsx --test
+          server/mlb-odds-quota-conservation.test.ts
+          server/mlb-f5-odds-routes.test.ts
+          server/mlb-s5c-shadow-ingestion.test.ts
+          server/mlb-s5e-coverage-service.test.ts
+          server/mlb-market-universe-registry.test.ts
+          server/mlb-odds-budget-controller.test.ts
+          server/mlb-odds-budget-controller-concurrency.test.ts
+          server/mlb-cheap-screening.test.ts
+          server/mlb-shortlist.test.ts
+          server/mlb-intrinsic-edge.test.ts
+          server/mlb-market-discovery.test.ts
+          server/mlb-selective-odds-acquisition.test.ts
+
+      - name: Preserve modular routes and production bundle
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Prove provider quota and pre-odds safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # P0 legacy/background quota safety.
+          ! grep -F 'api.the-odds-api.com' server/legacy-picks-routes.ts
+          ! grep -F 'ODDS_API_KEY' server/legacy-picks-routes.ts
+          ! grep -F 'LEGACY_ODDS_BACKGROUND_POLLING' server/legacy-picks-routes.ts
+          ! grep -F 'pollOddsForSport' server/legacy-picks-routes.ts
+          grep -F 'Legacy provider polling was permanently removed' server/legacy-picks-routes.ts
+          grep -F 'background=cache-only' server/mlb-s5c-shadow-ingestion.ts
+          grep -F 'background=cache-only' server/mlb-s5e-coverage-service.ts
+          grep -F 'F5_BACKGROUND_CACHE_TTL_MS = 5 * 60 * 1000' server/mlb-f5-odds-routes.ts
+          grep -F 'BACKGROUND_CACHE_MISS' server/mlb-f5-odds-routes.ts
+          grep -F 'isMlbClosingLineCaptureEnabled' server/index.ts
+          grep -F 'if (mlbClosingLineCaptureEnabled)' server/index.ts
+          ! grep -nE 'setInterval|setTimeout' server/mlb-market-universe-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/mlb-f5-odds-routes.ts
+          ! grep -nE 'setInterval|setTimeout' server/market-support-routes.ts
+
+          # Registry / budget / pre-odds stages remain network-free.
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-market-universe-registry.ts
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|process\.env|api\.the-odds-api\.com|setInterval|setTimeout' server/mlb-odds-budget-controller.ts
+          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|PREMIUM|ULTRA|setInterval|setTimeout' server/mlb-cheap-screening.ts
+          ! grep -nE 'ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout' server/mlb-shortlist.ts
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-intrinsic-edge.ts
+          ! grep -nE 'from[[:space:]]+.*\./mlb-(ere|tesi|f5-unified|early-markets)' server/mlb-intrinsic-edge.ts
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|PREMIUM|ULTRA' server/mlb-market-discovery.ts
+
+          # Step 8 is internal and explicit: no route, timer, env secret, background retry or broad odds endpoints.
+          ! grep -nE 'setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|register[A-Za-z]*Routes|requireSecret|process\.env' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'endpoint: "SPORT_ODDS"' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'endpoint: "EVENT_MARKETS"' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'regions=' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'private static providerTail' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'private static readonly eventCache' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'private static readonly completedRuns' server/mlb-selective-odds-acquisition.ts
+          ! grep -F 'providerAccountKey(apiKey' server/mlb-selective-odds-acquisition.ts
+          grep -F 'endpoint: "EVENT_ODDS"' server/mlb-selective-odds-acquisition.ts
+          grep -F 'AbortSignal.timeout' server/mlb-selective-odds-acquisition.ts
+
+          # Step 8 exact Registry / thesis authorization.
+          grep -F 'MLB_MARKET_UNIVERSE_REGISTRY' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_CURRENT_PREGAME_ANALYTICAL_MARKETS' server/mlb-selective-odds-acquisition.ts
+          grep -F 'REGISTRY_MARKET_MAPPING_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MARKET_HORIZON_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MARKET_THESIS_INTENT_MISMATCH' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MARKET_THESIS_NOT_AUTHORIZED_BY_SCOPE' server/mlb-selective-odds-acquisition.ts
+          grep -F 'DUPLICATE_MARKET_KEY' server/mlb-selective-odds-acquisition.ts
+          grep -F 'PAID_MARKET_KEY_MUTATION' server/mlb-selective-odds-acquisition.ts
+          grep -F 'paidStartMs === matchedStartMs' server/mlb-selective-odds-acquisition.ts
+
+          # Shared provider-account coordination and durable run journal MUST precede any provider access.
+          grep -F 'MlbSelectiveOddsSharedCoordinator' server/mlb-selective-odds-acquisition.ts
+          grep -F 'coordinationScope: "PROVIDER_ACCOUNT_SHARED"' server/mlb-selective-odds-acquisition.ts
+          grep -F 'providerAccountScopeKey' server/mlb-selective-odds-acquisition.ts
+          grep -F 'state: "IN_PROGRESS"' server/mlb-selective-odds-acquisition.ts
+          grep -F 'state: "COMPLETED"' server/mlb-selective-odds-acquisition.ts
+          grep -F 'beginRun(' server/mlb-selective-odds-acquisition.ts
+          grep -F 'completeRun(' server/mlb-selective-odds-acquisition.ts
+          grep -F 'SHARED_COORDINATOR_REQUIRED' server/mlb-selective-odds-acquisition.ts
+          grep -F 'PROVIDER_ACCOUNT_SCOPE_REQUIRED' server/mlb-selective-odds-acquisition.ts
+          grep -F 'DURABLE_RUN_RECOVERY_REQUIRED' server/mlb-selective-odds-acquisition.ts
+          grep -F 'SHARED_RUN_JOURNAL_CAPACITY_EXHAUSTED' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_MAX_SHARED_EVENT_CACHE_ENTRIES = 128' server/mlb-selective-odds-acquisition.ts
+          grep -F 'MLB_SELECTIVE_ODDS_MAX_SHARED_RUN_JOURNAL_ENTRIES = 1024' server/mlb-selective-odds-acquisition.ts
+
+          # Policy explicitly documents the financial safety boundary.
+          grep -F 'immutableExecutionSnapshot: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'fingerprintCoversCompleteExecutionSnapshot: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'rawApiKeyExcludedFromFingerprint: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'returnedResultsAreDeepFrozen: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'sharedCoordinatorRequiredForPaidWork: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'stableProviderAccountScopeRequiredForPaidWork: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'providerAccountScopeDerivedFromApiKey: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'processLocalStateCanAuthorizePaidWork: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'crossProcessLockDelegatedToSharedCoordinator: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'crossProcessIdempotencyDelegatedToSharedCoordinator: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'crossProcessMarketCacheDelegatedToSharedCoordinator: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'durableRunJournalBeforeAnyProviderAccess: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'unresolvedRunCanRetryProvider: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'runJournalCapacityReservedBeforeProvider: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'unexpiredRunJournalRecordsEvictedForAdmission: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'onePaidRequestPerGameMaximum: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'paidRequestsSequentialByIntrinsicRank: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'lowerRankCannotBypassBudgetDeniedHigherRank: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'cacheTtlIsRefreshPolicyNotPolling: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'negativeMarketAvailabilityCachedWithinTtl: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'sameRunIdReplayConsumesPaidCreditsWithinIdempotencyWindow: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'automaticProviderRetries: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'paidPayloadMustMatchProbedCommenceTime: true' server/mlb-selective-odds-acquisition.ts
+          grep -F 'ambiguousEventIdentityCanSpendCredits: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'staleOrMissingExecutionQuoteCanBeRecommended: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'calculatesMarketEdge: false' server/mlb-selective-odds-acquisition.ts
+          grep -F 'recommendsBet: false' server/mlb-selective-odds-acquisition.ts
+
+          # Earlier runner stages retain their frozen invariants.
+          grep -F 'requiresMarketOdds: false' server/mlb-cheap-screening.ts
+          grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-cheap-screening.ts
+          grep -F 'requiresMarketOdds: false' server/mlb-shortlist.ts
+          grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-shortlist.ts
+          grep -F 'weightsApplied: false' server/mlb-shortlist.ts
+          grep -F 'forcedQuota: false' server/mlb-shortlist.ts
+          grep -F 'MLB_SHORTLIST_MAX_CANDIDATES = 8' server/mlb-shortlist.ts
+          grep -F 'oddsAffectIntrinsicRank: false' server/mlb-intrinsic-edge.ts
+          grep -F 'finalInputsAffectIntrinsicRank: false' server/mlb-intrinsic-edge.ts
+          grep -F 'gameStartTimeAffectsIntrinsicRank: false' server/mlb-intrinsic-edge.ts
+          grep -F 'weightedScoreApplied: false' server/mlb-intrinsic-edge.ts
+          grep -F 'nonQualifyingSignalsAffectIntrinsicRank: false' server/mlb-intrinsic-edge.ts
+          grep -F 'horizonScopedThesesRequired: true' server/mlb-intrinsic-edge.ts
+          grep -F 'lateBullpenEvidenceAllowedInEarlyWindow: false' server/mlb-intrinsic-edge.ts
+          grep -F 'upstreamShortlistSelectedCapAffectsIntrinsicPopulation: false' server/mlb-intrinsic-edge.ts
+          grep -F 'intrinsicCapAppliedAfterIntrinsicRanking: true' server/mlb-intrinsic-edge.ts
+          grep -F 'researchOnlyNotOutcomeCertified: true' server/mlb-intrinsic-edge.ts
+          grep -F 'firstThreeInningsPriority: false' server/mlb-market-discovery.ts
+          grep -F 'marketOrderCarriesPreference: false' server/mlb-market-discovery.ts
+          grep -F 'intrinsicThesisRequiredForPaidLookup: true' server/mlb-market-discovery.ts
+          grep -F 'intrinsicThesisDirectionPreserved: true' server/mlb-market-discovery.ts
+          grep -F 'horizonScopedMarketThesisPlanning: true' server/mlb-market-discovery.ts
+          grep -F 'researchOnlyMarketsConsumeProviderCredits: false' server/mlb-market-discovery.ts
+          grep -F 'onlyFinalInputsMayAuthorizePaidLookup: true' server/mlb-market-discovery.ts
+          grep -F 'callsTheOddsApi: false' server/mlb-market-discovery.ts
+          grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-market-discovery.ts
+
+          # Budget controller fail-closed accounting remains intact.
+          grep -F 'PROVIDER_QUOTA_NOT_PROBED' server/mlb-odds-budget-controller.ts
+          grep -F 'PROVIDER_REMAINING_INSUFFICIENT' server/mlb-odds-budget-controller.ts
+          grep -F 'CONSERVATIVE_WORST_CASE' server/mlb-odds-budget-controller.ts
+          grep -F 'PROVIDER_USAGE_INCONSISTENT' server/mlb-odds-budget-controller.ts
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"

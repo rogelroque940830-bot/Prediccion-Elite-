@@ -1,0 +1,79 @@
+name: Validate S5B Shadow Mode
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-shadow-evaluation.ts'
+      - 'server/mlb-shadow-evaluation.test.ts'
+      - 'scripts/s5b-shadow-dry-run.mjs'
+      - 'docs/S5B_SHADOW_MODE.md'
+      - '.github/workflows/validate-s5b-shadow.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.s5b-shadow.json'
+      - 'server/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5b-shadow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-s5b-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout S5B branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Type-check S5B shadow evaluator
+        run: npm run typecheck:s5b-shadow
+
+      - name: Test S5B shadow evaluator
+        run: npm run test:s5b-shadow
+
+      - name: Run existing S1-S5A regression gates
+        run: |
+          npm run typecheck:s1-auth
+          npm run test:s1-auth
+          npm run typecheck:s2-multiuser
+          npm run test:s2-multiuser
+          npm run typecheck:s3-modularization
+          npm run test:s3-modularization
+          npm run typecheck:s4-operations
+          npm run test:s4-operations
+          npm run typecheck:mlb-ledger
+          npm run test:mlb-ledger
+          npm run build:backend
+
+      - name: Execute isolated S5B shadow dry run
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run dry-run:s5b-shadow 2>&1 | tee s5b-shadow-run.log
+
+      - name: Upload S5B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5b-shadow-mode-evidence
+          path: |
+            artifacts/s5b-shadow-dry-run/
+            s5b-shadow-run.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,123 @@
+name: Validate P1-M2B Official Injury Supplement
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p1-m2b-official-injury-supplement.yml'
+      - 'server/mlb-injury-official-supplement.ts'
+      - 'server/mlb-injury-official-supplement.test.ts'
+      - 'server/mlb-injury-official-supplement-routes.ts'
+      - 'server/mlb-injury-official-supplement-routes.test.ts'
+      - 'server/routes.ts'
+      - 'tsconfig.p1-m2b-official-injury-supplement.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Official supplement, rejected-identity reconciliation and aggregate diagnostic tests
+        run: >-
+          npx tsx --test
+          server/mlb-injury-official-supplement.test.ts
+          server/mlb-injury-official-supplement-routes.test.ts
+          server/mlb-injury-phase-b.test.ts
+          server/mlb-injury-identity.test.ts
+
+      - name: Official supplement focused typecheck
+        run: npx tsc -p tsconfig.p1-m2b-official-injury-supplement.json --noEmit
+
+      - name: P1-M2B existing focused typecheck
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json --noEmit
+
+      - name: P1-M2B readiness regressions
+        run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+
+      - name: Preserve modular route inventory
+        run: npm run test:s3-modularization
+
+      - name: Production backend build
+        run: npm run build:backend
+
+      - name: Prove middleware order, exact identity authority, privacy and fail-closed boundaries
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const assert = require('assert/strict');
+          const routes = fs.readFileSync('server/routes.ts', 'utf8');
+          const supplementRoutes = fs.readFileSync('server/mlb-injury-official-supplement-routes.ts', 'utf8');
+          const helper = fs.readFileSync('server/mlb-injury-official-supplement.ts', 'utf8');
+          assert.ok(routes.indexOf('registerMlbOfficialInjurySupplementMiddleware(app)') < routes.indexOf('registerMlbCoreRoutes(app)'));
+          assert.match(supplementRoutes, /source\)\.toUpperCase\(\) === "BALLDONTLIE"/);
+          assert.match(supplementRoutes, /validationSource\)\.toUpperCase\(\) === "MLB_STATS"/);
+          assert.match(supplementRoutes, /MLB_REJECTED_IDENTITY_RECONCILIATION_SCHEMA/);
+          assert.match(supplementRoutes, /observedMissingCount === expectedRejectedCount/);
+          assert.match(supplementRoutes, /exactWrongCurrentTeamCount === rejectedCount/);
+          assert.match(supplementRoutes, /officialIlReconciledCount === rejectedCount/);
+          assert.match(supplementRoutes, /unresolvedRejectedCount === 0/);
+          assert.match(supplementRoutes, /rejectedIdentityReconciliationEvidenceOnly:\s*true/);
+          assert.match(supplementRoutes, /phaseB:\s*meta\?\.phaseB/);
+          assert.match(supplementRoutes, /supplementEvidenceOnly:\s*true/);
+          assert.match(supplementRoutes, /rawOfficialOnlyCount !== expectedOfficialOnly/);
+          assert.match(supplementRoutes, /researchInjuryIdentityDiagnostic/);
+          assert.match(supplementRoutes, /MLB_INJURY_IDENTITY_DIAGNOSTIC_QUERY/);
+          assert.match(supplementRoutes, /requireSecret\("BDL_API_KEY"\)/);
+          assert.match(supplementRoutes, /Cache-Control/);
+          assert.doesNotMatch(supplementRoutes, /app\.get\(["']\/api\/mlb\/research/);
+          assert.doesNotMatch(supplementRoutes, /levenshtein|fuzzy|similarity/i);
+          assert.match(helper, /MLB_REJECTED_IDENTITY_RECONCILIATION_MODE/);
+          assert.match(helper, /EXACT_NAME_WRONG_CURRENT_TEAM_RECONCILED_BY_OFFICIAL_IL/);
+          assert.match(helper, /if \(rejectedCount > 0\)/);
+          assert.match(helper, /decision:\s*"PENDING"/);
+          assert.match(helper, /impact:\s*"NONE"/);
+          assert.match(helper, /aggregateOnly:\s*true/);
+          assert.match(helper, /playerNamesReturned:\s*false/);
+          assert.match(helper, /playerIdsReturned:\s*false/);
+          assert.match(helper, /credentialReturned:\s*false/);
+          assert.doesNotMatch(supplementRoutes, /automaticBet|sportsbook|stake|probabilit/i);
+          NODE
+
+      - name: Exact seven-file scope and no model/core mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            ".github/workflows/validate-p1-m2b-official-injury-supplement.yml"
+            "server/mlb-injury-official-supplement-routes.test.ts"
+            "server/mlb-injury-official-supplement-routes.ts"
+            "server/mlb-injury-official-supplement.test.ts"
+            "server/mlb-injury-official-supplement.ts"
+            "server/routes.ts"
+            "tsconfig.p1-m2b-official-injury-supplement.json"
+          )
+          [[ "${#changed[@]}" -eq "${#expected[@]}" ]]
+          for i in "${!expected[@]}"; do
+            [[ "${changed[$i]}" == "${expected[$i]}" ]] || {
+              echo "Unexpected scope: ${changed[$i]} != ${expected[$i]}";
+              exit 1;
+            }
+          done
+          ! git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | grep -E '^server/mlb-core-routes\.ts$|^frontend/|ledger|settlement'
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"

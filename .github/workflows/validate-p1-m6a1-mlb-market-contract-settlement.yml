@@ -1,0 +1,82 @@
+name: Validate P1-M6A1 MLB Market Contract
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-contract.ts'
+      - 'server/mlb-ledger-store.ts'
+      - 'server/mlb-ledger.test.ts'
+      - 'server/mlb-settlement-worker.ts'
+      - 'server/mlb-settlement-worker.test.ts'
+      - 'server/mlb-ledger-history-view.ts'
+      - 'docs/P1_M6A1_MLB_MARKET_CONTRACT_SETTLEMENT.md'
+      - '.github/workflows/validate-p1-m6a1-mlb-market-contract-settlement.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck immutable MLB ledger surface
+        run: npm run typecheck:mlb-ledger
+      - name: Run complete MLB ledger and settlement regression
+        run: npm run test:mlb-ledger
+      - name: Preserve modular route contract and production build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run S5B/S6 scientific regression
+        run: npm run test:s5b-shadow
+      - name: Verify P1-M6A1 scientific safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='server/mlb-market-contract.ts'
+          worker='server/mlb-settlement-worker.ts'
+          grep -F 'courtedge-p1-m6a1-mlb-market-contract.v1' "$contract"
+          grep -F 'F3_ML' "$contract"
+          grep -F 'F5_RUN_LINE' "$contract"
+          grep -F 'F3_RUN_LINE' "$contract"
+          grep -F 'F3_TOTAL' "$contract"
+          grep -F 'F5_TEAM_TOTAL' "$contract"
+          grep -F 'F3_TEAM_TOTAL' "$contract"
+          grep -F 'TWO_WAY_PUSH_ON_TIE' "$contract"
+          grep -F 'Three-way F3/F5 moneylines must fail closed' "$contract"
+          grep -F 'firstN(game, 3)' "$worker"
+          grep -F 'market === "F5_RUN_LINE" || market === "F3_RUN_LINE"' "$worker"
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|sportsbookIntegration:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$contract" "$worker"
+      - name: Verify exact P1-M6A1 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m6a1-mlb-market-contract-settlement.yml' \
+            'docs/P1_M6A1_MLB_MARKET_CONTRACT_SETTLEMENT.md' \
+            'server/mlb-ledger-history-view.ts' \
+            'server/mlb-ledger-store.ts' \
+            'server/mlb-ledger.test.ts' \
+            'server/mlb-market-contract.ts' \
+            'server/mlb-settlement-worker.test.ts' \
+            'server/mlb-settlement-worker.ts' | sort)
+          [[ "$changed" == "$expected" ]]

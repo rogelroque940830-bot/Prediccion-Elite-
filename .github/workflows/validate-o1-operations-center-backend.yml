@@ -1,0 +1,57 @@
+name: Validate O1 Operations Incident Center Backend
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/operational-incident-center.ts'
+      - 'server/operational-incident-center.test.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.o1-operations-center.json'
+      - 'docs/O1_OPERATIONS_INCIDENT_CENTER.md'
+      - '.github/workflows/validate-o1-operations-center-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused O1 typecheck
+        run: npx tsc -p tsconfig.o1-operations-center.json
+      - name: Run focused O1 tests
+        run: npx tsx --test server/operational-incident-center.test.ts
+      - name: Verify backend route contract
+        run: npm run test:s3-modularization
+      - name: Run operations regressions
+        run: npm run test:s4-operations
+      - name: Run shadow regressions
+        run: npm run test:s5b-shadow
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Verify read-only safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'app.get("/api/ops/v1/incident-center"' server/operational-incident-center.ts
+          grep -F 'mode: "OBSERVE_ONLY"' server/operational-incident-center.ts
+          grep -F 'readOnly: true' server/operational-incident-center.ts
+          grep -F 'realFinancialExposure: 0' server/operational-incident-center.ts
+          grep -F 'automaticSettlementRetry: false' server/operational-incident-center.ts
+          grep -F 'historicalLedgerMutation: false' server/operational-incident-center.ts
+          ! grep -E 'app\.(post|put|patch|delete)\("/api/ops/v1/incident-center' server/operational-incident-center.ts
+      - name: Diff hygiene
+        run: git diff --check

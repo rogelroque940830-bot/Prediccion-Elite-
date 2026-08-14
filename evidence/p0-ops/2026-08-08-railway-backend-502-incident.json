@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "p0-railway-backend-502-incident.v1",
+  "generatedAt": "2026-08-08T21:13:00Z",
+  "integrationCommit": "b9c403f5682792f397d814451a94b1467c8253ef",
+  "observations": {
+    "githubRailwayDeploymentContext": {
+      "context": "Prediccion Elite - web",
+      "state": "failure"
+    },
+    "liveBackend": {
+      "healthHttpStatus": 502,
+      "slateHttpStatusObservedBeforeRecoveryAttempt": 502,
+      "mlbAllHttpStatusObservedBeforeRecoveryAttempt": 502,
+      "postRecoveryMarkerHealthHttpStatus": 502,
+      "exactCommitObservableAfterMarker": false
+    },
+    "applicationBoot": {
+      "node24NpmCiBuildAndBoot": "PASS",
+      "node24LocalHealthHttpStatus": 200,
+      "exactNixpacksNode20NpmInstallBuildAndBoot": "PASS",
+      "exactNixpacksLocalHealthHttpStatus": 200
+    },
+    "railwayAutomation": {
+      "railwayCliAvailable": true,
+      "railwayCliVersion": "5.34.2",
+      "githubActionsHasRailwayToken": false,
+      "githubActionsHasRailwayApiToken": false,
+      "railwayWriteAttempted": false
+    }
+  },
+  "sourceRuns": {
+    "liveOutageAudit": 31277799779,
+    "postRedeployAudit": 31278481168,
+    "localBundleBootSmoke": 31278274787,
+    "exactNixpacksBootSmoke": 31278589884,
+    "railwayCliAvailability": 31278687677
+  },
+  "interpretation": {
+    "applicationBuildFailureReproduced": false,
+    "applicationStartupFailureReproduced": false,
+    "nixpacksCompatibilityFailureReproduced": false,
+    "railwayDeploymentFailureConfirmed": true,
+    "supportsPredictorRuntimeChange": false,
+    "supportsModelOrReadinessChange": false,
+    "nextOperationalRequirement": "Railway service/deployment access or a valid Railway API/project token is required to recover the failed deployment."
+  },
+  "safety": {
+    "modelFormulaChanged": false,
+    "thresholdChanged": false,
+    "readinessPolicyChanged": false,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "secretValuesPersisted": false
+  }
+}

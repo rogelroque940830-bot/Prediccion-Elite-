@@ -1,0 +1,482 @@
+[
+  {
+    "method": "DELETE",
+    "path": "/api/picks/v2/:id",
+    "registrations": 3
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/session",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/users",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/users/:id",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/advanced/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/all",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/archetype-matchup/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/bullpen-status/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/catcher-framing/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/context",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/discipline-speed/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ere/:teamId",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/closing-lines",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/export",
+    "registrations": 3
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/history",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/injury-decisions",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/injury-outcomes",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/injury-report",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/predictions",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/predictions/:id",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/report",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/ledger/v1/status",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/lineup-matchup/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/park-pitcher/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/pitcher-form/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/pitcher-recent/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/pitcher-vs-team/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/quality/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/rookie-pitcher/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/rotowire/all",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/rotowire/lineup/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/sos/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/statcast-matchup/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/team-fatigue/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/tesi/:teamId",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/umpire/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/weather/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/mlb/wind-park/:gamePk",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/all",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/context",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/form",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/independent-status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/manual-teams",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/player-impact",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/recent5",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/refs/:gameId",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/schedule",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/sos",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/teams",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nba/winrate",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nhl/all",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nhl/goalies/:gameId",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/nhl/manual-teams",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/odds/:sport",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/odds/mlb/f5",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/alerts",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/backups",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/diagnostics",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/metrics",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/ops/v1/status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/picks",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/picks/v2",
+    "registrations": 3
+  },
+  {
+    "method": "GET",
+    "path": "/api/sharp/:sport/:gameKey",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/sharp/summary/:sport",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/staging/admin-auth-self-test",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/staging/admin-auth-status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/all",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/fatigue",
+    "registrations": 2
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/games",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/h2h",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/independent-status",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/injuries",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/players",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/shot-profile/:espnTeamId",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/api/wnba/sos",
+    "registrations": 1
+  },
+  {
+    "method": "GET",
+    "path": "/health",
+    "registrations": 1
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/picks/v2/:id",
+    "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/users",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/clv",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/clv/refresh",
+    "registrations": 3
+  },
+  {
+    "method": "POST",
+    "path": "/api/clv/reset",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/mlb/early-markets",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/mlb/ledger/v1/capture-closing-lines",
+    "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/mlb/ledger/v1/predictions",
+    "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/mlb/ledger/v1/predictions/:id/settlements",
+    "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/mlb/ledger/v1/settle-pending",
+    "registrations": 2
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/alerts/evaluate",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/backups",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/backups/:id/restore-drill",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/ops/v1/backups/:id/verify",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/picks/sync",
+    "registrations": 1
+  },
+  {
+    "method": "POST",
+    "path": "/api/picks/v2",
+    "registrations": 3
+  },
+  {
+    "method": "POST",
+    "path": "/api/staging/admin-auth-probe",
+    "registrations": 1
+  }
+]

@@ -1,0 +1,94 @@
+name: Court Edge P0 Security Remediation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - security/p0-remediation
+    paths:
+      - 'server/**'
+      - 'scripts/p0-**'
+      - '.github/workflows/p0-security-remediation.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+  pull_request:
+    branches:
+      - main
+      - integration/p0-staging-secure
+    paths:
+      - 'server/**'
+      - 'scripts/p0-**'
+      - '.github/workflows/p0-security-remediation.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  security-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout current revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan tracked source for credential-like literals
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/p0-secret-scan.py 2>&1 | tee p0-secret-scan-report.txt
+
+      - name: Upload credential scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-secret-scan-report
+          path: p0-secret-scan-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Require reproducible lockfile
+        run: test -f package-lock.json
+
+      - name: Install backend dependencies reproducibly
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Execute P0 middleware smoke test
+        run: npx tsx scripts/p0-security-smoke.ts
+
+      - name: Verify current modular P0 controls are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'app.set("trust proxy", 1)' server/index.ts
+          grep -q 'app.use(securityHeaders)' server/index.ts
+          grep -q 'app.use(restrictedCors)' server/index.ts
+          grep -q 'app.use(apiRateLimit)' server/index.ts
+          grep -q 'app.use(requirePrivateReadAuth)' server/index.ts
+          grep -q 'app.use(requireWriteAuth)' server/index.ts
+          grep -q 'COURTEDGE_WRITE_TOKEN' server/security.ts
+          grep -q 'ALLOW_LEGACY_PICKS_SYNC' server/security.ts
+          grep -R --include='*.ts' -q 'ODDS_API_KEY' server
+          grep -R --include='*.ts' -q 'BDL_API_KEY' server
+          echo 'PASS: current modular P0 middleware and runtime-secret boundaries detected'
+
+      - name: Prove legacy sanitizer is not part of the current security gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'python3 scripts/p0-sanitize-routes.py' .github/workflows/p0-security-remediation.yml
+          echo 'PASS: security validation is observational; it does not mutate certified routes'

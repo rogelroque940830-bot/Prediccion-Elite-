@@ -1,0 +1,61 @@
+name: Validate P1-M2B MLB Pregame Readiness
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-pregame-readiness-service.ts'
+      - 'server/mlb-p1-pregame-readiness-routes.ts'
+      - 'server/mlb-p1-pregame-readiness.test.ts'
+      - 'server/mlb-p1-pregame-readiness-contract.ts'
+      - 'server/mlb-p1-daily-slate.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.p1-m2b-mlb-pregame-readiness.json'
+      - 'docs/P1_M2B_MLB_PREGAME_READINESS_BACKEND.md'
+      - '.github/workflows/validate-p1-m2b-mlb-pregame-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m2b-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused P1-M2B typecheck
+        run: npx tsc -p tsconfig.p1-m2b-mlb-pregame-readiness.json
+      - name: Run P1-M2B readiness tests
+        run: npx tsx --test server/mlb-p1-pregame-readiness.test.ts
+      - name: Run P1-M2A contract regression
+        run: npx tsx --test server/mlb-p1-pregame-readiness-contract.test.ts
+      - name: Run P1-M1 slate regression
+        run: npx tsx --test server/mlb-p1-daily-slate.test.ts
+      - name: Verify route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Verify endpoint and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'app.get("/api/mlb/p1/v1/pregame-readiness"' server/mlb-p1-pregame-readiness-routes.ts
+          grep -F 'courtedge-p1-m2b-pregame-readiness.v1' server/mlb-p1-pregame-readiness-service.ts
+          grep -F 'SHADOW_DECISION_SUPPORT' server/mlb-p1-pregame-readiness-service.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-p1-pregame-readiness-service.ts
+          grep -F 'automaticBetPlacement: false' server/mlb-p1-pregame-readiness-service.ts
+          grep -F 'automaticModelChangesAllowed: false' server/mlb-p1-pregame-readiness-service.ts
+          grep -F 'automaticPromotionAllowed: false' server/mlb-p1-pregame-readiness-service.ts
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]|appendSettlement|UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM' server/mlb-p1-pregame-readiness-*.ts
+      - name: Diff hygiene
+        run: git diff --check

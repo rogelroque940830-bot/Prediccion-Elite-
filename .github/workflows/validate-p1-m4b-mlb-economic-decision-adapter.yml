@@ -1,0 +1,121 @@
+name: Validate P1-M4B MLB Economic Decision Adapter
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-economic-decision-adapter.ts'
+      - 'server/mlb-p1-economic-decision-adapter.test.ts'
+      - 'docs/P1_M4B_MLB_ECONOMIC_DECISION_ADAPTER.md'
+      - 'tsconfig.p1-m4b-mlb-economic-decision-adapter.json'
+      - '.github/workflows/validate-p1-m4b-mlb-economic-decision-adapter.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m4b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M4B adapter
+        run: npx tsc -p tsconfig.p1-m4b-mlb-economic-decision-adapter.json --noEmit
+      - name: Run focused P1-M4B adapter tests
+        run: npx tsx --test server/mlb-p1-economic-decision-adapter.test.ts
+      - name: Run P1-M4A economic contract regressions
+        run: npx tsx --test server/mlb-p1-economic-decision-contract.test.ts
+      - name: Run P1 readiness, capture and accounting regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-scientific-capture-contract.test.ts \
+            server/mlb-p1-scientific-capture-service.test.ts \
+            server/mlb-p1-pregame-readiness-contract.test.ts \
+            server/mlb-p1-daily-slate.test.ts \
+            server/mlb-shadow-evaluation.test.ts \
+            server/mlb-terminal-ledger-records.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify adapter policy and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          adapter='server/mlb-p1-economic-decision-adapter.ts'
+          docs='docs/P1_M4B_MLB_ECONOMIC_DECISION_ADAPTER.md'
+
+          grep -F 'courtedge-p1-m4b-economic-decision-adapter.v1' "$adapter"
+          grep -F 'p1M4bEconomicDecision' "$adapter"
+          grep -F 'validateMlbP1M3aCapture(candidate, now)' "$adapter"
+          grep -F 'evaluateMlbP1M4aEconomicDecision(economicInput)' "$adapter"
+          grep -F 'SOURCE_SIGNAL_CEILING_APPLIED' "$adapter"
+          grep -F 'SOURCE_INFO_CONTROL_ONLY' "$adapter"
+          grep -F 'P1_M4B_LAYER_CONFLICT' "$adapter"
+          grep -F 'enriched.scientificSnapshot.payloadDigest = mlbP1M3aSha256(enrichedPayload)' "$adapter"
+          grep -F 'validateMlbP1M3aCapture(enriched, now)' "$adapter"
+          grep -F 'realFinancialExposure: 0' "$adapter"
+          grep -F 'ledgerWritePerformed: false' "$adapter"
+          grep -F 'The economic layer may downgrade a source signal, but it may not make it more aggressive' "$docs"
+          grep -F 'P1-M4B performs no ledger write' "$docs"
+          grep -F 'P1-M4C — Actionable decision card' "$docs"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const adapter = fs.readFileSync('server/mlb-p1-economic-decision-adapter.ts', 'utf8');
+          const docs = fs.readFileSync('docs/P1_M4B_MLB_ECONOMIC_DECISION_ADAPTER.md', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          assert(adapter.includes('signalRank(economicDecision.decision) > signalRank(compatibility.sourceSignalNormalized)'), 'source signal ceiling missing');
+          assert(adapter.includes('actionability: "OBSERVE_ONLY"'), 'non-actionable ceiling missing');
+          assert(adapter.includes('analyticalUnits: 0'), 'zero-unit ceiling missing');
+          assert(adapter.includes('existing.sourceDigest === adapter.sourceDigest'), 'idempotent layer identity missing');
+          assert(adapter.includes('candidate: null'), 'fail-closed attachment boundary missing');
+          assert(docs.includes('The original candidate fields are not overwritten'), 'source preservation not documented');
+          assert(docs.includes('This adapter does not enable a new route'), 'market expansion boundary missing');
+
+          const forbidden = [
+            /appendOwnedPrediction/,
+            /MlbLedgerStore/,
+            /registerRoutes/,
+            /app\.(post|put|patch|delete)\s*\(/,
+            /router\.(post|put|patch|delete)\s*\(/,
+            /fetch\s*\(/,
+            /apiRequest\s*\(/,
+            /automaticBetPlacement:\s*true/,
+            /sportsbookIntegration:\s*true/,
+            /realFinancialExposure:\s*[1-9]/,
+            /ledgerWritePerformed:\s*true/,
+          ];
+          for (const pattern of forbidden) {
+            assert(!pattern.test(adapter), `adapter contains forbidden side effect: ${pattern}`);
+          }
+          assert(!/candidate\.decision\s*=/.test(adapter), 'source decision is mutated');
+          assert(!/candidate\.probabilities\s*=/.test(adapter), 'source probabilities are mutated');
+          NODE
+      - name: Diff hygiene and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m4b-mlb-economic-decision-adapter.yml' \
+            'docs/P1_M4B_MLB_ECONOMIC_DECISION_ADAPTER.md' \
+            'server/mlb-p1-economic-decision-adapter.test.ts' \
+            'server/mlb-p1-economic-decision-adapter.ts' \
+            'tsconfig.p1-m4b-mlb-economic-decision-adapter.json' | sort)
+          [[ "$changed" == "$expected" ]]

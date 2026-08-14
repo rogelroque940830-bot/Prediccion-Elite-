@@ -1,0 +1,106 @@
+name: Validate P1-M6A3B2B1 Starting Pitcher History
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-market-starting-pitcher-history.ts'
+      - 'server/mlb-market-starting-pitcher-history.test.ts'
+      - 'scripts/p1-m6a3b2b1-starting-pitcher-backfill.mjs'
+      - 'docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md'
+      - 'tsconfig.p1-m6a3b2b1-starting-pitcher-history.json'
+      - '.github/workflows/validate-p1-m6a3b2b1-starting-pitcher-history.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m6a3b2b1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck owned B2B1 source
+        run: npx tsc -p tsconfig.p1-m6a3b2b1-starting-pitcher-history.json
+      - name: Run starting-pitcher source falsification tests
+        run: npx tsx --test server/mlb-market-starting-pitcher-history.test.ts
+      - name: Preserve B1 and B2A scientific contracts
+        run: |
+          npx tsx --test \
+            server/mlb-market-historical-dataset.test.ts \
+            server/mlb-market-historical-source.test.ts \
+            server/mlb-market-historical-fit.test.ts \
+            server/mlb-market-team-strength.test.ts \
+            server/mlb-market-team-strength-inference.test.ts
+      - name: Preserve ledger, backend and scientific regressions
+        run: |
+          npm run test:mlb-ledger
+          npm run test:s3-modularization
+          npm run build:backend
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify B2B1 historical and no-leakage preparation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-market-starting-pitcher-history.ts'
+          script='scripts/p1-m6a3b2b1-starting-pitcher-backfill.mjs'
+          docs='docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md'
+          grep -F '/v1/game/${game.gamePk}/boxscore' "$source"
+          grep -F 'gamesStarted' "$source"
+          grep -F 'GAME_STARTED_FLAG_AND_ORDER' "$source"
+          grep -F 'GAME_STARTED_FLAG_AFTER_ZERO_APPEARANCE_LISTING' "$source"
+          grep -F 'PITCHING_ORDER_FIRST' "$source"
+          grep -F 'mlbInningsPitchedToOuts' "$source"
+          grep -F 'starterHistoryDigest' "$source" "$script"
+          grep -F 'boxscoreProvenanceDigest' "$source" "$script"
+          grep -F 'P1_M6A3B2B1_OFFICIAL_OUTCOME_DIGEST_MISMATCH' "$script"
+          grep -F 'P1_M6A3B2B1_STARTER_COVERAGE_INCOMPLETE' "$script"
+          grep -Fi 'strictly earlier than the validation block' "$docs"
+          grep -F 'actionabilityAllowed: false' "$source" "$script"
+          grep -F 'automaticModelSelectionAllowed: false' "$source" "$script"
+          grep -F 'automaticPromotionAllowed: false' "$source" "$script"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement:[[:space:]]*true|actionabilityAllowed:[[:space:]]*true|automaticModelSelectionAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$source" "$script"
+      - name: Verify bounded B2B1 maintenance scope from PR base to PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          mapfile -t changed < <(git diff --name-only "$base...$head" | sort)
+          allowed=(
+            '.github/workflows/validate-p1-m6a3b2b1-starting-pitcher-history.yml'
+            'docs/P1_M6A3B2B1_MLB_STARTING_PITCHER_HISTORY.md'
+            'scripts/p1-m6a3b2b1-starting-pitcher-backfill.mjs'
+            'server/mlb-market-starting-pitcher-history.test.ts'
+            'server/mlb-market-starting-pitcher-history.ts'
+            'tsconfig.p1-m6a3b2b1-starting-pitcher-history.json'
+          )
+          for file in "${changed[@]}"; do
+            printf '%s\n' "${allowed[@]}" | grep -Fx -- "$file" >/dev/null || {
+              echo "Unexpected P1-M6A3B2B1 maintenance file: $file" >&2
+              exit 1
+            }
+          done
+          changed_text=$(printf '%s\n' "${changed[@]}")
+          if grep -Eq '^server/mlb-market-starting-pitcher-history(\.test)?\.ts$' <<<"$changed_text"; then
+            grep -Fx 'server/mlb-market-starting-pitcher-history.ts' <<<"$changed_text" >/dev/null
+            grep -Fx 'server/mlb-market-starting-pitcher-history.test.ts' <<<"$changed_text" >/dev/null
+          fi

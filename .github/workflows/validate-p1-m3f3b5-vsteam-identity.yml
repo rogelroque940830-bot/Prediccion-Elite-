@@ -1,0 +1,175 @@
+name: Validate P1-M3F3B5 VsTeam Identity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/route-contract.extensions.json'
+      - 'server/routes.ts'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
+      - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
+      - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
+      - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3f3b5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck identity-safe statcast surface
+        run: npx tsc -p tsconfig.p1-m3f3b5-vsteam-identity.json
+      - name: Run identity and route falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-statcast-matchup-vsteam-identity.test.ts \
+            server/mlb-statcast-matchup-identity-routes.test.ts
+      - name: Preserve advanced-factor provenance chain
+        run: |
+          npx tsx --test server/mlb-statcast-quality-provenance.test.ts
+          npx tsx --test server/mlb-discipline-speed-provenance.test.ts
+          npx tsx --test server/mlb-sos-provenance.test.ts
+          npx tsx --test server/mlb-advanced-context-provenance.test.ts
+          npx tsx --test server/mlb-p1-advanced-factor-provenance.test.ts
+      - name: Preserve modular route and production backend contracts
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Preserve real-save and shadow scientific gates
+        run: |
+          npm run test:s5a-e2e
+          npm run test:s5b-shadow
+      - name: Verify identity correction and frozen weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          fix='server/mlb-statcast-matchup-vsteam-identity.ts'
+          route='server/mlb-statcast-matchup-identity-routes.ts'
+          composition='server/routes.ts'
+          docs='docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+
+          grep -F 'opposingTeamId=${opponent}' "$fix"
+          grep -F 'NUMERIC_MLB_TEAM_ID' "$fix"
+          grep -F 'starter: 0.50, bullpen: 0.25, vsTeam: 0.25' "$fix"
+          grep -F '* 0.50' "$fix"
+          grep -F '* 0.25' "$fix"
+          grep -F 'registerMlbStatcastMatchupIdentityMiddleware(app)' "$composition"
+          grep -F 'app.use("/api/mlb/statcast-matchup/:gamePk"' "$route"
+          grep -F 'source-identity correctness fix' "$docs"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('server/routes.ts', 'utf8');
+          const safe = source.indexOf('registerMlbStatcastMatchupIdentityMiddleware(app)');
+          const core = source.indexOf('registerMlbCoreRoutes(app)');
+          if (safe < 0 || core < 0 || safe >= core) {
+            throw new Error('identity-safe statcast middleware must precede core routes');
+          }
+          NODE
+
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$fix" "$route"
+      - name: Verify exact P1-M3F3B5 or registered successor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+
+          b5_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3f3b5-vsteam-identity.json' | sort)
+
+          b5b_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' | sort)
+
+          premium_no_ultra_readonly=$(printf '%s\n' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' | sort)
+
+          compatibility_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' | sort)
+
+          m3e5_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-live.ts' \
+            'server/mlb-p1-operating-envelope-frozen-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
+
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          if [[ "$changed" != "$b5_package" \
+            && "$changed" != "$b5b_successor" \
+            && "$changed" != "$premium_no_ultra_readonly" \
+            && "$changed" != "$compatibility_package"  \
+            && "$changed" != "$m3e5_successor" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
+            echo 'P1-M3F3B5 scope rejected. Diff must be an exact registered analytical package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi
+          ! grep -Fxq 'server/mlb-statcast-matchup.ts' <<< "$changed"

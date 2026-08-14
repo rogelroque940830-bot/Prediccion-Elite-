@@ -1,0 +1,130 @@
+name: Validate P1-M3E.5 Live Frozen Operating Envelope
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-operating-envelope-frozen-live.ts'
+      - 'server/mlb-p1-operating-envelope-frozen-live.test.ts'
+      - 'server/mlb-p1-operating-envelope-frozen-routes.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md'
+      - 'tsconfig.p1-m3e5-live-frozen-envelope.json'
+      - '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m3e5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck focused P1-M3E.5 surface
+        run: npx tsc -p tsconfig.p1-m3e5-live-frozen-envelope.json
+      - name: Run live frozen-envelope falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-p1-operating-envelope-frozen-live.test.ts \
+            server/mlb-p1-operating-envelope-freeze.test.ts \
+            server/mlb-p1-operating-envelope-frozen-evaluation.test.ts \
+            server/mlb-p1-operating-envelope-stability.test.ts
+      - name: Preserve terminal interactive economic-review contract
+        run: npx tsx --test server/mlb-p1-economic-review.test.ts
+      - name: Verify modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend required by S5A
+        run: npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B shadow regression
+        run: npm run test:s5b-shadow
+      - name: Verify chronology, read-only and no-money invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          live='server/mlb-p1-operating-envelope-frozen-live.ts'
+          route='server/mlb-p1-operating-envelope-frozen-routes.ts'
+          docs='docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md'
+
+          grep -F 'courtedge-p1-m3e5-live-frozen-operating-envelope.v1' "$live"
+          grep -F 'buildMlbP1M3e3OperatingEnvelopeFreeze(rows, { generatedAt })' "$live"
+          grep -F 'buildMlbP1M3e4FrozenManifestEvaluation(rows, freeze, { generatedAt })' "$live"
+          grep -F 'P1_M3E5_SOURCE_WINDOW_TRUNCATED' "$live" "$route" "$docs"
+          grep -F 'economicProfitabilityCertified: false' "$live"
+          grep -F 'operationalRecommendationGateAllowed: false' "$live"
+          grep -F 'bettingRecommendationAllowed: false' "$live"
+          grep -F 'stakeChangesAllowed: false' "$live"
+          grep -F 'automaticBettingAllowed: false' "$live"
+          grep -F 'modelProbabilityChanged: false' "$live"
+          grep -F 'existingEconomicThresholdsChanged: false' "$live"
+          grep -F 'premiumNoUltraProspectiveHypothesisChanged: false' "$live"
+          grep -F 'automaticModelChangesAllowed: false' "$live"
+          grep -F 'automaticPromotionAllowed: false' "$live"
+
+          grep -F 'MLB_P1_M3E5_ENDPOINT = "/api/mlb/p1/v1/operating-envelope-frozen"' "$route"
+          grep -F 'requireInteractiveMlbCaptureSession' "$route"
+          grep -F 'ownershipStore.listPredictionIds(userId)' "$route"
+          grep -F 'store.getRecord(predictionId)' "$route"
+          grep -F 'buildMlbP1M3dEconomicReview(records)' "$route"
+          grep -F 'buildMlbP1M3e5LiveFrozenEnvelope(economicReview.rows' "$route"
+          grep -F 'registerMlbP1FrozenOperatingEnvelopeRoutes(app)' server/routes.ts
+          grep -F '"GET", "path": "/api/mlb/p1/v1/operating-envelope-frozen"' server/route-contract.extensions.json
+
+          ! grep -E 'app\.(post|put|patch|delete)\(' "$route"
+          ! grep -E 'appendOwnedPrediction|appendOwnedSettlement|appendPrediction|appendSettlement' "$live" "$route"
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|automaticModelChangesAllowed:[[:space:]]*true|automaticPromotionAllowed:[[:space:]]*true' "$live" "$route"
+      - name: Verify exact isolated P1-M3E.5 or registered successor package
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          if [[ -z "$base" || -z "$head" ]]; then
+            git fetch origin integration/p0-staging-secure --depth=1
+            base='origin/integration/p0-staging-secure'
+            head='HEAD'
+          fi
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+
+          workflow_only=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' | sort)
+
+          m3e5_package=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-live.ts' \
+            'server/mlb-p1-operating-envelope-frozen-routes.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' | sort)
+
+          m2b_official_injury_successor=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'server/routes.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+
+          if [[ "$changed" != "$workflow_only" \
+            && "$changed" != "$m3e5_package" \
+            && "$changed" != "$m2b_official_injury_successor" ]]; then
+            echo 'P1-M3E.5 scope rejected. Diff must be an exact registered package.' >&2
+            printf 'Changed files:\n%s\n' "$changed" >&2
+            exit 1
+          fi

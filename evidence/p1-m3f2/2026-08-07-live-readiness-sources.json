@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "p1-m3f2-live-readiness-source-audit.v1",
+  "generatedAt": "2026-08-07T23:44:11.784Z",
+  "backendCommit": "66ce753a12ca5e80f4b9eafe597f2ff24919ce43",
+  "environment": "p0-integration",
+  "auditDate": "2026-08-07",
+  "selectedGame": {
+    "gamePkSha256": "1c08711c42f3de9d55b4ffd9a28726b4cf06eb84b13bc44b16230ba8d99d17a9",
+    "state": "PREGAME"
+  },
+  "advancedFactors": {
+    "requiredEndpointCount": 5,
+    "successfulEndpointCount": 5,
+    "allSuccessful": true,
+    "anyRecognizedTimestamp": false,
+    "allSuccessfulButUntimed": true,
+    "endpoints": [
+      {
+        "endpoint": "/api/mlb/quality/:gamePk",
+        "httpStatus": 200,
+        "ok": true,
+        "durationMs": 122,
+        "recognizedTimestampCount": 0,
+        "recognizedTimestampKeys": [],
+        "latestRecognizedTimestamp": null,
+        "topLevelSchemaVersion": null,
+        "topLevelSourceStatus": null,
+        "errorCode": null
+      },
+      {
+        "endpoint": "/api/mlb/statcast-matchup/:gamePk",
+        "httpStatus": 200,
+        "ok": true,
+        "durationMs": 554,
+        "recognizedTimestampCount": 0,
+        "recognizedTimestampKeys": [],
+        "latestRecognizedTimestamp": null,
+        "topLevelSchemaVersion": null,
+        "topLevelSourceStatus": null,
+        "errorCode": null
+      },
+      {
+        "endpoint": "/api/mlb/discipline-speed/:gamePk",
+        "httpStatus": 200,
+        "ok": true,
+        "durationMs": 802,
+        "recognizedTimestampCount": 0,
+        "recognizedTimestampKeys": [],
+        "latestRecognizedTimestamp": null,
+        "topLevelSchemaVersion": null,
+        "topLevelSourceStatus": null,
+        "errorCode": null
+      },
+      {
+        "endpoint": "/api/mlb/sos/:gamePk",
+        "httpStatus": 200,
+        "ok": true,
+        "durationMs": 153,
+        "recognizedTimestampCount": 0,
+        "recognizedTimestampKeys": [],
+        "latestRecognizedTimestamp": null,
+        "topLevelSchemaVersion": null,
+        "topLevelSourceStatus": null,
+        "errorCode": null
+      },
+      {
+        "endpoint": "/api/mlb/advanced/:gamePk",
+        "httpStatus": 200,
+        "ok": true,
+        "durationMs": 103,
+        "recognizedTimestampCount": 0,
+        "recognizedTimestampKeys": [],
+        "latestRecognizedTimestamp": null,
+        "topLevelSchemaVersion": null,
+        "topLevelSourceStatus": null,
+        "errorCode": null
+      }
+    ]
+  },
+  "bullpen": {
+    "endpoint": "/api/mlb/bullpen-status/:gamePk",
+    "httpStatus": 200,
+    "ok": true,
+    "durationMs": 219,
+    "recognizedTimestampCount": 4,
+    "recognizedTimestampKeys": [
+      "generatedAt"
+    ],
+    "latestRecognizedTimestamp": "2026-08-07T23:44:07.606Z",
+    "topLevelSchemaVersion": null,
+    "topLevelSourceStatus": null,
+    "errorCode": null,
+    "sides": [
+      {
+        "side": "home",
+        "sourceStatus": "CERTIFIED",
+        "generatedAt": "2026-08-07T23:44:07.578Z",
+        "provenanceSchemaVersion": "courtedge-mlb-bullpen-evidence.v1",
+        "provenanceStatus": "CERTIFIED",
+        "failureDisposition": "THROW_FAIL_CLOSED"
+      },
+      {
+        "side": "away",
+        "sourceStatus": "CERTIFIED",
+        "generatedAt": "2026-08-07T23:44:07.606Z",
+        "provenanceSchemaVersion": "courtedge-mlb-bullpen-evidence.v1",
+        "provenanceStatus": "CERTIFIED",
+        "failureDisposition": "THROW_FAIL_CLOSED"
+      }
+    ],
+    "bothSidesCertified": true
+  },
+  "injuries": {
+    "aggregateHttpStatus": 200,
+    "aggregateOk": true,
+    "matchingGameFound": true,
+    "sideStatuses": [
+      {
+        "side": "home",
+        "status": "PARTIAL",
+        "officialValidationStatus": "VERIFIED",
+        "stale": false,
+        "fetchedAt": "2026-08-07T23:44:08.095Z",
+        "sourceErrorCount": 0,
+        "injuryCount": 10
+      },
+      {
+        "side": "away",
+        "status": "PARTIAL",
+        "officialValidationStatus": "VERIFIED",
+        "stale": false,
+        "fetchedAt": "2026-08-07T23:44:08.095Z",
+        "sourceErrorCount": 0,
+        "injuryCount": 8
+      }
+    ]
+  },
+  "interpretationBoundary": {
+    "changesSources": false,
+    "changesReadinessPolicy": false,
+    "changesModel": false,
+    "changesThresholds": false,
+    "authorizesPromotion": false
+  },
+  "safety": {
+    "publicReadOnlyEndpointsOnly": true,
+    "predictionsCreated": 0,
+    "settlementsCreated": 0,
+    "betsPlaced": 0,
+    "realFinancialExposure": 0
+  }
+}

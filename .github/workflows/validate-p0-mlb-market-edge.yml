@@ -1,0 +1,133 @@
+name: Validate P0 MLB Market Edge
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - '.github/workflows/validate-p0-mlb-market-edge.yml'
+      - 'server/mlb-market-edge.ts'
+      - 'server/mlb-market-edge.test.ts'
+      - 'server/mlb-market-edge-integrity.test.ts'
+      - 'server/mlb-selective-odds-acquisition.ts'
+      - 'server/mlb-market-odds-normalizer.ts'
+      - 'server/mlb-market-contract.ts'
+      - 'server/mlb-p1-economic-decision-contract.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-market-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Run push-aware Market Edge falsification tests
+        run: |
+          npx tsx --test server/mlb-market-edge.test.ts
+          npx tsx --test server/mlb-market-edge-integrity.test.ts
+
+      - name: Preserve quote, settlement and economic conversion regressions
+        run: |
+          npx tsx --test server/mlb-market-odds-normalizer.test.ts
+          npx tsx --test server/mlb-p1-economic-decision-contract.test.ts
+
+      - name: Preserve modular routes and production backend
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+
+      - name: Prove Market Edge stays push-aware, provenance-bound, lossless, fresh, threshold-free and post-price only
+        shell: bash
+        run: |
+          set -euo pipefail
+          edge='server/mlb-market-edge.ts'
+          integrity='server/mlb-market-edge-integrity.test.ts'
+
+          ! grep -nE '\bfetch\s*\(|ODDS_API_KEY|api\.the-odds-api\.com|x-requests-|setInterval|setTimeout|app\.get|app\.post|router\.get|router\.post|register[A-Za-z]*Routes|process\.env' "$edge"
+          ! grep -F 'evaluateMlbP1M4aEconomicDecision' "$edge"
+          ! grep -F 'MLB_P1_M4A_BET_EDGE_FLOOR_PP' "$edge"
+          ! grep -F 'MLB_P1_M4A_LEAN_EDGE_FLOOR_PP' "$edge"
+          ! grep -F 'MLB_P1_M4A_BET_CONFIDENCE_FLOOR' "$edge"
+          ! grep -F 'round(line, 9).toFixed(9)' "$edge"
+          ! grep -F 'round(value, 12) : null' "$edge"
+
+          grep -F 'courtedge-p0-mlb-market-edge.v1' "$edge"
+          grep -F 'probabilitySemantics: "UNCONDITIONAL_SETTLEMENT"' "$edge"
+          grep -F 'MODEL_PUSH_PROBABILITY_REQUIRED' "$edge"
+          grep -F 'winProbability * (decimal - 1) - Math.max(0, lossProbability)' "$edge"
+          grep -F 'const currentBreakEvenWinProbability = (1 - pushProbability) / currentDecimal' "$edge"
+          grep -F 'const decisiveWinProbability = decisiveDenominator > 0 ? winProbability / decisiveDenominator' "$edge"
+          grep -F 'quoteStillFresh(executionQuote, now)' "$edge"
+          grep -F 'timestampStillFresh(quote.providerLastUpdate, now, 120_000)' "$edge"
+          grep -F 'executionQuote.bookKey !== "hardrockbet_fl"' "$edge"
+          grep -F 'executionQuote.providerMarketKey !== thesis.providerMarketKey' "$edge"
+          grep -F 'EXECUTION_QUOTE_IDENTITY_MISMATCH' "$edge"
+          grep -F 'MODEL_INPUT_DIGEST_MISMATCH' "$edge"
+          grep -F 'MODEL_EXECUTION_LINE_IDENTITY_MISMATCH' "$edge"
+          grep -F 'buildMlbMarketProbabilityAssessmentDigest(digestInput)' "$edge"
+          grep -F 'buildMlbMarketProbabilityAssessmentIdentityKey' "$edge"
+          grep -F 'exactCanonicalAssessment(input)' "$edge"
+          grep -F 'exactNumberIdentity(line)' "$edge"
+          grep -F 'return Object.is(left, right) || left === right;' "$edge"
+          grep -F 'return line != null && Number.isInteger(line);' "$edge"
+          grep -F 'typeof assessment.modelVersion !== "string"' "$edge"
+          grep -F 'marketQuote.availability !== "EXECUTABLE"' "$edge"
+          grep -F 'EXACT_MARKET_MODEL_ASSESSMENT_REQUIRED' "$edge"
+          grep -F 'MODEL_SOURCE_POLICY_MISMATCH' "$edge"
+          grep -F 'fixedEdgeFloorApplied: false' "$edge"
+          grep -F 'legacyM4aBetLeanThresholdsApplied: false' "$edge"
+          grep -F 'legacyBinaryEvAppliedToPushCapableMarkets: false' "$edge"
+          grep -F 'referenceBooksCanSubstituteExecution: false' "$edge"
+          grep -F 'referenceConsensusIsDiagnosticOnly: true' "$edge"
+          grep -F 'quoteFreshnessRecheckedAtEvaluation: true' "$edge"
+          grep -F 'providerLastUpdateFreshnessRecheckedAtEvaluation: true' "$edge"
+          grep -F 'modelInputDigestRecomputedBeforeEconomics: true' "$edge"
+          grep -F 'losslessAssessmentIdentityKeyRequired: true' "$edge"
+          grep -F 'losslessModelAssessmentDigestRequired: true' "$edge"
+          grep -F 'missingModelProvenanceFailsClosedWithoutThrow: true' "$edge"
+          grep -F 'executionQuoteIdentityRevalidated: true' "$edge"
+          grep -F 'marketRankingProduced: false' "$edge"
+          grep -F 'operatingEnvelopeApplied: false' "$edge"
+          grep -F 'eliteLabelProduced: false' "$edge"
+          grep -F 'recommendsBet: false' "$edge"
+          grep -F 'stakeCalculated: false' "$edge"
+          grep -F 'callsTheOddsApi: false' "$edge"
+          grep -F 'theOddsApiCreditsConsumed: 0' "$edge"
+          grep -F 'automaticBetPlacement: false' "$edge"
+          grep -F 'realFinancialExposure: 0' "$edge"
+
+          grep -F 'assessment identity key is lossless for exact quote-line matching' "$integrity"
+          grep -F 'assessment digest changes for sub-12-decimal probability mutations' "$integrity"
+          grep -F 'assessment digest binds exact numeric line identity' "$integrity"
+
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" | sort)
+          expected_hotfix=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-edge.yml' \
+            'server/mlb-market-edge-integrity.test.ts' \
+            'server/mlb-market-edge.ts' | sort)
+          expected_core=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-edge.yml' \
+            'server/mlb-market-edge.test.ts' \
+            'server/mlb-market-edge.ts' | sort)
+          expected_step11a_sanitation=$(printf '%s\n' \
+            '.github/workflows/validate-p0-mlb-market-edge.yml' \
+            '.github/workflows/validate-p0-mlb-operating-envelope.yml' \
+            'server/mlb-market-edge.ts' \
+            'server/mlb-operating-envelope.test.ts' \
+            'server/mlb-operating-envelope.ts' \
+            'server/mlb-selective-odds-acquisition.ts' | sort)
+          [[ "$changed" == "$expected_hotfix" || "$changed" == "$expected_core" || "$changed" == "$expected_step11a_sanitation" ]]

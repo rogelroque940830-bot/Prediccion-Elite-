@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-market-probability-contract.ts",
+    "server/mlb-market-historical-dataset.ts",
+    "server/mlb-market-historical-source.ts",
+    "server/mlb-market-starting-pitcher-history.ts",
+    "server/mlb-market-starting-pitcher-history.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

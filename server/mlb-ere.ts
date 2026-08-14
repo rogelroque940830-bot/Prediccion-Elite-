@@ -25,6 +25,14 @@
 // Node 20+ provides global fetch natively; no need to import node-fetch.
 import { fetchSavantTeamXwobaVsHand } from "./mlb-savant-team.js";
 import { getRotowireLineupForGame, type RotowireGame } from "./mlb-rotowire-lineups.js";
+import {
+  collapseMlbPitcherInningSplits,
+  eraFromOuts,
+  inningsDecimalFromOuts,
+  mlbIpToOuts,
+  perNineFromOuts,
+  whipFromOuts,
+} from "./mlb-ere-pitcher-splits.js";
 
 // ── LEAGUE BASELINES (MLB 2026 estándares) ────────────────────────────────
 const LEAGUE = {
@@ -106,11 +114,16 @@ export interface EreInput {
   tempF?: number;
   windMph?: number;
   windDirOut?: boolean;
+  gameDate?: string;          // YYYY-MM-DD; all recent windows end before this game
 }
 
 export interface EreResult {
   teamId: number;
   teamName: string;
+  dataStatus: "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE";
+  asOfDate: string;
+  windowStart: string;
+  sourceErrors: string[];
   // Composite
   ereScore: number;            // 0-100 final con park/weather modifier
   ereRaw: number;              // 0-100 sin modifiers
@@ -142,13 +155,15 @@ export interface EreResult {
     pitcherPrior?: number;         // Prior individual del pitcher (0-100)
     pitcherPriorUsed?: boolean;    // ¿Se aplicó regresión hacia prior?
     pitcherSeasonEra?: number;     // ERA season usada para el prior
+    pitcherEvidenceCoverage?: number; // 0-1 de peso ERE pitcher con evidencia real
+    pitcherEvidenceStatus?: "VERIFIED" | "INCOMPLETE";
   };
   // F5 INNING-BY-INNING DATA (nuevo — 14 jun 2026)
   // ERA por cada inning 1-9 + TTO penalty real basado en ERA.
   // Los valores principales (f5Era, ttoXEraProxy) son BLENDED: 60% recent + 40% season.
   // Los *Season fields exponen season-only para comparación.
   f5InningData?: {
-    inningsByInning: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null;
+    inningsByInning: Record<string, { era: number; ip: number; outs: number; er: number; k: number; bb: number; h: number; hr: number }> | null;
     f5Era: number | null;     // BLENDED (recent 60% + season 40%)
     f5EraSeason: number | null;  // Season only (referencia)
     f5K9: number | null;
@@ -170,7 +185,10 @@ export interface EreResult {
 }
 
 export async function computeMlbEre(input: EreInput): Promise<EreResult> {
-  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut } = input;
+  const { teamId, teamName, gamePk, opposingPitcherId, opposingPitcherHand, venue, tempF, windMph, windDirOut, gameDate } = input;
+  const asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || "")
+    ? String(gameDate)
+    : new Date().toISOString().slice(0, 10);
 
   // ── 0. Rotowire lineup (anticipa 4-6h, mejor que boxscore que confirma 30min antes)
   let rotowireLineup: RotowireGame | null = null;
@@ -203,7 +221,7 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   // ── 1. Offense data (paralelo) ──────────────────────────────────────────
   const useRotowire = rotowireBatterIds.length >= 5;
   const [teamMetrics, lineupTop3, savantTop5, savantTeamXwoba, lineupTop4Woba] = await Promise.all([
-    computeTeamEarlyMetrics(teamId),
+    computeTeamEarlyMetrics(teamId, asOfDate),
     gamePk ? computeLineupTop3OBP(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     gamePk ? computeTop5IsoK(gamePk, teamId, useRotowire ? rotowireBatterIds : undefined) : Promise.resolve(null),
     opposingPitcherHand ? fetchSavantTeamXwobaVsHand(teamId, opposingPitcherHand) : Promise.resolve(null),
@@ -282,10 +300,10 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
         ? (() => {
             const i2 = pitcherData.f5InningsByInning!["i02"];
             const i3 = pitcherData.f5InningsByInning!["i03"];
-            const totalIp = i2.ip + i3.ip;
-            // THRESHOLD: mínimo 6 IP combinados (≈2 starts completos)
-            if (totalIp < 6) return null;
-            return Math.round(((i2.er + i3.er) / totalIp) * 9 * 100) / 100;
+            const totalOuts = i2.outs + i3.outs;
+            // THRESHOLD: mínimo 6 IP combinados = 18 outs (≈2 starts completos)
+            if (totalOuts < 18) return null;
+            return eraFromOuts(i2.er + i3.er, totalOuts);
           })()
         : null,
       LEAGUE.INNING_2_3_ERA, LEAGUE.INNING_2_3_ERA_SD, PITCHER_WEIGHTS.inning23Era, pitcherData.gs, SAMPLE_MIN.PITCHER_GS, true
@@ -299,6 +317,16 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const pitcherPrior = pitcherData.seasonIp >= 10 ? computePitcherPrior(pitcherData) : 50;
   const offenseScore = weightedAvg(offVars);
   const pitcherSuppressionScore = weightedAvg(pitVars, pitcherPrior);
+  // Evidence coverage is a custody/availability gate, not a performance filter.
+  // Missing pitcher evidence must never be converted into a favorable/negative bet signal.
+  const pitcherEvidenceCoverage = Object.values(pitVars).reduce(
+    (sum, v) => sum + Math.max(0, v.weight),
+    0,
+  );
+  const pitcherEvidenceIncomplete =
+    !opposingPitcherId ||
+    pitcherData.gs < MIN_GS_FIRST_INN ||
+    pitcherEvidenceCoverage < 0.70;
   const ereRaw = Math.round((0.5 * offenseScore + 0.5 * (100 - pitcherSuppressionScore)) * 10) / 10;
 
   // ── 5. Park & weather modifier ──────────────────────────────────────────
@@ -311,11 +339,31 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
   const ereScore = Math.max(0, Math.min(100, Math.round(ereRaw * parkFactor * weatherModifier * 10) / 10));
 
   // ── 6. Categoría + sugerencias de mercado ───────────────────────────────
-  const { category, marketSuggestions } = classifyEre(ereScore, offenseScore, pitcherSuppressionScore, teamMetrics.probFirstInn);
+  const effectiveDataStatus: EreResult["dataStatus"] = pitcherEvidenceIncomplete
+    ? "DATA_INCOMPLETE"
+    : teamMetrics.dataStatus;
+  const dataUnverified = effectiveDataStatus !== "VERIFIED";
+  const classified = dataUnverified
+    ? { category: "NEUTRAL" as EreResult["category"], marketSuggestions: [] as string[] }
+    : classifyEre(ereScore, offenseScore, pitcherSuppressionScore, teamMetrics.probFirstInn);
+  const { category, marketSuggestions } = classified;
   const warnings = collectWarnings(offVars, pitVars, teamMetrics, pitcherData);
+  if (pitcherEvidenceIncomplete) {
+    warnings.unshift(`PITCHER_EVIDENCE_INCOMPLETE: cobertura ${Math.round(pitcherEvidenceCoverage * 100)}%; mercados early bloqueados`);
+  } else if (teamMetrics.dataStatus === "DATA_INCOMPLETE") {
+    warnings.unshift("DATA_INCOMPLETE: no se validaron linescores suficientes; mercados early bloqueados");
+  } else if (teamMetrics.dataStatus === "PARTIAL") {
+    warnings.unshift(`Cobertura early parcial (${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto`);
+  }
 
   return {
     teamId, teamName,
+    dataStatus: effectiveDataStatus,
+    asOfDate: teamMetrics.asOfDate,
+    windowStart: teamMetrics.windowStart,
+    sourceErrors: pitcherEvidenceIncomplete
+      ? [...teamMetrics.sourceErrors, "pitcher:PITCHER_EVIDENCE_INCOMPLETE"]
+      : teamMetrics.sourceErrors,
     ereScore, ereRaw,
     category,
     offenseScore: Math.round(offenseScore * 10) / 10,
@@ -339,6 +387,8 @@ export async function computeMlbEre(input: EreInput): Promise<EreResult> {
       pitcherPriorUsed: pitcherData.seasonIp >= 10 &&
         Object.values(pitVars).filter((v: any) => v.weight === 0).length > 0,
       pitcherSeasonEra: pitcherData.seasonEra ?? undefined,
+      pitcherEvidenceCoverage: Math.round(pitcherEvidenceCoverage * 1000) / 1000,
+      pitcherEvidenceStatus: pitcherEvidenceIncomplete ? "INCOMPLETE" : "VERIFIED",
     },
     f5InningData: {
       inningsByInning: pitcherData.f5InningsByInning,
@@ -475,17 +525,42 @@ function collectWarnings(
 // ──────────────────────────────────────────────────────────────────────────
 // HELPER: Team early metrics (runs 1-3, F5, prob 1st inn, L7 RPG)
 // ──────────────────────────────────────────────────────────────────────────
-async function computeTeamEarlyMetrics(teamId: number) {
-  const end = new Date();
+async function computeTeamEarlyMetrics(teamId: number, asOfDate: string) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? new Date(`${asOfDate}T12:00:00Z`)
+    : new Date();
+  // The selected game must never enter its own pre-game sample.
+  const end = new Date(parsed);
+  end.setUTCDate(end.getUTCDate() - 1);
   const start = new Date(end.getTime() - 60 * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const windowStart = fmt(start);
+  const windowEnd = fmt(end);
+  const sourceErrors: string[] = [];
 
-  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${fmt(start)}&endDate=${fmt(end)}&gameType=R`;
+  const baseline = (status: "DATA_INCOMPLETE" | "PARTIAL" = "DATA_INCOMPLETE") => ({
+    gamesAnalyzed: 0,
+    earlyOff: LEAGUE.RUNS_1_3,
+    f5Runs: LEAGUE.F5_RUNS,
+    probFirstInn: LEAGUE.YRFI_RATE,
+    l7Rpg: LEAGUE.L7_RPG,
+    dataStatus: status as "VERIFIED" | "PARTIAL" | "DATA_INCOMPLETE",
+    asOfDate,
+    windowStart,
+    sourceErrors,
+  });
+
+  if (end.getTime() < start.getTime()) {
+    sourceErrors.push("invalid_date_window");
+    return baseline();
+  }
+
+  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${windowStart}&endDate=${windowEnd}&gameType=R`;
   let gamePks: number[] = [];
-  // BUG FIX: /linescore NO devuelve teams.home.team.id, mapeamos desde el schedule.
   const gameTeamMap = new Map<number, { homeId: number; awayId: number }>();
   try {
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+    if (!r.ok) throw new Error(`schedule_http_${r.status}`);
     const j: any = await r.json();
     for (const dd of j.dates ?? []) {
       for (const g of dd.games ?? []) {
@@ -498,36 +573,44 @@ async function computeTeamEarlyMetrics(teamId: number) {
         }
       }
     }
-    console.log(`[ERE] team ${teamId}: fetched ${gamePks.length} finalized games from schedule`);
+    console.log(`[ERE] team ${teamId}: fetched ${gamePks.length} finalized games through ${windowEnd}`);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    sourceErrors.push(`schedule:${msg}`);
     console.error(`[ERE] team ${teamId}: schedule fetch FAILED:`, e);
-    return { gamesAnalyzed: 0, earlyOff: 0, f5Runs: 0, probFirstInn: 0, l7Rpg: LEAGUE.L7_RPG };
+    return baseline();
   }
+
   const recent = gamePks.slice(-30);
+  if (recent.length === 0) {
+    sourceErrors.push("schedule:no_final_games");
+    return baseline();
+  }
 
   const linescores = await Promise.all(
     recent.map(async (pk) => {
       try {
         const lr = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/linescore`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
+        if (!lr.ok) throw new Error(`http_${lr.status}`);
         const data = await lr.json() as any;
-        // Inyectar teamIds desde el map porque /linescore no los trae
         const ids = gameTeamMap.get(pk);
         if (ids) {
           if (data.teams?.home) data.teams.home.__teamId = ids.homeId;
           if (data.teams?.away) data.teams.away.__teamId = ids.awayId;
         }
         return data;
-      } catch { return null; }
+      } catch (e) {
+        sourceErrors.push(`linescore:${pk}:${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
     })
   );
 
   let totalEarlyOff = 0, totalF5 = 0, firstInnScored = 0, gamesAnalyzed = 0;
   const l7Runs: number[] = [];
 
-  for (let idx = 0; idx < linescores.length; idx++) {
-    const ls = linescores[idx];
+  for (const ls of linescores) {
     if (!ls) continue;
-    // Usar el campo inyectado __teamId (ver map arriba). El default team.id no existe en /linescore.
     const isHome = ls.teams?.home?.__teamId === teamId || ls.teams?.home?.team?.id === teamId;
     const isAway = ls.teams?.away?.__teamId === teamId || ls.teams?.away?.team?.id === teamId;
     if (!isHome && !isAway) continue;
@@ -551,16 +634,25 @@ async function computeTeamEarlyMetrics(teamId: number) {
     l7Runs.push(fullGameRuns);
   }
 
-  const g = Math.max(1, gamesAnalyzed);
+  if (gamesAnalyzed === 0) {
+    sourceErrors.push("linescore:no_valid_games");
+    return baseline();
+  }
+
   const last7 = l7Runs.slice(-7);
   const l7Rpg = last7.length > 0 ? last7.reduce((a, b) => a + b, 0) / last7.length : LEAGUE.L7_RPG;
+  const dataStatus: "VERIFIED" | "PARTIAL" = gamesAnalyzed >= 10 ? "VERIFIED" : "PARTIAL";
 
   return {
     gamesAnalyzed,
-    earlyOff: Math.round((totalEarlyOff / g) * 100) / 100,
-    f5Runs: Math.round((totalF5 / g) * 100) / 100,
-    probFirstInn: Math.round((firstInnScored / g) * 100) / 100,
+    earlyOff: Math.round((totalEarlyOff / gamesAnalyzed) * 100) / 100,
+    f5Runs: Math.round((totalF5 / gamesAnalyzed) * 100) / 100,
+    probFirstInn: Math.round((firstInnScored / gamesAnalyzed) * 100) / 100,
     l7Rpg: Math.round(l7Rpg * 100) / 100,
+    dataStatus,
+    asOfDate,
+    windowStart,
+    sourceErrors,
   };
 }
 
@@ -840,7 +932,7 @@ function emptyPitcherData() {
     f5Whip: null as number | null,
     f5Hr9: null as number | null,
     f5Ip: 0,
-    f5InningsByInning: null as Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> | null,
+    f5InningsByInning: null as Record<string, { era: number; ip: number; outs: number; er: number; k: number; bb: number; h: number; hr: number }> | null,
     hasRecentForm: false,                   // True si tenemos sample reciente suficiente
     // TTO penalty REAL basado en ERA (BLENDED recent + season)
     tto1EraProxy: null as number | null,    // BLENDED
@@ -884,7 +976,7 @@ async function computePitcherRecentStats(
     const starts = ((lj.stats?.[0]?.splits ?? []) as any[])
       .filter((s: any) => {
         const gs = parseInt(s.stat?.gamesStarted) || 0;
-        const ip = parseFloat(s.stat?.inningsPitched || "0");
+        const ip = inningsDecimalFromOuts(mlbIpToOuts(s.stat?.inningsPitched));
         return gs >= 1 && ip >= 3 && s.date !== todayStr;
       })
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -981,7 +1073,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       const era = parseFloat(s.era);
       const whip = parseFloat(s.whip);
       const k9 = parseFloat(s.strikeoutsPer9Inn);
-      const ip = parseFloat(s.inningsPitched || "0");
+      const ip = inningsDecimalFromOuts(mlbIpToOuts(s.inningsPitched));
       if (isFinite(era)) data.seasonEra = era;
       if (isFinite(whip)) data.seasonWhip = whip;
       if (isFinite(k9)) data.seasonK9 = k9;
@@ -1000,70 +1092,63 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
     const j: any = await r.json();
     const splits = j.stats?.[0]?.splits ?? [];
 
-    // Map per-inning stats indexed by inning code (i01-i05)
-    const inningMap: Record<string, any> = {};
-    for (const s of splits) {
-      const code = s.split?.code; // e.g. "i01"
-      if (code) inningMap[code] = s.stat;
-    }
+    // StatsAPI can return multiple rows for one inning when a pitcher changes teams,
+    // followed by a no-team aggregate. Collapse by team custody instead of array order.
+    const inningMap = collapseMlbPitcherInningSplits(splits);
 
     // Inning 1 stats — mantiene firstInnEra/yrfiAllowed/whip13 para compatibilidad
     const i01 = inningMap["i01"];
-    if (i01) {
-      const er = parseInt(i01.earnedRuns) || 0;
-      const ip = parseFloat(i01.inningsPitched || "0");
-      if (ip > 0) data.firstInnEra = Math.round((er / ip) * 9 * 100) / 100;
-      const gs = parseInt(i01.gamesStarted) || 0;
-      data.gs = Math.max(data.gs, gs);
-      const r1 = parseInt(i01.runs) || 0;
-      const gp = parseInt(i01.gamesPlayed) || 0;
-      if (gp > 0) data.yrfiAllowed = Math.min(1, r1 / gp);
-      const h = parseInt(i01.hits) || 0;
-      const bb = parseInt(i01.baseOnBalls) || 0;
-      if (ip > 0) data.whip13 = Math.round(((h + bb) / ip) * 100) / 100;
+    if (i01 && i01.outs > 0) {
+      data.firstInnEra = eraFromOuts(i01.earnedRuns, i01.outs);
+      data.gs = Math.max(data.gs, Math.trunc(i01.gamesPlayed));
+      if (i01.gamesPlayed > 0) data.yrfiAllowed = Math.min(1, i01.runs / i01.gamesPlayed);
+      data.whip13 = whipFromOuts(i01.hits, i01.baseOnBalls, i01.outs);
     }
 
-    // Helper: aggregate stats for a group of innings
+    // Aggregate by recorded outs. MLB notation 8.1 means 8 1/3 innings, not 8.1 decimal.
     const aggregate = (codes: string[]) => {
-      let ip = 0, er = 0, k = 0, bb = 0, h = 0, hr = 0, r = 0;
+      let outs = 0, er = 0, k = 0, bb = 0, h = 0, hr = 0, r = 0;
       for (const c of codes) {
         const s = inningMap[c];
         if (!s) continue;
-        ip += parseFloat(s.inningsPitched || "0");
-        er += parseInt(s.earnedRuns) || 0;
-        k += parseInt(s.strikeOuts) || 0;
-        bb += parseInt(s.baseOnBalls) || 0;
-        h += parseInt(s.hits) || 0;
-        hr += parseInt(s.homeRuns) || 0;
-        r += parseInt(s.runs) || 0;
+        outs += s.outs;
+        er += s.earnedRuns;
+        k += s.strikeOuts;
+        bb += s.baseOnBalls;
+        h += s.hits;
+        hr += s.homeRuns;
+        r += s.runs;
       }
-      if (ip === 0) return null;
+      if (outs === 0) return null;
       return {
-        ip,
-        era: Math.round((er / ip) * 9 * 100) / 100,
-        k9: Math.round((k / ip) * 9 * 100) / 100,
-        bb9: Math.round((bb / ip) * 9 * 100) / 100,
-        whip: Math.round(((h + bb) / ip) * 100) / 100,
-        hr9: Math.round((hr / ip) * 9 * 100) / 100,
+        outs,
+        ip: inningsDecimalFromOuts(outs),
+        era: eraFromOuts(er, outs)!,
+        k9: perNineFromOuts(k, outs)!,
+        bb9: perNineFromOuts(bb, outs)!,
+        whip: whipFromOuts(h, bb, outs)!,
+        hr9: perNineFromOuts(hr, outs)!,
         er, k, bb, h, hr, r,
       };
     };
 
     // F5 AGREGADO (innings 1-5)
-    const innByInn: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
+    const innByInn: Record<string, { era: number; ip: number; outs: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
     for (let i = 1; i <= 9; i++) {
       const code = i < 10 ? `i0${i}` : `i${i}`;
       const s = inningMap[code];
-      if (!s) continue;
-      const ip = parseFloat(s.inningsPitched || "0");
+      if (!s || s.outs <= 0) continue; // zero outs = N/D, never synthetic 0.00 ERA
+      const era = eraFromOuts(s.earnedRuns, s.outs);
+      if (era === null) continue;
       innByInn[code] = {
-        era: ip > 0 ? Math.round(((parseInt(s.earnedRuns) || 0) / ip) * 9 * 100) / 100 : 0,
-        ip,
-        er: parseInt(s.earnedRuns) || 0,
-        k: parseInt(s.strikeOuts) || 0,
-        bb: parseInt(s.baseOnBalls) || 0,
-        h: parseInt(s.hits) || 0,
-        hr: parseInt(s.homeRuns) || 0,
+        era,
+        ip: s.inningsPitched,
+        outs: s.outs,
+        er: s.earnedRuns,
+        k: s.strikeOuts,
+        bb: s.baseOnBalls,
+        h: s.hits,
+        hr: s.homeRuns,
       };
     }
 
@@ -1122,21 +1207,17 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       const rR = await fetch(recentUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; CourtEdge/1.0)" } });
       const jR: any = await rR.json();
       const recentSplits = jR.stats?.[0]?.splits ?? [];
-      const recentMap: Record<string, any> = {};
-      for (const s of recentSplits) {
-        const c = s.split?.code;
-        if (c) recentMap[c] = s.stat;
-      }
+      const recentMap = collapseMlbPitcherInningSplits(recentSplits);
       const aggregateRecent = (codes: string[]) => {
-        let ip = 0, er = 0;
+        let outs = 0, er = 0;
         for (const c of codes) {
           const s = recentMap[c];
           if (!s) continue;
-          ip += parseFloat(s.inningsPitched || "0");
-          er += parseInt(s.earnedRuns) || 0;
+          outs += s.outs;
+          er += s.earnedRuns;
         }
-        if (ip === 0) return null;
-        return { ip, era: Math.round((er / ip) * 9 * 100) / 100 };
+        if (outs === 0) return null;
+        return { outs, ip: inningsDecimalFromOuts(outs), era: eraFromOuts(er, outs)! };
       };
       const recentF5 = aggregateRecent(["i01", "i02", "i03", "i04", "i05"]);
       const recentTto1 = aggregateRecent(["i01", "i02", "i03"]);
@@ -1212,7 +1293,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       const gs = parseInt(s.stat?.gamesStarted) || 0;
       if (gs < 1) return false;
       if (s.date === todayStr) return false;
-      const ip = parseFloat(s.stat?.inningsPitched || "0");
+      const ip = inningsDecimalFromOuts(mlbIpToOuts(s.stat?.inningsPitched));
       if (ip < 3) return false;
       return true;
     });
@@ -1224,7 +1305,7 @@ async function computePitcherEarlyMetrics(pitcherId: number) {
       let totalPitches = 0, totalIp = 0;
       for (const s of recent10) {
         totalPitches += parseInt(s.stat?.numberOfPitches) || 0;
-        totalIp += parseFloat(s.stat?.inningsPitched || "0");
+        totalIp += inningsDecimalFromOuts(mlbIpToOuts(s.stat?.inningsPitched));
       }
       if (totalIp > 0) {
         data.pitchCount12 = Math.round((totalPitches / totalIp) * 2);

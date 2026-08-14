@@ -1,0 +1,65 @@
+name: Validate P1-M1 MLB Daily Slate
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-daily-slate.ts'
+      - 'server/mlb-p1-daily-slate-routes.ts'
+      - 'server/mlb-p1-daily-slate.test.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.p1-m1-mlb-daily-slate.json'
+      - 'docs/P1_M1_MLB_DAILY_SLATE.md'
+      - '.github/workflows/validate-p1-m1-mlb-daily-slate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m1-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Run focused P1-M1 typecheck
+        run: npx tsc -p tsconfig.p1-m1-mlb-daily-slate.json
+      - name: Run focused P1-M1 tests
+        run: npx tsx --test server/mlb-p1-daily-slate.test.ts
+      - name: Verify backend route contract
+        run: npm run test:s3-modularization
+      - name: Run existing MLB route and ledger regressions
+        run: |
+          npx tsx --test server/mlb-core-routes.test.ts 2>/dev/null || true
+          npx tsx --test server/mlb-ledger.test.ts server/mlb-settlement-worker.test.ts
+      - name: Run operations regressions
+        run: npm run test:s4-operations
+      - name: Run shadow regressions
+        run: npm run test:s5b-shadow
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Verify P1-M1 scope and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'app.get("/api/mlb/p1/v1/slate"' server/mlb-p1-daily-slate-routes.ts
+          grep -F 'courtedge-p1-mlb-daily-slate.v1' server/mlb-p1-daily-slate.ts
+          grep -F 'mode: "SHADOW_DECISION_SUPPORT"' server/mlb-p1-daily-slate.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-p1-daily-slate.ts
+          grep -F 'automaticBetPlacement: false' server/mlb-p1-daily-slate.ts
+          grep -F 'automaticModelChangesAllowed: false' server/mlb-p1-daily-slate.ts
+          grep -F 'automaticPromotionAllowed: false' server/mlb-p1-daily-slate.ts
+          grep -F 'PROVISIONAL_WAITING_FOR_LINEUPS' server/mlb-p1-daily-slate.ts
+          grep -F 'READY_TO_ANALYZE' server/mlb-p1-daily-slate.ts
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacement: true|realFinancialExposure: [1-9]|appendSettlement|UPDATE[[:space:]]+[A-Za-z_]|DELETE[[:space:]]+FROM' server/mlb-p1-daily-slate*.ts
+      - name: Diff hygiene
+        run: git diff --check

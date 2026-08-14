@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-p1-economic-decision-contract.ts",
+    "server/mlb-p1-economic-decision-adapter.ts",
+    "server/mlb-p1-economic-decision-adapter.test.ts",
+    "server/mlb-p1-scientific-capture-contract.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "types": ["node"],
+    "noEmit": true
+  }
+}

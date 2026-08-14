@@ -29,6 +29,50 @@ export interface PitcherVsTeamHistory {
 
 const cache: Record<string, { ts: number; data: PitcherVsTeamHistory | null }> = {};
 
+export function isMeaningfulPitcherName(value: unknown): value is string {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name || name === "?" || name === "—") return false;
+  return !/^pitcher(?: local| visitante)? por confirmar$/i.test(name);
+}
+
+function normalizeCacheIdentity(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+export function buildPitcherVsTeamCacheKey(
+  pitcherId: number,
+  pitcherName: string,
+  opponentTeamId: number,
+  opponentTeamName: string,
+): string {
+  return [
+    pitcherId,
+    opponentTeamId,
+    normalizeCacheIdentity(pitcherName),
+    normalizeCacheIdentity(opponentTeamName),
+  ].join("::");
+}
+
+async function resolvePitcherDisplayName(
+  pitcherId: number,
+  candidateName: string,
+): Promise<string> {
+  if (isMeaningfulPitcherName(candidateName)) return candidateName.trim();
+
+  try {
+    const response = await fetch(`${MLB_BASE}/people/${pitcherId}`);
+    if (response.ok) {
+      const payload: any = await response.json();
+      const officialName = payload?.people?.[0]?.fullName;
+      if (isMeaningfulPitcherName(officialName)) return officialName.trim();
+    }
+  } catch {
+    // A later request with a real name receives a different cache key.
+  }
+
+  return "Pitcher por confirmar";
+}
+
 function parseIP(ip: string | undefined): number {
   if (!ip) return 0;
   const parts = String(ip).split(".");
@@ -67,7 +111,15 @@ export async function getPitcherVsTeam(
   opponentTeamId: number,
   opponentTeamName: string,
 ): Promise<PitcherVsTeamHistory | null> {
-  const cacheKey = `${pitcherId}::${opponentTeamId}`;
+  pitcherName = await resolvePitcherDisplayName(pitcherId, pitcherName);
+  opponentTeamName = opponentTeamName.trim() || "Equipo rival";
+
+  const cacheKey = buildPitcherVsTeamCacheKey(
+    pitcherId,
+    pitcherName,
+    opponentTeamId,
+    opponentTeamName,
+  );
   const cached = cache[cacheKey];
   if (cached && Date.now() - cached.ts < 12 * 3600 * 1000) return cached.data;
 

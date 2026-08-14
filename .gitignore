@@ -1,0 +1,32 @@
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+.tmp/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime data
+data/picks.json
+data/wnba-shadow-v1/
+data/wnba-predictor-shadow-v1/
+data/wnba-evaluation-emission-v1/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and OS files
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,59 @@
+name: Validate S6P First Twenty Settlements
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-s6p-first-twenty-settlements-certification.ts'
+      - 'server/mlb-s6p-first-twenty-settlements-certification.test.ts'
+      - 'server/mlb-s6m-statistical-milestones.ts'
+      - 'server/mlb-s6o-first-five-settlements-certification.ts'
+      - 'server/s5b-staging-entry.ts'
+      - 'server/route-contract.extensions.json'
+      - 'tsconfig.s6p-first-twenty-settlements.json'
+      - 'tsconfig.s5b-shadow.json'
+      - 'package.json'
+      - 'docs/S6P_PHASE5C5_FIRST_TWENTY_SETTLEMENTS.md'
+      - '.github/workflows/validate-s6p-first-twenty-settlements.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-s6p:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Run focused Phase 5C-5 tests
+        run: npm run test:s6p-first-twenty-settlements
+      - name: Type-check Phase 5C-5 surface
+        run: npm run typecheck:s6p-first-twenty-settlements
+      - name: Type-check complete shadow surface
+        run: npm run typecheck:s5b-shadow
+      - name: Preserve modular route contract
+        run: npm run test:s3-modularization
+      - name: Build production backend bundle
+        run: npm run build:backend
+      - name: Verify scientific and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ARMED_AND_WAITING_FOR_20' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'OBSERVING_TWENTY_RESULT_STABILITY' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'MINIMUM_SAMPLE_20_CERTIFIED' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'PRELIMINARY_REVIEW_ONLY_INSUFFICIENT_FOR_MODEL_CONCLUSIONS' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'preliminaryReviewAvailable' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'sampleAdequateForModelConclusions: false' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'automaticModelChangesAllowed: false' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q 'realFinancialExposure: 0' server/mlb-s6p-first-twenty-settlements-certification.ts
+          grep -q '/health/s6p-first-twenty-settlements' server/s5b-staging-entry.ts
+          grep -q '/api/mlb/ledger/v1/s6p-first-twenty-settlements/status' server/s5b-staging-entry.ts
+          grep -q '/api/mlb/ledger/v1/s6p-first-twenty-settlements/evidence' server/s5b-staging-entry.ts

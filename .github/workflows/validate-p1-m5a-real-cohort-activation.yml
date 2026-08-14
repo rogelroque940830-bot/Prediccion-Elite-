@@ -1,0 +1,179 @@
+name: Validate P1-M5A Real Cohort Activation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-p1-real-cohort-activation.ts'
+      - 'server/mlb-p1-real-cohort-activation.test.ts'
+      - 'server/mlb-p1-economic-review.ts'
+      - 'server/mlb-p1-economic-review.test.ts'
+      - 'server/mlb-premium-no-ultra-prospective-routes.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.ts'
+      - 'server/mlb-statcast-matchup-vsteam-identity.test.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.ts'
+      - 'server/mlb-statcast-matchup-identity-routes.test.ts'
+      - 'server/mlb-statcast-matchup-certifier.ts'
+      - 'server/mlb-statcast-matchup-certifier.test.ts'
+      - 'server/routes.ts'
+      - 'server/route-contract.extensions.json'
+      - 'docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
+      - 'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md'
+      - 'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md'
+      - 'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md'
+      - 'tsconfig.p1-m5a-real-cohort-activation.json'
+      - 'tsconfig.p1-premium-no-ultra-prospective-readonly.json'
+      - 'tsconfig.p1-m3f3b5-vsteam-identity.json'
+      - '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml'
+      - '.github/workflows/validate-p1-m3d-interactive-economic-review.yml'
+      - '.github/workflows/validate-p1-m3e-operating-envelope.yml'
+      - '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml'
+      - '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml'
+      - '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml'
+      - '.github/workflows/validate-p1-m4c-backend-economic-response.yml'
+      - '.github/workflows/validate-p1-m5a-real-cohort-activation.yml'
+      - '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-p1-m5a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Typecheck P1-M5A surface
+        run: npx tsc -p tsconfig.p1-m5a-real-cohort-activation.json
+      - name: Run P1-M5A and inherited economic review tests
+        run: |
+          npx tsx --test \
+            server/mlb-p1-real-cohort-activation.test.ts \
+            server/mlb-p1-economic-review.test.ts \
+            server/mlb-p1-economic-decision-contract.test.ts \
+            server/mlb-p1-economic-decision-adapter.test.ts \
+            server/mlb-p1-scientific-capture-service.test.ts \
+            server/mlb-shadow-evaluation.test.ts
+      - name: Verify modular routes and production backend build
+        run: |
+          npm run test:s3-modularization
+          npm run build:backend
+      - name: Run S5A real-save regression
+        run: npm run test:s5a-e2e
+      - name: Run complete S5B/S6 scientific regression
+        run: npm run test:s5b-shadow
+      - name: Verify activation certificate and safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          activation='server/mlb-p1-real-cohort-activation.ts'
+          review='server/mlb-p1-economic-review.ts'
+          testfile='server/mlb-p1-real-cohort-activation.test.ts'
+          docs='docs/P1_M5A_REAL_COHORT_ACTIVATION.md'
+
+          grep -F 'courtedge-p1-m5a-real-cohort-activation.v1' "$activation"
+          grep -F 'p1-m5a-real-cohort-activation-2026-08-06' "$activation"
+          grep -F 'END_TO_END_CERTIFIED' "$activation"
+          grep -F 'sameDecisionEndToEndObserved' "$activation"
+          grep -F 'LIFECYCLE_BRANCH_CONFLICT' "$activation"
+          grep -F 'ANALYTICAL_DUPLICATES_EXCLUDED' "$activation"
+          grep -F 'clvRequiredForActivation: false' "$activation"
+          grep -F 'profitabilityConclusionAllowed: false' "$activation"
+          grep -F 'syntheticCaptureCreation: false' "$activation"
+          grep -F 'activation: MlbP1M5aActivation' "$review"
+          grep -F 'buildMlbP1M5aRealCohortActivation' "$review"
+          grep -F 'ownerScoped: true' "$review"
+          grep -F 'terminalSupersessionLeavesOnly: true' "$review"
+          grep -F 'requires the same row to have valid economics and settlement' "$testfile"
+          grep -F 'CLV is not required' "$docs"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const activation = fs.readFileSync('server/mlb-p1-real-cohort-activation.ts', 'utf8');
+          const review = fs.readFileSync('server/mlb-p1-economic-review.ts', 'utf8');
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(activation.includes('row.economicLayerValid\n    && validOfficialSettlement(row)'), 'same-row certification invariant missing');
+          assert(activation.includes('input.terminalLeaves === input.lifecycleChains'), 'terminal lifecycle coverage check missing');
+          assert(activation.includes('input.analyticalDuplicatesExcluded === 0'), 'analytical identity protection missing');
+          assert(review.includes('activation,\n    readiness:'), 'activation not returned in P1-M3D report');
+          assert(!/app\.(post|put|patch|delete)\(/.test(activation + review), 'write route introduced');
+          assert(!/sportsbookIntegration:\s*true|automaticBetPlacement:\s*true|realFinancialExposure:\s*[1-9]|productionWrites:\s*true|settlementWrites:\s*true|historicalLedgerMutation:\s*true|syntheticCaptureCreation:\s*true/.test(activation + review), 'unsafe activation setting');
+          NODE
+      - name: Diff hygiene and protected extension scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin integration/p0-staging-secure --depth=1
+          git diff --check origin/integration/p0-staging-secure...HEAD
+          changed=$(git diff --name-only origin/integration/p0-staging-secure...HEAD | sort)
+          allowed=$(printf '%s\n' \
+            '.github/workflows/validate-p1-m3b-mlb-scientific-capture.yml' \
+            '.github/workflows/validate-p1-m3d-interactive-economic-review.yml' \
+            '.github/workflows/validate-p1-m3e-operating-envelope.yml' \
+            '.github/workflows/validate-p1-premium-no-ultra-prospective-readonly.yml' \
+            '.github/workflows/validate-p1-m3f3b5-vsteam-identity.yml' \
+            '.github/workflows/validate-p1-m3f3b5b-statcast-certification.yml' \
+            '.github/workflows/validate-p1-m4c-backend-economic-response.yml' \
+            '.github/workflows/validate-p1-m5a-real-cohort-activation.yml' \
+            '.github/workflows/validate-p1-m6a2-mlb-market-odds-universe.yml' \
+            'docs/P1_PREMIUM_NO_ULTRA_PROSPECTIVE_READONLY.md' \
+            'docs/P1_M3F3B5_VSTEAM_OPPOSING_TEAM_ID.md' \
+            'docs/P1_M3F3B5B_STATCAST_CERTIFICATION.md' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
+            'server/mlb-premium-no-ultra-prospective-routes.ts' \
+            'server/mlb-p1-real-cohort-activation.test.ts' \
+            'server/mlb-p1-real-cohort-activation.ts' \
+            'server/mlb-statcast-matchup-certifier.test.ts' \
+            'server/mlb-statcast-matchup-certifier.ts' \
+            'server/mlb-statcast-matchup-identity-routes.test.ts' \
+            'server/mlb-statcast-matchup-identity-routes.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.test.ts' \
+            'server/mlb-statcast-matchup-vsteam-identity.ts' \
+            'server/route-contract.extensions.json' \
+            'server/routes.ts' \
+            'tsconfig.p1-premium-no-ultra-prospective-readonly.json' \
+            'tsconfig.p1-m3f3b5-vsteam-identity.json' \
+            'tsconfig.p1-m5a-real-cohort-activation.json' \
+            '.github/workflows/validate-p1-m3e5-live-frozen-envelope.yml' \
+            'docs/P1_M3E5_MLB_LIVE_FROZEN_OPERATING_ENVELOPE.md' \
+            'server/mlb-p1-operating-envelope-frozen-live.test.ts' \
+            'server/mlb-p1-operating-envelope-frozen-live.ts' \
+            'server/mlb-p1-operating-envelope-frozen-routes.ts' \
+            'tsconfig.p1-m3e5-live-frozen-envelope.json' \
+            '.github/workflows/validate-p1-m2b-official-injury-supplement.yml' \
+            'server/mlb-injury-official-supplement-routes.test.ts' \
+            'server/mlb-injury-official-supplement-routes.ts' \
+            'server/mlb-injury-official-supplement.test.ts' \
+            'server/mlb-injury-official-supplement.ts' \
+            'tsconfig.p1-m2b-official-injury-supplement.json' | sort)
+          unexpected=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$allowed"))
+          [[ -z "$unexpected" ]]
+
+          owned=$(printf '%s\n' \
+            'docs/P1_M5A_REAL_COHORT_ACTIVATION.md' \
+            'server/mlb-p1-economic-review.test.ts' \
+            'server/mlb-p1-economic-review.ts' \
+            'server/mlb-p1-real-cohort-activation.test.ts' \
+            'server/mlb-p1-real-cohort-activation.ts' \
+            'tsconfig.p1-m5a-real-cohort-activation.json' | sort)
+          touched_owned=$(comm -12 <(printf '%s\n' "$changed") <(printf '%s\n' "$owned"))
+          if [[ -n "$touched_owned" ]]; then
+            missing_owned=$(comm -23 <(printf '%s\n' "$owned") <(printf '%s\n' "$changed"))
+            [[ -z "$missing_owned" ]]
+          fi
+
+          ! grep -E 'sportsbookIntegration:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|productionWrites:[[:space:]]*true|settlementWrites:[[:space:]]*true|historicalLedgerMutation:[[:space:]]*true|syntheticCaptureCreation:[[:space:]]*true' \
+            server/mlb-p1-real-cohort-activation.ts \
+            server/mlb-p1-economic-review.ts

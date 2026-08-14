@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "courtedge-p1-m6a3b2b2b-2025-evidence.v1",
+  "evidenceDate": "2026-08-07",
+  "stage": "P1-M6A3B2B2B",
+  "subject": "starting-pitcher incremental paired date-cluster inference",
+  "researchRun": {
+    "pullRequest": 324,
+    "workflowRunId": 31209919814,
+    "artifactId": 9006459288,
+    "validMergeRef": "d04eada0b19568245604c07b6f2d23484fe75423",
+    "mergedB2B2BBase": "ece82c3a77ec1812a3d13b4d5c46e85a4067cb59",
+    "artifactZipSha256": "822d716ef04c374d697aef24668d4120da68b9f2dc190c4aec7802feb5e5fbad",
+    "artifactFiles": 4
+  },
+  "frozenSportingIdentity": {
+    "regularSeasonFinalGames": 2430,
+    "starterLines": 4860,
+    "outcomeDigest": "c4f0c8b3bf2b7cb8eed5660d836034410b9f125b0491194df9b2162a4c19a64d",
+    "outcomeDigestReproduced": true,
+    "starterHistoryDigest": "2ae7b52b671f84fdecbc802b7891a03b66e768178bc6add177be5116c9426efa",
+    "starterHistoryDigestReproduced": true,
+    "allFoldsLeakageFree": true
+  },
+  "artifactIntegrity": {
+    "manifest.json": {
+      "sha256": "996d685060453775820f5ed5d52ec314d14d82539dd21c2580050b44541fb9a5",
+      "bytes": 8219,
+      "schemaVersion": "courtedge-p1-m6a3b2b2-starting-pitcher-oos-artifact-manifest.v2"
+    },
+    "source-integrity.json": {
+      "sha256": "6a5d58e3d1480b5d74821578697b35f4963a9f02b17ecb0cef500dc107aec185",
+      "bytes": 969,
+      "schemaVersion": "courtedge-p1-m6a3b2b2-source-integrity.v1"
+    },
+    "starting-pitcher-oos-report.json": {
+      "sha256": "e97645458bc0f280da290e62c078bfa321a4e65f8d412def12b61c6da1e254ac",
+      "bytes": 3396714,
+      "schemaVersion": "courtedge-p1-m6a3b2b2-starting-pitcher-asof-oos.v1"
+    },
+    "starting-pitcher-paired-inference.json": {
+      "sha256": "72650afb3edf8cb398a909fffcfbe1356e1a3d554df7d07efd54ebf38749952a",
+      "bytes": 5889,
+      "schemaVersion": "courtedge-p1-m6a3b2b2b-paired-pitcher-inference.v1"
+    },
+    "manifestHashesMatchFiles": true
+  },
+  "inferenceConfiguration": {
+    "validationGamesPerHorizon": 1507,
+    "dateClustersPerHorizon": 112,
+    "countObservationsPerHorizon": 3014,
+    "bootstrapReplicates": 5000,
+    "familywiseHorizons": 4,
+    "unadjustedConfidenceLevel": 0.95,
+    "bonferroniFamilywiseConfidenceLevel": 0.9875
+  },
+  "horizons": [
+    {
+      "horizon": "FIRST_INNING",
+      "teamOnlyMinusPitcher": {
+        "pointEstimateCountNll": 0.00048228,
+        "unadjusted95": [-0.00207328, 0.00295564],
+        "bonferroniFamilywise": [-0.00263139, 0.00358836],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "leagueNb2MinusPitcher": {
+        "pointEstimateCountNll": -0.00112664,
+        "unadjusted95": [-0.00600963, 0.00376255],
+        "bonferroniFamilywise": [-0.00747818, 0.00520396],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "overallEvidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FIRST_3",
+      "teamOnlyMinusPitcher": {
+        "pointEstimateCountNll": 0.00035827,
+        "unadjusted95": [-0.00184787, 0.00257996],
+        "bonferroniFamilywise": [-0.00239058, 0.00318498],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "leagueNb2MinusPitcher": {
+        "pointEstimateCountNll": 0.00278624,
+        "unadjusted95": [-0.00218392, 0.00739137],
+        "bonferroniFamilywise": [-0.0034541, 0.0086953],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "overallEvidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FIRST_5",
+      "teamOnlyMinusPitcher": {
+        "pointEstimateCountNll": 0.00146261,
+        "unadjusted95": [-0.00234669, 0.0052431],
+        "bonferroniFamilywise": [-0.00354146, 0.00620712],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "leagueNb2MinusPitcher": {
+        "pointEstimateCountNll": 0.00652583,
+        "unadjusted95": [-0.00006123, 0.01322536],
+        "bonferroniFamilywise": [-0.00228611, 0.01482067],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "overallEvidenceStatus": "INCONCLUSIVE"
+    },
+    {
+      "horizon": "FULL_GAME",
+      "teamOnlyMinusPitcher": {
+        "pointEstimateCountNll": 0.00017375,
+        "unadjusted95": [-0.00282829, 0.00315111],
+        "bonferroniFamilywise": [-0.00351739, 0.00394526],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "leagueNb2MinusPitcher": {
+        "pointEstimateCountNll": 0.00409139,
+        "unadjusted95": [-0.00191771, 0.01015618],
+        "bonferroniFamilywise": [-0.00350909, 0.01163921],
+        "evidenceStatus": "INCONCLUSIVE"
+      },
+      "overallEvidenceStatus": "INCONCLUSIVE"
+    }
+  ],
+  "scientificConclusion": {
+    "result": "INCONCLUSIVE_ALL_HORIZONS",
+    "interpretation": "The specific B2B2 starting-pitcher feature produced small favorable point estimates versus team-only in all four horizons, but no family-wise paired interval established supported incremental improvement. No horizon established supported regression either.",
+    "doesNotMean": "This evidence does not establish that starting pitchers are generally unimportant; it only evaluates this specific historical feature/model on the frozen 2025 cohort.",
+    "promotionDecision": "DO_NOT_PROMOTE",
+    "actionabilityAllowed": false,
+    "automaticModelSelectionAllowed": false,
+    "automaticPromotionAllowed": false
+  }
+}

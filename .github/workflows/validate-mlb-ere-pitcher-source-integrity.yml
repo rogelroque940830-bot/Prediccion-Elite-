@@ -1,0 +1,65 @@
+name: Validate MLB ERE Pitcher Source Integrity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "server/mlb-ere.ts"
+      - "server/mlb-ere-pitcher-splits.ts"
+      - "server/mlb-ere*.test.ts"
+      - "scripts/mlb-ere-pitcher-source-audit.mjs"
+      - "scripts/mlb-ere-pitcher-source-verify.ts"
+      - ".github/workflows/validate-mlb-ere-pitcher-source-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    # Final proof intentionally exercises the cleaned product slice plus live official MLB custody.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit-test MLB innings and multi-team split custody
+        run: npx tsx --test server/mlb-ere-pitcher-splits.test.ts
+      - name: Compile backend
+        run: npm run build:backend
+      - name: Audit official MLB pitcher source coverage
+        env:
+          PITCHER_ID: "605280"
+          SEASON: "2026"
+        run: node scripts/mlb-ere-pitcher-source-audit.mjs
+      - name: Verify product consolidator against live Clay Holmes source
+        env:
+          PITCHER_ID: "605280"
+          SEASON: "2026"
+        run: npx tsx scripts/mlb-ere-pitcher-source-verify.ts
+      - name: Safety boundary
+        shell: bash
+        run: |
+          git fetch --no-tags origin integration/p0-staging-secure:refs/remotes/origin/integration/p0-staging-secure
+          diff_file="$(mktemp)"
+          git diff --unified=0 origin/integration/p0-staging-secure...HEAD -- server/mlb-ere.ts server/mlb-ere-pitcher-splits.ts > "$diff_file"
+          if grep -Ei '^\+.*(BET_ELITE|stake|automaticBet|placeBet|threshold search|feature search)' "$diff_file"; then
+            echo "Unexpected wagering/search mutation in pitcher source-integrity slice."
+            exit 1
+          fi
+          echo "Safety boundary clean."
+      - name: Upload source audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-ere-pitcher-source-audit
+          path: artifacts/mlb-ere-pitcher-source-audit.json
+          if-no-files-found: error

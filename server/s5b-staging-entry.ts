@@ -1,0 +1,1175 @@
+import "./staging-entry";
+import { app } from "./index";
+import { getMlbLedgerStore } from "./mlb-ledger";
+import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
+import { resolveSystemOwnerUserId } from "./user-data-context";
+import { startMlbShadowCollectionWorker } from "./mlb-shadow-collection-worker";
+import { startMlbS5cShadowIngestionWorker } from "./mlb-s5c-shadow-ingestion";
+import { startMlbS5dGateMonitorWorker } from "./mlb-s5d-gate-monitor";
+import { startMlbS5eCoverageWorker } from "./mlb-s5e-coverage-service";
+import { startMlbS5fCertificationWorker } from "./mlb-s5f-certification-service";
+import { startMlbS6iPostfixCertificationWorker } from "./mlb-s6i-postfix-certification";
+import { startMlbS6jFirstCycleCertificationWorker } from "./mlb-s6j-first-cycle-certification";
+import { startMlbS6kFirstTenCyclesCertificationWorker } from "./mlb-s6k-first-ten-cycles-certification";
+import { startMlbS6lScientificMetricsWorker } from "./mlb-s6l-scientific-metrics";
+import { startMlbS6mStatisticalMilestoneWorker } from "./mlb-s6m-statistical-milestones";
+import { startMlbS6nFirstRealSettlementMonitorWorker } from "./mlb-s6n-first-real-settlement-monitor";
+import { startMlbS6oFirstFiveSettlementsCertificationWorker } from "./mlb-s6o-first-five-settlements-certification";
+import { startMlbS6pFirstTwentySettlementsCertificationWorker } from "./mlb-s6p-first-twenty-settlements-certification";
+import { startMlbS6qFiftySettlementHumanReviewWorker } from "./mlb-s6q-fifty-settlement-human-review";
+import { startMlbS6rHumanReviewDossierWorker, type S6rReviewConclusion, type S6rReviewStage } from "./mlb-s6r-human-review-dossier";
+
+const ledgerStore = getMlbLedgerStore();
+const ownershipStore = getMlbLedgerOwnershipStore();
+const systemOwnerUserId = resolveSystemOwnerUserId();
+const shadowCollection = startMlbShadowCollectionWorker(ledgerStore);
+const s5cIngestion = startMlbS5cShadowIngestionWorker(
+  ledgerStore,
+  ownershipStore,
+  { ownerUserId: systemOwnerUserId },
+);
+const s5dGateMonitor = startMlbS5dGateMonitorWorker(ledgerStore);
+const s5eCoverage = startMlbS5eCoverageWorker(
+  ledgerStore,
+  ownershipStore,
+  s5cIngestion.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s5fCertification = startMlbS5fCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
+  s5dGateMonitor.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6iPostfixCertification = startMlbS6iPostfixCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6jFirstCycleCertification = startMlbS6jFirstCycleCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6kFirstTenCyclesCertification = startMlbS6kFirstTenCyclesCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s5eCoverage.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6lScientificMetrics = startMlbS6lScientificMetricsWorker(
+  ledgerStore,
+  ownershipStore,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6mStatisticalMilestones = startMlbS6mStatisticalMilestoneWorker(
+  ledgerStore,
+  ownershipStore,
+  s6lScientificMetrics.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6nFirstRealSettlement = startMlbS6nFirstRealSettlementMonitorWorker(
+  ledgerStore,
+  ownershipStore,
+  s6mStatisticalMilestones.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6oFirstFiveSettlements = startMlbS6oFirstFiveSettlementsCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s6mStatisticalMilestones.service,
+  s6nFirstRealSettlement.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6pFirstTwentySettlements = startMlbS6pFirstTwentySettlementsCertificationWorker(
+  ledgerStore,
+  ownershipStore,
+  s6mStatisticalMilestones.service,
+  s6oFirstFiveSettlements.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6qFiftySettlementHumanReview = startMlbS6qFiftySettlementHumanReviewWorker(
+  ledgerStore,
+  ownershipStore,
+  s6mStatisticalMilestones.service,
+  s6pFirstTwentySettlements.service,
+  s6kFirstTenCyclesCertification.service,
+  { ownerUserId: systemOwnerUserId },
+);
+const s6rHumanReviewDossier = startMlbS6rHumanReviewDossierWorker(
+  s6qFiftySettlementHumanReview.service,
+  { ownerUserId: systemOwnerUserId },
+);
+
+app.get("/health/shadow-collection", (_req, res) => {
+  const status = shadowCollection.service.status();
+  const ready = status.enabled
+    && Boolean(status.lastSuccessAt)
+    && status.snapshots >= 1
+    && status.lastError == null;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    retentionDays: status.retentionDays,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    snapshots: status.snapshots,
+    lastError: status.lastError,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+    },
+  });
+});
+
+app.get("/health/s5c-ingestion", (_req, res) => {
+  const status = s5cIngestion.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      gameDate: latest.gameDate,
+      gamesDiscovered: latest.gamesDiscovered,
+      gamesEligible: latest.gamesEligible,
+      gamesAnalyzed: latest.gamesAnalyzed,
+      pricedDecisions: latest.pricedDecisions,
+      unpricedDecisions: latest.unpricedDecisions,
+      recordsCreated: latest.recordsCreated,
+      idempotentSkips: latest.idempotentSkips,
+      skippedGames: latest.skippedGames,
+      errorCount: latest.errors.length,
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      syntheticOdds: false,
+    },
+  });
+});
+
+app.get("/health/s5d-gate", (_req, res) => {
+  const status = s5dGateMonitor.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    snapshots: status.snapshots,
+    transitions: status.transitions,
+    reviewPackages: status.reviewPackages,
+    latest: latest ? {
+      gateStatus: latest.gate.status,
+      settled: latest.progress.settled,
+      marketImpliedCoverage: latest.progress.marketImpliedCoverage,
+      closingCoverage: latest.progress.closingCoverage,
+      finalSnapshotCoverage: latest.progress.finalSnapshotCoverage,
+      humanReviewRequired: latest.humanReview.required,
+      automaticPromotion: latest.humanReview.automaticPromotion,
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s5e-coverage", (_req, res) => {
+  const status = s5eCoverage.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    observationCount: status.observationCount,
+    latest: latest ? {
+      terminalPredictions: latest.terminalPredictions,
+      finalization: latest.finalization,
+      closing: latest.closing,
+      settlement: latest.settlement,
+      diagnosticCounts: {
+        sourceSetChanged: latest.diagnostics.sourceSetChanged,
+        lineMoved: latest.diagnostics.lineMoved,
+        noPrice: latest.diagnostics.noPrice,
+        noOddsMatch: latest.diagnostics.noOddsMatch,
+        errors: latest.diagnostics.errors.length,
+      },
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      syntheticOdds: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s5f-certification", (_req, res) => {
+  const status = s5fCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  const severityCounts = latest?.alerts.reduce((counts, item) => {
+    counts[item.severity] = (counts[item.severity] ?? 0) + 1;
+    return counts;
+  }, { INFO: 0, WARNING: 0, CRITICAL: 0 } as Record<string, number>) ?? null;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    snapshots: status.snapshots,
+    latest: latest ? {
+      terminalPredictions: latest.source.terminalPredictions,
+      supersededPredictions: latest.source.supersededPredictions,
+      dashboardCounts: latest.dashboard.counts,
+      alertCounts: severityCounts,
+      actionableAlerts: latest.alerts.filter((item) => item.actionable).length,
+      gateStatus: latest.reviewPackage.gate.status,
+      partialReviewPackage: latest.reviewPackage.partial,
+      humanReviewRequired: latest.reviewPackage.humanReview.required,
+      automaticPromotion: latest.reviewPackage.humanReview.automaticPromotion,
+    } : null,
+    safety: {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6i-postfix-certification", (_req, res) => {
+  const status = s6iPostfixCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      cohort: latest.cohort,
+      summary: latest.summary,
+      coverage: latest.coverage,
+      persistence: latest.persistence,
+      readiness: latest.readiness,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.code] = (counts[entry.code] ?? 0) + 1;
+        return counts;
+      }, {} as Record<string, number>),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6j-first-cycle", (_req, res) => {
+  const status = s6jFirstCycleCertification.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      chainLength: latest.lifecycle.chainLength,
+      provisionalStages: latest.lifecycle.provisionalStages,
+      finalStages: latest.lifecycle.finalStages,
+      settled: latest.lifecycle.settled,
+      officialVerified: latest.officialVerification.gameFinal && latest.lifecycle.officialGradeResult != null,
+      comparableClosingCaptured: latest.lifecycle.comparableClosingCaptured,
+      clvCaptured: latest.lifecycle.clvCaptured,
+      criticalIssues: latest.issues.filter((entry) => entry.severity === "CRITICAL").length,
+      checks: latest.checks,
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6k-first-ten-cycles", (_req, res) => {
+  const status = s6kFirstTenCyclesCertification.service.status();
+  const latest = status.latest;
+  const certificationPool = latest?.certificationPool ?? (latest ? {
+    limit: 10 as const,
+    evaluated: latest.cycles.length,
+    certified: latest.cycles.filter((cycle) => cycle.status === "PASS").length,
+    review: latest.cycles.filter((cycle) => cycle.status === "REVIEW").length,
+    rejected: latest.cycles.filter((cycle) => cycle.status === "REJECT").length,
+    waiting: latest.cycles.filter((cycle) => cycle.status === "WAITING").length,
+    cycles: latest.cycles,
+    evidence: latest.evidence,
+  } : null);
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      summary: latest.summary,
+      certificationPool: certificationPool ? {
+        limit: certificationPool.limit,
+        evaluated: certificationPool.evaluated,
+        certified: certificationPool.certified,
+        review: certificationPool.review,
+        rejected: certificationPool.rejected,
+        waiting: certificationPool.waiting,
+        issueCounts: Object.fromEntries(
+          [...new Set(certificationPool.cycles.flatMap((cycle) => cycle.issueCodes))]
+            .sort()
+            .map((code) => [code, certificationPool.cycles.filter((cycle) => cycle.issueCodes.includes(code)).length]),
+        ),
+      } : null,
+      readyForAnalysis: latest.readyForAnalysis,
+      persistence: latest.persistence,
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6q-fifty-settlement-human-review", (_req, res) => {
+  const status = s6qFiftySettlementHumanReview.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion, enabled: status.enabled, intervalMs: status.intervalMs, initialDelayMs: status.initialDelayMs,
+    minimumStabilityMs: status.minimumStabilityMs, maxSnapshots: status.maxSnapshots, lastRunAt: status.lastRunAt, lastSuccessAt: status.lastSuccessAt, lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state, sourceS6m: latest.sourceS6m, sourceS6p: latest.sourceS6p, sample: latest.sample, target: latest.target,
+      stability: latest.stability, checks: latest.checks, readiness: latest.readiness, persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => { counts[entry.severity] = (counts[entry.severity] ?? 0) + 1; return counts; }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? { mode: "SHADOW", realFinancialExposure: 0, sportsbookIntegration: false, automaticBetPlacement: false, productionWrites: false, historicalLedgerMutation: false, automaticPromotion: false, formulasChanged: false, probabilitiesChanged: false, signalsChanged: false, marketsChanged: false, thresholdsChanged: false, settlementRulesChanged: false, stakePolicyChanged: false },
+  });
+});
+
+app.get("/health/s6r-human-review-dossier", (_req, res) => {
+  const status = s6rHumanReviewDossier.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sourceS6q: latest.sourceS6q,
+      dossier: latest.dossier,
+      review: latest.review,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, issue) => {
+        counts[issue.severity] = (counts[issue.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      probabilitiesChanged: false,
+      signalsChanged: false,
+      marketsChanged: false,
+      thresholdsChanged: false,
+      settlementRulesChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6p-first-twenty-settlements", (_req, res) => {
+  const status = s6pFirstTwentySettlements.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion, enabled: status.enabled, intervalMs: status.intervalMs, initialDelayMs: status.initialDelayMs,
+    minimumStabilityMs: status.minimumStabilityMs, maxSnapshots: status.maxSnapshots, lastRunAt: status.lastRunAt, lastSuccessAt: status.lastSuccessAt, lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state, sourceS6m: latest.sourceS6m, sourceS6o: latest.sourceS6o, sample: latest.sample,
+      target: { certificatePresent: latest.target.certificatePresent, manifestEntries: latest.target.manifestEntries, wins: latest.target.wins, losses: latest.target.losses, clvAvailable: latest.target.clvAvailable },
+      stability: latest.stability, checks: latest.checks, readiness: latest.readiness, persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => { counts[entry.severity] = (counts[entry.severity] ?? 0) + 1; return counts; }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? { mode: "SHADOW", realFinancialExposure: 0, sportsbookIntegration: false, automaticBetPlacement: false, productionWrites: false, historicalLedgerMutation: false, automaticPromotion: false, formulasChanged: false, probabilitiesChanged: false, signalsChanged: false, marketsChanged: false, thresholdsChanged: false, settlementRulesChanged: false, stakePolicyChanged: false },
+  });
+});
+
+app.get("/health/s6o-first-five-settlements", (_req, res) => {
+  const status = s6oFirstFiveSettlements.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    minimumStabilityMs: status.minimumStabilityMs,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sourceS6m: latest.sourceS6m,
+      sourceS6n: latest.sourceS6n,
+      sample: latest.sample,
+      target: {
+        certificatePresent: latest.target.certificatePresent,
+        manifestEntries: latest.target.manifestEntries,
+        wins: latest.target.wins,
+        losses: latest.target.losses,
+        clvAvailable: latest.target.clvAvailable,
+      },
+      stability: latest.stability,
+      checks: latest.checks,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      probabilitiesChanged: false,
+      signalsChanged: false,
+      marketsChanged: false,
+      thresholdsChanged: false,
+      settlementRulesChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6n-first-real-settlement", (_req, res) => {
+  const status = s6nFirstRealSettlement.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    minimumStabilityMs: status.minimumStabilityMs,
+    maxSnapshots: status.maxSnapshots,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sourceS6m: latest.sourceS6m,
+      sample: latest.sample,
+      target: {
+        certificatePresent: latest.target.certificatePresent,
+        result: latest.target.result,
+      },
+      stability: latest.stability,
+      checks: latest.checks,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      probabilitiesChanged: false,
+      signalsChanged: false,
+      marketsChanged: false,
+      thresholdsChanged: false,
+      settlementRulesChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6m-statistical-milestones", (_req, res) => {
+  const status = s6mStatisticalMilestones.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sample: latest.sample,
+      metricParity: latest.metricParity,
+      milestones: latest.milestones,
+      highestCertifiedMilestone: latest.highestCertifiedMilestone,
+      nextMilestone: latest.nextMilestone,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      certificateDiagnostics: latest.issues
+        .filter((entry) => /^MILESTONE_\d+_CERTIFICATE_INVALID$/.test(entry.code))
+        .map((entry) => ({ code: entry.code, severity: entry.severity, message: entry.message })),
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/health/s6l-scientific-metrics", (_req, res) => {
+  const status = s6lScientificMetrics.service.status();
+  const latest = status.latest;
+  const ready = status.enabled && Boolean(status.lastSuccessAt) && status.lastError == null && Boolean(latest);
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "healthy" : "pending",
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "unknown",
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? "unknown",
+    schemaVersion: status.schemaVersion,
+    enabled: status.enabled,
+    intervalMs: status.intervalMs,
+    initialDelayMs: status.initialDelayMs,
+    lastRunAt: status.lastRunAt,
+    lastSuccessAt: status.lastSuccessAt,
+    lastError: status.lastError,
+    latest: latest ? {
+      state: latest.state,
+      sample: latest.sample,
+      overall: latest.overall,
+      coverage: latest.coverage,
+      readiness: latest.readiness,
+      persistence: latest.persistence,
+      issueCounts: latest.issues.reduce((counts, entry) => {
+        counts[entry.severity] = (counts[entry.severity] ?? 0) + 1;
+        return counts;
+      }, { INFO: 0, WARNING: 0, CRITICAL: 0 }),
+    } : null,
+    safety: latest?.safety ?? {
+      mode: "SHADOW",
+      realFinancialExposure: 0,
+      sportsbookIntegration: false,
+      automaticBetPlacement: false,
+      productionWrites: false,
+      historicalLedgerMutation: false,
+      automaticPromotion: false,
+      formulasChanged: false,
+      thresholdsChanged: false,
+      stakePolicyChanged: false,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/status", (_req, res) => {
+  const status = s6qFiftySettlementHumanReview.service.status();
+  res.json({ success: true, data: { schemaVersion: status.schemaVersion, enabled: status.enabled, intervalMs: status.intervalMs, initialDelayMs: status.initialDelayMs, minimumStabilityMs: status.minimumStabilityMs, maxSnapshots: status.maxSnapshots, lastRunAt: status.lastRunAt, lastSuccessAt: status.lastSuccessAt, lastError: status.lastError, latest: status.latest } });
+});
+
+app.get("/api/mlb/ledger/v1/s6q-fifty-settlement-human-review/evidence", (_req, res) => {
+  const latest = s6qFiftySettlementHumanReview.service.readLatest();
+  if (!latest) { res.status(404).json({ success: false, error: "No S6Q fifty-settlement human-review report has completed yet" }); return; }
+  res.json({ success: true, data: { latest, baseline: s6qFiftySettlementHumanReview.service.readBaseline(), evidence: s6qFiftySettlementHumanReview.service.readEvidence() } });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/status", (_req, res) => {
+  const status = s6rHumanReviewDossier.service.status();
+  res.json({ success: true, data: status });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/dossier", (_req, res) => {
+  const latest = s6rHumanReviewDossier.service.readLatest();
+  const dossier = s6rHumanReviewDossier.service.readDossier();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6R human-review dossier report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: { latest, dossier } });
+});
+
+app.get("/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions", (_req, res) => {
+  res.json({ success: true, data: { decisions: s6rHumanReviewDossier.service.readReviewDecisions() } });
+});
+
+app.post("/api/mlb/ledger/v1/s6r-human-review-dossier/review-decisions", async (req, res) => {
+  const reviewerUserId = Number((req as any).user?.id ?? (req as any).session?.passport?.user);
+  if (!Number.isInteger(reviewerUserId) || reviewerUserId !== systemOwnerUserId) {
+    res.status(403).json({ success: false, error: "Only the configured owner may submit an S6R review decision" });
+    return;
+  }
+  const body = req.body ?? {};
+  try {
+    const result = await s6rHumanReviewDossier.service.submitReviewDecision({
+      stage: String(body.stage ?? "") as S6rReviewStage,
+      conclusion: body.conclusion == null ? null : String(body.conclusion) as S6rReviewConclusion,
+      rationale: String(body.rationale ?? ""),
+      candidateVersion: body.candidateVersion == null ? null : String(body.candidateVersion),
+    }, reviewerUserId);
+    res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/mlb/ledger/v1/s6p-first-twenty-settlements/status", (_req, res) => {
+  const status = s6pFirstTwentySettlements.service.status();
+  res.json({ success: true, data: { schemaVersion: status.schemaVersion, enabled: status.enabled, intervalMs: status.intervalMs, initialDelayMs: status.initialDelayMs, minimumStabilityMs: status.minimumStabilityMs, maxSnapshots: status.maxSnapshots, lastRunAt: status.lastRunAt, lastSuccessAt: status.lastSuccessAt, lastError: status.lastError, latest: status.latest } });
+});
+
+app.get("/api/mlb/ledger/v1/s6p-first-twenty-settlements/evidence", (_req, res) => {
+  const latest = s6pFirstTwentySettlements.service.readLatest();
+  if (!latest) { res.status(404).json({ success: false, error: "No S6P first-twenty-settlement report has completed yet" }); return; }
+  res.json({ success: true, data: { latest, baseline: s6pFirstTwentySettlements.service.readBaseline(), evidence: s6pFirstTwentySettlements.service.readEvidence() } });
+});
+
+app.get("/api/mlb/ledger/v1/s6o-first-five-settlements/status", (_req, res) => {
+  const status = s6oFirstFiveSettlements.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      minimumStabilityMs: status.minimumStabilityMs,
+      maxSnapshots: status.maxSnapshots,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6o-first-five-settlements/evidence", (_req, res) => {
+  const latest = s6oFirstFiveSettlements.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6O first-five-settlement report has completed yet" });
+    return;
+  }
+  res.json({
+    success: true,
+    data: {
+      latest,
+      baseline: s6oFirstFiveSettlements.service.readBaseline(),
+      evidence: s6oFirstFiveSettlements.service.readEvidence(),
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6n-first-real-settlement/status", (_req, res) => {
+  const status = s6nFirstRealSettlement.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      minimumStabilityMs: status.minimumStabilityMs,
+      maxSnapshots: status.maxSnapshots,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6n-first-real-settlement/evidence", (_req, res) => {
+  const latest = s6nFirstRealSettlement.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6N first-real-settlement report has completed yet" });
+    return;
+  }
+  res.json({
+    success: true,
+    data: {
+      latest,
+      baseline: s6nFirstRealSettlement.service.readBaseline(),
+      evidence: s6nFirstRealSettlement.service.readEvidence(),
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6m-statistical-milestones/status", (_req, res) => {
+  const status = s6mStatisticalMilestones.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        sourceS6l: status.latest.sourceS6l,
+        sample: status.latest.sample,
+        metricParity: status.latest.metricParity,
+        milestones: status.latest.milestones,
+        highestCertifiedMilestone: status.latest.highestCertifiedMilestone,
+        nextMilestone: status.latest.nextMilestone,
+        readiness: status.latest.readiness,
+        persistence: status.latest.persistence,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6m-statistical-milestones/report", (_req, res) => {
+  const latest = s6mStatisticalMilestones.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6M statistical milestone report has completed yet" });
+    return;
+  }
+  res.json({
+    success: true,
+    data: {
+      ...latest,
+      certificates: s6mStatisticalMilestones.service.readCertificates(),
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6l-scientific-metrics/status", (_req, res) => {
+  const status = s6lScientificMetrics.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        sample: status.latest.sample,
+        overall: status.latest.overall,
+        coverage: status.latest.coverage,
+        readiness: status.latest.readiness,
+        persistence: status.latest.persistence,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6l-scientific-metrics/report", (_req, res) => {
+  const latest = s6lScientificMetrics.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6L scientific metrics report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/status", (_req, res) => {
+  const status = s6kFirstTenCyclesCertification.service.status();
+  const pool = status.latest?.certificationPool;
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        summary: status.latest.summary,
+        certificationPool: pool ? {
+          limit: pool.limit,
+          evaluated: pool.evaluated,
+          certified: pool.certified,
+          review: pool.review,
+          rejected: pool.rejected,
+          waiting: pool.waiting,
+          cycles: pool.cycles,
+        } : null,
+        cycles: status.latest.cycles,
+        persistence: status.latest.persistence,
+        readyForAnalysis: status.latest.readyForAnalysis,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6k-first-ten-cycles/evidence", (_req, res) => {
+  const latest = s6kFirstTenCyclesCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6K first-ten-cycle report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s6j-first-cycle/status", (_req, res) => {
+  const status = s6jFirstCycleCertification.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        target: status.latest.target,
+        lifecycle: status.latest.lifecycle,
+        checks: status.latest.checks,
+        persistence: status.latest.persistence,
+        issueCounts: status.latest.issues.reduce((counts, entry) => {
+          counts[entry.code] = (counts[entry.code] ?? 0) + 1;
+          return counts;
+        }, {} as Record<string, number>),
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6j-first-cycle/evidence", (_req, res) => {
+  const latest = s6jFirstCycleCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6J first-cycle report has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/shadow-collection/status", (_req, res) => {
+  res.json({ success: true, data: shadowCollection.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/shadow-collection/latest", (_req, res) => {
+  const latest = shadowCollection.service.readLatest();
+  if (!latest) {
+    res.status(404).json({
+      success: false,
+      error: "No S5B shadow collection has completed yet",
+    });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5c-ingestion/status", (_req, res) => {
+  res.json({ success: true, data: s5cIngestion.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5c-ingestion/latest", (_req, res) => {
+  const latest = s5cIngestion.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S5C ingestion run has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/status", (_req, res) => {
+  res.json({ success: true, data: s5dGateMonitor.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/latest", (_req, res) => {
+  const latest = s5dGateMonitor.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S5D gate evaluation has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5d-gate/transitions", (req, res) => {
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? parsed : 100;
+  res.json({ success: true, data: s5dGateMonitor.service.readTransitions(limit) });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/status", (_req, res) => {
+  res.json({ success: true, data: s5eCoverage.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/latest", (_req, res) => {
+  const latest = s5eCoverage.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S5E coverage audit has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: latest });
+});
+
+app.get("/api/mlb/ledger/v1/s5e-coverage/observations", (req, res) => {
+  const predictionId = typeof req.query.predictionId === "string" ? req.query.predictionId : undefined;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  const observations = s5eCoverage.service.readObservations(predictionId);
+  res.json({ success: true, data: observations.slice(-limit) });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/status", (_req, res) => {
+  res.json({ success: true, data: s5fCertification.service.status() });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/dashboard", (_req, res) => {
+  const dashboard = s5fCertification.service.readDashboard();
+  if (!dashboard) {
+    res.status(404).json({ success: false, error: "No S5F certification dashboard has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: dashboard });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/review-package", (_req, res) => {
+  const reviewPackage = s5fCertification.service.readReviewPackage();
+  if (!reviewPackage) {
+    res.status(404).json({ success: false, error: "No S5F scientific review package has completed yet" });
+    return;
+  }
+  res.json({ success: true, data: reviewPackage });
+});
+
+app.get("/api/mlb/ledger/v1/s5f-certification/alerts", (req, res) => {
+  const severity = typeof req.query.severity === "string" ? req.query.severity.toUpperCase() : null;
+  const actionable = req.query.actionable === "true" ? true : req.query.actionable === "false" ? false : null;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(1_000, Math.max(1, Math.floor(parsed))) : 200;
+  const alerts = s5fCertification.service.readAlerts()
+    .filter((item) => !severity || item.severity === severity)
+    .filter((item) => actionable == null || item.actionable === actionable)
+    .slice(0, limit);
+  res.json({ success: true, data: alerts });
+});
+
+app.get("/api/mlb/ledger/v1/s6i-postfix-certification/status", (_req, res) => {
+  const status = s6iPostfixCertification.service.status();
+  res.json({
+    success: true,
+    data: {
+      schemaVersion: status.schemaVersion,
+      enabled: status.enabled,
+      intervalMs: status.intervalMs,
+      initialDelayMs: status.initialDelayMs,
+      lastRunAt: status.lastRunAt,
+      lastSuccessAt: status.lastSuccessAt,
+      lastError: status.lastError,
+      latest: status.latest ? {
+        generatedAt: status.latest.generatedAt,
+        state: status.latest.state,
+        cohort: status.latest.cohort,
+        summary: status.latest.summary,
+        coverage: status.latest.coverage,
+        persistence: status.latest.persistence,
+        performanceObservation: status.latest.performanceObservation,
+        marketBreakdowns: status.latest.marketBreakdowns,
+        readiness: status.latest.readiness,
+        safety: status.latest.safety,
+      } : null,
+    },
+  });
+});
+
+app.get("/api/mlb/ledger/v1/s6i-postfix-certification/issues", (req, res) => {
+  const latest = s6iPostfixCertification.service.readLatest();
+  if (!latest) {
+    res.status(404).json({ success: false, error: "No S6I post-fix certification report has completed yet" });
+    return;
+  }
+  const severity = typeof req.query.severity === "string" ? req.query.severity.toUpperCase() : null;
+  const parsed = Number(req.query.limit);
+  const limit = Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  const issues = latest.issues
+    .filter((entry) => !severity || entry.severity === severity)
+    .slice(0, limit);
+  res.json({ success: true, data: issues });
+});

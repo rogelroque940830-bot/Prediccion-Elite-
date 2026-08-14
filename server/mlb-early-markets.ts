@@ -88,6 +88,7 @@ export interface EarlyMarketsResult {
   // Meta
   confidence: "HIGH" | "MEDIUM" | "LOW";  // baja si warnings significativos
   warnings: string[];
+  dataIncomplete?: boolean;
   // Recomendación final: pick con mayor prob (o PREMIUM si hay)
   finalRecommendation: {
     market: "F5_ML" | "INNING_1_ML" | "TT_OVER_15_F5" | "TT_UNDER_25_F5" | "PASS";
@@ -134,6 +135,38 @@ const HOME_INN_EDGE = 0.006;              // inning-level home edge (muy pequeñ
 
 export function computeEarlyMarkets(input: EarlyMarketsInput): EarlyMarketsResult {
   const { homeEre, awayEre } = input;
+  const dataIncomplete = homeEre.dataStatus !== "VERIFIED" || awayEre.dataStatus !== "VERIFIED";
+  if (dataIncomplete) {
+    const statusLabel = homeEre.dataStatus === "DATA_INCOMPLETE" || awayEre.dataStatus === "DATA_INCOMPLETE"
+      ? "DATA_INCOMPLETE"
+      : "PARTIAL_DATA";
+    const warning = `${statusLabel}: faltan linescores verificados suficientes; NRFI/YRFI/F5/Team Totals bloqueados`;
+    return {
+      f5ProbHome: 0.5,
+      f5ProbAway: 0.5,
+      f5RecommendedSide: "PASS",
+      f5TotalRunsEstimated: LEAGUE_F5_TOTAL,
+      f5TotalSide: "PASS",
+      probAnyRun1stInn: 0.5,
+      probNoRun1stInn: 0.5,
+      nrfiYrfiRec: "PASS",
+      inning1: { homeProb: 0.5, awayProb: 0.5, side: "PASS" },
+      inning2: { homeProb: 0.5, awayProb: 0.5, side: "PASS" },
+      inning3: { homeProb: 0.5, awayProb: 0.5, side: "PASS" },
+      teamTotalOver15F5: { homeProb: 0.5, awayProb: 0.5, side: "PASS" },
+      teamTotalUnder25F5: { homeProb: 0.5, awayProb: 0.5, side: "PASS" },
+      confidence: "LOW",
+      warnings: [warning, ...homeEre.warnings, ...awayEre.warnings],
+      dataIncomplete: true,
+      finalRecommendation: {
+        market: "PASS",
+        side: "PASS",
+        action: "PASS",
+        reason: "Datos early incompletos — no apostar hasta recuperar las fuentes",
+      },
+      alternativePicks: [],
+    };
+  }
   const warnings = [...homeEre.warnings, ...awayEre.warnings];
 
   // ── 1. F5 ML ────────────────────────────────────────────────────────────

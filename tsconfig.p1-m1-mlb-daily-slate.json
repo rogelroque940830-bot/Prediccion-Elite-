@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/mlb-p1-daily-slate.ts",
+    "server/mlb-p1-daily-slate-routes.ts",
+    "server/mlb-p1-daily-slate.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "noEmit": true
+  }
+}

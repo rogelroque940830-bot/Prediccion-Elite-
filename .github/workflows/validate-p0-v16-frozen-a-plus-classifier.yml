@@ -1,0 +1,62 @@
+name: Validate P0 V16 Frozen A Plus Classifier
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-frozen-a-plus-classifier.ts'
+      - 'server/mlb-frozen-a-plus-classifier.test.ts'
+      - '.github/workflows/validate-p0-v16-frozen-a-plus-classifier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate frozen V6 and V7 classifier semantics
+        run: npx tsx --test server/mlb-frozen-a-plus-classifier.test.ts
+      - name: Preserve downstream frozen route semantics
+        run: npx tsx --test server/mlb-frozen-research-route-assessor.test.ts
+      - name: Compile classifier
+        run: npx esbuild server/mlb-frozen-a-plus-classifier.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-frozen-a-plus-classifier.cjs
+      - name: Backend build
+        run: npm run build:backend
+      - name: Preserve frozen scientific and safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          classifier='server/mlb-frozen-a-plus-classifier.ts'
+          grep -F 'team_win10_diff: 0.09999999999999998' "$classifier"
+          grep -F 'threshold: 0.69' "$classifier"
+          grep -F 'threshold: 0.64' "$classifier"
+          grep -F 'threshold: 0.71' "$classifier"
+          grep -F 'medianImputation: true' "$classifier"
+          grep -F 'noThresholdSearch: true' "$classifier"
+          grep -F 'changesLiveRecommendation: false' "$classifier"
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|appendPrediction\(|appendSettlement\(' "$classifier"
+      - name: Verify exact slice scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-v16-frozen-a-plus-classifier.yml' \
+            'server/mlb-frozen-a-plus-classifier.test.ts' \
+            'server/mlb-frozen-a-plus-classifier.ts' | sort)
+          [[ "$changed" == "$expected" ]]

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/auth.ts",
+    "server/auth-persistence.ts",
+    "server/security.ts",
+    "server/auth-persistence.test.ts",
+    "server/auth-routes.test.ts",
+    "server/security-private-read.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
