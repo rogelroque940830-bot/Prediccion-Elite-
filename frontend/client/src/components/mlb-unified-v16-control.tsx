@@ -25,6 +25,29 @@ interface V16RunnerSummary {
   eliteEvidenceRowsCaptured: number;
 }
 
+interface V16EliteCandidate {
+  predictionId: string;
+  gamePk: number;
+  awayTeam: string;
+  homeTeam: string;
+  marketType: string;
+  selectedSide: string;
+  selectedLine: number | null;
+  modelWinProbability: number;
+  modelPushProbability: number;
+  expectedValuePerUnit: number;
+  executionEdgePp: number;
+  executionNoVigEdgePp: number;
+  referenceNoVigEdgePp: number | null;
+  referenceAgreement: string;
+  executionBookTitle: string;
+  executionOddsAmerican: number;
+  executionCapturedAt: string;
+  intrinsicProjectionScope: string;
+  intrinsicThesisKinds: string[];
+  supportingComponents: string[];
+}
+
 type V16UiStatus =
   | "WAITING_FOR_FINAL_INPUTS"
   | "CERTIFIED_INPUT_ASSEMBLY_BLOCKED"
@@ -51,6 +74,7 @@ interface V16UiResponse {
     schemaVersion: string;
     summary: V16RunnerSummary;
     prepriceSummary: Record<string, number>;
+    eliteCandidates: V16EliteCandidate[];
   };
   policy: {
     explicitInvocationRequired: true;
@@ -85,6 +109,23 @@ function blockerLabel(blocker: unknown): string {
   }
 }
 
+function pct(value: number | null | undefined, digits = 1): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : "N/D";
+}
+
+function pp(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${value >= 0 ? "+" : ""}${value.toFixed(2)} pp` : "N/D";
+}
+
+function americanOdds(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function lineLabel(value: number | null): string {
+  if (value === null) return "";
+  return value > 0 ? ` +${value}` : ` ${value}`;
+}
+
 export function MlbUnifiedV16Control() {
   const [date, setDate] = useState(todayFL());
   const [loading, setLoading] = useState(false);
@@ -110,6 +151,7 @@ export function MlbUnifiedV16Control() {
   const blocked = result?.status === "CERTIFIED_INPUT_ASSEMBLY_BLOCKED";
   const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
   const runSummary = result?.result?.summary;
+  const eliteCandidates = result?.result?.eliteCandidates ?? [];
 
   const statusLabel = !result
     ? "IDLE"
@@ -200,13 +242,44 @@ export function MlbUnifiedV16Control() {
                   <div><div className="text-[11px] text-muted-foreground">Evidencia capturada</div><div className="font-semibold">{runSummary.eliteEvidenceRowsCaptured}</div></div>
                 </div>
 
-                {runSummary.eliteEvidenceCandidates > 0 ? (
-                  <div className="rounded-md border border-primary/30 bg-background/50 p-3 text-xs">
-                    <span className="font-semibold">Hay evidencia candidata Elite.</span> Esta salida todavía no es una recomendación final ni calcula stake; sirve para la evaluación prospectiva certificada.
+                {runSummary.eliteEvidenceCandidates === 0 ? (
+                  <div className="rounded-lg border-2 border-border bg-background/70 p-4 text-center" data-testid="mlb-v16-no-play">
+                    <div className="text-lg font-extrabold tracking-wide">NO JUGADA</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      V16 analizó los juegos FINAL y no encontró un mercado con evidencia suficiente para elevarlo a candidato Elite.
+                    </div>
                   </div>
                 ) : (
-                  <div className="rounded-md border border-border/60 bg-background/50 p-3 text-xs">
-                    <span className="font-semibold">Sin candidato Elite en esta ejecución.</span> El sistema analizó los juegos FINAL y no produjo evidencia suficiente para elevar una jugada.
+                  <div className="space-y-2" data-testid="mlb-v16-elite-candidates">
+                    <div className="text-xs font-semibold uppercase tracking-wide">Candidatos Elite detectados</div>
+                    {eliteCandidates.map((candidate) => (
+                      <div key={candidate.predictionId} className="rounded-lg border border-primary/40 bg-background/70 p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="font-semibold">{candidate.awayTeam} @ {candidate.homeTeam}</div>
+                            <div className="mt-1 text-sm font-bold">
+                              {candidate.marketType} · {candidate.selectedSide}{lineLabel(candidate.selectedLine)} · {americanOdds(candidate.executionOddsAmerican)}
+                            </div>
+                          </div>
+                          <Badge variant="outline">CANDIDATO ELITE</Badge>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div><div className="text-[11px] text-muted-foreground">Prob. modelo</div><div className="font-semibold">{pct(candidate.modelWinProbability)}</div></div>
+                          <div><div className="text-[11px] text-muted-foreground">EV / unidad</div><div className="font-semibold">{pct(candidate.expectedValuePerUnit)}</div></div>
+                          <div><div className="text-[11px] text-muted-foreground">Edge ejecución</div><div className="font-semibold">{pp(candidate.executionEdgePp)}</div></div>
+                          <div><div className="text-[11px] text-muted-foreground">Casa / precio</div><div className="font-semibold">{candidate.executionBookTitle} {americanOdds(candidate.executionOddsAmerican)}</div></div>
+                        </div>
+                        {(candidate.intrinsicThesisKinds.length > 0 || candidate.supportingComponents.length > 0) && (
+                          <div className="mt-3 text-xs text-muted-foreground">
+                            <span className="font-semibold text-foreground">Evidencia:</span>{" "}
+                            {[...candidate.intrinsicThesisKinds, ...candidate.supportingComponents].join(" · ")}
+                          </div>
+                        )}
+                        <div className="mt-2 text-[11px] text-muted-foreground">
+                          Evidencia pregame certificada. No constituye recomendación final, stake ni apuesta automática.
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

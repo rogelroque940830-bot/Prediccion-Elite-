@@ -73,7 +73,7 @@ test("missing certified evidence blocks before runtime custody and Step 8", asyn
   assert.equal(policy.theOddsApiCreditsConsumed, 0);
 });
 
-test("complete certified assembly invokes the priced runner once without returning server custody fields", async () => {
+test("complete certified assembly returns public Elite evidence without leaking server custody fields", async () => {
   let runtimeCalls = 0;
   let pricedCalls = 0;
   let capturedInput: any = null;
@@ -101,6 +101,30 @@ test("complete certified assembly invokes the priced runner once without returni
         generatedAt: "2026-08-13T17:01:00.000Z",
         summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 1, positiveEvMarkets: 1, eliteEvidenceCandidates: 1, eliteEvidenceRowsCaptured: 1 },
         preprice: { summary: { slateGames: 1, analysisEligibleGames: 1, finalAnalysisEligibleGames: 1, provisionalAnalysisEligibleGames: 0, intrinsicResearchEliteCandidates: 1, gamesWithMarketDiscoveryPlan: 1, gamesPaidLookupEligibleNow: 1, frozenRouteRowsCaptured: 1 } },
+        eliteEvidenceLedger: {
+          entries: [{
+            predictionId: "pred-123-home-ml",
+            candidate: {
+              gamePk: 123,
+              marketType: "h2h",
+              selectedSide: "HOME",
+              selectedLine: null,
+              modelWinProbability: 0.612,
+              modelPushProbability: 0,
+              expectedValuePerUnit: 0.074,
+              executionEdgePp: 5.2,
+              executionNoVigEdgePp: 4.8,
+              referenceNoVigEdgePp: 4.4,
+              referenceAgreement: "AGREES",
+              executionBookTitle: "Test Book",
+              executionOddsAmerican: -105,
+              executionCapturedAt: "2026-08-13T17:00:30.000Z",
+              intrinsicProjectionScope: "FULL_GAME",
+              intrinsicThesisKinds: ["A_PLUS"],
+              supportingComponents: ["C4", "FULL13"],
+            },
+          }],
+        },
       } as any;
     }) as any,
     runIdFactory: () => "run-complete",
@@ -112,9 +136,64 @@ test("complete certified assembly invokes the priced runner once without returni
   assert.equal(pricedCalls, 1);
   assert.equal(capturedInput.apiKey, opaqueKey);
   assert.equal(capturedInput.providerAccountScopeKey, opaqueScope);
+
+  const result = response.body.result as Record<string, any>;
+  assert.equal(result.eliteCandidates.length, 1);
+  assert.deepEqual(result.eliteCandidates[0], {
+    predictionId: "pred-123-home-ml",
+    gamePk: 123,
+    awayTeam: "Away",
+    homeTeam: "Home",
+    marketType: "h2h",
+    selectedSide: "HOME",
+    selectedLine: null,
+    modelWinProbability: 0.612,
+    modelPushProbability: 0,
+    expectedValuePerUnit: 0.074,
+    executionEdgePp: 5.2,
+    executionNoVigEdgePp: 4.8,
+    referenceNoVigEdgePp: 4.4,
+    referenceAgreement: "AGREES",
+    executionBookTitle: "Test Book",
+    executionOddsAmerican: -105,
+    executionCapturedAt: "2026-08-13T17:00:30.000Z",
+    intrinsicProjectionScope: "FULL_GAME",
+    intrinsicThesisKinds: ["A_PLUS"],
+    supportingComponents: ["C4", "FULL13"],
+  });
+
   const serialized = JSON.stringify(response.body);
   assert.equal(serialized.includes(opaqueKey), false);
   assert.equal(serialized.includes(opaqueScope), false);
   assert.equal(serialized.includes("314159"), false);
   assert.equal(serialized.includes("271828"), false);
+});
+
+test("completed run with no Elite evidence returns an explicit empty candidate list", async () => {
+  const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
+    buildSlate: async () => slate("FINAL"),
+    liveEvidenceProviders: {
+      shortlistEvidence: async () => ({ value: { 123: {} } }),
+      bullpenEvidence: async () => ({ value: { 123: {} } }),
+      frozenRouteAssessments: async () => ({ value: { 123: {} as any } }),
+      c4Assessments: async () => ({ value: { 123: {} as any } }),
+    },
+    resolveRuntimeConfig: () => ({ providerAccountScopeKey: "scope", apiKey: "key", maxRunCredits: 1, reserveCredits: 0 }),
+    getOddsService: () => ({} as any),
+    runPriced: (async (input: any) => ({
+      schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
+      runId: input.runId,
+      generatedAt: "2026-08-13T17:01:00.000Z",
+      summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 0, positiveEvMarkets: 0, eliteEvidenceCandidates: 0, eliteEvidenceRowsCaptured: 0 },
+      preprice: { summary: { slateGames: 1, analysisEligibleGames: 1, finalAnalysisEligibleGames: 1, provisionalAnalysisEligibleGames: 0, intrinsicResearchEliteCandidates: 0, gamesWithMarketDiscoveryPlan: 0, gamesPaidLookupEligibleNow: 0, frozenRouteRowsCaptured: 6 } },
+      eliteEvidenceLedger: { entries: [] },
+    })) as any,
+    runIdFactory: () => "run-no-play",
+    now: () => new Date("2026-08-13T17:01:00.000Z"),
+  });
+
+  assert.equal(response.httpStatus, 200);
+  assert.equal(response.body.status, "RUN_COMPLETED");
+  const result = response.body.result as Record<string, any>;
+  assert.deepEqual(result.eliteCandidates, []);
 });
