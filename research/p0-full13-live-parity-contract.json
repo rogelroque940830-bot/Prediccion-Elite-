@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "courtedge-p0-full13-live-parity-contract.v1",
+  "objective": "Prove 13-of-13 numerical and missingness parity between the runtime FULL13 builder and the canonical Step12V historical feature table before the frozen A+/F5 classifier is wired into live route assessments.",
+  "canonicalSource": {
+    "workflowRun": 31659518059,
+    "artifactName": "p0-step12v3-expanded-regimes",
+    "artifactSha256": "6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "featureSchema": "courtedge-p0-step12v-game-anatomy-feature-table.v1"
+  },
+  "features": [
+    "team_rd10_diff",
+    "team_win10_diff",
+    "starter_kbb_adv",
+    "team_ra10_adv",
+    "lineup_exposure_rate_adv",
+    "starter_runrisk_adv",
+    "team_rs10_diff",
+    "starter_hr_adv",
+    "min_probable_prior_bf",
+    "lineup_continuity_rate_adv",
+    "combined_starter_kbb",
+    "combined_team_rs10",
+    "combined_team_ra10"
+  ],
+  "formulaLock": {
+    "teamWindow": 10,
+    "minimumTeamHistoryGames": 5,
+    "starterShrinkagePriorBattersFaced": 72,
+    "starterLeaguePrior": "ALL_COMPLETED_PRIOR_DATE_STARTER_LINES_IN_CURRENT_SEASON",
+    "starterRunRiskRate": "SHRUNK_EARNED_RUNS_PER_BF",
+    "starterKbbRate": "SHRUNK_K_MINUS_BB_PER_BF",
+    "starterHrRate": "SHRUNK_HOME_RUNS_PER_BF",
+    "lineupExposure": "MEAN_OF_TEAM_SPECIFIC_PRIOR_COMPLETE_LINEUP_APPEARANCES_PER_CURRENT_BATTER_DIVIDED_BY_ALL_TEAM_PRIOR_GAMES",
+    "lineupContinuity": "CURRENT_NINE_OVERLAP_WITH_MOST_RECENT_PRIOR_COMPLETE_LINEUP_DIVIDED_BY_NINE",
+    "seasonHistoryReset": true,
+    "sameDateHistoryAllowed": false
+  },
+  "parityGate": {
+    "requiredFeatureMatches": "13_OF_13",
+    "maximumNumericAbsoluteDifference": 1e-12,
+    "maximumMismatches": 0,
+    "minimumRowsComparedAcrossAllSeasons": 10000,
+    "seasons": ["2022", "2023", "2024", "2025", "2026_YTD"]
+  },
+  "forbiddenRuntimeInputs": [
+    "sportsbookOdds",
+    "americanOdds",
+    "decimalOdds",
+    "impliedProbability",
+    "vig",
+    "ev",
+    "roi",
+    "currentGameOutcome",
+    "sameDateCompletedGameOutcome"
+  ],
+  "policy": {
+    "frozenClassifierLiveInputAllowedBeforeParityPass": false,
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "stakeChangeAllowed": false,
+    "automaticBetPlacementAllowed": false
+  }
+}
