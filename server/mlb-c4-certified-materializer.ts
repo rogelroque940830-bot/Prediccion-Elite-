@@ -2,13 +2,20 @@ import {
   buildC4LiveFeatures,
   type C4LiveFeatureAssessment,
   type C4PriorLineupSnapshot,
-  type C4PriorPitcherLine,
   type C4PriorTeamGame,
 } from "./mlb-c4-live-feature-builder";
+import {
+  buildMlbFull13LiveFeatures,
+  type MlbFull13LiveFeatureAssessment,
+  type MlbFull13LivePregameInput,
+  type MlbFull13PriorPitcherLine,
+} from "./mlb-full13-live-feature-builder";
 import type { MlbP1SlateGame } from "./mlb-p1-daily-slate";
 
 export const MLB_C4_CERTIFIED_MATERIALIZER_SCHEMA =
   "courtedge-p0-mlb-c4-certified-materializer.v1" as const;
+export const MLB_FULL13_CERTIFIED_MATERIALIZER_SCHEMA =
+  "courtedge-p0-mlb-full13-certified-materializer.v1" as const;
 
 const MLB_STATS_API_BASE = "https://statsapi.mlb.com/api";
 const DEFAULT_CONCURRENCY = 12;
@@ -28,8 +35,8 @@ interface HistoricalSnapshot {
   cutoffDate: string;
   teamHistoryByTeam: Map<number, C4PriorTeamGame[]>;
   lineupHistoryByTeam: Map<number, C4PriorLineupSnapshot[]>;
-  starterHistoryByPitcher: Map<number, C4PriorPitcherLine[]>;
-  leagueStarterHistory: C4PriorPitcherLine[];
+  starterHistoryByPitcher: Map<number, MlbFull13PriorPitcherLine[]>;
+  leagueStarterHistory: MlbFull13PriorPitcherLine[];
   priorGameCount: number;
 }
 
@@ -47,8 +54,8 @@ interface ParsedHistoricalGame {
   awayRuns: number;
   homeLineup: number[] | null;
   awayLineup: number[] | null;
-  homeStarter: C4PriorPitcherLine;
-  awayStarter: C4PriorPitcherLine;
+  homeStarter: MlbFull13PriorPitcherLine;
+  awayStarter: MlbFull13PriorPitcherLine;
 }
 
 function clean(value: unknown): string {
@@ -95,7 +102,7 @@ function starterLine(
   side: "home" | "away",
   officialDate: string,
   gamePk: number,
-): C4PriorPitcherLine {
+): MlbFull13PriorPitcherLine {
   const pitchers = feed?.liveData?.boxscore?.teams?.[side]?.pitchers;
   const pitcherId = Array.isArray(pitchers) ? positiveInt(pitchers[0]) : null;
   if (!pitcherId) throw new Error(`C4_CERTIFIED_STARTER_MISSING:${gamePk}:${side}`);
@@ -106,7 +113,16 @@ function starterLine(
   if (battersFaced === null || strikeOuts === null || baseOnBalls === null) {
     throw new Error(`C4_CERTIFIED_STARTER_STATS_MISSING:${gamePk}:${side}:${pitcherId}`);
   }
-  return { officialDate, gamePk, pitcherId, battersFaced, strikeOuts, baseOnBalls };
+  return {
+    officialDate,
+    gamePk,
+    pitcherId,
+    battersFaced,
+    strikeOuts,
+    baseOnBalls,
+    earnedRuns: nonNegativeFinite(pitching?.earnedRuns),
+    homeRuns: nonNegativeFinite(pitching?.homeRuns),
+  };
 }
 
 function parseHistoricalGame(feed: any, expected: ScheduledGameIdentity): ParsedHistoricalGame {
@@ -180,6 +196,24 @@ export class MlbC4CertifiedMaterializer {
   }
 
   async assessGame(game: MlbP1SlateGame): Promise<C4LiveFeatureAssessment> {
+    const materialized = await this.materializePregameInput(game);
+    const assessment = buildC4LiveFeatures(materialized);
+    if (Object.values(assessment.featureVector).some((value) => value === null || !Number.isFinite(value))) {
+      throw new Error(`C4_CERTIFIED_FEATURE_VECTOR_INCOMPLETE:${game.gamePk}`);
+    }
+    return assessment;
+  }
+
+  async assessFull13Game(game: MlbP1SlateGame): Promise<MlbFull13LiveFeatureAssessment> {
+    const materialized = await this.materializePregameInput(game);
+    const assessment = buildMlbFull13LiveFeatures(materialized);
+    if (Object.values(assessment.featureVector).some((value) => value === null || !Number.isFinite(value))) {
+      throw new Error(`FULL13_CERTIFIED_FEATURE_VECTOR_INCOMPLETE:${game.gamePk}`);
+    }
+    return assessment;
+  }
+
+  private async materializePregameInput(game: MlbP1SlateGame): Promise<MlbFull13LivePregameInput> {
     if (!positiveInt(game.gamePk)) throw new Error("C4_CERTIFIED_TARGET_GAME_PK_INVALID");
     if (!validIsoDate(game.officialDate)) throw new Error(`C4_CERTIFIED_TARGET_DATE_INVALID:${game.officialDate}`);
     const homeTeamId = positiveInt(game.homeTeam.id);
@@ -211,7 +245,7 @@ export class MlbC4CertifiedMaterializer {
       throw new Error(`C4_CERTIFIED_AWAY_LINEUP_HISTORY_INCOMPLETE:${game.gamePk}:${awayPriorLineups.length}:${awayTeamHistory.length}`);
     }
 
-    const assessment = buildC4LiveFeatures({
+    return {
       officialDate: game.officialDate,
       gamePk: game.gamePk,
       homeTeamId,
@@ -227,12 +261,7 @@ export class MlbC4CertifiedMaterializer {
       awayPriorLineups,
       homeBattingOrder,
       awayBattingOrder,
-    });
-
-    if (Object.values(assessment.featureVector).some((value) => value === null || !Number.isFinite(value))) {
-      throw new Error(`C4_CERTIFIED_FEATURE_VECTOR_INCOMPLETE:${game.gamePk}`);
-    }
-    return assessment;
+    };
   }
 
   private assertTargetIdentity(
@@ -294,8 +323,8 @@ export class MlbC4CertifiedMaterializer {
 
     const teamHistoryByTeam = new Map<number, C4PriorTeamGame[]>();
     const lineupHistoryByTeam = new Map<number, C4PriorLineupSnapshot[]>();
-    const starterHistoryByPitcher = new Map<number, C4PriorPitcherLine[]>();
-    const leagueStarterHistory: C4PriorPitcherLine[] = [];
+    const starterHistoryByPitcher = new Map<number, MlbFull13PriorPitcherLine[]>();
+    const leagueStarterHistory: MlbFull13PriorPitcherLine[] = [];
 
     for (const game of parsed) {
       append(teamHistoryByTeam, game.homeTeamId, {
