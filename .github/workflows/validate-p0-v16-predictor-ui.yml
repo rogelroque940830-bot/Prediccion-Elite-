@@ -3,6 +3,7 @@ name: Validate P0 V16 Predictor UI
 on:
   pull_request:
     branches:
+      - main
       - feature/p0-c4-live-parity-gate
     paths:
       - 'server/mlb-unified-v16-live-input-assembler.ts'
