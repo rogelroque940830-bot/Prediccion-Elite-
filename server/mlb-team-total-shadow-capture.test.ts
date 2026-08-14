@@ -12,6 +12,7 @@ import {
 
 const NOW = new Date("2026-08-14T20:00:00.000Z");
 const START = "2026-08-14T23:10:00.000Z";
+const FIXTURE_API_KEY = ["fixture", "provider", "token"].join("-");
 
 function game(overrides: Partial<MlbP1SlateGame> = {}): MlbP1SlateGame {
   return {
@@ -78,23 +79,23 @@ function headers(remaining: number, used: number, last: number): Headers {
   });
 }
 
-function eventsPayload() {
-  return [{
-    id: "event-777001",
+function eventsPayload(games = [game()]) {
+  return games.map((item) => ({
+    id: `event-${item.gamePk}`,
     sport_key: "baseball_mlb",
-    commence_time: START,
-    home_team: "Home Club",
-    away_team: "Away Club",
-  }];
+    commence_time: item.startTime,
+    home_team: item.homeTeam.name,
+    away_team: item.awayTeam.name,
+  }));
 }
 
-function teamTotalsPayload() {
+function teamTotalsPayload(target = game()) {
   return {
-    id: "event-777001",
+    id: `event-${target.gamePk}`,
     sport_key: "baseball_mlb",
-    commence_time: START,
-    home_team: "Home Club",
-    away_team: "Away Club",
+    commence_time: target.startTime,
+    home_team: target.homeTeam.name,
+    away_team: target.awayTeam.name,
     bookmakers: [{
       key: "hardrockbet_fl",
       title: "Hard Rock Bet Florida",
@@ -103,10 +104,10 @@ function teamTotalsPayload() {
         key: "team_totals",
         last_update: "2026-08-14T19:59:00.000Z",
         outcomes: [
-          { name: "Over", description: "Home Club", point: 4.5, price: -105 },
-          { name: "Under", description: "Home Club", point: 4.5, price: -115 },
-          { name: "Over", description: "Away Club", point: 3.5, price: 105 },
-          { name: "Under", description: "Away Club", point: 3.5, price: -125 },
+          { name: "Over", description: target.homeTeam.name, point: 4.5, price: -105 },
+          { name: "Under", description: target.homeTeam.name, point: 4.5, price: -115 },
+          { name: "Over", description: target.awayTeam.name, point: 3.5, price: 105 },
+          { name: "Under", description: target.awayTeam.name, point: 3.5, price: -125 },
         ],
       }],
     }],
@@ -127,7 +128,7 @@ function baseInput(runId: string) {
     games: [game()],
     maxGames: 1,
     providerAccountScopeKey: "scope-test",
-    apiKey: "secret-never-returned",
+    apiKey: FIXTURE_API_KEY,
     maxRunCredits: 1,
     reserveCredits: 10,
   };
@@ -168,7 +169,7 @@ test("V22 captures one paid team_totals market and evaluates both team sides wit
   assert.equal(result.policy.recommendsBet, false);
   assert.equal(result.policy.automaticBetPlacement, false);
   assert.equal(result.policy.realFinancialExposure, 0);
-  assert.equal(JSON.stringify(result).includes("secret-never-returned"), false);
+  assert.equal(JSON.stringify(result).includes(FIXTURE_API_KEY), false);
 });
 
 test("same run replay and later run for the same game consume no additional paid credits", async () => {
@@ -196,6 +197,39 @@ test("same run replay and later run for the same game consume no additional paid
   assert.equal(calls, 2);
 });
 
+test("maxGames counts uncaptured games so an older canonical capture cannot starve later games", async () => {
+  const first = game();
+  const second = game({
+    gamePk: 777002,
+    startTime: "2026-08-15T00:10:00.000Z",
+    homeTeam: { id: 3, name: "Second Home" },
+    awayTeam: { id: 4, name: "Second Away" },
+  });
+  const store = new MemoryStore();
+  store.games.set(first.gamePk, {
+    gamePk: first.gamePk, officialDate: first.officialDate, startTime: first.startTime!, homeTeam: first.homeTeam.name, awayTeam: first.awayTeam.name,
+    status: "CAPTURED", providerEventId: `event-${first.gamePk}`, providerCallMade: true, providerCreditsCharged: 1,
+    homeMarketAvailability: "EXECUTABLE", awayMarketAvailability: "EXECUTABLE", home: null, away: null, blockers: [],
+  });
+  let paidCalls = 0;
+  const service = new MlbTeamTotalShadowCaptureService({
+    coordinator: coordinator(), store, now: () => NOW,
+    materializer: { assessFull13Game: async () => ({ featureVector: featureVector() }) } as any,
+    fetchFn: async (input) => {
+      const url = String(input);
+      if (url.includes("/events/?")) return new Response(JSON.stringify(eventsPayload([first, second])), { headers: headers(100, 10, 0) });
+      paidCalls += 1;
+      assert.ok(url.includes("event-777002"));
+      return new Response(JSON.stringify(teamTotalsPayload(second)), { headers: headers(99, 11, 1) });
+    },
+  });
+  const result = await service.capture({ ...baseInput("progress-run"), games: [first, second], maxGames: 1 });
+  assert.equal(result.games.some((row) => row.gamePk === first.gamePk && row.status === "ALREADY_CAPTURED"), true);
+  assert.equal(result.games.some((row) => row.gamePk === second.gamePk && row.status === "CAPTURED"), true);
+  assert.equal(paidCalls, 1);
+  assert.equal(result.summary.providerCreditsCharged, 1);
+});
+
 test("zero paid-credit authorization probes quota but never crosses the paid boundary", async () => {
   let paidCalls = 0;
   const service = new MlbTeamTotalShadowCaptureService({
@@ -214,14 +248,31 @@ test("zero paid-credit authorization probes quota but never crosses the paid bou
   assert.equal(result.summary.providerCreditsCharged, 0);
 });
 
-test("provider paid response must reproduce the probed event identity", async () => {
+test("paid network failure charges worst-case authorized credits instead of releasing an issued request", async () => {
+  const service = new MlbTeamTotalShadowCaptureService({
+    coordinator: coordinator(), store: new MemoryStore(), now: () => NOW,
+    materializer: { assessFull13Game: async () => { throw new Error("must not materialize"); } } as any,
+    fetchFn: async (input) => {
+      const url = String(input);
+      if (url.includes("/events/?")) return new Response(JSON.stringify(eventsPayload()), { headers: headers(100, 10, 0) });
+      throw Object.assign(new Error("network lost after request issuance"), { name: "NetworkError" });
+    },
+  });
+  const result = await service.capture(baseInput("network-failure"));
+  assert.equal(result.games[0].status, "PROVIDER_FAILED");
+  assert.equal(result.games[0].providerCallMade, true);
+  assert.equal(result.games[0].providerCreditsCharged, 1);
+  assert.equal(result.summary.providerCreditsCharged, 1);
+});
+
+test("provider paid response must reproduce the complete probed event identity", async () => {
   const service = new MlbTeamTotalShadowCaptureService({
     coordinator: coordinator(), store: new MemoryStore(), now: () => NOW,
     materializer: { assessFull13Game: async () => ({ featureVector: featureVector() }) } as any,
     fetchFn: async (input) => {
       const url = String(input);
       if (url.includes("/events/?")) return new Response(JSON.stringify(eventsPayload()), { headers: headers(100, 10, 0) });
-      const wrong = { ...teamTotalsPayload(), id: "different-event" };
+      const wrong = { ...teamTotalsPayload(), home_team: "Different Home" };
       return new Response(JSON.stringify(wrong), { headers: headers(99, 11, 1) });
     },
   });
@@ -229,4 +280,5 @@ test("provider paid response must reproduce the probed event identity", async ()
   assert.equal(result.games[0].status, "PROVIDER_FAILED");
   assert.equal(result.games[0].providerCreditsCharged, 1);
   assert.equal(result.summary.evaluatedTeamTotals, 0);
+  assert.ok(result.games[0].blockers.includes("PAID_EVENT_IDENTITY_MISMATCH"));
 });
