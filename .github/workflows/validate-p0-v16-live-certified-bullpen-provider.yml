@@ -1,0 +1,61 @@
+name: Validate P0 V16 Live Certified Bullpen Provider
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-unified-v16-live-providers.ts'
+      - 'server/mlb-unified-v16-live-providers.test.ts'
+      - '.github/workflows/validate-p0-v16-live-certified-bullpen-provider.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate certified live provider custody
+        run: npx tsx --test server/mlb-unified-v16-live-providers.test.ts
+      - name: Preserve official bullpen source certification
+        run: npx tsx --test server/mlb-bullpen.test.ts
+      - name: Preserve V16 live assembler fail-closed boundary
+        run: npx tsx --test server/mlb-unified-v16-live-input-assembler.test.ts
+      - name: Compile live provider surface
+        run: npx esbuild server/mlb-unified-v16-live-providers.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-v16-live-providers.cjs
+      - name: Backend build
+        run: npm run build:backend
+      - name: Verify live bullpen provider and safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider='server/mlb-unified-v16-live-providers.ts'
+          grep -F 'getBullpenStatus' "$provider"
+          grep -F 'bullpenEvidence: createMlbUnifiedV16CertifiedBullpenProvider()' "$provider"
+          grep -F 'BULLPEN_EVIDENCE_UNAVAILABLE' "$provider"
+          grep -F 'BULLPEN_CERTIFIED_PROVENANCE_REQUIRED' "$provider"
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|appendPrediction\(|appendSettlement\(' "$provider"
+      - name: Verify exact slice scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-v16-live-certified-bullpen-provider.yml' \
+            'server/mlb-unified-v16-live-providers.test.ts' \
+            'server/mlb-unified-v16-live-providers.ts' | sort)
+          [[ "$changed" == "$expected" ]]
