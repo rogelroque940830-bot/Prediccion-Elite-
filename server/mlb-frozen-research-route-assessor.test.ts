@@ -28,6 +28,7 @@ function classifiers(overrides: Partial<MlbFrozenRouteClassifierSnapshot> = {}):
       hrpaAdv: -0.02,
     },
     f5Consensus: false,
+    bullpenD1Eligible: true,
     bullpenPitches1dAdv: 18,
     ...overrides,
   };
@@ -65,6 +66,7 @@ test("non-A+ router is not applicable and outside-A F5 unions preserve the froze
       premiumA: false,
       aPlus: false,
       f5Consensus: true,
+      bullpenD1Eligible: false,
       bullpenPitches1dAdv: null,
       pitchmix: {
         eligible: true,
@@ -93,13 +95,20 @@ test("provisional inputs are retained but every frozen route and router stays no
   assert.deepEqual(new Set(Object.values(row.routers)), new Set(["NOT_EVALUATED"]));
 });
 
-test("A+ fails closed when exact bullpen D1 evidence is absent", () => {
+test("A+ fails closed when exact bullpen D1 evidence is absent or the frozen eligibility gate fails", () => {
   assert.throws(
     () => assessMlbFrozenResearchRoutes({
       ...BASE,
       classifiers: classifiers({ bullpenPitches1dAdv: null }),
     }),
     /MLB_FROZEN_ROUTE_BULLPEN_D1_REQUIRED_FOR_APLUS/,
+  );
+  assert.throws(
+    () => assessMlbFrozenResearchRoutes({
+      ...BASE,
+      classifiers: classifiers({ bullpenD1Eligible: false }),
+    }),
+    /MLB_FROZEN_ROUTE_BULLPEN_D1_INELIGIBLE_FOR_APLUS/,
   );
 });
 
