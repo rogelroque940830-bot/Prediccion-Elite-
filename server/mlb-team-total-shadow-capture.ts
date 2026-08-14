@@ -164,6 +164,7 @@ export interface MlbTeamTotalShadowStore {
 }
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+type EligibleShadowGame = MlbP1SlateGame & { startTime: string };
 
 export interface MlbTeamTotalShadowCaptureServiceOptions {
   fetchFn?: FetchLike;
@@ -195,12 +196,13 @@ function validIsoDate(value: string): boolean {
   return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
 }
 
-function exactNumber(value: number): string {
-  if (Object.is(value, -0)) return "-0";
-  if (Number.isNaN(value)) return "NaN";
-  if (value === Number.POSITIVE_INFINITY) return "+Infinity";
-  if (value === Number.NEGATIVE_INFINITY) return "-Infinity";
-  return value.toString();
+function isEligibleShadowGame(game: MlbP1SlateGame, date: string): game is EligibleShadowGame {
+  return game.officialDate === date
+    && game.analysisAllowed
+    && game.analysisStage === "FINAL"
+    && typeof game.startTime === "string"
+    && game.startTime.trim().length > 0
+    && Number.isFinite(Date.parse(game.startTime));
 }
 
 function planFingerprint(input: Omit<MlbTeamTotalShadowCaptureInput, "apiKey">): string {
@@ -255,8 +257,8 @@ function evSide(
   const decimal = mlbP1M4aAmericanToDecimal(oddsAmerican);
   const implied = mlbP1M4aAmericanToImpliedProbability(oddsAmerican);
   if (decimal == null || implied == null) throw new Error("MLB_TEAM_TOTAL_SHADOW_PRICE_INVALID");
-  const ev = settlement.winProbability * (decimal - 1) - settlement.lossProbability;
-  if (!Number.isFinite(ev)) throw new Error("MLB_TEAM_TOTAL_SHADOW_EV_INVALID");
+  const expectedValuePerUnit = settlement.winProbability * (decimal - 1) - settlement.lossProbability;
+  if (!Number.isFinite(expectedValuePerUnit)) throw new Error("MLB_TEAM_TOTAL_SHADOW_EV_INVALID");
   return Object.freeze({
     side,
     line,
@@ -265,7 +267,7 @@ function evSide(
     modelWinProbability: settlement.winProbability,
     modelPushProbability: settlement.pushProbability,
     modelLossProbability: settlement.lossProbability,
-    expectedValuePerUnit: ev,
+    expectedValuePerUnit,
   });
 }
 
@@ -312,7 +314,7 @@ function evaluateQuote(input: {
 }
 
 function emptyGame(
-  game: MlbP1SlateGame,
+  game: EligibleShadowGame,
   status: MlbTeamTotalShadowGameStatus,
   blockers: string[],
 ): MlbTeamTotalShadowGameResult {
@@ -395,6 +397,15 @@ function buildResult(input: {
   });
 }
 
+function matchInput(game: EligibleShadowGame) {
+  return {
+    officialDate: game.officialDate,
+    startTime: game.startTime,
+    homeTeam: game.homeTeam,
+    awayTeam: game.awayTeam,
+  };
+}
+
 export class MlbTeamTotalShadowCaptureService {
   private readonly fetchFn: FetchLike;
   private readonly now: () => Date;
@@ -442,10 +453,10 @@ export class MlbTeamTotalShadowCaptureService {
     if (!Number.isFinite(now.getTime())) throw new Error("MLB_TEAM_TOTAL_SHADOW_NOW_INVALID");
 
     const candidates = input.games
-      .filter((game) => game.officialDate === input.date && game.analysisAllowed && game.analysisStage === "FINAL")
-      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime) || a.gamePk - b.gamePk)
-      .slice(0, input.maxGames);
-    const fingerprint = planFingerprint({ ...input, apiKey: undefined as never });
+      .filter((game): game is EligibleShadowGame => isEligibleShadowGame(game, input.date))
+      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime) || a.gamePk - b.gamePk);
+    const { apiKey: _apiKey, ...fingerprintInput } = input;
+    const fingerprint = planFingerprint(fingerprintInput);
 
     return this.coordinator.runExclusive(input.providerAccountScopeKey, async () => {
       const admission = await this.store.beginRun({
@@ -460,7 +471,7 @@ export class MlbTeamTotalShadowCaptureService {
       if (admission.status === "FINGERPRINT_MISMATCH") throw new Error("MLB_TEAM_TOTAL_SHADOW_RUN_ID_REUSED_WITH_DIFFERENT_PLAN");
 
       const results: MlbTeamTotalShadowGameResult[] = [];
-      const queryable: MlbP1SlateGame[] = [];
+      const queryable: EligibleShadowGame[] = [];
       for (const game of candidates) {
         if (Date.parse(game.startTime) <= now.getTime()) {
           const result = emptyGame(game, "TARGET_STARTED", ["CAPTURE_MUST_PRECEDE_GAME_START"]);
@@ -478,7 +489,7 @@ export class MlbTeamTotalShadowCaptureService {
           results.push(emptyGame(game, "ALREADY_CAPTURED", ["FIRST_PROSPECTIVE_CAPTURE_ALREADY_EXISTS"]));
           continue;
         }
-        queryable.push(game);
+        if (queryable.length < input.maxGames) queryable.push(game);
       }
 
       if (!queryable.length) {
@@ -508,12 +519,7 @@ export class MlbTeamTotalShadowCaptureService {
       }
 
       for (const game of queryable) {
-        const matched = matchMlbDiscoveryGameToProviderEvent({
-          officialDate: game.officialDate,
-          startTime: game.startTime,
-          homeTeam: game.homeTeam,
-          awayTeam: game.awayTeam,
-        }, probePayload);
+        const matched = matchMlbDiscoveryGameToProviderEvent(matchInput(game), probePayload);
         if (matched.status !== "MATCHED") {
           const result = emptyGame(game, matched.status === "NOT_FOUND" ? "EVENT_NOT_FOUND" : "EVENT_MATCH_AMBIGUOUS", [`PROVIDER_EVENT_${matched.status}`]);
           results.push(result);
@@ -544,18 +550,27 @@ export class MlbTeamTotalShadowCaptureService {
             { signal: withTimeout(this.timeoutMs) },
           );
         } catch (error: any) {
-          budget.releaseUnissuedOperation(operationId);
-          const result = emptyGame(game, "PROVIDER_FAILED", [String(error?.name ?? "PROVIDER_REQUEST_FAILED")]);
+          budget.settlePaidOperation(operationId, null);
+          const charged = budget.snapshot().runCreditsCharged - beforeCharged;
+          const result = emptyGame(game, "PROVIDER_FAILED", [String(error?.name ?? "PROVIDER_REQUEST_FAILED"), "PAID_REQUEST_ACCOUNTED_WORST_CASE"]);
           result.providerEventId = matched.eventId;
+          result.providerCallMade = true;
+          result.providerCreditsCharged = charged;
           results.push(result);
           await this.store.saveCanonicalGameCapture({ providerAccountScopeKey: input.providerAccountScopeKey, runId: input.runId, gamePk: game.gamePk, capturedAt: now.toISOString(), result });
           break;
         }
+
         const payload = await safeJson(response);
         budget.settlePaidOperation(operationId, response.headers);
         const charged = budget.snapshot().runCreditsCharged - beforeCharged;
-        if (!response.ok || !payload || String(payload?.id ?? "").trim() !== matched.eventId) {
-          const result = emptyGame(game, "PROVIDER_FAILED", [!response.ok ? `EVENT_ODDS_HTTP_${response.status}` : "PAID_EVENT_IDENTITY_MISMATCH"]);
+        const paidIdentity = payload
+          ? matchMlbDiscoveryGameToProviderEvent(matchInput(game), [payload])
+          : { status: "NOT_FOUND" as const };
+        const paidIdentityOk = paidIdentity.status === "MATCHED" && paidIdentity.eventId === matched.eventId;
+        if (!response.ok || !payload || !paidIdentityOk) {
+          const blocker = !response.ok ? `EVENT_ODDS_HTTP_${response.status}` : "PAID_EVENT_IDENTITY_MISMATCH";
+          const result = emptyGame(game, "PROVIDER_FAILED", [blocker]);
           result.providerEventId = matched.eventId;
           result.providerCallMade = true;
           result.providerCreditsCharged = charged;
