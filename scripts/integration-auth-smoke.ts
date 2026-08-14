@@ -25,7 +25,7 @@ delete process.env.COURTEDGE_WRITE_TOKEN;
 
 const [
   { restrictedCors, apiRateLimit, requireWriteAuth },
-  { createSessionMiddleware, registerAuthRoutes },
+  { createSessionMiddleware, initializeAuthPersistence, registerAuthRoutes },
   { registerPicksV2Routes },
 ] = await Promise.all([
   import("../server/security"),
@@ -33,14 +33,15 @@ const [
   import("../server/picks-v2"),
 ]);
 
+const authDatabase = initializeAuthPersistence();
 const app = express();
 app.set("trust proxy", 1);
 app.use(restrictedCors);
 app.use(apiRateLimit);
-app.use(createSessionMiddleware());
+app.use(createSessionMiddleware(authDatabase));
 app.use(express.json());
 app.use(requireWriteAuth);
-registerAuthRoutes(app);
+registerAuthRoutes(app, authDatabase);
 registerPicksV2Routes(app);
 
 const server = createServer(app);
