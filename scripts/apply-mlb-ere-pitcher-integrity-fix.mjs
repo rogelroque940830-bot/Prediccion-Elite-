@@ -94,7 +94,7 @@ replaceOnce(
   if (teamMetrics.dataStatus === "DATA_INCOMPLETE") {
     warnings.unshift("DATA_INCOMPLETE: no se validaron linescores suficientes; mercados early bloqueados");
   } else if (teamMetrics.dataStatus === "PARTIAL") {
-    warnings.unshift(\`Cobertura early parcial (\${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto\`);
+    warnings.unshift(`Cobertura early parcial (${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto`);
   }`,
 `  // ── 6. Categoría + sugerencias de mercado ───────────────────────────────
   const effectiveDataStatus: EreResult["dataStatus"] = pitcherEvidenceIncomplete
@@ -107,11 +107,11 @@ replaceOnce(
   const { category, marketSuggestions } = classified;
   const warnings = collectWarnings(offVars, pitVars, teamMetrics, pitcherData);
   if (pitcherEvidenceIncomplete) {
-    warnings.unshift(\`PITCHER_EVIDENCE_INCOMPLETE: cobertura \${Math.round(pitcherEvidenceCoverage * 100)}%; mercados early bloqueados\`);
+    warnings.unshift(`PITCHER_EVIDENCE_INCOMPLETE: cobertura ${Math.round(pitcherEvidenceCoverage * 100)}%; mercados early bloqueados`);
   } else if (teamMetrics.dataStatus === "DATA_INCOMPLETE") {
     warnings.unshift("DATA_INCOMPLETE: no se validaron linescores suficientes; mercados early bloqueados");
   } else if (teamMetrics.dataStatus === "PARTIAL") {
-    warnings.unshift(\`Cobertura early parcial (\${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto\`);
+    warnings.unshift(`Cobertura early parcial (${teamMetrics.gamesAnalyzed} juegos); usar solo como contexto`);
   }`,
   "classification fail-closed gate",
 );
@@ -238,9 +238,9 @@ replaceOnce(
 );
 
 replaceOnce(
-`    const innByInn: Record<string, { era: number; ip: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
+`    const innByInn: Record<string, { era: number; ip: number; outs: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
     for (let i = 1; i <= 9; i++) {
-      const code = i < 10 ? \`i0\${i}\` : \`i\${i}\`;
+      const code = i < 10 ? `i0${i}` : `i${i}`;
       const s = inningMap[code];
       if (!s) continue;
       const ip = parseFloat(s.inningsPitched || "0");
@@ -256,7 +256,7 @@ replaceOnce(
     }`,
 `    const innByInn: Record<string, { era: number; ip: number; outs: number; er: number; k: number; bb: number; h: number; hr: number }> = {};
     for (let i = 1; i <= 9; i++) {
-      const code = i < 10 ? \`i0\${i}\` : \`i\${i}\`;
+      const code = i < 10 ? `i0${i}` : `i${i}`;
       const s = inningMap[code];
       if (!s || s.outs <= 0) continue; // zero outs = N/D, never a synthetic 0.00 ERA
       const era = eraFromOuts(s.earnedRuns, s.outs);
