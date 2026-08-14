@@ -58,17 +58,38 @@ jobs:
             --v12-2025 /tmp/v12-2025/pitchmix-2025.json \
             --v12-2026 /tmp/v12-2026/pitchmix-2026_YTD.json \
             --out server/mlb-frozen-matchup-canonical-seed.generated.ts
+      - name: Align live builder with frozen V9/V12 descriptive-value semantics
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/mlb-frozen-matchup-live-feature-builder.ts')
+          s=p.read_text()
+          s=s.replace(
+            '  const slgAdv = slgEligible ? (homeHand.slg as number) - (awayHand.slg as number) : null;',
+            '  const slgAdv = homeHand.slg !== null && awayHand.slg !== null ? homeHand.slg - awayHand.slg : null;',
+          )
+          s=s.replace(
+            '  const pitchmixEligible = reasons.length === 0;\n  const positiveCount = pitchmixEligible\n    ? Object.values(values).filter((value) => (value as number) > 0).length\n    : 0;',
+            '  const pitchmixEligible = reasons.length === 0;\n  const positiveCount = Object.values(values).filter((value) => value !== null && Number.isFinite(value) && value > 0).length;',
+          )
+          s=s.replace(
+            '      contactAdv: pitchmixEligible ? values.contactAdv : null,\n      whiffAdv: pitchmixEligible ? values.whiffAdv : null,\n      tbpaAdv: pitchmixEligible ? values.tbpaAdv : null,\n      hrpaAdv: pitchmixEligible ? values.hrpaAdv : null,',
+            '      contactAdv: values.contactAdv,\n      whiffAdv: values.whiffAdv,\n      tbpaAdv: values.tbpaAdv,\n      hrpaAdv: values.hrpaAdv,',
+          )
+          p.write_text(s)
+          PY
       - name: Commit generated custody if changed
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
-          if [[ -z "$(git status --porcelain -- server/mlb-frozen-matchup-canonical-seed.generated.ts)" ]]; then
-            echo 'Canonical seed already matches frozen artifacts.'
+          if [[ -z "$(git status --porcelain -- server/mlb-frozen-matchup-canonical-seed.generated.ts server/mlb-frozen-matchup-live-feature-builder.ts)" ]]; then
+            echo 'Canonical seed and builder semantics already match frozen evidence.'
             exit 0
           fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add server/mlb-frozen-matchup-canonical-seed.generated.ts
-          git commit -m 'P0 V17: materialize frozen V9/V12 matchup seed'
+          git add server/mlb-frozen-matchup-canonical-seed.generated.ts server/mlb-frozen-matchup-live-feature-builder.ts
+          git commit -m 'P0 V17: align frozen matchup descriptive parity'
           git push origin HEAD:feature/p0-v17-certified-slg-pitchmix-materializer
