@@ -1,0 +1,57 @@
+name: Validate P0 C4 Certified Materialization
+
+on:
+  pull_request:
+    branches:
+      - feature/p0-v16-runtime-scorer
+    paths:
+      - 'server/mlb-c4-certified-materializer.ts'
+      - 'server/mlb-c4-certified-materializer.test.ts'
+      - 'server/mlb-unified-v16-live-providers.ts'
+      - 'server/mlb-unified-v16-live-providers.test.ts'
+      - 'server/mlb-unified-v16-live-input-assembler.ts'
+      - 'server/mlb-unified-v16-live-input-assembler.test.ts'
+      - 'server/mlb-unified-v16-ui-orchestration.test.ts'
+      - 'server/mlb-pure-settlement-scorer.ts'
+      - 'scripts/mlb-c4-certified-live-smoke.ts'
+      - '.github/workflows/validate-p0-c4-certified-materialization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Run C4 and orchestration tests
+        run: |
+          npx tsx --test server/mlb-c4-certified-materializer.test.ts server/mlb-unified-v16-live-providers.test.ts
+          npx tsx --test server/mlb-unified-v16-live-input-assembler.test.ts server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Compile C4 and V16 modules
+        run: |
+          npx esbuild server/mlb-c4-certified-materializer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-c4-certified-materializer.cjs
+          npx esbuild server/mlb-unified-v16-live-providers.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-unified-v16-live-providers.cjs
+          npx esbuild server/mlb-pure-settlement-scorer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-pure-settlement-scorer.cjs
+      - name: Backend build
+        run: npm run build:backend
+
+  official-mlb-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Run official MLB C4 to V16 smoke
+        run: npx tsx scripts/mlb-c4-certified-live-smoke.ts
