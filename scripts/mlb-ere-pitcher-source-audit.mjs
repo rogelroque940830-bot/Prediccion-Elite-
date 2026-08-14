@@ -24,8 +24,20 @@ function inningRows(payload) {
   return (payload?.stats?.[0]?.splits ?? []).map((row) => ({
     splitCode: row?.split?.code ?? null,
     splitDescription: row?.split?.description ?? null,
+    teamId: row?.team?.id ?? null,
+    teamName: row?.team?.name ?? null,
+    sportId: row?.sport?.id ?? null,
+    sportName: row?.sport?.name ?? null,
+    leagueId: row?.league?.id ?? null,
+    leagueName: row?.league?.name ?? null,
+    season: row?.season ?? null,
     inningsPitched: row?.stat?.inningsPitched ?? null,
     earnedRuns: row?.stat?.earnedRuns ?? null,
+    runs: row?.stat?.runs ?? null,
+    hits: row?.stat?.hits ?? null,
+    baseOnBalls: row?.stat?.baseOnBalls ?? null,
+    strikeOuts: row?.stat?.strikeOuts ?? null,
+    homeRuns: row?.stat?.homeRuns ?? null,
     gamesPlayed: row?.stat?.gamesPlayed ?? null,
     gamesStarted: row?.stat?.gamesStarted ?? null,
   }));
@@ -59,8 +71,21 @@ const individualUsable = Object.entries(individual).filter(([, rows]) =>
 const combinedRows = inningRows(combinedPayload);
 const combinedUsable = combinedRows.filter((row) => Number.parseFloat(String(row.inningsPitched ?? "0")) > 0);
 
+const lastWriteWins = {};
+for (const row of combinedRows) {
+  if (row.splitCode) lastWriteWins[row.splitCode] = row;
+}
+
+const duplicateCodes = inningCodes.filter((code) => combinedRows.filter((row) => row.splitCode === code).length > 1);
+const overwrittenByZero = duplicateCodes.filter((code) => {
+  const rows = combinedRows.filter((row) => row.splitCode === code);
+  const hasPositive = rows.some((row) => Number.parseFloat(String(row.inningsPitched ?? "0")) > 0);
+  const finalIp = Number.parseFloat(String(lastWriteWins[code]?.inningsPitched ?? "0"));
+  return hasPositive && finalIp === 0;
+});
+
 const report = {
-  schema: "courtedge-mlb-ere-pitcher-source-audit.v1",
+  schema: "courtedge-mlb-ere-pitcher-source-audit.v2",
   auditedAt: new Date().toISOString(),
   pitcherId,
   season,
@@ -78,6 +103,8 @@ const report = {
     latestStarts: starts.slice(-5).map((row) => ({
       date: row?.date ?? null,
       gamePk: row?.game?.gamePk ?? null,
+      teamId: row?.team?.id ?? null,
+      teamName: row?.team?.name ?? null,
       ip: row?.stat?.inningsPitched ?? null,
       er: row?.stat?.earnedRuns ?? null,
       gs: row?.stat?.gamesStarted ?? null,
@@ -87,6 +114,9 @@ const report = {
     requested: inningCodes,
     rows: combinedRows,
     usableRows: combinedUsable.length,
+    duplicateCodes,
+    lastWriteWins,
+    overwrittenByZero,
   },
   individualSitCodes: {
     usableCodes: individualUsable,
@@ -97,7 +127,8 @@ const report = {
     starterHistoryExists: starts.length >= 5,
     combinedCoverageCount: combinedUsable.length,
     individualCoverageCount: individualUsable.length,
-    combinedQueryLosesCoverage: individualUsable.length > combinedUsable.length,
+    duplicateSplitCodes: duplicateCodes.length,
+    currentParserOverwritesValidDataWithZero: overwrittenByZero.length > 0,
   },
 };
 
