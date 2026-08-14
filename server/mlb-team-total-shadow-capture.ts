@@ -550,7 +550,7 @@ export class MlbTeamTotalShadowCaptureService {
             { signal: withTimeout(this.timeoutMs) },
           );
         } catch (error: any) {
-          budget.settlePaidOperation(operationId, null);
+          budget.settlePaidOperation(operationId, new Headers());
           const charged = budget.snapshot().runCreditsCharged - beforeCharged;
           const result = emptyGame(game, "PROVIDER_FAILED", [String(error?.name ?? "PROVIDER_REQUEST_FAILED"), "PAID_REQUEST_ACCOUNTED_WORST_CASE"]);
           result.providerEventId = matched.eventId;
