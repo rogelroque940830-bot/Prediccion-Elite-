@@ -1,0 +1,46 @@
+name: Audit S6H Phase 1 Market Integrity
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - "scripts/s6h-*"
+      - "scripts/lib/s6h-*"
+      - "scripts/fixtures/s6h-*"
+      - "docs/S6H_PHASE1_*"
+      - ".github/workflows/audit-s6h-phase1-market-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run deterministic audit tests
+        run: node --test scripts/s6h-market-integrity-audit.test.mjs
+      - name: Generate fixture audit evidence
+        run: |
+          node scripts/s6h-audit-mlb-market-integrity.mjs \
+            --input scripts/fixtures/s6h-screenshot-sample.json \
+            --json artifacts/s6h-phase1-market-integrity.json \
+            --markdown artifacts/s6h-phase1-market-integrity.md
+      - name: Assert read-only fixture findings
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('artifacts/s6h-phase1-market-integrity.json', 'utf8'));
+          if (report.summary.PASS !== 1 || report.summary.REVIEW !== 2 || report.summary.REJECT !== 1) {
+            throw new Error(`Unexpected audit summary: ${JSON.stringify(report.summary)}`);
+          }
+          if (report.policy.readOnly !== true) throw new Error('Audit must remain read-only');
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s6h-phase1-market-integrity-evidence
+          path: artifacts/s6h-phase1-market-integrity.*
+          retention-days: 30
