@@ -114,21 +114,21 @@ test("excludes same-date outcomes and resets SLG history at the season boundary"
   assert.ok(Math.abs((result.pitchmix.contactAdv as number) - 0.10) < 1e-12);
 });
 
-test("fails SLG eligibility below the frozen 50 PA floor", () => {
+test("fails SLG eligibility below the frozen 50 PA floor but preserves the descriptive value", () => {
   const input = baseInput();
   input.handSplitGames = [handGame(2, "2026-08-10", 49, 40, 80, 60, 50, 50)];
   const result = buildMlbFrozenMatchupLiveFeatures(input);
   assert.equal(result.slg.eligible, false);
-  assert.equal(result.slg.adv, null);
+  assert.equal(result.slg.adv, 1);
   assert.equal(result.slg.minimumPriorPa, 49);
 });
 
-test("fails pitchmix eligibility below the frozen 250-pitch starter floor", () => {
+test("fails pitchmix eligibility below the frozen 250-pitch starter floor but preserves descriptive values", () => {
   const input = baseInput();
   input.pitchmixGames = [pitchGame(20, "2026-08-10", { homeStarterPitches: 249 })];
   const result = buildMlbFrozenMatchupLiveFeatures(input);
   assert.equal(result.pitchmix.eligible, false);
-  assert.equal(result.pitchmix.contactAdv, null);
+  assert.ok(Math.abs((result.pitchmix.contactAdv as number) - 0.10) < 1e-12);
   assert.ok(result.diagnostics.eligibilityReasons.includes("HOME_STARTER_LOW_PITCHES"));
 });
 
