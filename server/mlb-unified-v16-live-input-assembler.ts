@@ -130,6 +130,51 @@ async function load<T>(input: {
   return result;
 }
 
+function blockersTouchAnyFinalGame(
+  blockers: readonly MlbUnifiedV16LiveInputBlocker[],
+  finalEligibleGamePks: readonly number[],
+): boolean {
+  const finals = new Set(finalEligibleGamePks);
+  return blockers.some((entry) => entry.gamePks.some((gamePk) => finals.has(gamePk)));
+}
+
+async function loadBullpenWithProvisionalIsolation(input: {
+  provider: MlbUnifiedV16LiveEvidenceProvider<MlbIntrinsicBullpenByGame> | undefined;
+  context: MlbUnifiedV16LiveEvidenceContext;
+}): Promise<MlbUnifiedV16LiveEvidenceLoad<MlbIntrinsicBullpenByGame>> {
+  const missingMessage = "Certified bullpen evidence is not available from a server-side provider.";
+  const initial = await load({
+    provider: input.provider,
+    context: input.context,
+    missingCode: "BULLPEN_EVIDENCE_UNAVAILABLE",
+    gamePks: input.context.analysisEligibleGamePks,
+    missingMessage,
+  });
+
+  if (
+    initial.value !== undefined
+    || !initial.blockers
+    || initial.blockers.length === 0
+    || input.context.finalEligibleGamePks.length === 0
+    || blockersTouchAnyFinalGame(initial.blockers, input.context.finalEligibleGamePks)
+  ) {
+    return initial;
+  }
+
+  const finalOnlyContext: MlbUnifiedV16LiveEvidenceContext = Object.freeze({
+    ...input.context,
+    analysisEligibleGamePks: input.context.finalEligibleGamePks,
+  });
+
+  return load({
+    provider: input.provider,
+    context: finalOnlyContext,
+    missingCode: "BULLPEN_EVIDENCE_UNAVAILABLE",
+    gamePks: input.context.finalEligibleGamePks,
+    missingMessage,
+  });
+}
+
 function uniqueBlockers(
   blockers: readonly MlbUnifiedV16LiveInputBlocker[],
 ): readonly MlbUnifiedV16LiveInputBlocker[] {
@@ -203,12 +248,9 @@ export async function assembleMlbUnifiedV16LiveInput(
       gamePks: analysisEligibleGamePks,
       missingMessage: "Certified shortlist evidence is not available from a server-side provider.",
     }),
-    load({
+    loadBullpenWithProvisionalIsolation({
       provider: providers.bullpenEvidence,
       context,
-      missingCode: "BULLPEN_EVIDENCE_UNAVAILABLE",
-      gamePks: analysisEligibleGamePks,
-      missingMessage: "Certified bullpen evidence is not available from a server-side provider.",
     }),
     load({
       provider: providers.frozenRouteAssessments,
