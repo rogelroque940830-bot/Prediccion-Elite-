@@ -1,0 +1,57 @@
+name: Validate P0 V16 Frozen Route Assessor
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-frozen-research-route-assessor.ts'
+      - 'server/mlb-frozen-research-route-assessor.test.ts'
+      - '.github/workflows/validate-p0-v16-frozen-route-assessor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Validate frozen route scoring semantics
+        run: npx tsx --test server/mlb-frozen-research-route-assessor.test.ts
+      - name: Preserve frozen ledger contract
+        run: npx tsx --test server/mlb-frozen-research-route-ledger.test.ts
+      - name: Compile assessor
+        run: npx esbuild server/mlb-frozen-research-route-assessor.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-frozen-route-assessor.cjs
+      - name: Backend build
+        run: npm run build:backend
+      - name: Preserve prospective-only safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          assessor='server/mlb-frozen-research-route-assessor.ts'
+          grep -F 'A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1' "$assessor"
+          grep -F 'bullpenPitches1dAdv' "$assessor"
+          ! grep -E 'automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]|appendPrediction\(|appendSettlement\(' "$assessor"
+      - name: Verify exact slice scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          git diff --check "$base...$head"
+          changed=$(git diff --name-only "$base...$head" | sort)
+          expected=$(printf '%s\n' \
+            '.github/workflows/validate-p0-v16-frozen-route-assessor.yml' \
+            'server/mlb-frozen-research-route-assessor.test.ts' \
+            'server/mlb-frozen-research-route-assessor.ts' | sort)
+          [[ "$changed" == "$expected" ]]
