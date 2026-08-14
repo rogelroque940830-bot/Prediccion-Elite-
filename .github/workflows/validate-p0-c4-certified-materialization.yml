@@ -7,6 +7,7 @@ on:
     paths:
       - 'server/mlb-c4-certified-materializer.ts'
       - 'server/mlb-c4-certified-materializer.test.ts'
+      - 'server/mlb-c4-certified-assembly.test.ts'
       - 'server/mlb-unified-v16-live-providers.ts'
       - 'server/mlb-unified-v16-live-providers.test.ts'
       - 'server/mlb-unified-v16-live-input-assembler.ts'
@@ -33,7 +34,7 @@ jobs:
       - run: npm ci
       - name: Run C4 and orchestration tests
         run: |
-          npx tsx --test server/mlb-c4-certified-materializer.test.ts server/mlb-unified-v16-live-providers.test.ts
+          npx tsx --test server/mlb-c4-certified-materializer.test.ts server/mlb-unified-v16-live-providers.test.ts server/mlb-c4-certified-assembly.test.ts
           npx tsx --test server/mlb-unified-v16-live-input-assembler.test.ts server/mlb-unified-v16-ui-orchestration.test.ts
       - name: Compile C4 and V16 modules
         run: |
