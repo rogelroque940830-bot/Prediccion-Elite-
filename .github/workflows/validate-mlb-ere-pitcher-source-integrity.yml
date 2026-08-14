@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -46,8 +48,10 @@ jobs:
       - name: Safety boundary
         shell: bash
         run: |
-          if git diff --unified=0 origin/integration/p0-staging-secure...HEAD -- server/mlb-ere.ts server/mlb-ere-pitcher-splits.ts \
-            | grep -Ei '^\+.*(BET_ELITE|stake|automaticBet|placeBet|threshold search|feature search)'; then
+          git fetch --no-tags origin integration/p0-staging-secure:refs/remotes/origin/integration/p0-staging-secure
+          diff_file="$(mktemp)"
+          git diff --unified=0 origin/integration/p0-staging-secure...HEAD -- server/mlb-ere.ts server/mlb-ere-pitcher-splits.ts > "$diff_file"
+          if grep -Ei '^\+.*(BET_ELITE|stake|automaticBet|placeBet|threshold search|feature search)' "$diff_file"; then
             echo "Unexpected wagering/search mutation in pitcher source-integrity slice."
             exit 1
           fi
