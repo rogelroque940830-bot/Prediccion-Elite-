@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "courtedge-p0-step12v20-team-total-count-model-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_TEAM_TOTAL_COUNT_MODEL_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test whether the already-certified FULL13 pregame feature vector can support a calibrated full-game team-run probability distribution suitable for prospective Team Total price capture, without adding a second live data pipeline.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "full13LiveParityPr": 545,
+    "full13LiveFeatureNamesSource": "server/mlb-full13-live-feature-builder.ts",
+    "marketRegistrySource": "server/mlb-market-universe-registry.ts",
+    "volumeCeilingPr": 557
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresT5PregameValid": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalTeamTotalPricesUsed": false,
+    "marketLineUsedAsModelFeature": false
+  },
+  "features": {
+    "exactly": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false
+  },
+  "model": {
+    "targets": ["HOME_FULL_GAME_RUNS", "AWAY_FULL_GAME_RUNS"],
+    "oneModelPerSide": true,
+    "family": "POISSON_REGRESSION_MEAN_WITH_TRAINING_ONLY_NB2_DISPERSION",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonRegressorAlpha": 1.0,
+    "poissonRegressorMaxIter": 2000,
+    "negativeBinomialDispersionMethod": "NB2_METHOD_OF_MOMENTS_ON_2022_RESIDUALS",
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "probabilityDiagnostics": {
+    "fixedHalfRunLines": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "tailProbability": "P(FULL_GAME_TEAM_RUNS > LINE)",
+    "baseline": "2022_SIDE_SPECIFIC_CONSTANT_MEAN_AND_LINE_CLIMATOLOGY",
+    "metrics": [
+      "MEAN_POISSON_DEVIANCE",
+      "MAE",
+      "MEAN_PREDICTED_RUNS",
+      "OBSERVED_MEAN_RUNS",
+      "LINE_SPECIFIC_BRIER_SCORE",
+      "AVERAGE_BRIER_ACROSS_FIXED_LINES"
+    ],
+    "lineSearchAllowed": false,
+    "probabilityThresholdSearchAllowed": false
+  },
+  "candidateRubric": {
+    "prospectivePriceCaptureCandidateRequires": [
+      "HOME_AND_AWAY_POISSON_DEVIANCE_BELOW_CONSTANT_BASELINE_IN_2023",
+      "HOME_AND_AWAY_POISSON_DEVIANCE_BELOW_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "HOME_AND_AWAY_AVERAGE_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "HOME_AND_AWAY_AVERAGE_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD"
+    ],
+    "passingDoesNotAuthorizeLiveBetting": true,
+    "passingOnlyAuthorizesDesignOfProspectiveShadowPriceCapture": true
+  },
+  "marketBoundary": {
+    "candidateProviderMarketKey": "team_totals",
+    "candidateCanonicalMarketType": "TEAM_TOTAL",
+    "alternateTeamTotalsNotEvaluatedInThisStep": true,
+    "f5TeamTotalsNotEvaluatedInThisStep": true,
+    "historicalHitRateCannotEstablishPositiveEvWithoutPrices": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePriceCaptureRequiredBeforePromotion": true
+  }
+}

@@ -1,0 +1,134 @@
+name: Validate P0 Step 12V20 Team Total Count Model
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v20-team-total-count-model-contract.json'
+      - 'scripts/p0-step12v20-team-total-count-model.py'
+      - '.github/workflows/validate-p0-step12v20-team-total-count-model.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Validate V20 contract and live FULL13 parity surface
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v20-team-total-count-model-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v20-team-total-count-model-contract.v1'
+          assert c['dataBoundary']['modelFitSeason']=='2022'
+          assert c['dataBoundary']['validationSeason']=='2023'
+          assert c['dataBoundary']['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert len(c['features']['exactly'])==13
+          assert c['features']['featureSearchAllowed'] is False
+          assert c['model']['hyperparameterSearchAllowed'] is False
+          assert c['probabilityDiagnostics']['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5]
+          assert c['probabilityDiagnostics']['lineSearchAllowed'] is False
+          assert c['dataBoundary']['historicalTeamTotalPricesUsed'] is False
+          assert c['marketBoundary']['candidateProviderMarketKey']=='team_totals'
+          assert c['policy']['liveLookupAuthorizationChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          ts=open('server/mlb-full13-live-feature-builder.ts',encoding='utf-8').read()
+          for feature in c['features']['exactly']:
+              assert f'"{feature}"' in ts, feature
+          print('STEP12V20_CONTRACT_AND_FULL13_SURFACE_LOCKED')
+          PY
+      - name: Syntax check V20 scorer
+        run: python -m py_compile scripts/p0-step12v20-team-total-count-model.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Run V20 team-total count-model study
+        run: |
+          mkdir -p artifacts/p0-step12v20
+          python scripts/p0-step12v20-team-total-count-model.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v20-team-total-count-model-contract.json \
+            --out artifacts/p0-step12v20/team-total-count-model-report.json
+
+      - name: Validate model candidate rubric and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v20/team-total-count-model-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v20-team-total-count-model.v1'
+          assert r['classification']=='PROSPECTIVE_TEAM_TOTAL_PRICE_CAPTURE_CANDIDATE'
+          assert r['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['data']['featureCount']==13
+          assert r['candidateRubricPassed'] is True
+          for target in ('HOME_FULL_GAME_RUNS','AWAY_FULL_GAME_RUNS'):
+              checks=r['candidateRubricChecks'][target]
+              assert all(checks.values()), (target,checks)
+              snap=r['modelSnapshots'][target]
+              assert snap['poissonRegressorAlpha']==1.0
+              assert snap['nb2Dispersion']>0
+              assert len(snap['featureNames'])==13
+              assert len(snap['coef'])==13
+              v=r['validation2023'][target]
+              e=r['evaluation2024_2026Ytd'][target]
+              assert v['poissonDevianceImprovement']>0
+              assert e['poissonDevianceImprovement']>0
+              assert v['averageBrierImprovement']>0
+              assert e['averageBrierImprovement']>0
+          assert r['marketBoundary']['providerMarketKey']=='team_totals'
+          assert r['marketBoundary']['historicalTeamTotalPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          assert r['marketBoundary']['prospectivePriceCaptureRequired'] is True
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['probabilityThresholdSearchUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve certified FULL13 live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-full13-live-feature-builder.test.ts server/mlb-frozen-research-route-assessor.test.ts
+          npm run build:backend
+
+      - name: Upload V20 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v20-team-total-count-model
+          path: artifacts/p0-step12v20/
+          if-no-files-found: error
+          retention-days: 30
