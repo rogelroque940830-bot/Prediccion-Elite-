@@ -22,6 +22,7 @@ import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe
 import { registerMlbUnifiedPricedV16Routes } from "./mlb-unified-priced-v16-routes";
 import { registerMlbUnifiedV16UiRoutes } from "./mlb-unified-v16-ui-routes";
 import { registerMlbTeamTotalShadowRoutes } from "./mlb-team-total-shadow-routes";
+import { registerMlbBatterProspectiveCustodyRoutes } from "./mlb-batter-prospective-custody-routes";
 import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
 import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
@@ -62,6 +63,9 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   // Explicit shadow-only Team Total price capture. This route is never invoked by the normal V16
   // button, is capped per request, and cannot mutate production lookup authorization or Elite rows.
   registerMlbTeamTotalShadowRoutes(app);
+  // Explicit future-only batter identity custody. This route captures only authoritative FINAL
+  // pregame lineups/pitcher identities and never requests odds, scores a model, or mutates V16.
+  registerMlbBatterProspectiveCustodyRoutes(app);
   // Browser-facing explicit preflight: verifies the official slate and server custody without
   // crossing the paid odds boundary or accepting forged certified sporting inputs from the UI.
   registerMlbUnifiedV16UiRoutes(app);
