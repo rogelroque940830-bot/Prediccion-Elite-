@@ -46,7 +46,13 @@
     ],
     "sourceOrderField": "battingOrder",
     "duplicateBatterWithinGameSideAllowed": false,
-    "sameBatterOnBothTeamsAllowed": false,
+    "sameBatterOnBothTeamsAllowedWhenOfficialBoxscoreContainsBothSides": true,
+    "sameBatterOnBothTeamsMustRemainSideAndTeamSeparated": true,
+    "knownOfficialMlbExceptionEvidence": {
+      "gamePk": 746942,
+      "batterId": 643376,
+      "reason": "SUSPENDED_GAME_RESUMED_AFTER_TRADE_DANNY_JANSEN_FIRST_MLB_PLAYER_TO_APPEAR_FOR_BOTH_TEAMS_IN_ONE_GAME"
+    },
     "pregameLineupCrosslinkIsDiagnosticNotOutcomeCustodyGate": true
   },
   "directBatterOutcomeFields": {
