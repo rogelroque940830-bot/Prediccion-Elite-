@@ -1,0 +1,218 @@
+name: Validate P0 Step 12V30 F5 Total No Retune Robustness
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v30-f5-total-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v30-f5-total-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v30-f5-total-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate predeclared V30 robustness gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v30-f5-total-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v30-f5-total-no-retune-robustness-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='a19ffed5e5f7425f6629df289adec4af62f47669'
+          assert c['parentEvidence']['v29WorkflowRunId']==31897272618
+          assert c['parentEvidence']['v29ArtifactId']==9250152499
+          assert c['parentEvidence']['v29ArtifactDigest']=='sha256:8580ef037f682f0a74abb4f06a689e0715ab1d4e321e7b4d15a7d414c8ede846'
+          assert c['parentEvidence']['v29ClassificationRequired']=='F5_TOTAL_SYMMETRIC_CORE_ROBUSTNESS_CANDIDATE_ONLY'
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v29-f5-total-symmetric-core.py'
+          assert m['unchangedV29TrainingSeasonRequired']=='2022'
+          assert m['unchangedV29PoissonAlphaRequired']==1.0
+          assert m['unchangedV29FixedLinesRequired']==[2.5,3.5,4.5,5.5,6.5]
+          assert m['refitWithAdditionalSeasonsAllowed'] is False
+          assert m['recalibrationAllowed'] is False
+          assert m['coefficientChangeAllowed'] is False
+          assert m['featureChangeAllowed'] is False
+          assert m['lineSetChangeAllowed'] is False
+          assert m['thresholdSearchAllowed'] is False
+          p=c['replayParity']
+          assert p['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          assert s['requirePositivePoissonDevianceImprovementEachPartition'] is True
+          assert s['requirePositiveAverageBrierImprovementEachPartition'] is True
+          assert s['requireModelAbsoluteMeanBiasNoWorseThanConstantBaselineEachPartition'] is True
+          assert s['noLineSpecificSubsetPromotion'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['evaluationSeasons']==['2024','2025','2026_YTD']
+          assert b['clusterUnit']=='OFFICIAL_DATE'
+          assert b['aggregationWithinCluster']=='MEAN_PER_GAME_LOSS_IMPROVEMENT_WITHIN_DATE'
+          assert b['aggregationAcrossClusters']=='EQUAL_WEIGHT_MEAN_ACROSS_OFFICIAL_DATES'
+          assert b['replicates']==10000
+          assert b['randomSeed']==3001
+          assert b['confidenceLevel']==0.95
+          assert b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForBothMetrics'] is True
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['failureClosesF5TotalForCurrentInformationSet'] is True
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('STEP12V30_ROBUSTNESS_GATE_PREDECLARED')
+          PY
+
+      - name: Syntax check V30 scorer
+        run: python -m py_compile scripts/p0-step12v30-f5-total-no-retune-robustness.py
+
+      - name: Download immutable V29 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v29-f5-total-symmetric-core
+          path: artifacts/p0-step12v29
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31897272618
+
+      - name: Download immutable V28 F5 outcomes
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v28-f5-total-baseline
+          path: artifacts/p0-step12v28
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896949764
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify immutable V29 parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v29/f5-total-symmetric-core-report.json'))
+          o=json.load(open('artifacts/p0-step12v28/f5-outcomes.json'))
+          assert r['classification']=='F5_TOTAL_SYMMETRIC_CORE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True
+          assert r['candidateRubricChecks']=={
+            'evaluationAverageBrierBeatsBaseline': True,
+            'evaluationPoissonDevianceBeatsBaseline': True,
+            'validationAverageBrierBeatsBaseline': True,
+            'validationPoissonDevianceBeatsBaseline': True,
+          }
+          assert o['acquisition']['outcomeCompleteGames']==11405
+          assert o['acquisition']['conflictingDuplicateApiObservations']==0
+          print('V29_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V30 unchanged-model robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v30
+          python scripts/p0-step12v30-f5-total-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v30-f5-total-no-retune-robustness-contract.json \
+            --v29-contract research/p0-step12v29-f5-total-symmetric-core-contract.json \
+            --v29-script scripts/p0-step12v29-f5-total-symmetric-core.py \
+            --v29-report artifacts/p0-step12v29/f5-total-symmetric-core-report.json \
+            --v28-outcomes artifacts/p0-step12v28/f5-outcomes.json \
+            --out artifacts/p0-step12v30/f5-total-no-retune-robustness-report.json
+
+      - name: Validate immutable replay, robustness result, and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v30/f5-total-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v30-f5-total-no-retune-robustness.v1'
+          assert r['parent']['v29Classification']=='F5_TOTAL_SYMMETRIC_CORE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['parent']['v29CandidateRubricPassed'] is True
+          mb=r['modelBoundary']
+          assert mb['unchangedV29ImplementationReplayed'] is True
+          assert mb['replayParityPassed'] is True
+          assert mb['replayParityTolerance']==1e-12
+          assert mb['refitWithAdditionalSeasonsUsed'] is False
+          assert mb['recalibrationUsed'] is False
+          assert mb['coefficientChangeUsed'] is False
+          assert mb['featureChangeUsed'] is False
+          assert mb['imputationChangeUsed'] is False
+          assert mb['scalingChangeUsed'] is False
+          assert mb['dispersionChangeUsed'] is False
+          assert mb['lineSetChangeUsed'] is False
+          assert mb['thresholdSearchUsed'] is False
+          assert r['data']['scoredRows']==11405
+          assert r['data']['featureCount']==10
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert set(r['seasonStabilityChecks'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000
+          assert b['randomSeed']==3001
+          assert b['confidenceLevel']==0.95
+          assert b['uniqueDates']>490
+          market=r['marketBoundary']
+          assert market['historicalF5PricesUsed'] is False
+          assert market['positiveEvEstablished'] is False
+          assert market['productionPromotionAuthorized'] is False
+          assert market['prospectiveShadowPriceCaptureAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['thresholdSearchUsed'] is False
+          assert p['subsetMiningUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'robustnessGatePassed':r['robustnessGatePassed'],
+            'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],
+            'seasonStabilityChecks':r['seasonStabilityChecks'],
+            'seasonMetrics':r['seasonMetrics'],
+            'bootstrapGatePassed':r['bootstrapGatePassed'],
+            'dateClusterBootstrap':r['dateClusterBootstrap'],
+            'bootstrapChecks':r['bootstrapChecks'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+      - name: Upload V30 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v30-f5-total-no-retune-robustness
+          path: artifacts/p0-step12v30/
+          if-no-files-found: error
+          retention-days: 30
