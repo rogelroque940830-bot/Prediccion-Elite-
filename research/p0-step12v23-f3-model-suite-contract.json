@@ -15,6 +15,7 @@
   "outcomeAcquisition": {
     "source": "MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE",
     "baseUrl": "https://statsapi.mlb.com/api/v1/schedule",
+    "perGameLinescoreBaseUrl": "https://statsapi.mlb.com/api/v1/game",
     "sportId": 1,
     "windowDays": 14,
     "requiredCanonicalGameMatch": "EXACT_GAME_PK_AND_TEAM_IDS",
@@ -27,6 +28,8 @@
     "futureGameDataUsedAsFeature": false,
     "currentMetadataFallbackAllowed": false,
     "playByPlayFallbackAllowed": false,
+    "perGameOfficialLinescoreFallbackAllowed": true,
+    "maximumPerGameLinescoreFallbacks": 50,
     "minimumOutcomeCoverageShare": 0.995,
     "duplicateGamePkAllowed": false
   },
