@@ -1,0 +1,192 @@
+name: Validate P0 Step 12V37 Pitcher Hits Allowed Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v37-pitcher-hits-allowed-baseline-contract.json'
+      - 'scripts/p0-step12v37-pitcher-hits-allowed-baseline.py'
+      - '.github/workflows/validate-p0-step12v37-pitcher-hits-allowed-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V37 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v37-pitcher-hits-allowed-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v37-pitcher-hits-allowed-baseline-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='66cec65c78f9cd6f4b06aada396277ceab5aebe3'
+          assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
+          assert c['parentEvidence']['step12v3ArtifactId']==9166442982
+          assert c['parentEvidence']['step12v3ArtifactDigest']=='sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26'
+          assert c['marketEvidence']['providerMarketKey']=='pitcher_hits_allowed'
+          assert c['marketEvidence']['repositoryRegistryEntryAlreadyExists'] is True
+          assert c['marketEvidence']['repositoryRegistryFamily']=='PITCHER_PROP'
+          assert c['marketEvidence']['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert c['marketEvidence']['repositoryModelIntegrationStatusExpected']=='NOT_IMPLEMENTED'
+          assert c['marketEvidence']['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
+          assert c['marketEvidence']['hardRockFloridaPerEventAvailabilityEstablished'] is False
+          t=c['canonicalTargetCustody']
+          assert t['source']=='cohort/starting-pitcher-history.json'
+          assert t['recordedStarterField']=='hits'
+          assert t['targetDirectlyRecordedNotReconstructed'] is True
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023'
+          assert d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['requiresExactProbableEqualsRecordedStarter'] is True
+          assert d['sameDateHistoryAllowed'] is False and d['seasonHistoryReset'] is True
+          assert d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          e=c['featureEngineering']
+          assert e['rateShrinkagePriorBattersFaced']==72 and e['workloadShrinkagePriorStarts']==5
+          assert e['opponentRateShrinkagePriorBattersFaced']==72 and e['opponentWorkloadShrinkagePriorGames']==5
+          assert e['recentStartsWindow']==5
+          f=c['features']
+          assert f['featureCount']==12 and len(f['exactly'])==12 and len(set(f['exactly']))==12
+          assert f['featureSearchAllowed'] is False and f['postResultFeatureAdditionAllowed'] is False and f['postResultFeatureRemovalAllowed'] is False
+          assert c['baselines']['pitcherOnlyMechanistic']=='PITCHER_HBF_SHRUNK_TIMES_PITCHER_BF_PER_START_SHRUNK'
+          m=c['model']
+          assert m['providerMarketKey']=='pitcher_hits_allowed' and m['poissonAlpha']==1.0 and m['maxIter']==1000
+          assert m['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5,7.5]
+          assert m['lineSearchAllowed'] is False and m['modelSelectionAllowed'] is False and m['hyperparameterSearchAllowed'] is False
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert '["pitcher_hits_allowed", "Pitcher hits allowed", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          assert 'pitcher_hits_allowed: ["HARD_ROCK_MLB_GUIDE_20260807"]' in registry
+          canonical=registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
+          assert 'pitcher_hits_allowed:' not in canonical
+          print('STEP12V37_PITCHER_HITS_ALLOWED_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V37 scorer
+        run: python -m py_compile scripts/p0-step12v37-pitcher-hits-allowed-baseline.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify direct recorded hits custody
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          seasons=['2022','2023','2024','2025','2026_YTD']
+          checked=0
+          for season in seasons:
+              p=pathlib.Path('artifacts/p0-step12v3')/season/'cohort'/'starting-pitcher-history.json'
+              j=json.load(open(p))
+              assert j['games']
+              season_checked=0
+              for game in j['games']:
+                  for side in ('homeStarter','awayStarter'):
+                      row=game.get(side)
+                      if not row: continue
+                      assert 'hits' in row and 'battersFaced' in row
+                      assert isinstance(row['hits'], int) and row['hits']>=0
+                      assert isinstance(row['battersFaced'], int) and row['battersFaced']>=0
+                      season_checked += 1
+                      checked += 1
+                      if season_checked>=100: break
+                  if season_checked>=100: break
+              assert season_checked>=100
+          assert checked>=500
+          print('DIRECT_RECORDED_STARTER_HITS_CUSTODY_VERIFIED',checked)
+          PY
+
+      - name: Run V37 exact probable-starter pitcher hits-allowed model
+        run: |
+          mkdir -p artifacts/p0-step12v37
+          python scripts/p0-step12v37-pitcher-hits-allowed-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v37-pitcher-hits-allowed-baseline-contract.json \
+            --out artifacts/p0-step12v37/pitcher-hits-allowed-baseline-report.json
+
+      - name: Validate player prop custody, result, and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v37/pitcher-hits-allowed-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v37-pitcher-hits-allowed-baseline.v1'
+          assert r['data']['featureCount']==12 and r['data']['sameDateHistoryAllowed'] is False and r['data']['seasonHistoryReset'] is True
+          assert set(r['data']['custodyBySeason'])=={'2022','2023','2024','2025','2026_YTD'}
+          total_slots=0; total_eligible=0
+          for c in r['data']['custodyBySeason'].values():
+              assert c['canonicalT5Games']>1700
+              assert c['canonicalStarterSlots']==2*c['canonicalT5Games']
+              assert c['auditValidProbableStarterSlots']>0.98*c['canonicalStarterSlots']
+              assert c['exactProbableRecordedStarterEligibleSlots']>0.98*c['canonicalStarterSlots']
+              assert c['completeAuditValidLineupPairs']>0.98*c['canonicalT5Games']
+              total_slots += c['canonicalStarterSlots']; total_eligible += c['exactProbableRecordedStarterEligibleSlots']
+          assert r['data']['scoredRows']==total_eligible==22753
+          assert r['model']['providerMarketKey']=='pitcher_hits_allowed'
+          assert r['model']['canonicalResearchMarketType']=='PITCHER_HITS_ALLOWED'
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==4777
+          assert r['model']['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5,7.5]
+          assert r['model']['featureSearchUsed'] is False and r['model']['modelSearchUsed'] is False
+          assert r['model']['hyperparameterSearchUsed'] is False and r['model']['lineSearchUsed'] is False
+          assert r['validation2023']['rows']==4791 and r['evaluation2024_2026Ytd']['rows']==13185
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          v=r['volumeDiagnostics']
+          assert v['eligiblePitcherStarts']==22753 and v['canonicalStarterSlots']==total_slots and v['eligibilityShare']>0.997
+          mb=r['marketBoundary']
+          assert mb['providerMarketKey']=='pitcher_hits_allowed' and mb['repositoryRegistryFamily']=='PITCHER_PROP'
+          assert mb['hardRockFloridaPerEventAvailabilityEstablished'] is False and mb['productionRegistryChanged'] is False
+          assert mb['historicalPitcherHitsAllowedPricesUsed'] is False and mb['positiveEvEstablished'] is False
+          assert mb['priceCaptureAuthorized'] is False and mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'volumeDiagnostics':r['volumeDiagnostics'],
+            'coefficientsDescriptiveOnly':r['model']['coefficientsDescriptiveNotSelectionInput'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-full13-live-feature-builder.test.ts server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+          grep -F '["pitcher_hits_allowed", "Pitcher hits allowed", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'pitcher_hits_allowed: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V37 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v37-pitcher-hits-allowed-baseline
+          path: artifacts/p0-step12v37/
+          if-no-files-found: error
+          retention-days: 30
