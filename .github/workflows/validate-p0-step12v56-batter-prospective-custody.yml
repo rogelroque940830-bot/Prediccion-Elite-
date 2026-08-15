@@ -1,0 +1,114 @@
+name: Validate P0 Step 12V56 Batter Prospective Custody
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v56-batter-prospective-custody-contract.json'
+      - 'server/mlb-batter-prospective-custody.ts'
+      - 'server/mlb-batter-prospective-custody-sqlite-store.ts'
+      - 'server/mlb-batter-prospective-custody-routes.ts'
+      - 'server/mlb-batter-prospective-custody.test.ts'
+      - 'server/mlb-batter-prospective-custody-sqlite-store.test.ts'
+      - 'server/mlb-batter-prospective-custody-routes.test.ts'
+      - 'server/routes.ts'
+      - '.github/workflows/validate-p0-step12v56-batter-prospective-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate frozen V56 contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v56-batter-prospective-custody-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v56-batter-prospective-custody-contract.v1'
+          assert c['scientificStatus']=='PROSPECTIVE_PREGAME_BATTER_IDENTITY_CUSTODY_ONLY_NO_MODEL_NO_PRICE_VALIDATION'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='7cba7c5860fe9e50e7a467e5c7642a07de646f84'
+          assert p['v55Pr']==593 and p['v55WorkflowRunId']==31910952855 and p['v55ArtifactId']==9253688106
+          assert p['v55ArtifactDigest']=='sha256:b979e623c6727261f432526e1ca4b258582aabbee391981b25f323fd6b1235e5'
+          assert p['v55ClassificationRequired']=='BATTER_DOUBLES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          e=c['captureEligibility']
+          assert e['requiresDailySlateAnalysisStage']=='FINAL' and e['requiresDailySlateAnalysisAllowed'] is True
+          assert e['requiresExactNineUniqueHomeBatters'] is True and e['requiresExactNineUniqueAwayBatters'] is True
+          assert e['requiresCaptureStrictlyBeforeStartTime'] is True
+          assert e['startedGamesAllowed'] is False and e['finalGamesAllowed'] is False and e['degradedSourceAllowed'] is False
+          assert e['maxGamesPerExplicitCapture']==15
+          s=c['canonicalSnapshot']
+          assert s['homeBattingOrderLength']==9 and s['awayBattingOrderLength']==9
+          assert s['firstCanonicalCapturePerGameIsImmutable'] is True
+          assert s['laterDuplicateCaptureReturnsExistingCanonicalSnapshot'] is True
+          assert s['overwriteCanonicalSnapshotAllowed'] is False
+          assert c['persistence']['backend']=='SQLITE' and c['persistence']['walModeRequired'] is True and c['persistence']['busyTimeoutMs']==5000
+          embargo=c['prospectiveEvaluationEmbargo']
+          assert embargo['outcomeSettlementInV56Allowed'] is False
+          assert embargo['modelScoringInV56Allowed'] is False
+          assert embargo['priceCaptureInV56Allowed'] is False
+          assert embargo['minimumCanonicalGamesBeforeAnyOutcomeBasedResearch']==250
+          assert embargo['minimumDistinctOfficialDatesBeforeAnyOutcomeBasedResearch']==14
+          assert embargo['futureEvaluationContractMustBeFrozenBeforeReadingCohortOutcomes'] is True
+          inv=c['invocationPolicy']
+          assert inv['explicitInvocationRequired'] is True and inv['automaticPolling'] is False
+          assert inv['providerOddsCallsAllowed'] is False and inv['paidProviderCreditsAllowed']==0
+          assert inv['normalV16PredictionFlowMayInvokeAutomatically'] is False
+          policy=c['policy']
+          assert policy['productionMarketRegistryChangeAllowed'] is False
+          assert policy['liveLookupAuthorizationChangeAllowed'] is False
+          assert policy['rankingChangeAllowed'] is False and policy['stakeChangeAllowed'] is False
+          assert policy['betEliteAllowed'] is False and policy['automaticBetPlacementAllowed'] is False
+          assert policy['realFinancialExposure']==0
+          print('STEP12V56_PROSPECTIVE_CUSTODY_CONTRACT_LOCKED')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test V56 custody invariants
+        run: |
+          npx tsx --test \
+            server/mlb-batter-prospective-custody.test.ts \
+            server/mlb-batter-prospective-custody-sqlite-store.test.ts \
+            server/mlb-batter-prospective-custody-routes.test.ts
+
+      - name: Preserve existing slate and Team Total custody regressions
+        run: |
+          npx tsx --test \
+            server/mlb-p1-daily-slate.test.ts \
+            server/mlb-team-total-shadow-capture.test.ts \
+            server/mlb-team-total-shadow-sqlite-store.test.ts \
+            server/mlb-team-total-shadow-routes.test.ts
+
+      - name: Enforce zero-odds zero-model V56 boundary
+        shell: bash
+        run: |
+          grep -F 'providerOddsCallsAllowed: false' server/mlb-batter-prospective-custody.ts
+          grep -F 'priceCaptureAllowed: false' server/mlb-batter-prospective-custody.ts
+          grep -F 'modelScoringAllowed: false' server/mlb-batter-prospective-custody.ts
+          grep -F 'automaticPolling: false' server/mlb-batter-prospective-custody.ts
+          grep -F 'realFinancialExposure: 0' server/mlb-batter-prospective-custody.ts
+          grep -F 'registerMlbBatterProspectiveCustodyRoutes(app)' server/routes.ts
+          if grep -E 'buildMlbSelectiveEventOddsUrl|MLB_ODDS_PROVIDER|expectedValuePerUnit|BET_ELITE' server/mlb-batter-prospective-custody.ts server/mlb-batter-prospective-custody-routes.ts; then
+            echo 'V56 crossed a forbidden odds/model/wager boundary' >&2
+            exit 1
+          fi
+
+      - name: Build backend
+        run: npm run build:backend
