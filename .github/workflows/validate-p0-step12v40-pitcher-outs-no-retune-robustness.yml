@@ -1,0 +1,147 @@
+name: Validate P0 Step 12V40 Pitcher Outs No Retune Robustness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v40-pitcher-outs-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v40-pitcher-outs-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v40-pitcher-outs-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Validate frozen V40 gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v40-pitcher-outs-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v40-pitcher-outs-no-retune-robustness-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='d4f770c684a16cbd441ddf5b19561e092b28f2ac'
+          assert c['parentEvidence']['v39WorkflowRunId']==31902835230
+          assert c['parentEvidence']['v39ArtifactId']==9251573906
+          assert c['parentEvidence']['v39ArtifactDigest']=='sha256:6d6270c425b340b62232387c4fdf011ab9b8cd1ea223c91e67f91c8842bca001'
+          assert c['parentEvidence']['v39ClassificationRequired']=='PITCHER_OUTS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v39-pitcher-outs-baseline.py'
+          assert m['unchangedV39TrainingSeasonRequired']=='2022'
+          assert m['unchangedV39PoissonAlphaRequired']==1.0
+          assert m['unchangedV39FixedLinesRequired']==[14.5,15.5,16.5,17.5,18.5,19.5]
+          assert m['unchangedV39PitcherOnlyBaselineRequired']=='PITCHER_OUTS_PER_START_SHRUNK'
+          for key in ['refitWithAdditionalSeasonsAllowed','recalibrationAllowed','coefficientChangeAllowed','featureChangeAllowed','imputationChangeAllowed','scalingChangeAllowed','dispersionChangeAllowed','lineSetChangeAllowed','baselineFormulaChangeAllowed','thresholdSearchAllowed']:
+              assert m[key] is False
+          assert c['replayParity']['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          for key in ['requireModelDevianceBeatConstantEachPartition','requireModelDevianceBeatPitcherOnlyEachPartition','requireModelAverageBrierBeatConstantEachPartition','requireModelAverageBrierBeatPitcherOnlyEachPartition','requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition','requireModelAbsoluteMeanBiasNoWorseThanPitcherOnlyEachPartition']:
+              assert s[key] is True
+          assert s['noLineSpecificSubsetPromotion'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['clusterUnit']=='OFFICIAL_DATE' and b['replicates']==10000 and b['randomSeed']==4001 and b['confidenceLevel']==0.95
+          assert len(b['metrics'])==4 and b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics'] is True
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V40_GATE_PREDECLARED')
+          PY
+      - name: Syntax check V40 scorer
+        run: python -m py_compile scripts/p0-step12v40-pitcher-outs-no-retune-robustness.py
+      - name: Download immutable V39 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v39-pitcher-outs-baseline
+          path: artifacts/p0-step12v39
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31902835230
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify immutable V39 parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v39/pitcher-outs-baseline-report.json'))
+          assert r['classification']=='PITCHER_OUTS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True
+          assert all(r['candidateRubricChecks'].values())
+          assert r['data']['scoredRows']==22753
+          assert r['model']['trainingRows']==4777
+          assert r['volumeDiagnostics']['eligibilityShare']>0.997
+          assert r['marketBoundary']['historicalPitcherOutPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          print('V39_PARENT_CUSTODY_VERIFIED')
+          PY
+      - name: Run V40 exact V39 replay and robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v40
+          python scripts/p0-step12v40-pitcher-outs-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v40-pitcher-outs-no-retune-robustness-contract.json \
+            --v39-contract research/p0-step12v39-pitcher-outs-baseline-contract.json \
+            --v39-script scripts/p0-step12v39-pitcher-outs-baseline.py \
+            --v39-report artifacts/p0-step12v39/pitcher-outs-baseline-report.json \
+            --out artifacts/p0-step12v40/pitcher-outs-no-retune-robustness-report.json
+      - name: Validate immutable replay and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v40/pitcher-outs-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v40-pitcher-outs-no-retune-robustness.v1'
+          assert r['parent']['v39Classification']=='PITCHER_OUTS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['parent']['v39CandidateRubricPassed'] is True
+          mb=r['modelBoundary']
+          assert mb['unchangedV39ImplementationReplayed'] is True and mb['replayParityPassed'] is True and mb['replayParityTolerance']==1e-12
+          for key in ['refitWithAdditionalSeasonsUsed','recalibrationUsed','coefficientChangeUsed','featureChangeUsed','imputationChangeUsed','scalingChangeUsed','dispersionChangeUsed','lineSetChangeUsed','baselineFormulaChangeUsed','thresholdSearchUsed']:
+              assert mb[key] is False
+          assert r['data']['scoredRows']==22753 and r['data']['featureCount']==12
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert set(r['seasonStabilityChecks'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000 and b['randomSeed']==4001 and b['confidenceLevel']==0.95 and b['uniqueDates']>490
+          assert set(b['metrics'])=={'devianceVsConstant','devianceVsPitcherOnly','averageBrierVsConstant','averageBrierVsPitcherOnly'}
+          assert set(r['bootstrapChecks'])==set(b['metrics'])
+          market=r['marketBoundary']
+          assert market['providerMarketKey']=='pitcher_outs' and market['repositoryRegistryFamily']=='PITCHER_PROP'
+          assert market['historicalPitcherOutPricesUsed'] is False and market['positiveEvEstablished'] is False
+          assert market['hardRockFloridaPerEventAvailabilityEstablished'] is False and market['productionPromotionAuthorized'] is False
+          assert market['prospectivePriceCaptureEngineeringAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          for key in ['featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'robustnessGatePassed':r['robustnessGatePassed'],'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],'seasonStabilityChecks':r['seasonStabilityChecks'],'seasonMetrics':r['seasonMetrics'],'bootstrapGatePassed':r['bootstrapGatePassed'],'dateClusterBootstrap':r['dateClusterBootstrap'],'bootstrapChecks':r['bootstrapChecks']},indent=2))
+          PY
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve canonical MLB regressions and registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-full13-live-feature-builder.test.ts server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+          grep -F '["pitcher_outs", "Pitcher outs", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+      - name: Upload V40 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v40-pitcher-outs-no-retune-robustness
+          path: artifacts/p0-step12v40/
+          if-no-files-found: error
+          retention-days: 30
