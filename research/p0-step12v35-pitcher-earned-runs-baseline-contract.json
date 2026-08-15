@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "courtedge-p0-step12v35-pitcher-earned-runs-baseline-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_PITCHER_EARNED_RUNS_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test pitcher earned runs as the next high-volume MLB player-prop family using exact pregame probable-to-recorded starter identity and a strong pitcher-only earned-run expectation baseline.",
+  "parentEvidence": {
+    "mainBaseSha": "25e4ce613fb7e08cb6bf04bf64e6f14860a15b05",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "pitcherWalksClosurePr": 572,
+    "pitcherWalksClosureMerge": "bc739ca83d08c3b0f42a40505ad0231abe6127fa"
+  },
+  "marketEvidence": {
+    "providerMarketKey": "pitcher_earned_runs",
+    "repositoryRegistryEntryAlreadyExists": true,
+    "repositoryRegistryFamily": "PITCHER_PROP",
+    "repositoryRegistryQuoteShape": "PLAYER_OVER_UNDER",
+    "repositoryModelIntegrationStatusExpected": "NOT_IMPLEMENTED",
+    "hardRockExactFirstPartyProductEvidenceExistsInRegistry": true,
+    "hardRockEvidenceSourceId": "HARD_ROCK_MLB_GUIDE_20260807",
+    "hardRockFloridaPerEventAvailabilityEstablished": false,
+    "productionRegistryChangeAllowedInThisResearch": false
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresCanonicalT5PregameValid": true,
+    "requiresAuditValidPregameProbableStarter": true,
+    "requiresExactProbableEqualsRecordedStarter": true,
+    "sameDateHistoryAllowed": false,
+    "seasonHistoryReset": true,
+    "scoreWholeDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "historicalPitcherEarnedRunPricesUsed": false,
+    "targetPropLineUsedAsFeature": false
+  },
+  "featureEngineering": {
+    "rateShrinkagePriorBattersFaced": 72,
+    "workloadShrinkagePriorStarts": 5,
+    "opponentRateShrinkagePriorBattersFaced": 72,
+    "opponentWorkloadShrinkagePriorGames": 5,
+    "recentStartsWindow": 5,
+    "leaguePriorsUseCurrentSeasonStrictlyPriorDateRecordedStartersOnly": true,
+    "openingDateWithoutLeaguePriorLeavesRateAndWorkloadFeaturesMissing": true,
+    "trainingOnlyMedianImputationHandlesMissing": true,
+    "opponentLineupContinuity": "INTERSECTION_CURRENT_COMPLETE_ORDER_WITH_PREVIOUS_COMPLETE_ORDER_DIVIDED_BY_9"
+  },
+  "features": {
+    "exactly": [
+      "pitcher_erbf_shrunk",
+      "pitcher_hrbf_shrunk",
+      "pitcher_bbbf_shrunk",
+      "pitcher_kbf_shrunk",
+      "pitcher_bf_per_start_shrunk",
+      "pitcher_recent5_er_per_start",
+      "pitcher_recent5_bf_per_start",
+      "opponent_vs_starters_erbf_scored_shrunk",
+      "opponent_vs_starters_bf_per_game_shrunk",
+      "opponent_rs10",
+      "opponent_lineup_continuity",
+      "pitcher_prior_bf"
+    ],
+    "featureCount": 12,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false
+  },
+  "baselines": {
+    "constant": "2022_ELIGIBLE_STARTER_MEAN_EARNED_RUNS",
+    "pitcherOnlyMechanistic": "PITCHER_ERBF_SHRUNK_TIMES_PITCHER_BF_PER_START_SHRUNK",
+    "pitcherOnlyMissingPredictionFallback": "2022_ELIGIBLE_STARTER_MEAN_EARNED_RUNS",
+    "fixedLineConstantProbabilities": "2022_EMPIRICAL_OVER_RATES",
+    "pitcherOnlyProbabilityDispersion": "USE_MODEL_TRAINING_ONLY_NB2_DISPERSION_WITHOUT_REFIT"
+  },
+  "model": {
+    "providerMarketKey": "pitcher_earned_runs",
+    "canonicalResearchMarketType": "PITCHER_EARNED_RUNS",
+    "modelFamily": "POISSON_REGRESSOR_WITH_TRAINING_ONLY_NB2_DISPERSION_FOR_OVER_PROBABILITIES",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonAlpha": 1.0,
+    "maxIter": 1000,
+    "nb2DispersionFitOn2022Only": true,
+    "fixedHalfRunLines": [0.5, 1.5, 2.5, 3.5, 4.5],
+    "lineSearchAllowed": false,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "candidateRubric": {
+    "requiresModelToBeatConstantAndPitcherOnlyOnDevianceAndAverageBrierInValidationAndEvaluation": true,
+    "passingOnlyAuthorizesNoRetuneRobustnessGate": true,
+    "passingDoesNotAuthorizePriceCapture": true,
+    "passingDoesNotEstablishPositiveEv": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
