@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "courtedge-p0-step12v41-batter-historical-custody-contract.v1",
+  "scientificStatus": "OFFICIAL_HISTORICAL_BATTER_CUSTODY_ONLY_NO_MODEL_NO_PRICE_VALIDATION",
+  "objective": "Create one canonical official-MLB per-batter historical custody layer over the immutable Step 12V3 game cohort so future batter-prop studies can use direct settled outcomes without inventing targets or duplicating acquisition infrastructure.",
+  "parentEvidence": {
+    "mainBaseSha": "a40bec986639cdc6ff6c14ffb31ecbbd92dd0fc9",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v3ArtifactName": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "step12v3WorkflowPath": ".github/workflows/validate-p0-step12v3-expanded-regimes.yml",
+    "step12mAcquisitionScript": "scripts/p0-step12m-acquire-clean-replication-cohort.mjs",
+    "existingPitcherBoxscoreModule": "server/mlb-market-starting-pitcher-history.ts"
+  },
+  "sourceBoundary": {
+    "source": "MLB_STATS_API_BOXSCORE",
+    "endpointTemplate": "https://statsapi.mlb.com/api/v1/game/{gamePk}/boxscore",
+    "officialGameIdentitySource": "STEP12V3/cohort/official-acquisition.json",
+    "pregameLineupIdentitySource": "STEP12V3/cohort/pregame-lineup-history.json",
+    "refetchScheduleAllowed": false,
+    "alternateOutcomeProviderAllowed": false,
+    "manualOutcomeEntryAllowed": false,
+    "rawBoxscoreDigestRequiredPerGame": true,
+    "fetchFailuresAllowed": 0,
+    "teamAggregateReconciliationFailuresAllowed": 0
+  },
+  "seasons": {
+    "exactly": ["2022", "2023", "2024", "2025", "2026_YTD"],
+    "expectedOfficialFinalGamesFromImmutableParent": {
+      "2022": 2430,
+      "2023": 2430,
+      "2024": 2429,
+      "2025": 2430,
+      "2026_YTD": 1786
+    }
+  },
+  "identity": {
+    "requiredFields": [
+      "gamePk",
+      "officialDate",
+      "side",
+      "teamId",
+      "opponentTeamId",
+      "batterId",
+      "batterName"
+    ],
+    "sourceOrderField": "battingOrder",
+    "duplicateBatterWithinGameSideAllowed": false,
+    "sameBatterOnBothTeamsAllowed": false,
+    "pregameLineupCrosslinkIsDiagnosticNotOutcomeCustodyGate": true
+  },
+  "directBatterOutcomeFields": {
+    "requiredNonNegativeIntegerFields": [
+      "atBats",
+      "runs",
+      "hits",
+      "doubles",
+      "triples",
+      "homeRuns",
+      "rbi",
+      "baseOnBalls",
+      "strikeOuts",
+      "plateAppearances",
+      "totalBases",
+      "stolenBases",
+      "caughtStealing"
+    ],
+    "optionalNonNegativeIntegerFields": [
+      "intentionalWalks",
+      "hitByPitch",
+      "sacBunts",
+      "sacFlies",
+      "groundIntoDoublePlay",
+      "leftOnBase"
+    ],
+    "directTargetsUnlocked": [
+      "batter_hits",
+      "batter_total_bases",
+      "batter_rbis",
+      "batter_runs_scored",
+      "batter_doubles",
+      "batter_triples",
+      "batter_walks",
+      "batter_strikeouts",
+      "batter_stolen_bases"
+    ]
+  },
+  "deterministicDerivedFields": {
+    "singles": "hits - doubles - triples - homeRuns",
+    "hitsRunsRbis": "hits + runs + rbi",
+    "derivedTargetsPotentiallyUnlocked": [
+      "batter_singles",
+      "batter_hits_runs_rbis"
+    ],
+    "derivedFieldsMustBeExplicitlyLabeled": true,
+    "derivedFieldsMayNotReplaceDirectFieldsWhenDirectFieldExists": true
+  },
+  "arithmeticInvariants": {
+    "hitsAtLeastExtraBaseHitComponents": true,
+    "atBatsAtLeastHits": true,
+    "plateAppearancesAtLeastAtBats": true,
+    "totalBasesMustEqualHitsPlusDoublesPlusTwoTriplesPlusThreeHomeRuns": true,
+    "derivedSinglesMustBeNonNegative": true
+  },
+  "teamReconciliation": {
+    "requiredExactSumFields": [
+      "atBats",
+      "runs",
+      "hits",
+      "doubles",
+      "triples",
+      "homeRuns",
+      "rbi",
+      "baseOnBalls",
+      "strikeOuts",
+      "plateAppearances",
+      "totalBases",
+      "stolenBases",
+      "caughtStealing"
+    ],
+    "compareAgainst": "boxscore.teams.{side}.teamStats.batting",
+    "failClosedOnMismatch": true
+  },
+  "pregameCrosslinkDiagnostics": {
+    "completePregameLineupSlotsExpectedPerGame": 18,
+    "reportCompleteLineupGames": true,
+    "reportCompleteLineupSlots": true,
+    "reportSlotsFoundInOfficialBatterLines": true,
+    "reportSlotsWithPositivePlateAppearances": true,
+    "minimumMatchRateForCustodyCertification": null,
+    "reasonNoMinimum": "A T-minus-5 pregame lineup can legitimately differ from final participation after a late scratch; this diagnostic is preserved for later market eligibility rather than mutating official outcome custody."
+  },
+  "artifact": {
+    "seasonFile": "batter-history.json",
+    "seasonManifestFile": "batter-history-manifest.json",
+    "consolidatedArtifactName": "p0-step12v41-batter-historical-custody",
+    "historyDigestRequired": true,
+    "boxscoreProvenanceDigestRequired": true,
+    "officialGamePksDigestRequired": true
+  },
+  "researchBoundary": {
+    "modelTrainingAllowed": false,
+    "featureSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "historicalPropPricesUsed": false,
+    "positiveEvClaimAllowed": false,
+    "marketRankingAllowed": false,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
