@@ -1,0 +1,171 @@
+name: Validate P0 Step 12V26 NRFI YRFI Baseline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v26-nrfi-yrfi-baseline-contract.json'
+      - 'scripts/p0-step12v26-nrfi-yrfi-baseline.py'
+      - '.github/workflows/validate-p0-step12v26-nrfi-yrfi-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V26 contract and market boundary
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v26-nrfi-yrfi-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v26-nrfi-yrfi-baseline-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='6b7ddd27f1b822d5889ea9003cf2fd465c886181'
+          assert c['outcomeAcquisition']['source']=='MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE'
+          assert c['outcomeAcquisition']['requiredInnings']==[1]
+          assert c['outcomeAcquisition']['playByPlayFallbackAllowed'] is False
+          assert c['outcomeAcquisition']['maximumPerGameLinescoreFallbacks']==50
+          assert c['outcomeAcquisition']['minimumOutcomeCoverageShare']==0.995
+          assert c['dataBoundary']['modelFitSeason']=='2022'
+          assert c['dataBoundary']['validationSeason']=='2023'
+          assert c['dataBoundary']['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert len(c['features']['exactly'])==13
+          assert c['features']['firstInningSpecificFeaturesAdded'] is False
+          assert c['features']['featureSearchAllowed'] is False
+          assert c['model']['providerMarketKey']=='totals_1st_1_innings'
+          assert c['model']['canonicalMarketTypes']==['NRFI','YRFI']
+          assert c['model']['regularizationC']==1.0
+          assert c['model']['solver']=='lbfgs'
+          assert c['model']['classWeight'] is None
+          assert c['model']['modelSelectionAllowed'] is False
+          assert c['model']['hyperparameterSearchAllowed'] is False
+          assert c['model']['probabilityThresholdSearchAllowed'] is False
+          assert c['marketBoundary']['requiredExactLine']==0.5
+          assert c['marketBoundary']['underMapsTo']=='NRFI'
+          assert c['marketBoundary']['overMapsTo']=='YRFI'
+          assert c['statistics']['noPostResultModelSelection'] is True
+          assert c['policy']['liveLookupAuthorizationChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          normalizer=open('server/mlb-market-odds-normalizer.ts',encoding='utf-8').read()
+          assert 'totals_1st_1_innings' in registry
+          assert '["NRFI", "YRFI"]' in registry
+          assert 'exactFirstInningTotalHalfPair' in normalizer
+          assert 'pair[0].line !== 0.5' in normalizer
+          assert 'transformFirstInningRuns' in normalizer
+          print('STEP12V26_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V26 scorer
+        run: python -m py_compile scripts/p0-step12v26-nrfi-yrfi-baseline.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Run V26 official first-inning outcome acquisition and baseline model
+        run: |
+          mkdir -p artifacts/p0-step12v26
+          python scripts/p0-step12v26-nrfi-yrfi-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v26-nrfi-yrfi-baseline-contract.json \
+            --outcomes-out artifacts/p0-step12v26/first-inning-outcomes.json \
+            --out artifacts/p0-step12v26/nrfi-yrfi-baseline-report.json
+
+      - name: Validate NRFI YRFI custody, partitions, metrics, and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          o=json.load(open('artifacts/p0-step12v26/first-inning-outcomes.json'))
+          r=json.load(open('artifacts/p0-step12v26/nrfi-yrfi-baseline-report.json'))
+          assert o['schemaVersion']=='courtedge-p0-step12v26-first-inning-outcomes.v1'
+          assert o['source']=='MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE'
+          assert o['policy']['labelsOnly'] is True
+          assert o['policy']['sameDateOutcomeUsedAsFeature'] is False
+          assert o['policy']['futureGameDataUsedAsFeature'] is False
+          assert o['policy']['playByPlayFallbackUsed'] is False
+          assert r['schemaVersion']=='courtedge-p0-step12v26-nrfi-yrfi-baseline.v1'
+          assert r['data']['canonicalSeasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          acquisition=r['data']['outcomeAcquisition']
+          assert acquisition['canonicalGames']==11407
+          assert acquisition['coverageShare']>=0.995
+          assert acquisition['perGameLinescoreFallbackRequests']<=50
+          assert acquisition['conflictingDuplicateApiObservations']==0
+          assert r['data']['featureCount']==13
+          assert r['model']['providerMarketKey']=='totals_1st_1_innings'
+          assert r['model']['canonicalMarketTypes']==['NRFI','YRFI']
+          assert r['model']['trainingSeason']=='2022'
+          assert r['model']['firstInningSpecificFeaturesAdded'] is False
+          assert r['validation2023']['rows']>2300
+          assert r['evaluation2024_2026Ytd']['rows']>6400
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          assert r['marketBoundary']['requiredExactLine']==0.5
+          assert r['marketBoundary']['historicalNrfiYrfiPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          assert r['marketBoundary']['productionPromotionAuthorized'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['probabilityThresholdSearchUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'outcomeAcquisition':acquisition,
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'volumeDiagnostics':r['volumeDiagnostics'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve first-inning market and certified FULL13 regressions
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+      - name: Upload V26 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v26-nrfi-yrfi-baseline
+          path: artifacts/p0-step12v26/
+          if-no-files-found: error
+          retention-days: 30
