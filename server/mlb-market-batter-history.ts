@@ -165,12 +165,19 @@ function parseTeamBatters(
   if (new Set(batterIds).size !== batterIds.length) throw new Error(`BATTER_HISTORY_DUPLICATE_BATTER_ID:${side}`);
 
   const players = teamBox?.players ?? {};
-  const lines = batterIds.map((batterId: number) => {
+  const lines = batterIds.flatMap((batterId: number) => {
     const player = players?.[`ID${batterId}`];
     const batting = player?.stats?.batting;
-    if (!player || !batting || typeof batting !== "object") {
+    if (!player || !batting || typeof batting !== "object" || Array.isArray(batting)) {
       throw new Error(`BATTER_HISTORY_STATS_MISSING:${side}:${batterId}`);
     }
+
+    // MLB's team.batters can include roster participants (commonly pitchers)
+    // with an empty batting object and no batting order. Those entries are not
+    // zero-stat batter outcomes. Only a completely empty batting payload is
+    // excluded; every non-empty payload remains subject to all fail-closed gates.
+    if (Object.keys(batting).length === 0) return [];
+
     const batterName = String(player?.person?.fullName ?? "").trim();
     if (!batterName) throw new Error(`BATTER_HISTORY_NAME_MISSING:${side}:${batterId}`);
 
@@ -198,8 +205,9 @@ function parseTeamBatters(
       hitsRunsRbisDerived: direct.hits + direct.runs + direct.rbi,
     };
     validateLineArithmetic(line);
-    return line;
+    return [line];
   });
+  if (!lines.length) throw new Error(`BATTER_HISTORY_NO_STATISTICAL_BATTER_LINES:${side}`);
 
   const teamBatting = teamBox?.teamStats?.batting;
   if (!teamBatting || typeof teamBatting !== "object") throw new Error(`BATTER_HISTORY_TEAM_STATS_MISSING:${side}`);
