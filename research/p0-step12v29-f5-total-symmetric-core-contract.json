@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "courtedge-p0-step12v29-f5-total-symmetric-core-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_F5_TOTAL_SYMMETRIC_CORE_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test one final domain-driven F5 Total hypothesis after the frozen FULL13 baseline failed validation Brier: replace side-oriented advantage variables with a predeclared symmetric run-environment core, while preserving the same outcome custody, model family, temporal split and market lines.",
+  "parentEvidence": {
+    "mainBaseSha": "ede34e5f7f3c6b83d4f9e7380c08311c76630fe0",
+    "v28Pr": 566,
+    "v28WorkflowRunId": 31896949764,
+    "v28ArtifactId": 9250077249,
+    "v28ArtifactName": "p0-step12v28-f5-total-baseline",
+    "v28ArtifactDigest": "sha256:6ad4b42e1e87c595382856724e6706fefda12aea3d8892611fe8e47cee7e8a80",
+    "v28ClassificationRequired": "F5_TOTAL_FULL13_BASELINE_REJECTED",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresCanonicalT5PregameValid": true,
+    "sameDateHistoryAllowed": false,
+    "seasonHistoryReset": true,
+    "scoreWholeDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "historicalF5PricesUsed": false
+  },
+  "canonicalSources": {
+    "f5Labels": "V28_IMMUTABLE_F5_OUTCOMES",
+    "full13Rows": "game-anatomy-feature-table.json",
+    "starterHistory": "cohort/starting-pitcher-history.json",
+    "pregameLineupHistory": "cohort/pregame-lineup-history.json",
+    "starterIdentityAudit": "t5-audit/t5-starter-identity-audit.json",
+    "probableStarterUseRequires": ["identityOk", "sourceHistorical", "pregame", "probableBothKnown"],
+    "currentLineupUseRequires": ["identityOk", "sourceHistorical", "pregame", "lineup.complete"]
+  },
+  "f5History": {
+    "teamRunMeanPriorStrengthGames": 20,
+    "starterOpeningTeamRunMeanPriorStrengthGames": 20,
+    "priorMeanSource": "CURRENT_SEASON_STRICTLY_PRIOR_DATE_LEAGUE_PER_TEAM_F5_RUN_MEAN",
+    "openingDayFallbackPerTeamF5Runs": 2.5,
+    "teamOffenseMetric": "PRIOR_F5_RUNS_SCORED_PER_GAME_SHRUNK",
+    "teamDefenseMetric": "PRIOR_F5_RUNS_ALLOWED_PER_GAME_SHRUNK",
+    "starterOpeningTeamMetric": "OPPONENT_F5_RUNS_WHILE_PITCHER_IS_RECORDED_GAME_STARTER_SHRUNK",
+    "starterOpeningTeamMetricDoesNotClaimPitcherChargedRunAttribution": true,
+    "sameDateGamesUpdateAfterWholeDate": true
+  },
+  "starterQuality": {
+    "shrinkagePriorBattersFaced": 72,
+    "leagueRatesUsePriorDateRecordedStartersOnly": true,
+    "rates": ["ER_PER_BF", "HR_PER_BF", "K_MINUS_BB_PER_BF"],
+    "probableStarterPriorBfUsesStrictPriorDateHistory": true
+  },
+  "lineup": {
+    "teamContinuity": "INTERSECTION_CURRENT_COMPLETE_ORDER_WITH_PREVIOUS_COMPLETE_ORDER_DIVIDED_BY_9",
+    "combinedContinuity": "HOME_CONTINUITY_PLUS_AWAY_CONTINUITY",
+    "previousLineupMustBeStrictlyPriorDate": true,
+    "currentLineupMustBeT5AuditValidAndComplete": true
+  },
+  "features": {
+    "exactly": [
+      "combined_team_f5_offense_runs_shrunk",
+      "combined_team_f5_defense_runs_shrunk",
+      "combined_starter_opening_team_f5_allow_runs_shrunk",
+      "combined_starter_erbf",
+      "combined_starter_hrbf",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "min_probable_prior_bf",
+      "combined_lineup_continuity"
+    ],
+    "featureCount": 10,
+    "allFeaturesSymmetricWithRespectToHomeAwaySwap": true,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false
+  },
+  "model": {
+    "providerMarketKey": "totals_1st_5_innings",
+    "canonicalMarketType": "F5_TOTAL",
+    "modelFamily": "POISSON_REGRESSOR_WITH_TRAINING_ONLY_NB2_DISPERSION_FOR_OVER_PROBABILITIES",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonAlpha": 1.0,
+    "maxIter": 1000,
+    "nb2DispersionFitOn2022Only": true,
+    "fixedHalfRunLines": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "lineSearchAllowed": false,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "baselineMean": "2022_F5_TOTAL_MEAN",
+    "baselineLineProbabilities": "2022_EMPIRICAL_OVER_RATE_AT_EACH_FIXED_LINE"
+  },
+  "candidateRubric": {
+    "requires": [
+      "POSITIVE_POISSON_DEVIANCE_IMPROVEMENT_VS_2022_CONSTANT_BASELINE_IN_2023",
+      "POSITIVE_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_VS_2022_CLIMATOLOGY_IN_2023",
+      "POSITIVE_POISSON_DEVIANCE_IMPROVEMENT_VS_2022_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "POSITIVE_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_VS_2022_CLIMATOLOGY_IN_2024_2026_YTD"
+    ],
+    "passingOnlyAuthorizesNoRetunePerSeasonCalibrationBootstrapGate": true,
+    "passingDoesNotAuthorizeShadowPriceCapture": true,
+    "passingDoesNotEstablishPositiveEv": true,
+    "failureClosesF5TotalResearchForCurrentInformationSet": true
+  },
+  "marketBoundary": {
+    "exactProviderKey": "totals_1st_5_innings",
+    "canonicalMarketType": "F5_TOTAL",
+    "historicalF5PricesUsed": false,
+    "positiveEvCannotBeEstablishedWithoutPrices": true,
+    "liveHardRockFloridaAvailabilityStillRequiresPerEventDiscovery": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePriceCaptureRequiredBeforeAnyPromotion": true
+  }
+}
