@@ -1,0 +1,151 @@
+name: Validate P0 Step 12V55 Batter Doubles No Retune Robustness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v55-batter-doubles-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v55-batter-doubles-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v55-batter-doubles-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Validate frozen V55 gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v55-batter-doubles-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v55-batter-doubles-no-retune-robustness-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='88df2f9cf43614716df48250463d88ad4e203b95'
+          assert p['v54Pr']==592 and p['v54MergeSha']=='88df2f9cf43614716df48250463d88ad4e203b95'
+          assert p['v54WorkflowRunId']==31910589288 and p['v54ArtifactId']==9253588333
+          assert p['v54ArtifactDigest']=='sha256:f0f0290bdc7cd063dbc32a799fd57af5eeb37e99cd1a040102f133d9d9dd19e7'
+          assert p['v54ClassificationRequired']=='BATTER_DOUBLES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v54-batter-doubles-baseline.py'
+          assert m['unchangedV54TrainingSeasonRequired']=='2022' and m['unchangedV54PoissonAlphaRequired']==1.0
+          assert m['unchangedV54FixedLinesRequired']==[0.5,1.5,2.5]
+          assert m['unchangedV54BatterOnlyBaselineRequired']=='BATTER_2BPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          for key in ['refitWithAdditionalSeasonsAllowed','recalibrationAllowed','coefficientChangeAllowed','featureChangeAllowed','imputationChangeAllowed','scalingChangeAllowed','dispersionChangeAllowed','lineSetChangeAllowed','baselineFormulaChangeAllowed','thresholdSearchAllowed']:
+              assert m[key] is False
+          assert c['replayParity']['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          for key in ['requireModelDevianceBeatConstantEachPartition','requireModelDevianceBeatBatterOnlyEachPartition','requireModelAverageBrierBeatConstantEachPartition','requireModelAverageBrierBeatBatterOnlyEachPartition','requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition','requireModelAbsoluteMeanBiasNoWorseThanBatterOnlyEachPartition']:
+              assert s[key] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['replicates']==10000 and b['randomSeed']==5501 and b['confidenceLevel']==0.95
+          assert len(b['metrics'])==4 and b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics'] is True
+          assert c['classification']['pass']=='BATTER_DOUBLES_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY'
+          assert c['classification']['fail']=='BATTER_DOUBLES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert c['policy']['failureClosesCurrentBatterDoublesModel'] is True
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V55_GATE_PREDECLARED')
+          PY
+      - name: Syntax check V55 scorer
+        run: python -m py_compile scripts/p0-step12v55-batter-doubles-no-retune-robustness.py
+      - name: Download immutable V54 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v54-batter-doubles-baseline
+          path: artifacts/p0-step12v54
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31910589288
+      - name: Download certified V41 batter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify immutable V54 parent
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v54/batter-doubles-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v54-batter-doubles-baseline.v1'
+          assert r['classification']=='BATTER_DOUBLES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True and all(r['candidateRubricChecks'].values())
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==10
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916
+          assert r['model']['fixedHalfDoubleLines']==[0.5,1.5,2.5]
+          assert r['marketBoundary']['providerMarketKey']=='batter_doubles'
+          assert r['marketBoundary']['historicalBatterDoublesPricesUsed'] is False
+          print('V54_PARENT_CUSTODY_VERIFIED')
+          PY
+      - name: Run V55 exact V54 replay and robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v55
+          python scripts/p0-step12v55-batter-doubles-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v55-batter-doubles-no-retune-robustness-contract.json \
+            --v54-contract research/p0-step12v54-batter-doubles-baseline-contract.json \
+            --v54-script scripts/p0-step12v54-batter-doubles-baseline.py \
+            --v54-report artifacts/p0-step12v54/batter-doubles-baseline-report.json \
+            --out artifacts/p0-step12v55/batter-doubles-no-retune-robustness-report.json
+      - name: Validate immutable replay and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v55/batter-doubles-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v55-batter-doubles-no-retune-robustness.v1'
+          assert r['parent']['v54Classification']=='BATTER_DOUBLES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['modelBoundary']['replayParityPassed'] is True and r['modelBoundary']['replayParityTolerance']==1e-12
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==10
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000 and b['randomSeed']==5501 and b['confidenceLevel']==0.95 and b['uniqueDates']>490
+          assert set(b['metrics'])=={'devianceVsConstant','devianceVsBatterOnly','averageBrierVsConstant','averageBrierVsBatterOnly'}
+          assert r['classification'] in {'BATTER_DOUBLES_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY','BATTER_DOUBLES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'}
+          market=r['marketBoundary']
+          assert market['providerMarketKey']=='batter_doubles' and market['repositoryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert market['historicalBatterDoublesPricesUsed'] is False and market['positiveEvEstablished'] is False and market['productionPromotionAuthorized'] is False
+          assert market['prospectivePriceCaptureEngineeringAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          for key in ['featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'robustnessGatePassed':r['robustnessGatePassed'],'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],'seasonStabilityChecks':r['seasonStabilityChecks'],'seasonMetrics':r['seasonMetrics'],'bootstrapGatePassed':r['bootstrapGatePassed'],'dateClusterBootstrap':r['dateClusterBootstrap'],'bootstrapChecks':r['bootstrapChecks']},indent=2))
+          PY
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_doubles", "Batter doubles", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+      - name: Upload V55 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v55-batter-doubles-no-retune-robustness
+          path: artifacts/p0-step12v55/
+          if-no-files-found: error
+          retention-days: 30
