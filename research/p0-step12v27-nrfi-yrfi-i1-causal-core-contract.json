@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "courtedge-p0-step12v27-nrfi-yrfi-i1-causal-core-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_I1_CAUSAL_CORE_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test one predeclared first-inning-specific causal feature block for NRFI/YRFI after the frozen FULL13 baseline failed, using only prior-date canonical team, starter, lineup and first-inning history available before the target game.",
+  "parentEvidence": {
+    "mainBaseSha": "069a83e8721f1f7b001841e2f8d08e04309c3c9c",
+    "v26Pr": 564,
+    "v26WorkflowRunId": 31896273442,
+    "v26ArtifactId": 9249905718,
+    "v26ArtifactName": "p0-step12v26-nrfi-yrfi-baseline",
+    "v26ArtifactDigest": "sha256:bfbacf7c49b500bd5c1c35cd18e2d5767fd440ff439d71368a0e7336620475fa",
+    "v26ClassificationRequired": "NRFI_YRFI_FULL13_BASELINE_REJECTED",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresCanonicalT5PregameValid": true,
+    "sameDateHistoryAllowed": false,
+    "seasonHistoryReset": true,
+    "scoreWholeDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "historicalNrfiYrfiPricesUsed": false
+  },
+  "canonicalSources": {
+    "firstInningLabels": "V26_IMMUTABLE_FIRST_INNING_OUTCOMES",
+    "full13Rows": "game-anatomy-feature-table.json",
+    "starterHistory": "cohort/starting-pitcher-history.json",
+    "pregameLineupHistory": "cohort/pregame-lineup-history.json",
+    "starterIdentityAudit": "t5-audit/t5-starter-identity-audit.json",
+    "probableStarterUseRequires": ["identityOk", "sourceHistorical", "pregame", "probableBothKnown"],
+    "currentLineupUseRequires": ["identityOk", "sourceHistorical", "pregame", "lineup.complete"]
+  },
+  "firstInningHistory": {
+    "teamRatePriorStrengthHalfInnings": 20,
+    "starterRatePriorStrengthGames": 20,
+    "priorMeanSource": "CURRENT_SEASON_LEAGUE_PRIOR_HALF_INNING_SCORE_RATE",
+    "openingDayFallbackPriorMean": 0.5,
+    "teamOffenseSuccess": "TEAM_SCORES_AT_LEAST_ONE_RUN_IN_ITS_FIRST_OFFENSIVE_HALF_INNING",
+    "teamDefenseSuccess": "TEAM_ALLOWS_AT_LEAST_ONE_RUN_IN_OPPONENT_FIRST_OFFENSIVE_HALF_INNING",
+    "starterOpeningTeamAllowSuccess": "OPPONENT_SCORES_AT_LEAST_ONE_FIRST_INNING_RUN_WHILE_THIS_PITCHER_IS_THE_RECORDED_GAME_STARTER",
+    "starterOpeningTeamMetricDoesNotClaimChargedRunAttribution": true,
+    "sameDateGamesUpdateAfterWholeDate": true
+  },
+  "starterQuality": {
+    "shrinkagePriorBattersFaced": 72,
+    "leagueRatesUsePriorDateRecordedStartersOnly": true,
+    "combinedStarterErbf": "SHRUNK_HOME_STARTER_ER_PER_BF_PLUS_SHRUNK_AWAY_STARTER_ER_PER_BF",
+    "combinedStarterHrbf": "SHRUNK_HOME_STARTER_HR_PER_BF_PLUS_SHRUNK_AWAY_STARTER_HR_PER_BF",
+    "combinedStarterKbb": "USE_CANONICAL_FULL13_COMBINED_STARTER_KBB"
+  },
+  "lineup": {
+    "homeTop3Continuity": "INTERSECTION_CURRENT_TOP3_WITH_PREVIOUS_COMPLETE_TOP3_DIVIDED_BY_3",
+    "awayTop3Continuity": "INTERSECTION_CURRENT_TOP3_WITH_PREVIOUS_COMPLETE_TOP3_DIVIDED_BY_3",
+    "previousLineupMustBeStrictlyPriorDate": true,
+    "currentLineupMustBeT5AuditValidAndComplete": true
+  },
+  "features": {
+    "exactly": [
+      "home_offense_i1_score_rate_shrunk",
+      "away_offense_i1_score_rate_shrunk",
+      "home_defense_i1_allow_rate_shrunk",
+      "away_defense_i1_allow_rate_shrunk",
+      "home_starter_opening_team_i1_allow_rate_shrunk",
+      "away_starter_opening_team_i1_allow_rate_shrunk",
+      "combined_starter_erbf",
+      "combined_starter_hrbf",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "home_top3_continuity",
+      "away_top3_continuity"
+    ],
+    "featureCount": 13,
+    "full13DifferenceAdvantageFeaturesIncluded": false,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureRemovalAllowed": false,
+    "postResultFeatureAdditionAllowed": false
+  },
+  "model": {
+    "providerMarketKey": "totals_1st_1_innings",
+    "canonicalMarketTypes": ["NRFI", "YRFI"],
+    "target": "YRFI_BINARY_WITH_NRFI_AS_COMPLEMENT",
+    "modelFamily": "BINARY_LOGISTIC_REGRESSION",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "regularizationC": 1.0,
+    "solver": "lbfgs",
+    "maxIter": 2000,
+    "randomState": 2701,
+    "classWeight": null,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "probabilityThresholdSearchAllowed": false,
+    "baseline": "2022_YRFI_CLIMATOLOGY"
+  },
+  "candidateRubric": {
+    "requires": [
+      "LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "ROC_AUC_ABOVE_0_5_IN_2023",
+      "LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD",
+      "BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD",
+      "ROC_AUC_ABOVE_0_5_IN_2024_2026_YTD"
+    ],
+    "passingOnlyAuthorizesNoRetunePerSeasonBootstrapRobustnessGate": true,
+    "passingDoesNotAuthorizeShadowPriceCapture": true,
+    "passingDoesNotEstablishPositiveEv": true
+  },
+  "marketBoundary": {
+    "exactProviderKey": "totals_1st_1_innings",
+    "requiredExactLine": 0.5,
+    "underMapsTo": "NRFI",
+    "overMapsTo": "YRFI",
+    "historicalNrfiYrfiPricesUsed": false,
+    "positiveEvCannotBeEstablishedWithoutPrices": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePriceCaptureRequiredBeforeAnyPromotion": true
+  }
+}
