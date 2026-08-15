@@ -1,0 +1,205 @@
+name: Validate P0 Step 12V29 F5 Total Symmetric Core
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v29-f5-total-symmetric-core-contract.json'
+      - 'scripts/p0-step12v29-f5-total-symmetric-core.py'
+      - '.github/workflows/validate-p0-step12v29-f5-total-symmetric-core.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate predeclared V29 symmetric total contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v29-f5-total-symmetric-core-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v29-f5-total-symmetric-core-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='ede34e5f7f3c6b83d4f9e7380c08311c76630fe0'
+          assert c['parentEvidence']['v28WorkflowRunId']==31896949764
+          assert c['parentEvidence']['v28ArtifactId']==9250077249
+          assert c['parentEvidence']['v28ArtifactDigest']=='sha256:6ad4b42e1e87c595382856724e6706fefda12aea3d8892611fe8e47cee7e8a80'
+          assert c['parentEvidence']['v28ClassificationRequired']=='F5_TOTAL_FULL13_BASELINE_REJECTED'
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023'
+          assert d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['sameDateHistoryAllowed'] is False
+          assert d['seasonHistoryReset'] is True
+          assert d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          h=c['f5History']
+          assert h['teamRunMeanPriorStrengthGames']==20
+          assert h['starterOpeningTeamRunMeanPriorStrengthGames']==20
+          assert h['openingDayFallbackPerTeamF5Runs']==2.5
+          assert h['starterOpeningTeamMetricDoesNotClaimPitcherChargedRunAttribution'] is True
+          assert c['starterQuality']['shrinkagePriorBattersFaced']==72
+          f=c['features']
+          assert f['featureCount']==10 and len(f['exactly'])==10 and len(set(f['exactly']))==10
+          assert f['allFeaturesSymmetricWithRespectToHomeAwaySwap'] is True
+          assert f['featureSearchAllowed'] is False
+          assert f['postResultFeatureAdditionAllowed'] is False
+          assert f['postResultFeatureRemovalAllowed'] is False
+          expected={
+            'combined_team_f5_offense_runs_shrunk','combined_team_f5_defense_runs_shrunk',
+            'combined_starter_opening_team_f5_allow_runs_shrunk','combined_starter_erbf',
+            'combined_starter_hrbf','combined_starter_kbb','combined_team_rs10',
+            'combined_team_ra10','min_probable_prior_bf','combined_lineup_continuity'
+          }
+          assert set(f['exactly'])==expected
+          m=c['model']
+          assert m['providerMarketKey']=='totals_1st_5_innings' and m['canonicalMarketType']=='F5_TOTAL'
+          assert m['poissonAlpha']==1.0 and m['maxIter']==1000
+          assert m['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5]
+          assert m['lineSearchAllowed'] is False and m['modelSelectionAllowed'] is False
+          assert m['hyperparameterSearchAllowed'] is False
+          assert c['candidateRubric']['failureClosesF5TotalResearchForCurrentInformationSet'] is True
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V29_F5_SYMMETRIC_CORE_PREDECLARED')
+          PY
+
+      - name: Syntax check V29 scorer
+        run: python -m py_compile scripts/p0-step12v29-f5-total-symmetric-core.py
+
+      - name: Download immutable V28 F5 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v28-f5-total-baseline
+          path: artifacts/p0-step12v28
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896949764
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify V28 rejected parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v28/f5-total-baseline-report.json'))
+          o=json.load(open('artifacts/p0-step12v28/f5-outcomes.json'))
+          assert r['classification']=='F5_TOTAL_FULL13_BASELINE_REJECTED'
+          assert r['candidateRubricPassed'] is False
+          assert r['candidateRubricChecks']['validationAverageBrierBeatsBaseline'] is False
+          assert o['acquisition']['canonicalGames']==11407
+          assert o['acquisition']['outcomeCompleteGames']==11405
+          assert o['acquisition']['conflictingDuplicateApiObservations']==0
+          assert o['policy']['sameDateOutcomeUsedAsFeature'] is False
+          print('V28_REJECTED_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V29 frozen symmetric F5 total core
+        run: |
+          mkdir -p artifacts/p0-step12v29
+          python scripts/p0-step12v29-f5-total-symmetric-core.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v29-f5-total-symmetric-core-contract.json \
+            --v28-outcomes artifacts/p0-step12v28/f5-outcomes.json \
+            --v28-report artifacts/p0-step12v28/f5-total-baseline-report.json \
+            --out artifacts/p0-step12v29/f5-total-symmetric-core-report.json
+
+      - name: Validate V29 temporal, model, and safety boundaries
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v29/f5-total-symmetric-core-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v29-f5-total-symmetric-core.v1'
+          assert r['parent']['v28Classification']=='F5_TOTAL_FULL13_BASELINE_REJECTED'
+          assert r['parent']['v28CandidateRubricPassed'] is False
+          assert r['data']['featureCount']==10
+          assert r['data']['sameDateHistoryAllowed'] is False
+          assert r['data']['seasonHistoryReset'] is True
+          assert r['data']['scoredRows']==11405
+          expected_rows={'2022':2398,'2023':2399,'2024':2404,'2025':2423,'2026_YTD':1781}
+          assert set(r['data']['custodyBySeason'])==set(expected_rows)
+          for season, expected in expected_rows.items():
+              c=r['data']['custodyBySeason'][season]
+              assert c['canonicalOutcomeJoinedRows']==expected
+              assert c['validProbableStarterPairs']>1500
+              assert c['completeAuditValidLineupPairs']>1500
+          assert r['model']['trainingSeason']=='2022'
+          assert r['model']['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5]
+          assert r['model']['featureSearchUsed'] is False
+          assert r['model']['modelSearchUsed'] is False
+          assert r['model']['hyperparameterSearchUsed'] is False
+          assert r['model']['lineSearchUsed'] is False
+          assert r['validation2023']['rows']==2399
+          assert r['evaluation2024_2026Ytd']['rows']==6608
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          mb=r['marketBoundary']
+          assert mb['historicalF5PricesUsed'] is False
+          assert mb['positiveEvEstablished'] is False
+          assert mb['shadowPriceCaptureAuthorized'] is False
+          assert mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['thresholdSearchUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'custodyBySeason':r['data']['custodyBySeason'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'coefficientsDescriptiveOnly':r['model']['coefficientsDescriptiveNotSelectionInput'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+      - name: Upload V29 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v29-f5-total-symmetric-core
+          path: artifacts/p0-step12v29/
+          if-no-files-found: error
+          retention-days: 30
