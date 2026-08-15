@@ -151,7 +151,8 @@ def collect_schedule_linescores(contract, canonical):
     max_date = max(date.fromisoformat(row['officialDate']) for row in canonical)
     found = {}
     schedule_requests = 0
-    duplicate_api_game_pks = set()
+    exact_duplicate_observations = 0
+    conflicting_duplicates = []
     identity_mismatches = []
 
     for left, right in date_windows(min_date, max_date, window_days):
@@ -171,9 +172,6 @@ def collect_schedule_linescores(contract, canonical):
                     continue
                 if game_pk not in expected:
                     continue
-                if game_pk in found:
-                    duplicate_api_game_pks.add(game_pk)
-                    continue
                 expected_row = expected[game_pk]
                 api_home = team_id(raw, 'home')
                 api_away = team_id(raw, 'away')
@@ -187,6 +185,23 @@ def collect_schedule_linescores(contract, canonical):
                     })
                     continue
                 f3 = innings_to_f3((raw.get('linescore') or {}).get('innings'))
+                if game_pk in found:
+                    exact_duplicate_observations += 1
+                    if f3 is not None:
+                        existing = found[game_pk]
+                        comparable = {
+                            'homeRuns': existing['homeRuns'],
+                            'awayRuns': existing['awayRuns'],
+                            'totalRuns': existing['totalRuns'],
+                            'outcome': existing['outcome'],
+                        }
+                        if f3 != comparable:
+                            conflicting_duplicates.append({
+                                'gamePk': game_pk,
+                                'existing': comparable,
+                                'duplicate': f3,
+                            })
+                    continue
                 if f3 is not None:
                     found[game_pk] = {
                         'gamePk': game_pk,
@@ -198,8 +213,8 @@ def collect_schedule_linescores(contract, canonical):
                         'source': 'SCHEDULE_HYDRATE_LINESCORE',
                     }
 
-    if duplicate_api_game_pks:
-        raise SystemExit(f'V23_API_DUPLICATE_GAME_PK:{sorted(duplicate_api_game_pks)[:20]}')
+    if conflicting_duplicates:
+        raise SystemExit(f'V23_API_CONFLICTING_DUPLICATE_GAME_PK:{conflicting_duplicates[:5]}')
     if identity_mismatches:
         raise SystemExit(f'V23_TEAM_IDENTITY_MISMATCH:{identity_mismatches[:5]}')
 
@@ -237,6 +252,8 @@ def collect_schedule_linescores(contract, canonical):
         'outcomeCompleteGames': len(found),
         'coverageShare': coverage,
         'scheduleWindowRequests': schedule_requests,
+        'exactDuplicateApiObservationsDeduplicated': exact_duplicate_observations,
+        'conflictingDuplicateApiObservations': 0,
         'perGameLinescoreFallbackRequests': fallback_requests,
         'unresolvedGamePks': sorted(game_pk for game_pk in expected if game_pk not in found),
     }
@@ -266,14 +283,16 @@ def evaluate_moneyline(frame, features, imputer, scaler, model, baseline_probs):
     baseline = np.tile(np.asarray(baseline_probs, dtype=float), (len(frame), 1))
     model_brier, model_classwise = multiclass_brier(y, probs)
     baseline_brier, baseline_classwise = multiclass_brier(y, baseline)
+    model_log_loss = float(log_loss(y, probs, labels=[0, 1, 2]))
+    baseline_log_loss = float(log_loss(y, baseline, labels=[0, 1, 2]))
     return {
         'rows': int(len(frame)),
         'observedClassRates': class_rates(y),
         'meanPredictedClassProbabilities': mean_class_probabilities(probs),
         'trainingClimatologyClassProbabilities': {INT_TO_CLASS[index]: float(baseline_probs[index]) for index in (0, 1, 2)},
-        'multiclassLogLoss': float(log_loss(y, probs, labels=[0, 1, 2])),
-        'baselineMulticlassLogLoss': float(log_loss(y, baseline, labels=[0, 1, 2])),
-        'logLossImprovement': float(log_loss(y, baseline, labels=[0, 1, 2]) - log_loss(y, probs, labels=[0, 1, 2])),
+        'multiclassLogLoss': model_log_loss,
+        'baselineMulticlassLogLoss': baseline_log_loss,
+        'logLossImprovement': baseline_log_loss - model_log_loss,
         'multiclassBrier': model_brier,
         'baselineMulticlassBrier': baseline_brier,
         'brierImprovement': baseline_brier - model_brier,
