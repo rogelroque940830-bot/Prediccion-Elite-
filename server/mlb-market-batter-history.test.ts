@@ -87,6 +87,22 @@ test("excludes MLB roster participants with completely empty batting payloads", 
   assert.equal(parsed.homeBatters[0].atBats, 4);
 });
 
+test("preserves same batter ID on both official sides as separate team custody", () => {
+  const sharedId = 643376;
+  const source = {
+    teams: {
+      home: teamBox(10, sharedId, "Danny Jansen", batterStats({ atBats: 4, plateAppearances: 4, hits: 1, doubles: 0, totalBases: 1, runs: 0, rbi: 0, baseOnBalls: 0 })),
+      away: teamBox(20, sharedId, "Danny Jansen", batterStats({ atBats: 0, plateAppearances: 0, hits: 0, doubles: 0, totalBases: 0, runs: 0, rbi: 0, baseOnBalls: 0, strikeOuts: 0 })),
+    },
+  };
+  const parsed = parseMlbHistoricalBatterBoxscore(game, source);
+  assert.equal(parsed.homeBatters[0].batterId, sharedId);
+  assert.equal(parsed.awayBatters[0].batterId, sharedId);
+  assert.equal(parsed.homeBatters[0].teamId, 10);
+  assert.equal(parsed.awayBatters[0].teamId, 20);
+  assert.notEqual(parsed.homeBatters[0].side, parsed.awayBatters[0].side);
+});
+
 test("history digest is deterministic regardless of game input order", () => {
   const first = parseMlbHistoricalBatterBoxscore(game, boxscore());
   const second = parseMlbHistoricalBatterBoxscore({ ...game, gamePk: 999002, officialDate: "2026-08-02" }, boxscore());
