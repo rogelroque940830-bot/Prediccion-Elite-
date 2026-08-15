@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "courtedge-p0-step12v25-f3-total-walkforward-calibration-contract.v1",
+  "scientificStatus": "PREDECLARED_PREVIOUS_SEASON_INTERCEPT_CALIBRATION_HYPOTHESIS",
+  "objective": "Test whether the V23 F3 Total structural signal can satisfy the V24 calibration gate using only one previous-season league-wide intercept factor, without changing coefficients, features, dispersion, lines, or using target-season outcomes.",
+  "parentEvidence": {
+    "v23WorkflowRunId": 31894436492,
+    "v23ArtifactId": 9249427586,
+    "v23ArtifactDigest": "sha256:7ac9b44038f48446e03c997b60ca18059bfacdd97be8a4a7829aa4c0d84d99e5",
+    "v24Pr": 562,
+    "v24MergeCommit": "a54cd6ea8685553864d69ada660f085a77fdef11",
+    "v24WorkflowRunId": 31894841760,
+    "v24ArtifactId": 9249531195,
+    "v24ArtifactDigest": "sha256:2a4a8822565f3cd5dd4e4520e55773c38cd149614ffbb57b793c0f8280768a73",
+    "requiredV24Classification": "F3_TOTAL_NOT_ROBUST_ENOUGH_FOR_LIVE_PROMOTION"
+  },
+  "frozenBaseModel": {
+    "source": "V23_TOTAL_MODEL_SNAPSHOT",
+    "coefficientChangeAllowed": false,
+    "featureChangeAllowed": false,
+    "imputationChangeAllowed": false,
+    "standardizationChangeAllowed": false,
+    "dispersionChangeAllowed": false,
+    "lineSetChangeAllowed": false,
+    "fixedLines": [1.5, 2.5, 3.5, 4.5, 5.5]
+  },
+  "calibrationAlgorithm": {
+    "type": "PREVIOUS_COMPLETE_SEASON_GLOBAL_MULTIPLICATIVE_MEAN_FACTOR",
+    "equivalentParameterChange": "INTERCEPT_ONLY_LOG_FACTOR",
+    "factorFormula": "SUM_OBSERVED_F3_RUNS_PREVIOUS_SEASON / SUM_UNCALIBRATED_V23_PREDICTED_MEANS_PREVIOUS_SEASON",
+    "targetSeasonFactors": {
+      "2023": "1.0_VALIDATION_ANCHOR_NO_CALIBRATION",
+      "2024": "DERIVE_FROM_2023_ONLY",
+      "2025": "DERIVE_FROM_2024_ONLY",
+      "2026_YTD": "DERIVE_FROM_2025_ONLY"
+    },
+    "targetSeasonOutcomeUsedToCalibrateSameSeason": false,
+    "futureSeasonDataUsed": false,
+    "rollingWindowSearchAllowed": false,
+    "factorClippingAllowed": false,
+    "factorSearchAllowed": false,
+    "manualAdjustmentAllowed": false
+  },
+  "evaluation": {
+    "validationAnchor": "2023",
+    "walkForwardSeasons": ["2024", "2025", "2026_YTD"],
+    "baseline": "V23_2022_CONSTANT_MEAN_AND_FIXED_LINE_CLIMATOLOGY",
+    "uncalibratedComparator": "V23_UNCHANGED_MODEL",
+    "requirePositivePoissonDevianceImprovementVsBaselineEachPartition": true,
+    "requirePositiveAverageBrierImprovementVsBaselineEachPartition": true,
+    "requireCalibratedAbsoluteMeanBiasNoWorseThanBaselineEachPartition": true,
+    "requireCalibratedAbsoluteMeanBiasNoWorseThanUncalibratedEachWalkForwardSeason": true,
+    "requireAggregateWalkForwardPoissonDevianceNoWorseThanUncalibrated": true,
+    "requireAggregateWalkForwardAverageBrierNoWorseThanUncalibrated": true
+  },
+  "dateClusterBootstrapGate": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "clusterUnit": "OFFICIAL_DATE",
+    "replicates": 10000,
+    "randomSeed": 2501,
+    "confidenceLevel": 0.95,
+    "requireBaselineMinusCalibratedPoissonDevianceCiLowerGreaterThanZero": true,
+    "requireBaselineMinusCalibratedAverageBrierCiLowerGreaterThanZero": true
+  },
+  "promotionRubric": {
+    "passClassification": "F3_TOTAL_WALKFORWARD_CALIBRATION_ROBUST_CANDIDATE",
+    "failClassification": "F3_TOTAL_WALKFORWARD_CALIBRATION_NOT_ROBUST",
+    "passingOnlyAuthorizesFrozenLiveImplementationAndProspectiveShadowPricing": true,
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeProductionRecommendation": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "calibrationFactorSearchAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalF3PricesUsed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
