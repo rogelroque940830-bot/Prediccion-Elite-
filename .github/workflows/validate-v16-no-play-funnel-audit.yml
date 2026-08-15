@@ -7,28 +7,48 @@ on:
       - 'research/v16-no-play-funnel-audit.md'
       - 'server/mlb-v16-no-play-funnel-audit.ts'
       - 'server/mlb-v16-no-play-funnel-audit.test.ts'
+      - 'server/mlb-unified-v16-ui-routes.ts'
       - '.github/workflows/validate-v16-no-play-funnel-audit.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24.18.0
           cache: npm
       - run: npm ci
-      - name: Freeze diagnostic policy
+      - name: Freeze diagnostic-only policy
         run: |
           node - <<'NODE'
           const c = require('./research/v16-no-play-funnel-audit-contract.json');
-          if (c.scientificStatus !== 'DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION') process.exit(1);
-          for (const key of ['changeModel','changeFeatures','changeThresholds','changeMarketDirection','changeRanking','changeStake','changeBetElite','changeFinalRecommendation','automaticBetPlacement']) {
+          if (c.schemaVersion !== 'courtedge-p0-v16-no-play-funnel-audit-contract.v2') throw new Error('contract version drift');
+          if (c.scientificStatus !== 'DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION') throw new Error('scientific status drift');
+          for (const key of [
+            'changeModel','changeFeatures','changeThresholds','changeIntrinsicThesisRules',
+            'changeMarketDirection','changeOddsAcquisition','changeMarketEdgeEconomics',
+            'changeOperatingEnvelope','changeRanking','changeStake','changeBetElite',
+            'changeFinalRecommendation','automaticBetPlacement'
+          ]) {
             if (c.policy[key] !== false) throw new Error(`policy mutation forbidden: ${key}`);
           }
-          if (c.policy.realFinancialExposure !== 0 || c.policy.diagnosticsOnly !== true) process.exit(1);
+          if (c.control.predictionMustRemainPriceIndependent !== true) throw new Error('price independence must remain frozen');
+          if (c.policy.realFinancialExposure !== 0 || c.policy.diagnosticsOnly !== true) throw new Error('diagnostic safety boundary drift');
           NODE
-      - run: npx vitest run server/mlb-v16-no-play-funnel-audit.test.ts
-      - run: npm run check
+      - name: Prove stage attribution
+        run: npx tsx --test server/mlb-v16-no-play-funnel-audit.test.ts
+      - name: Preserve V16 UI orchestration
+        run: npx tsx --test server/mlb-unified-v16-ui-routes.test.ts server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Compile diagnostic and UI route
+        run: |
+          npx esbuild server/mlb-v16-no-play-funnel-audit.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-no-play-audit.cjs
+          npx esbuild server/mlb-unified-v16-ui-routes.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-ui-routes.cjs --external:better-sqlite3
+      - name: Backend build
+        run: npm run build:backend
