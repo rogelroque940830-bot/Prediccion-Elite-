@@ -1,0 +1,204 @@
+name: Validate P0 Step 12V44 Batter Total Bases Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v44-batter-total-bases-baseline-contract.json'
+      - 'scripts/p0-step12v44-batter-total-bases-baseline.py'
+      - '.github/workflows/validate-p0-step12v44-batter-total-bases-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V44 contract and unchanged registry boundary
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v44-batter-total-bases-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v44-batter-total-bases-baseline-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='7dd26cd28eb8ef8edbac6e5af53fd6b2833e32d6'
+          assert p['step12v3WorkflowRunId']==31659518059 and p['step12v3ArtifactId']==9166442982
+          assert p['step12v3ArtifactDigest']=='sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26'
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          assert p['v41ArtifactDigest']=='sha256:a9f493bb61259ca7a0400149fe2b79e5145c2294e8afa49f27aeed6541ca8e2a'
+          assert p['v41CertificationRequired']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert p['v41FiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          h=p['priorBatterHitsClosure']
+          assert h['v43Pr']==581 and h['v43MergeSha']=='7dd26cd28eb8ef8edbac6e5af53fd6b2833e32d6'
+          assert h['v43WorkflowRunId']==31906005503 and h['v43ArtifactId']==9252413048
+          assert h['v43ArtifactDigest']=='sha256:ae54b959eae3e0baff2ac442a9ade362c2103da8ec0b3e05f521d8543361cd8b'
+          assert h['v43ClassificationRequired']=='BATTER_HITS_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert h['batterHitsRetuneAllowedInV44'] is False
+          m=c['marketEvidence']
+          assert m['providerMarketKey']=='batter_total_bases' and m['repositoryRegistryFamily']=='BATTER_PROP' and m['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert m['repositoryModelIntegrationStatusExpected']=='NOT_IMPLEMENTED'
+          assert m['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True and m['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
+          assert m['hardRockFloridaPerEventAvailabilityEstablished'] is False
+          t=c['canonicalTargetCustody']
+          assert t['recordedBatterField']=='totalBases' and t['targetDirectlyRecordedNotReconstructed'] is True and t['requiresPositivePlateAppearances'] is True
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023' and d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['requiresCompleteT5PregameLineup'] is True and d['requiresBatterInFrozenT5StartingNine'] is True
+          assert d['requiresExactProbableEqualsRecordedOpposingStarter'] is True
+          assert d['sameDateHistoryAllowed'] is False and d['seasonHistoryReset'] is True and d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          e=c['featureEngineering']
+          assert e['batterRateShrinkagePriorPlateAppearances']==100
+          assert e['lineupSlotWorkloadShrinkagePriorStarts']==20
+          assert e['pitcherRateShrinkagePriorBattersFaced']==72 and e['pitcherWorkloadShrinkagePriorStarts']==5
+          assert e['recentBatterGamesWindow']==10 and e['extraBaseHitDefinition']=='DOUBLES_PLUS_TRIPLES_PLUS_HOME_RUNS'
+          f=c['features']
+          expected=['batter_tbpa_shrunk','batter_hpa_shrunk','batter_xbhpa_shrunk','batter_kpa_shrunk','batter_recent10_tb_per_game','batter_recent10_pa_per_game','lineup_slot','lineup_slot_pa_per_start_shrunk','opposing_starter_hbf_shrunk','opposing_starter_hrbf_shrunk','opposing_starter_kbf_shrunk','opposing_starter_bf_per_start_shrunk']
+          assert f['exactly']==expected and f['featureCount']==12 and len(set(f['exactly']))==12
+          assert f['featureSearchAllowed'] is False and f['derivedFeatureSearchAllowed'] is False
+          assert f['postResultFeatureAdditionAllowed'] is False and f['postResultFeatureRemovalAllowed'] is False
+          assert c['baselines']['batterOnlyMechanistic']=='BATTER_TBPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          model=c['model']
+          assert model['providerMarketKey']=='batter_total_bases' and model['canonicalResearchMarketType']=='BATTER_TOTAL_BASES'
+          assert model['poissonAlpha']==1.0 and model['maxIter']==1000 and model['fixedHalfTotalBasesLines']==[0.5,1.5,2.5,3.5]
+          assert model['lineSearchAllowed'] is False and model['modelSelectionAllowed'] is False and model['hyperparameterSearchAllowed'] is False
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['candidateRubric']['passingClassification']=='BATTER_TOTAL_BASES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert c['candidateRubric']['failureClassification']=='BATTER_TOTAL_BASES_BASELINE_REJECTED'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert '["batter_total_bases", "Batter total bases", "BATTER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          assert 'batter_total_bases: ["HARD_ROCK_MLB_GUIDE_20260807"]' in registry
+          canonical=registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
+          assert 'batter_total_bases:' not in canonical
+          print('STEP12V44_BATTER_TOTAL_BASES_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V44 scorer
+        run: python -m py_compile scripts/p0-step12v44-batter-total-bases-baseline.py
+
+      - name: Download immutable Step 12V3 pregame evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download certified V41 batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Verify immutable V41 total-bases custody before modeling
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('artifacts/p0-step12v41')
+          c=json.load(open(root/'batter-historical-custody-certification.json'))
+          assert c['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert c['totalGames']==11505 and c['totalBatterLines']==240512
+          assert c['fiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          assert c['pregameCrosslinkDiagnostics']['slotMatchRate']==1
+          assert c['pregameCrosslinkDiagnostics']['positivePlateAppearanceRate']>0.9995
+          assert 'batter_total_bases' in c['directTargetsAvailable']
+          for season in ['2022','2023','2024','2025','2026_YTD']:
+              h=json.load(open(root/season/'batter-history.json'))
+              assert h['fetchFailures']==[] and h['teamAggregateReconciliationFailures']==0
+              assert h['gamesWithBatterLines']==h['officialGamesReceived']
+              for game in h['games'][:3]:
+                  for side in ['awayBatters','homeBatters']:
+                      for batter in game[side]:
+                          assert isinstance(batter['totalBases'],int) and batter['totalBases']>=0
+          print('V41_DIRECT_BATTER_TOTAL_BASES_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V44 frozen batter-total-bases model
+        run: |
+          mkdir -p artifacts/p0-step12v44
+          python scripts/p0-step12v44-batter-total-bases-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v44-batter-total-bases-baseline-contract.json \
+            --out artifacts/p0-step12v44/batter-total-bases-baseline-report.json
+
+      - name: Validate V44 result and research-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v44/batter-total-bases-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v44-batter-total-bases-baseline.v1'
+          assert r['classification'] in {'BATTER_TOTAL_BASES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY','BATTER_TOTAL_BASES_BASELINE_REJECTED'}
+          assert r['parent']['v41Classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert r['parent']['v41FiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          assert r['parent']['priorBatterHitsClosure']['v43ClassificationRequired']=='BATTER_HITS_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert r['data']['featureCount']==12 and r['data']['sameDateHistoryAllowed'] is False and r['data']['seasonHistoryReset'] is True
+          assert set(r['data']['custodyBySeason'])=={'2022','2023','2024','2025','2026_YTD'}
+          assert r['data']['scoredRows']>200000
+          assert r['model']['providerMarketKey']=='batter_total_bases' and r['model']['canonicalResearchMarketType']=='BATTER_TOTAL_BASES'
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']>42000
+          assert r['model']['fixedHalfTotalBasesLines']==[0.5,1.5,2.5,3.5]
+          assert r['model']['featureSearchUsed'] is False and r['model']['modelSearchUsed'] is False
+          assert r['model']['hyperparameterSearchUsed'] is False and r['model']['lineSearchUsed'] is False
+          assert r['validation2023']['rows']>42000 and r['evaluation2024_2026Ytd']['rows']>110000
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          v=r['volumeDiagnostics']
+          assert v['eligibleStartingBatterOutcomes']==r['data']['scoredRows']
+          assert v['eligibilityShare']>0.995 and v['meanEligibleBatterOutcomesPerSlateDay']>200
+          mb=r['marketBoundary']
+          assert mb['providerMarketKey']=='batter_total_bases' and mb['repositoryRegistryFamily']=='BATTER_PROP'
+          assert mb['hardRockFloridaPerEventAvailabilityEstablished'] is False and mb['productionRegistryChanged'] is False
+          assert mb['historicalBatterTotalBasesPricesUsed'] is False and mb['positiveEvEstablished'] is False
+          assert mb['priceCaptureAuthorized'] is False and mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','batterHitsRetuned','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'volumeDiagnostics':r['volumeDiagnostics'],
+            'coefficientsDescriptiveOnly':r['model']['coefficientsDescriptiveNotSelectionInput'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_total_bases", "Batter total bases", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_total_bases: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V44 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v44-batter-total-bases-baseline
+          path: artifacts/p0-step12v44/
+          if-no-files-found: error
+          retention-days: 30
