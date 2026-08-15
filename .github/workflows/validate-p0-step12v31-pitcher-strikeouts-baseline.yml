@@ -1,0 +1,206 @@
+name: Validate P0 Step 12V31 Pitcher Strikeouts Baseline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v31-pitcher-strikeouts-baseline-contract.json'
+      - 'scripts/p0-step12v31-pitcher-strikeouts-baseline.py'
+      - '.github/workflows/validate-p0-step12v31-pitcher-strikeouts-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V31 player prop contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v31-pitcher-strikeouts-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v31-pitcher-strikeouts-baseline-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='4fbedcb45b717ae80dd7d0f77e9af5d62650e87b'
+          assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
+          assert c['marketEvidence']['provider']=='THE_ODDS_API'
+          assert c['marketEvidence']['providerMarketKey']=='pitcher_strikeouts'
+          assert c['marketEvidence']['hardRockFloridaPerEventAvailabilityEstablished'] is False
+          assert c['marketEvidence']['productionRegistryChangeAllowedInThisResearch'] is False
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023'
+          assert d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['requiresExactProbableEqualsRecordedStarter'] is True
+          assert d['sameDateHistoryAllowed'] is False
+          assert d['seasonHistoryReset'] is True
+          assert d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          assert d['historicalPitcherStrikeoutPricesUsed'] is False
+          e=c['featureEngineering']
+          assert e['rateShrinkagePriorBattersFaced']==72
+          assert e['workloadShrinkagePriorStarts']==5
+          assert e['opponentRateShrinkagePriorBattersFaced']==72
+          assert e['opponentWorkloadShrinkagePriorGames']==5
+          assert e['recentStartsWindow']==5
+          assert e['openingDateWithoutLeaguePriorLeavesRateAndWorkloadFeaturesMissing'] is True
+          f=c['features']
+          assert f['featureCount']==12 and len(f['exactly'])==12 and len(set(f['exactly']))==12
+          assert f['featureSearchAllowed'] is False
+          assert f['postResultFeatureAdditionAllowed'] is False
+          assert f['postResultFeatureRemovalAllowed'] is False
+          expected={
+            'pitcher_kbf_shrunk','pitcher_bbbf_shrunk','pitcher_erbf_shrunk','pitcher_hrbf_shrunk',
+            'pitcher_bf_per_start_shrunk','pitcher_recent5_k_per_start','pitcher_recent5_bf_per_start',
+            'opponent_vs_starters_kbf_allowed_shrunk','opponent_vs_starters_bf_per_game_shrunk',
+            'opponent_rs10','opponent_lineup_continuity','pitcher_prior_bf'
+          }
+          assert set(f['exactly'])==expected
+          b=c['baselines']
+          assert b['pitcherOnlyMechanistic']=='PITCHER_KBF_SHRUNK_TIMES_PITCHER_BF_PER_START_SHRUNK'
+          assert b['pitcherOnlyMissingPredictionFallback']=='2022_ELIGIBLE_STARTER_MEAN_STRIKEOUTS'
+          m=c['model']
+          assert m['providerMarketKey']=='pitcher_strikeouts'
+          assert m['poissonAlpha']==1.0 and m['maxIter']==1000
+          assert m['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5,7.5]
+          assert m['lineSearchAllowed'] is False and m['modelSelectionAllowed'] is False
+          assert m['hyperparameterSearchAllowed'] is False
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['productionMarketRegistryChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert 'pitcher_strikeouts' not in registry
+          print('STEP12V31_PITCHER_STRIKEOUTS_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V31 scorer
+        run: python -m py_compile scripts/p0-step12v31-pitcher-strikeouts-baseline.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Run V31 exact probable-starter pitcher strikeouts model
+        run: |
+          mkdir -p artifacts/p0-step12v31
+          python scripts/p0-step12v31-pitcher-strikeouts-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v31-pitcher-strikeouts-baseline-contract.json \
+            --out artifacts/p0-step12v31/pitcher-strikeouts-baseline-report.json
+
+      - name: Validate player prop custody, model, and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v31/pitcher-strikeouts-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v31-pitcher-strikeouts-baseline.v1'
+          assert r['data']['featureCount']==12
+          assert r['data']['sameDateHistoryAllowed'] is False
+          assert r['data']['seasonHistoryReset'] is True
+          assert set(r['data']['custodyBySeason'])=={'2022','2023','2024','2025','2026_YTD'}
+          total_slots=0
+          total_eligible=0
+          for season,c in r['data']['custodyBySeason'].items():
+              assert c['canonicalT5Games']>1700
+              assert c['canonicalStarterSlots']==2*c['canonicalT5Games']
+              assert c['auditValidProbableStarterSlots']>0.98*c['canonicalStarterSlots']
+              assert c['exactProbableRecordedStarterEligibleSlots']>0.98*c['canonicalStarterSlots']
+              assert c['eligibilityShareOfCanonicalStarterSlots']>0.98
+              assert c['completeAuditValidLineupPairs']>0.98*c['canonicalT5Games']
+              total_slots += c['canonicalStarterSlots']
+              total_eligible += c['exactProbableRecordedStarterEligibleSlots']
+          assert r['data']['scoredRows']==total_eligible
+          assert r['data']['scoredRows']>22000
+          assert r['model']['providerMarketKey']=='pitcher_strikeouts'
+          assert r['model']['canonicalResearchMarketType']=='PITCHER_STRIKEOUTS'
+          assert r['model']['trainingSeason']=='2022'
+          assert r['model']['trainingRows']>4600
+          assert r['model']['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5,7.5]
+          assert r['model']['featureSearchUsed'] is False
+          assert r['model']['modelSearchUsed'] is False
+          assert r['model']['hyperparameterSearchUsed'] is False
+          assert r['model']['lineSearchUsed'] is False
+          assert r['validation2023']['rows']>4600
+          assert r['evaluation2024_2026Ytd']['rows']>12800
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          v=r['volumeDiagnostics']
+          assert v['eligiblePitcherStarts']==r['data']['scoredRows']
+          assert v['canonicalStarterSlots']==total_slots
+          assert v['eligibilityShare']>0.98
+          mb=r['marketBoundary']
+          assert mb['provider']=='THE_ODDS_API'
+          assert mb['providerMarketKey']=='pitcher_strikeouts'
+          assert mb['hardRockFloridaPerEventAvailabilityEstablished'] is False
+          assert mb['productionRegistryChanged'] is False
+          assert mb['historicalPitcherStrikeoutPricesUsed'] is False
+          assert mb['positiveEvEstablished'] is False
+          assert mb['shadowPriceCaptureAuthorized'] is False
+          assert mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['thresholdSearchUsed'] is False
+          assert p['subsetMiningUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['productionMarketRegistryChanged'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'custodyBySeason':r['data']['custodyBySeason'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'volumeDiagnostics':r['volumeDiagnostics'],
+            'coefficientsDescriptiveOnly':r['model']['coefficientsDescriptiveNotSelectionInput'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged production registry
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+          ! grep -R "pitcher_strikeouts" -n server/mlb-market-universe-registry.ts
+
+      - name: Upload V31 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v31-pitcher-strikeouts-baseline
+          path: artifacts/p0-step12v31/
+          if-no-files-found: error
+          retention-days: 30
