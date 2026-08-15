@@ -1,7 +1,7 @@
 {
   "schemaVersion": "courtedge-p0-step12v52-batter-home-runs-binary-baseline-contract.v1",
   "scientificStatus": "RETROSPECTIVE_BATTER_HOME_RUN_BINARY_DISCOVERY_NOT_PRICE_VALIDATION",
-  "objective": "Test the documented batter-home-run binary market as a genuinely different batter-prop hypothesis after V51 Walks was rejected, using certified direct homeRuns custody and a probability model rather than another count-over-line model.",
+  "objective": "Test a predeclared any-home-run binary research target as a genuinely different batter-prop hypothesis after V51 Walks was rejected, using certified direct homeRuns custody and a probability model. The repository provider market is PLAYER_OVER_UNDER; this research binary target is not asserted to be an exact provider quote-contract mapping.",
   "parentEvidence": {
     "mainBaseSha": "70d14211a6448603812ddfc192edbeaeb09d9e49",
     "step12v3WorkflowRunId": 31659518059,
@@ -27,8 +27,9 @@
     "providerMarketKey": "batter_home_runs",
     "repositoryRegistryEntryAlreadyExists": true,
     "repositoryRegistryFamily": "BATTER_PROP",
-    "repositoryRegistryQuoteShape": "NO_LINE_BINARY",
+    "repositoryRegistryQuoteShape": "PLAYER_OVER_UNDER",
     "repositoryModelIntegrationStatusExpected": "NOT_IMPLEMENTED",
+    "researchBinaryTargetMatchesProviderQuoteShape": false,
     "hardRockExactFirstPartyProductEvidenceExistsInRegistry": true,
     "hardRockEvidenceSourceId": "HARD_ROCK_MLB_GUIDE_20260807",
     "hardRockFloridaPerEventAvailabilityEstablished": false,
@@ -40,6 +41,7 @@
     "recordedBatterField": "homeRuns",
     "targetEvent": "HOME_RUNS_GREATER_THAN_ZERO",
     "targetUsesDirectOfficialCountThenDeterministicBinaryIndicator": true,
+    "providerMarketIsOverUnderWhileResearchTargetIsAnyHrBinary": true,
     "requiresPositivePlateAppearances": true,
     "samePlayerBothTeamsOfficialExceptionRemainsSideTeamSeparated": true
   },
