@@ -1,0 +1,178 @@
+name: Validate P0 Step 12V36 Pitcher Earned Runs No Retune Robustness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v36-pitcher-earned-runs-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v36-pitcher-earned-runs-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v36-pitcher-earned-runs-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V36 gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v36-pitcher-earned-runs-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v36-pitcher-earned-runs-no-retune-robustness-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='f9e5ce0ca941110a3fcc899b67367cb24b009078'
+          assert c['parentEvidence']['v35WorkflowRunId']==31901378335
+          assert c['parentEvidence']['v35ArtifactId']==9251198604
+          assert c['parentEvidence']['v35ArtifactDigest']=='sha256:501141fcb2eef15d7f4e2dc3fad102848dd9b22472d9d0c57b951f373111170b'
+          assert c['parentEvidence']['v35ClassificationRequired']=='PITCHER_EARNED_RUNS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v35-pitcher-earned-runs-baseline.py'
+          assert m['unchangedV35TrainingSeasonRequired']=='2022'
+          assert m['unchangedV35PoissonAlphaRequired']==1.0
+          assert m['unchangedV35FixedLinesRequired']==[0.5,1.5,2.5,3.5,4.5]
+          assert m['unchangedV35PitcherOnlyBaselineRequired']=='PITCHER_ERBF_SHRUNK_TIMES_PITCHER_BF_PER_START_SHRUNK'
+          for key in ['refitWithAdditionalSeasonsAllowed','recalibrationAllowed','coefficientChangeAllowed','featureChangeAllowed','imputationChangeAllowed','scalingChangeAllowed','dispersionChangeAllowed','lineSetChangeAllowed','baselineFormulaChangeAllowed','thresholdSearchAllowed']:
+              assert m[key] is False
+          assert c['replayParity']['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          assert s['requireModelDevianceBeatConstantEachPartition'] is True
+          assert s['requireModelDevianceBeatPitcherOnlyEachPartition'] is True
+          assert s['requireModelAverageBrierBeatConstantEachPartition'] is True
+          assert s['requireModelAverageBrierBeatPitcherOnlyEachPartition'] is True
+          assert s['requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition'] is True
+          assert s['requireModelAbsoluteMeanBiasNoWorseThanPitcherOnlyEachPartition'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['evaluationSeasons']==['2024','2025','2026_YTD']
+          assert b['clusterUnit']=='OFFICIAL_DATE'
+          assert b['replicates']==10000 and b['randomSeed']==3601 and b['confidenceLevel']==0.95
+          assert len(b['metrics'])==4
+          assert b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics'] is True
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['failureClosesCurrentPitcherEarnedRunsModel'] is True
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V36_PITCHER_EARNED_RUNS_GATE_LOCKED')
+          PY
+
+      - name: Syntax check V36 scorer
+        run: python -m py_compile scripts/p0-step12v36-pitcher-earned-runs-no-retune-robustness.py
+
+      - name: Download immutable V35 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v35-pitcher-earned-runs-baseline
+          path: artifacts/p0-step12v35
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31901378335
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify V35 parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v35/pitcher-earned-runs-baseline-report.json'))
+          assert r['classification']=='PITCHER_EARNED_RUNS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True
+          assert all(r['candidateRubricChecks'].values())
+          assert r['data']['scoredRows']==22753
+          assert r['model']['trainingRows']==4777
+          assert r['volumeDiagnostics']['eligibilityShare']>0.997
+          assert r['marketBoundary']['historicalPitcherEarnedRunPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          print('V35_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V36 exact V35 replay and robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v36
+          python scripts/p0-step12v36-pitcher-earned-runs-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v36-pitcher-earned-runs-no-retune-robustness-contract.json \
+            --v35-contract research/p0-step12v35-pitcher-earned-runs-baseline-contract.json \
+            --v35-script scripts/p0-step12v35-pitcher-earned-runs-baseline.py \
+            --v35-report artifacts/p0-step12v35/pitcher-earned-runs-baseline-report.json \
+            --out artifacts/p0-step12v36/pitcher-earned-runs-no-retune-robustness-report.json
+
+      - name: Validate immutable replay and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v36/pitcher-earned-runs-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v36-pitcher-earned-runs-no-retune-robustness.v1'
+          assert r['parent']['v35Classification']=='PITCHER_EARNED_RUNS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['parent']['v35CandidateRubricPassed'] is True
+          mb=r['modelBoundary']
+          assert mb['unchangedV35ImplementationReplayed'] is True
+          assert mb['replayParityPassed'] is True and mb['replayParityTolerance']==1e-12
+          for key in ['refitWithAdditionalSeasonsUsed','recalibrationUsed','coefficientChangeUsed','featureChangeUsed','imputationChangeUsed','scalingChangeUsed','dispersionChangeUsed','lineSetChangeUsed','baselineFormulaChangeUsed','thresholdSearchUsed']:
+              assert mb[key] is False
+          assert r['data']['scoredRows']==22753 and r['data']['featureCount']==12
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert set(r['seasonStabilityChecks'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000 and b['randomSeed']==3601 and b['confidenceLevel']==0.95
+          assert b['uniqueDates']>490
+          assert set(b['metrics'])=={'devianceVsConstant','devianceVsPitcherOnly','averageBrierVsConstant','averageBrierVsPitcherOnly'}
+          market=r['marketBoundary']
+          assert market['providerMarketKey']=='pitcher_earned_runs'
+          assert market['historicalPitcherEarnedRunPricesUsed'] is False
+          assert market['positiveEvEstablished'] is False
+          assert market['hardRockFloridaPerEventAvailabilityEstablished'] is False
+          assert market['productionPromotionAuthorized'] is False
+          assert market['prospectivePriceCaptureEngineeringAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          for key in ['featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'robustnessGatePassed':r['robustnessGatePassed'],
+            'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],
+            'seasonStabilityChecks':r['seasonStabilityChecks'],
+            'seasonMetrics':r['seasonMetrics'],
+            'bootstrapGatePassed':r['bootstrapGatePassed'],
+            'dateClusterBootstrap':r['dateClusterBootstrap'],
+            'bootstrapChecks':r['bootstrapChecks'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-full13-live-feature-builder.test.ts server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+          grep -F '["pitcher_earned_runs", "Pitcher earned runs", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'pitcher_earned_runs: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V36 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v36-pitcher-earned-runs-no-retune-robustness
+          path: artifacts/p0-step12v36/
+          if-no-files-found: error
+          retention-days: 30
