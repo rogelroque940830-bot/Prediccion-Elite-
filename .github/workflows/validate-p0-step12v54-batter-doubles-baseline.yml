@@ -1,0 +1,147 @@
+name: Validate P0 Step 12V54 Batter Doubles Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v54-batter-doubles-baseline-contract.json'
+      - 'scripts/p0-step12v54-batter-doubles-baseline.py'
+      - '.github/workflows/validate-p0-step12v54-batter-doubles-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Validate frozen V54 contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v54-batter-doubles-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v54-batter-doubles-baseline-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='7a283690af3dd984267875501d252ca1cce1168a'
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          q=p['priorBatterHomeRunClosure']
+          assert q['v53Pr']==591 and q['v53MergeSha']=='7a283690af3dd984267875501d252ca1cce1168a'
+          assert q['v53WorkflowRunId']==31910288367 and q['v53ArtifactId']==9253487997
+          assert q['v53ArtifactDigest']=='sha256:0f6b0374717efe656318b6f509a4f84c20adbce847191526a0ddd4148b0f7803'
+          assert q['v53ClassificationRequired']=='BATTER_HOME_RUN_BINARY_NOT_ROBUST_CLOSE_CURRENT_MODEL'
+          assert q['priorClosedModelsRetuneAllowedInV54'] is False
+          m=c['marketEvidence']
+          assert m['providerMarketKey']=='batter_doubles' and m['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert m['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True
+          assert c['canonicalTargetCustody']['recordedBatterField']=='doubles'
+          assert c['canonicalTargetCustody']['targetDirectlyRecordedNotReconstructed'] is True
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023' and d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['sameDateHistoryAllowed'] is False and d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True and d['futureGameDataAllowed'] is False
+          expected=['batter_2bpa_shrunk','batter_hpa_shrunk','batter_hrpa_shrunk','batter_recent10_doubles_per_game','batter_recent10_pa_per_game','lineup_slot','lineup_slot_pa_per_start_shrunk','opposing_starter_hbf_shrunk','opposing_starter_hrbf_shrunk','opposing_starter_bf_per_start_shrunk']
+          assert c['features']['exactly']==expected and c['features']['featureCount']==10 and len(set(expected))==10
+          assert c['baselines']['batterOnlyMechanistic']=='BATTER_2BPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          model=c['model']
+          assert model['poissonAlpha']==1.0 and model['fixedHalfDoubleLines']==[0.5,1.5,2.5]
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['candidateRubric']['passingClassification']=='BATTER_DOUBLES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert c['candidateRubric']['failureClassification']=='BATTER_DOUBLES_BASELINE_REJECTED'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert '["batter_doubles", "Batter doubles", "BATTER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          exact=registry.split('const HARD_ROCK_EXACT_EVIDENCE',1)[1].split('});',1)[0]
+          assert 'batter_doubles: ["HARD_ROCK_MLB_GUIDE_20260807"]' in exact
+          print('STEP12V54_BATTER_DOUBLES_CONTRACT_LOCKED')
+          PY
+      - name: Syntax check V54 scorer
+        run: python -m py_compile scripts/p0-step12v54-batter-doubles-baseline.py
+      - name: Download immutable Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download certified V41 batter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+      - name: Verify V41 doubles custody
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('artifacts/p0-step12v41')
+          c=json.load(open(root/'batter-historical-custody-certification.json'))
+          assert c['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert c['totalGames']==11505 and c['totalBatterLines']==240512
+          for season in ['2022','2023','2024','2025','2026_YTD']:
+              h=json.load(open(root/season/'batter-history.json'))
+              assert h['fetchFailures']==[] and h['teamAggregateReconciliationFailures']==0
+              for game in h['games']:
+                  for side in ['awayBatters','homeBatters']:
+                      for batter in game[side]:
+                          assert isinstance(batter['doubles'],int) and batter['doubles']>=0
+          print('V41_DIRECT_BATTER_DOUBLES_CUSTODY_VERIFIED')
+          PY
+      - name: Run V54 frozen batter-doubles model
+        run: |
+          mkdir -p artifacts/p0-step12v54
+          python scripts/p0-step12v54-batter-doubles-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v54-batter-doubles-baseline-contract.json \
+            --out artifacts/p0-step12v54/batter-doubles-baseline-report.json
+      - name: Validate V54 result and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v54/batter-doubles-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v54-batter-doubles-baseline.v1'
+          assert r['classification'] in {'BATTER_DOUBLES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY','BATTER_DOUBLES_BASELINE_REJECTED'}
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==10
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916
+          assert r['model']['fixedHalfDoubleLines']==[0.5,1.5,2.5]
+          assert r['validation2023']['rows']==43060 and r['evaluation2024_2026Ytd']['rows']==118504
+          assert len(r['candidateRubricChecks'])==8
+          assert r['volumeDiagnostics']['eligibleStartingBatterOutcomes']==204480 and r['volumeDiagnostics']['eligibilityShare']>0.9996
+          mb=r['marketBoundary']
+          assert mb['providerMarketKey']=='batter_doubles' and mb['repositoryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert mb['historicalBatterDoublesPricesUsed'] is False and mb['positiveEvEstablished'] is False and mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','priorClosedModelsRetuned','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'candidateRubricPassed':r['candidateRubricPassed'],'validation2023':r['validation2023'],'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],'bySeason':r['bySeasonDescriptiveOnly'],'candidateRubricChecks':r['candidateRubricChecks'],'volumeDiagnostics':r['volumeDiagnostics']},indent=2))
+          PY
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_doubles", "Batter doubles", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_doubles: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+      - name: Upload V54 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v54-batter-doubles-baseline
+          path: artifacts/p0-step12v54/
+          if-no-files-found: error
+          retention-days: 30
