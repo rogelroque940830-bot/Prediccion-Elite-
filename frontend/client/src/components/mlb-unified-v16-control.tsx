@@ -48,6 +48,54 @@ interface V16EliteCandidate {
   supportingComponents: string[];
 }
 
+interface V16NoPlayGameAudit {
+  gamePk: number;
+  sportsPrediction: {
+    scoredByV16: boolean;
+    fullGameHomeWinProbability: number | null;
+    fullGameAwayWinProbability: number | null;
+    first5HomeWinProbability: number | null;
+    first5AwayWinProbability: number | null;
+    first5TieProbability: number | null;
+  };
+  prePriceRouting: {
+    shortlistEvaluated: boolean;
+    shortlistQualified: boolean;
+    shortlistSelected: boolean;
+    certifiedComponentCount: number | null;
+    independentSignalCount: number | null;
+    intrinsicEvaluated: boolean;
+    intrinsicResearchClassification: string | null;
+    selectedForMarketDiscovery: boolean;
+    intrinsicRank: number | null;
+    plannedMarkets: string[];
+    paidLookupEligibleNow: boolean;
+    paidLookupHoldReason: string | null;
+  };
+  bettingEconomics: {
+    pricedMarkets: number;
+    positiveEvMarkets: number;
+    noPositiveEvMarkets: number;
+    blockedOrUnavailableMarkets: number;
+    eliteEvidenceCandidates: number;
+    marketClassifications: string[];
+    operatingEnvelopeClassifications: string[];
+  };
+  earliestBlocker: string;
+}
+
+interface V16NoPlayAudit {
+  schemaVersion: string;
+  primaryBlocker: string;
+  counts: Record<string, number>;
+  blockerCounts: Record<string, number>;
+  gameAudits: V16NoPlayGameAudit[];
+  policy: {
+    diagnosticsOnly: true;
+    predictionRemainsPriceIndependent: true;
+  };
+}
+
 type V16UiStatus =
   | "WAITING_FOR_FINAL_INPUTS"
   | "CERTIFIED_INPUT_ASSEMBLY_BLOCKED"
@@ -74,6 +122,7 @@ interface V16UiResponse {
     schemaVersion: string;
     summary: V16RunnerSummary;
     prepriceSummary: Record<string, number>;
+    noPlayAudit?: V16NoPlayAudit;
     eliteCandidates: V16EliteCandidate[];
   };
   policy: {
@@ -107,6 +156,27 @@ function blockerLabel(blocker: unknown): string {
   } catch {
     return "Bloqueo certificado no identificado";
   }
+}
+
+function noPlayReasonLabel(code: string): string {
+  const labels: Record<string, string> = {
+    NONE: "No existe bloqueo: hay evidencia Elite capturada.",
+    NO_FINAL_INPUTS: "Todavía no había juegos con inputs pregame FINAL.",
+    NO_V16_SCORED_FINAL_GAME: "Había juego FINAL, pero V16 no pudo producir su probabilidad deportiva.",
+    NO_V16_SCORE: "V16 no produjo probabilidad para este juego FINAL.",
+    NO_SHORTLIST_SIGNAL_QUALIFICATION: "V16 sí calculó el juego, pero la ruta previa de señales certificadas no lo calificó para el shortlist.",
+    EXCLUDED_BY_INTRINSIC_DISCOVERY_CAP: "V16 sí calculó el juego, pero quedó fuera de la población limitada que llega a market discovery.",
+    NO_STRONG_INTRINSIC_THESIS_ON_V16_SCORED_GAMES: "V16 sí calculó el juego, pero la capa intrínseca previa no generó una tesis suficientemente fuerte para consultar precio.",
+    NO_STRONG_INTRINSIC_MARKET_THESIS: "La capa intrínseca previa no autorizó ningún mercado para este juego.",
+    MIXED_PREPRICE_ROUTING_BLOCKERS: "Los juegos V16 fueron detenidos por más de un bloqueo antes de consultar cuotas.",
+    NO_PAID_LOOKUP_ELIGIBILITY: "La ruta deportiva no autorizó todavía la consulta de una cuota ejecutable.",
+    NO_FRESH_EXECUTABLE_PRICE: "La tesis deportiva llegó al mercado, pero no hubo una cuota ejecutable y fresca.",
+    MARKET_OR_MODEL_BLOCKED: "La evaluación mercado-modelo quedó bloqueada por contrato, disponibilidad o consistencia.",
+    NO_POSITIVE_EV: "La predicción llegó a precio, pero la cuota disponible no ofreció EV positivo.",
+    POSITIVE_EV_ENVELOPE_BLOCKED: "Hubo EV positivo, pero otra condición del operating envelope bloqueó el candidato.",
+    NO_ELITE_EVIDENCE_CANDIDATE: "La cadena llegó al final sin reunir todas las condiciones de candidato Elite.",
+  };
+  return labels[code] ?? code;
 }
 
 function pct(value: number | null | undefined, digits = 1): string {
@@ -151,6 +221,8 @@ export function MlbUnifiedV16Control() {
   const blocked = result?.status === "CERTIFIED_INPUT_ASSEMBLY_BLOCKED";
   const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
   const runSummary = result?.result?.summary;
+  const noPlayAudit = result?.result?.noPlayAudit;
+  const auditedGames = noPlayAudit?.gameAudits ?? [];
   const eliteCandidates = result?.result?.eliteCandidates ?? [];
 
   const statusLabel = !result
@@ -173,7 +245,7 @@ export function MlbUnifiedV16Control() {
               MLB Unified V16
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Ejecución explícita: primero verifica la jornada y, si existen juegos FINAL, continúa al ensamblaje certificado y al runner V16.
+              Ejecución explícita: primero estima el partido con evidencia deportiva pregame y solo después cruza a precio cuando la ruta certificada lo autoriza.
             </p>
           </div>
           <Badge variant={statusVariant}>{statusLabel}</Badge>
@@ -242,12 +314,59 @@ export function MlbUnifiedV16Control() {
                   <div><div className="text-[11px] text-muted-foreground">Evidencia capturada</div><div className="font-semibold">{runSummary.eliteEvidenceRowsCaptured}</div></div>
                 </div>
 
+                {auditedGames.length > 0 && (
+                  <div className="space-y-2" data-testid="mlb-v16-sports-predictions">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide">Predicción deportiva V16</div>
+                      <Badge variant="secondary">INDEPENDIENTE DE CUOTA</Badge>
+                    </div>
+                    {auditedGames.map((audit) => {
+                      const game = result.games.find((row) => row.gamePk === audit.gamePk);
+                      const homeP = audit.sportsPrediction.fullGameHomeWinProbability;
+                      const awayP = audit.sportsPrediction.fullGameAwayWinProbability;
+                      const predictedTeam = homeP != null && awayP != null && game
+                        ? homeP >= awayP ? game.homeTeam : game.awayTeam
+                        : "N/D";
+                      return (
+                        <div key={audit.gamePk} className="rounded-lg border border-border bg-background/70 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold">{game ? `${game.awayTeam} @ ${game.homeTeam}` : `Game ${audit.gamePk}`}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Lado con mayor probabilidad Full Game: <span className="font-semibold text-foreground">{predictedTeam}</span>
+                              </div>
+                            </div>
+                            <Badge variant="outline">V16 SPORTING MODEL</Badge>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                            <div><div className="text-[11px] text-muted-foreground">Home FG</div><div className="font-semibold">{pct(homeP)}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">Away FG</div><div className="font-semibold">{pct(awayP)}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">Home F5</div><div className="font-semibold">{pct(audit.sportsPrediction.first5HomeWinProbability)}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">Away F5</div><div className="font-semibold">{pct(audit.sportsPrediction.first5AwayWinProbability)}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">Tie F5</div><div className="font-semibold">{pct(audit.sportsPrediction.first5TieProbability)}</div></div>
+                          </div>
+                          <div className="mt-3 rounded border border-border/60 bg-muted/20 p-2 text-xs">
+                            <span className="font-semibold">Ruta pre-precio:</span>{" "}
+                            {noPlayReasonLabel(audit.earliestBlocker)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {runSummary.eliteEvidenceCandidates === 0 ? (
                   <div className="rounded-lg border-2 border-border bg-background/70 p-4 text-center" data-testid="mlb-v16-no-play">
                     <div className="text-lg font-extrabold tracking-wide">NO JUGADA</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      V16 analizó los juegos FINAL y no encontró un mercado con evidencia suficiente para elevarlo a candidato Elite.
+                      V16 no produjo un candidato Elite. Esto no significa automáticamente que el modelo no viera un ganador; el diagnóstico separa predicción deportiva, ruta pre-precio y economía de la cuota.
                     </div>
+                    {noPlayAudit && (
+                      <div className="mt-3 rounded-md border border-border/60 bg-muted/20 p-3 text-left text-xs" data-testid="mlb-v16-no-play-reason">
+                        <div className="font-semibold">Motivo principal del no-play</div>
+                        <div className="mt-1 text-muted-foreground">{noPlayReasonLabel(noPlayAudit.primaryBlocker)}</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2" data-testid="mlb-v16-elite-candidates">
