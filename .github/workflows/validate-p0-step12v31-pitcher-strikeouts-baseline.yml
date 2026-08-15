@@ -36,6 +36,12 @@ jobs:
           assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
           assert c['marketEvidence']['provider']=='THE_ODDS_API'
           assert c['marketEvidence']['providerMarketKey']=='pitcher_strikeouts'
+          assert c['marketEvidence']['repositoryRegistryEntryAlreadyExists'] is True
+          assert c['marketEvidence']['repositoryRegistryFamily']=='PITCHER_PROP'
+          assert c['marketEvidence']['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert c['marketEvidence']['repositoryModelIntegrationStatusExpected']=='NOT_IMPLEMENTED'
+          assert c['marketEvidence']['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True
+          assert c['marketEvidence']['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
           assert c['marketEvidence']['hardRockFloridaPerEventAvailabilityEstablished'] is False
           assert c['marketEvidence']['productionRegistryChangeAllowedInThisResearch'] is False
           d=c['dataBoundary']
@@ -79,7 +85,11 @@ jobs:
           assert c['policy']['productionMarketRegistryChangeAllowed'] is False
           assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
           registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
-          assert 'pitcher_strikeouts' not in registry
+          assert '["pitcher_strikeouts", "Pitcher strikeouts", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          assert 'pitcher_strikeouts: ["HARD_ROCK_MLB_GUIDE_20260807"]' in registry
+          assert 'const CANONICAL_BY_PROVIDER_KEY' in registry
+          assert 'pitcher_strikeouts: [' not in registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
+          assert 'liveHardRockFloridaDiscoveryRequired: true' in registry
           print('STEP12V31_PITCHER_STRIKEOUTS_CONTRACT_LOCKED')
           PY
 
@@ -195,7 +205,8 @@ jobs:
             server/mlb-market-universe-registry.test.ts \
             server/mlb-market-odds-normalizer.test.ts
           npm run build:backend
-          ! grep -R "pitcher_strikeouts" -n server/mlb-market-universe-registry.ts
+          grep -F '["pitcher_strikeouts", "Pitcher strikeouts", "PITCHER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'pitcher_strikeouts: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
 
       - name: Upload V31 evidence
         uses: actions/upload-artifact@v4
