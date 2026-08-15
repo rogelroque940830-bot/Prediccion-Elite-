@@ -1,0 +1,215 @@
+name: Validate P0 Step 12V41 Batter Historical Custody
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v41-batter-historical-custody-contract.json'
+      - 'server/mlb-market-batter-history.ts'
+      - 'server/mlb-market-batter-history.test.ts'
+      - 'scripts/p0-step12v41-build-batter-history.mjs'
+      - '.github/workflows/validate-p0-step12v41-batter-historical-custody.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate frozen V41 custody contract
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('research/p0-step12v41-batter-historical-custody-contract.json','utf8'));
+          if(c.schemaVersion!=='courtedge-p0-step12v41-batter-historical-custody-contract.v1') throw new Error('V41_SCHEMA');
+          if(c.parentEvidence.mainBaseSha!=='a40bec986639cdc6ff6c14ffb31ecbbd92dd0fc9') throw new Error('V41_BASE');
+          if(c.parentEvidence.step12v3WorkflowRunId!==31659518059 || c.parentEvidence.step12v3ArtifactId!==9166442982) throw new Error('V41_PARENT');
+          if(c.parentEvidence.step12v3ArtifactDigest!=='sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26') throw new Error('V41_PARENT_DIGEST');
+          if(c.sourceBoundary.source!=='MLB_STATS_API_BOXSCORE') throw new Error('V41_SOURCE');
+          if(c.sourceBoundary.endpointTemplate!=='https://statsapi.mlb.com/api/v1/game/{gamePk}/boxscore') throw new Error('V41_ENDPOINT');
+          if(c.sourceBoundary.refetchScheduleAllowed!==false || c.sourceBoundary.alternateOutcomeProviderAllowed!==false) throw new Error('V41_SOURCE_BOUNDARY');
+          if(c.sourceBoundary.fetchFailuresAllowed!==0 || c.sourceBoundary.teamAggregateReconciliationFailuresAllowed!==0) throw new Error('V41_FAIL_CLOSED');
+          const expected={2022:2430,2023:2430,2024:2429,2025:2430,"2026_YTD":1786};
+          if(JSON.stringify(c.seasons.expectedOfficialFinalGamesFromImmutableParent)!==JSON.stringify(expected)) throw new Error('V41_COUNTS');
+          if(c.directBatterOutcomeFields.requiredNonNegativeIntegerFields.length!==13) throw new Error('V41_DIRECT_FIELD_COUNT');
+          if(c.teamReconciliation.requiredExactSumFields.length!==13 || c.teamReconciliation.failClosedOnMismatch!==true) throw new Error('V41_RECONCILIATION');
+          if(c.deterministicDerivedFields.singles!=='hits - doubles - triples - homeRuns') throw new Error('V41_SINGLES_DERIVATION');
+          if(c.pregameCrosslinkDiagnostics.minimumMatchRateForCustodyCertification!==null) throw new Error('V41_NO_POST_LINEUP_GATE');
+          const p=c.researchBoundary;
+          for(const key of ['modelTrainingAllowed','featureSearchAllowed','thresholdSearchAllowed','historicalPropPricesUsed','positiveEvClaimAllowed','marketRankingAllowed','productionMarketRegistryChangeAllowed','liveLookupAuthorizationChangeAllowed','stakeChangeAllowed','betEliteAllowed','automaticBetPlacementAllowed']) if(p[key]!==false) throw new Error(`V41_POLICY_${key}`);
+          if(p.realFinancialExposure!==0) throw new Error('V41_EXPOSURE');
+          console.log('STEP12V41_CUSTODY_CONTRACT_LOCKED');
+          NODE
+      - name: Syntax and unit tests
+        run: |
+          node --check scripts/p0-step12v41-build-batter-history.mjs
+          npx tsx --test server/mlb-market-batter-history.test.ts
+      - name: Preserve backend and market registry regressions
+        run: |
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+  build-season:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - label: '2022'
+            expected_games: 2430
+          - label: '2023'
+            expected_games: 2430
+          - label: '2024'
+            expected_games: 2429
+          - label: '2025'
+            expected_games: 2430
+          - label: '2026_YTD'
+            expected_games: 1786
+    name: batter-custody-${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install acquisition dependency tree
+        run: npm ci
+      - name: Download immutable Step 12V3 parent
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Build exact official batter history
+        shell: bash
+        run: |
+          set -euo pipefail
+          label='${{ matrix.label }}'
+          mkdir -p "artifacts/p0-step12v41/${label}"
+          node --import tsx scripts/p0-step12v41-build-batter-history.mjs \
+            --season-root "artifacts/p0-step12v3/${label}" \
+            --out "artifacts/p0-step12v41/${label}" \
+            --label "$label" \
+            --concurrency 3
+      - name: Validate full season custody
+        env:
+          LABEL: ${{ matrix.label }}
+          EXPECTED_GAMES: ${{ matrix.expected_games }}
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const label=process.env.LABEL;
+          const expected=Number(process.env.EXPECTED_GAMES);
+          const root=`artifacts/p0-step12v41/${label}`;
+          const h=JSON.parse(fs.readFileSync(`${root}/batter-history.json`,'utf8'));
+          const m=JSON.parse(fs.readFileSync(`${root}/batter-history-manifest.json`,'utf8'));
+          if(h.schemaVersion!=='courtedge-mlb-historical-batter-history.v1') throw new Error('V41_HISTORY_SCHEMA');
+          if(h.source!=='MLB_STATS_API_BOXSCORE') throw new Error('V41_HISTORY_SOURCE');
+          if(h.officialGamesReceived!==expected || h.gamesWithBatterLines!==expected || h.games.length!==expected) throw new Error('V41_HISTORY_GAME_COUNT');
+          if(h.fetchFailures.length!==0 || h.teamAggregateReconciliationFailures!==0) throw new Error('V41_HISTORY_FAILURE');
+          if(!/^[a-f0-9]{64}$/.test(h.batterHistoryDigest) || !/^[a-f0-9]{64}$/.test(h.boxscoreProvenanceDigest)) throw new Error('V41_HISTORY_DIGEST');
+          if(m.schemaVersion!=='courtedge-p0-step12v41-batter-historical-custody-manifest.v1') throw new Error('V41_MANIFEST_SCHEMA');
+          if(m.seasonLabel!==label || m.parent.officialFinalGames!==expected) throw new Error('V41_MANIFEST_PARENT');
+          if(m.custody.batterLines!==h.batterLines || m.custody.fetchFailures!==0 || m.custody.teamAggregateReconciliationFailures!==0) throw new Error('V41_MANIFEST_CUSTODY');
+          if(m.pregameCrosslinkDiagnostics.completePregameLineupSlots!==m.pregameCrosslinkDiagnostics.completePregameLineupGames*18) throw new Error('V41_LINEUP_SLOTS');
+          if(m.pregameCrosslinkDiagnostics.gateApplied!==false) throw new Error('V41_LINEUP_GATE_MUTATED');
+          const required=['atBats','runs','hits','doubles','triples','homeRuns','rbi','baseOnBalls','strikeOuts','plateAppearances','totalBases','stolenBases','caughtStealing'];
+          let lines=0;
+          for(const g of h.games){
+            if(!/^[a-f0-9]{64}$/.test(g.boxscoreSourceDigest)) throw new Error(`V41_GAME_DIGEST:${g.gamePk}`);
+            for(const side of ['awayBatters','homeBatters']) for(const b of g[side]){
+              lines++;
+              for(const k of required) if(!Number.isInteger(b[k]) || b[k]<0) throw new Error(`V41_DIRECT_STAT:${g.gamePk}:${b.batterId}:${k}`);
+              if(b.hits < b.doubles+b.triples+b.homeRuns) throw new Error('V41_HIT_COMPONENTS');
+              if(b.atBats < b.hits || b.plateAppearances < b.atBats) throw new Error('V41_AB_PA');
+              if(b.totalBases !== b.hits+b.doubles+2*b.triples+3*b.homeRuns) throw new Error('V41_TB');
+              if(b.singlesDerived !== b.hits-b.doubles-b.triples-b.homeRuns || b.singlesDerived<0) throw new Error('V41_SINGLE');
+              if(b.hitsRunsRbisDerived !== b.hits+b.runs+b.rbi) throw new Error('V41_HRR');
+            }
+          }
+          if(lines!==h.batterLines || lines<=expected*2) throw new Error('V41_LINE_COUNT');
+          const p=m.policy;
+          for(const key of ['modelTrainingUsed','featureSearchUsed','thresholdSearchUsed','historicalPropPricesUsed','positiveEvClaimAllowed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']) if(p[key]!==false) throw new Error(`V41_POLICY_${key}`);
+          if(p.realFinancialExposure!==0) throw new Error('V41_EXPOSURE');
+          console.log(JSON.stringify({label,games:h.games.length,batterLines:h.batterLines,uniqueBatters:m.custody.uniqueBatters,completePregameLineupGames:m.pregameCrosslinkDiagnostics.completePregameLineupGames,slotMatchRate:m.pregameCrosslinkDiagnostics.slotMatchRate,positivePlateAppearanceRate:m.pregameCrosslinkDiagnostics.positivePlateAppearanceRate,batterHistoryDigest:h.batterHistoryDigest,boxscoreProvenanceDigest:h.boxscoreProvenanceDigest},null,2));
+          NODE
+      - name: Pack season evidence
+        run: |
+          mkdir -p artifacts/p0-step12v41-packs
+          tar -czf "artifacts/p0-step12v41-packs/${{ matrix.label }}.tgz" -C artifacts/p0-step12v41 "${{ matrix.label }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v41-season-${{ matrix.label }}
+          path: artifacts/p0-step12v41-packs/${{ matrix.label }}.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+  certify:
+    needs: build-season
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all V41 season packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v41-season-*
+          path: artifacts/p0-step12v41-packs
+          merge-multiple: true
+      - name: Reassemble and certify five-season custody
+        run: |
+          mkdir -p artifacts/p0-step12v41
+          for pack in artifacts/p0-step12v41-packs/*.tgz; do tar -xzf "$pack" -C artifacts/p0-step12v41; done
+          node - <<'NODE'
+          const crypto=require('node:crypto');
+          const fs=require('node:fs');
+          const labels=['2022','2023','2024','2025','2026_YTD'];
+          const expected={2022:2430,2023:2430,2024:2429,2025:2430,"2026_YTD":1786};
+          const seasons={}; let totalGames=0,totalLines=0,totalCompleteSlots=0,totalMatchedSlots=0,totalPositiveSlots=0;
+          for(const label of labels){
+            const root=`artifacts/p0-step12v41/${label}`;
+            const h=JSON.parse(fs.readFileSync(`${root}/batter-history.json`,'utf8'));
+            const m=JSON.parse(fs.readFileSync(`${root}/batter-history-manifest.json`,'utf8'));
+            if(h.games.length!==expected[label] || h.fetchFailures.length!==0 || h.teamAggregateReconciliationFailures!==0) throw new Error(`V41_FINAL_${label}`);
+            totalGames+=h.games.length; totalLines+=h.batterLines;
+            totalCompleteSlots+=m.pregameCrosslinkDiagnostics.completePregameLineupSlots;
+            totalMatchedSlots+=m.pregameCrosslinkDiagnostics.slotsFoundInOfficialBatterLines;
+            totalPositiveSlots+=m.pregameCrosslinkDiagnostics.slotsWithPositivePlateAppearances;
+            seasons[label]={officialFinalGames:h.games.length,batterLines:h.batterLines,uniqueBatters:m.custody.uniqueBatters,batterHistoryDigest:h.batterHistoryDigest,boxscoreProvenanceDigest:h.boxscoreProvenanceDigest,pregameSlotMatchRate:m.pregameCrosslinkDiagnostics.slotMatchRate,positivePlateAppearanceRate:m.pregameCrosslinkDiagnostics.positivePlateAppearanceRate};
+          }
+          const canonical=labels.map(label=>`${label}:${seasons[label].batterHistoryDigest}:${seasons[label].boxscoreProvenanceDigest}`).join('\n');
+          const report={
+            schemaVersion:'courtedge-p0-step12v41-batter-historical-custody-certification.v1',
+            classification:'BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY',
+            parentStep12v3:{workflowRunId:31659518059,artifactId:9166442982,artifactDigest:'sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26'},
+            seasons,totalGames,totalBatterLines:totalLines,
+            pregameCrosslinkDiagnostics:{completePregameLineupSlots:totalCompleteSlots,slotsFoundInOfficialBatterLines:totalMatchedSlots,slotMatchRate:totalMatchedSlots/totalCompleteSlots,slotsWithPositivePlateAppearances:totalPositiveSlots,positivePlateAppearanceRate:totalPositiveSlots/totalCompleteSlots,gateApplied:false},
+            directTargetsAvailable:['batter_hits','batter_total_bases','batter_rbis','batter_runs_scored','batter_doubles','batter_triples','batter_walks','batter_strikeouts','batter_stolen_bases'],
+            deterministicDerivedTargetsAvailable:['batter_singles','batter_hits_runs_rbis'],
+            fiveSeasonCustodyDigest:crypto.createHash('sha256').update(canonical).digest('hex'),
+            policy:{modelTrained:false,historicalPropPricesUsed:false,positiveEvEstablished:false,productionMarketRegistryChanged:false,liveLookupAuthorizationChanged:false,rankingChanged:false,stakeChanged:false,betEliteAllowed:false,automaticBetPlacementAllowed:false,realFinancialExposure:0}
+          };
+          fs.writeFileSync('artifacts/p0-step12v41/batter-historical-custody-certification.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41/
+          if-no-files-found: error
+          retention-days: 30
