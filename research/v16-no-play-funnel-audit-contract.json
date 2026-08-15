@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "courtedge-p0-v16-no-play-funnel-audit-contract.v2",
+  "schemaVersion": "courtedge-p0-v16-no-play-funnel-audit-contract.v3",
   "scientificStatus": "DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION",
-  "objective": "Determine whether V16 produces no actionable candidate because final baseball inputs are unavailable, the upstream intrinsic-thesis gate suppresses price discovery, executable price is unavailable, price removes the edge, or a downstream operating-envelope blocker rejects a positive-EV market.",
+  "objective": "Determine whether a V16 no-play is caused by unavailable final inputs, pre-V16 shortlist/intrinsic discovery gates, lack of a strong intrinsic thesis, unavailable executable price, non-positive economics, or a downstream operating-envelope blocker.",
   "control": {
     "mainCommit": "353f9dd9248ef74791d47d6293fe206df6c8b350",
     "runtimeScorerVersion": "mlb-v16-runtime-scorer-v1",
@@ -15,10 +15,11 @@
     "finalAnalysisEligibleGames",
     "provisionalAnalysisEligibleGames",
     "v16ScoredGames",
-    "gamesWithIntrinsicThesis",
-    "finalGamesWithIntrinsicThesis",
-    "finalGamesWithoutStrongIntrinsicThesis",
-    "provisionalGamesWithIntrinsicThesis",
+    "v16ScoredWithoutShortlistQualification",
+    "v16ScoredExcludedByIntrinsicDiscoveryCap",
+    "v16ScoredSelectedForMarketDiscovery",
+    "v16ScoredWithoutStrongIntrinsicThesis",
+    "v16ScoredWithIntrinsicThesis",
     "paidLookupEligibleGames",
     "pricedThesisMarkets",
     "positiveEvMarkets",
@@ -31,7 +32,9 @@
   "requiredNoPlayAttribution": [
     "NO_FINAL_INPUTS",
     "NO_V16_SCORED_FINAL_GAME",
-    "NO_STRONG_INTRINSIC_THESIS_ON_FINAL_GAMES",
+    "NO_SHORTLIST_SIGNAL_QUALIFICATION",
+    "EXCLUDED_BY_INTRINSIC_DISCOVERY_CAP",
+    "NO_STRONG_INTRINSIC_THESIS_ON_V16_SCORED_GAMES",
     "NO_PAID_LOOKUP_ELIGIBILITY",
     "NO_FRESH_EXECUTABLE_PRICE",
     "MARKET_OR_MODEL_BLOCKED",
@@ -40,14 +43,17 @@
     "NO_ELITE_EVIDENCE_CANDIDATE"
   ],
   "requiredDiagnosticSeparation": {
-    "sportsPrediction": "Expose the V16 settlement probabilities for every scored FINAL game without using price to alter them.",
-    "bettingEconomics": "Separately expose discovery eligibility, price availability, EV classification and operating-envelope disposition.",
-    "upstreamGateAudit": "A FINAL game scored by V16 but lacking a discovery plan must be visible as an intrinsic-thesis suppression rather than being mislabeled as a market-price failure."
+    "sportsPrediction": "Expose V16 settlement probabilities for every scored FINAL game without using price or upstream market-discovery eligibility to alter those probabilities.",
+    "prePriceRouting": "For every V16-scored FINAL game, expose whether it qualified for the certified-signal shortlist, entered intrinsic evaluation, survived the intrinsic discovery cap, produced a strong market thesis and became eligible for price lookup.",
+    "bettingEconomics": "Only after the pre-price route is visible, separately expose executable price availability, EV classification and operating-envelope disposition.",
+    "architecturalQuestion": "A game can be scored by V16 but be prevented from reaching price discovery by gates that do not use the V16 win probability. The audit must make that condition explicit rather than treating every no-play as lack of V16 conviction or bad price."
   },
   "policy": {
     "changeModel": false,
     "changeFeatures": false,
     "changeThresholds": false,
+    "changeShortlistQualification": false,
+    "changeIntrinsicDiscoveryCap": false,
     "changeIntrinsicThesisRules": false,
     "changeMarketDirection": false,
     "changeOddsAcquisition": false,
@@ -61,5 +67,5 @@
     "realFinancialExposure": 0,
     "diagnosticsOnly": true
   },
-  "decisionRule": "Do not loosen any gate from a short no-play observation. First measure the full funnel and identify the earliest blocker for each FINAL scored game. Any later architecture change requires separate evidence and authorization."
+  "decisionRule": "Do not loosen any gate from a short no-play observation. First audit every V16-scored FINAL game from sporting probability through the entire pre-price routing chain and then through price/EV. Any architecture change requires a separate controlled comparison and authorization."
 }
