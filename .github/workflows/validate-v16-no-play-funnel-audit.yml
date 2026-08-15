@@ -8,6 +8,7 @@ on:
       - 'server/mlb-v16-no-play-funnel-audit.ts'
       - 'server/mlb-v16-no-play-funnel-audit.test.ts'
       - 'server/mlb-unified-v16-ui-routes.ts'
+      - 'server/mlb-unified-v16-ui-orchestration.test.ts'
       - '.github/workflows/validate-v16-no-play-funnel-audit.yml'
   workflow_dispatch:
 
@@ -29,13 +30,14 @@ jobs:
         run: |
           node - <<'NODE'
           const c = require('./research/v16-no-play-funnel-audit-contract.json');
-          if (c.schemaVersion !== 'courtedge-p0-v16-no-play-funnel-audit-contract.v2') throw new Error('contract version drift');
+          if (c.schemaVersion !== 'courtedge-p0-v16-no-play-funnel-audit-contract.v3') throw new Error('contract version drift');
           if (c.scientificStatus !== 'DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION') throw new Error('scientific status drift');
           for (const key of [
-            'changeModel','changeFeatures','changeThresholds','changeIntrinsicThesisRules',
-            'changeMarketDirection','changeOddsAcquisition','changeMarketEdgeEconomics',
-            'changeOperatingEnvelope','changeRanking','changeStake','changeBetElite',
-            'changeFinalRecommendation','automaticBetPlacement'
+            'changeModel','changeFeatures','changeThresholds','changeShortlistQualification',
+            'changeIntrinsicDiscoveryCap','changeIntrinsicThesisRules','changeMarketDirection',
+            'changeOddsAcquisition','changeMarketEdgeEconomics','changeOperatingEnvelope',
+            'changeRanking','changeStake','changeBetElite','changeFinalRecommendation',
+            'automaticBetPlacement'
           ]) {
             if (c.policy[key] !== false) throw new Error(`policy mutation forbidden: ${key}`);
           }
