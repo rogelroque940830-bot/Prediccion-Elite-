@@ -45,10 +45,10 @@ function teamBox(teamId: number, batterId: number, batterName: string, stats = b
       [`ID${batterId}`]: {
         person: { id: batterId, fullName: batterName },
         battingOrder: "100",
-        stats: { batting: stats },
+        stats: { batting: { ...stats } },
       },
     },
-    teamStats: { batting: stats },
+    teamStats: { batting: { ...stats } },
   };
 }
 
@@ -83,7 +83,6 @@ test("history digest is deterministic regardless of game input order", () => {
 test("fails closed when direct total bases violates arithmetic custody", () => {
   const bad = boxscore();
   bad.teams.home.players.ID101.stats.batting.totalBases = 4;
-  bad.teams.home.teamStats.batting.totalBases = 4;
   assert.throws(() => parseMlbHistoricalBatterBoxscore(game, bad), /BATTER_HISTORY_TOTAL_BASES_MISMATCH/);
 });
 
