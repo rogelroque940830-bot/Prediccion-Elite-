@@ -34,6 +34,117 @@ function slate(stage: "FINAL" | "PROVISIONAL"): MlbP1DailySlate {
   };
 }
 
+function settlementEvidence() {
+  return [{
+    gamePk: 123,
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    modelVersion: "fixture",
+    manifestSha256: "fixture",
+    priceIndependent: true,
+    fullGame: { homeWinProbability: 0.612, awayWinProbability: 0.388, pushProbability: 0 },
+    first5: { homeWinProbability: 0.55, awayWinProbability: 0.35, pushProbability: 0.10 },
+  }];
+}
+
+function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: boolean }) {
+  const hasThesis = input.plannedMarkets.length > 0;
+  return {
+    summary: {
+      slateGames: 1,
+      analysisEligibleGames: 1,
+      finalAnalysisEligibleGames: 1,
+      provisionalAnalysisEligibleGames: 0,
+      intrinsicResearchEliteCandidates: hasThesis ? 1 : 0,
+      gamesWithMarketDiscoveryPlan: hasThesis ? 1 : 0,
+      gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
+      frozenRouteRowsCaptured: 1,
+    },
+    discovery: {
+      games: [{
+        gamePk: 123,
+        inputStage: "FINAL",
+        intrinsicRank: 1,
+        plannedMarkets: input.plannedMarkets.map((canonicalMarketType) => ({ canonicalMarketType })),
+        paidLookupEligibleNow: input.paidLookupEligibleNow,
+        paidLookupHoldReason: input.paidLookupEligibleNow
+          ? null
+          : hasThesis
+            ? "OFFICIAL_FINAL_INPUTS_REQUIRED"
+            : "NO_STRONG_INTRINSIC_MARKET_THESIS",
+      }],
+      summary: {
+        gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
+        gamesHeldForFinalInputs: 0,
+        gamesWithNoStrongIntrinsicMarketThesis: hasThesis ? 0 : 1,
+      },
+    },
+  };
+}
+
+function eliteRunnerResult(input: any) {
+  const candidate = {
+    gamePk: 123,
+    marketType: "h2h",
+    selectedSide: "HOME",
+    selectedLine: null,
+    modelWinProbability: 0.612,
+    modelPushProbability: 0,
+    expectedValuePerUnit: 0.074,
+    executionEdgePp: 5.2,
+    executionNoVigEdgePp: 4.8,
+    referenceNoVigEdgePp: 4.4,
+    referenceAgreement: "AGREES",
+    executionBookTitle: "Test Book",
+    executionOddsAmerican: -105,
+    executionCapturedAt: "2026-08-13T17:00:30.000Z",
+    intrinsicProjectionScope: "FULL_GAME",
+    intrinsicThesisKinds: ["A_PLUS"],
+    supportingComponents: ["C4", "FULL13"],
+  };
+  return {
+    schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
+    runId: input.runId,
+    date: "2026-08-13",
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 1, positiveEvMarkets: 1, eliteEvidenceCandidates: 1, eliteEvidenceRowsCaptured: 1 },
+    preprice: basePreprice({ plannedMarkets: ["ML"], paidLookupEligibleNow: true }),
+    settlementEvidence: settlementEvidence(),
+    marketEdge: {
+      games: [{ gamePk: 123, markets: [{ classification: "POSITIVE_EV", execution: { bookKey: "fixture" } }] }],
+      summary: { positiveEvMarkets: 1, noPositiveEvMarkets: 0, blockedOrUnavailableMarkets: 0 },
+    },
+    operatingEnvelope: {
+      games: [{ gamePk: 123, markets: [{ classification: "ELITE_EVIDENCE_CANDIDATE" }] }],
+      summary: { positiveEvEnvelopeBlocked: 0, eliteEvidenceCandidates: 1 },
+    },
+    eliteEvidenceLedger: {
+      summary: { capturedCandidates: 1 },
+      entries: [{ predictionId: "pred-123-home-ml", candidate }],
+    },
+  } as any;
+}
+
+function noPlayRunnerResult(input: any) {
+  return {
+    schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
+    runId: input.runId,
+    date: "2026-08-13",
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 0, positiveEvMarkets: 0, eliteEvidenceCandidates: 0, eliteEvidenceRowsCaptured: 0 },
+    preprice: basePreprice({ plannedMarkets: [], paidLookupEligibleNow: false }),
+    settlementEvidence: settlementEvidence(),
+    marketEdge: {
+      games: [],
+      summary: { positiveEvMarkets: 0, noPositiveEvMarkets: 0, blockedOrUnavailableMarkets: 0 },
+    },
+    operatingEnvelope: {
+      games: [],
+      summary: { positiveEvEnvelopeBlocked: 0, eliteEvidenceCandidates: 0 },
+    },
+    eliteEvidenceLedger: { summary: { capturedCandidates: 0 }, entries: [] },
+  } as any;
+}
+
 test("provisional-only command does not assemble or invoke the priced runner", async () => {
   let assemblyCalls = 0;
   let runtimeCalls = 0;
@@ -73,7 +184,7 @@ test("missing certified evidence blocks before runtime custody and Step 8", asyn
   assert.equal(policy.theOddsApiCreditsConsumed, 0);
 });
 
-test("complete certified assembly returns public Elite evidence without leaking server custody fields", async () => {
+test("complete certified assembly returns Elite evidence and diagnostic without leaking server custody", async () => {
   let runtimeCalls = 0;
   let pricedCalls = 0;
   let capturedInput: any = null;
@@ -95,37 +206,7 @@ test("complete certified assembly returns public Elite evidence without leaking 
     runPriced: (async (input: any) => {
       pricedCalls += 1;
       capturedInput = input;
-      return {
-        schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
-        runId: input.runId,
-        generatedAt: "2026-08-13T17:01:00.000Z",
-        summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 1, positiveEvMarkets: 1, eliteEvidenceCandidates: 1, eliteEvidenceRowsCaptured: 1 },
-        preprice: { summary: { slateGames: 1, analysisEligibleGames: 1, finalAnalysisEligibleGames: 1, provisionalAnalysisEligibleGames: 0, intrinsicResearchEliteCandidates: 1, gamesWithMarketDiscoveryPlan: 1, gamesPaidLookupEligibleNow: 1, frozenRouteRowsCaptured: 1 } },
-        eliteEvidenceLedger: {
-          entries: [{
-            predictionId: "pred-123-home-ml",
-            candidate: {
-              gamePk: 123,
-              marketType: "h2h",
-              selectedSide: "HOME",
-              selectedLine: null,
-              modelWinProbability: 0.612,
-              modelPushProbability: 0,
-              expectedValuePerUnit: 0.074,
-              executionEdgePp: 5.2,
-              executionNoVigEdgePp: 4.8,
-              referenceNoVigEdgePp: 4.4,
-              referenceAgreement: "AGREES",
-              executionBookTitle: "Test Book",
-              executionOddsAmerican: -105,
-              executionCapturedAt: "2026-08-13T17:00:30.000Z",
-              intrinsicProjectionScope: "FULL_GAME",
-              intrinsicThesisKinds: ["A_PLUS"],
-              supportingComponents: ["C4", "FULL13"],
-            },
-          }],
-        },
-      } as any;
+      return eliteRunnerResult(input);
     }) as any,
     runIdFactory: () => "run-complete",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
@@ -139,6 +220,9 @@ test("complete certified assembly returns public Elite evidence without leaking 
 
   const result = response.body.result as Record<string, any>;
   assert.equal(result.eliteCandidates.length, 1);
+  assert.equal(result.noPlayAudit.primaryBlocker, "NONE");
+  assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.fullGameHomeWinProbability, 0.612);
+  assert.equal(result.noPlayAudit.policy.predictionRemainsPriceIndependent, true);
   assert.deepEqual(result.eliteCandidates[0], {
     predictionId: "pred-123-home-ml",
     gamePk: 123,
@@ -169,7 +253,7 @@ test("complete certified assembly returns public Elite evidence without leaking 
   assert.equal(serialized.includes("271828"), false);
 });
 
-test("completed run with no Elite evidence returns an explicit empty candidate list", async () => {
+test("completed no-play run identifies upstream intrinsic-thesis suppression instead of blaming price", async () => {
   const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
     buildSlate: async () => slate("FINAL"),
     liveEvidenceProviders: {
@@ -180,14 +264,7 @@ test("completed run with no Elite evidence returns an explicit empty candidate l
     },
     resolveRuntimeConfig: () => ({ providerAccountScopeKey: "scope", apiKey: "key", maxRunCredits: 1, reserveCredits: 0 }),
     getOddsService: () => ({} as any),
-    runPriced: (async (input: any) => ({
-      schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
-      runId: input.runId,
-      generatedAt: "2026-08-13T17:01:00.000Z",
-      summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 0, positiveEvMarkets: 0, eliteEvidenceCandidates: 0, eliteEvidenceRowsCaptured: 0 },
-      preprice: { summary: { slateGames: 1, analysisEligibleGames: 1, finalAnalysisEligibleGames: 1, provisionalAnalysisEligibleGames: 0, intrinsicResearchEliteCandidates: 0, gamesWithMarketDiscoveryPlan: 0, gamesPaidLookupEligibleNow: 0, frozenRouteRowsCaptured: 6 } },
-      eliteEvidenceLedger: { entries: [] },
-    })) as any,
+    runPriced: (async (input: any) => noPlayRunnerResult(input)) as any,
     runIdFactory: () => "run-no-play",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
   });
@@ -196,4 +273,9 @@ test("completed run with no Elite evidence returns an explicit empty candidate l
   assert.equal(response.body.status, "RUN_COMPLETED");
   const result = response.body.result as Record<string, any>;
   assert.deepEqual(result.eliteCandidates, []);
+  assert.equal(result.noPlayAudit.primaryBlocker, "NO_STRONG_INTRINSIC_THESIS_ON_FINAL_GAMES");
+  assert.equal(result.noPlayAudit.counts.v16ScoredGames, 1);
+  assert.equal(result.noPlayAudit.counts.paidLookupEligibleGames, 0);
+  assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.scoredByV16, true);
+  assert.equal(result.noPlayAudit.gameAudits[0].earliestBlocker, "NO_STRONG_INTRINSIC_MARKET_THESIS");
 });
