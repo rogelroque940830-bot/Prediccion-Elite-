@@ -1,0 +1,201 @@
+name: Validate P0 Step 12V27 NRFI YRFI I1 Causal Core
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v27-nrfi-yrfi-i1-causal-core-contract.json'
+      - 'scripts/p0-step12v27-nrfi-yrfi-i1-causal-core.py'
+      - '.github/workflows/validate-p0-step12v27-nrfi-yrfi-i1-causal-core.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0'
+
+      - name: Validate predeclared V27 I1 causal feature contract
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v27-nrfi-yrfi-i1-causal-core-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v27-nrfi-yrfi-i1-causal-core-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='069a83e8721f1f7b001841e2f8d08e04309c3c9c'
+          assert c['parentEvidence']['v26WorkflowRunId']==31896273442
+          assert c['parentEvidence']['v26ArtifactId']==9249905718
+          assert c['parentEvidence']['v26ArtifactDigest']=='sha256:bfbacf7c49b500bd5c1c35cd18e2d5767fd440ff439d71368a0e7336620475fa'
+          assert c['parentEvidence']['v26ClassificationRequired']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023'
+          assert d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['sameDateHistoryAllowed'] is False
+          assert d['seasonHistoryReset'] is True
+          assert d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          h=c['firstInningHistory']
+          assert h['teamRatePriorStrengthHalfInnings']==20
+          assert h['starterRatePriorStrengthGames']==20
+          assert h['openingDayFallbackPriorMean']==0.5
+          assert h['starterOpeningTeamMetricDoesNotClaimChargedRunAttribution'] is True
+          assert c['starterQuality']['shrinkagePriorBattersFaced']==72
+          f=c['features']
+          assert f['featureCount']==13 and len(f['exactly'])==13
+          assert len(set(f['exactly']))==13
+          assert f['full13DifferenceAdvantageFeaturesIncluded'] is False
+          assert f['featureSearchAllowed'] is False
+          assert f['postResultFeatureRemovalAllowed'] is False
+          expected={
+            'home_offense_i1_score_rate_shrunk','away_offense_i1_score_rate_shrunk',
+            'home_defense_i1_allow_rate_shrunk','away_defense_i1_allow_rate_shrunk',
+            'home_starter_opening_team_i1_allow_rate_shrunk','away_starter_opening_team_i1_allow_rate_shrunk',
+            'combined_starter_erbf','combined_starter_hrbf','combined_starter_kbb',
+            'combined_team_rs10','combined_team_ra10','home_top3_continuity','away_top3_continuity'
+          }
+          assert set(f['exactly'])==expected
+          m=c['model']
+          assert m['providerMarketKey']=='totals_1st_1_innings'
+          assert m['regularizationC']==1.0 and m['solver']=='lbfgs' and m['classWeight'] is None
+          assert m['modelSelectionAllowed'] is False and m['hyperparameterSearchAllowed'] is False
+          assert m['probabilityThresholdSearchAllowed'] is False
+          assert c['marketBoundary']['requiredExactLine']==0.5
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V27_I1_CAUSAL_CORE_PREDECLARED')
+          PY
+
+      - name: Syntax check V27 scorer
+        run: python -m py_compile scripts/p0-step12v27-nrfi-yrfi-i1-causal-core.py
+
+      - name: Download immutable V26 NRFI YRFI evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v26-nrfi-yrfi-baseline
+          path: artifacts/p0-step12v26
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896273442
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify V26 negative parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v26/nrfi-yrfi-baseline-report.json'))
+          o=json.load(open('artifacts/p0-step12v26/first-inning-outcomes.json'))
+          assert r['classification']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          assert r['candidateRubricPassed'] is False
+          assert o['acquisition']['canonicalGames']==11407
+          assert o['acquisition']['outcomeCompleteGames']==11405
+          assert o['acquisition']['conflictingDuplicateApiObservations']==0
+          assert o['policy']['sameDateOutcomeUsedAsFeature'] is False
+          print('V26_NEGATIVE_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V27 frozen I1 causal core
+        run: |
+          mkdir -p artifacts/p0-step12v27
+          python scripts/p0-step12v27-nrfi-yrfi-i1-causal-core.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v27-nrfi-yrfi-i1-causal-core-contract.json \
+            --v26-outcomes artifacts/p0-step12v26/first-inning-outcomes.json \
+            --v26-report artifacts/p0-step12v26/nrfi-yrfi-baseline-report.json \
+            --out artifacts/p0-step12v27/nrfi-yrfi-i1-causal-core-report.json
+
+      - name: Validate V27 temporal, model, and safety boundaries
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v27/nrfi-yrfi-i1-causal-core-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v27-nrfi-yrfi-i1-causal-core.v1'
+          assert r['parent']['v26Classification']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          assert r['parent']['v26CandidateRubricPassed'] is False
+          assert r['data']['featureCount']==13
+          assert r['data']['sameDateHistoryAllowed'] is False
+          assert r['data']['seasonHistoryReset'] is True
+          assert r['data']['scoredRows']==11405
+          assert set(r['data']['custodyBySeason'])=={'2022','2023','2024','2025','2026_YTD'}
+          for season, c in r['data']['custodyBySeason'].items():
+              assert c['outcomeJoinedRows']>1700
+              assert c['validProbableStarterPairs']>1500
+              assert c['completeAuditValidLineupPairs']>1500
+          assert r['model']['trainingSeason']=='2022'
+          assert r['model']['featureSearchUsed'] is False
+          assert r['model']['modelSearchUsed'] is False
+          assert r['model']['hyperparameterSearchUsed'] is False
+          assert r['model']['probabilityThresholdSearchUsed'] is False
+          assert r['validation2023']['rows']>2300
+          assert r['evaluation2024_2026Ytd']['rows']>6400
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          mb=r['marketBoundary']
+          assert mb['requiredExactLine']==0.5
+          assert mb['historicalNrfiYrfiPricesUsed'] is False
+          assert mb['positiveEvEstablished'] is False
+          assert mb['shadowPriceCaptureAuthorized'] is False
+          assert mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['probabilityThresholdSearchUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'custodyBySeason':r['data']['custodyBySeason'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'coefficientsDescriptiveOnly':r['model']['coefficientsDescriptiveNotSelectionInput'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+      - name: Upload V27 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v27-nrfi-yrfi-i1-causal-core
+          path: artifacts/p0-step12v27/
+          if-no-files-found: error
+          retention-days: 30
