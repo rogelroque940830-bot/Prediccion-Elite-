@@ -39,7 +39,7 @@ jobs:
           if(c.sourceBoundary.endpointTemplate!=='https://statsapi.mlb.com/api/v1/game/{gamePk}/boxscore') throw new Error('V41_ENDPOINT');
           if(c.sourceBoundary.refetchScheduleAllowed!==false || c.sourceBoundary.alternateOutcomeProviderAllowed!==false) throw new Error('V41_SOURCE_BOUNDARY');
           if(c.sourceBoundary.fetchFailuresAllowed!==0 || c.sourceBoundary.teamAggregateReconciliationFailuresAllowed!==0) throw new Error('V41_FAIL_CLOSED');
-          const expected={2022:2430,2023:2430,2024:2429,2025:2430,2026_YTD:1786};
+          const expected={2022:2430,2023:2430,2024:2429,2025:2430,"2026_YTD":1786};
           if(JSON.stringify(c.seasons.expectedOfficialFinalGamesFromImmutableParent)!==JSON.stringify(expected)) throw new Error('V41_COUNTS');
           if(c.directBatterOutcomeFields.requiredNonNegativeIntegerFields.length!==13) throw new Error('V41_DIRECT_FIELD_COUNT');
           if(c.teamReconciliation.requiredExactSumFields.length!==13 || c.teamReconciliation.failClosedOnMismatch!==true) throw new Error('V41_RECONCILIATION');
@@ -179,7 +179,7 @@ jobs:
           const crypto=require('node:crypto');
           const fs=require('node:fs');
           const labels=['2022','2023','2024','2025','2026_YTD'];
-          const expected={2022:2430,2023:2430,2024:2429,2025:2430,2026_YTD:1786};
+          const expected={2022:2430,2023:2430,2024:2429,2025:2430,"2026_YTD":1786};
           const seasons={}; let totalGames=0,totalLines=0,totalCompleteSlots=0,totalMatchedSlots=0,totalPositiveSlots=0;
           for(const label of labels){
             const root=`artifacts/p0-step12v41/${label}`;
