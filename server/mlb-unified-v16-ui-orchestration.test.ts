@@ -48,6 +48,16 @@ function settlementEvidence() {
 
 function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: boolean }) {
   const hasThesis = input.plannedMarkets.length > 0;
+  const shortlistCandidate = {
+    gamePk: 123,
+    qualifiedForShortlist: true,
+    certifiedComponentCount: 2,
+    independentSignalCount: 2,
+  };
+  const intrinsicGame = {
+    gamePk: 123,
+    researchClassification: hasThesis ? "GAME_ELITE_RESEARCH_CANDIDATE" : "NO_STRONG_THESIS",
+  };
   return {
     summary: {
       slateGames: 1,
@@ -58,6 +68,17 @@ function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: 
       gamesWithMarketDiscoveryPlan: hasThesis ? 1 : 0,
       gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
       frozenRouteRowsCaptured: 1,
+    },
+    cheapScreen: {
+      games: [{ gamePk: 123, eligibleForDeepPrefilterNow: true, finalInputsAvailable: true }],
+    },
+    shortlist: {
+      candidates: [shortlistCandidate],
+      selected: [shortlistCandidate],
+    },
+    intrinsic: {
+      games: [intrinsicGame],
+      rankedGames: [intrinsicGame],
     },
     discovery: {
       games: [{
@@ -74,8 +95,6 @@ function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: 
       }],
       summary: {
         gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
-        gamesHeldForFinalInputs: 0,
-        gamesWithNoStrongIntrinsicMarketThesis: hasThesis ? 0 : 1,
       },
     },
   };
@@ -253,7 +272,7 @@ test("complete certified assembly returns Elite evidence and diagnostic without 
   assert.equal(serialized.includes("271828"), false);
 });
 
-test("completed no-play run identifies upstream intrinsic-thesis suppression instead of blaming price", async () => {
+test("completed no-play run identifies pre-V16 intrinsic-thesis suppression instead of blaming price", async () => {
   const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
     buildSlate: async () => slate("FINAL"),
     liveEvidenceProviders: {
@@ -273,9 +292,12 @@ test("completed no-play run identifies upstream intrinsic-thesis suppression ins
   assert.equal(response.body.status, "RUN_COMPLETED");
   const result = response.body.result as Record<string, any>;
   assert.deepEqual(result.eliteCandidates, []);
-  assert.equal(result.noPlayAudit.primaryBlocker, "NO_STRONG_INTRINSIC_THESIS_ON_FINAL_GAMES");
+  assert.equal(result.noPlayAudit.primaryBlocker, "NO_STRONG_INTRINSIC_THESIS_ON_V16_SCORED_GAMES");
   assert.equal(result.noPlayAudit.counts.v16ScoredGames, 1);
+  assert.equal(result.noPlayAudit.counts.v16ScoredSelectedForMarketDiscovery, 1);
+  assert.equal(result.noPlayAudit.counts.v16ScoredWithoutStrongIntrinsicThesis, 1);
   assert.equal(result.noPlayAudit.counts.paidLookupEligibleGames, 0);
   assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.scoredByV16, true);
+  assert.equal(result.noPlayAudit.gameAudits[0].prePriceRouting.selectedForMarketDiscovery, true);
   assert.equal(result.noPlayAudit.gameAudits[0].earliestBlocker, "NO_STRONG_INTRINSIC_MARKET_THESIS");
 });
