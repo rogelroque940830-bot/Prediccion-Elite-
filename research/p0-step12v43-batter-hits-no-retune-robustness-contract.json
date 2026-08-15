@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "courtedge-p0-step12v43-batter-hits-no-retune-robustness-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_NO_RETUNE_BATTER_PROP_ROBUSTNESS_GATE_NOT_PRICE_VALIDATION",
+  "objective": "Apply the standard strict unchanged-model robustness gate to the V42 batter-hits candidate before any prospective price-capture engineering.",
+  "parentEvidence": {
+    "mainBaseSha": "8112abcdd70634dcf6b0244002cb2a59f9be575f",
+    "v42Pr": 580,
+    "v42MergeSha": "8112abcdd70634dcf6b0244002cb2a59f9be575f",
+    "v42WorkflowRunId": 31905694360,
+    "v42ArtifactId": 9252298988,
+    "v42ArtifactName": "p0-step12v42-batter-hits-baseline",
+    "v42ArtifactDigest": "sha256:ef50f82565a013a62fcd239f464972c255acc02e57780e6b01895a44bc84f747",
+    "v42ClassificationRequired": "BATTER_HITS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY",
+    "v41WorkflowRunId": 31905076013,
+    "v41ArtifactId": 9252168716,
+    "v41ArtifactName": "p0-step12v41-batter-historical-custody",
+    "v41ArtifactDigest": "sha256:a9f493bb61259ca7a0400149fe2b79e5145c2294e8afa49f27aeed6541ca8e2a",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+  },
+  "modelBoundary": {
+    "sourceImplementation": "scripts/p0-step12v42-batter-hits-baseline.py",
+    "unchangedV42FeatureSetRequired": true,
+    "unchangedV42TrainingSeasonRequired": "2022",
+    "unchangedV42PoissonAlphaRequired": 1.0,
+    "unchangedV42FixedLinesRequired": [0.5, 1.5, 2.5],
+    "unchangedV42BatterOnlyBaselineRequired": "BATTER_HPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK",
+    "refitWithAdditionalSeasonsAllowed": false,
+    "recalibrationAllowed": false,
+    "coefficientChangeAllowed": false,
+    "featureChangeAllowed": false,
+    "imputationChangeAllowed": false,
+    "scalingChangeAllowed": false,
+    "dispersionChangeAllowed": false,
+    "lineSetChangeAllowed": false,
+    "baselineFormulaChangeAllowed": false,
+    "thresholdSearchAllowed": false
+  },
+  "replayParity": {
+    "absoluteTolerance": 1e-12,
+    "partitions": ["2023", "2024_2026_YTD"],
+    "requiredMetrics": [
+      "modelPoissonDeviance",
+      "constantPoissonDeviance",
+      "batterOnlyPoissonDeviance",
+      "modelVsConstantDevianceImprovement",
+      "modelVsBatterOnlyDevianceImprovement",
+      "modelAverageBrier",
+      "constantAverageBrier",
+      "batterOnlyAverageBrier",
+      "modelVsConstantAverageBrierImprovement",
+      "modelVsBatterOnlyAverageBrierImprovement",
+      "observedMeanHits",
+      "meanModelHits",
+      "meanBatterOnlyHits"
+    ]
+  },
+  "seasonStabilityGate": {
+    "partitions": ["2023", "2024", "2025", "2026_YTD"],
+    "requireModelDevianceBeatConstantEachPartition": true,
+    "requireModelDevianceBeatBatterOnlyEachPartition": true,
+    "requireModelAverageBrierBeatConstantEachPartition": true,
+    "requireModelAverageBrierBeatBatterOnlyEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanBatterOnlyEachPartition": true,
+    "noLineSpecificSubsetPromotion": true
+  },
+  "dateClusterBootstrapGate": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "clusterUnit": "OFFICIAL_DATE",
+    "aggregationWithinCluster": "MEAN_PER_ELIGIBLE_STARTING_BATTER_LOSS_IMPROVEMENT_WITHIN_DATE",
+    "aggregationAcrossClusters": "EQUAL_WEIGHT_MEAN_ACROSS_OFFICIAL_DATES",
+    "resampling": "SAMPLE_OFFICIAL_DATES_WITH_REPLACEMENT_AND_AVERAGE_DATE_MEANS",
+    "replicates": 10000,
+    "randomSeed": 4301,
+    "confidenceLevel": 0.95,
+    "metrics": [
+      "POISSON_DEVIANCE_IMPROVEMENT_CONSTANT_MINUS_MODEL",
+      "POISSON_DEVIANCE_IMPROVEMENT_BATTER_ONLY_MINUS_MODEL",
+      "AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_CONSTANT_MINUS_MODEL",
+      "AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_BATTER_ONLY_MINUS_MODEL"
+    ],
+    "requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics": true
+  },
+  "classification": {
+    "pass": "BATTER_HITS_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY",
+    "fail": "BATTER_HITS_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL"
+  },
+  "marketBoundary": {
+    "providerMarketKey": "batter_hits",
+    "repositoryRegistryFamily": "BATTER_PROP",
+    "historicalBatterHitsPricesUsed": false,
+    "positiveEvEstablished": false,
+    "hardRockFloridaPerEventAvailabilityEstablished": false,
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeProductionRecommendation": true,
+    "passingOnlyAuthorizesProspectivePriceCaptureEngineering": true
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "failureClosesCurrentBatterHitsModel": true
+  }
+}
