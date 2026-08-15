@@ -1,0 +1,179 @@
+name: Validate P0 Step 12V46 Batter RBI Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v46-batter-rbis-baseline-contract.json'
+      - 'scripts/p0-step12v46-batter-rbis-baseline.py'
+      - '.github/workflows/validate-p0-step12v46-batter-rbis-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V46 contract and registry boundary
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v46-batter-rbis-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v46-batter-rbis-baseline-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='c53fafbf569bbcb0e66ef9cbc542917384f61f17'
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          assert p['v41ArtifactDigest']=='sha256:a9f493bb61259ca7a0400149fe2b79e5145c2294e8afa49f27aeed6541ca8e2a'
+          assert p['v41FiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          q=p['priorBatterTotalBasesClosure']
+          assert q['v45Pr']==583 and q['v45MergeSha']=='c53fafbf569bbcb0e66ef9cbc542917384f61f17'
+          assert q['v45WorkflowRunId']==31906806623 and q['v45ArtifactId']==9252627570
+          assert q['v45ArtifactDigest']=='sha256:4d3e3e83cf79fbf1d3aa2099b535ba5f8207bba108fbdfdc7253db9adf448e64'
+          assert q['v45ClassificationRequired']=='BATTER_TOTAL_BASES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert q['priorClosedModelsRetuneAllowedInV46'] is False
+          m=c['marketEvidence']
+          assert m['providerMarketKey']=='batter_rbis' and m['repositoryRegistryFamily']=='BATTER_PROP' and m['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert m['repositoryModelIntegrationStatusExpected']=='NOT_IMPLEMENTED'
+          assert m['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True
+          assert c['canonicalTargetCustody']['recordedBatterField']=='rbi' and c['canonicalTargetCustody']['targetDirectlyRecordedNotReconstructed'] is True
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023' and d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['sameDateHistoryAllowed'] is False and d['seasonHistoryReset'] is True and d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          f=c['features']
+          expected=['batter_rbipa_shrunk','batter_hrpa_shrunk','batter_hpa_shrunk','batter_tbpa_shrunk','batter_recent10_rbi_per_game','batter_recent10_pa_per_game','lineup_slot','lineup_slot_pa_per_start_shrunk','opposing_starter_erbf_shrunk','opposing_starter_bbf_shrunk','opposing_starter_hbf_shrunk','opposing_starter_bf_per_start_shrunk']
+          assert f['exactly']==expected and f['featureCount']==12 and len(set(expected))==12
+          assert c['baselines']['batterOnlyMechanistic']=='BATTER_RBIPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          model=c['model']
+          assert model['providerMarketKey']=='batter_rbis' and model['poissonAlpha']==1.0 and model['fixedHalfRbiLines']==[0.5,1.5,2.5]
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['candidateRubric']['passingClassification']=='BATTER_RBI_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert c['candidateRubric']['failureClassification']=='BATTER_RBI_BASELINE_REJECTED'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert '["batter_rbis", "Batter RBIs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          assert 'batter_rbis: ["HARD_ROCK_MLB_GUIDE_20260807"]' in registry
+          canonical=registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
+          assert 'batter_rbis:' not in canonical
+          print('STEP12V46_BATTER_RBI_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V46 scorer
+        run: python -m py_compile scripts/p0-step12v46-batter-rbis-baseline.py
+
+      - name: Download immutable Step 12V3 pregame evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download certified V41 batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Verify immutable V41 RBI custody before modeling
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('artifacts/p0-step12v41')
+          c=json.load(open(root/'batter-historical-custody-certification.json'))
+          assert c['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert c['totalGames']==11505 and c['totalBatterLines']==240512
+          assert c['fiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          assert c['pregameCrosslinkDiagnostics']['slotMatchRate']==1
+          for season in ['2022','2023','2024','2025','2026_YTD']:
+              h=json.load(open(root/season/'batter-history.json'))
+              assert h['fetchFailures']==[] and h['teamAggregateReconciliationFailures']==0
+              assert h['gamesWithBatterLines']==h['officialGamesReceived']
+              for game in h['games']:
+                  for side in ['awayBatters','homeBatters']:
+                      for batter in game[side]:
+                          assert isinstance(batter['rbi'],int) and batter['rbi']>=0
+          print('V41_DIRECT_BATTER_RBI_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V46 frozen batter-RBI model
+        run: |
+          mkdir -p artifacts/p0-step12v46
+          python scripts/p0-step12v46-batter-rbis-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v46-batter-rbis-baseline-contract.json \
+            --out artifacts/p0-step12v46/batter-rbis-baseline-report.json
+
+      - name: Validate V46 result and research-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v46/batter-rbis-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v46-batter-rbis-baseline.v1'
+          assert r['classification'] in {'BATTER_RBI_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY','BATTER_RBI_BASELINE_REJECTED'}
+          assert r['parent']['v41Classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert r['parent']['priorBatterTotalBasesClosure']['v45ClassificationRequired']=='BATTER_TOTAL_BASES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert r['data']['featureCount']==12 and r['data']['sameDateHistoryAllowed'] is False and r['data']['seasonHistoryReset'] is True
+          assert r['data']['scoredRows']==204480
+          assert r['model']['providerMarketKey']=='batter_rbis' and r['model']['canonicalResearchMarketType']=='BATTER_RBI'
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916
+          assert r['model']['fixedHalfRbiLines']==[0.5,1.5,2.5]
+          assert r['validation2023']['rows']==43060 and r['evaluation2024_2026Ytd']['rows']==118504
+          assert set(r['bySeasonDescriptiveOnly'])=={'2023','2024','2025','2026_YTD'}
+          v=r['volumeDiagnostics']
+          assert v['eligibleStartingBatterOutcomes']==204480 and v['eligibilityShare']>0.9996
+          mb=r['marketBoundary']
+          assert mb['providerMarketKey']=='batter_rbis' and mb['repositoryRegistryFamily']=='BATTER_PROP'
+          assert mb['historicalBatterRbiPricesUsed'] is False and mb['positiveEvEstablished'] is False
+          assert mb['priceCaptureAuthorized'] is False and mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','priorClosedModelsRetuned','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bySeason':r['bySeasonDescriptiveOnly'],
+            'candidateRubricChecks':r['candidateRubricChecks'],
+            'volumeDiagnostics':r['volumeDiagnostics']
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_rbis", "Batter RBIs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_rbis: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V46 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v46-batter-rbis-baseline
+          path: artifacts/p0-step12v46/
+          if-no-files-found: error
+          retention-days: 30
