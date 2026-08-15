@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "courtedge-p0-step12v39-pitcher-outs-baseline-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_PITCHER_OUTS_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test pitcher outs as a high-volume MLB player-prop family using directly recorded starter outs, exact pregame probable-to-recorded starter identity, and a strong pitcher-only workload baseline.",
+  "parentEvidence": {
+    "mainBaseSha": "d890900bb029092480953a967bbf17129f22647b",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "hitsAllowedClosurePr": 576,
+    "hitsAllowedClosureMerge": "d890900bb029092480953a967bbf17129f22647b"
+  },
+  "marketEvidence": {
+    "providerMarketKey": "pitcher_outs",
+    "repositoryRegistryEntryAlreadyExists": true,
+    "repositoryRegistryFamily": "PITCHER_PROP",
+    "repositoryRegistryQuoteShape": "PLAYER_OVER_UNDER",
+    "repositoryModelIntegrationStatusExpected": "NOT_IMPLEMENTED",
+    "hardRockExactFirstPartyProductEvidenceExistsInRegistry": true,
+    "hardRockEvidenceSourceId": "HARD_ROCK_MLB_GUIDE_20260807",
+    "hardRockFloridaPerEventAvailabilityEstablished": false,
+    "productionRegistryChangeAllowedInThisResearch": false
+  },
+  "canonicalTargetCustody": {
+    "source": "cohort/starting-pitcher-history.json",
+    "recordedStarterField": "outsRecorded",
+    "pitchCountField": "numberOfPitches",
+    "battersFacedField": "battersFaced",
+    "targetDirectlyRecordedNotReconstructed": true,
+    "requiresRecordedStarterBattersFacedGreaterThanZero": true
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresCanonicalT5PregameValid": true,
+    "requiresAuditValidPregameProbableStarter": true,
+    "requiresExactProbableEqualsRecordedStarter": true,
+    "sameDateHistoryAllowed": false,
+    "seasonHistoryReset": true,
+    "scoreWholeDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "historicalPitcherOutPricesUsed": false,
+    "targetPropLineUsedAsFeature": false
+  },
+  "featureEngineering": {
+    "rateShrinkagePriorBattersFaced": 72,
+    "workloadShrinkagePriorStarts": 5,
+    "opponentWorkloadShrinkagePriorGames": 5,
+    "recentStartsWindow": 5,
+    "leaguePriorsUseCurrentSeasonStrictlyPriorDateRecordedStartersOnly": true,
+    "openingDateWithoutLeaguePriorLeavesRateAndWorkloadFeaturesMissing": true,
+    "trainingOnlyMedianImputationHandlesMissing": true,
+    "opponentLineupContinuity": "INTERSECTION_CURRENT_COMPLETE_ORDER_WITH_PREVIOUS_COMPLETE_ORDER_DIVIDED_BY_9"
+  },
+  "features": {
+    "exactly": [
+      "pitcher_outs_per_start_shrunk",
+      "pitcher_bf_per_start_shrunk",
+      "pitcher_pitches_per_start_shrunk",
+      "pitcher_kbf_shrunk",
+      "pitcher_bbbf_shrunk",
+      "pitcher_erbf_shrunk",
+      "pitcher_recent5_outs_per_start",
+      "pitcher_recent5_pitches_per_start",
+      "opponent_vs_starters_outs_per_game_shrunk",
+      "opponent_rs10",
+      "opponent_lineup_continuity",
+      "pitcher_prior_starts"
+    ],
+    "featureCount": 12,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false
+  },
+  "baselines": {
+    "constant": "2022_ELIGIBLE_STARTER_MEAN_OUTS_RECORDED",
+    "pitcherOnlyMechanistic": "PITCHER_OUTS_PER_START_SHRUNK",
+    "pitcherOnlyMissingPredictionFallback": "2022_ELIGIBLE_STARTER_MEAN_OUTS_RECORDED",
+    "fixedLineConstantProbabilities": "2022_EMPIRICAL_OVER_RATES",
+    "pitcherOnlyProbabilityDispersion": "USE_MODEL_TRAINING_ONLY_NB2_DISPERSION_WITHOUT_REFIT"
+  },
+  "model": {
+    "providerMarketKey": "pitcher_outs",
+    "canonicalResearchMarketType": "PITCHER_OUTS",
+    "modelFamily": "POISSON_REGRESSOR_WITH_TRAINING_ONLY_NB2_DISPERSION_FOR_OVER_PROBABILITIES",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonAlpha": 1.0,
+    "maxIter": 1000,
+    "nb2DispersionFitOn2022Only": true,
+    "fixedHalfOutLines": [14.5, 15.5, 16.5, 17.5, 18.5, 19.5],
+    "lineSearchAllowed": false,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "candidateRubric": {
+    "requires": [
+      "MODEL_POISSON_DEVIANCE_BEATS_CONSTANT_BASELINE_IN_2023",
+      "MODEL_POISSON_DEVIANCE_BEATS_PITCHER_ONLY_BASELINE_IN_2023",
+      "MODEL_AVERAGE_FIXED_LINE_BRIER_BEATS_CONSTANT_BASELINE_IN_2023",
+      "MODEL_AVERAGE_FIXED_LINE_BRIER_BEATS_PITCHER_ONLY_BASELINE_IN_2023",
+      "MODEL_POISSON_DEVIANCE_BEATS_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "MODEL_POISSON_DEVIANCE_BEATS_PITCHER_ONLY_BASELINE_IN_2024_2026_YTD",
+      "MODEL_AVERAGE_FIXED_LINE_BRIER_BEATS_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "MODEL_AVERAGE_FIXED_LINE_BRIER_BEATS_PITCHER_ONLY_BASELINE_IN_2024_2026_YTD"
+    ],
+    "passingOnlyAuthorizesNoRetuneRobustnessGate": true,
+    "passingDoesNotAuthorizePriceCapture": true,
+    "passingDoesNotEstablishPositiveEv": true
+  },
+  "volumeDiagnostics": {
+    "reportEligiblePitcherStarts": true,
+    "reportCanonicalStarterSlots": true,
+    "reportEligibilityShare": true,
+    "reportMeanEligiblePitcherStartsPerSlateDay": true,
+    "doNotTreatEligibleStartsAsBetCandidates": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
