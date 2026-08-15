@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "courtedge-p0-step12v34-pitcher-walks-no-retune-robustness-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_NO_RETUNE_PITCHER_WALKS_ROBUSTNESS_GATE_NOT_PRICE_VALIDATION",
+  "objective": "Apply a strict unchanged-model robustness gate to the V33 pitcher-walks candidate before any prospective price-capture engineering.",
+  "parentEvidence": {
+    "mainBaseSha": "629d014f8f2be6cc16e29b9fcabcb4258a659e10",
+    "v33Pr": 571,
+    "v33MergeSha": "629d014f8f2be6cc16e29b9fcabcb4258a659e10",
+    "v33WorkflowRunId": 31900247122,
+    "v33ArtifactId": 9250897763,
+    "v33ArtifactName": "p0-step12v33-pitcher-walks-baseline",
+    "v33ArtifactDigest": "sha256:0d11229fc91774c0ae25e5b94b809f040a62d0c4c1856ef4776cb8ece3bb51f0",
+    "v33ClassificationRequired": "PITCHER_WALKS_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+  },
+  "modelBoundary": {
+    "sourceImplementation": "scripts/p0-step12v33-pitcher-walks-baseline.py",
+    "unchangedV33FeatureSetRequired": true,
+    "unchangedV33TrainingSeasonRequired": "2022",
+    "unchangedV33PoissonAlphaRequired": 1.0,
+    "unchangedV33FixedLinesRequired": [0.5, 1.5, 2.5, 3.5, 4.5],
+    "unchangedV33PitcherOnlyBaselineRequired": "PITCHER_BBBF_SHRUNK_TIMES_PITCHER_BF_PER_START_SHRUNK",
+    "refitWithAdditionalSeasonsAllowed": false,
+    "recalibrationAllowed": false,
+    "coefficientChangeAllowed": false,
+    "featureChangeAllowed": false,
+    "imputationChangeAllowed": false,
+    "scalingChangeAllowed": false,
+    "dispersionChangeAllowed": false,
+    "lineSetChangeAllowed": false,
+    "baselineFormulaChangeAllowed": false,
+    "thresholdSearchAllowed": false
+  },
+  "replayParity": {
+    "absoluteTolerance": 1e-12,
+    "partitions": ["2023", "2024_2026_YTD"],
+    "requiredMetrics": [
+      "modelPoissonDeviance",
+      "constantPoissonDeviance",
+      "pitcherOnlyPoissonDeviance",
+      "modelVsConstantDevianceImprovement",
+      "modelVsPitcherOnlyDevianceImprovement",
+      "modelAverageBrier",
+      "constantAverageBrier",
+      "pitcherOnlyAverageBrier",
+      "modelVsConstantAverageBrierImprovement",
+      "modelVsPitcherOnlyAverageBrierImprovement",
+      "observedMeanWalks",
+      "meanModelWalks",
+      "meanPitcherOnlyWalks"
+    ]
+  },
+  "seasonStabilityGate": {
+    "partitions": ["2023", "2024", "2025", "2026_YTD"],
+    "requireModelDevianceBeatConstantEachPartition": true,
+    "requireModelDevianceBeatPitcherOnlyEachPartition": true,
+    "requireModelAverageBrierBeatConstantEachPartition": true,
+    "requireModelAverageBrierBeatPitcherOnlyEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanPitcherOnlyEachPartition": true,
+    "noLineSpecificSubsetPromotion": true
+  },
+  "dateClusterBootstrapGate": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "clusterUnit": "OFFICIAL_DATE",
+    "aggregationWithinCluster": "MEAN_PER_PITCHER_START_LOSS_IMPROVEMENT_WITHIN_DATE",
+    "aggregationAcrossClusters": "EQUAL_WEIGHT_MEAN_ACROSS_OFFICIAL_DATES",
+    "resampling": "SAMPLE_OFFICIAL_DATES_WITH_REPLACEMENT_AND_AVERAGE_DATE_MEANS",
+    "replicates": 10000,
+    "randomSeed": 3401,
+    "confidenceLevel": 0.95,
+    "metrics": [
+      "POISSON_DEVIANCE_IMPROVEMENT_CONSTANT_MINUS_MODEL",
+      "POISSON_DEVIANCE_IMPROVEMENT_PITCHER_ONLY_MINUS_MODEL",
+      "AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_CONSTANT_MINUS_MODEL",
+      "AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_PITCHER_ONLY_MINUS_MODEL"
+    ],
+    "requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics": true
+  },
+  "classification": {
+    "pass": "PITCHER_WALKS_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY",
+    "fail": "PITCHER_WALKS_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL"
+  },
+  "marketBoundary": {
+    "providerMarketKey": "pitcher_walks",
+    "repositoryRegistryFamily": "PITCHER_PROP",
+    "historicalPitcherWalkPricesUsed": false,
+    "positiveEvEstablished": false,
+    "hardRockFloridaPerEventAvailabilityEstablished": false,
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeProductionRecommendation": true,
+    "passingOnlyAuthorizesProspectivePriceCaptureEngineering": true
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "failureClosesCurrentPitcherWalksModel": true
+  }
+}
