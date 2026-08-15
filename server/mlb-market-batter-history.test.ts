@@ -74,6 +74,19 @@ test("parses direct batter outcomes and labels deterministic derived fields", ()
   assert.match(parsed.boxscoreSourceDigest, /^[a-f0-9]{64}$/);
 });
 
+test("excludes MLB roster participants with completely empty batting payloads", () => {
+  const source = boxscore();
+  source.teams.home.batters.push(303);
+  source.teams.home.players.ID303 = {
+    person: { id: 303, fullName: "Pitcher Without Batting Line" },
+    battingOrder: null,
+    stats: { batting: {} },
+  };
+  const parsed = parseMlbHistoricalBatterBoxscore(game, source);
+  assert.deepEqual(parsed.homeBatters.map((line) => line.batterId), [101]);
+  assert.equal(parsed.homeBatters[0].atBats, 4);
+});
+
 test("history digest is deterministic regardless of game input order", () => {
   const first = parseMlbHistoricalBatterBoxscore(game, boxscore());
   const second = parseMlbHistoricalBatterBoxscore({ ...game, gamePk: 999002, officialDate: "2026-08-02" }, boxscore());
