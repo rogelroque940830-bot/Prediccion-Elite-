@@ -1,0 +1,34 @@
+name: Validate V16 No-Play Funnel Audit
+
+on:
+  pull_request:
+    paths:
+      - 'research/v16-no-play-funnel-audit-contract.json'
+      - 'research/v16-no-play-funnel-audit.md'
+      - 'server/mlb-v16-no-play-funnel-audit.ts'
+      - 'server/mlb-v16-no-play-funnel-audit.test.ts'
+      - '.github/workflows/validate-v16-no-play-funnel-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Freeze diagnostic policy
+        run: |
+          node - <<'NODE'
+          const c = require('./research/v16-no-play-funnel-audit-contract.json');
+          if (c.scientificStatus !== 'DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION') process.exit(1);
+          for (const key of ['changeModel','changeFeatures','changeThresholds','changeMarketDirection','changeRanking','changeStake','changeBetElite','changeFinalRecommendation','automaticBetPlacement']) {
+            if (c.policy[key] !== false) throw new Error(`policy mutation forbidden: ${key}`);
+          }
+          if (c.policy.realFinancialExposure !== 0 || c.policy.diagnosticsOnly !== true) process.exit(1);
+          NODE
+      - run: npx vitest run server/mlb-v16-no-play-funnel-audit.test.ts
+      - run: npm run check
