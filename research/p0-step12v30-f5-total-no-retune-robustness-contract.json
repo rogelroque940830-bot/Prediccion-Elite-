@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "courtedge-p0-step12v30-f5-total-no-retune-robustness-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_NO_RETUNE_ROBUSTNESS_GATE_NOT_PRICE_VALIDATION",
+  "objective": "Apply a strict unchanged-model robustness gate to the V29 F5 Total symmetric core before any prospective shadow price capture.",
+  "parentEvidence": {
+    "mainBaseSha": "a19ffed5e5f7425f6629df289adec4af62f47669",
+    "v29Pr": 567,
+    "v29WorkflowRunId": 31897272618,
+    "v29ArtifactId": 9250152499,
+    "v29ArtifactName": "p0-step12v29-f5-total-symmetric-core",
+    "v29ArtifactDigest": "sha256:8580ef037f682f0a74abb4f06a689e0715ab1d4e321e7b4d15a7d414c8ede846",
+    "v29ClassificationRequired": "F5_TOTAL_SYMMETRIC_CORE_ROBUSTNESS_CANDIDATE_ONLY",
+    "v28WorkflowRunId": 31896949764,
+    "v28ArtifactName": "p0-step12v28-f5-total-baseline",
+    "v28ArtifactDigest": "sha256:6ad4b42e1e87c595382856724e6706fefda12aea3d8892611fe8e47cee7e8a80",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+  },
+  "modelBoundary": {
+    "sourceImplementation": "scripts/p0-step12v29-f5-total-symmetric-core.py",
+    "unchangedV29FeatureSetRequired": true,
+    "unchangedV29TrainingSeasonRequired": "2022",
+    "unchangedV29PoissonAlphaRequired": 1.0,
+    "unchangedV29FixedLinesRequired": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "refitWithAdditionalSeasonsAllowed": false,
+    "recalibrationAllowed": false,
+    "coefficientChangeAllowed": false,
+    "featureChangeAllowed": false,
+    "imputationChangeAllowed": false,
+    "scalingChangeAllowed": false,
+    "dispersionChangeAllowed": false,
+    "lineSetChangeAllowed": false,
+    "thresholdSearchAllowed": false
+  },
+  "replayParity": {
+    "aggregatePartitions": ["2023", "2024_2026_YTD"],
+    "absoluteTolerance": 1e-12,
+    "requiredMetrics": [
+      "meanPoissonDeviance",
+      "constantBaselineMeanPoissonDeviance",
+      "poissonDevianceImprovement",
+      "averageBrierAcrossFixedLines",
+      "averageBaselineBrierAcrossFixedLines",
+      "averageBrierImprovement",
+      "observedMeanRuns",
+      "meanPredictedRuns"
+    ]
+  },
+  "seasonStabilityGate": {
+    "partitions": ["2023", "2024", "2025", "2026_YTD"],
+    "requirePositivePoissonDevianceImprovementEachPartition": true,
+    "requirePositiveAverageBrierImprovementEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanConstantBaselineEachPartition": true,
+    "noLineSpecificSubsetPromotion": true
+  },
+  "dateClusterBootstrapGate": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "clusterUnit": "OFFICIAL_DATE",
+    "aggregationWithinCluster": "MEAN_PER_GAME_LOSS_IMPROVEMENT_WITHIN_DATE",
+    "aggregationAcrossClusters": "EQUAL_WEIGHT_MEAN_ACROSS_OFFICIAL_DATES",
+    "resampling": "SAMPLE_OFFICIAL_DATES_WITH_REPLACEMENT_AND_AVERAGE_DATE_MEANS",
+    "replicates": 10000,
+    "randomSeed": 3001,
+    "confidenceLevel": 0.95,
+    "metrics": [
+      "POISSON_DEVIANCE_IMPROVEMENT_BASELINE_MINUS_MODEL",
+      "AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_BASELINE_MINUS_MODEL"
+    ],
+    "requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForBothMetrics": true
+  },
+  "classification": {
+    "pass": "F5_TOTAL_ROBUST_ENOUGH_FOR_PROSPECTIVE_SHADOW_PRICE_CAPTURE_ONLY",
+    "fail": "F5_TOTAL_NOT_ROBUST_ENOUGH_FOR_SHADOW_CLOSE_CURRENT_INFORMATION_SET"
+  },
+  "marketBoundary": {
+    "providerMarketKey": "totals_1st_5_innings",
+    "canonicalMarketType": "F5_TOTAL",
+    "historicalF5PricesUsed": false,
+    "positiveEvEstablished": false,
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeProductionRecommendation": true,
+    "passingOnlyAuthorizesProspectiveShadowPriceCaptureEngineering": true
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "failureClosesF5TotalForCurrentInformationSet": true
+  }
+}
