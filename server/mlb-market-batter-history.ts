@@ -226,9 +226,11 @@ export function parseMlbHistoricalBatterBoxscore(
   if (!game || !Number.isInteger(game.gamePk) || game.gamePk <= 0) throw new Error("BATTER_HISTORY_INVALID_OFFICIAL_GAME");
   const homeBatters = parseTeamBatters(game, boxscore, "home");
   const awayBatters = parseTeamBatters(game, boxscore, "away");
-  const homeIds = new Set(homeBatters.map((line) => line.batterId));
-  const shared = awayBatters.find((line) => homeIds.has(line.batterId));
-  if (shared) throw new Error(`BATTER_HISTORY_SAME_BATTER_BOTH_TEAMS:${shared.batterId}`);
+
+  // Preserve side/team custody exactly as the official boxscore records it.
+  // A suspended game resumed after a trade can legitimately contain the same
+  // batter ID on both sides (Danny Jansen, gamePk 746942). The compound
+  // identity is gamePk + side + teamId + batterId, so the lines remain distinct.
   return {
     gamePk: game.gamePk,
     officialDate: game.officialDate,
