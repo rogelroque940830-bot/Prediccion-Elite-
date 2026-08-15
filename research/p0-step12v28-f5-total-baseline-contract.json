@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "courtedge-p0-step12v28-f5-total-baseline-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_F5_TOTAL_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test First 5 Innings Total as the next orthogonal MLB volume-expansion family after NRFI/YRFI closure, using the already-certified FULL13 vector and the same frozen total-model family used in F3 so the signal comparison is not contaminated by model or feature search.",
+  "parentEvidence": {
+    "mainBaseSha": "7bb890b1ff7a50be1dfeb37fbd89f1d8e036cc3c",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "f3TotalParentPr": 561,
+    "f3TotalParentWorkflowRunId": 31894436492,
+    "nrfiYrfiClosurePrs": [564, 565]
+  },
+  "outcomeAcquisition": {
+    "source": "MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE",
+    "baseUrl": "https://statsapi.mlb.com/api/v1/schedule",
+    "perGameLinescoreBaseUrl": "https://statsapi.mlb.com/api/v1/game",
+    "sportId": 1,
+    "windowDays": 14,
+    "requiredCanonicalGameMatch": "EXACT_GAME_PK_AND_TEAM_IDS",
+    "requiredInnings": [1, 2, 3, 4, 5],
+    "f5TotalRuns": "SUM_HOME_AND_AWAY_RUNS_IN_INNINGS_1_THROUGH_5",
+    "sameDateOutcomeUsedAsFeature": false,
+    "futureGameDataUsedAsFeature": false,
+    "currentMetadataFallbackAllowed": false,
+    "playByPlayFallbackAllowed": false,
+    "perGameOfficialLinescoreFallbackAllowed": true,
+    "maximumPerGameLinescoreFallbacks": 50,
+    "minimumOutcomeCoverageShare": 0.995,
+    "duplicateGamePkAllowed": false
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresT5PregameValid": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalF5PricesUsed": false,
+    "marketLineUsedAsModelFeature": false
+  },
+  "features": {
+    "exactly": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "featureCount": 13,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false
+  },
+  "model": {
+    "providerMarketKey": "totals_1st_5_innings",
+    "canonicalMarketType": "F5_TOTAL",
+    "modelFamily": "POISSON_REGRESSOR_WITH_TRAINING_ONLY_NB2_DISPERSION_FOR_OVER_PROBABILITIES",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonAlpha": 1.0,
+    "maxIter": 1000,
+    "nb2DispersionFitOn2022Only": true,
+    "fixedHalfRunLines": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "lineSearchAllowed": false,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "baselineMean": "2022_F5_TOTAL_MEAN",
+    "baselineLineProbabilities": "2022_EMPIRICAL_OVER_RATE_AT_EACH_FIXED_LINE"
+  },
+  "candidateRubric": {
+    "requires": [
+      "POSITIVE_POISSON_DEVIANCE_IMPROVEMENT_VS_2022_CONSTANT_BASELINE_IN_2023",
+      "POSITIVE_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_VS_2022_CLIMATOLOGY_IN_2023",
+      "POSITIVE_POISSON_DEVIANCE_IMPROVEMENT_VS_2022_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "POSITIVE_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_VS_2022_CLIMATOLOGY_IN_2024_2026_YTD"
+    ],
+    "passingOnlyAuthorizesNoRetunePerSeasonCalibrationBootstrapGate": true,
+    "passingDoesNotAuthorizeShadowPriceCapture": true,
+    "passingDoesNotEstablishPositiveEv": true
+  },
+  "volumeDiagnostics": {
+    "reportCanonicalGames": true,
+    "reportOutcomeCoverage": true,
+    "reportGamesPerEligibleSlateDay": true,
+    "reportPotentialF5TotalMarketPairsPerEligibleSlateDayBeforePriceFiltering": true,
+    "doNotTreatPotentialRowsAsBetCandidates": true
+  },
+  "marketBoundary": {
+    "exactProviderKey": "totals_1st_5_innings",
+    "canonicalMarketType": "F5_TOTAL",
+    "hardRockFirstPartyProductEvidenceRequiredInRegistry": true,
+    "historicalF5PricesUsed": false,
+    "historicalHitRateCannotEstablishPositiveEvWithoutPrices": true,
+    "liveHardRockFloridaAvailabilityStillRequiresPerEventDiscovery": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "robustnessGateRequiredBeforeProspectivePriceCapture": true,
+    "prospectivePriceCaptureRequiredBeforeAnyPromotion": true
+  }
+}
