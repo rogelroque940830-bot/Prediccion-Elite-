@@ -1,0 +1,190 @@
+name: Validate P0 Step 12V45 Batter Total Bases No Retune Robustness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v45-batter-total-bases-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v45-batter-total-bases-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v45-batter-total-bases-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V45 gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v45-batter-total-bases-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v45-batter-total-bases-no-retune-robustness-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='79962e9928e735c1c1d0f9facfbf563b8d5ef38d'
+          assert p['v44Pr']==582 and p['v44MergeSha']=='79962e9928e735c1c1d0f9facfbf563b8d5ef38d'
+          assert p['v44WorkflowRunId']==31906454299 and p['v44ArtifactId']==9252522584
+          assert p['v44ArtifactName']=='p0-step12v44-batter-total-bases-baseline'
+          assert p['v44ArtifactDigest']=='sha256:6e344b05fbf636278cd73bb00748bca892e20c9f765b2017b41abcac42b318f8'
+          assert p['v44ClassificationRequired']=='BATTER_TOTAL_BASES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          assert p['step12v3WorkflowRunId']==31659518059
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v44-batter-total-bases-baseline.py'
+          assert m['unchangedV44FeatureSetRequired'] is True
+          assert m['unchangedV44TrainingSeasonRequired']=='2022'
+          assert m['unchangedV44PoissonAlphaRequired']==1.0
+          assert m['unchangedV44FixedLinesRequired']==[0.5,1.5,2.5,3.5]
+          assert m['unchangedV44BatterOnlyBaselineRequired']=='BATTER_TBPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          for key in ['refitWithAdditionalSeasonsAllowed','recalibrationAllowed','coefficientChangeAllowed','featureChangeAllowed','imputationChangeAllowed','scalingChangeAllowed','dispersionChangeAllowed','lineSetChangeAllowed','baselineFormulaChangeAllowed','thresholdSearchAllowed']:
+              assert m[key] is False
+          assert c['replayParity']['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          for key in ['requireModelDevianceBeatConstantEachPartition','requireModelDevianceBeatBatterOnlyEachPartition','requireModelAverageBrierBeatConstantEachPartition','requireModelAverageBrierBeatBatterOnlyEachPartition','requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition','requireModelAbsoluteMeanBiasNoWorseThanBatterOnlyEachPartition']:
+              assert s[key] is True
+          assert s['noLineSpecificSubsetPromotion'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['clusterUnit']=='OFFICIAL_DATE' and b['replicates']==10000 and b['randomSeed']==4501 and b['confidenceLevel']==0.95
+          assert len(b['metrics'])==4 and b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics'] is True
+          assert c['classification']['pass']=='BATTER_TOTAL_BASES_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY'
+          assert c['classification']['fail']=='BATTER_TOTAL_BASES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['failureClosesCurrentBatterTotalBasesModel'] is True
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V45_GATE_PREDECLARED')
+          PY
+
+      - name: Syntax check V45 scorer
+        run: python -m py_compile scripts/p0-step12v45-batter-total-bases-no-retune-robustness.py
+
+      - name: Download immutable V44 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v44-batter-total-bases-baseline
+          path: artifacts/p0-step12v44
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31906454299
+
+      - name: Download certified V41 batter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify immutable V44 parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v44/batter-total-bases-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v44-batter-total-bases-baseline.v1'
+          assert r['classification']=='BATTER_TOTAL_BASES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True and all(r['candidateRubricChecks'].values())
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==12
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916
+          assert r['model']['fixedHalfTotalBasesLines']==[0.5,1.5,2.5,3.5]
+          assert r['volumeDiagnostics']['eligibleStartingBatterOutcomes']==204480
+          assert r['volumeDiagnostics']['eligibilityShare']>0.9996
+          assert r['marketBoundary']['providerMarketKey']=='batter_total_bases'
+          assert r['marketBoundary']['historicalBatterTotalBasesPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          print('V44_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V45 exact V44 replay and robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v45
+          python scripts/p0-step12v45-batter-total-bases-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v45-batter-total-bases-no-retune-robustness-contract.json \
+            --v44-contract research/p0-step12v44-batter-total-bases-baseline-contract.json \
+            --v44-script scripts/p0-step12v44-batter-total-bases-baseline.py \
+            --v44-report artifacts/p0-step12v44/batter-total-bases-baseline-report.json \
+            --out artifacts/p0-step12v45/batter-total-bases-no-retune-robustness-report.json
+
+      - name: Validate immutable replay and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v45/batter-total-bases-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v45-batter-total-bases-no-retune-robustness.v1'
+          assert r['parent']['v44Classification']=='BATTER_TOTAL_BASES_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['parent']['v44CandidateRubricPassed'] is True
+          mb=r['modelBoundary']
+          assert mb['unchangedV44ImplementationReplayed'] is True and mb['replayParityPassed'] is True and mb['replayParityTolerance']==1e-12
+          for key in ['refitWithAdditionalSeasonsUsed','recalibrationUsed','coefficientChangeUsed','featureChangeUsed','imputationChangeUsed','scalingChangeUsed','dispersionChangeUsed','lineSetChangeUsed','baselineFormulaChangeUsed','thresholdSearchUsed']:
+              assert mb[key] is False
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==12
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert set(r['seasonStabilityChecks'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000 and b['randomSeed']==4501 and b['confidenceLevel']==0.95 and b['uniqueDates']>490
+          assert set(b['metrics'])=={'devianceVsConstant','devianceVsBatterOnly','averageBrierVsConstant','averageBrierVsBatterOnly'}
+          assert set(r['bootstrapChecks'])==set(b['metrics'])
+          assert r['classification'] in {'BATTER_TOTAL_BASES_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY','BATTER_TOTAL_BASES_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'}
+          market=r['marketBoundary']
+          assert market['providerMarketKey']=='batter_total_bases' and market['repositoryRegistryFamily']=='BATTER_PROP'
+          assert market['historicalBatterTotalBasesPricesUsed'] is False and market['positiveEvEstablished'] is False
+          assert market['hardRockFloridaPerEventAvailabilityEstablished'] is False and market['productionPromotionAuthorized'] is False
+          assert market['prospectivePriceCaptureEngineeringAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          for key in ['featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'robustnessGatePassed':r['robustnessGatePassed'],
+            'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],
+            'seasonStabilityChecks':r['seasonStabilityChecks'],
+            'seasonMetrics':r['seasonMetrics'],
+            'bootstrapGatePassed':r['bootstrapGatePassed'],
+            'dateClusterBootstrap':r['dateClusterBootstrap'],
+            'bootstrapChecks':r['bootstrapChecks']
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_total_bases", "Batter total bases", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_total_bases: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V45 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v45-batter-total-bases-no-retune-robustness
+          path: artifacts/p0-step12v45/
+          if-no-files-found: error
+          retention-days: 30
