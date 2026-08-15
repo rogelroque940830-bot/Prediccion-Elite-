@@ -1,0 +1,190 @@
+name: Validate P0 Step 12V47 Batter RBI No Retune Robustness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v47-batter-rbis-no-retune-robustness-contract.json'
+      - 'scripts/p0-step12v47-batter-rbis-no-retune-robustness.py'
+      - '.github/workflows/validate-p0-step12v47-batter-rbis-no-retune-robustness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V47 gate
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v47-batter-rbis-no-retune-robustness-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v47-batter-rbis-no-retune-robustness-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='cb98cfc4b4d426e5aec76a8044ea5b5ed0c817c7'
+          assert p['v46Pr']==584 and p['v46MergeSha']=='cb98cfc4b4d426e5aec76a8044ea5b5ed0c817c7'
+          assert p['v46WorkflowRunId']==31907205911 and p['v46ArtifactId']==9252718878
+          assert p['v46ArtifactName']=='p0-step12v46-batter-rbis-baseline'
+          assert p['v46ArtifactDigest']=='sha256:0ed4434573536fc1637baf329ef7e2646614728b7a8df64fda6b4fb870457789'
+          assert p['v46ClassificationRequired']=='BATTER_RBI_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          assert p['step12v3WorkflowRunId']==31659518059
+          m=c['modelBoundary']
+          assert m['sourceImplementation']=='scripts/p0-step12v46-batter-rbis-baseline.py'
+          assert m['unchangedV46FeatureSetRequired'] is True
+          assert m['unchangedV46TrainingSeasonRequired']=='2022'
+          assert m['unchangedV46PoissonAlphaRequired']==1.0
+          assert m['unchangedV46FixedLinesRequired']==[0.5,1.5,2.5]
+          assert m['unchangedV46BatterOnlyBaselineRequired']=='BATTER_RBIPA_SHRUNK_TIMES_LINEUP_SLOT_PA_PER_START_SHRUNK'
+          for key in ['refitWithAdditionalSeasonsAllowed','recalibrationAllowed','coefficientChangeAllowed','featureChangeAllowed','imputationChangeAllowed','scalingChangeAllowed','dispersionChangeAllowed','lineSetChangeAllowed','baselineFormulaChangeAllowed','thresholdSearchAllowed']:
+              assert m[key] is False
+          assert c['replayParity']['absoluteTolerance']==1e-12
+          s=c['seasonStabilityGate']
+          assert s['partitions']==['2023','2024','2025','2026_YTD']
+          for key in ['requireModelDevianceBeatConstantEachPartition','requireModelDevianceBeatBatterOnlyEachPartition','requireModelAverageBrierBeatConstantEachPartition','requireModelAverageBrierBeatBatterOnlyEachPartition','requireModelAbsoluteMeanBiasNoWorseThanConstantEachPartition','requireModelAbsoluteMeanBiasNoWorseThanBatterOnlyEachPartition']:
+              assert s[key] is True
+          assert s['noLineSpecificSubsetPromotion'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['clusterUnit']=='OFFICIAL_DATE' and b['replicates']==10000 and b['randomSeed']==4701 and b['confidenceLevel']==0.95
+          assert len(b['metrics'])==4 and b['requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForAllMetrics'] is True
+          assert c['classification']['pass']=='BATTER_RBI_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY'
+          assert c['classification']['fail']=='BATTER_RBI_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['failureClosesCurrentBatterRbiModel'] is True
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V47_GATE_PREDECLARED')
+          PY
+
+      - name: Syntax check V47 scorer
+        run: python -m py_compile scripts/p0-step12v47-batter-rbis-no-retune-robustness.py
+
+      - name: Download immutable V46 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v46-batter-rbis-baseline
+          path: artifacts/p0-step12v46
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31907205911
+
+      - name: Download certified V41 batter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify immutable V46 parent custody
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v46/batter-rbis-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v46-batter-rbis-baseline.v1'
+          assert r['classification']=='BATTER_RBI_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['candidateRubricPassed'] is True and all(r['candidateRubricChecks'].values())
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==12
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916
+          assert r['model']['fixedHalfRbiLines']==[0.5,1.5,2.5]
+          assert r['volumeDiagnostics']['eligibleStartingBatterOutcomes']==204480
+          assert r['volumeDiagnostics']['eligibilityShare']>0.9996
+          assert r['marketBoundary']['providerMarketKey']=='batter_rbis'
+          assert r['marketBoundary']['historicalBatterRbiPricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          print('V46_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V47 exact V46 replay and robustness gate
+        run: |
+          mkdir -p artifacts/p0-step12v47
+          python scripts/p0-step12v47-batter-rbis-no-retune-robustness.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v47-batter-rbis-no-retune-robustness-contract.json \
+            --v46-contract research/p0-step12v46-batter-rbis-baseline-contract.json \
+            --v46-script scripts/p0-step12v46-batter-rbis-baseline.py \
+            --v46-report artifacts/p0-step12v46/batter-rbis-baseline-report.json \
+            --out artifacts/p0-step12v47/batter-rbis-no-retune-robustness-report.json
+
+      - name: Validate immutable replay and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v47/batter-rbis-no-retune-robustness-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v47-batter-rbis-no-retune-robustness.v1'
+          assert r['parent']['v46Classification']=='BATTER_RBI_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert r['parent']['v46CandidateRubricPassed'] is True
+          mb=r['modelBoundary']
+          assert mb['unchangedV46ImplementationReplayed'] is True and mb['replayParityPassed'] is True and mb['replayParityTolerance']==1e-12
+          for key in ['refitWithAdditionalSeasonsUsed','recalibrationUsed','coefficientChangeUsed','featureChangeUsed','imputationChangeUsed','scalingChangeUsed','dispersionChangeUsed','lineSetChangeUsed','baselineFormulaChangeUsed','thresholdSearchUsed']:
+              assert mb[key] is False
+          assert r['data']['scoredRows']==204480 and r['data']['featureCount']==12
+          assert set(r['seasonMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert set(r['seasonStabilityChecks'])=={'2023','2024','2025','2026_YTD'}
+          b=r['dateClusterBootstrap']
+          assert b['replicates']==10000 and b['randomSeed']==4701 and b['confidenceLevel']==0.95 and b['uniqueDates']>490
+          assert set(b['metrics'])=={'devianceVsConstant','devianceVsBatterOnly','averageBrierVsConstant','averageBrierVsBatterOnly'}
+          assert set(r['bootstrapChecks'])==set(b['metrics'])
+          assert r['classification'] in {'BATTER_RBI_ROBUST_ENOUGH_FOR_PROSPECTIVE_PRICE_CAPTURE_ENGINEERING_ONLY','BATTER_RBI_NOT_ROBUST_ENOUGH_FOR_PRICE_CAPTURE_CLOSE_CURRENT_MODEL'}
+          market=r['marketBoundary']
+          assert market['providerMarketKey']=='batter_rbis' and market['repositoryRegistryFamily']=='BATTER_PROP'
+          assert market['historicalBatterRbiPricesUsed'] is False and market['positiveEvEstablished'] is False
+          assert market['hardRockFloridaPerEventAvailabilityEstablished'] is False and market['productionPromotionAuthorized'] is False
+          assert market['prospectivePriceCaptureEngineeringAuthorized']==r['robustnessGatePassed']
+          p=r['policy']
+          for key in ['featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','lineSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'robustnessGatePassed':r['robustnessGatePassed'],
+            'seasonStabilityGatePassed':r['seasonStabilityGatePassed'],
+            'seasonStabilityChecks':r['seasonStabilityChecks'],
+            'seasonMetrics':r['seasonMetrics'],
+            'bootstrapGatePassed':r['bootstrapGatePassed'],
+            'dateClusterBootstrap':r['dateClusterBootstrap'],
+            'bootstrapChecks':r['bootstrapChecks']
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_rbis", "Batter RBIs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_rbis: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V47 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v47-batter-rbis-no-retune-robustness
+          path: artifacts/p0-step12v47/
+          if-no-files-found: error
+          retention-days: 30
