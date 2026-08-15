@@ -1,0 +1,163 @@
+name: Validate P0 Step 12V23 F3 Model Suite
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v23-f3-model-suite-contract.json'
+      - 'scripts/p0-step12v23-f3-model-suite.py'
+      - '.github/workflows/validate-p0-step12v23-f3-model-suite.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V23 contract and market boundaries
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v23-f3-model-suite-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v23-f3-model-suite-contract.v1'
+          assert c['outcomeAcquisition']['source']=='MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE'
+          assert c['outcomeAcquisition']['windowDays']==14
+          assert c['outcomeAcquisition']['requiredInnings']==[1,2,3]
+          assert c['outcomeAcquisition']['playByPlayFallbackAllowed'] is False
+          assert c['outcomeAcquisition']['maximumPerGameLinescoreFallbacks']==50
+          assert c['outcomeAcquisition']['minimumOutcomeCoverageShare']==0.995
+          assert c['dataBoundary']['modelFitSeason']=='2022'
+          assert c['dataBoundary']['validationSeason']=='2023'
+          assert c['dataBoundary']['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert len(c['features']['exactly'])==13
+          assert c['features']['featureSearchAllowed'] is False
+          assert c['moneylineModel']['marketKey']=='h2h_1st_3_innings'
+          assert c['moneylineModel']['canonicalMarketType']=='F3_ML'
+          assert c['moneylineModel']['modelSelectionAllowed'] is False
+          assert c['moneylineModel']['hyperparameterSearchAllowed'] is False
+          assert c['totalModel']['marketKey']=='totals_1st_3_innings'
+          assert c['totalModel']['canonicalMarketType']=='F3_TOTAL'
+          assert c['totalModel']['fixedHalfRunLines']==[1.5,2.5,3.5,4.5,5.5]
+          assert c['totalModel']['lineSearchAllowed'] is False
+          assert c['marketBoundary']['threeWayF3MoneylineEvaluated'] is False
+          assert c['marketBoundary']['f3RunLineEvaluated'] is False
+          assert c['statistics']['noPostResultModelSelection'] is True
+          assert c['policy']['liveLookupAuthorizationChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert 'h2h_1st_3_innings' in registry
+          assert 'totals_1st_3_innings' in registry
+          assert 'h2h_3_way_1st_3_innings' in registry
+          print('STEP12V23_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V23 scorer
+        run: python -m py_compile scripts/p0-step12v23-f3-model-suite.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Run V23 official F3 outcome acquisition and model suite
+        run: |
+          mkdir -p artifacts/p0-step12v23
+          python scripts/p0-step12v23-f3-model-suite.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v23-f3-model-suite-contract.json \
+            --outcomes-out artifacts/p0-step12v23/f3-outcomes.json \
+            --out artifacts/p0-step12v23/f3-model-suite-report.json
+
+      - name: Validate F3 custody, partitions, metrics, and safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          o=json.load(open('artifacts/p0-step12v23/f3-outcomes.json'))
+          r=json.load(open('artifacts/p0-step12v23/f3-model-suite-report.json'))
+          assert o['schemaVersion']=='courtedge-p0-step12v23-f3-outcomes.v1'
+          assert o['source']=='MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE'
+          assert o['policy']['labelsOnly'] is True
+          assert o['policy']['sameDateOutcomeUsedAsFeature'] is False
+          assert o['policy']['futureGameDataUsedAsFeature'] is False
+          assert o['policy']['playByPlayFallbackUsed'] is False
+          assert r['schemaVersion']=='courtedge-p0-step12v23-f3-model-suite.v1'
+          assert r['data']['canonicalSeasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          acquisition=r['data']['outcomeAcquisition']
+          assert acquisition['canonicalGames']==11407
+          assert acquisition['coverageShare']>=0.995
+          assert acquisition['perGameLinescoreFallbackRequests']<=50
+          assert r['data']['featureCount']==13
+          assert r['moneyline']['marketKey']=='h2h_1st_3_innings'
+          assert r['moneyline']['canonicalMarketType']=='F3_ML'
+          assert r['moneyline']['validation2023']['rows']>2300
+          assert r['moneyline']['evaluation2024_2026Ytd']['rows']>6400
+          assert r['total']['marketKey']=='totals_1st_3_innings'
+          assert r['total']['canonicalMarketType']=='F3_TOTAL'
+          assert r['total']['validation2023']['rows']>2300
+          assert r['total']['evaluation2024_2026Ytd']['rows']>6400
+          assert r['marketBoundary']['threeWayF3MoneylineEvaluated'] is False
+          assert r['marketBoundary']['f3RunLineEvaluated'] is False
+          assert r['marketBoundary']['historicalF3PricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['probabilityThresholdSearchUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'outcomeAcquisition':acquisition,
+            'volumeDiagnostics':r['volumeDiagnostics'],
+            'moneylineChecks':r['moneyline']['candidateRubricChecks'],
+            'totalChecks':r['total']['candidateRubricChecks'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve certified FULL13 and market-registry regressions
+        run: |
+          npm ci
+          npx tsx --test \
+            server/mlb-full13-live-feature-builder.test.ts \
+            server/mlb-market-universe-registry.test.ts \
+            server/mlb-market-odds-normalizer.test.ts \
+            server/mlb-frozen-research-route-assessor.test.ts
+          npm run build:backend
+
+      - name: Upload V23 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v23-f3-model-suite
+          path: artifacts/p0-step12v23/
+          if-no-files-found: error
+          retention-days: 30
