@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "courtedge-p0-step12v26-nrfi-yrfi-baseline-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_NRFI_YRFI_BASELINE_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test whether the already-certified FULL13 pregame vector contains stable information about whether either team scores in the first inning, using official MLB inning-level outcomes and strict train/validation/evaluation separation before any first-inning-specific feature engineering.",
+  "parentEvidence": {
+    "mainBaseSha": "6b7ddd27f1b822d5889ea9003cf2fd465c886181",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "full13LiveParityPr": 545,
+    "marketRegistrySource": "server/mlb-market-universe-registry.ts",
+    "marketNormalizerSource": "server/mlb-market-odds-normalizer.ts",
+    "f3ResearchClosurePrs": [561, 562, 563]
+  },
+  "outcomeAcquisition": {
+    "source": "MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE",
+    "baseUrl": "https://statsapi.mlb.com/api/v1/schedule",
+    "perGameLinescoreBaseUrl": "https://statsapi.mlb.com/api/v1/game",
+    "sportId": 1,
+    "windowDays": 14,
+    "requiredCanonicalGameMatch": "EXACT_GAME_PK_AND_TEAM_IDS",
+    "requiredInnings": [1],
+    "firstInningRuns": "HOME_RUNS_IN_INNING_1_PLUS_AWAY_RUNS_IN_INNING_1",
+    "yrfiLabel": "FIRST_INNING_RUNS_GTE_1",
+    "nrfiLabel": "FIRST_INNING_RUNS_EQ_0",
+    "sameDateOutcomeUsedAsFeature": false,
+    "futureGameDataUsedAsFeature": false,
+    "currentMetadataFallbackAllowed": false,
+    "playByPlayFallbackAllowed": false,
+    "perGameOfficialLinescoreFallbackAllowed": true,
+    "maximumPerGameLinescoreFallbacks": 50,
+    "minimumOutcomeCoverageShare": 0.995,
+    "duplicateGamePkAllowed": false
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresT5PregameValid": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalNrfiYrfiPricesUsed": false,
+    "marketLineUsedAsModelFeature": false
+  },
+  "features": {
+    "exactly": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "firstInningSpecificFeaturesAdded": false,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false
+  },
+  "model": {
+    "providerMarketKey": "totals_1st_1_innings",
+    "canonicalMarketTypes": ["NRFI", "YRFI"],
+    "quoteContract": "EXACT_TOTAL_0_5_OVER_UNDER_TRANSFORMED_TO_YRFI_NRFI",
+    "target": "YRFI_BINARY_WITH_NRFI_AS_COMPLEMENT",
+    "modelFamily": "BINARY_LOGISTIC_REGRESSION",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "regularizationC": 1.0,
+    "solver": "lbfgs",
+    "maxIter": 2000,
+    "randomState": 2601,
+    "classWeight": null,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "probabilityThresholdSearchAllowed": false,
+    "baseline": "2022_YRFI_CLIMATOLOGY",
+    "metrics": [
+      "BINARY_LOG_LOSS",
+      "BRIER_SCORE",
+      "ROC_AUC",
+      "OBSERVED_YRFI_RATE",
+      "MEAN_PREDICTED_YRFI_PROBABILITY",
+      "ABSOLUTE_MEAN_CALIBRATION_BIAS"
+    ]
+  },
+  "candidateRubric": {
+    "prospectiveCaptureCandidateRequires": [
+      "LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD",
+      "BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD",
+      "ROC_AUC_ABOVE_0_5_IN_2023",
+      "ROC_AUC_ABOVE_0_5_IN_2024_2026_YTD"
+    ],
+    "passingDoesNotAuthorizeLiveBetting": true,
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingOnlyAuthorizesNoRetuneRobustnessGateBeforeAnyShadowPriceCapture": true
+  },
+  "volumeDiagnostics": {
+    "reportCanonicalGames": true,
+    "reportOutcomeCoverage": true,
+    "reportGamesPerEligibleSlateDay": true,
+    "reportPotentialMarketPairsPerEligibleSlateDayBeforePriceFiltering": true,
+    "potentialMarketPairDefinition": "ONE_NRFI_YRFI_TWO_SIDED_MARKET_PAIR_PER_OUTCOME_COMPLETE_GAME",
+    "doNotDoubleCountNrfiAndYrfiAsIndependentMarkets": true,
+    "doNotTreatPotentialRowsAsBetCandidates": true
+  },
+  "marketBoundary": {
+    "exactProviderKey": "totals_1st_1_innings",
+    "requiredExactLine": 0.5,
+    "underMapsTo": "NRFI",
+    "overMapsTo": "YRFI",
+    "firstInningMoneylineEvaluated": false,
+    "threeWayFirstInningMoneylineEvaluated": false,
+    "historicalHitRateCannotEstablishPositiveEvWithoutPrices": true,
+    "historicalNrfiYrfiPricesUsed": false
+  },
+  "statistics": {
+    "noNumericThresholdSearch": true,
+    "noFeatureSearch": true,
+    "noModelSearch": true,
+    "noHyperparameterSearch": true,
+    "noPostResultModelSelection": true,
+    "noSubsetSelectionByHitRate": true,
+    "historicalHitRateDoesNotEstablishPositiveEvWithoutPrices": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "robustnessGateRequiredBeforeProspectivePriceCapture": true,
+    "prospectivePriceCaptureRequiredBeforePromotion": true
+  }
+}
