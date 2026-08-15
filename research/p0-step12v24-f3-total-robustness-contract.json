@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "courtedge-p0-step12v24-f3-total-robustness-contract.v1",
+  "scientificStatus": "FROZEN_F3_TOTAL_ROBUSTNESS_GATE_NOT_RETUNE",
+  "objective": "Require the unchanged V23 F3 Total model to demonstrate temporal stability, calibration-in-the-large, and date-clustered loss improvement before any live-model or prospective price-capture implementation.",
+  "parentEvidence": {
+    "v23Pr": 561,
+    "v23MergeCommit": "80b5248a2f4b3cbf3a25360ed7f6f0674f8f487c",
+    "v23WorkflowRunId": 31894436492,
+    "v23ArtifactId": 9249427586,
+    "v23ArtifactDigest": "sha256:7ac9b44038f48446e03c997b60ca18059bfacdd97be8a4a7829aa4c0d84d99e5",
+    "v23ArtifactName": "p0-step12v23-f3-model-suite",
+    "requiredParentClassification": "F3_TOTAL_PROSPECTIVE_CAPTURE_CANDIDATE_ONLY"
+  },
+  "modelBoundary": {
+    "modelSource": "V23_TOTAL_MODEL_SNAPSHOT",
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "coefficientChangeAllowed": false,
+    "featureChangeAllowed": false,
+    "imputationChangeAllowed": false,
+    "standardizationChangeAllowed": false,
+    "dispersionChangeAllowed": false,
+    "lineSetChangeAllowed": false,
+    "fixedLines": [1.5, 2.5, 3.5, 4.5, 5.5]
+  },
+  "dataBoundary": {
+    "validationSeason": "2023",
+    "robustnessSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalF3PricesUsed": false
+  },
+  "seasonStabilityGate": {
+    "partitions": ["2023", "2024", "2025", "2026_YTD"],
+    "requirePositivePoissonDevianceImprovementEachPartition": true,
+    "requirePositiveAverageBrierImprovementEachPartition": true,
+    "requireModelAbsoluteMeanBiasNoWorseThanConstantBaselineEachPartition": true,
+    "meanBiasDefinition": "ABS(OBSERVED_MEAN_F3_RUNS - MEAN_PREDICTED_F3_RUNS)",
+    "baselineMeanBiasDefinition": "ABS(OBSERVED_MEAN_F3_RUNS - V23_2022_TRAINING_MEAN_RUNS)"
+  },
+  "dateClusterBootstrapGate": {
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "clusterUnit": "OFFICIAL_DATE",
+    "withinClusterRowsKeptTogether": true,
+    "dayWeighting": "EQUAL_DAY_WEIGHT_AFTER_WITHIN_DAY_MEAN_LOSS_DIFFERENCE",
+    "replicates": 10000,
+    "randomSeed": 2401,
+    "confidenceLevel": 0.95,
+    "metrics": [
+      "BASELINE_MINUS_MODEL_POISSON_DEVIANCE",
+      "BASELINE_MINUS_MODEL_AVERAGE_FIXED_LINE_BRIER"
+    ],
+    "requireTwoSidedPercentileCiLowerBoundGreaterThanZeroForBothMetrics": true,
+    "numericEffectThresholdSearchAllowed": false
+  },
+  "diagnostics": {
+    "reportPerSeasonFixedLineBrier": true,
+    "reportPerSeasonObservedAndPredictedMean": true,
+    "reportPerSeasonMeanBias": true,
+    "reportBootstrapPointEstimateAndCi": true,
+    "reportMonthlyLossDifferences": true,
+    "monthlyResultsAreDescriptiveOnly": true,
+    "noMonthlySelectionAllowed": true
+  },
+  "promotionRubric": {
+    "robustnessPassRequires": [
+      "ALL_FOUR_PARTITIONS_POSITIVE_POISSON_DEVIANCE_IMPROVEMENT",
+      "ALL_FOUR_PARTITIONS_POSITIVE_AVERAGE_BRIER_IMPROVEMENT",
+      "ALL_FOUR_PARTITIONS_MODEL_MEAN_BIAS_NO_WORSE_THAN_CONSTANT_BASELINE",
+      "EVALUATION_DATE_CLUSTER_BOOTSTRAP_95CI_LOWER_BOUND_GT_0_FOR_DEVIANCE_IMPROVEMENT",
+      "EVALUATION_DATE_CLUSTER_BOOTSTRAP_95CI_LOWER_BOUND_GT_0_FOR_AVERAGE_BRIER_IMPROVEMENT"
+    ],
+    "passClassification": "F3_TOTAL_ROBUST_ENOUGH_FOR_LIVE_FREEZE_AND_SHADOW_PRICE_CAPTURE",
+    "failClassification": "F3_TOTAL_NOT_ROBUST_ENOUGH_FOR_LIVE_PROMOTION",
+    "passingStillDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeBetting": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "postResultRuleChangeAllowed": false,
+    "historicalHitRateDoesNotEstablishPositiveEvWithoutPrices": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePriceCaptureRequiredBeforePromotion": true
+  }
+}
