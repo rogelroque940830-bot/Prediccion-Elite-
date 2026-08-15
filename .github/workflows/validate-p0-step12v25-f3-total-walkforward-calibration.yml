@@ -1,0 +1,182 @@
+name: Validate P0 Step 12V25 F3 Total Walkforward Calibration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v25-f3-total-walkforward-calibration-contract.json'
+      - 'scripts/p0-step12v25-f3-total-walkforward-calibration.py'
+      - '.github/workflows/validate-p0-step12v25-f3-total-walkforward-calibration.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+
+      - name: Validate predeclared V25 walk-forward algorithm
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v25-f3-total-walkforward-calibration-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v25-f3-total-walkforward-calibration-contract.v1'
+          assert c['parentEvidence']['v23WorkflowRunId']==31894436492
+          assert c['parentEvidence']['v24WorkflowRunId']==31894841760
+          assert c['frozenBaseModel']['coefficientChangeAllowed'] is False
+          assert c['frozenBaseModel']['featureChangeAllowed'] is False
+          assert c['frozenBaseModel']['dispersionChangeAllowed'] is False
+          assert c['frozenBaseModel']['fixedLines']==[1.5,2.5,3.5,4.5,5.5]
+          a=c['calibrationAlgorithm']
+          assert a['type']=='PREVIOUS_COMPLETE_SEASON_GLOBAL_MULTIPLICATIVE_MEAN_FACTOR'
+          assert a['targetSeasonFactors']=={'2023':'1.0_VALIDATION_ANCHOR_NO_CALIBRATION','2024':'DERIVE_FROM_2023_ONLY','2025':'DERIVE_FROM_2024_ONLY','2026_YTD':'DERIVE_FROM_2025_ONLY'}
+          assert a['targetSeasonOutcomeUsedToCalibrateSameSeason'] is False
+          assert a['futureSeasonDataUsed'] is False
+          assert a['factorClippingAllowed'] is False
+          assert a['factorSearchAllowed'] is False
+          e=c['evaluation']
+          assert e['requirePositivePoissonDevianceImprovementVsBaselineEachPartition'] is True
+          assert e['requirePositiveAverageBrierImprovementVsBaselineEachPartition'] is True
+          assert e['requireCalibratedAbsoluteMeanBiasNoWorseThanBaselineEachPartition'] is True
+          assert e['requireCalibratedAbsoluteMeanBiasNoWorseThanUncalibratedEachWalkForwardSeason'] is True
+          assert e['requireAggregateWalkForwardPoissonDevianceNoWorseThanUncalibrated'] is True
+          assert e['requireAggregateWalkForwardAverageBrierNoWorseThanUncalibrated'] is True
+          b=c['dateClusterBootstrapGate']
+          assert b['replicates']==10000 and b['randomSeed']==2501 and b['confidenceLevel']==0.95
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('STEP12V25_ALGORITHM_PREDECLARED')
+          PY
+      - name: Syntax check V25 scorer
+        run: python -m py_compile scripts/p0-step12v25-f3-total-walkforward-calibration.py
+
+      - name: Download immutable V23 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v23-f3-model-suite
+          path: artifacts/p0-step12v23
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31894436492
+
+      - name: Download immutable V24 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v24-f3-total-robustness
+          path: artifacts/p0-step12v24
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31894841760
+
+      - name: Download canonical Step 12V3 features
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify parent custody
+        run: |
+          python - <<'PY'
+          import json
+          v23=json.load(open('artifacts/p0-step12v23/f3-model-suite-report.json'))
+          v24=json.load(open('artifacts/p0-step12v24/f3-total-robustness-report.json'))
+          o=json.load(open('artifacts/p0-step12v23/f3-outcomes.json'))
+          assert v23['classification']=='F3_TOTAL_PROSPECTIVE_CAPTURE_CANDIDATE_ONLY'
+          assert v23['total']['candidateRubricPassed'] is True
+          assert v23['moneyline']['candidateRubricPassed'] is False
+          assert v24['classification']=='F3_TOTAL_NOT_ROBUST_ENOUGH_FOR_LIVE_PROMOTION'
+          assert v24['robustnessGatePassed'] is False
+          assert v24['seasonStabilityChecks']['2024']['modelAbsoluteMeanBiasNoWorseThanConstantBaseline'] is False
+          assert o['acquisition']['outcomeCompleteGames']==11405
+          print('V23_V24_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V25 previous-season intercept calibration
+        run: |
+          mkdir -p artifacts/p0-step12v25
+          python scripts/p0-step12v25-f3-total-walkforward-calibration.py \
+            --root artifacts/p0-step12v3 \
+            --contract research/p0-step12v25-f3-total-walkforward-calibration-contract.json \
+            --v23-report artifacts/p0-step12v23/f3-model-suite-report.json \
+            --v23-outcomes artifacts/p0-step12v23/f3-outcomes.json \
+            --v24-report artifacts/p0-step12v24/f3-total-robustness-report.json \
+            --out artifacts/p0-step12v25/f3-total-walkforward-calibration-report.json
+
+      - name: Validate immutable/safety boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v25/f3-total-walkforward-calibration-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v25-f3-total-walkforward-calibration.v1'
+          assert r['algorithm']['targetSeasonOutcomeUsedToCalibrateSameSeason'] is False
+          assert r['algorithm']['futureSeasonDataUsed'] is False
+          assert r['algorithm']['factorSearchUsed'] is False
+          assert r['algorithm']['factorClippingUsed'] is False
+          assert r['algorithm']['baseCoefficientsChanged'] is False
+          assert r['algorithm']['baseFeaturesChanged'] is False
+          assert r['algorithm']['baseDispersionChanged'] is False
+          assert r['algorithm']['lineSetChanged'] is False
+          assert r['data']['canonicalSeasonRows']=={'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['data']['scoredRows']==9007
+          assert set(r['partitionMetrics'])=={'2023','2024','2025','2026_YTD'}
+          assert r['algorithm']['targetSeasonFactors']['2023']==1.0
+          assert r['dateClusterBootstrap']['replicates']==10000
+          assert r['dateClusterBootstrap']['randomSeed']==2501
+          assert r['marketBoundary']['historicalF3PricesUsed'] is False
+          assert r['marketBoundary']['positiveEvEstablished'] is False
+          assert r['marketBoundary']['productionPromotionAuthorized'] is False
+          p=r['policy']
+          assert p['sameSeasonOutcomeCalibrationUsed'] is False
+          assert p['futureDataUsed'] is False
+          assert p['thresholdSearchUsed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['modelSearchUsed'] is False
+          assert p['lineSearchUsed'] is False
+          assert p['postResultRuleChangeUsed'] is False
+          assert p['liveLookupAuthorizationChanged'] is False
+          assert p['liveMarketDiscoveryChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['stakeChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'gatePassed':r['gatePassed'],
+            'factors':r['algorithm']['targetSeasonFactors'],
+            'partitionChecks':r['partitionChecks'],
+            'aggregateChecks':r['aggregateChecks'],
+            'bootstrapChecks':r['bootstrapChecks'],
+          },indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Preserve MLB regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-full13-live-feature-builder.test.ts server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts
+          npm run build:backend
+
+      - name: Upload V25 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v25-f3-total-walkforward-calibration
+          path: artifacts/p0-step12v25/
+          if-no-files-found: error
+          retention-days: 30
