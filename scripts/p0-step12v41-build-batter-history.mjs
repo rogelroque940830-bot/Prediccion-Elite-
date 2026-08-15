@@ -32,7 +32,15 @@ if (officialPks.length !== official.officialFinalGames) throw new Error("V41_PAR
 
 await fs.mkdir(outputRoot, { recursive: true });
 const history = await fetchMlbHistoricalBatterHistoryFromOfficialGames({ games: official.games, concurrency });
-if (history.fetchFailures.length !== 0) throw new Error(`V41_BATTER_HISTORY_INCOMPLETE:${history.fetchFailures.length}`);
+if (history.fetchFailures.length !== 0) {
+  console.error(JSON.stringify({
+    diagnostic: "V41_BATTER_HISTORY_FAILURE_SAMPLE",
+    seasonLabel,
+    failureCount: history.fetchFailures.length,
+    firstFailures: history.fetchFailures.slice(0, 10),
+  }, null, 2));
+  throw new Error(`V41_BATTER_HISTORY_INCOMPLETE:${history.fetchFailures.length}`);
+}
 if (history.teamAggregateReconciliationFailures !== 0) throw new Error("V41_TEAM_RECONCILIATION_FAILED");
 if (history.gamesWithBatterLines !== official.officialFinalGames) throw new Error("V41_GAME_COUNT_MISMATCH");
 
