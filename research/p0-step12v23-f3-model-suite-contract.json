@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "courtedge-p0-step12v23-f3-model-suite-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_F3_MODEL_DISCOVERY_NOT_PRICE_VALIDATION",
+  "objective": "Test whether the already-certified FULL13 pregame feature vector can support stable first-three-innings moneyline and total probability models, using official MLB inning-level outcomes and strict train/validation/evaluation separation.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "full13LiveParityPr": 545,
+    "full13LiveFeatureNamesSource": "server/mlb-full13-live-feature-builder.ts",
+    "marketRegistrySource": "server/mlb-market-universe-registry.ts",
+    "volumeCeilingPr": 557,
+    "teamTotalResearchPr": 558,
+    "teamTotalLivePr": 559,
+    "teamTotalShadowPr": 560
+  },
+  "outcomeAcquisition": {
+    "source": "MLB_STATS_API_SCHEDULE_HYDRATE_LINESCORE",
+    "baseUrl": "https://statsapi.mlb.com/api/v1/schedule",
+    "sportId": 1,
+    "windowDays": 14,
+    "requiredCanonicalGameMatch": "EXACT_GAME_PK_AND_TEAM_IDS",
+    "requiredInnings": [1, 2, 3],
+    "f3AwayRuns": "SUM_AWAY_RUNS_IN_INNINGS_1_TO_3",
+    "f3HomeRuns": "SUM_HOME_RUNS_IN_INNINGS_1_TO_3",
+    "f3TotalRuns": "F3_HOME_RUNS_PLUS_F3_AWAY_RUNS",
+    "f3OutcomeClasses": ["HOME", "DRAW", "AWAY"],
+    "sameDateOutcomeUsedAsFeature": false,
+    "futureGameDataUsedAsFeature": false,
+    "currentMetadataFallbackAllowed": false,
+    "playByPlayFallbackAllowed": false,
+    "minimumOutcomeCoverageShare": 0.995,
+    "duplicateGamePkAllowed": false
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "requiresT5PregameValid": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalF3PricesUsed": false,
+    "marketLineUsedAsModelFeature": false
+  },
+  "features": {
+    "exactly": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false
+  },
+  "moneylineModel": {
+    "marketKey": "h2h_1st_3_innings",
+    "canonicalMarketType": "F3_ML",
+    "settlement": "HOME_OR_AWAY_WIN_WITH_DRAW_AS_PUSH",
+    "modelFamily": "MULTINOMIAL_LOGISTIC_REGRESSION_HOME_DRAW_AWAY",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "regularizationC": 1.0,
+    "maxIter": 2000,
+    "randomState": 1729,
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "baseline": "2022_THREE_CLASS_CLIMATOLOGY",
+    "metrics": [
+      "MULTICLASS_LOG_LOSS",
+      "MULTICLASS_BRIER_SCORE",
+      "CLASSWISE_BRIER_HOME",
+      "CLASSWISE_BRIER_DRAW",
+      "CLASSWISE_BRIER_AWAY",
+      "OBSERVED_CLASS_RATES",
+      "MEAN_PREDICTED_CLASS_PROBABILITIES"
+    ]
+  },
+  "totalModel": {
+    "marketKey": "totals_1st_3_innings",
+    "canonicalMarketType": "F3_TOTAL",
+    "target": "F3_TOTAL_RUNS",
+    "modelFamily": "POISSON_REGRESSION_MEAN_WITH_TRAINING_ONLY_NB2_DISPERSION",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonRegressorAlpha": 1.0,
+    "poissonRegressorMaxIter": 2000,
+    "negativeBinomialDispersionMethod": "NB2_METHOD_OF_MOMENTS_ON_2022_RESIDUALS",
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "fixedHalfRunLines": [1.5, 2.5, 3.5, 4.5, 5.5],
+    "lineSearchAllowed": false,
+    "probabilityThresholdSearchAllowed": false,
+    "baseline": "2022_CONSTANT_MEAN_AND_LINE_CLIMATOLOGY",
+    "metrics": [
+      "MEAN_POISSON_DEVIANCE",
+      "MAE",
+      "MEAN_PREDICTED_RUNS",
+      "OBSERVED_MEAN_RUNS",
+      "LINE_SPECIFIC_BRIER_SCORE",
+      "AVERAGE_BRIER_ACROSS_FIXED_LINES"
+    ]
+  },
+  "candidateRubric": {
+    "f3MoneylineProspectiveCaptureCandidateRequires": [
+      "MULTICLASS_LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "MULTICLASS_LOG_LOSS_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD",
+      "MULTICLASS_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "MULTICLASS_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD"
+    ],
+    "f3TotalProspectiveCaptureCandidateRequires": [
+      "POISSON_DEVIANCE_BELOW_CONSTANT_BASELINE_IN_2023",
+      "POISSON_DEVIANCE_BELOW_CONSTANT_BASELINE_IN_2024_2026_YTD",
+      "AVERAGE_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2023",
+      "AVERAGE_BRIER_BELOW_2022_CLIMATOLOGY_BASELINE_IN_2024_2026_YTD"
+    ],
+    "passingDoesNotAuthorizeLiveBetting": true,
+    "passingOnlyAuthorizesFrozenLiveModelAndProspectiveShadowPriceCapture": true
+  },
+  "volumeDiagnostics": {
+    "reportCanonicalGames": true,
+    "reportOutcomeCoverage": true,
+    "reportGamesPerEligibleSlateDay": true,
+    "reportPotentialMarketRowsPerEligibleSlateDayBeforePriceFiltering": true,
+    "potentialMarketRowsDefinition": "ONE_F3_ML_PLUS_ONE_F3_TOTAL_PER_OUTCOME_COMPLETE_GAME",
+    "doNotTreatPotentialRowsAsBetCandidates": true
+  },
+  "marketBoundary": {
+    "twoWayF3MoneylineOnly": true,
+    "threeWayF3MoneylineKey": "h2h_3_way_1st_3_innings",
+    "threeWayF3MoneylineEvaluated": false,
+    "threeWayContractMustRemainSeparate": true,
+    "f3RunLineEvaluated": false,
+    "historicalHitRateCannotEstablishPositiveEvWithoutPrices": true,
+    "historicalF3PricesUsed": false
+  },
+  "statistics": {
+    "noNumericThresholdSearch": true,
+    "noFeatureSearch": true,
+    "noLineSearch": true,
+    "noPostResultModelSelection": true,
+    "doNotChooseMarketByHitRateAlone": true,
+    "historicalHitRateDoesNotEstablishPositiveEvWithoutPrices": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePriceCaptureRequiredBeforePromotion": true
+  }
+}
