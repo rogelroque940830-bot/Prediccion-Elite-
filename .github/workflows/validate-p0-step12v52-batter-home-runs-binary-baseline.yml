@@ -42,11 +42,13 @@ jobs:
           assert q['v51ClassificationRequired']=='BATTER_WALKS_BASELINE_REJECTED'
           assert q['priorClosedModelsRetuneAllowedInV52'] is False
           m=c['marketEvidence']
-          assert m['providerMarketKey']=='batter_home_runs' and m['repositoryRegistryQuoteShape']=='NO_LINE_BINARY'
+          assert m['providerMarketKey']=='batter_home_runs' and m['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert m['researchBinaryTargetMatchesProviderQuoteShape'] is False
           assert m['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True and m['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
           t=c['canonicalTargetCustody']
           assert t['recordedBatterField']=='homeRuns' and t['targetEvent']=='HOME_RUNS_GREATER_THAN_ZERO'
           assert t['targetUsesDirectOfficialCountThenDeterministicBinaryIndicator'] is True
+          assert t['providerMarketIsOverUnderWhileResearchTargetIsAnyHrBinary'] is True
           d=c['dataBoundary']
           assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023' and d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
           assert d['sameDateHistoryAllowed'] is False and d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True and d['futureGameDataAllowed'] is False
@@ -60,7 +62,7 @@ jobs:
           assert c['candidateRubric']['failureClassification']=='BATTER_HOME_RUN_BINARY_BASELINE_REJECTED'
           assert c['statistics']['postResultRuleChangeAllowed'] is False and c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
           registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
-          assert '["batter_home_runs", "Batter home runs", "BATTER_PROP", "NO_LINE_BINARY"]' in registry
+          assert '["batter_home_runs", "Batter home runs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' in registry
           exact=registry.split('const HARD_ROCK_EXACT_EVIDENCE',1)[1].split('});',1)[0]
           assert 'batter_home_runs: ["HARD_ROCK_MLB_GUIDE_20260807"]' in exact
           canonical=registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
@@ -132,7 +134,9 @@ jobs:
           v=r['volumeDiagnostics']
           assert v['eligibleStartingBatterOutcomes']==204480 and v['eligibilityShare']>0.9996 and v['positiveHomeRunEvents']>0
           mb=r['marketBoundary']
-          assert mb['repositoryQuoteShape']=='NO_LINE_BINARY' and mb['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
+          assert mb['repositoryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert mb['researchTargetEvent']=='HOME_RUNS_GREATER_THAN_ZERO' and mb['researchBinaryTargetMatchesProviderQuoteShape'] is False
+          assert mb['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
           assert mb['historicalBatterHomeRunPricesUsed'] is False and mb['positiveEvEstablished'] is False and mb['productionPromotionAuthorized'] is False
           p=r['policy']
           for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','priorClosedModelsRetuned','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
@@ -151,7 +155,7 @@ jobs:
           npm ci
           npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
           npm run build:backend
-          grep -F '["batter_home_runs", "Batter home runs", "BATTER_PROP", "NO_LINE_BINARY"]' server/mlb-market-universe-registry.ts
+          grep -F '["batter_home_runs", "Batter home runs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
           grep -F 'batter_home_runs: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
 
       - name: Upload V52 evidence
