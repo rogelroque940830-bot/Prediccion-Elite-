@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "courtedge-p0-v16-no-play-funnel-audit-contract.v1",
+  "scientificStatus": "DIAGNOSTIC_ONLY_NO_THRESHOLD_OR_RECOMMENDATION_MUTATION",
+  "objective": "Determine whether V16 produces no actionable candidates because the baseball model lacks conviction, because price/EV removes otherwise strong theses, or because downstream fail-closed gates block them.",
+  "control": {
+    "mainCommit": "353f9dd9248ef74791d47d6293fe206df6c8b350",
+    "runtimeScorerVersion": "mlb-v16-runtime-scorer-v1",
+    "classifierVersion": "mlb-frozen-a-plus-classifier.v1",
+    "modelAndThresholdsFrozen": true
+  },
+  "requiredStageCounts": [
+    "slateGames",
+    "analysisAllowedGames",
+    "finalInputGames",
+    "deepPrefilterEligibleGames",
+    "v16ScoredGames",
+    "intrinsicThesisGames",
+    "paidLookupEligibleGames",
+    "pricedThesisMarkets",
+    "positiveEvMarkets",
+    "positiveEvEnvelopeBlocked",
+    "eliteEvidenceCandidates",
+    "eliteEvidenceRowsCaptured"
+  ],
+  "requiredNoPlayAttribution": [
+    "NO_FINAL_INPUTS",
+    "NO_DEEP_PREFILTER_ELIGIBILITY",
+    "NO_INTRINSIC_THESIS",
+    "NO_PAID_LOOKUP_ELIGIBILITY",
+    "NO_PRICE_OR_STALE_PRICE",
+    "NO_POSITIVE_EV",
+    "POSITIVE_EV_ENVELOPE_BLOCKED",
+    "NO_ELITE_EVIDENCE_CANDIDATE"
+  ],
+  "policy": {
+    "changeModel": false,
+    "changeFeatures": false,
+    "changeThresholds": false,
+    "changeMarketDirection": false,
+    "changeRanking": false,
+    "changeStake": false,
+    "changeBetElite": false,
+    "changeFinalRecommendation": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "diagnosticsOnly": true
+  },
+  "decisionRule": "Do not loosen any gate from a two-day no-play observation. First instrument the full funnel and attribute each rejection to the earliest blocking stage. Any later architecture change requires separate evidence and authorization."
+}
