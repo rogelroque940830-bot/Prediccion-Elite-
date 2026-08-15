@@ -1,0 +1,167 @@
+name: Validate P0 Step 12V52 Batter Home Runs Binary Baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v52-batter-home-runs-binary-baseline-contract.json'
+      - 'scripts/p0-step12v52-batter-home-runs-binary-baseline.py'
+      - '.github/workflows/validate-p0-step12v52-batter-home-runs-binary-baseline.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scikit-learn==1.8.0'
+
+      - name: Validate frozen V52 contract and registry boundary
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v52-batter-home-runs-binary-baseline-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v52-batter-home-runs-binary-baseline-contract.v1'
+          p=c['parentEvidence']
+          assert p['mainBaseSha']=='70d14211a6448603812ddfc192edbeaeb09d9e49'
+          assert p['step12v3WorkflowRunId']==31659518059 and p['step12v3ArtifactId']==9166442982
+          assert p['v41WorkflowRunId']==31905076013 and p['v41ArtifactId']==9252168716
+          q=p['priorBatterWalksClosure']
+          assert q['v51Pr']==589 and q['v51MergeSha']=='70d14211a6448603812ddfc192edbeaeb09d9e49'
+          assert q['v51WorkflowRunId']==31909499521 and q['v51ArtifactId']==9253298372
+          assert q['v51ArtifactDigest']=='sha256:b3a54958d876ff540469a6b50d372b35d6db6e81bea697799234e39038958c52'
+          assert q['v51ClassificationRequired']=='BATTER_WALKS_BASELINE_REJECTED'
+          assert q['priorClosedModelsRetuneAllowedInV52'] is False
+          m=c['marketEvidence']
+          assert m['providerMarketKey']=='batter_home_runs' and m['repositoryRegistryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert m['researchBinaryTargetMatchesProviderQuoteShape'] is False
+          assert m['hardRockExactFirstPartyProductEvidenceExistsInRegistry'] is True and m['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
+          t=c['canonicalTargetCustody']
+          assert t['recordedBatterField']=='homeRuns' and t['targetEvent']=='HOME_RUNS_GREATER_THAN_ZERO'
+          assert t['targetUsesDirectOfficialCountThenDeterministicBinaryIndicator'] is True
+          assert t['providerMarketIsOverUnderWhileResearchTargetIsAnyHrBinary'] is True
+          d=c['dataBoundary']
+          assert d['modelFitSeason']=='2022' and d['validationSeason']=='2023' and d['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert d['sameDateHistoryAllowed'] is False and d['scoreWholeDateBeforeUpdatingAnySameDateState'] is True and d['futureGameDataAllowed'] is False
+          expected=['batter_hrpa_shrunk','batter_hpa_shrunk','batter_bbpa_shrunk','batter_kpa_shrunk','batter_recent10_hr_per_game','batter_recent10_pa_per_game','lineup_slot','lineup_slot_pa_per_start_shrunk','opposing_starter_hrbf_shrunk','opposing_starter_kbf_shrunk','opposing_starter_bbbf_shrunk','opposing_starter_bf_per_start_shrunk']
+          assert c['features']['exactly']==expected and c['features']['featureCount']==12 and len(set(expected))==12
+          assert c['baselines']['batterOnlyMechanistic']=='ONE_MINUS_ONE_MINUS_SHRUNK_BATTER_HRPA_TO_EXPECTED_LINEUP_SLOT_PA_POWER'
+          model=c['model']
+          assert model['modelFamily']=='LOGISTIC_REGRESSION_L2' and model['regularizationC']==1.0 and model['solver']=='lbfgs' and model['classWeight'] is None
+          assert len(c['candidateRubric']['requires'])==8
+          assert c['candidateRubric']['passingClassification']=='BATTER_HOME_RUN_BINARY_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY'
+          assert c['candidateRubric']['failureClassification']=='BATTER_HOME_RUN_BINARY_BASELINE_REJECTED'
+          assert c['statistics']['postResultRuleChangeAllowed'] is False and c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          registry=open('server/mlb-market-universe-registry.ts',encoding='utf-8').read()
+          assert '["batter_home_runs", "Batter home runs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' in registry
+          exact=registry.split('const HARD_ROCK_EXACT_EVIDENCE',1)[1].split('});',1)[0]
+          assert 'batter_home_runs: ["HARD_ROCK_MLB_GUIDE_20260807"]' in exact
+          canonical=registry.split('const CANONICAL_BY_PROVIDER_KEY',1)[1].split('});',1)[0]
+          assert 'batter_home_runs:' not in canonical
+          print('STEP12V52_BATTER_HOME_RUN_BINARY_CONTRACT_LOCKED')
+          PY
+
+      - name: Syntax check V52 scorer
+        run: python -m py_compile scripts/p0-step12v52-batter-home-runs-binary-baseline.py
+
+      - name: Download immutable Step 12V3 pregame evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download certified V41 batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Verify immutable V41 home-run custody before modeling
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('artifacts/p0-step12v41')
+          c=json.load(open(root/'batter-historical-custody-certification.json'))
+          assert c['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert c['totalGames']==11505 and c['totalBatterLines']==240512
+          assert c['fiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          for season in ['2022','2023','2024','2025','2026_YTD']:
+              h=json.load(open(root/season/'batter-history.json'))
+              assert h['fetchFailures']==[] and h['teamAggregateReconciliationFailures']==0
+              for game in h['games']:
+                  for side in ['awayBatters','homeBatters']:
+                      for batter in game[side]:
+                          assert isinstance(batter['homeRuns'],int) and batter['homeRuns']>=0
+          print('V41_DIRECT_BATTER_HOME_RUN_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run V52 frozen batter-home-run binary model
+        run: |
+          mkdir -p artifacts/p0-step12v52
+          python scripts/p0-step12v52-batter-home-runs-binary-baseline.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --contract research/p0-step12v52-batter-home-runs-binary-baseline-contract.json \
+            --out artifacts/p0-step12v52/batter-home-runs-binary-baseline-report.json
+
+      - name: Validate V52 result and research-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v52/batter-home-runs-binary-baseline-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v52-batter-home-runs-binary-baseline.v1'
+          assert r['classification'] in {'BATTER_HOME_RUN_BINARY_NO_RETUNE_ROBUSTNESS_CANDIDATE_ONLY','BATTER_HOME_RUN_BINARY_BASELINE_REJECTED'}
+          assert r['data']['featureCount']==12 and r['data']['scoredRows']==204480
+          assert r['model']['providerMarketKey']=='batter_home_runs' and r['model']['canonicalResearchMarketType']=='BATTER_HOME_RUN_BINARY'
+          assert r['model']['trainingSeason']=='2022' and r['model']['trainingRows']==42916 and r['model']['trainingPositiveEvents']>0
+          assert r['validation2023']['rows']==43060 and r['evaluation2024_2026Ytd']['rows']==118504
+          assert len(r['candidateRubricChecks'])==8
+          v=r['volumeDiagnostics']
+          assert v['eligibleStartingBatterOutcomes']==204480 and v['eligibilityShare']>0.9996 and v['positiveHomeRunEvents']>0
+          mb=r['marketBoundary']
+          assert mb['repositoryQuoteShape']=='PLAYER_OVER_UNDER'
+          assert mb['researchTargetEvent']=='HOME_RUNS_GREATER_THAN_ZERO' and mb['researchBinaryTargetMatchesProviderQuoteShape'] is False
+          assert mb['hardRockEvidenceSourceId']=='HARD_ROCK_MLB_GUIDE_20260807'
+          assert mb['historicalBatterHomeRunPricesUsed'] is False and mb['positiveEvEstablished'] is False and mb['productionPromotionAuthorized'] is False
+          p=r['policy']
+          for key in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','thresholdSearchUsed','subsetMiningUsed','postResultRuleChangeUsed','priorClosedModelsRetuned','productionMarketRegistryChanged','liveLookupAuthorizationChanged','liveMarketDiscoveryChanged','rankingChanged','stakeChanged','betEliteAllowed','automaticBetPlacementAllowed']:
+              assert p[key] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'candidateRubricPassed':r['candidateRubricPassed'],'validation2023':r['validation2023'],'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],'bySeason':r['bySeasonDescriptiveOnly'],'candidateRubricChecks':r['candidateRubricChecks'],'volumeDiagnostics':r['volumeDiagnostics']},indent=2))
+          PY
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Preserve canonical MLB regressions and unchanged registry
+        run: |
+          npm ci
+          npx tsx --test server/mlb-market-universe-registry.test.ts server/mlb-market-odds-normalizer.test.ts server/mlb-market-batter-history.test.ts
+          npm run build:backend
+          grep -F '["batter_home_runs", "Batter home runs", "BATTER_PROP", "PLAYER_OVER_UNDER"]' server/mlb-market-universe-registry.ts
+          grep -F 'batter_home_runs: ["HARD_ROCK_MLB_GUIDE_20260807"]' server/mlb-market-universe-registry.ts
+
+      - name: Upload V52 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v52-batter-home-runs-binary-baseline
+          path: artifacts/p0-step12v52/
+          if-no-files-found: error
+          retention-days: 30
