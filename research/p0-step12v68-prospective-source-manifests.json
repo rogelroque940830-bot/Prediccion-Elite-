@@ -1,7 +1,17 @@
 {
   "schemaVersion": "courtedge-p0-step12v68-prospective-source-manifests.v1",
+  "manifestRevision": 2,
   "scientificStatus": "FROZEN_SOURCE_ADAPTERS_BEFORE_FIRST_REAL_V68_PROSPECTIVE_CAPTURE",
   "parentContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "preCaptureOperationalCompletion": {
+    "completedBeforeFirstEligibleOfficialDate": "2026-08-17",
+    "noRealV68ProspectiveCaptureOccurred": true,
+    "noRealV68OutcomeEvaluationOccurred": true,
+    "frozenScientificHypothesisChanged": false,
+    "frozenPrimaryModelChanged": false,
+    "frozenPromotionGateChanged": false,
+    "purpose": "Complete durable source custody, daily prior-date state preparation, and serialized immutable capture operations before the prospective cohort begins."
+  },
   "canonicalHistoricalBase": {
     "workflowRunId": 31659518059,
     "artifactId2026Ytd": 9166093353,
@@ -149,6 +159,24 @@
       "combined_team_rs10",
       "team_rd10_diff"
     ]
+  },
+  "operationalProspectiveCapture": {
+    "dataBranch": "data/p0-step12v68-prospective",
+    "sourceBaseArtifactName": "p0-step12v68-frozen-prospective-source-base",
+    "sourceBaseRetentionDays": 90,
+    "sourceBaseDiscovery": "LATEST_NONEXPIRED_ARTIFACT_WITH_EXACT_NAME_FROM_FIXED_PARENT_PRESERVATION_WORKFLOW",
+    "preparedStateUsesOnlyOfficialDatesStrictlyBeforeTargetDate": true,
+    "preparedStateFirstWritePerOfficialDateImmutable": true,
+    "preparedStateRetryHoursUtc": [10, 11, 12, 13, 14],
+    "capturePollingCadenceMinutes": 10,
+    "captureWindowMaximumMinutesBeforeScheduledStart": 20,
+    "captureMustBeStrictlyBeforeScheduledStart": true,
+    "requiresExactNineByNineCurrentLineups": true,
+    "requiresBothCurrentPregameProbablePitchers": true,
+    "firstCanonicalGameCaptureImmutable": true,
+    "duplicateCaptureReturnsExistingCanonicalSnapshot": true,
+    "serializedDataLedgerWritesRequired": true,
+    "outcomesOrMarketPricesInPregameLedgerAllowed": false
   },
   "policy": {
     "researchOnly": true,
