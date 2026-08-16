@@ -18,7 +18,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: p0-step12v68-prospective-ledger
+  group: p0-step12v68-capture-prospective-games
   cancel-in-progress: false
 
 jobs:
@@ -206,4 +206,5 @@ jobs:
           git add v68/captures v68/source-records v68/receipts
           git diff --cached --quiet && exit 0
           git commit -m "V68 capture ${{ steps.date.outputs.target }}: add ${{ steps.score.outputs.new }} immutable pregame game(s)"
+          git pull --rebase origin data/p0-step12v68-prospective
           git push origin HEAD:data/p0-step12v68-prospective
