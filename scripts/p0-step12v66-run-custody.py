@@ -9,6 +9,8 @@ uses effective scale 1.0, leaving its standardized contribution at zero.
 from __future__ import annotations
 
 import importlib.util
+import json
+import sys
 from pathlib import Path
 
 
@@ -56,10 +58,36 @@ def corrected_quality_scaler(mod, raw):
     return params
 
 
+def report_path_from_argv():
+    try:
+        i = sys.argv.index("--report")
+        return Path(sys.argv[i + 1])
+    except (ValueError, IndexError):
+        return None
+
+
+def attach_correction_audit_alias(report_path):
+    if report_path is None or not report_path.exists():
+        raise SystemExit("V66_CORRECTION_REPORT_PATH_MISSING")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    params = report.get("qualityTrainingStandardization", {}).get("sideLevelComponentParameters")
+    if not isinstance(params, dict):
+        raise SystemExit("V66_CORRECTION_SCALER_AUDIT_MISSING")
+    report["qualityIndex"] = {
+        "definition": "UNWEIGHTED_MEAN_OF_FIVE_2022_STANDARDIZED_V62_SIDE_COMPONENTS",
+        "2022TrainingScaler": params,
+        "zeroVariancePolicy": "PRESERVE_RAW_VALUES_AND_MEAN_USE_EFFECTIVE_SCALE_ONE",
+        "correctionDocument": "research/p0-step12v66-preoutcome-zero-variance-correction.json",
+    }
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def main():
+    report_path = report_path_from_argv()
     mod = load_custody_module()
     mod.quality_scaler = lambda raw: corrected_quality_scaler(mod, raw)
     mod.main()
+    attach_correction_audit_alias(report_path)
 
 
 if __name__ == "__main__":
