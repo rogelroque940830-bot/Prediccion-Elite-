@@ -47,6 +47,8 @@ def probable_id(prob,side):
 
 def acquire(item):
     base={k:item[k] for k in ('season','gamePk','officialDate','homeTeamId','awayTeamId','homePitcherId','awayPitcherId','requestedTimecode')}
+    if item['homePitcherId']<=0 or item['awayPitcherId']<=0:
+        return {**base,'usable':False,'reason':'FROZEN_T5_PROBABLE_STARTER_ID_MISSING'}
     try:
         payload,url=fetch_json(item['gamePk'],item['requestedTimecode'])
         base['urlDigest']=hashlib.sha256(url.encode()).hexdigest()
@@ -84,7 +86,6 @@ def main():
         seen.add(pk);ls=lm.get(pk)
         if not ls or ls.get('complete') is not True:raise SystemExit(f'V60_PREGAME_HANDS_CANONICAL_LINEUP_MISSING:{pk}')
         hpid=int(r.get('t5HomeProbablePitcherId') or 0);apid=int(r.get('t5AwayProbablePitcherId') or 0)
-        if hpid<=0 or apid<=0:raise SystemExit(f'V60_PREGAME_HANDS_PROBABLE_STARTER_MISSING:{pk}')
         rows.append({'season':a.season,'gamePk':pk,'officialDate':str(r['officialDate']),'homeTeamId':int(r['homeTeamId']),'awayTeamId':int(r['awayTeamId']),'homePitcherId':hpid,'awayPitcherId':apid,'requestedTimecode':str(ls['requestedTimecode']),'homeBattingOrder':[int(x) for x in ls['homeBattingOrder']],'awayBattingOrder':[int(x) for x in ls['awayBattingOrder']]})
     snaps=[]
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
@@ -92,7 +93,7 @@ def main():
         for f in as_completed(fut):snaps.append(f.result())
     snaps.sort(key=lambda x:(x.get('officialDate','9999'),x['gamePk']))
     usable=[x for x in snaps if x.get('usable') is True];reasons=Counter(x.get('reason') for x in snaps if x.get('usable') is not True)
-    out={'schemaVersion':SCHEMA,'season':a.season,'gamesExpected':len(rows),'usableGames':len(usable),'usableShare':len(usable)/len(rows) if rows else 0.0,'unusableReasons':dict(reasons),'snapshots':snaps,'policy':{'source':'MLB_STATS_API_TIMECODE_FEED','exactT5BattingOrderRequired':True,'probableStarterIdentityMatchRequired':True,'currentPlayerMetadataFallbackAllowed':False,'currentGamePlayByPlayMaySupplyStarterHand':False,'futureGameDataAllowed':False}}
+    out={'schemaVersion':SCHEMA,'season':a.season,'gamesExpected':len(rows),'usableGames':len(usable),'usableShare':len(usable)/len(rows) if rows else 0.0,'unusableReasons':dict(reasons),'snapshots':snaps,'policy':{'source':'MLB_STATS_API_TIMECODE_FEED','exactT5BattingOrderRequired':True,'probableStarterIdentityMatchRequired':True,'missingFrozenProbableStarterClassifiedUnusable':True,'currentPlayerMetadataFallbackAllowed':False,'currentGamePlayByPlayMaySupplyStarterHand':False,'futureGameDataAllowed':False}}
     os.makedirs(os.path.dirname(a.out) or '.',exist_ok=True)
     with open(a.out,'w',encoding='utf-8') as f:json.dump(out,f,sort_keys=True,separators=(',',':'));f.write('\n')
     print(json.dumps({'schemaVersion':SCHEMA,'season':a.season,'gamesExpected':len(rows),'usableGames':len(usable),'usableShare':out['usableShare'],'unusableReasons':dict(reasons)},indent=2))
