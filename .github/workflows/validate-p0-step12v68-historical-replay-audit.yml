@@ -1,0 +1,181 @@
+name: Validate P0 Step 12V68 Historical Replay Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v68-historical-replay-audit-spec.json'
+      - 'scripts/p0-step12v68-historical-replay-audit.py'
+      - '.github/workflows/validate-p0-step12v68-historical-replay-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  historical-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen replay dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V66 winner score
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-f5-fullgame-winner
+          path: inputs/v66-score
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31963437044
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Download immutable 2023 historical control
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2023
+          path: inputs/season-2023
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable 2024 historical control
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2024
+          path: inputs/season-2024
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable 2025 historical control
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2025
+          path: inputs/season-2025
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable 2026 YTD historical control
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2026_YTD
+          path: inputs/season-2026_YTD
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Prepare exact historical replay inputs
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/p0-step12v68-historical-replay-audit.py
+          mkdir -p work/control
+          for S in 2023 2024 2025 2026_YTD; do
+            mkdir -p "work/extract/$S" "work/control/$S"
+            TGZ="$(find "inputs/season-$S" -type f -name '*.tgz' -print -quit)"
+            test -n "$TGZ"
+            tar -xzf "$TGZ" -C "work/extract/$S"
+            TABLE="$(find "work/extract/$S" -type f -name game-anatomy-feature-table.json -print -quit)"
+            test -n "$TABLE"
+            cp "$TABLE" "work/control/$S/game-anatomy-feature-table.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          test -n "$CUSTODY"
+          SCORE="$(python - <<'PY'
+          import json,pathlib
+          for p in sorted(pathlib.Path('inputs/v66-score').rglob('*.json')):
+              try:
+                  x=json.load(open(p,encoding='utf-8'))
+              except Exception:
+                  continue
+              if x.get('schemaVersion')=='courtedge-p0-step12v66-f5-fullgame-winner-score.v1':
+                  print(p)
+                  break
+          PY
+          )"
+          test -n "$SCORE"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen V68 deep historical replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-historical-replay-audit.py \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --control-root work/control \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v66-score '${{ steps.paths.outputs.score }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --audit-spec research/p0-step12v68-historical-replay-audit-spec.json \
+            --out work/v68-historical-replay-audit.json
+
+      - name: Validate retrospective-only scientific boundary and exact metric parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v68-historical-replay-audit.json'))
+          assert r['classification']=='V68_HISTORICAL_REPLAY_COMPLETED_RETROSPECTIVE_CHARACTERIZATION_ONLY'
+          assert r['historicalMetricParityToDisclosedV66Diagnostic']['passed'] is True
+          assert r['sample']['combinedEvaluationRows']==6610
+          assert r['boundaries']['prospectiveV68MayBeConfirmedByThisAudit'] is False
+          assert r['boundaries']['prospectiveV68MayBeChangedByThisAudit'] is False
+          assert r['boundaries']['productionPromotionAllowed'] is False
+          assert r['boundaries']['positiveEvEstablished'] is False
+          assert r['policy']['refitPerformed'] is False
+          assert r['policy']['recalibrationPerformed'] is False
+          assert r['policy']['featureSearchPerformed'] is False
+          assert r['policy']['thresholdOptimizationPerformed'] is False
+          assert r['policy']['productionV16Changed'] is False
+          assert r['policy']['prospectiveV68Changed'] is False
+          assert r['policy']['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'sample':r['sample'],
+            'combinedDelta':r['combinedEvaluation2024_2026Ytd']['delta'],
+            'bootstrap':r['pairedDateClusterBootstrap2024_2026Ytd'],
+            'probabilityShift':r['diagnostics2024_2026Ytd']['probabilityShift'],
+            'decisionFlips':r['diagnostics2024_2026Ytd']['decisionFlipsAt0_5'],
+            'brierDirection':r['diagnostics2024_2026Ytd']['perGameBrierDirection'],
+          },indent=2))
+          PY
+
+      - name: Upload deep historical replay report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v68-historical-replay-audit
+          path: work/v68-historical-replay-audit.json
+          if-no-files-found: error
+          retention-days: 90
