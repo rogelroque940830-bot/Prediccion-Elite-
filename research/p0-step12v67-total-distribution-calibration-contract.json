@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "courtedge-p0-step12v67-total-distribution-calibration-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_ANY_V67_OUTCOME_SCORER_EXISTS",
+  "objective": "Test whether the robust V66 conditional-mean signal for F5 and Full Game totals can be converted into better fixed-line probabilities by changing only the count-distribution layer from Poisson to NB2, while freezing the V66 mean engine exactly and estimating one training-only dispersion parameter per route.",
+  "parentEvidence": {
+    "v66TotalsWorkflowRunId": 31965267742,
+    "v66TotalsArtifactId": 9268313420,
+    "v66TotalsArtifactDigest": "sha256:ac69d321fbb5e6560832df221998825ce25c46340f8f76f571539e940180e0b1",
+    "v66F5TotalClassification": "V66_D_F5_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v66FullGameTotalClassification": "V66_E_FULL_GAME_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v66F5CombinedPoissonDevianceImprovement": 0.020339305849237824,
+    "v66F5CombinedAverageFixedLineBrierImprovement": -0.0038806410999679616,
+    "v66FullGameCombinedPoissonDevianceImprovement": 0.023713124545227966,
+    "v66FullGameCombinedAverageFixedLineBrierImprovement": -0.0016459521260665428,
+    "lesson": "Both total routes contain robust information about conditional expected runs, but the frozen Poisson distribution fails to translate that mean signal into better fixed-line probabilities. V67 isolates that distributional bottleneck and forbids any mean-model change."
+  },
+  "routes": [
+    "V67_A_F5_TOTAL_NB2",
+    "V67_B_FULL_GAME_TOTAL_NB2"
+  ],
+  "chronology": {
+    "trainingSeason": "2022",
+    "validationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "frozenMeanEngine": {
+    "source": "V66_TOTALS_REPORT_PRIMARY_CANDIDATE_MODELS",
+    "mustLoadExactV66ModelParametersFromArtifact": true,
+    "refitMeanEngineAllowed": false,
+    "changeFeaturesAllowed": false,
+    "changeImputationAllowed": false,
+    "changeStandardizationAllowed": false,
+    "changeCoefficientsAllowed": false,
+    "changeInterceptAllowed": false,
+    "changeAlphaL2Allowed": false,
+    "requiredV66MetricParityTolerance": 1e-12,
+    "F5FeatureSetExactly": [
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "mean_f5_starter_share",
+      "min_f5_starter_share",
+      "combined_f5_expected_bullpen_share",
+      "quality_weighted_combined_f5_starter_share",
+      "bullpen_pitches_1d_combined_weighted_f5",
+      "bullpen_pitches_3d_combined_weighted_f5",
+      "bullpen_core3_pitches_2d_combined_weighted_f5",
+      "bullpen_b2b_arms_combined_weighted_f5"
+    ],
+    "FULL_GAMEFeatureSetExactly": [
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "mean_fg_starter_share",
+      "min_fg_starter_share",
+      "combined_fg_expected_bullpen_share",
+      "quality_weighted_combined_fg_starter_share",
+      "bullpen_pitches_1d_combined_weighted_fg",
+      "bullpen_pitches_3d_combined_weighted_fg",
+      "bullpen_core3_pitches_2d_combined_weighted_fg",
+      "bullpen_b2b_arms_combined_weighted_fg"
+    ]
+  },
+  "candidateDistribution": {
+    "family": "NEGATIVE_BINOMIAL_2",
+    "parameterization": "VAR_Y_GIVEN_MU_EQUALS_MU_PLUS_ALPHA_TIMES_MU_SQUARED",
+    "mean": "EXACT_FROZEN_V66_POISSON_MEAN_MU_PER_GAME",
+    "dispersionParameter": "ONE_GLOBAL_ALPHA_PER_ROUTE",
+    "alphaDomain": "ALPHA_GT_ZERO",
+    "fitSeason": "2022_ONLY",
+    "fitCriterion": "MAXIMUM_LIKELIHOOD_WITH_FROZEN_GAME_LEVEL_V66_MU",
+    "optimizationParameter": "LOG_ALPHA",
+    "optimizer": "SCIPY_MINIMIZE_SCALAR_BOUNDED",
+    "logAlphaBoundsExactly": [-8.0, 3.0],
+    "alternativeDistributionSearchAllowed": false,
+    "mixtureModelAllowed": false,
+    "zeroInflationAllowed": false,
+    "routeSpecificFeatureChangeAllowed": false,
+    "postResultDispersionRefitAllowed": false
+  },
+  "outcomesAndLines": {
+    "F5": {
+      "outcomeSource": "FROZEN_V28_F5_OUTCOMES",
+      "workflowRunId": 31896949764,
+      "artifactId": 9250077249,
+      "target": "HOME_RUNS_FIRST_5_PLUS_AWAY_RUNS_FIRST_5",
+      "fixedHalfRunLinesExactly": [2.5, 3.5, 4.5, 5.5, 6.5]
+    },
+    "FULL_GAME": {
+      "outcomeSource": "FROZEN_STEP12V_WINNER_ANATOMY_OFFICIAL_FINAL_OUTCOMES",
+      "workflowRunId": 31649438822,
+      "artifactId": 9162508658,
+      "target": "FINAL_HOME_RUNS_PLUS_FINAL_AWAY_RUNS_INCLUDING_EXTRA_INNINGS",
+      "fixedHalfRunLinesExactly": [6.5, 7.5, 8.5, 9.5, 10.5]
+    }
+  },
+  "comparators": {
+    "formalLineBaseline": "EXACT_V66_2022_EMPIRICAL_LINE_CLIMATOLOGY_PER_ROUTE",
+    "mechanisticDistributionComparator": "EXACT_V66_POISSON_DISTRIBUTION_WITH_IDENTICAL_FROZEN_MU",
+    "candidate": "NB2_WITH_IDENTICAL_FROZEN_MU_AND_2022_ONLY_ALPHA",
+    "formalLineBaselineMayNotBeChanged": true,
+    "v66PoissonComparatorMayNotBeChanged": true
+  },
+  "evaluation": {
+    "primaryLineMetric": "AVERAGE_FIXED_LINE_BRIER",
+    "secondaryDistributionMetric": "MEAN_COUNT_NEGATIVE_LOG_LIKELIHOOD",
+    "lineImprovementVsClimatologyOrientation": "CLIMATOLOGY_BRIER_MINUS_NB2_BRIER_SO_POSITIVE_IS_BETTER",
+    "lineImprovementVsPoissonOrientation": "V66_POISSON_BRIER_MINUS_NB2_BRIER_SO_POSITIVE_IS_BETTER",
+    "nllImprovementVsPoissonOrientation": "V66_POISSON_NLL_MINUS_NB2_NLL_SO_POSITIVE_IS_BETTER",
+    "pairedBootstrap": {
+      "unit": "OFFICIAL_DATE_CLUSTER",
+      "resamples": 5000,
+      "seed": 20260817,
+      "confidenceLevel": 0.95,
+      "combinedEvaluationOnly": "2024_PLUS_2025_PLUS_2026_YTD"
+    },
+    "evaluateRoutesIndependently": true
+  },
+  "promotionRubric": {
+    "eachRouteMustPassAll": [
+      "2023_BRIER_IMPROVEMENT_VS_CLIMATOLOGY_POSITIVE",
+      "2023_BRIER_IMPROVEMENT_VS_V66_POISSON_POSITIVE",
+      "2023_COUNT_NLL_IMPROVEMENT_VS_V66_POISSON_POSITIVE",
+      "COMBINED_2024_2026_YTD_BRIER_IMPROVEMENT_VS_CLIMATOLOGY_POSITIVE",
+      "COMBINED_2024_2026_YTD_BRIER_IMPROVEMENT_VS_V66_POISSON_POSITIVE",
+      "COMBINED_2024_2026_YTD_COUNT_NLL_IMPROVEMENT_VS_V66_POISSON_POSITIVE",
+      "BOOTSTRAP_BRIER_VS_CLIMATOLOGY_95CI_LOWER_BOUND_POSITIVE",
+      "BOOTSTRAP_BRIER_VS_POISSON_95CI_LOWER_BOUND_POSITIVE",
+      "BOOTSTRAP_COUNT_NLL_VS_POISSON_95CI_LOWER_BOUND_POSITIVE",
+      "AT_LEAST_TWO_OF_THREE_EVALUATION_SEASONS_BRIER_IMPROVES_VS_BOTH_COMPARATORS",
+      "NO_EVALUATION_SEASON_BRIER_WORSE_VS_BOTH_COMPARATORS"
+    ],
+    "passingClassifications": {
+      "V67_A_F5_TOTAL_NB2": "V67_F5_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "V67_B_FULL_GAME_TOTAL_NB2": "V67_FULL_GAME_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE"
+    },
+    "failingClassificationSuffix": "NOT_ROBUST_ENOUGH_TO_ADVANCE"
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "meanModelSearchAllowed": false,
+    "distributionFamilySearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultFeatureChangeAllowed": false,
+    "postResultMeanRefitAllowed": false,
+    "postResultDistributionChangeAllowed": false,
+    "postResultMetricChangeAllowed": false,
+    "postResultControlChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "positiveEvEstablished": false,
+    "v16ProductionChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
