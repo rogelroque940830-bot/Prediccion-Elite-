@@ -24,17 +24,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify V65 revision 2 source correction was frozen before outcome scorer
+      - name: Verify V65 custody evidence predates outcome scorer
         run: |
           set -euo pipefail
           INITIAL_FREEZE=0c0afa279fa58409609d02b25d70247ba14190ec
           CORRECTION_FREEZE=f71e5b24d87786dccf0afea31b38e2a80542581b
+          CUSTODY_EVIDENCE_HEAD=d56c5cdcfc54e8e2de071fc73ff312442c9c8e0e
+          SCORER_COMMIT=84c52cc48f59e342dd6647e4ae9cfa98ae6196ab
           git merge-base --is-ancestor "$INITIAL_FREEZE" "$CORRECTION_FREEZE"
-          git merge-base --is-ancestor "$CORRECTION_FREEZE" HEAD
+          git merge-base --is-ancestor "$CORRECTION_FREEZE" "$CUSTODY_EVIDENCE_HEAD"
+          git merge-base --is-ancestor "$CUSTODY_EVIDENCE_HEAD" "$SCORER_COMMIT"
+          git merge-base --is-ancestor "$SCORER_COMMIT" HEAD
           git cat-file -e "$CORRECTION_FREEZE:research/p0-step12v65-contact-process-matchup-winner-contract.json"
           ! git cat-file -e "$CORRECTION_FREEZE:scripts/p0-step12v65-contact-process-matchup-winner.py"
-          test ! -e scripts/p0-step12v65-contact-process-matchup-winner.py
-          ! git diff --quiet "$CORRECTION_FREEZE" HEAD -- scripts/p0-step12v65-acquire-contact-process.py
+          ! git cat-file -e "$CUSTODY_EVIDENCE_HEAD:scripts/p0-step12v65-contact-process-matchup-winner.py"
+          git cat-file -e "$SCORER_COMMIT:scripts/p0-step12v65-contact-process-matchup-winner.py"
+          git diff --quiet "$CUSTODY_EVIDENCE_HEAD" HEAD -- scripts/p0-step12v65-acquire-contact-process.py
           python - <<'PY'
           import json
           c=json.load(open('research/p0-step12v65-contact-process-matchup-winner-contract.json'))
@@ -72,7 +77,7 @@ jobs:
           assert c['policy']['v16ProductionChanged'] is False
           assert c['policy']['betEliteAllowed'] is False
           assert c['policy']['realFinancialExposure']==0
-          print('V65_REVISION2_PRE_OUTCOME_SOURCE_SEMANTICS_FROZEN')
+          print('V65_CUSTODY_PRE_OUTCOME_CHRONOLOGY_VERIFIED')
           PY
       - name: Syntax check custody extractor
         run: python -m py_compile scripts/p0-step12v65-acquire-contact-process.py
@@ -150,15 +155,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: p0-step12v65-contact-process-*
           path: artifacts/contact-process
           merge-multiple: true
-      - name: Verify all six immutable custody packs before any outcome scorer exists
+      - name: Verify all six custody packs and historical pre-scorer evidence boundary
         run: |
           set -euo pipefail
-          test ! -e scripts/p0-step12v65-contact-process-matchup-winner.py
+          CUSTODY_EVIDENCE_HEAD=d56c5cdcfc54e8e2de071fc73ff312442c9c8e0e
+          SCORER_COMMIT=84c52cc48f59e342dd6647e4ae9cfa98ae6196ab
+          ! git cat-file -e "$CUSTODY_EVIDENCE_HEAD:scripts/p0-step12v65-contact-process-matchup-winner.py"
+          git cat-file -e "$SCORER_COMMIT:scripts/p0-step12v65-contact-process-matchup-winner.py"
           python - <<'PY'
           import json,glob
           files=sorted(glob.glob('artifacts/contact-process/contact-process-*.json'))
