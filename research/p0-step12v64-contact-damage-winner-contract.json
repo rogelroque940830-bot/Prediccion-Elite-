@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "courtedge-p0-step12v64-contact-damage-winner-contract.v1",
+  "scientificStatus": "FROZEN_CONTACT_DAMAGE_WINNER_HYPOTHESIS_BEFORE_V64_OUTCOME_SCORER",
+  "objective": "Test whether leakage-safe expected contact and damage quality for the exact T-5 lineup versus the opposing confirmed starter improves full-game winner probability beyond the frozen V16 C4 control, while preserving V62 as a diagnostic benchmark only.",
+  "sportingTarget": {
+    "primaryTarget": "FULL_GAME_HOME_WIN",
+    "marketTarget": false,
+    "priceIndependent": true
+  },
+  "dataBoundary": {
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateHistoryAllowed": false,
+    "futureGameDataAllowed": false,
+    "exactPregameLineupBoundary": "T_MINUS_5_MINUTES",
+    "exactNineUniqueBattersPerSideRequired": true,
+    "confirmedPregameStarterPairRequired": true,
+    "boxscoreLineupBackfillAllowed": false,
+    "projectedLineupFallbackAllowed": false,
+    "currentMetadataFallbackAllowed": false
+  },
+  "parentEvidence": {
+    "v16ControlRunId": 31704085189,
+    "v62RunId": 31925270654,
+    "v63RunId": 31930159372,
+    "v63Result": "BATTER_CONDITIONED_PITCH_SHAPE_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v63Interpretation": "Micro-cell pitch-shape matching improved V16 C4 point estimates but failed frozen bootstrap and temporal-stability gates and underperformed V62; V64 must not reuse post-result V63 bucket tuning."
+  },
+  "hypothesis": {
+    "statement": "A lower-variance representation of how well each exact T-5 lineup is expected to make contact and do damage against the opposing starter can retain matchup information without fragmenting batter history into sparse four-dimensional pitch-shape cells.",
+    "mechanism": "starter arsenal quality and handedness -> batter contact/discipline/damage expectation -> lineup-level expected contact and damage differential -> full-game win probability"
+  },
+  "featureEngineering": {
+    "principle": "Use broad, leakage-safe batter outcome/contact priors conditioned only on opposing starter handedness and frozen starter quality context. Do not use V63 local pitch-shape cells or any post-result bandwidth search.",
+    "batterHistorySource": "V41 direct batter historical custody, prior official dates only",
+    "handednessSource": "V60 exact pregame batter/starter hand custody",
+    "starterQualitySource": "V62 frozen starter quality report/features",
+    "batterShrinkagePa": 100,
+    "lineupSlotWorkloadShrinkageStarts": 20,
+    "perBatterRates": [
+      "H_PER_PA",
+      "TB_PER_PA",
+      "BB_PER_PA",
+      "K_PER_PA",
+      "HR_PER_PA"
+    ],
+    "lineupFeaturesExactly": [
+      "home_expected_contact_rate_vs_starter",
+      "away_expected_contact_rate_vs_starter",
+      "home_expected_damage_per_pa_vs_starter",
+      "away_expected_damage_per_pa_vs_starter",
+      "home_expected_hr_per_pa_vs_starter",
+      "away_expected_hr_per_pa_vs_starter",
+      "contact_advantage_home_minus_away",
+      "damage_advantage_home_minus_away"
+    ],
+    "definitions": {
+      "expected_contact_rate_vs_starter": "PA-weighted lineup expectation of (H + BB - K) / PA after 100-PA shrinkage against the starter handedness bucket.",
+      "expected_damage_per_pa_vs_starter": "PA-weighted lineup expectation of TB / PA after 100-PA shrinkage against the starter handedness bucket.",
+      "expected_hr_per_pa_vs_starter": "PA-weighted lineup expectation of HR / PA after 100-PA shrinkage against the starter handedness bucket.",
+      "starterQualityInteraction": "The challenger receives the frozen V62 starter-quality variables unchanged alongside the eight lineup contact/damage variables; no multiplication term search is permitted."
+    },
+    "pitchShapeMicroCellsAllowed": false,
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "homeAwaySubsetMiningAllowed": false,
+    "postResultFeatureDefinitionChangeAllowed": false,
+    "postResultShrinkageChangeAllowed": false
+  },
+  "control": {
+    "name": "V16_C4_FROZEN_FULL_GAME_WINNER",
+    "featureCount": 4,
+    "features": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "combined_team_rs10",
+      "team_rd10_diff"
+    ],
+    "modelFamily": "frozen V16 logistic probability model",
+    "metricParityRequired": true
+  },
+  "diagnosticBenchmark": {
+    "name": "V62_PITCH_QUALITY_WINNER",
+    "promotionControl": false,
+    "purpose": "V62 is compared descriptively to determine whether V64 recovers the stronger starter-matchup signal without sparse V63 cells; failing to beat V62 does not alter the pre-frozen V64 pass rubric against V16 C4."
+  },
+  "challenger": {
+    "controlFeatures": 4,
+    "v62StarterQualityFeatures": 4,
+    "contactDamageFeatures": 8,
+    "featureCount": 16,
+    "modelFamily": "LogisticRegression",
+    "penalty": "L2",
+    "C": 1.0,
+    "maxIter": 2000,
+    "trainingOnlyMedianImputer": true,
+    "trainingOnlyStandardScaler": true,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "statistics": {
+    "primaryMetrics": ["LOG_LOSS", "BRIER"],
+    "calibrationMetrics": ["ECE_10", "ABSOLUTE_MEAN_HOME_PROBABILITY_GAP"],
+    "secondaryMetrics": ["ACCURACY_AT_HALF"],
+    "pairedBootstrap": {
+      "unit": "OFFICIAL_DATE_CLUSTER",
+      "resamples": 5000,
+      "seed": 20260816,
+      "confidenceLevel": 0.95
+    },
+    "passRubric": {
+      "controlManifestAndMetricParity": true,
+      "validation2023LogLossImproves": true,
+      "validation2023BrierImproves": true,
+      "combinedEvaluation2024_2026YtdLogLossImproves": true,
+      "combinedEvaluation2024_2026YtdBrierImproves": true,
+      "bootstrapLogLossLowerBoundPositive": true,
+      "bootstrapBrierLowerBoundPositive": true,
+      "atLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
+      "noEvaluationSeasonWorseOnBoth": true,
+      "challengerCombinedEce10AbsoluteMax": 0.03,
+      "challengerAbsoluteMeanProbabilityGapNotWorseThanControl": true
+    },
+    "postResultRetuningAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false
+  },
+  "classification": {
+    "pass": "CONTACT_DAMAGE_WINNER_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
+    "fail": "CONTACT_DAMAGE_WINNER_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "insufficientCustody": "CONTACT_DAMAGE_WINNER_CUSTODY_INSUFFICIENT"
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "positiveEvEstablished": false,
+    "v16ProductionChanged": false,
+    "productionMarketRegistryChanged": false,
+    "marketDiscoveryChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
