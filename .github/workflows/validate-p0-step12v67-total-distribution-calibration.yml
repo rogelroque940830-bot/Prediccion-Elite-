@@ -1,0 +1,173 @@
+name: Validate P0 Step 12V67 Total Distribution Calibration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v67-total-distribution-calibration-contract.json'
+      - 'scripts/p0-step12v67-total-distribution-calibration.py'
+      - '.github/workflows/validate-p0-step12v67-total-distribution-calibration.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V67 contract predates scorer
+        run: |
+          set -euo pipefail
+          FREEZE=4480183b4d367b00e7a29e3c223e635d50a3de12
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v67-total-distribution-calibration-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v67-total-distribution-calibration.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v67-total-distribution-calibration-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V67_OUTCOME_SCORER_EXISTS'
+          assert c['frozenMeanEngine']['refitMeanEngineAllowed'] is False
+          assert c['candidateDistribution']['family']=='NEGATIVE_BINOMIAL_2'
+          assert c['candidateDistribution']['fitSeason']=='2022_ONLY'
+          assert c['candidateDistribution']['logAlphaBoundsExactly']==[-8.0,3.0]
+          assert c['evaluation']['pairedBootstrap']['resamples']==5000
+          assert c['evaluation']['pairedBootstrap']['seed']==20260817
+          assert c['statistics']['distributionFamilySearchAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False and c['policy']['realFinancialExposure']==0
+          print('V67_PREOUTCOME_CONTRACT_VERIFIED')
+          PY
+          python -m py_compile scripts/p0-step12v67-total-distribution-calibration.py
+
+  score-distribution:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+      - name: Download frozen V66 predictor custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: artifacts/p0-step12v66
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+      - name: Download frozen V66 totals evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-totals
+          path: artifacts/p0-step12v66-totals
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965267742
+      - name: Download frozen V28 F5 outcomes
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v28-f5-total-baseline
+          path: artifacts/p0-step12v28
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896949764
+      - name: Download frozen Step12 full-game outcomes
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Verify immutable source packs and V66 evidence
+        run: |
+          set -euo pipefail
+          test -s artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz
+          test -s artifacts/p0-step12v66/v66-custody-report.json
+          test -s artifacts/p0-step12v66-totals/v66-totals-report.json
+          test -s artifacts/p0-step12v28/f5-outcomes.json
+          for s in 2022 2023 2024 2025 2026_YTD; do test -s "artifacts/p0-step12v-control/${s}/game-anatomy-feature-table.json"; done
+          python - <<'PY'
+          import json
+          c=json.load(open('artifacts/p0-step12v66/v66-custody-report.json'))
+          assert c['classification']=='V66_PREOUTCOME_CUSTODY_FROZEN_READY_FOR_SEPARATE_OUTCOME_SCORER'
+          assert c['rows']==11407 and c['output']['containsOutcomeTargets'] is False
+          v=json.load(open('artifacts/p0-step12v66-totals/v66-totals-report.json'))
+          assert v['schemaVersion']=='courtedge-p0-step12v66-totals-score.v1'
+          assert v['routes']['V66_D_F5_TOTAL']['classification']=='V66_D_F5_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE'
+          assert v['routes']['V66_E_FULL_GAME_TOTAL']['classification']=='V66_E_FULL_GAME_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE'
+          f=json.load(open('artifacts/p0-step12v28/f5-outcomes.json'))
+          assert f['schemaVersion']=='courtedge-p0-step12v28-f5-outcomes.v1'
+          assert f['acquisition']['outcomeCompleteGames']==11405
+          print('V67_FROZEN_INPUTS_VERIFIED')
+          PY
+      - name: Score predeclared NB2 distribution calibration
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v67
+          python scripts/p0-step12v67-total-distribution-calibration.py \
+            --custody artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz \
+            --v66-report artifacts/p0-step12v66-totals/v66-totals-report.json \
+            --f5-outcomes artifacts/p0-step12v28/f5-outcomes.json \
+            --fullgame-root artifacts/p0-step12v-control \
+            --contract research/p0-step12v67-total-distribution-calibration-contract.json \
+            --out artifacts/p0-step12v67/v67-total-distribution-calibration-report.json
+      - name: Validate independent route decisions and frozen mean parity
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v67/v67-total-distribution-calibration-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v67-total-distribution-calibration-score.v1'
+          assert r['scientificStatus']=='OUTCOME_SCORING_COMPLETED_WITH_FROZEN_V66_MEAN_AND_PREDECLARED_NB2_DISTRIBUTION'
+          assert r['joins']['F5']['coverageShare']>=0.995 and r['joins']['FULL_GAME']['coverageShare']==1.0
+          expected={
+            'V67_A_F5_TOTAL_NB2':{'V67_F5_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE','V67_A_F5_TOTAL_NB2_NOT_ROBUST_ENOUGH_TO_ADVANCE'},
+            'V67_B_FULL_GAME_TOTAL_NB2':{'V67_FULL_GAME_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE','V67_B_FULL_GAME_TOTAL_NB2_NOT_ROBUST_ENOUGH_TO_ADVANCE'},
+          }
+          for k,v in r['routes'].items():
+            assert v['classification'] in expected[k]
+            for p in v['frozenV66MeanEngineParity'].values():
+              assert p['meanPoissonDevianceAbsoluteDelta']<=1e-12
+              assert p['averageFixedLineBrierAbsoluteDelta']<=1e-12
+            assert v['dispersionFit2022']['alpha']>0
+            assert len(v['pairedBootstrap']['brierImprovementVsClimatology']['ci95'])==2
+            assert len(v['pairedBootstrap']['brierImprovementVsV66Poisson']['ci95'])==2
+            assert len(v['pairedBootstrap']['countNllImprovementVsV66Poisson']['ci95'])==2
+          pol=r['policy']
+          for k in ('historicalPricesUsed','marketOddsUsedAsFeatures','positiveEvEstablished','v16ProductionChanged','routingChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed'):
+            assert pol[k] is False
+          assert pol['realFinancialExposure']==0
+          print(json.dumps({k:{
+            'classification':v['classification'],'passed':v['passed'],'alpha':v['dispersionFit2022']['alpha'],
+            'trainingVarianceToMeanRatio':v['dispersionFit2022']['trainingVarianceToMeanRatio'],
+            'validation2023':{m:v['bySeason']['2023'][m] for m in ('nb2BrierImprovementVsClimatology','nb2BrierImprovementVsV66Poisson','nb2CountNllImprovementVsV66Poisson')},
+            'combined':{m:v['combinedEvaluation'][m] for m in ('nb2BrierImprovementVsClimatology','nb2BrierImprovementVsV66Poisson','nb2CountNllImprovementVsV66Poisson')},
+            'bySeason':{s:{m:v['bySeason'][s][m] for m in ('nb2BrierImprovementVsClimatology','nb2BrierImprovementVsV66Poisson')} for s in ('2024','2025','2026_YTD')},
+            'bootstrap':v['pairedBootstrap'],'checks':v['promotionChecks']
+          } for k,v in r['routes'].items()},indent=2))
+          PY
+      - name: Verify no production policy changes
+        run: |
+          set -euo pipefail
+          git diff --check
+          ! grep -E "betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]|automaticBetPlacementAllowed[^\n]*True" scripts/p0-step12v67-total-distribution-calibration.py
+      - name: Upload V67 distribution evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v67-total-distribution-calibration
+          path: artifacts/p0-step12v67/v67-total-distribution-calibration-report.json
+          if-no-files-found: error
+          retention-days: 30
