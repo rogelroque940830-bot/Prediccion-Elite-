@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "courtedge-p0-step12v66-f5-fullgame-winner-scoring-spec.v1",
+  "scientificStatus": "FROZEN_WINNER_SCORING_SEMANTICS_BEFORE_FIRST_V66_OUTCOME_RUN",
+  "scope": ["V66_B_F5_WINNER", "V66_C_FULL_GAME_WINNER"],
+  "parentContract": "research/p0-step12v66-game-horizon-exposure-suite-contract.json",
+  "preOutcomeTechnicalCorrection": "research/p0-step12v66-preoutcome-zero-variance-correction.json",
+  "formalControls": {
+    "V66_B_F5_WINNER": {
+      "model": "FROZEN_V16_F5_MODEL",
+      "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+      "targetClassesExactly": ["HOME", "AWAY", "TIE"],
+      "tieSettlement": "PUSH",
+      "v16WorkflowRunId": 31704085189,
+      "v16ArtifactId": 9182440949,
+      "v16ArtifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+      "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+    },
+    "V66_C_FULL_GAME_WINNER": {
+      "model": "FROZEN_V16_C4",
+      "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+      "targetClassesExactly": ["HOME", "AWAY"],
+      "v16WorkflowRunId": 31704085189,
+      "v16ArtifactId": 9182440949,
+      "v16ArtifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+      "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+    }
+  },
+  "candidateTraining": {
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "modelFamily": "L2_LOGISTIC_OR_MULTINOMIAL_REGRESSION_MATCHING_V16_TARGET_SEMANTICS",
+    "l2Strength": 1.0,
+    "trainingOnlyMedianImputation": true,
+    "trainingOnlyStandardization": true,
+    "zeroVarianceStandardization": "EFFECTIVE_SCALE_ONE",
+    "binaryCalibration": "V16_SLOPE_INTERCEPT_LOGIT_CALIBRATION_ON_2023",
+    "multiclassCalibration": "V16_TEMPERATURE_PLUS_HOME_AND_TIE_BIAS_CALIBRATION_ON_2023_WITH_AWAY_REFERENCE",
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "candidateChain": {
+    "F5": [
+      "FROZEN_V16_F5_CONTROL",
+      "CONTROL_PLUS_STARTER_QUALITY5",
+      "CONTROL_PLUS_EXPOSURE_F5",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_F5_PLUS_QUALITY_X_EXPOSURE5",
+      "FULL_MECHANISTIC_PRIMARY"
+    ],
+    "FULL_GAME": [
+      "FROZEN_V16_C4_CONTROL",
+      "CONTROL_PLUS_STARTER_QUALITY5",
+      "CONTROL_PLUS_EXPOSURE_FG",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_FG_PLUS_QUALITY_X_EXPOSURE5",
+      "FULL_MECHANISTIC_PRIMARY"
+    ],
+    "fullMechanisticPrimaryDefinition": "CONTROL4_PLUS_STARTER_QUALITY5_PLUS_HORIZON_EXPOSURE_ADV_PLUS_FIVE_QUALITY_X_MEAN_STARTER_SHARE_INTERACTIONS_PLUS_FOUR_HORIZON_WEIGHTED_BULLPEN_WORKLOAD_ADVANTAGES",
+    "lowerAblationsDiagnosticOnly": true,
+    "postResultCandidateSelectionAllowed": false
+  },
+  "properScoreDefinitions": {
+    "fullGameLogLoss": "BINARY_NEGATIVE_LOG_LIKELIHOOD",
+    "fullGameBrier": "MEAN_SQUARED_ERROR_OF_HOME_WIN_PROBABILITY",
+    "f5LogLoss": "THREE_CLASS_NEGATIVE_LOG_LIKELIHOOD_WITH_HOME_AWAY_TIE",
+    "f5Brier": "MEAN_SUM_OF_SQUARED_ERROR_ACROSS_HOME_AWAY_TIE_PROBABILITIES",
+    "improvementOrientation": "FORMAL_CONTROL_SCORE_MINUS_CANDIDATE_SCORE_SO_POSITIVE_IS_BETTER"
+  },
+  "calibrationDefinitions": {
+    "fullGameEce10": "TEN_EQUAL_WIDTH_BINS_OF_HOME_WIN_PROBABILITY_WEIGHTED_ABSOLUTE_PREDICTED_MINUS_OBSERVED_HOME_RATE",
+    "f5Ece10": "TEN_EQUAL_WIDTH_BINS_OF_MAX_CLASS_PROBABILITY_WEIGHTED_ABSOLUTE_MEAN_CONFIDENCE_MINUS_CLASSIFICATION_ACCURACY",
+    "fullGameAbsoluteMeanProbabilityGap": "ABS_MEAN_HOME_PROBABILITY_MINUS_OBSERVED_HOME_RATE",
+    "f5AbsoluteMeanProbabilityGap": "MEAN_ABSOLUTE_GAP_BETWEEN_MEAN_PREDICTED_AND_OBSERVED_RATE_ACROSS_HOME_AWAY_TIE"
+  },
+  "bootstrap": {
+    "unit": "OFFICIAL_DATE_CLUSTER",
+    "resamples": 5000,
+    "seed": 20260816,
+    "confidenceLevel": 0.95,
+    "combinedEvaluationOnly": "2024_PLUS_2025_PLUS_2026_YTD",
+    "clusterResampling": "SAMPLE_DISTINCT_OFFICIAL_DATES_WITH_REPLACEMENT_AND_RETAIN_ALL_GAMES_PER_SELECTED_DATE"
+  },
+  "promotionChecksExactly": [
+    "2023_LOG_LOSS_IMPROVEMENT_POSITIVE",
+    "2023_BRIER_IMPROVEMENT_POSITIVE",
+    "COMBINED_2024_2026_YTD_LOG_LOSS_IMPROVEMENT_POSITIVE",
+    "COMBINED_2024_2026_YTD_BRIER_IMPROVEMENT_POSITIVE",
+    "BOOTSTRAP_LOG_LOSS_95CI_LOWER_BOUND_POSITIVE",
+    "BOOTSTRAP_BRIER_95CI_LOWER_BOUND_POSITIVE",
+    "AT_LEAST_TWO_OF_THREE_EVALUATION_SEASONS_IMPROVE_BOTH_PROPER_SCORES",
+    "NO_EVALUATION_SEASON_WORSE_ON_BOTH_PROPER_SCORES",
+    "COMBINED_ECE10_LE_0_02"
+  ],
+  "independence": {
+    "f5AndFullGamePromotionDecisionsIndependent": true,
+    "oneRoutePassingMayNotPromoteTheOther": true,
+    "oneRouteFailureMayNotInvalidateTheOther": true
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "thresholdSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false,
+    "postResultInteractionChangeAllowed": false,
+    "postResultMetricDefinitionChangeAllowed": false,
+    "postResultControlChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "positiveEvEstablished": false,
+    "v16ProductionChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
