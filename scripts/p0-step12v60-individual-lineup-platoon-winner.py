@@ -56,17 +56,21 @@ def team_impacts(ids,opposing_hand,bst,splitst,league,sst,gst,prior_overall,prio
     keys=('h','tb','bb','k','hr');lp=rates(league)
     generic={n:None for n in names};adjust={n:None for n in names}
     if lp is None:return generic,adjust,{'minPriorSplitPa':None,'meanPriorSplitPa':None,'hittersGte50':0,'hittersGte100':0}
-    g={n:0. for n in names};a={n:0. for n in names};split_pas=[]
+    g={n:0. for n in names};items=[]
     for pos,bid in enumerate(ids,1):
         epa=slot_pa(sst[pos],gst,prior_starts)
         if epa is None:return generic,adjust,{'minPriorSplitPa':None,'meanPriorSplitPa':None,'hittersGte50':0,'hittersGte100':0}
-        overall=bst[int(bid)];sp=splitst[(int(bid),opposing_hand)] if opposing_hand in ('R','L') else None
-        if sp is None:return generic,adjust,{'minPriorSplitPa':None,'meanPriorSplitPa':None,'hittersGte50':0,'hittersGte100':0}
-        split_pas.append(float(sp['pa']))
+        overall=bst[int(bid)];gr={}
         for n,k in zip(names,keys):
-            gr=shrink(overall[k],overall['pa'],lp[k],prior_overall)
-            sr=shrink(sp[k],sp['pa'],gr,prior_split)
-            g[n]+=gr*epa;a[n]+=(sr-gr)*epa
+            gr[k]=shrink(overall[k],overall['pa'],lp[k],prior_overall);g[n]+=gr[k]*epa
+        items.append((int(bid),epa,gr))
+    if opposing_hand not in ('R','L'):
+        return g,adjust,{'minPriorSplitPa':None,'meanPriorSplitPa':None,'hittersGte50':0,'hittersGte100':0}
+    a={n:0. for n in names};split_pas=[]
+    for bid,epa,gr in items:
+        sp=splitst[(bid,opposing_hand)];split_pas.append(float(sp['pa']))
+        for n,k in zip(names,keys):
+            sr=shrink(sp[k],sp['pa'],gr[k],prior_split);a[n]+=(sr-gr[k])*epa
     return g,a,{'minPriorSplitPa':min(split_pas),'meanPriorSplitPa':float(np.mean(split_pas)),'hittersGte50':sum(x>=50 for x in split_pas),'hittersGte100':sum(x>=100 for x in split_pas)}
 
 def build_rows(control_root,lineup_root,batter_root,custody_root,season,c):
