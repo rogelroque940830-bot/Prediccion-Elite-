@@ -1,7 +1,12 @@
 {
   "schemaVersion": "courtedge-p0-step12v66-game-horizon-exposure-suite-contract.v1",
-  "contractRevision": 1,
+  "contractRevision": 2,
   "scientificStatus": "FROZEN_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS",
+  "sourceSemanticsCorrection": {
+    "reason": "Revision 2 aligns the five starter-quality feature names with the exact frozen V62 source-native names discovered during pre-scorer source audit. No hypothesis, quantity, transform, target, candidate, metric, season, gate or model setting changed.",
+    "hypothesisChanged": false,
+    "outcomeScorerExistedBeforeCorrection": false
+  },
   "objective": "Decompose how starter physical quality, expected starter exposure and bullpen handoff affect MLB outcomes at F3, F5 and full-game horizons, while separately testing F5 and full-game combined-run distributions. The experiment is deliberately compact: it reuses frozen upstream evidence, adds only mechanistic exposure/handoff transforms, evaluates each route independently, and forbids post-result feature, subset, model or hyperparameter search.",
   "mainBaseSha": "6a7362419694e7aae50bcb1700b0741b2ec539df",
   "routes": [
@@ -47,11 +52,11 @@
   "starterQuality": {
     "source": "V62_FROZEN_STARTER_QUALITY_ENGINEERING_AND_CUSTODY",
     "featuresExactly": [
-      "starter_velocity_quality_adv",
-      "starter_spin_quality_adv",
-      "starter_whiff_quality_adv",
-      "starter_strike_quality_adv",
-      "starter_hard_hit_suppression_adv"
+      "starter_velocity_adv",
+      "starter_spin_adv",
+      "starter_swing_miss_adv",
+      "starter_in_zone_adv",
+      "starter_weak_contact_adv"
     ],
     "featureCount": 5,
     "postResultDefinitionChangeAllowed": false
