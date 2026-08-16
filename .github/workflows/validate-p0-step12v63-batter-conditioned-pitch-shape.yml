@@ -1,0 +1,106 @@
+name: Validate P0 Step 12V63 Batter Conditioned Pitch Shape
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v63-batter-conditioned-pitch-shape-contract.json'
+      - 'scripts/p0-step12v63-acquire-pitch-shape.py'
+      - 'scripts/p0-step12v63-batter-conditioned-pitch-shape.py'
+      - '.github/workflows/validate-p0-step12v63-batter-conditioned-pitch-shape.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V63 hypothesis was frozen before outcome scorer
+        run: |
+          set -euo pipefail
+          FREEZE=6268ab6948d50ce4364a04fa31615e08f8123c52
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v63-batter-conditioned-pitch-shape-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v63-batter-conditioned-pitch-shape.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v63-batter-conditioned-pitch-shape-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v63-batter-conditioned-pitch-shape-contract.v1'
+          assert c['contractRevision']==1
+          assert c['scientificStatus']=='FROZEN_BATTER_CONDITIONED_PITCH_SHAPE_WINNER_HYPOTHESIS_BEFORE_OUTCOME_SCORER'
+          assert c['sportingTarget']['primaryTarget']=='FULL_GAME_HOME_WIN'
+          assert c['dataBoundary']['sameDateHistoryAllowed'] is False
+          assert c['shapeCellEngineering']['dimensionsExactly']==['velocityMph','horizontalMovementInches','verticalMovementInches','spinRpm']
+          assert c['shapeCellEngineering']['neighborRadiusCellsEachDimension']==1
+          assert c['shapeMatchupLayer']['featureCount']==6
+          assert c['challenger']['featureCount']==10
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['postResultBucketOrBandwidthChangeAllowed'] is False
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V63_PRE_OUTCOME_CONTRACT_FROZEN')
+          PY
+      - name: Syntax check custody extractor
+        run: python -m py_compile scripts/p0-step12v63-acquire-pitch-shape.py
+
+  acquire-pitch-shape:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        season: [2021, 2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 target evidence
+        if: matrix.season != '2021'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Acquire direct historical batter-conditioned pitch-shape custody
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/p0-step12v63-${SEASON}"
+          if [ "$SEASON" = "2021" ]; then
+            python scripts/p0-step12v63-acquire-pitch-shape.py \
+              --season "$SEASON" \
+              --contract research/p0-step12v63-batter-conditioned-pitch-shape-contract.json \
+              --out "artifacts/p0-step12v63-${SEASON}/pitch-shape-${SEASON}.json" \
+              --workers 6
+          else
+            python scripts/p0-step12v63-acquire-pitch-shape.py \
+              --season "$SEASON" \
+              --table "artifacts/p0-step12v3/${SEASON}/game-anatomy-feature-table.json" \
+              --contract research/p0-step12v63-batter-conditioned-pitch-shape-contract.json \
+              --out "artifacts/p0-step12v63-${SEASON}/pitch-shape-${SEASON}.json" \
+              --workers 6
+          fi
+      - name: Upload V63 pitch-shape custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v63-pitch-shape-${{ matrix.season }}
+          path: artifacts/p0-step12v63-${{ matrix.season }}/pitch-shape-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
