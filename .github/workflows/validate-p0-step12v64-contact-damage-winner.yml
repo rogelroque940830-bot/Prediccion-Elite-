@@ -1,0 +1,229 @@
+name: Validate P0 Step 12V64 Contact Damage Winner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v64-contact-damage-winner-contract.json'
+      - 'scripts/p0-step12v64-contact-damage-winner.py'
+      - '.github/workflows/validate-p0-step12v64-contact-damage-winner.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V64 revision 2 was frozen before outcome scorer
+        run: |
+          set -euo pipefail
+          FREEZE=b720fbecf7e7dfe1c844637a9647da7c1076850d
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v64-contact-damage-winner-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v64-contact-damage-winner.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v64-contact-damage-winner-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v64-contact-damage-winner-contract.v1'
+          assert c['contractRevision']==2
+          assert c['scientificStatus']=='FROZEN_BROAD_CONTACT_DAMAGE_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS_BEFORE_V64_OUTCOME_SCORER'
+          assert c['preOutcomeCorrection']['performedBeforeV64OutcomeScorerExisted'] is True
+          assert c['preOutcomeCorrection']['v64OutcomeMetricsAvailableAtCorrection'] is False
+          assert c['sportingTarget']['primaryTarget']=='FULL_GAME_HOME_WIN'
+          assert c['broadBatterEngineering']['featureCount']==5
+          assert c['starterQualityEngineering']['featureCount']==5
+          assert c['control']['featureCount']==4
+          assert c['challenger']['featureCount']==14
+          assert c['dataBoundary']['sameDateHistoryAllowed'] is False
+          assert c['pairedBootstrap']['resamples']==5000
+          assert c['predeclaredDiagnostics']['promotionCandidateIsAlwaysFull'] is True
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['postResultFeatureAdditionAllowed'] is False
+          assert c['statistics']['postResultFeatureRemovalAllowed'] is False
+          assert c['statistics']['postResultShrinkageChangeAllowed'] is False
+          assert c['statistics']['postResultLookbackChangeAllowed'] is False
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V64_FINAL_PRE_OUTCOME_CONTRACT_FROZEN')
+          PY
+      - name: Syntax check
+        run: python -m py_compile scripts/p0-step12v64-contact-damage-winner.py
+
+  score-winner:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.17.0'
+      - name: Download frozen winner-anatomy control source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Download frozen T-minus-5 lineup lineage
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download certified batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+      - name: Download certified V16 pure winner model
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/p0-step12v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Download frozen V60 T-minus-5 starter and split custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v60-matchup-custody-*
+          path: artifacts/p0-step12v60-custody
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31919873754
+      - name: Download immutable V62 pitch-quality custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v62-pitch-quality-*
+          path: artifacts/p0-step12v62-pitch-quality
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download frozen V62 winner evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-winner
+          path: artifacts/p0-step12v62
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Verify immutable parent evidence before scoring
+        run: |
+          set -euo pipefail
+          test -s artifacts/p0-step12v16/pure-settlement-probability-report.json
+          test -s artifacts/p0-step12v16/pure-settlement-model-manifest.json
+          test -s artifacts/p0-step12v62/pitch-quality-winner-report.json
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${s}/cohort/pregame-lineup-history.json"
+            test -s "artifacts/p0-step12v41/${s}/batter-history.json"
+            test -s "artifacts/p0-step12v60-custody/pregame-hands-${s}.json"
+            test -s "artifacts/p0-step12v60-custody/batter-hand-${s}.json"
+            test -s "artifacts/p0-step12v62-pitch-quality/pitch-quality-${s}.json"
+          done
+          test -s artifacts/p0-step12v62-pitch-quality/pitch-quality-2021.json
+      - name: Run frozen V64 contact-damage winner experiment
+        run: |
+          mkdir -p artifacts/p0-step12v64
+          python scripts/p0-step12v64-contact-damage-winner.py \
+            --control-root artifacts/p0-step12v-control \
+            --lineup-root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --hands-root artifacts/p0-step12v60-custody \
+            --pitch-root artifacts/p0-step12v62-pitch-quality \
+            --v16-report artifacts/p0-step12v16/pure-settlement-probability-report.json \
+            --v16-manifest artifacts/p0-step12v16/pure-settlement-model-manifest.json \
+            --v62-report artifacts/p0-step12v62/pitch-quality-winner-report.json \
+            --contract research/p0-step12v64-contact-damage-winner-contract.json \
+            --out artifacts/p0-step12v64/contact-damage-winner-report.json
+      - name: Validate evidence without requiring favorable result
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v64/contact-damage-winner-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v64-contact-damage-winner.v1'
+          assert r['classification'] in {
+            'CONTACT_DAMAGE_WINNER_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH',
+            'CONTACT_DAMAGE_WINNER_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE',
+            'CONTACT_DAMAGE_WINNER_CUSTODY_INSUFFICIENT'
+          }
+          assert isinstance(r['candidateRubricPassed'],bool)
+          assert isinstance(r['coverageGatePassed'],bool)
+          assert r['target']=='FULL_GAME_HOME_WIN'
+          assert r['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['features']['controlCount']==4
+          assert r['features']['broadVsHandContactDamageCount']==5
+          assert r['features']['starterQualityCount']==5
+          assert r['features']['challengerCount']==14
+          assert r['combinedEvaluation2024_2026Ytd']['rows']==6610
+          b=r['pairedDateBootstrapVsControl2024_2026Ytd']
+          assert b['unit']=='OFFICIAL_DATE_CLUSTER' and b['resamples']==5000 and b['distinctDates']>400
+          assert r['diagnostics']['frozenV62IsDiagnosticOnlyNotPromotionControl'] is True
+          assert r['diagnostics']['diagnosticResultsMayNotChoosePromotionCandidate'] is True
+          p=r['policy']
+          for k in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','historicalPricesUsed','marketOddsUsedAsFeatures','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','subsetMiningUsed','homeAwaySubsetMiningUsed','seasonExclusionAfterResultsUsed','postResultRuleChangeAllowed','postResultShrinkageChangeAllowed','postResultLookbackChangeAllowed','v16ProductionChanged','productionMarketRegistryChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed','positiveEvEstablished']:
+            assert p[k] is False,k
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'coverageGatePassed':r['coverageGatePassed'],
+            'validation2023':r['validation2023']['challengerImprovementVsControl'],
+            'combined':r['combinedEvaluation2024_2026Ytd']['challengerImprovementVsControl'],
+            'broadBatterOnly':r['combinedEvaluation2024_2026Ytd']['broadBatterOnlyImprovementVsControl'],
+            'starterQualityOnly':r['combinedEvaluation2024_2026Ytd']['starterQualityOnlyImprovementVsControl'],
+            'bootstrap':r['pairedDateBootstrapVsControl2024_2026Ytd'],
+            'bySeason':{s:v['challengerImprovementVsControl'] for s,v in r['evaluationBySeason'].items()},
+            'vsV62':r['diagnostics']['improvementVsFrozenV62Combined'],
+            'checks':r['candidateRubricChecks']
+          },indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Verify exact research-only scope
+        run: |
+          set -euo pipefail
+          grep -F "'historicalPricesUsed': False" scripts/p0-step12v64-contact-damage-winner.py
+          grep -F "'betEliteAllowed': False" scripts/p0-step12v64-contact-damage-winner.py
+          grep -F "'realFinancialExposure': 0" scripts/p0-step12v64-contact-damage-winner.py
+          ! grep -E "automaticBetPlacementAllowed[^\n]*True|betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]" scripts/p0-step12v64-contact-damage-winner.py
+          git diff --check
+      - name: Upload V64 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v64-contact-damage-winner
+          path: artifacts/p0-step12v64/
+          if-no-files-found: error
+          retention-days: 30
