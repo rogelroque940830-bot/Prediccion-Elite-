@@ -1,0 +1,255 @@
+name: Validate P0 Step 12V62 Pitch Quality Winner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v62-pitch-quality-winner-contract.json'
+      - 'scripts/p0-step12v62-acquire-pitch-quality.py'
+      - 'scripts/p0-step12v62-pitch-quality-winner.py'
+      - '.github/workflows/validate-p0-step12v62-pitch-quality-winner.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify final V62 outcome contract was frozen before outcome scorer
+        run: |
+          set -euo pipefail
+          FREEZE=97bbc65ff30d108453f012d9cdf1f34e1bf2c967
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v62-pitch-quality-winner-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v62-pitch-quality-winner.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v62-pitch-quality-winner-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v62-pitch-quality-winner-contract.v1'
+          assert c['contractRevision']==2
+          assert c['preOutcomeCorrection']['performedBeforeV62OutcomeScorerExisted'] is True
+          assert c['preOutcomeCorrection']['custodyExtractorDoesNotReadWinnerOutcomeMetrics'] is True
+          assert c['dataBoundary']['warmupSeason']=='2021'
+          assert c['dataBoundary']['trainingSeason']=='2022'
+          assert c['dataBoundary']['calibrationSeason']=='2023'
+          assert c['dataBoundary']['retrospectiveEvaluationSeasons']==['2024','2025','2026_YTD']
+          assert c['dataBoundary']['rollingLookbackDays']==365
+          assert c['challenger']['featureCount']==14 and c['challenger']['l2Strength']==1.0
+          assert c['pairedBootstrap']['resamples']==5000
+          assert c['predeclaredAblations']['promotionCandidateIsAlwaysFull'] is True
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['postResultPitchTypeChangeAllowed'] is False
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          assert len(c['recognizedPitchTypes'])==len(set(c['recognizedPitchTypes']))
+          print('V62_FINAL_PRE_OUTCOME_CONTRACT_FROZEN')
+          PY
+      - name: Syntax check
+        run: |
+          python -m py_compile scripts/p0-step12v62-acquire-pitch-quality.py
+          python -m py_compile scripts/p0-step12v62-pitch-quality-winner.py
+
+  acquire-pitch-quality:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        season: [2021, 2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 target evidence
+        if: matrix.season != '2021'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Acquire direct historical pitch-quality PBP custody
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/p0-step12v62-${SEASON}"
+          if [ "$SEASON" = "2021" ]; then
+            python scripts/p0-step12v62-acquire-pitch-quality.py \
+              --season "$SEASON" \
+              --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+              --out "artifacts/p0-step12v62-${SEASON}/pitch-quality-${SEASON}.json" \
+              --workers 6
+          else
+            python scripts/p0-step12v62-acquire-pitch-quality.py \
+              --season "$SEASON" \
+              --table "artifacts/p0-step12v3/${SEASON}/game-anatomy-feature-table.json" \
+              --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+              --out "artifacts/p0-step12v62-${SEASON}/pitch-quality-${SEASON}.json" \
+              --workers 6
+          fi
+      - name: Upload V62 pitch-quality season custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-${{ matrix.season }}
+          path: artifacts/p0-step12v62-${{ matrix.season }}/pitch-quality-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  score-winner:
+    needs: acquire-pitch-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.17.0'
+      - name: Download frozen winner-anatomy control source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Download frozen T-minus-5 lineup lineage
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download certified batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+      - name: Download certified V16 pure winner model
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/p0-step12v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Download frozen V61 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v61-individual-pitchmix-winner
+          path: artifacts/p0-step12v61
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31922901817
+      - name: Download frozen V60 T-minus-5 starter and split custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v60-matchup-custody-*
+          path: artifacts/p0-step12v60-custody
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31919873754
+      - name: Download all V62 pitch-quality custody packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v62-pitch-quality-*
+          path: artifacts/p0-step12v62-pitch-quality
+          merge-multiple: true
+      - name: Verify immutable parent custody before scoring
+        run: |
+          set -euo pipefail
+          test -s artifacts/p0-step12v16/pure-settlement-probability-report.json
+          test -s artifacts/p0-step12v16/pure-settlement-model-manifest.json
+          test -s artifacts/p0-step12v61/individual-pitchmix-winner-report.json
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${s}/cohort/pregame-lineup-history.json"
+            test -s "artifacts/p0-step12v41/${s}/batter-history.json"
+            test -s "artifacts/p0-step12v60-custody/pregame-hands-${s}.json"
+            test -s "artifacts/p0-step12v60-custody/batter-hand-${s}.json"
+            test -s "artifacts/p0-step12v62-pitch-quality/pitch-quality-${s}.json"
+          done
+          test -s artifacts/p0-step12v62-pitch-quality/pitch-quality-2021.json
+      - name: Run frozen V62 pitch-quality winner experiment
+        run: |
+          mkdir -p artifacts/p0-step12v62
+          python scripts/p0-step12v62-pitch-quality-winner.py \
+            --control-root artifacts/p0-step12v-control \
+            --lineup-root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --hands-root artifacts/p0-step12v60-custody \
+            --pitch-root artifacts/p0-step12v62-pitch-quality \
+            --v16-report artifacts/p0-step12v16/pure-settlement-probability-report.json \
+            --v16-manifest artifacts/p0-step12v16/pure-settlement-model-manifest.json \
+            --v61-report artifacts/p0-step12v61/individual-pitchmix-winner-report.json \
+            --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out artifacts/p0-step12v62/pitch-quality-winner-report.json
+      - name: Validate evidence without requiring favorable result
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v62/pitch-quality-winner-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v62-pitch-quality-winner.v1'
+          assert r['classification'] in {'PITCH_QUALITY_MATCHUP_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH','PITCH_QUALITY_MATCHUP_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE','PITCH_QUALITY_CUSTODY_INSUFFICIENT'}
+          assert isinstance(r['candidateRubricPassed'],bool) and isinstance(r['coverageGatePassed'],bool)
+          assert r['target']=='FULL_GAME_HOME_WIN'
+          assert r['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['features']['controlCount']==4 and r['features']['exactPitchTypeBatterCount']==5 and r['features']['starterQualityCount']==5 and r['features']['challengerCount']==14
+          assert r['combinedEvaluation2024_2026Ytd']['rows']==6610
+          b=r['pairedDateBootstrapVsControl2024_2026Ytd'];assert b['unit']=='OFFICIAL_DATE_CLUSTER' and b['resamples']==5000 and b['distinctDates']>400
+          assert r['diagnostics']['ablationResultsMayNotChoosePromotionCandidate'] is True
+          p=r['policy']
+          for k in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','historicalPricesUsed','marketOddsUsedAsFeatures','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','subsetMiningUsed','homeAwaySubsetMiningUsed','seasonExclusionAfterResultsUsed','postResultRuleChangeAllowed','postResultShrinkageChangeAllowed','postResultPitchTypeChangeAllowed','v16ProductionChanged','productionMarketRegistryChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed','positiveEvEstablished']:
+            assert p[k] is False,k
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'candidateRubricPassed':r['candidateRubricPassed'],'coverageGatePassed':r['coverageGatePassed'],'custody':r['data']['custody'],'combined':r['combinedEvaluation2024_2026Ytd']['challengerImprovementVsControl'],'pitchTypeOnly':r['combinedEvaluation2024_2026Ytd']['pitchTypeOnlyImprovementVsControl'],'starterQualityOnly':r['combinedEvaluation2024_2026Ytd']['starterQualityOnlyImprovementVsControl'],'bootstrap':r['pairedDateBootstrapVsControl2024_2026Ytd'],'bySeason':{s:v['challengerImprovementVsControl'] for s,v in r['evaluationBySeason'].items()},'diagnostics':r['diagnostics'],'checks':r['candidateRubricChecks']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Verify exact research-only scope
+        run: |
+          set -euo pipefail
+          grep -F "'historicalPricesUsed':False" scripts/p0-step12v62-pitch-quality-winner.py
+          grep -F "'betEliteAllowed':False" scripts/p0-step12v62-pitch-quality-winner.py
+          grep -F "'realFinancialExposure':0" scripts/p0-step12v62-pitch-quality-winner.py
+          ! grep -E "automaticBetPlacementAllowed[^\n]*True|betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]" scripts/p0-step12v62-pitch-quality-winner.py
+          git diff --check
+      - name: Upload V62 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-winner
+          path: artifacts/p0-step12v62/
+          if-no-files-found: error
+          retention-days: 30
