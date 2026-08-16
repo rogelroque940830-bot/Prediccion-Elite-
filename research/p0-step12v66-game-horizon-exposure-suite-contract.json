@@ -1,0 +1,294 @@
+{
+  "schemaVersion": "courtedge-p0-step12v66-game-horizon-exposure-suite-contract.v1",
+  "contractRevision": 2,
+  "scientificStatus": "FROZEN_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS",
+  "sourceSemanticsCorrection": {
+    "reason": "Revision 2 aligns the five starter-quality feature names with the exact frozen V62 source-native names discovered during pre-scorer source audit. No hypothesis, quantity, transform, target, candidate, metric, season, gate or model setting changed.",
+    "hypothesisChanged": false,
+    "outcomeScorerExistedBeforeCorrection": false
+  },
+  "objective": "Decompose how starter physical quality, expected starter exposure and bullpen handoff affect MLB outcomes at F3, F5 and full-game horizons, while separately testing F5 and full-game combined-run distributions. The experiment is deliberately compact: it reuses frozen upstream evidence, adds only mechanistic exposure/handoff transforms, evaluates each route independently, and forbids post-result feature, subset, model or hyperparameter search.",
+  "mainBaseSha": "6a7362419694e7aae50bcb1700b0741b2ec539df",
+  "routes": [
+    "V66_A_F3_WINNER",
+    "V66_B_F5_WINNER",
+    "V66_C_FULL_GAME_WINNER",
+    "V66_D_F5_TOTAL",
+    "V66_E_FULL_GAME_TOTAL"
+  ],
+  "parentEvidence": {
+    "v16WinnerWorkflowRunId": 31704085189,
+    "v16Role": "FROZEN_F5_AND_FULL_GAME_WINNER_CONTROL",
+    "v23F3WorkflowRunId": 31894436492,
+    "v23Role": "FROZEN_F3_WINNER_DIAGNOSTIC_REFERENCE_ONLY_BECAUSE_2023_ROBUSTNESS_FAILED",
+    "v25F3TotalWorkflowRunId": 31895109239,
+    "v25Role": "F3_TOTAL_DIAGNOSTIC_ONLY_NOT_A_V66_TARGET",
+    "v30F5TotalWorkflowRunId": 31897557943,
+    "v30Role": "FROZEN_F5_TOTAL_DIAGNOSTIC_REFERENCE_ONLY_BECAUSE_NO_RETUNE_ROBUSTNESS_FAILED",
+    "v39PitcherOutsWorkflowRunId": 31902835230,
+    "v39ArtifactId": 9251573906,
+    "v39Role": "FROZEN_EXPECTED_STARTER_OUTS_SOURCE",
+    "v40Role": "PROVES_EXPECTED_OUTS_HAS_RELATIVE_SIGNAL_BUT_ABSOLUTE_CALIBRATION_BIAS_SO_V66_MUST_USE_BOUNDED_SHARE_AND_RELATIVE_TRANSFORMS",
+    "v14BullpenRole": "FROZEN_WORKLOAD_AVAILABILITY_SOURCE_HELPFUL_BUT_NOT_PROMOTION_READY",
+    "v62StarterQualityWorkflowRunId": 31925270654,
+    "v62Role": "FROZEN_FIVE_FEATURE_STARTER_PHYSICAL_QUALITY_SOURCE",
+    "v65WorkflowRunId": 31957558580,
+    "v65Classification": "CONTACT_PROCESS_WINNER_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v65Lesson": "CONTACT_PROCESS_LAYER_DETRIMENTAL_WHILE_STARTER_QUALITY_ONLY_RETAINED_POSITIVE_SIGNAL"
+  },
+  "chronology": {
+    "warmupSeason": "2021",
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeLeakageAllowed": false,
+    "scoreWholeOfficialDateBeforeAnySameDateStateUpdate": true,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "lineupCutoff": "T_MINUS_5_MINUTES",
+    "probableStarterCutoff": "T_MINUS_5_MINUTES"
+  },
+  "starterQuality": {
+    "source": "V62_FROZEN_STARTER_QUALITY_ENGINEERING_AND_CUSTODY",
+    "featuresExactly": [
+      "starter_velocity_adv",
+      "starter_spin_adv",
+      "starter_swing_miss_adv",
+      "starter_in_zone_adv",
+      "starter_weak_contact_adv"
+    ],
+    "featureCount": 5,
+    "postResultDefinitionChangeAllowed": false
+  },
+  "starterExposure": {
+    "source": "V39_FROZEN_PITCHER_OUTS_MODEL_WITH_V40_BIAS_WARNING",
+    "rawExpectedOutsMayNotBeTreatedAsPerfectAbsoluteTruth": true,
+    "teamLevelInputs": [
+      "home_expected_starter_outs",
+      "away_expected_starter_outs"
+    ],
+    "boundedTransformsExactly": {
+      "home_f3_starter_share": "clip(home_expected_starter_outs / 9.0, 0.0, 1.0)",
+      "away_f3_starter_share": "clip(away_expected_starter_outs / 9.0, 0.0, 1.0)",
+      "home_f5_starter_share": "clip(home_expected_starter_outs / 15.0, 0.0, 1.0)",
+      "away_f5_starter_share": "clip(away_expected_starter_outs / 15.0, 0.0, 1.0)",
+      "home_fg_starter_share": "clip(home_expected_starter_outs / 27.0, 0.0, 1.0)",
+      "away_fg_starter_share": "clip(away_expected_starter_outs / 27.0, 0.0, 1.0)",
+      "f3_exposure_adv": "home_f3_starter_share - away_f3_starter_share",
+      "f5_exposure_adv": "home_f5_starter_share - away_f5_starter_share",
+      "fg_exposure_adv": "home_fg_starter_share - away_fg_starter_share",
+      "home_f5_expected_bullpen_share": "1.0 - home_f5_starter_share",
+      "away_f5_expected_bullpen_share": "1.0 - away_f5_starter_share",
+      "home_fg_expected_bullpen_share": "1.0 - home_fg_starter_share",
+      "away_fg_expected_bullpen_share": "1.0 - away_fg_starter_share"
+    },
+    "postResultTransformChangeAllowed": false
+  },
+  "bullpenAvailability": {
+    "source": "V14_FROZEN_DIRECT_PBP_WORKLOAD_CUSTODY",
+    "metricsExactly": [
+      "bullpen_pitches_1d",
+      "bullpen_pitches_3d",
+      "bullpen_core3_pitches_2d",
+      "bullpen_b2b_arms"
+    ],
+    "winnerOrientation": "AWAY_WORKLOAD_MINUS_HOME_WORKLOAD_SO_POSITIVE_MEANS_HOME_HAS_REST_ADVANTAGE",
+    "handoffWeightingExactly": {
+      "f5": "each bullpen workload advantage multiplied by mean(home_f5_expected_bullpen_share, away_f5_expected_bullpen_share)",
+      "full_game": "each bullpen workload advantage multiplied by mean(home_fg_expected_bullpen_share, away_fg_expected_bullpen_share)"
+    },
+    "f3BullpenFeaturesAllowed": false,
+    "postResultMetricChangeAllowed": false
+  },
+  "winnerControls": {
+    "F3": {
+      "formalBaseline": "TRAINING_SEASON_HOME_DRAW_AWAY_CLIMATOLOGY",
+      "diagnosticReference": "FROZEN_V23_F3_FULL13",
+      "diagnosticReferenceMayNotReplaceFormalBaseline": true
+    },
+    "F5": {
+      "formalControl": "FROZEN_V16_F5_MODEL",
+      "tieIsPush": true
+    },
+    "FULL_GAME": {
+      "formalControl": "FROZEN_V16_C4",
+      "controlFeaturesExactly": [
+        "lineup_exposure_rate_adv",
+        "starter_kbb_adv",
+        "combined_team_rs10",
+        "team_rd10_diff"
+      ]
+    }
+  },
+  "winnerCandidateAblation": {
+    "commonModelFamily": "L2_LOGISTIC_OR_MULTINOMIAL_REGRESSION_MATCHING_THE_FORMAL_CONTROL_TARGET_SEMANTICS",
+    "l2Strength": 1.0,
+    "trainingOnlyMedianImputationAllowed": true,
+    "trainingOnlyStandardizationAllowed": true,
+    "noModelFamilySearch": true,
+    "noHyperparameterSearch": true,
+    "F3": [
+      "FORMAL_BASELINE",
+      "STARTER_QUALITY5_ONLY",
+      "EXPOSURE_ONLY_F3",
+      "STARTER_QUALITY5_PLUS_EXPOSURE_F3_PLUS_QUALITY_X_EXPOSURE5"
+    ],
+    "F5": [
+      "V16_F5_CONTROL",
+      "CONTROL_PLUS_STARTER_QUALITY5",
+      "CONTROL_PLUS_EXPOSURE_F5",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_F5_PLUS_QUALITY_X_EXPOSURE5",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_F5_PLUS_QUALITY_X_EXPOSURE5_PLUS_WEIGHTED_BULLPEN_WORKLOAD4"
+    ],
+    "FULL_GAME": [
+      "V16_C4_CONTROL",
+      "CONTROL_PLUS_STARTER_QUALITY5",
+      "CONTROL_PLUS_EXPOSURE_FG",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_FG_PLUS_QUALITY_X_EXPOSURE5",
+      "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_FG_PLUS_QUALITY_X_EXPOSURE5_PLUS_WEIGHTED_BULLPEN_WORKLOAD4"
+    ],
+    "qualityExposureInteractionDefinition": "each of the five home-oriented V62 starter-quality advantages multiplied by the horizon-specific symmetric mean starter share",
+    "promotionCandidateSelectionRule": "THE_FULL_MECHANISTIC_CANDIDATE_IS_PREDECLARED_AS_PRIMARY; LOWER_ABLATIONS_ARE_DIAGNOSTIC_AND_MAY_IDENTIFY_WHERE_SIGNAL_LIVES_BUT_MAY_NOT_BE_SELECTED_POST_RESULT_AS_A_REPLACEMENT_PROMOTION_CANDIDATE"
+  },
+  "totalTargets": {
+    "F5": "HOME_RUNS_FIRST_5_PLUS_AWAY_RUNS_FIRST_5",
+    "FULL_GAME": "FINAL_HOME_RUNS_PLUS_FINAL_AWAY_RUNS",
+    "countDistributionRequired": true,
+    "pushAwareLineProbabilitiesMayBeDerivedAfter_FROZEN_COUNT_MODEL": true,
+    "marketPriceOptimizationAllowed": false
+  },
+  "totalControls": {
+    "F5": {
+      "formalBaseline": "TRAINING_SEASON_COUNT_CLIMATOLOGY",
+      "diagnosticReference": "FROZEN_V29_V30_SYMMETRIC_F5_TOTAL_CORE",
+      "diagnosticReferenceMayNotReplaceFormalBaseline": true
+    },
+    "FULL_GAME": {
+      "formalBaseline": "TRAINING_SEASON_COUNT_CLIMATOLOGY",
+      "diagnosticReference": "FROZEN_STEP12V_WINNER_ANATOMY_WALKFORWARD_FULL_GAME_TOTAL_IF_EXACT_TARGET_PARITY_IS_AVAILABLE",
+      "absenceOfDedicatedRobustStandaloneFullGameTotalModelBlocksV66": false
+    }
+  },
+  "totalMechanisticFeatures": {
+    "orientation": "SYMMETRIC_ONLY",
+    "winnerSideDirectionalFeaturesAllowed": false,
+    "sharedRunEnvironmentBaseExactly": [
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "F5Exactly": [
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "mean_f5_starter_share",
+      "min_f5_starter_share",
+      "combined_f5_expected_bullpen_share",
+      "quality_weighted_combined_f5_starter_share",
+      "bullpen_pitches_1d_combined_weighted_f5",
+      "bullpen_pitches_3d_combined_weighted_f5",
+      "bullpen_core3_pitches_2d_combined_weighted_f5",
+      "bullpen_b2b_arms_combined_weighted_f5"
+    ],
+    "FULL_GAMEExactly": [
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "mean_fg_starter_share",
+      "min_fg_starter_share",
+      "combined_fg_expected_bullpen_share",
+      "quality_weighted_combined_fg_starter_share",
+      "bullpen_pitches_1d_combined_weighted_fg",
+      "bullpen_pitches_3d_combined_weighted_fg",
+      "bullpen_core3_pitches_2d_combined_weighted_fg",
+      "bullpen_b2b_arms_combined_weighted_fg"
+    ],
+    "qualityWeightedCombinedStarterShareDefinition": "sum over both starters of a frozen scalar V62 physical-quality index multiplied by that starter's horizon share; scalar index is the unweighted mean of the five standardized V62 starter-quality components on the 2022 training distribution",
+    "combinedBullpenWorkloadDefinition": "home workload plus away workload multiplied by mean expected bullpen share for the horizon",
+    "postResultFeatureChangeAllowed": false
+  },
+  "totalModel": {
+    "primaryFamily": "POISSON_REGRESSION",
+    "alpha": 1.0,
+    "nb2DiagnosticAllowed": true,
+    "nb2MayNotReplacePrimaryPostResult": true,
+    "trainingOnlyMedianImputationAllowed": true,
+    "trainingOnlyStandardizationAllowed": true,
+    "noModelFamilySearch": true,
+    "noHyperparameterSearch": true
+  },
+  "evaluation": {
+    "winnerPrimaryMetrics": ["LOG_LOSS", "BRIER"],
+    "winnerCalibrationMetrics": ["ECE10", "ABSOLUTE_MEAN_PROBABILITY_GAP"],
+    "totalPrimaryMetrics": ["MEAN_POISSON_DEVIANCE", "AVERAGE_FIXED_LINE_BRIER"],
+    "totalCalibrationMetrics": ["ABSOLUTE_MEAN_RUN_BIAS"],
+    "pairedBootstrap": {
+      "unit": "OFFICIAL_DATE_CLUSTER",
+      "resamples": 5000,
+      "seed": 20260816,
+      "confidenceLevel": 0.95
+    },
+    "evaluateEachRouteIndependently": true,
+    "oneRouteFailureMayNotInvalidateAnotherRoute": true,
+    "crossHorizonDiagnostics": [
+      "F3_TO_F5_WINNER_SIGNAL_RETENTION",
+      "F5_TO_FULL_GAME_WINNER_SIGNAL_RETENTION",
+      "F5_TO_FULL_GAME_TOTAL_SIGNAL_RETENTION"
+    ]
+  },
+  "promotionRubric": {
+    "winner": {
+      "require2023ImprovementOnBothProperScores": true,
+      "requireCombined2024_2026YtdImprovementOnBothProperScores": true,
+      "requireBootstrapLowerBoundPositiveForBothProperScores": true,
+      "requireAtLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
+      "requireNoEvaluationSeasonWorseOnBoth": true,
+      "ece10AbsoluteMaximum": 0.02
+    },
+    "total": {
+      "require2023ImprovementVsFormalBaselineOnPoissonDevianceAndAverageFixedLineBrier": true,
+      "requireCombined2024_2026YtdImprovementOnBoth": true,
+      "requireBootstrapLowerBoundPositiveOnBoth": true,
+      "requireAtLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
+      "requireNoEvaluationSeasonWorseOnBoth": true,
+      "requireAbsoluteMeanRunBiasNotWorseThanFormalBaseline": true
+    },
+    "routePassingClassifications": {
+      "V66_A_F3_WINNER": "V66_F3_WINNER_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "V66_B_F5_WINNER": "V66_F5_WINNER_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "V66_C_FULL_GAME_WINNER": "V66_FULL_GAME_WINNER_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "V66_D_F5_TOTAL": "V66_F5_TOTAL_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "V66_E_FULL_GAME_TOTAL": "V66_FULL_GAME_TOTAL_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE"
+    },
+    "routeFailingClassificationSuffix": "NOT_ROBUST_ENOUGH_TO_ADVANCE"
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "thresholdSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "homeAwaySubsetMiningAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false,
+    "postResultInteractionChangeAllowed": false,
+    "postResultExposureTransformChangeAllowed": false,
+    "postResultBullpenMetricChangeAllowed": false,
+    "postResultControlChangeAllowed": false,
+    "technicalSourceSemanticsCorrectionAllowedOnlyBeforeOutcomeScorerAndMustPreserveHypothesis": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "positiveEvEstablished": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "v16ProductionChanged": false,
+    "productionMarketRegistryChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}

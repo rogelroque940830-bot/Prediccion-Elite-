@@ -1,0 +1,242 @@
+name: Validate P0 Step 12V66 Game Horizon Exposure Custody
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v66-game-horizon-exposure-suite-contract.json'
+      - 'research/p0-step12v66-preoutcome-zero-variance-correction.json'
+      - 'scripts/p0-step12v66-acquire-bullpen.py'
+      - 'scripts/p0-step12v66-game-horizon-exposure-custody.py'
+      - 'scripts/p0-step12v66-run-custody.py'
+      - '.github/workflows/validate-p0-step12v66-game-horizon-exposure-custody.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V66 contract predates all V66 predictor custody code
+        run: |
+          set -euo pipefail
+          FREEZE=262be86daae01a37f3fec5f02cb12721745e2ae5
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v66-game-horizon-exposure-suite-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v66-acquire-bullpen.py"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v66-game-horizon-exposure-custody.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v66-game-horizon-exposure-suite-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v66-game-horizon-exposure-suite-contract.v1'
+          assert c['contractRevision']==2
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS'
+          assert c['sourceSemanticsCorrection']['outcomeScorerExistedBeforeCorrection'] is False
+          assert c['chronology']['warmupSeason']=='2021'
+          assert c['chronology']['trainingSeason']=='2022'
+          assert c['chronology']['calibrationSeason']=='2023'
+          assert c['chronology']['evaluationSeasons']==['2024','2025','2026_YTD']
+          assert c['chronology']['sameDateOutcomeLeakageAllowed'] is False
+          assert c['starterQuality']['featuresExactly']==[
+            'starter_velocity_adv','starter_spin_adv','starter_swing_miss_adv',
+            'starter_in_zone_adv','starter_weak_contact_adv'
+          ]
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['modelSearchAllowed'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          z=json.load(open('research/p0-step12v66-preoutcome-zero-variance-correction.json'))
+          assert z['scientificStatus']=='FROZEN_TECHNICAL_CORRECTION_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS'
+          assert z['observedInWorkflowRunId']==31960945745
+          assert z['correction']['sourceSemanticsChanged'] is False
+          assert z['correction']['featureRemoved'] is False
+          assert z['outcomeBoundary']['v66OutcomeScorerExistedBeforeCorrection'] is False
+          assert z['outcomeBoundary']['v66OutcomeMetricsAvailableBeforeCorrection'] is False
+          assert z['outcomeBoundary']['postResultRetuning'] is False
+          print('V66_PREOUTCOME_CONTRACT_CHRONOLOGY_VERIFIED')
+          PY
+      - name: Syntax check V66 custody code
+        run: |
+          python -m py_compile scripts/p0-step12v66-acquire-bullpen.py
+          python -m py_compile scripts/p0-step12v66-game-horizon-exposure-custody.py
+          python -m py_compile scripts/p0-step12v66-run-custody.py
+
+  acquire-2022-bullpen:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Extend exact frozen V14 bullpen custody backward to V66 training season
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v66-bullpen-2022
+          python scripts/p0-step12v66-acquire-bullpen.py \
+            --season 2022 \
+            --table artifacts/p0-step12v3/2022/game-anatomy-feature-table.json \
+            --contract research/p0-step12v66-game-horizon-exposure-suite-contract.json \
+            --out artifacts/p0-step12v66-bullpen-2022/bullpen-2022.json \
+            --workers 8
+      - name: Upload 2022 bullpen source pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v66-bullpen-2022
+          path: artifacts/p0-step12v66-bullpen-2022/bullpen-2022.json
+          if-no-files-found: error
+          retention-days: 30
+
+  build-custody:
+    needs: acquire-2022-bullpen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+      - name: Download frozen winner-anatomy control source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Download canonical Step 12V3 source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download frozen V60 T-minus-5 starter custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v60-matchup-custody-*
+          path: artifacts/p0-step12v60-custody
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31919873754
+      - name: Download frozen V62 pitch-quality custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v62-pitch-quality-*
+          path: artifacts/p0-step12v62-pitch-quality
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download frozen V14 bullpen packs for 2023 forward
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v14-bullpen-20*
+          path: artifacts/p0-step12v66-bullpen
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31672480680
+      - name: Download V66 exact-semantics 2022 bullpen pack
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-bullpen-2022
+          path: artifacts/p0-step12v66-bullpen
+      - name: Verify immutable source packs
+        run: |
+          set -euo pipefail
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "artifacts/p0-step12v-control/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v3/${s}/game-anatomy-feature-table.json"
+            test -s "artifacts/p0-step12v60-custody/pregame-hands-${s}.json"
+            test -s "artifacts/p0-step12v62-pitch-quality/pitch-quality-${s}.json"
+            test -s "artifacts/p0-step12v66-bullpen/bullpen-${s}.json"
+          done
+          test -s artifacts/p0-step12v62-pitch-quality/pitch-quality-2021.json
+      - name: Build V66 outcome-blind predictor custody
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v66
+          python scripts/p0-step12v66-run-custody.py \
+            --control-root artifacts/p0-step12v-control \
+            --step12v3-root artifacts/p0-step12v3 \
+            --hands-root artifacts/p0-step12v60-custody \
+            --pitch-root artifacts/p0-step12v62-pitch-quality \
+            --bullpen-dir artifacts/p0-step12v66-bullpen \
+            --v39-contract research/p0-step12v39-pitcher-outs-baseline-contract.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --contract research/p0-step12v66-game-horizon-exposure-suite-contract.json \
+            --out artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz \
+            --report artifacts/p0-step12v66/v66-custody-report.json
+      - name: Validate custody boundary without inspecting V66 outcomes
+        run: |
+          python - <<'PY'
+          import gzip,json
+          r=json.load(open('artifacts/p0-step12v66/v66-custody-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v66-game-horizon-exposure-custody.v1'
+          assert r['classification']=='V66_PREOUTCOME_CUSTODY_FROZEN_READY_FOR_SEPARATE_OUTCOME_SCORER'
+          assert r['rows']==11407
+          assert r['rowsBySeason']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['chronology']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['chronology']['qualityStateUpdatedAfterWholeOfficialDate'] is True
+          assert r['output']['containsOutcomeTargets'] is False
+          assert r['policy']['betEliteAllowed'] is False and r['policy']['realFinancialExposure']==0
+          with gzip.open('artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz','rt') as f:
+            first=json.loads(next(f))
+          forbidden=('outcome','homeruns','awayruns','final_','winner','homewin','target','settlement','result')
+          assert not [k for k in first if any(x in k.lower() for x in forbidden)]
+          for side in ('home','away'):
+            for h in ('f3','f5','fg'):
+              v=first.get(f'{side}_{h}_starter_share')
+              assert v is None or 0.0<=float(v)<=1.0
+          q=r['qualityIndex']['2022TrainingScaler']
+          assert q['whiff']['zeroVarianceTraining'] is True
+          assert q['whiff']['rawScale']==0.0
+          assert q['whiff']['scale']==1.0
+          print(json.dumps({
+            'classification':r['classification'],
+            'rowsBySeason':r['rowsBySeason'],
+            'coverageBySeason':r['coverageBySeason'],
+            'qualityCustodyBySeason':r['qualityCustodyBySeason'],
+            'qualityIndex':r['qualityIndex'],
+            'bullpenSourcePacks':r['bullpenSourcePacks'],
+            'outputSha256':r['output']['sha256']
+          },indent=2))
+          PY
+      - name: Verify research-only scope
+        run: |
+          set -euo pipefail
+          ! grep -E "betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]|automaticBetPlacementAllowed[^\n]*True" scripts/p0-step12v66-game-horizon-exposure-custody.py scripts/p0-step12v66-run-custody.py
+          git diff --check
+      - name: Upload V66 pre-outcome custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: artifacts/p0-step12v66/
+          if-no-files-found: error
+          retention-days: 30
