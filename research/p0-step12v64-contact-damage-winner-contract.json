@@ -1,148 +1,175 @@
 {
   "schemaVersion": "courtedge-p0-step12v64-contact-damage-winner-contract.v1",
-  "scientificStatus": "FROZEN_CONTACT_DAMAGE_WINNER_HYPOTHESIS_BEFORE_V64_OUTCOME_SCORER",
-  "objective": "Test whether leakage-safe expected contact and damage quality for the exact T-5 lineup versus the opposing confirmed starter improves full-game winner probability beyond the frozen V16 C4 control, while preserving V62 as a diagnostic benchmark only.",
+  "contractRevision": 2,
+  "scientificStatus": "FROZEN_BROAD_CONTACT_DAMAGE_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS_BEFORE_V64_OUTCOME_SCORER",
+  "preOutcomeCorrection": {
+    "performedBeforeV64OutcomeScorerExisted": true,
+    "reason": "Repository compatibility inspection after the initial hypothesis freeze showed that frozen V62 exposes five starter-quality variables, not four, and that frozen V60 already provides leakage-safe exact-lineup generic and starter-hand adjustment components for H, TB, BB, K and HR. Revision 2 therefore replaces the initial overcomplicated eight team-level draft variables with five predeclared broad handedness-conditioned lineup differentials and retains all five frozen V62 starter-quality variables. This correction uses parent architecture only; no V64 winner outcomes or V64 model metrics existed when revision 2 was frozen.",
+    "v64OutcomeMetricsAvailableAtCorrection": false,
+    "postResultRetuning": false
+  },
+  "objective": "Test whether a lower-variance exact-lineup contact/discipline/damage representation conditioned on opposing starter handedness, combined with frozen V62 starter quality, improves full-game winner probability beyond certified V16 C4 without the sparse exact-pitch or pitch-shape microcells that limited V63.",
   "sportingTarget": {
     "primaryTarget": "FULL_GAME_HOME_WIN",
+    "winnerProbabilityIsPrimaryProjectObjective": true,
     "marketTarget": false,
     "priceIndependent": true
   },
+  "parentEvidence": {
+    "mainBaseSha": "2bda95a3f6e54443ecaa4f689af1b3c7eb285522",
+    "v16WorkflowRunId": 31704085189,
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "v16RequiredClassification": "PURE_SETTLEMENT_MODEL_ELIGIBLE_FOR_RUNTIME_RESEARCH_ADAPTER",
+    "v41WorkflowRunId": 31905076013,
+    "v60WorkflowRunId": 31919873754,
+    "v62WorkflowRunId": 31925270654,
+    "v63WorkflowRunId": 31930159372,
+    "v63FrozenClassification": "BATTER_CONDITIONED_PITCH_SHAPE_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "historicalT5LineupRunId": 31659518059
+  },
   "dataBoundary": {
+    "warmupSeasonForStarterQuality": "2021",
     "trainingSeason": "2022",
     "calibrationSeason": "2023",
-    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "expectedRowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
     "sameDateHistoryAllowed": false,
+    "scoreWholeOfficialDateBeforeUpdatingAnySameDateState": true,
     "futureGameDataAllowed": false,
-    "exactPregameLineupBoundary": "T_MINUS_5_MINUTES",
-    "exactNineUniqueBattersPerSideRequired": true,
-    "confirmedPregameStarterPairRequired": true,
-    "boxscoreLineupBackfillAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "pregameIdentityBoundary": {
+    "lineupSource": "CANONICAL_STEP12V3_T_MINUS_5_LINEUP_HISTORY",
+    "starterHandSource": "V60_EXACT_T_MINUS_5_PROBABLE_STARTER_CUSTODY",
+    "starterIdentitySource": "V60_EXACT_T_MINUS_5_PROBABLE_STARTER_CUSTODY",
+    "cutoff": "T_MINUS_5_MINUTES",
+    "exactNineBattersPerTeamRequired": true,
+    "probableStarterIdentityMustMatchFrozenT5Table": true,
+    "validStarterHands": ["R", "L"],
+    "finalBoxscoreLineupBackfillAllowed": false,
     "projectedLineupFallbackAllowed": false,
-    "currentMetadataFallbackAllowed": false
+    "postgameStarterSubstitutionAllowed": false,
+    "currentPlayerMetadataFallbackAllowed": false
   },
-  "parentEvidence": {
-    "v16ControlRunId": 31704085189,
-    "v62RunId": 31925270654,
-    "v63RunId": 31930159372,
-    "v63Result": "BATTER_CONDITIONED_PITCH_SHAPE_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
-    "v63Interpretation": "Micro-cell pitch-shape matching improved V16 C4 point estimates but failed frozen bootstrap and temporal-stability gates and underperformed V62; V64 must not reuse post-result V63 bucket tuning."
-  },
-  "hypothesis": {
-    "statement": "A lower-variance representation of how well each exact T-5 lineup is expected to make contact and do damage against the opposing starter can retain matchup information without fragmenting batter history into sparse four-dimensional pitch-shape cells.",
-    "mechanism": "starter arsenal quality and handedness -> batter contact/discipline/damage expectation -> lineup-level expected contact and damage differential -> full-game win probability"
-  },
-  "featureEngineering": {
-    "principle": "Use broad, leakage-safe batter outcome/contact priors conditioned only on opposing starter handedness and frozen starter quality context. Do not use V63 local pitch-shape cells or any post-result bandwidth search.",
-    "batterHistorySource": "V41 direct batter historical custody, prior official dates only",
-    "handednessSource": "V60 exact pregame batter/starter hand custody",
-    "starterQualitySource": "V62 frozen starter quality report/features",
-    "batterShrinkagePa": 100,
-    "lineupSlotWorkloadShrinkageStarts": 20,
-    "perBatterRates": [
-      "H_PER_PA",
-      "TB_PER_PA",
-      "BB_PER_PA",
-      "K_PER_PA",
-      "HR_PER_PA"
+  "broadBatterEngineering": {
+    "source": "V60_FROZEN_PRIOR_DATE_GENERIC_PLUS_VS_HAND_ENGINEERING",
+    "batterOverallRateShrinkagePriorPlateAppearances": 100,
+    "batterVsHandShrinkagePriorPlateAppearances": 50,
+    "batterVsHandShrinkageAnchor": "THE_SAME_BATTER_GENERIC_PREGAME_RATE",
+    "lineupSlotWorkloadShrinkagePriorStarts": 20,
+    "outcomesExactly": ["H", "TB", "BB", "K", "HR"],
+    "featureDefinition": "For each exact T-minus-5 hitter, generic prior-date expected count plus the frozen V60 handedness adjustment versus the opposing starter hand, summed with frozen lineup-slot expected PA; then HOME expected count minus AWAY expected count.",
+    "featuresExactly": [
+      "lineup_vs_hand_expected_hits_diff",
+      "lineup_vs_hand_expected_total_bases_diff",
+      "lineup_vs_hand_expected_walks_diff",
+      "lineup_vs_hand_expected_strikeouts_diff",
+      "lineup_vs_hand_expected_home_runs_diff"
     ],
-    "lineupFeaturesExactly": [
-      "home_expected_contact_rate_vs_starter",
-      "away_expected_contact_rate_vs_starter",
-      "home_expected_damage_per_pa_vs_starter",
-      "away_expected_damage_per_pa_vs_starter",
-      "home_expected_hr_per_pa_vs_starter",
-      "away_expected_hr_per_pa_vs_starter",
-      "contact_advantage_home_minus_away",
-      "damage_advantage_home_minus_away"
-    ],
-    "definitions": {
-      "expected_contact_rate_vs_starter": "PA-weighted lineup expectation of (H + BB - K) / PA after 100-PA shrinkage against the starter handedness bucket.",
-      "expected_damage_per_pa_vs_starter": "PA-weighted lineup expectation of TB / PA after 100-PA shrinkage against the starter handedness bucket.",
-      "expected_hr_per_pa_vs_starter": "PA-weighted lineup expectation of HR / PA after 100-PA shrinkage against the starter handedness bucket.",
-      "starterQualityInteraction": "The challenger receives the frozen V62 starter-quality variables unchanged alongside the eight lineup contact/damage variables; no multiplication term search is permitted."
-    },
+    "featureCount": 5,
+    "pitchTypeConditioningAllowed": false,
     "pitchShapeMicroCellsAllowed": false,
-    "featureSearchAllowed": false,
-    "subsetMiningAllowed": false,
-    "homeAwaySubsetMiningAllowed": false,
-    "postResultFeatureDefinitionChangeAllowed": false,
-    "postResultShrinkageChangeAllowed": false
+    "postResultShrinkageChangeAllowed": false,
+    "postResultOutcomeFeatureSelectionAllowed": false
+  },
+  "starterQualityEngineering": {
+    "source": "V62_FROZEN_STARTER_QUALITY_ENGINEERING_AND_PITCH_TELEMETRY_CUSTODY",
+    "rollingLookbackDays": 365,
+    "featuresExactly": [
+      "starter_velocity_quality_adv",
+      "starter_spin_quality_adv",
+      "starter_whiff_quality_adv",
+      "starter_strike_quality_adv",
+      "starter_hard_hit_suppression_adv"
+    ],
+    "featureCount": 5,
+    "allShrinkageLookbacksAndPitchTypeDefinitionsInheritedUnchangedFromV62": true,
+    "postResultStarterQualityChangeAllowed": false
   },
   "control": {
-    "name": "V16_C4_FROZEN_FULL_GAME_WINNER",
+    "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "featureSetRequired": "C4",
+    "featuresExactly": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
     "featureCount": 4,
-    "features": [
-      "lineup_exposure_rate_adv",
-      "starter_kbb_adv",
-      "combined_team_rs10",
-      "team_rd10_diff"
-    ],
-    "modelFamily": "frozen V16 logistic probability model",
-    "metricParityRequired": true
-  },
-  "diagnosticBenchmark": {
-    "name": "V62_PITCH_QUALITY_WINNER",
-    "promotionControl": false,
-    "purpose": "V62 is compared descriptively to determine whether V64 recovers the stronger starter-matchup signal without sparse V63 cells; failing to beat V62 does not alter the pre-frozen V64 pass rubric against V16 C4."
+    "metricParityAbsoluteTolerance": 1e-12
   },
   "challenger": {
-    "controlFeatures": 4,
-    "v62StarterQualityFeatures": 4,
-    "contactDamageFeatures": 8,
-    "featureCount": 16,
-    "modelFamily": "LogisticRegression",
-    "penalty": "L2",
-    "C": 1.0,
-    "maxIter": 2000,
-    "trainingOnlyMedianImputer": true,
-    "trainingOnlyStandardScaler": true,
-    "modelSearchAllowed": false,
-    "hyperparameterSearchAllowed": false
+    "featureSet": "V16_C4_PLUS_BROAD_VS_HAND_CONTACT_DAMAGE5_PLUS_V62_STARTER_QUALITY5",
+    "featureCount": 14,
+    "l2Strength": 1.0,
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "trainingOnlyMedianImputationAllowed": true,
+    "trainingOnlyStandardizationAllowed": true,
+    "modelFamily": "L2_LOGISTIC_REGRESSION_WITH_FROZEN_CALIBRATION_PROCEDURE",
+    "noModelFamilySearch": true,
+    "noHyperparameterSearch": true
+  },
+  "predeclaredDiagnostics": {
+    "v62FullModel": "DESCRIPTIVE_BENCHMARK_ONLY_NOT_PROMOTION_CONTROL",
+    "broadBatterOnly": "V16_C4_PLUS_BROAD_VS_HAND_CONTACT_DAMAGE5",
+    "starterQualityOnly": "V16_C4_PLUS_V62_STARTER_QUALITY5",
+    "diagnosticResultsMayNotChoosePromotionCandidate": true,
+    "promotionCandidateIsAlwaysFull": true
+  },
+  "coverageGate": {
+    "minimumPregameStarterHandPairShareEachSeason": 0.98,
+    "minimumPregameStarterIdentityPairShareEachSeason": 0.98,
+    "minimumV62PitchTelemetryFullFeatureDerivedShareEachEvaluationSeason": 0.95,
+    "doNotDropTargetRowsForMissingDerivedFeatures": true,
+    "missingDerivedRowsUseTrainingMedian": true,
+    "belowGateClassification": "CONTACT_DAMAGE_WINNER_CUSTODY_INSUFFICIENT"
+  },
+  "pairedBootstrap": {
+    "unit": "OFFICIAL_DATE_CLUSTER",
+    "resamples": 5000,
+    "seed": 20260816,
+    "confidenceLevel": 0.95
+  },
+  "candidateRubric": {
+    "passingClassification": "CONTACT_DAMAGE_WINNER_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
+    "failingClassification": "CONTACT_DAMAGE_WINNER_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "ece10AbsoluteMaximum": 0.02,
+    "meanProbabilityGapComparisonTolerance": 0.002,
+    "requireValidation2023LogLossImprovementVsC4": true,
+    "requireValidation2023BrierImprovementVsC4": true,
+    "requireCombinedLogLossImprovementVsC4": true,
+    "requireCombinedBrierImprovementVsC4": true,
+    "requireBootstrapLogLossLowerBoundPositive": true,
+    "requireBootstrapBrierLowerBoundPositive": true,
+    "requireAtLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
+    "requireNoEvaluationSeasonWorseOnBoth": true,
+    "requireChallengerCombinedEce10WithinAbsoluteMaximum": true,
+    "requireMeanProbabilityGapNotWorseThanControl": true,
+    "beatV62CombinedProperScoresIsDiagnosticOnly": true
   },
   "statistics": {
-    "primaryMetrics": ["LOG_LOSS", "BRIER"],
-    "calibrationMetrics": ["ECE_10", "ABSOLUTE_MEAN_HOME_PROBABILITY_GAP"],
-    "secondaryMetrics": ["ACCURACY_AT_HALF"],
-    "pairedBootstrap": {
-      "unit": "OFFICIAL_DATE_CLUSTER",
-      "resamples": 5000,
-      "seed": 20260816,
-      "confidenceLevel": 0.95
-    },
-    "passRubric": {
-      "controlManifestAndMetricParity": true,
-      "validation2023LogLossImproves": true,
-      "validation2023BrierImproves": true,
-      "combinedEvaluation2024_2026YtdLogLossImproves": true,
-      "combinedEvaluation2024_2026YtdBrierImproves": true,
-      "bootstrapLogLossLowerBoundPositive": true,
-      "bootstrapBrierLowerBoundPositive": true,
-      "atLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
-      "noEvaluationSeasonWorseOnBoth": true,
-      "challengerCombinedEce10AbsoluteMax": 0.03,
-      "challengerAbsoluteMeanProbabilityGapNotWorseThanControl": true
-    },
-    "postResultRetuningAllowed": false,
-    "seasonExclusionAfterResultsAllowed": false
-  },
-  "classification": {
-    "pass": "CONTACT_DAMAGE_WINNER_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
-    "fail": "CONTACT_DAMAGE_WINNER_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
-    "insufficientCustody": "CONTACT_DAMAGE_WINNER_CUSTODY_INSUFFICIENT"
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "homeAwaySubsetMiningAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultRuleChangeAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false,
+    "postResultShrinkageChangeAllowed": false,
+    "postResultLookbackChangeAllowed": false
   },
   "policy": {
     "researchOnly": true,
-    "historicalPricesUsed": false,
-    "marketOddsUsedAsFeatures": false,
-    "positiveEvEstablished": false,
     "v16ProductionChanged": false,
-    "productionMarketRegistryChanged": false,
-    "marketDiscoveryChanged": false,
-    "rankingChanged": false,
-    "stakeChanged": false,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
     "betEliteAllowed": false,
-    "finalRecommendationChanged": false,
+    "finalRecommendationChangeAllowed": false,
     "automaticBetPlacementAllowed": false,
+    "positiveEvClaimAllowed": false,
     "realFinancialExposure": 0
   }
 }
