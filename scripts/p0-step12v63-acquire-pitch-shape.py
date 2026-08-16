@@ -98,10 +98,8 @@ def acquire(row,c,recognized):
                     excluded['UNRECOGNIZED_PITCH_TYPE']+=1;continue
                 recp+=1
                 if pid<=0:excluded['PITCHER_ID_MISSING']+=1
-                pd=ev.get('pitchData') or {};coord=pd.get('coordinates') or {};br=pd.get('breaks') or {}
-                v=bounded(pd.get('startSpeed'),vlo,vhi)
-                px=finite(coord.get('pfxX'));pz=finite(coord.get('pfxZ'));spin=bounded(br.get('spinRate'),slo,shi)
-                xi=bounded(px*12.0 if px is not None else None,xlo,xhi);zi=bounded(pz*12.0 if pz is not None else None,zlo,zhi)
+                pd=ev.get('pitchData') or {};br=pd.get('breaks') or {}
+                v=bounded(pd.get('startSpeed'),vlo,vhi);xi=bounded(br.get('breakHorizontal'),xlo,xhi);zi=bounded(br.get('breakVerticalInduced'),zlo,zhi);spin=bounded(br.get('spinRate'),slo,shi)
                 if v is not None:veln+=1
                 if xi is not None:xn+=1
                 if zi is not None:zn+=1
@@ -135,7 +133,7 @@ def acquire(row,c,recognized):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--season',required=True);ap.add_argument('--table');ap.add_argument('--contract',required=True);ap.add_argument('--out',required=True);ap.add_argument('--workers',type=int,default=6);x=ap.parse_args();c=load(x.contract)
-    if c.get('schemaVersion')!=CONTRACT_SCHEMA or c.get('contractRevision')!=1:raise SystemExit('V63_CONTRACT_INVALID')
+    if c.get('schemaVersion')!=CONTRACT_SCHEMA or c.get('contractRevision')!=3:raise SystemExit('V63_CONTRACT_INVALID')
     if x.workers<1 or x.workers>6:raise SystemExit('V63_WORKERS_INVALID')
     recognized=set(c['recognizedPitchTypes']);warm=x.season==str(c['dataBoundary']['warmupSeason']);rows=warmup_rows() if warm else target_rows(x.season,x.table)
     if not warm:
