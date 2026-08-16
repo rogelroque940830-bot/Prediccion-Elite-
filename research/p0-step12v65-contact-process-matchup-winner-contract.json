@@ -1,7 +1,20 @@
 {
   "schemaVersion": "courtedge-p0-step12v65-contact-process-matchup-winner-contract.v1",
-  "contractRevision": 1,
-  "scientificStatus": "FROZEN_CONTACT_PROCESS_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS_BEFORE_V65_OUTCOME_SCORER",
+  "contractRevision": 2,
+  "scientificStatus": "FROZEN_CONTACT_PROCESS_SOURCE_SEMANTICS_CORRECTED_BEFORE_V65_OUTCOME_SCORER",
+  "preOutcomeCorrection": {
+    "performedBeforeV65OutcomeScorerExisted": true,
+    "v65OutcomeMetricsAvailableAtCorrection": false,
+    "custodyRunContainsWinnerTarget": false,
+    "reason": "The first custody-only CI run proved a source-semantics mismatch before any V65 winner scorer existed: exact canonical games fetched successfully, but the initial snake_case details.description tokens yielded zero whiffs and zero in-play events while foul-only swing counts remained nonzero. Revision 2 therefore normalizes human-readable MLB pitch descriptions only for whiff/foul calls and defines a batted-ball event from the source-native presence of a non-empty playEvents[].hitData object. Launch-speed completeness is measured as valid launchSpeed divided by those hitData batted-ball events. The 0.80 completeness threshold is retained unchanged and was not tuned to the corrected telemetry. No winner target, V65 model metric, sportsbook price, or outcome-driven feature result was available when this correction was frozen.",
+    "initialCustodyRunId": 31956293267,
+    "observedInitial2022GamesFetched": 2398,
+    "observedInitial2022FetchFailureShare": 0.0,
+    "observedInitial2022Whiffs": 0,
+    "observedInitial2022InPlayEvents": 0,
+    "observedInitial2022LaunchSpeedN": 0,
+    "postResultRetuning": false
+  },
   "objective": "Test whether medium-resolution batter contact-process quality from direct historical MLB pitch-by-pitch telemetry (exit velocity, hard-hit rate and whiff resistance), matched to the opposing probable starter's corresponding contact/whiff vulnerability and combined with the frozen V62 starter-quality layer, improves full-game winner probability beyond certified V16 C4 without using the broad H/TB/BB/K/HR outcome layer that hurt V64 or the sparse exact pitch-shape microcells that limited V63.",
   "sportingTarget": {
     "primaryTarget": "FULL_GAME_HOME_WIN",
@@ -58,10 +71,12 @@
     "targetGameUniverse": "CANONICAL_STEP12V3_GAMES_ONLY",
     "pitcherIdentitySource": "matchup.pitcher.id",
     "batterIdentitySource": "matchup.batter.id",
-    "swingWhiffSource": "playEvents[].details.description",
+    "pitchCallSource": "playEvents[].details.description_NORMALIZED_TO_LOWER_SNAKE_CASE_FOR_WHIFF_AND_FOUL_ONLY",
+    "battedBallEventSource": "NONEMPTY_playEvents[].hitData_ON_IS_PITCH_EVENT",
     "launchSpeedSource": "playEvents[].hitData.launchSpeed",
     "hardHitDefinition": "VALID_LAUNCH_SPEED_GTE_95_MPH",
-    "inPlayDefinition": "SWING_DESCRIPTION_IS_HIT_INTO_PLAY_FAMILY",
+    "swingDefinition": "NORMALIZED_WHIFF_CALL_OR_NORMALIZED_FOUL_CALL_OR_NONEMPTY_HITDATA_BATTED_BALL_EVENT",
+    "launchSpeedCompletenessDefinition": "VALID_LAUNCH_SPEED_EVENTS_DIVIDED_BY_NONEMPTY_HITDATA_BATTED_BALL_EVENTS",
     "physicalLaunchSpeedBoundsMph": [20.0, 125.0],
     "containsPlateAppearanceOutcomeFeatures": false,
     "containsHitsTotalBasesWalksStrikeoutsHomeRunsAsFeatures": false,
@@ -69,12 +84,11 @@
     "sameDateOutcomeMayTrainSameDate": false,
     "featureStateUpdatedOnlyAfterAllGamesOnOfficialDateAreScored": true,
     "maximumTargetGameFetchFailureShareEachSeason": 0.002,
-    "minimumLaunchSpeedTelemetryShareOfInPlayEventsEachSeason": 0.80
+    "minimumLaunchSpeedTelemetryShareOfHitDataBattedBallEventsEachSeason": 0.80
   },
   "eventDefinitions": {
-    "swingDescriptions": ["swinging_strike", "swinging_strike_blocked", "missed_bunt", "foul", "foul_tip", "foul_bunt", "hit_into_play", "hit_into_play_no_out", "hit_into_play_score"],
-    "whiffDescriptions": ["swinging_strike", "swinging_strike_blocked", "missed_bunt"],
-    "inPlayDescriptions": ["hit_into_play", "hit_into_play_no_out", "hit_into_play_score"]
+    "whiffDescriptionsNormalized": ["swinging_strike", "swinging_strike_blocked", "missed_bunt"],
+    "foulDescriptionsNormalized": ["foul", "foul_tip", "foul_bunt"]
   },
   "contactProcessEngineering": {
     "lookbackDays": 365,
@@ -145,7 +159,7 @@
   },
   "coverageGate": {
     "minimumPregameStarterIdentityPairShareEachTargetSeason": 0.98,
-    "minimumLaunchSpeedTelemetryShareOfInPlayEventsEachTargetSeason": 0.80,
+    "minimumLaunchSpeedTelemetryShareOfHitDataBattedBallEventsEachTargetSeason": 0.80,
     "maximumTargetGameFetchFailureShareEachSeason": 0.002,
     "minimumContactProcessFullFeatureDerivedShareEachEvaluationSeason": 0.95,
     "minimumV62StarterQualityFullFeatureDerivedShareEachEvaluationSeason": 0.95,
