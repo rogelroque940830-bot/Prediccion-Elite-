@@ -1,0 +1,186 @@
+name: Validate P0 Step 12V57 Lineup Offensive Impact
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v57-lineup-offensive-impact-contract.json'
+      - 'scripts/p0-step12v57-lineup-offensive-impact.py'
+      - '.github/workflows/validate-p0-step12v57-lineup-offensive-impact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen research dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'pandas==3.0.0' 'scipy==1.18.0' 'scikit-learn==1.8.0'
+
+      - name: Freeze V57 contract before outcome comparison
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v57-lineup-offensive-impact-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v57-lineup-offensive-impact-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='a798763ed72ff44bf373a2582de8db4707a6f221'
+          assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
+          assert c['parentEvidence']['v20WorkflowRunId']==31838474790
+          assert c['parentEvidence']['v41WorkflowRunId']==31905076013
+          assert c['pregameIdentityBoundary']['cutoff']=='T_MINUS_5_MINUTES'
+          assert c['pregameIdentityBoundary']['finalBoxscoreLineupBackfillAllowed'] is False
+          assert c['batterHistoryBoundary']['sameDateHistoryAllowed'] is False
+          assert c['batterHistoryBoundary']['scoreWholeDateBeforeUpdatingAnySameDateState'] is True
+          assert c['dataBoundary']['expectedControlRowsBySeason']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert c['playerPriorEngineering']['batterRateShrinkagePriorPlateAppearances']==100
+          assert c['playerPriorEngineering']['lineupSlotWorkloadShrinkagePriorStarts']==20
+          assert c['playerPriorEngineering']['shrinkageSearchAllowed'] is False
+          assert len(c['control']['featuresExactly'])==13
+          assert len(c['lineupOffensiveImpact']['derivedFeaturesPerSideExactly'])==5
+          assert c['challenger']['featureCountPerTarget']==18
+          assert c['challenger']['poissonRegressorAlpha']==1.0
+          assert c['challenger']['modelSelectionAllowed'] is False
+          assert c['challenger']['hyperparameterSearchAllowed'] is False
+          assert c['probabilityDiagnostics']['fixedHalfRunLines']==[2.5,3.5,4.5,5.5,6.5]
+          assert c['pairedBootstrap']['resamples']==2000
+          assert c['pairedBootstrap']['seed']==20260815
+          assert c['candidateRubric']['passingOnlyAuthorizesSeparateFrozenWinnerIntegrationExperiment'] is True
+          assert c['candidateRubric']['passingDoesNotAuthorizeLiveTeamTotalPromotion'] is True
+          for key in ['thresholdSearchAllowed','featureSearchAllowed','modelSearchAllowed','hyperparameterSearchAllowed','lineSearchAllowed','subsetMiningAllowed','postResultRuleChangeAllowed']:
+              assert c['statistics'][key] is False, key
+          for key in ['productionMarketRegistryChangeAllowed','liveLookupAuthorizationChangeAllowed','liveMarketDiscoveryChangeAllowed','rankingChangeAllowed','stakeChangeAllowed','betEliteAllowed','finalRecommendationChangeAllowed','automaticBetPlacementAllowed']:
+              assert c['policy'][key] is False, key
+          assert c['policy']['v16Changed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V57_CONTRACT_FROZEN')
+          PY
+
+      - name: Syntax check V57 scorer
+        run: python -m py_compile scripts/p0-step12v57-lineup-offensive-impact.py
+
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download certified V41 batter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+
+      - name: Download certified V20 control report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v20-team-total-count-model
+          path: artifacts/p0-step12v20
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31838474790
+
+      - name: Verify parent custody before V57 execution
+        run: |
+          python - <<'PY'
+          import json
+          v41=json.load(open('artifacts/p0-step12v41/batter-historical-custody-certification.json'))
+          assert v41['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert v41['fiveSeasonCustodyDigest']=='bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3'
+          v20=json.load(open('artifacts/p0-step12v20/team-total-count-model-report.json'))
+          assert v20['schemaVersion']=='courtedge-p0-step12v20-team-total-count-model.v1'
+          assert v20['classification']=='PROSPECTIVE_TEAM_TOTAL_PRICE_CAPTURE_CANDIDATE'
+          assert v20['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert v20['candidateRubricPassed'] is True
+          assert v20['marketBoundary']['historicalTeamTotalPricesUsed'] is False
+          assert v20['marketBoundary']['positiveEvEstablished'] is False
+          print('V57_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run frozen V57 control vs lineup challenger
+        run: |
+          mkdir -p artifacts/p0-step12v57
+          python scripts/p0-step12v57-lineup-offensive-impact.py \
+            --root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --v20-report artifacts/p0-step12v20/team-total-count-model-report.json \
+            --contract research/p0-step12v57-lineup-offensive-impact-contract.json \
+            --out artifacts/p0-step12v57/lineup-offensive-impact-report.json
+
+      - name: Validate V57 report without requiring a favorable scientific result
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v57/lineup-offensive-impact-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v57-lineup-offensive-impact.v1'
+          assert r['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['data']['pairedControlAndChallengerRows'] is True
+          assert r['controlParity']['allTargetsReproduced'] is True
+          assert all(r['controlParity']['targetSnapshotReproduced'].values())
+          assert r['features']['controlCount']==13
+          assert r['features']['lineupOffensiveImpactPerSideCount']==5
+          assert r['features']['challengerCountPerTarget']==18
+          assert r['classification'] in {
+            'LINEUP_OFFENSIVE_IMPACT_INCREMENTAL_VALUE_CERTIFIED_FOR_WINNER_INTEGRATION_RESEARCH',
+            'LINEUP_OFFENSIVE_IMPACT_NOT_ROBUST_ENOUGH_TO_ADVANCE',
+          }
+          assert isinstance(r['candidateRubricPassed'], bool)
+          for target in ('HOME_FULL_GAME_RUNS','AWAY_FULL_GAME_RUNS'):
+              assert r['validation2023'][target]['rows']==2399
+              assert r['evaluation2024_2026Ytd'][target]['rows']==2406+2423+1781
+              assert r['pairedBootstrap2024_2026Ytd'][target]['poissonDevianceImprovement']['resamples']==2000
+              assert r['pairedBootstrap2024_2026Ytd'][target]['averageBrierImprovement']['resamples']==2000
+          p=r['policy']
+          assert p['sameDateOutcomeLeakageAllowed'] is False
+          assert p['futureGameDataAllowed'] is False
+          assert p['featureSearchUsed'] is False
+          assert p['shrinkageSearchUsed'] is False
+          assert p['hyperparameterSearchUsed'] is False
+          assert p['subsetMiningUsed'] is False
+          assert p['postResultRuleChangeAllowed'] is False
+          assert p['v16Changed'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'candidateRubricPassed':r['candidateRubricPassed'],
+            'validation2023':r['validation2023'],
+            'evaluation2024_2026Ytd':r['evaluation2024_2026Ytd'],
+            'bootstrap':r['pairedBootstrap2024_2026Ytd'],
+            'checks':r['candidateRubricChecks'],
+          },indent=2))
+          PY
+
+      - name: Verify research-only exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'historicalTeamTotalPricesUsed": False' scripts/p0-step12v57-lineup-offensive-impact.py
+          grep -F 'betEliteAllowed": False' scripts/p0-step12v57-lineup-offensive-impact.py
+          grep -F 'realFinancialExposure": 0' scripts/p0-step12v57-lineup-offensive-impact.py
+          ! grep -E 'apiKey|MlbSelectiveOddsAcquisitionService|automaticBetPlacementAllowed[^\n]*True|betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]' scripts/p0-step12v57-lineup-offensive-impact.py
+          git diff --check
+
+      - name: Upload V57 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v57-lineup-offensive-impact
+          path: artifacts/p0-step12v57/
+          if-no-files-found: error
+          retention-days: 30
