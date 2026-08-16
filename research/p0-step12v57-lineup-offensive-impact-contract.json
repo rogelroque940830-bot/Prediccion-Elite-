@@ -1,0 +1,211 @@
+{
+  "schemaVersion": "courtedge-p0-step12v57-lineup-offensive-impact-contract.v1",
+  "scientificStatus": "FROZEN_INCREMENTAL_GAME_LEVEL_LINEUP_RESEARCH_NOT_PRICE_VALIDATION",
+  "objective": "Test whether exact T-minus-5 starting-lineup batter quality adds incremental predictive value for full-game team runs beyond the already-certified V20 FULL13 Team Total control. Team Total is used as a mechanistic laboratory for lineup offense; the project-level destination remains winner probability, and any winner-model integration requires a separate frozen experiment after this gate.",
+  "parentEvidence": {
+    "mainBaseSha": "a798763ed72ff44bf373a2582de8db4707a6f221",
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "v20Pr": 558,
+    "v20WorkflowRunId": 31838474790,
+    "v20ArtifactId": 9233422245,
+    "v20ArtifactName": "p0-step12v20-team-total-count-model",
+    "v20ArtifactDigest": "sha256:5ef2e6525ccb67a27227b18422401db8672e5a74bf682af5c1e00c229570b43d",
+    "v20ClassificationRequired": "PROSPECTIVE_TEAM_TOTAL_PRICE_CAPTURE_CANDIDATE",
+    "v41Pr": 579,
+    "v41WorkflowRunId": 31905076013,
+    "v41ArtifactId": 9252168716,
+    "v41ArtifactName": "p0-step12v41-batter-historical-custody",
+    "v41ArtifactDigest": "sha256:a9f493bb61259ca7a0400149fe2b79e5145c2294e8afa49f27aeed6541ca8e2a",
+    "v41CertificationRequired": "BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY",
+    "v41FiveSeasonCustodyDigest": "bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3"
+  },
+  "pregameIdentityBoundary": {
+    "lineupSource": "STEP12V3_COHORT_PREGAME_LINEUP_HISTORY",
+    "seasonFile": "cohort/pregame-lineup-history.json",
+    "cutoff": "T_MINUS_5_MINUTES",
+    "requiresCanonicalT5PregameValid": true,
+    "requiresCompleteNineByNineLineup": true,
+    "finalBoxscoreLineupBackfillAllowed": false,
+    "projectedLineupFallbackAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "playerIdentityMustUseMlbId": true
+  },
+  "batterHistoryBoundary": {
+    "sourceArtifact": "p0-step12v41-batter-historical-custody",
+    "seasonFile": "batter-history.json",
+    "directFieldsUsed": [
+      "hits",
+      "totalBases",
+      "baseOnBalls",
+      "strikeOuts",
+      "homeRuns",
+      "plateAppearances"
+    ],
+    "sameDateHistoryAllowed": false,
+    "scoreWholeDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "seasonHistoryReset": true,
+    "outcomesMayUpdatePlayerStateOnlyAfterWholeOfficialDateIsScored": true
+  },
+  "dataBoundary": {
+    "modelFitSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "expectedControlRowsBySeason": {
+      "2022": 2398,
+      "2023": 2399,
+      "2024": 2406,
+      "2025": 2423,
+      "2026_YTD": 1781
+    },
+    "pairedControlAndChallengerRowsRequired": true,
+    "historicalTeamTotalPricesUsed": false,
+    "marketLineUsedAsModelFeature": false,
+    "outcomeBasedRowDeletionAllowed": false
+  },
+  "playerPriorEngineering": {
+    "batterRateShrinkagePriorPlateAppearances": 100,
+    "lineupSlotWorkloadShrinkagePriorStarts": 20,
+    "leagueBatterPriorsUseCurrentSeasonStrictlyPriorDatePositivePaLinesOnly": true,
+    "lineupSlotPaExpectationUsesCurrentSeasonStrictlyPriorDateFrozenStartingNineOnly": true,
+    "openingDateWithoutLeaguePriorLeavesDerivedLineupFeaturesMissing": true,
+    "newBatterWithLeaguePriorShrinksExactlyToContemporaneousLeagueRate": true,
+    "trainingOnlyMedianImputationHandlesMissing": true,
+    "shrinkageValuesInheritedFromV42": true,
+    "shrinkageSearchAllowed": false
+  },
+  "lineupOffensiveImpact": {
+    "rateDefinitions": {
+      "H_PA": "prior_hits / prior_plate_appearances with 100-PA contemporaneous-league shrinkage",
+      "TB_PA": "prior_total_bases / prior_plate_appearances with 100-PA contemporaneous-league shrinkage",
+      "BB_PA": "prior_base_on_balls / prior_plate_appearances with 100-PA contemporaneous-league shrinkage",
+      "K_PA": "prior_strikeouts / prior_plate_appearances with 100-PA contemporaneous-league shrinkage",
+      "HR_PA": "prior_home_runs / prior_plate_appearances with 100-PA contemporaneous-league shrinkage"
+    },
+    "slotVolumeDefinition": "For lineup slot 1 through 9, expected PA is the current-season strictly-prior-date slot PA/start mean shrunk toward the contemporaneous all-slot PA/start mean with 20 prior starts.",
+    "aggregation": "For each exact T-5 starting batter, multiply each shrunk batter rate by that batter's lineup-slot expected PA, then sum across all nine starters.",
+    "derivedFeaturesPerSideExactly": [
+      "lineup_expected_hits",
+      "lineup_expected_total_bases",
+      "lineup_expected_walks",
+      "lineup_expected_strikeouts",
+      "lineup_expected_home_runs"
+    ],
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "weightsHandTunedAfterOutcomeInspectionAllowed": false,
+    "opposingStarterInteractionAddedInV57": false,
+    "bullpenInteractionAddedInV57": false,
+    "parkWeatherInteractionAddedInV57": false
+  },
+  "control": {
+    "name": "FROZEN_V20_FULL13_TEAM_TOTAL_COUNT_MODEL",
+    "featuresExactly": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "featureCount": 13,
+    "mustReproduceCertifiedV20SnapshotBeforeComparison": true,
+    "controlRetuningAllowed": false
+  },
+  "challenger": {
+    "name": "V20_FULL13_PLUS_OWN_LINEUP_OFFENSIVE_IMPACT",
+    "targets": {
+      "HOME_FULL_GAME_RUNS": "FULL13 plus the five HOME lineup offensive-impact features only",
+      "AWAY_FULL_GAME_RUNS": "FULL13 plus the five AWAY lineup offensive-impact features only"
+    },
+    "featureCountPerTarget": 18,
+    "family": "POISSON_REGRESSION_MEAN_WITH_TRAINING_ONLY_NB2_DISPERSION",
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "poissonRegressorAlpha": 1.0,
+    "poissonRegressorMaxIter": 2000,
+    "negativeBinomialDispersionMethod": "NB2_METHOD_OF_MOMENTS_ON_2022_RESIDUALS",
+    "modelSelectionAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "probabilityDiagnostics": {
+    "fixedHalfRunLines": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "lineSearchAllowed": false,
+    "metrics": [
+      "MEAN_POISSON_DEVIANCE",
+      "MAE",
+      "ABSOLUTE_MEAN_RUN_CALIBRATION_BIAS",
+      "LINE_SPECIFIC_BRIER_SCORE",
+      "AVERAGE_BRIER_ACROSS_FIXED_LINES"
+    ],
+    "primaryComparison": "PAIRED_CHALLENGER_VS_EXACT_V20_CONTROL_ON_IDENTICAL_ROWS"
+  },
+  "pairedBootstrap": {
+    "enabled": true,
+    "evaluationPopulation": "2024_2026_YTD_COMBINED",
+    "resamples": 2000,
+    "seed": 20260815,
+    "confidenceLevel": 0.95,
+    "pairedUnit": "GAME_ROW_WITHIN_TARGET",
+    "improvementOrientation": "CONTROL_LOSS_MINUS_CHALLENGER_LOSS",
+    "metrics": ["MEAN_POISSON_DEVIANCE", "AVERAGE_BRIER_ACROSS_FIXED_LINES"]
+  },
+  "candidateRubric": {
+    "requires": [
+      "EXACT_V20_CONTROL_SNAPSHOT_REPRODUCTION",
+      "BOTH_TARGETS_CHALLENGER_POISSON_DEVIANCE_BEATS_CONTROL_IN_2023",
+      "BOTH_TARGETS_CHALLENGER_AVERAGE_BRIER_BEATS_CONTROL_IN_2023",
+      "BOTH_TARGETS_CHALLENGER_ABSOLUTE_MEAN_CALIBRATION_BIAS_NOT_WORSE_THAN_CONTROL_IN_2023",
+      "BOTH_TARGETS_CHALLENGER_POISSON_DEVIANCE_BEATS_CONTROL_IN_2024_2026_YTD",
+      "BOTH_TARGETS_CHALLENGER_AVERAGE_BRIER_BEATS_CONTROL_IN_2024_2026_YTD",
+      "BOTH_TARGETS_CHALLENGER_ABSOLUTE_MEAN_CALIBRATION_BIAS_NOT_WORSE_THAN_CONTROL_IN_2024_2026_YTD",
+      "BOTH_TARGETS_PAIRED_BOOTSTRAP_95_LOWER_BOUND_POSITIVE_FOR_DEVIANCE_IMPROVEMENT",
+      "BOTH_TARGETS_PAIRED_BOOTSTRAP_95_LOWER_BOUND_POSITIVE_FOR_AVERAGE_BRIER_IMPROVEMENT",
+      "EACH_TARGET_IMPROVES_BOTH_DEVIANCE_AND_AVERAGE_BRIER_IN_AT_LEAST_TWO_OF_THREE_EVALUATION_SEASONS",
+      "NO_EVALUATION_SEASON_FOR_EITHER_TARGET_IS_WORSE_ON_BOTH_DEVIANCE_AND_AVERAGE_BRIER"
+    ],
+    "passingClassification": "LINEUP_OFFENSIVE_IMPACT_INCREMENTAL_VALUE_CERTIFIED_FOR_WINNER_INTEGRATION_RESEARCH",
+    "failingClassification": "LINEUP_OFFENSIVE_IMPACT_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "passingOnlyAuthorizesSeparateFrozenWinnerIntegrationExperiment": true,
+    "passingDoesNotAuthorizeLiveTeamTotalPromotion": true,
+    "passingDoesNotEstablishPositiveEv": true
+  },
+  "winnerObjectiveBoundary": {
+    "principalProjectQuestion": "Which team is more likely to win the game and why?",
+    "v57Role": "Mechanistic test of whether batter-level lineup quality improves team scoring prediction before attempting winner-model integration.",
+    "winnerModelChangedInV57": false,
+    "marketPriceMayInfluenceSportingPrediction": false,
+    "futureWinnerIntegrationRequiresSeparateFrozenContract": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "lineSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "postResultRuleChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "v16Changed": false,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChangeAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
