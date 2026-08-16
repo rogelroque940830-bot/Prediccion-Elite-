@@ -1,0 +1,209 @@
+name: P0 Step 12V68 Capture Prospective Games
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3,13,23,33,43,53 * * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - 'scripts/p0-step12v68-prospective-ledger.py'
+      - 'scripts/p0-step12v68-fg-winner-prospective-capture.py'
+      - 'research/p0-step12v68-prospective-source-manifests.json'
+      - '.github/workflows/p0-step12v68-capture-prospective-games.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: p0-step12v68-prospective-ledger
+  cancel-in-progress: false
+
+jobs:
+  validate-capture-operation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen live-capture boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/p0-step12v68-prospective-source.py \
+            scripts/p0-step12v68-prospective-ledger.py \
+            scripts/p0-step12v68-fg-winner-prospective-capture.py
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12v68-prospective-source-manifests.json'))
+          op=m['operationalProspectiveCapture']
+          assert op['capturePollingCadenceMinutes']==10
+          assert op['captureWindowMaximumMinutesBeforeScheduledStart']==20
+          assert op['captureMustBeStrictlyBeforeScheduledStart'] is True
+          assert op['requiresExactNineByNineCurrentLineups'] is True
+          assert op['requiresBothCurrentPregameProbablePitchers'] is True
+          assert op['firstCanonicalGameCaptureImmutable'] is True
+          assert op['serializedDataLedgerWritesRequired'] is True
+          assert op['outcomesOrMarketPricesInPregameLedgerAllowed'] is False
+          print('V68_AUTOMATED_CAPTURE_BOUNDARY_VERIFIED')
+          PY
+
+  capture-live-pregame:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Checkout frozen V68 code from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout prospective data ledger branch
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve MLB official date in Eastern time
+        id: date
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          d=dt.datetime.now(ZoneInfo('America/New_York')).date()
+          print(f'target={d.isoformat()}')
+          print(f'eligible={str(d>=dt.date(2026,8,17)).lower()}')
+          PY
+
+      - name: Stop before first eligible official date
+        if: steps.date.outputs.eligible != 'true'
+        run: echo 'V68 prospective capture is not eligible before 2026-08-17.'
+
+      - name: Require immutable prior-date state
+        if: steps.date.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "ledger/v68/states/${{ steps.date.outputs.target }}.json" || {
+            echo 'V68_FAIL_CLOSED_DAILY_STATE_MISSING:${{ steps.date.outputs.target }}' >&2
+            exit 1
+          }
+
+      - name: Download immutable V16 control manifest
+        if: steps.date.outputs.eligible == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Poll authoritative MLB feed for exact pregame-ready games
+        if: steps.date.outputs.eligible == 'true'
+        id: source
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          python scripts/p0-step12v68-prospective-source.py live \
+            --state '../ledger/v68/states/${{ steps.date.outputs.target }}.json' \
+            --target-date '${{ steps.date.outputs.target }}' \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --max-lead-minutes 20 \
+            --out ../work/source.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work/source.json'))
+          n=len(x.get('rows',[]))
+          print(f'rows={n}')
+          print(f'has_rows={str(n>0).lower()}')
+          PY
+
+      - name: Score V16 and frozen V68 before outcomes exist
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true'
+        id: score
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING=()
+          if test -s ../ledger/v68/captures/canonical.json; then
+            EXISTING=(--existing ../ledger/v68/captures/canonical.json)
+          fi
+          python scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            --input ../work/source.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest ../v16/pure-settlement-model-manifest.json \
+            "${EXISTING[@]}" \
+            --out ../work/canonical.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work/canonical.json'))
+          n=int(x['summary']['newCaptures'])
+          print(f'new={n}')
+          print(f'has_new={str(n>0).lower()}')
+          print(f'total={x["summary"]["canonicalGames"]}')
+          PY
+
+      - name: Preserve first source evidence and canonical probability ledger
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-prospective-ledger.py install-sources \
+            --input ../work/source.json \
+            --ledger-root ../ledger/v68
+          mkdir -p ../ledger/v68/captures
+          cp ../work/canonical.json ../ledger/v68/captures/canonical.json
+          python - <<'PY'
+          import json,os
+          x=json.load(open('../work/canonical.json'))
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          assert x['policy']['realFinancialExposure']==0
+          for r in x['rows']:
+              assert r['containsOutcome'] is False
+              assert r['containsMarketPrice'] is False
+          os.makedirs('../ledger/v68/receipts',exist_ok=True)
+          receipt={
+            'schemaVersion':'courtedge-p0-step12v68-capture-receipt.v1',
+            'officialDate':'${{ steps.date.outputs.target }}',
+            'githubRunId':'${{ github.run_id }}',
+            'githubRunAttempt':'${{ github.run_attempt }}',
+            'summary':x['summary'],
+            'researchOnly':True,
+            'outcomesRead':False,
+            'pricesRead':False,
+            'realFinancialExposure':0,
+          }
+          open('../ledger/v68/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w').write(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Commit only newly captured immutable games
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'court-edge-v68-research-bot'
+          git config user.email 'v68-research-bot@users.noreply.github.com'
+          git add v68/captures v68/source-records v68/receipts
+          git diff --cached --quiet && exit 0
+          git commit -m "V68 capture ${{ steps.date.outputs.target }}: add ${{ steps.score.outputs.new }} immutable pregame game(s)"
+          git push origin HEAD:data/p0-step12v68-prospective
