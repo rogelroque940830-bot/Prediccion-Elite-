@@ -1,0 +1,79 @@
+name: Validate P0 Step 12V68 Prospective Source Parity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - 'research/p0-step12v68-prospective-source-manifests.json'
+      - '.github/workflows/validate-p0-step12v68-prospective-source-parity.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity-v66-frozen-day:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download frozen V68 source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Download frozen V66 custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: v66
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Reconstruct 2026-08-10 prior-date state and prove feature parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          BASE_ROOT="$(dirname "$TABLE")"
+          CUSTODY="$(find v66 -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          test -n "$CUSTODY"
+          python scripts/p0-step12v68-prospective-source.py prepare \
+            --base-root "$BASE_ROOT" \
+            --v62-2025 frozen/v62-2025/pitch-quality-2025.json \
+            --v62-2026 frozen/v62-2026/pitch-quality-2026_YTD.json \
+            --target-date 2026-08-10 \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/state-2026-08-10.json
+          python scripts/p0-step12v68-prospective-source.py parity \
+            --state work/state-2026-08-10.json \
+            --base-root "$BASE_ROOT" \
+            --v66-custody "$CUSTODY" \
+            --target-date 2026-08-10 \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --tolerance 1e-12 \
+            --out work/parity.json
+          python - <<'PY'
+          import json
+          r=json.load(open('work/parity.json'))
+          assert r['passed'] is True
+          assert r['checkedGames'] > 0
+          assert r['maxAbsoluteFeatureDiff'] <= 1e-12
+          print('V68_PROSPECTIVE_SOURCE_EXACT_V66_PARITY_VERIFIED', r)
+          PY
