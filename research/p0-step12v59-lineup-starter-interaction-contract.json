@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "courtedge-p0-step12v59-lineup-starter-interaction-contract.v1",
+  "scientificStatus": "FROZEN_PREMARKET_WINNER_MATCHUP_INTERACTION_TEST_NO_POST_RESULT_RETUNING",
+  "objective": "Test whether exact T-5 lineup offensive intelligence becomes robust for Full Game winner probability when modeled jointly with the opposing starter's pregame run, home-run and K-BB profile instead of only as additive lineup differences.",
+  "sportingTarget": {
+    "primaryTarget": "FULL_GAME_HOME_WIN",
+    "winnerProbabilityIsPrimaryProjectObjective": true,
+    "propOrTeamTotalPromotionIsObjective": false
+  },
+  "parentEvidence": {
+    "mainBaseSha": "60cc5e8087c8b7e28340fa4bff4c9fc3d8be29c5",
+    "winnerAnatomyWorkflowRunId": 31649438822,
+    "step12v3WorkflowRunId": 31659518059,
+    "v16WorkflowRunId": 31704085189,
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "v16RequiredClassification": "PURE_SETTLEMENT_MODEL_ELIGIBLE_FOR_RUNTIME_RESEARCH_ADAPTER",
+    "v41WorkflowRunId": 31905076013,
+    "v41FiveSeasonCustodyDigest": "bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3",
+    "v58WorkflowRunId": 31918463429,
+    "v58ArtifactId": 9255620854,
+    "v58ArtifactDigest": "sha256:1ef7991d2477291dc28a3cb4d055f3ab5e8b9379c07e6bc45ef393b277530f26",
+    "v58FrozenClassification": "LINEUP_WINNER_INCREMENTAL_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE"
+  },
+  "dataBoundary": {
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "expectedRowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
+    "pregameCutoff": "T_MINUS_5_MINUTES",
+    "sameDateHistoryAllowed": false,
+    "scoreWholeOfficialDateBeforeUpdatingAnySameDateState": true,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "pregameIdentityBoundary": {
+    "exactNineBattersPerTeamRequired": true,
+    "finalBoxscoreLineupBackfillAllowed": false,
+    "projectedLineupFallbackAllowed": false,
+    "probableStarterIdentityMustBeKnownAtT5": true
+  },
+  "control": {
+    "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "featureSetRequired": "C4",
+    "featuresExactly": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
+    "featureCount": 4,
+    "l2Strength": 1.0,
+    "metricParityAbsoluteTolerance": 1e-10
+  },
+  "playerPriorEngineering": {
+    "batterRateShrinkagePriorPlateAppearances": 100,
+    "lineupSlotWorkloadShrinkagePriorStarts": 20,
+    "teamLevelComponentsExactly": [
+      "lineup_expected_hits",
+      "lineup_expected_total_bases",
+      "lineup_expected_walks",
+      "lineup_expected_strikeouts",
+      "lineup_expected_home_runs"
+    ],
+    "gameLevelMainEffectsExactly": [
+      "lineup_expected_hits_diff",
+      "lineup_expected_total_bases_diff",
+      "lineup_expected_walks_diff",
+      "lineup_expected_strikeouts_diff",
+      "lineup_expected_home_runs_diff"
+    ]
+  },
+  "opposingStarterProfile": {
+    "sideSpecificPregameMetricsExactly": ["starter_erbf", "starter_hrbf", "starter_kbb"],
+    "sourceFeaturePairs": {
+      "starter_erbf": ["home_starter_erbf", "away_starter_erbf"],
+      "starter_hrbf": ["home_starter_hrbf", "away_starter_hrbf"],
+      "starter_kbb": ["home_starter_kbb", "away_starter_kbb"]
+    },
+    "samePregameFeatureTableAsControl": true
+  },
+  "interactionLayer": {
+    "definition": "For lineup component L and starter metric S, interaction_diff = HOME_L * AWAY_STARTER_S - AWAY_L * HOME_STARTER_S. Coefficient sign is learned only from 2022 training data.",
+    "featuresExactly": [
+      "matchup_hits_x_erbf_diff", "matchup_hits_x_hrbf_diff", "matchup_hits_x_kbb_diff",
+      "matchup_total_bases_x_erbf_diff", "matchup_total_bases_x_hrbf_diff", "matchup_total_bases_x_kbb_diff",
+      "matchup_walks_x_erbf_diff", "matchup_walks_x_hrbf_diff", "matchup_walks_x_kbb_diff",
+      "matchup_strikeouts_x_erbf_diff", "matchup_strikeouts_x_hrbf_diff", "matchup_strikeouts_x_kbb_diff",
+      "matchup_home_runs_x_erbf_diff", "matchup_home_runs_x_hrbf_diff", "matchup_home_runs_x_kbb_diff"
+    ],
+    "featureCount": 15,
+    "allFiveV58LineupMainEffectsRetained": true,
+    "postResultInteractionSelectionAllowed": false
+  },
+  "challenger": {
+    "featureFamily": "V16_C4_PLUS_LINEUP_DIFF5_PLUS_LINEUP_X_OPPOSING_STARTER_15",
+    "featureCount": 24,
+    "modelFamily": "L2_LOGISTIC_REGRESSION_WITH_TRAINING_ONLY_MEDIAN_IMPUTE_AND_STANDARDIZATION",
+    "l2Strength": 1.0,
+    "fitSeason": "2022",
+    "calibration": "POSITIVE_SLOPE_AFFINE_LOGIT_FIT_2023_ONLY"
+  },
+  "additiveBenchmark": {
+    "reproduceFrozenV58FeatureFamily": true,
+    "featureCount": 9,
+    "comparisonIsDiagnosticNotPromotionGate": true
+  },
+  "pairedBootstrap": {
+    "unit": "OFFICIAL_DATE_CLUSTER",
+    "resamples": 5000,
+    "seed": 20260816,
+    "confidenceLevel": 0.95
+  },
+  "candidateRubric": {
+    "combinedLogLossMustImprove": true,
+    "combinedBrierMustImprove": true,
+    "bootstrapLogLossLowerBoundMustBePositive": true,
+    "bootstrapBrierLowerBoundMustBePositive": true,
+    "ece10AbsoluteMaximum": 0.03,
+    "meanProbabilityGapComparisonTolerance": 0.0005,
+    "minimumEvaluationSeasonsImprovingBothProperScores": 2,
+    "noEvaluationSeasonMayBeWorseOnBothProperScores": true,
+    "passingClassification": "LINEUP_STARTER_INTERACTION_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
+    "failingClassification": "LINEUP_STARTER_INTERACTION_NOT_ROBUST_ENOUGH_TO_ADVANCE"
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "homeAwaySubsetMiningAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultRuleChangeAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChangeAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvClaimAllowed": false,
+    "v16ProductionChanged": false,
+    "realFinancialExposure": 0
+  }
+}
