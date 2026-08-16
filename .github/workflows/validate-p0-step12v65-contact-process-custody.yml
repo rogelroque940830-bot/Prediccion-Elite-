@@ -1,0 +1,161 @@
+name: Validate P0 Step 12V65 Contact Process Custody
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'research/p0-step12v65-contact-process-matchup-winner-contract.json'
+      - 'scripts/p0-step12v65-acquire-contact-process.py'
+      - '.github/workflows/validate-p0-step12v65-contact-process-custody.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V65 winner hypothesis was frozen before custody and outcome scorer
+        run: |
+          set -euo pipefail
+          FREEZE=0c0afa279fa58409609d02b25d70247ba14190ec
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v65-contact-process-matchup-winner-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v65-acquire-contact-process.py"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v65-contact-process-matchup-winner.py"
+          test ! -e scripts/p0-step12v65-contact-process-matchup-winner.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v65-contact-process-matchup-winner-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v65-contact-process-matchup-winner-contract.v1'
+          assert c['contractRevision']==1
+          assert c['scientificStatus']=='FROZEN_CONTACT_PROCESS_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS_BEFORE_V65_OUTCOME_SCORER'
+          assert c['sportingTarget']['primaryTarget']=='FULL_GAME_HOME_WIN'
+          assert c['historicalContactProcessCustody']['containsPlateAppearanceOutcomeFeatures'] is False
+          assert c['historicalContactProcessCustody']['containsPitchShapeBuckets'] is False
+          assert c['contactProcessEngineering']['featuresExactly']==[
+            'lineup_contact_exit_velocity_matchup_diff',
+            'lineup_contact_hard_hit_matchup_diff',
+            'lineup_contact_whiff_resistance_matchup_diff'
+          ]
+          assert c['contactProcessEngineering']['featureCount']==3
+          assert c['starterQualityEngineering']['featureCount']==5
+          assert c['control']['featureCount']==4
+          assert c['challenger']['featureCount']==12
+          assert c['dataBoundary']['sameDateHistoryAllowed'] is False
+          assert c['pairedBootstrap']['resamples']==5000
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['postResultFeatureAdditionAllowed'] is False
+          assert c['statistics']['postResultFeatureRemovalAllowed'] is False
+          assert c['statistics']['postResultShrinkageChangeAllowed'] is False
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V65_PRE_OUTCOME_HYPOTHESIS_FROZEN')
+          PY
+      - name: Syntax check custody extractor
+        run: python -m py_compile scripts/p0-step12v65-acquire-contact-process.py
+
+  acquire-contact-process:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        season: ['2021','2022','2023','2024','2025','2026_YTD']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical T-minus-5 lineage for target seasons
+        if: matrix.season != '2021'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Acquire immutable contact-process custody
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v65-contact-process
+          if [[ '${{ matrix.season }}' == '2021' ]]; then
+            python scripts/p0-step12v65-acquire-contact-process.py \
+              --season '${{ matrix.season }}' \
+              --contract research/p0-step12v65-contact-process-matchup-winner-contract.json \
+              --out 'artifacts/p0-step12v65-contact-process/contact-process-${{ matrix.season }}.json'
+          else
+            python scripts/p0-step12v65-acquire-contact-process.py \
+              --season '${{ matrix.season }}' \
+              --table 'artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json' \
+              --contract research/p0-step12v65-contact-process-matchup-winner-contract.json \
+              --out 'artifacts/p0-step12v65-contact-process/contact-process-${{ matrix.season }}.json'
+          fi
+      - name: Validate custody shape and research-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          s='${{ matrix.season }}'
+          p=f'artifacts/p0-step12v65-contact-process/contact-process-{s}.json'
+          r=json.load(open(p))
+          assert r['schemaVersion']=='courtedge-p0-step12v65-contact-process-pbp.v1'
+          assert r['season']==s
+          assert r['gamesFetched']>2000 if s!='2026_YTD' else r['gamesFetched']>1500
+          assert r['launchSpeedTelemetryShareOfInPlayEvents']>=0.80
+          q=r['policy']
+          assert q['sameDateOutcomeMayTrainSameDate'] is False
+          assert q['futureGameDataAllowed'] is False
+          assert q['containsFinalHistoricalPbpOnly'] is True
+          assert q['containsWinnerTarget'] is False
+          assert q['containsPlateAppearanceOutcomeFeatures'] is False
+          assert q['containsSportsbookPrice'] is False
+          print(json.dumps({k:r[k] for k in ['season','gamesExpected','gamesFetched','failureShare','pitchEvents','swings','whiffs','inPlayEvents','launchSpeedN','launchSpeedTelemetryShareOfInPlayEvents','hardHitN']},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v65-contact-process-${{ matrix.season }}
+          path: artifacts/p0-step12v65-contact-process/
+          if-no-files-found: error
+          retention-days: 30
+
+  custody-summary:
+    needs: acquire-contact-process
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v65-contact-process-*
+          path: artifacts/contact-process
+          merge-multiple: true
+      - name: Verify all six immutable custody packs before any outcome scorer exists
+        run: |
+          set -euo pipefail
+          test ! -e scripts/p0-step12v65-contact-process-matchup-winner.py
+          python - <<'PY'
+          import json,glob
+          files=sorted(glob.glob('artifacts/contact-process/contact-process-*.json'))
+          assert len(files)==6,files
+          rows=[]
+          for p in files:
+            r=json.load(open(p)); rows.append((r['season'],r['gamesFetched'],r['failureShare'],r['launchSpeedTelemetryShareOfInPlayEvents']))
+          print(json.dumps(rows,indent=2))
+          PY
+      - name: Verify exact custody-only scope
+        run: |
+          set -euo pipefail
+          git diff --check
+          ! grep -Ei 'placeBet|sportsbook.*write|automaticBetPlacementAllowed[^\n]*true|betEliteAllowed[^\n]*true|realFinancialExposure[^\n]*[1-9]' scripts/p0-step12v65-acquire-contact-process.py
