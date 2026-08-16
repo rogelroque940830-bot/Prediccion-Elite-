@@ -1,6 +1,13 @@
 {
   "schemaVersion": "courtedge-p0-step12v62-pitch-quality-winner-contract.v1",
+  "contractRevision": 2,
   "scientificStatus": "FROZEN_EXACT_PITCH_TYPE_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS",
+  "preOutcomeCorrection": {
+    "performedBeforeV62OutcomeScorerExisted": true,
+    "reason": "The initial draft incorrectly treated 250 prior recognized starter pitches as a hard eligibility gate even though already-known V61 parent evidence showed that such a gate would mechanically remove roughly one tenth of otherwise valid T-minus-5 games. Revision 2 keeps 250 as a predeclared reliability diagnostic and uses the frozen shrinkage priors to handle smaller samples. No V62 winner outcomes or V62 model metrics were available when this correction was frozen.",
+    "custodyExtractorMayExistBeforeRevision2": true,
+    "custodyExtractorDoesNotReadWinnerOutcomeMetrics": true
+  },
   "objective": "Test whether exact T-minus-5 lineup information becomes more predictive of Full Game winner probability when batter prior-date performance is matched to the opposing probable starter's exact pitch-type mix and the starter's own strictly prior-date pitch quality is represented by velocity, spin, whiff, strike and hard-hit suppression, while preserving certified V16 C4 as the promotion control.",
   "parentEvidence": {
     "mainBaseSha": "a56ebd0b9857c30b74b9344f81a1a456073aed3d",
@@ -30,13 +37,7 @@
     "trainingSeason": "2022",
     "calibrationSeason": "2023",
     "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
-    "expectedRowsBySeason": {
-      "2022": 2398,
-      "2023": 2399,
-      "2024": 2406,
-      "2025": 2423,
-      "2026_YTD": 1781
-    },
+    "expectedRowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
     "rollingLookbackDays": 365,
     "sameDateHistoryAllowed": false,
     "scoreWholeOfficialDateBeforeUpdatingAnySameDateState": true,
@@ -76,18 +77,14 @@
     "minimumVelocityTelemetryShareEachSeason": 0.90,
     "minimumSpinTelemetryShareEachSeason": 0.75
   },
-  "recognizedPitchTypes": [
-    "FF", "FT", "SI", "FC", "SL", "ST", "SV", "CU", "KC", "CS", "CH", "FS", "FO", "SC", "KN", "EP"
-  ],
+  "recognizedPitchTypes": ["FF", "FT", "SI", "FC", "SL", "ST", "SV", "CU", "KC", "CS", "CH", "FS", "FO", "SC", "KN", "EP"],
   "eventDefinitions": {
     "hits": ["single", "double", "triple", "home_run"],
     "totalBases": {"single": 1, "double": 2, "triple": 3, "home_run": 4},
     "walks": ["walk", "intent_walk", "intentional_walk"],
     "strikeouts": ["strikeout", "strikeout_double_play"],
     "homeRuns": ["home_run"],
-    "swingDescriptions": [
-      "swinging_strike", "swinging_strike_blocked", "missed_bunt", "foul", "foul_tip", "foul_bunt", "hit_into_play", "hit_into_play_no_out", "hit_into_play_score"
-    ],
+    "swingDescriptions": ["swinging_strike", "swinging_strike_blocked", "missed_bunt", "foul", "foul_tip", "foul_bunt", "hit_into_play", "hit_into_play_no_out", "hit_into_play_score"],
     "whiffDescriptions": ["swinging_strike", "swinging_strike_blocked", "missed_bunt"]
   },
   "exactPitchTypeBatterEngineering": {
@@ -96,7 +93,8 @@
     "genericShrinkageAnchor": "LEAGUE_PREGAME_TERMINAL_PA_RATE_IN_SAME_365_DAY_WINDOW",
     "pitchTypeShrinkagePriorPlateAppearances": 50,
     "pitchTypeShrinkageAnchor": "THE_SAME_BATTER_GENERIC_PREGAME_RATE",
-    "starterMixMinimumPriorRecognizedPitches": 250,
+    "starterMixReliabilityDiagnosticPriorRecognizedPitches": 250,
+    "hardEligibilityMinimumPriorRecognizedPitches": 1,
     "lineupSlotWorkloadShrinkagePriorStarts": 20,
     "lineupSlotExpectedPaDefinition": "REPRODUCE_FROZEN_V58_V60_TRAINING_CHRONOLOGY_AND_SLOT_WORKLOAD_SHRINKAGE",
     "specificExpectedRateDefinition": "SUM_OVER_RECOGNIZED_PITCH_TYPES_OF_STARTER_PRIOR_USAGE_SHARE_TIMES_SHRUNK_BATTER_RATE_FOR_THAT_EXACT_PITCH_TYPE",
@@ -104,7 +102,8 @@
   },
   "starterQualityEngineering": {
     "lookbackDays": 365,
-    "starterMinimumPriorRecognizedPitches": 250,
+    "starterReliabilityDiagnosticPriorRecognizedPitches": 250,
+    "hardEligibilityMinimumPriorRecognizedPitches": 1,
     "velocityShrinkagePriorPitches": 100,
     "spinShrinkagePriorPitches": 100,
     "whiffShrinkagePriorSwings": 50,
@@ -121,33 +120,16 @@
   "control": {
     "modelVersion": "rogel-pure-settlement-ml-f5-v1",
     "featureSetRequired": "C4",
-    "featuresExactly": [
-      "lineup_exposure_rate_adv",
-      "starter_kbb_adv",
-      "combined_team_rs10",
-      "team_rd10_diff"
-    ],
+    "featuresExactly": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
     "featureCount": 4,
     "metricParityAbsoluteTolerance": 1e-12
   },
   "exactPitchTypeBatterLayer": {
-    "featuresExactly": [
-      "lineup_exact_pitchtype_hits_diff",
-      "lineup_exact_pitchtype_total_bases_diff",
-      "lineup_exact_pitchtype_walks_diff",
-      "lineup_exact_pitchtype_strikeouts_diff",
-      "lineup_exact_pitchtype_home_runs_diff"
-    ],
+    "featuresExactly": ["lineup_exact_pitchtype_hits_diff", "lineup_exact_pitchtype_total_bases_diff", "lineup_exact_pitchtype_walks_diff", "lineup_exact_pitchtype_strikeouts_diff", "lineup_exact_pitchtype_home_runs_diff"],
     "featureCount": 5
   },
   "starterQualityLayer": {
-    "featuresExactly": [
-      "starter_velocity_quality_adv",
-      "starter_spin_quality_adv",
-      "starter_whiff_quality_adv",
-      "starter_strike_quality_adv",
-      "starter_hard_hit_suppression_adv"
-    ],
+    "featuresExactly": ["starter_velocity_quality_adv", "starter_spin_quality_adv", "starter_whiff_quality_adv", "starter_strike_quality_adv", "starter_hard_hit_suppression_adv"],
     "featureCount": 5
   },
   "predeclaredAblations": {
@@ -180,12 +162,7 @@
     "missingDerivedRowsUseTrainingMedian": true,
     "belowGateClassification": "PITCH_QUALITY_CUSTODY_INSUFFICIENT"
   },
-  "pairedBootstrap": {
-    "unit": "OFFICIAL_DATE_CLUSTER",
-    "resamples": 5000,
-    "seed": 20260816,
-    "confidenceLevel": 0.95
-  },
+  "pairedBootstrap": {"unit": "OFFICIAL_DATE_CLUSTER", "resamples": 5000, "seed": 20260816, "confidenceLevel": 0.95},
   "candidateRubric": {
     "passingClassification": "PITCH_QUALITY_MATCHUP_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
     "failingClassification": "PITCH_QUALITY_MATCHUP_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
