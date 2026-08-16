@@ -1,0 +1,94 @@
+name: Validate P0 Step 12F Legacy Diagnostic Boundary
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12f-acquire-2024-replication.mjs'
+      - 'scripts/p0-step12f-independent-replication.py'
+      - 'scripts/p0-step12d-freeze-candidates.mjs'
+      - 'scripts/p0-step12-pocket-pilot.py'
+      - 'evidence/p0-step12/2025-pocket-pilot.json'
+      - 'server/mlb-market-historical-source.ts'
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-starting-pitcher-history.ts'
+      - 'server/mlb-market-pregame-lineup-history.ts'
+      - '.github/workflows/validate-p0-step12f-independent-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12f-legacy-diagnostic-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Freeze exact candidate family for legacy diagnostic reproduction only
+        run: >-
+          node scripts/p0-step12d-freeze-candidates.mjs
+          --input evidence/p0-step12/2025-pocket-pilot.json
+          --out artifacts/p0-step12f/frozen-candidates.json
+      - name: Syntax-check legacy diagnostic surface
+        run: |
+          node --check scripts/p0-step12f-acquire-2024-replication.mjs
+          python -m py_compile scripts/p0-step12-pocket-pilot.py scripts/p0-step12f-independent-replication.py
+      - name: Reproduce legacy 2024 cohort for diagnostics only
+        run: >-
+          node --import tsx scripts/p0-step12f-acquire-2024-replication.mjs
+          --start 2024-03-01 --end 2024-09-30 --concurrency 6
+          --out artifacts/p0-step12f/cohort-2024-replication
+      - name: Materialize explicitly invalidated legacy diagnostic
+        run: >-
+          python scripts/p0-step12f-independent-replication.py
+          --candidates artifacts/p0-step12f/frozen-candidates.json
+          --dataset artifacts/p0-step12f/cohort-2024-replication/dataset.json
+          --starter-history artifacts/p0-step12f/cohort-2024-replication/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12f/cohort-2024-replication/pregame-lineup-history.json
+          --cohort-manifest artifacts/p0-step12f/cohort-2024-replication/cohort-manifest.json
+          --out artifacts/p0-step12f/independent-replication-report.json
+      - name: Enforce methodology-invalid boundary
+        run: |
+          python - <<'PY'
+          import json
+          with open('artifacts/p0-step12f/independent-replication-report.json',encoding='utf-8') as f:r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12f-independent-2024-replication.v2'
+          assert r['evidenceStatus']=='STEP12F_LEGACY_DIAGNOSTIC_INVALID_FOR_CONFIRMATION'
+          assert r['classification']=='METHODOLOGY_INVALID_PENDING_T5_REBUILD'
+          blockers=set(r['knownMethodologyBlockers'])
+          required={
+            'TARGET_STARTER_IDENTITY_FROM_FINAL_BOXSCORE_NOT_T5_ASOF',
+            'INCOMPLETE_T5_LINEUPS_CAN_SILENTLY_CHANGE_ELIGIBLE_POPULATION',
+            '2024_AND_2026_CALENDAR_EXPOSURE_NOT_MATCHED_FOR_CUMULATIVE_LINEUP_FEATURE',
+            'PLUGIN_BINOMIAL_BASELINE_TREATS_SAME_COHORT_ESTIMATE_AS_FIXED',
+            'LEADER_DISCOVERY_ITSELF_USED_NON_T5_TARGET_STARTER_IDENTITY',
+          }
+          assert required <= blockers
+          assert r['interpretationBoundary']['legacyMetricsMaySupportOrRejectHypothesis'] is False
+          assert r['interpretationBoundary']['freshIndependentConfirmationClaimAllowed'] is False
+          assert r['interpretationBoundary']['newDiscoveryRequiredAfterT5StarterIdentityCorrection'] is True
+          assert r['requiredRebuild']['futureIndependentReplicationMustUseUninspectedCohort'] is True
+          assert r['promotionBoundary']['canProduceBetElite'] is False
+          print(json.dumps({'classification':r['classification'],'blockers':sorted(blockers)},indent=2))
+          PY
+      - name: Preserve live-model and evidence-ledger regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload invalidated legacy Step 12F evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12f-legacy-diagnostic-invalidated
+          path: artifacts/p0-step12f/
+          if-no-files-found: error
+          retention-days: 30

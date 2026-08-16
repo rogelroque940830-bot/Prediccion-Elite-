@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "courtedge-p0-step12r-loss-invalidators-frozen.v1",
+  "evidenceStatus": "POSTHOC_2022_2023_2025_2026_DISCOVERY_FROZEN_FOR_EXTERNAL_REPLICATION_AND_PROSPECTIVE_ONLY",
+  "baseRules": {
+    "strict": {
+      "id": "PREMIUM_FG_HOME_TRIPLE_A",
+      "target": "FULL_GAME:RESULT:HOME",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554}
+      ]
+    },
+    "broad": {
+      "id": "PREMIUM_FG_HOME_TRIPLE_A_BROAD",
+      "target": "FULL_GAME:RESULT:HOME",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329}
+      ]
+    }
+  },
+  "discoveryCohorts": [
+    "2022_FULL_REGULAR_SEASON",
+    "2023_FULL_REGULAR_SEASON",
+    "2025_POST_2025_07_31_HOLDOUT",
+    "2026_YTD_THROUGH_2026_08_10"
+  ],
+  "lossAnatomy": {
+    "broad": {
+      "selectedRows": 438,
+      "wins": 308,
+      "losses": 130,
+      "hitRate": 0.7031963470319634,
+      "lossesTrailingAfterFirst5": 89,
+      "lossesNotTrailingAfterFirst5": 41
+    },
+    "strict": {
+      "selectedRows": 343,
+      "wins": 246,
+      "losses": 97,
+      "hitRate": 0.717201166180758,
+      "lossesTrailingAfterFirst5": 69,
+      "lossesNotTrailingAfterFirst5": 28
+    }
+  },
+  "derivedPregameFeatureSemantics": {
+    "away_days_since_last_start": "CALENDAR_DAYS_FROM_CURRENT_T5_AWAY_PROBABLE_TO_HIS_LAST_COMPLETED_PRIOR_START",
+    "bullpen_outs_adv_last3d": "AWAY_BULLPEN_OUTS_PROXY_MINUS_HOME_BULLPEN_OUTS_PROXY_OVER_PRIOR_3_CALENDAR_DAYS",
+    "bullpen_outs_proxy": "MAX_0_27_MINUS_STARTER_OUTS_RECORDED_FOR_PRIOR_COMPLETED_GAME_RESEARCH_PROXY_NOT_ACTUAL_RELIEVER_PITCH_COUNT",
+    "team_ra10_adv": "AWAY_RECENT10_RUNS_ALLOWED_MEAN_MINUS_HOME_RECENT10_RUNS_ALLOWED_MEAN",
+    "team_rd10_diff": "HOME_RECENT10_RUN_DIFFERENTIAL_MEAN_MINUS_AWAY_RECENT10_RUN_DIFFERENTIAL_MEAN",
+    "home_probable_prior_bf": "PRIOR_COMPLETED_BATTERS_FACED_FOR_CURRENT_T5_HOME_PROBABLE"
+  },
+  "invalidatorHypotheses": [
+    {
+      "id": "VETO_A_ROTATION_AND_BULLPEN_CONTEXT",
+      "role": "HIGH_VOLUME_CONTEXTUAL_RISK",
+      "all": [
+        {"feature": "away_days_since_last_start", "operator": "LTE", "threshold": 5},
+        {"feature": "bullpen_outs_adv_last3d", "operator": "LTE", "threshold": 3}
+      ],
+      "posthocStrictDiscovery": {
+        "rows": 56,
+        "wins": 26,
+        "losses": 30,
+        "hitRateInsideRiskPocket": 0.4642857142857143,
+        "strictHitRateOutsideRiskPocket": 0.7665505226480837
+      },
+      "causalInterpretationAllowed": false
+    },
+    {
+      "id": "VETO_B_RECENT_RUN_PREVENTION_AND_BORDERLINE_KBB",
+      "role": "RARE_RED_FLAG",
+      "all": [
+        {"feature": "team_ra10_adv", "operator": "LTE", "threshold": -0.3},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": 0.05}
+      ],
+      "posthocStrictDiscovery": {
+        "rows": 15,
+        "wins": 3,
+        "losses": 12,
+        "hitRateInsideRiskPocket": 0.2,
+        "strictHitRateOutsideRiskPocket": 0.7408536585365854
+      }
+    },
+    {
+      "id": "VETO_C_WEAK_RUN_DIFFERENTIAL_AND_LOW_STARTER_HISTORY",
+      "role": "STARTER_UNCERTAINTY_CONTEXT",
+      "all": [
+        {"feature": "team_rd10_diff", "operator": "LTE", "threshold": 1.5},
+        {"feature": "home_probable_prior_bf", "operator": "LTE", "threshold": 180}
+      ],
+      "posthocStrictDiscovery": {
+        "rows": 27,
+        "wins": 11,
+        "losses": 16,
+        "hitRateInsideRiskPocket": 0.4074074074074074,
+        "strictHitRateOutsideRiskPocket": 0.7436708860759493
+      }
+    }
+  ],
+  "unionDiagnostic": {
+    "strict": {
+      "rowsRetained": 257,
+      "wins": 207,
+      "losses": 50,
+      "posthocHitRate": 0.8054474708171206,
+      "volumeRetainedPct": 74.92711370262391,
+      "lossesRemoved": 47,
+      "lossesRemovedPct": 48.45360824742268,
+      "winsRemoved": 39,
+      "winsRemovedPct": 15.853658536585366,
+      "seasonHitRatesAfterUnionVeto": {
+        "2022": 0.7777777777777778,
+        "2023": 0.8311688311688312,
+        "2025_POST_JUL31": 0.8333333333333334,
+        "2026_YTD": 0.7948717948717948
+      }
+    },
+    "broad": {
+      "rowsRetained": 334,
+      "wins": 256,
+      "losses": 78,
+      "posthocHitRate": 0.7664670658682635,
+      "volumeRetainedPct": 76.25570776255708
+    }
+  },
+  "externalReplicationPolicy": {
+    "reservedSeason": 2021,
+    "preflightMustNotEvaluateInvalidatorOutcomes": true,
+    "thresholdRetuningAfterFreezeAllowed": false,
+    "newInvalidatorSearchIn2021Allowed": false,
+    "evaluateStrictAndBroad": true,
+    "evaluateEachInvalidatorSeparately": true,
+    "evaluateFrozenUnion": true,
+    "historicalPricesUsed": false,
+    "historicalEvClaimAllowed": false,
+    "liveFilterChangeAllowed": false,
+    "betEliteAllowed": false,
+    "prospective11cValidationStillRequired": true
+  }
+}

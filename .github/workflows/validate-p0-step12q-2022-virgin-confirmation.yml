@@ -1,0 +1,120 @@
+name: Validate P0 Step 12Q 2022 Virgin Premium Confirmation
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'research/p0-step12q-premium-interactions-frozen.json'
+      - 'scripts/p0-step12q-virgin-2022-confirmation.py'
+      - 'scripts/p0-step12m-acquire-clean-replication-cohort.mjs'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - 'scripts/p0-step12n-multimarket-target-matrix.py'
+      - '.github/workflows/validate-p0-step12q-2022-virgin-confirmation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  confirm-2022-premium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Validate frozen gate before 2022 outcome access
+        run: |
+          python - <<'PY'
+          import json
+          p='research/p0-step12q-premium-interactions-frozen.json'
+          with open(p,encoding='utf-8') as f:m=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12q-premium-interactions-frozen.v2'
+          assert m['primaryCandidateId']=='PREMIUM_FG_HOME_TRIPLE_A'
+          assert len(m['candidates'])==6
+          assert m['selectionHistory']['preflight2022UsedOutcomes'] is False
+          assert m['interactionContract']['thresholdRetuningAllowedAfterFreeze'] is False
+          assert m['interactionContract']['candidateSearchAllowedIn2022'] is False
+          q=m['finalConfirmationPolicy']
+          assert q['familywiseCandidateCount']==6
+          assert q['minimumDecisiveRowsForPremium']==50
+          assert q['minimumDecisiveDatesForPremium']==35
+          assert q['minimumHitRateForPremium']==0.65
+          assert q['minimumLiftVsBaselineForPremium']==0.10
+          assert q['holmAlpha']==0.05
+          assert q['noThresholdChangesAfterSeeing2022'] is True
+          print('STEP12Q_2022_GATE_LOCKED_BEFORE_OUTCOME_ACCESS')
+          PY
+      - name: Syntax-check Step 12Q chain
+        run: |
+          node --check scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12n-multimarket-target-matrix.py scripts/p0-step12q-virgin-2022-confirmation.py
+      - name: Acquire virgin clean 2022 cohort
+        run: >-
+          node --import tsx scripts/p0-step12m-acquire-clean-replication-cohort.mjs
+          --start 2022-03-01 --end 2022-10-06 --concurrency 6
+          --role VIRGIN_PREMIUM_CONFIRMATION_2022
+          --out artifacts/p0-step12q/2022/cohort
+      - name: Audit 2022 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2022-03-01 --end 2022-10-06 --concurrency 6
+          --out artifacts/p0-step12q/2022/t5-audit
+      - name: Build clean 2022 T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12q/2022/cohort/dataset.json
+          --starter-history artifacts/p0-step12q/2022/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12q/2022/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12q/2022/t5-audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12q/2022/feature-table.json
+      - name: Build 2022 multi-market target matrix
+        run: >-
+          python scripts/p0-step12n-multimarket-target-matrix.py
+          --feature-table artifacts/p0-step12q/2022/feature-table.json
+          --dataset artifacts/p0-step12q/2022/cohort/dataset.json
+          --out artifacts/p0-step12q/2022/target-matrix.json
+      - name: Score all six candidates without retuning
+        run: >-
+          python scripts/p0-step12q-virgin-2022-confirmation.py
+          --matrix artifacts/p0-step12q/2022/target-matrix.json
+          --manifest research/p0-step12q-premium-interactions-frozen.json
+          --out artifacts/p0-step12q/2022/confirmation-report.json
+      - name: Validate evidence boundary and gate execution
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('artifacts/p0-step12q/2022/t5-audit/t5-starter-identity-audit.json'))
+          f=json.load(open('artifacts/p0-step12q/2022/feature-table.json'))
+          r=json.load(open('artifacts/p0-step12q/2022/confirmation-report.json'))
+          assert a['counts']['bothProbableCoveragePct']>=95
+          assert a['counts']['completeLineupAndBothProbablesPct']>=95
+          assert f['counts']['coreFeatureUsableRows']>0.90*f['counts']['rows']
+          assert r['schemaVersion']=='courtedge-p0-step12q-virgin-2022-confirmation.v1'
+          assert len(r['results'])==6
+          assert r['policy']['thresholdRetuningPerformed'] is False
+          assert r['policy']['candidateSearchPerformedIn2022'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['betEliteProduced'] is False
+          print({'coverage':a['counts'],'primary':r['primaryResult'],'counts':r['counts']})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12Q confirmation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12q-2022-virgin-confirmation
+          path: artifacts/p0-step12q/
+          if-no-files-found: error
+          retention-days: 30

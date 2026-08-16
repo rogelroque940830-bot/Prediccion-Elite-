@@ -1,0 +1,98 @@
+name: Validate P0 Step 12J Clean Rediscovery
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12j-clean-rediscovery.py'
+      - 'scripts/p0-step12i-acquire-2025-clean-cohort.mjs'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - 'server/mlb-market-historical-source.ts'
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-starting-pitcher-history.ts'
+      - 'server/mlb-market-pregame-lineup-history.ts'
+      - '.github/workflows/validate-p0-step12j-clean-rediscovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12j-clean-rediscovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check clean rediscovery surface
+        run: |
+          node --check scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py scripts/p0-step12j-clean-rediscovery.py
+      - name: Rebuild frozen 2025 clean cohort
+        run: >-
+          node --import tsx scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12j/cohort-2025-clean
+      - name: Reconstruct 2025 T-5 starter identity
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12j/t5-audit-2025
+      - name: Build clean T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12j/cohort-2025-clean/dataset.json
+          --starter-history artifacts/p0-step12j/cohort-2025-clean/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12j/cohort-2025-clean/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12j/t5-audit-2025/t5-starter-identity-audit.json
+          --out artifacts/p0-step12j/clean-t5-feature-table-2025.json
+      - name: Rediscover clean pockets from discovery only
+        run: >-
+          python scripts/p0-step12j-clean-rediscovery.py
+          --feature-table artifacts/p0-step12j/clean-t5-feature-table-2025.json
+          --out artifacts/p0-step12j/clean-rediscovery-report.json
+      - name: Validate rediscovery contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          with open('artifacts/p0-step12j/clean-t5-feature-table-2025.json',encoding='utf-8') as f:t=json.load(f)
+          with open('artifacts/p0-step12j/clean-rediscovery-report.json',encoding='utf-8') as f:r=json.load(f)
+          assert t['counts']['coreFeatureUsableRows']>0.90*t['counts']['rows']
+          assert r['schemaVersion']=='courtedge-p0-step12j-clean-rediscovery.v1'
+          assert r['evidenceStatus']=='CLEAN_REDISCOVERY_RESEARCH_ONLY_NO_CERTIFICATION_NO_BET_ELITE'
+          assert r['searchContract']['thresholdsLearnedFromDiscoveryOnly'] is True
+          assert r['searchContract']['holdoutUsedForCandidateSelection'] is False
+          assert r['searchContract']['holdoutUsedForThresholdTuning'] is False
+          assert r['searchContract']['holdoutIsCertificationEvidence'] is False
+          assert r['searchContract']['maxAtomsPerRule']==3
+          assert r['searchContract']['topKPerHorizon']==10
+          assert r['frozenFamilySize']==20
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['automaticPromotionAllowed'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          print(json.dumps({'split':r['split'],'attempted':r['attemptedRulesAfterDiscoveryFloor'],'familySize':r['frozenFamilySize']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12J clean rediscovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12j-clean-rediscovery
+          path: artifacts/p0-step12j/
+          if-no-files-found: error
+          retention-days: 30

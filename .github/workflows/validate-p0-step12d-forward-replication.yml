@@ -1,0 +1,272 @@
+name: Validate P0 Step 12D Forward Replication
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12d-freeze-candidates.mjs'
+      - 'scripts/p0-step12d-acquire-forward-cohort.mjs'
+      - 'scripts/p0-step12d-independent-forward-validation.py'
+      - 'scripts/p0-step12e-adversarial-stability.py'
+      - 'scripts/p0-step12-pocket-pilot.py'
+      - 'evidence/p0-step12/2025-pocket-pilot.json'
+      - 'server/mlb-market-historical-source.ts'
+      - 'server/mlb-market-historical-dataset.ts'
+      - 'server/mlb-market-starting-pitcher-history.ts'
+      - 'server/mlb-market-pregame-lineup-history.ts'
+      - '.github/workflows/validate-p0-step12d-forward-replication.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12d-forward-replication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install dependencies reproducibly
+        run: npm ci
+
+      - name: Freeze exact 2025 candidate family before external evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_blob='3988b0214284b7338be8aeb8102c57d98f88d7a1'
+          actual_blob="$(git hash-object evidence/p0-step12/2025-pocket-pilot.json)"
+          test "$actual_blob" = "$expected_blob"
+          node scripts/p0-step12d-freeze-candidates.mjs \
+            --input evidence/p0-step12/2025-pocket-pilot.json \
+            --out artifacts/p0-step12d/frozen-candidates.json
+
+      - name: Syntax-check Step 12D and 12E research surface
+        run: |
+          node --check scripts/p0-step12d-freeze-candidates.mjs
+          node --check scripts/p0-step12d-acquire-forward-cohort.mjs
+          python -m py_compile \
+            scripts/p0-step12-pocket-pilot.py \
+            scripts/p0-step12d-independent-forward-validation.py \
+            scripts/p0-step12e-adversarial-stability.py
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node \
+            server/mlb-market-historical-source.ts \
+            server/mlb-market-historical-dataset.ts \
+            server/mlb-market-starting-pitcher-history.ts \
+            server/mlb-market-pregame-lineup-history.ts
+
+      - name: Acquire frozen untouched 2026 forward cohort from official MLB sources
+        run: >-
+          node --import tsx scripts/p0-step12d-acquire-forward-cohort.mjs
+          --start 2026-03-01
+          --end 2026-08-10
+          --concurrency 6
+          --out artifacts/p0-step12d/cohort-2026-forward
+
+      - name: Validate official-final cohort identity before pocket evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          root='artifacts/p0-step12d/cohort-2026-forward'
+          with open(f'{root}/cohort-manifest.json', encoding='utf-8') as f: m=json.load(f)
+          with open(f'{root}/pregame-lineup-history.json', encoding='utf-8') as f: l=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12d-forward-cohort.v1'
+          assert m['cohort']['regularSeasonFinalGames']==m['cohort']['starterGames']==m['cohort']['lineupSnapshotsFetched']
+          assert l['schemaVersion']=='courtedge-p0-step12d-cohort-pregame-lineups.v1'
+          assert l['cohortDefinition']=='OFFICIAL_FINAL_GAME_PK_INTERSECTION'
+          assert l['officialFinalGames']==l['snapshotsFetched']==m['cohort']['regularSeasonFinalGames']
+          assert m['policy']['lineupScheduleExtrasAreExcludedByOfficialFinalGamePk'] is True
+          assert m['policy']['officialFinalLineupSnapshotCoverageMustBeComplete'] is True
+          assert m['cohort']['excludedNonCohortLineupScheduleSnapshots']>=0
+          assert len(l['upstreamSchedule']['excludedSnapshots'])==m['cohort']['excludedNonCohortLineupScheduleSnapshots']
+          print(json.dumps({
+            'officialFinalGames':m['cohort']['regularSeasonFinalGames'],
+            'lineupSnapshotsFetched':m['cohort']['lineupSnapshotsFetched'],
+            'completeLineupGames':m['cohort']['completeLineupGames'],
+            'completeLineupCoveragePct':m['cohort']['completeLineupCoveragePct'],
+            'excludedNonCohortLineupScheduleSnapshots':m['cohort']['excludedNonCohortLineupScheduleSnapshots'],
+          }, indent=2))
+          PY
+
+      - name: Apply frozen 20-rule family without retuning
+        run: >-
+          python scripts/p0-step12d-independent-forward-validation.py
+          --candidates artifacts/p0-step12d/frozen-candidates.json
+          --dataset artifacts/p0-step12d/cohort-2026-forward/dataset.json
+          --starter-history artifacts/p0-step12d/cohort-2026-forward/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12d/cohort-2026-forward/pregame-lineup-history.json
+          --cohort-manifest artifacts/p0-step12d/cohort-2026-forward/cohort-manifest.json
+          --out artifacts/p0-step12d/forward-validation-report.json
+
+      - name: Validate 12D report contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12d/forward-validation-report.json'
+          with open(p, encoding='utf-8') as f: r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12d-independent-forward-validation.v1'
+          assert r['evidenceStatus']=='STEP12D_RESEARCH_ONLY_NOT_BET_ELITE'
+          assert r['hypothesisIdentity']=='HORIZON_PLUS_RULE_KEY'
+          assert r['multiplicity']['method']=='HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'
+          assert r['multiplicity']['familySize']==20
+          assert r['supportCriteria']['minimumForwardDecisiveRows']==80
+          assert r['supportCriteria']['minimumForwardDecisiveDates']==30
+          assert r['supportCriteria']['maximumAbsolute2025HoldoutForwardDrift']==0.15
+          assert len(r['results'])==20
+          assert len({x['hypothesisKey'] for x in r['results']})==20
+          assert all(x['hypothesisKey']==f"{x['horizon']}:{x['ruleKey']}" for x in r['results'])
+          assert r['policy']['externalThresholdTuningAllowed'] is False
+          assert r['policy']['candidateAdditionAllowed'] is False
+          assert r['policy']['candidateRemovalAllowed'] is False
+          assert r['policy']['atomMutationAllowed'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['historicalEvClaimProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['stakeCalculated'] is False
+          assert r['policy']['automaticBetPlacement'] is False
+          print(json.dumps({'statusCounts':r['statusCounts'],'cohortSummary':r['cohortSummary']}, indent=2))
+          PY
+
+      - name: Adversarial stress-test frozen leading hypothesis without rescue tuning
+        run: >-
+          python scripts/p0-step12e-adversarial-stability.py
+          --candidates artifacts/p0-step12d/frozen-candidates.json
+          --forward-report artifacts/p0-step12d/forward-validation-report.json
+          --dataset artifacts/p0-step12d/cohort-2026-forward/dataset.json
+          --starter-history artifacts/p0-step12d/cohort-2026-forward/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12d/cohort-2026-forward/pregame-lineup-history.json
+          --out artifacts/p0-step12d/adversarial-stability-report.json
+
+      - name: Validate 12E diagnostic-only contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12d/adversarial-stability-report.json'
+          with open(p, encoding='utf-8') as f: r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12e-adversarial-stability.v3'
+          assert r['evidenceStatus']=='STEP12E_DIAGNOSTIC_ONLY_CANNOT_PROMOTE_BET_ELITE'
+          assert r['leader']['hypothesisKey']=='FIRST_5:46a7cbb6ff5c2458'
+          assert r['leader']['forward2026Status']=='PROMISING_NOT_HOLM_SUPPORTED'
+          assert r['leader']['forward2026HolmAdjustedGlobalFamilyPValue']>0.05
+          assert r['forwardParity']['selectedRows']==100
+          assert r['forwardParity']['decisiveRows']==90
+          assert r['forwardParity']['hits']==62
+          assert r['forwardParity']['losses']==28
+          assert r['forwardParity']['pushes']==10
+          b=r['adversarialDiagnostics']['jointEligibleCohortDateClusterBootstrap']
+          assert b['method']=='JOINT_ELIGIBLE_COHORT_DATE_CLUSTER_BOOTSTRAP'
+          assert b['baselineRecomputedInsideEveryReplicate'] is True
+          assert b['inferentialProbabilityClaimAllowed'] is False
+          assert b['requestedReplicates']==10000
+          ids=r['adversarialDiagnostics']['identityConcentrationAndLeaveOneOut']
+          assert ids['team']['identityType']=='OFFICIAL_TEAM_ID_ACROSS_BOTH_ROLES'
+          assert ids['team']['rolesCollapsed'] is True
+          assert ids['pitcher']['identityType']=='OFFICIAL_STARTER_ID_ACROSS_BOTH_ROLES'
+          assert ids['pitcher']['rolesCollapsed'] is True
+          assert r['policy']['identitiesCollapsedAcrossHomeAwayRoles'] is True
+          assert r['interpretationBoundary']['leaderWasSelectedAfterInspecting12DResults'] is True
+          assert r['interpretationBoundary']['stressTestsReuseSame2026CohortAs12D'] is True
+          assert r['interpretationBoundary']['stressClassificationIsIndependentReplicationEvidence'] is False
+          assert r['interpretationBoundary']['bootstrapFractionIsPosteriorOrFrequentistProbabilityOfTrueEdge'] is False
+          assert r['promotionBoundary']['canUpgrade12DStatisticalStatus'] is False
+          assert r['promotionBoundary']['canProduceBetElite'] is False
+          assert r['promotionBoundary']['canChangeLiveFilters'] is False
+          assert r['promotionBoundary']['canTuneAtomsOrThresholds'] is False
+          assert r['promotionBoundary']['canDropBadMonthsTeamsPitchersOrDates'] is False
+          assert r['promotionBoundary']['canRecomputeMultiplicityOnReducedFamily'] is False
+          assert r['policy']['diagnosticOnly'] is True
+          assert r['policy']['leaderDefinitionFrozenBeforeStressTesting'] is True
+          assert r['policy']['leaderWasNotFrozenBefore12DResults'] is True
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['historicalEvClaimProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['stakeCalculated'] is False
+          assert r['policy']['automaticBetPlacement'] is False
+          print(json.dumps({
+            'classification':r['classification'],
+            'stressGates':r['stressGates'],
+            'forwardParity':r['forwardParity'],
+            'minimumLeaveOneMonthOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneMonthOutLiftVsBaseline'],
+            'minimumLeaveOneDateOutLiftVsBaseline':r['adversarialDiagnostics']['minimumLeaveOneDateOutLiftVsBaseline'],
+            'teamIdentityStress':ids['team'],
+            'pitcherIdentityStress':ids['pitcher'],
+            'jointEligibleCohortDateClusterBootstrap':b,
+          }, indent=2))
+          PY
+
+      - name: Preserve live-model and evidence-ledger regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+
+      - name: Freeze Step 12D/12E no-retuning and no-live-mutation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          freeze='scripts/p0-step12d-freeze-candidates.mjs'
+          acquire='scripts/p0-step12d-acquire-forward-cohort.mjs'
+          validate='scripts/p0-step12d-independent-forward-validation.py'
+          stress='scripts/p0-step12e-adversarial-stability.py'
+          grep -F 'EXPECTED_PILOT_GIT_BLOB_SHA = "3988b0214284b7338be8aeb8102c57d98f88d7a1"' "$freeze"
+          grep -F 'hypothesisIdentity: "HORIZON_PLUS_RULE_KEY"' "$freeze"
+          grep -F 'globalMultiplicityFamilySize: 20' "$freeze"
+          grep -F 'externalThresholdTuningAllowed: false' "$freeze"
+          grep -F 'candidateAdditionAllowed: false' "$freeze"
+          grep -F 'candidateRemovalAllowed: false' "$freeze"
+          grep -F 'atomMutationAllowed: false' "$freeze"
+          grep -F 'FROZEN_START_DATE = "2026-03-01"' "$acquire"
+          grep -F 'FROZEN_END_DATE = "2026-08-10"' "$acquire"
+          grep -F 'cohortDefinition: "OFFICIAL_FINAL_GAME_PK_INTERSECTION"' "$acquire"
+          grep -F 'lineupScheduleExtrasAreExcludedByOfficialFinalGamePk: true' "$acquire"
+          grep -F 'officialFinalLineupSnapshotCoverageMustBeComplete: true' "$acquire"
+          grep -F 'usedFor2025CandidateDiscovery: false' "$acquire"
+          grep -F "MIN_DECISIVE_ROWS = 80" "$validate"
+          grep -F "MIN_DECISIVE_DATES = 30" "$validate"
+          grep -F "GLOBAL_FAMILY_SIZE = 20" "$validate"
+          grep -F "MAX_ABSOLUTE_2025_HOLDOUT_FORWARD_DRIFT = 0.15" "$validate"
+          grep -F "'hypothesisIdentity': 'HORIZON_PLUS_RULE_KEY'" "$validate"
+          grep -F "'method': 'HOLM_BONFERRONI_GLOBAL_FROZEN_FAMILY'" "$validate"
+          grep -F "'repeatedSequentialRetestingAllowed': False" "$validate"
+          grep -F "LEADER_HYPOTHESIS_KEY = 'FIRST_5:46a7cbb6ff5c2458'" "$stress"
+          grep -F "BOOTSTRAP_REPLICATES = 10000" "$stress"
+          grep -F "MIN_BOOTSTRAP_POSITIVE_LIFT_FRACTION = 0.95" "$stress"
+          grep -F "'method': 'JOINT_ELIGIBLE_COHORT_DATE_CLUSTER_BOOTSTRAP'" "$stress"
+          grep -F "'baselineRecomputedInsideEveryReplicate': True" "$stress"
+          grep -F "'inferentialProbabilityClaimAllowed': False" "$stress"
+          grep -F "'leaderWasSelectedAfterInspecting12DResults': True" "$stress"
+          grep -F "'stressClassificationIsIndependentReplicationEvidence': False" "$stress"
+          grep -F "'identitiesCollapsedAcrossHomeAwayRoles': True" "$stress"
+          grep -F "'identityType': identity_type" "$stress"
+          grep -F "'rolesCollapsed': True" "$stress"
+          grep -F "'canUpgrade12DStatisticalStatus': False" "$stress"
+          grep -F "'canProduceBetElite': False" "$stress"
+          grep -F "'canTuneAtomsOrThresholds': False" "$stress"
+          grep -F "'canDropBadMonthsTeamsPitchersOrDates': False" "$stress"
+          ! grep -E 'betElite(Label)?Produced:[[:space:]]*true|betEliteProduced[[:space:]]*=[[:space:]]*True|stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$freeze" "$acquire" "$validate" "$stress"
+          git diff --check
+
+      - name: Upload Step 12D/12E forward research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12d-forward-replication
+          path: artifacts/p0-step12d/
+          if-no-files-found: error
+          retention-days: 30

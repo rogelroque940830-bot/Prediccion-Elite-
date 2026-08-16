@@ -1,0 +1,85 @@
+name: Validate P0 Step 12Q 2022 Premium Preflight
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'research/p0-step12q-premium-interactions-frozen.json'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - '.github/workflows/validate-p0-step12q-2022-premium-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight-2022-premium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Validate final frozen premium manifest before 2022 scoring
+        run: |
+          python - <<'PY'
+          import json
+          p='research/p0-step12q-premium-interactions-frozen.json'
+          with open(p,encoding='utf-8') as f:m=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12q-premium-interactions-frozen.v2'
+          assert m['primaryCandidateId']=='PREMIUM_FG_HOME_TRIPLE_A'
+          assert len(m['candidates'])==6
+          assert all(len(c['atoms'])==3 for c in m['candidates'])
+          assert m['selectionHistory']['preflight2022UsedOutcomes'] is False
+          assert m['interactionContract']['thresholdRetuningAllowedAfterFreeze'] is False
+          assert m['interactionContract']['candidateSearchAllowedIn2022'] is False
+          assert m['interactionContract']['betEliteAllowed'] is False
+          p=m['finalConfirmationPolicy']
+          assert p['season']==2022 and p['familywiseCandidateCount']==6
+          assert p['minimumDecisiveRowsForPremium']==50
+          assert p['minimumDecisiveDatesForPremium']==35
+          assert p['minimumHitRateForPremium']==0.65
+          assert p['minimumLiftVsBaselineForPremium']==0.10
+          assert p['noThresholdChangesAfterSeeing2022'] is True
+          print('STEP12Q_FINAL_PRE_2022_MANIFEST_FROZEN_OK')
+          PY
+      - name: Syntax-check T-5 audit surface
+        run: node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+      - name: Audit 2022 T-5 data availability only
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2022-03-01 --end 2022-10-06 --concurrency 6
+          --out artifacts/p0-step12q/2022-preflight
+      - name: Validate 2022 preflight without opening premium outcomes
+        run: |
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12q/2022-preflight/t5-starter-identity-audit.json'
+          with open(p,encoding='utf-8') as f:r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12h-t5-starter-identity-audit.v1'
+          assert r['evidenceStatus']=='DIAGNOSTIC_ONLY_NO_PROMOTION'
+          assert r['interpretation']['thresholdRetuningAllowed'] is False
+          assert r['interpretation']['canProduceBetElite'] is False
+          assert r['counts']['validPregameSnapshots']>0
+          assert r['counts']['bothProbableCoveragePct']>=95.0
+          assert r['counts']['completeLineupAndBothProbablesPct']>=95.0
+          print({'ok':True,'counts':r['counts'],'premiumTargetsEvaluated':False})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload 2022 preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12q-2022-premium-preflight
+          path: artifacts/p0-step12q/
+          if-no-files-found: error
+          retention-days: 30

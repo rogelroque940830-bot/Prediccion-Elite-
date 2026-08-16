@@ -1,0 +1,99 @@
+name: Validate P0 Step 12P Multi-Market Familywise Audit
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12p-multimarket-familywise-audit.py'
+      - 'scripts/p0-step12n-multimarket-target-matrix.py'
+      - 'scripts/p0-step12o-multimarket-clean-discovery.py'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - 'scripts/p0-step12i-acquire-2025-clean-cohort.mjs'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - '.github/workflows/p0-step12p-multimarket-familywise-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-multimarket-familywise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check Step 12P chain
+        run: |
+          python -m py_compile scripts/p0-step12n-multimarket-target-matrix.py
+          python -m py_compile scripts/p0-step12o-multimarket-clean-discovery.py
+          python -m py_compile scripts/p0-step12p-multimarket-familywise-audit.py
+      - name: Acquire frozen 2025 clean cohort
+        run: >-
+          node --import tsx scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12p/cohort
+      - name: Audit 2025 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12p/audit
+      - name: Build clean T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12p/cohort/dataset.json
+          --starter-history artifacts/p0-step12p/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12p/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12p/audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12p/feature-table.json
+      - name: Build multi-market target matrix
+        run: >-
+          python scripts/p0-step12n-multimarket-target-matrix.py
+          --feature-table artifacts/p0-step12p/feature-table.json
+          --dataset artifacts/p0-step12p/cohort/dataset.json
+          --out artifacts/p0-step12p/target-matrix.json
+      - name: Freeze multi-market discovery family
+        run: >-
+          python scripts/p0-step12o-multimarket-clean-discovery.py
+          --matrix artifacts/p0-step12p/target-matrix.json
+          --out artifacts/p0-step12p/discovery.json
+      - name: Audit multiplicity overlap and stability
+        run: >-
+          python scripts/p0-step12p-multimarket-familywise-audit.py
+          --matrix artifacts/p0-step12p/target-matrix.json
+          --discovery artifacts/p0-step12p/discovery.json
+          --out artifacts/p0-step12p/familywise.json
+      - name: Validate Step 12P contract
+        run: |
+          python - <<'PY'
+          import json
+          with open('artifacts/p0-step12p/familywise.json',encoding='utf-8') as f:r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12p-multimarket-familywise-audit.v1'
+          assert r['permutations']==20000
+          assert r['familySize']==126
+          assert r['policy']['thresholdRetuning'] is False
+          assert r['policy']['holdoutSelection'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          print({'familySize':r['familySize'],'clusters':r['clusterCount'],'survivors':len(r['survivors'])})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12P evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12p-multimarket-familywise
+          path: artifacts/p0-step12p/
+          if-no-files-found: error
+          retention-days: 30

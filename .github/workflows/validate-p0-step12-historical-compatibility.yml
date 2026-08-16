@@ -1,0 +1,116 @@
+name: Validate P0 Step 12 Historical Compatibility
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'server/mlb-step12-historical-compatibility.ts'
+      - 'server/mlb-step12-historical-compatibility.test.ts'
+      - 'server/mlb-step12-historical-feature-table.ts'
+      - 'server/mlb-step12-historical-feature-table.test.ts'
+      - 'server/mlb-step12-pocket-evaluator.ts'
+      - 'server/mlb-step12-pocket-evaluator.test.ts'
+      - 'server/mlb-step12-pocket-validation.ts'
+      - 'server/mlb-step12-pocket-validation.test.ts'
+      - 'scripts/p0-step12-pocket-pilot.py'
+      - 'scripts/p0-step12-validate-pocket-pilot.mjs'
+      - 'evidence/p0-step12/2025-pocket-pilot.json'
+      - 'docs/P0_STEP12_HISTORICAL_ELITE_DISCOVERY.md'
+      - 'docs/P0_STEP12_ALIGNMENT_AUDIT.md'
+      - '.github/workflows/validate-p0-step12-historical-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Test Step 12 compatibility feature-table pocket and robust-validation boundaries
+        run: |
+          npx tsx --test server/mlb-step12-historical-compatibility.test.ts
+          npx tsx --test server/mlb-step12-historical-feature-table.test.ts
+          npx tsx --test server/mlb-step12-pocket-evaluator.test.ts
+          npx tsx --test server/mlb-step12-pocket-validation.test.ts
+          python -m py_compile scripts/p0-step12-pocket-pilot.py
+      - name: Type-check Step 12 research surface
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node
+          server/mlb-step12-historical-compatibility.ts server/mlb-step12-historical-compatibility.test.ts
+          server/mlb-step12-historical-feature-table.ts server/mlb-step12-historical-feature-table.test.ts
+          server/mlb-step12-pocket-evaluator.ts server/mlb-step12-pocket-evaluator.test.ts
+          server/mlb-step12-pocket-validation.ts server/mlb-step12-pocket-validation.test.ts
+      - name: Materialize robust validation report from frozen 2025 pilot
+        run: >-
+          node --import tsx scripts/p0-step12-validate-pocket-pilot.mjs
+          --input evidence/p0-step12/2025-pocket-pilot.json
+          --out artifacts/p0-step12-pocket-validation/validation-report.json
+      - name: Preserve backend regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Freeze research-only and volume-preserving boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          compat='server/mlb-step12-historical-compatibility.ts'
+          table='server/mlb-step12-historical-feature-table.ts'
+          pocket='server/mlb-step12-pocket-evaluator.ts'
+          validate='server/mlb-step12-pocket-validation.ts'
+          producer='scripts/p0-step12-pocket-pilot.py'
+          script='scripts/p0-step12-validate-pocket-pilot.mjs'
+          grep -F 'missingHistoricalPricesDoNotBlockSportingSignalDiscovery: true' "$compat"
+          grep -F 'missingHistoricalPricesBlockHistoricalEvClaims: true' "$compat"
+          grep -F 'highHitRatePocketsMayBeInvestigated: true' "$compat"
+          grep -F 'lowerHitRateStableSignalsRemainEligibleForResearch: true' "$compat"
+          grep -F 'qualityAndFrequencyMustBeReportedTogether: true' "$compat"
+          grep -F 'livePickFiltersChanged: false' "$compat" "$table" "$pocket" "$validate"
+          grep -F 'step11cCapturePopulationChanged: false' "$compat"
+          grep -F 'betEliteLabelProduced: false' "$compat" "$table" "$pocket" "$validate"
+          grep -F 'automaticBetPlacement: false' "$compat" "$table" "$pocket" "$validate"
+          grep -F 'randomShuffleAllowed: false' "$table"
+          grep -F 'pregameAsOfRequired: true' "$table"
+          grep -F 'outcomeFieldsAllowedAsFeatures: false' "$table"
+          grep -F 'thresholdsLearnedFromHoldoutAllowed: false' "$table"
+          grep -F 'highHitRatePocketSearchAllowedInDiscovery: true' "$table"
+          grep -F 'historicalPricesRequiredForSportingHitRateStudy: false' "$table"
+          grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$table"
+          grep -F 'ruleThresholdsMustComeFromDiscoveryOnly: true' "$pocket"
+          grep -F 'holdoutThresholdTuningAllowed: false' "$pocket" "$validate"
+          grep -F 'maximumAtomsPerRule: 3' "$pocket"
+          grep -F 'hitRateBandIsDescriptiveNotPromotion: true' "$pocket" "$validate"
+          grep -F 'pocketsBelow80RemainResearchEligible: true' "$pocket"
+          grep -F 'lowerHitRateStableSignalsRemainResearchEligible: true' "$validate"
+          grep -F 'sampleAndFrequencyAlwaysReported: true' "$pocket"
+          grep -F 'familywiseAlpha: 0.05' "$validate"
+          grep -F 'minimumHoldoutDecisiveRows: 80' "$validate"
+          grep -F 'minimumHoldoutDecisiveDates: 30' "$validate"
+          grep -F 'decisiveDatesRequiredForSufficiency: true' "$validate"
+          grep -F 'decisiveUniqueDates' "$producer"
+          grep -F "decisive_dates.add(r['officialDate'])" "$producer"
+          grep -F 'maximumAbsoluteDiscoveryHoldoutDrift: 0.15' "$validate"
+          grep -F 'exactHoldoutPValueRecomputedFromCounts: true' "$validate"
+          grep -F 'bonferroniParityRecomputedFromTopK: true' "$validate"
+          grep -F 'historicalPricesRequiredForSportingSupport: false' "$validate"
+          grep -F 'historicalPricesRequiredForHistoricalEvClaim: true' "$validate"
+          grep -F 'validationCriteriaWerePredeclaredBeforeThisReport: true' "$script"
+          ! grep -E 'stakeCalculated:[[:space:]]*true|automaticBetPlacement:[[:space:]]*true|realFinancialExposure:[[:space:]]*[1-9]' "$compat" "$table" "$pocket" "$validate" "$script"
+          git diff --check
+      - name: Upload Step 12C robust validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12-pocket-validation
+          path: artifacts/p0-step12-pocket-validation/
+          if-no-files-found: error
+          retention-days: 30

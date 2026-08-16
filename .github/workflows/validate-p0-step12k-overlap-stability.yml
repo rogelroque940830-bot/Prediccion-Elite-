@@ -1,0 +1,104 @@
+name: Validate P0 Step 12K Overlap Stability
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12k-overlap-stability.py'
+      - 'scripts/p0-step12j-clean-rediscovery.py'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - 'scripts/p0-step12i-acquire-2025-clean-cohort.mjs'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - '.github/workflows/validate-p0-step12k-overlap-stability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-step12k-overlap-stability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check Step 12K chain
+        run: |
+          node --check scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          node --check scripts/p0-step12h-t5-starter-identity-audit.mjs
+          python -m py_compile scripts/p0-step12i-clean-t5-feature-table.py
+          python -m py_compile scripts/p0-step12j-clean-rediscovery.py
+          python -m py_compile scripts/p0-step12k-overlap-stability.py
+      - name: Rebuild frozen 2025 clean cohort
+        run: >-
+          node --import tsx scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12k/cohort-2025-clean
+      - name: Reconstruct 2025 T-5 starter identity
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12k/t5-audit-2025
+      - name: Build clean T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12k/cohort-2025-clean/dataset.json
+          --starter-history artifacts/p0-step12k/cohort-2025-clean/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12k/cohort-2025-clean/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12k/t5-audit-2025/t5-starter-identity-audit.json
+          --out artifacts/p0-step12k/clean-t5-feature-table-2025.json
+      - name: Reproduce frozen 12J family
+        run: >-
+          python scripts/p0-step12j-clean-rediscovery.py
+          --feature-table artifacts/p0-step12k/clean-t5-feature-table-2025.json
+          --out artifacts/p0-step12k/clean-rediscovery-report.json
+      - name: Analyze overlap stability and family-wise multiplicity
+        run: >-
+          python scripts/p0-step12k-overlap-stability.py
+          --rediscovery artifacts/p0-step12k/clean-rediscovery-report.json
+          --feature-table artifacts/p0-step12k/clean-t5-feature-table-2025.json
+          --out artifacts/p0-step12k/overlap-stability-report.json
+      - name: Validate 12K research-only contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p='artifacts/p0-step12k/overlap-stability-report.json'
+          with open(p,encoding='utf-8') as f:r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12k-overlap-stability.v1'
+          assert r['source']['rediscoveryFamilySize']==20
+          assert r['multiplicity']['familySize']==20
+          assert r['multiplicity']['method']=='DATE_STRATIFIED_RANDOMIZATION_WITH_WESTFALL_YOUNG_MAXT'
+          assert r['multiplicity']['permutations']==20000
+          assert r['policy']['diagnosticOnly'] is True
+          assert r['policy']['holdoutUsedForRetuning'] is False
+          assert r['policy']['thresholdMutationAllowed'] is False
+          assert r['policy']['candidateMutationAllowed'] is False
+          assert r['policy']['automaticPromotionAllowed'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          assert len(r['overlap']['pairwise'])==190
+          print(json.dumps({'components':r['overlap']['componentCount'],'largest':r['overlap']['largestComponentSize'],
+                            'familyWiseSupported':sum(x['familyWiseSupported'] for x in r['multiplicity']['results'])},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload Step 12K evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12k-overlap-stability
+          path: artifacts/p0-step12k/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "courtedge-p0-step12q-premium-interactions-frozen.v2",
+  "evidenceStatus": "FINAL_PRE_2022_OUTCOME_FREEZE_AFTER_T5_PREFLIGHT_ONLY",
+  "selectionHistory": {
+    "discovery": "2025 through 2025-07-31",
+    "exploratoryValidationAlreadySeen": ["2025_POST_JUL31", "2023", "2026_YTD"],
+    "virginConfirmationReserved": "2022",
+    "preflight2022UsedOutcomes": false,
+    "warning": "2022 T-5 availability was audited before this final gate; no 2022 premium outcome was evaluated before this v2 freeze."
+  },
+  "interactionContract": {
+    "allCandidatesHaveExactlyThreeDistinctPregameFeatures": true,
+    "thresholdRetuningAllowedAfterFreeze": false,
+    "candidateSearchAllowedIn2022": false,
+    "historicalPricesUsed": false,
+    "betEliteAllowed": false
+  },
+  "primaryCandidateId": "PREMIUM_FG_HOME_TRIPLE_A",
+  "candidates": [
+    {
+      "id": "PREMIUM_FG_HOME_TRIPLE_A",
+      "target": "FULL_GAME:RESULT:HOME",
+      "role": "PRIMARY_PREMIUM_INTERACTION",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.09876543209876554}
+      ]
+    },
+    {
+      "id": "PREMIUM_FG_HOME_TRIPLE_A_BROAD",
+      "target": "FULL_GAME:RESULT:HOME",
+      "role": "PRIMARY_VOLUME_SIBLING_PREDECLARED_BEFORE_2022_SCORING",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "GTE", "threshold": 0.09999999999999998},
+        {"feature": "starter_kbb_adv", "operator": "GTE", "threshold": 0.02481042579422841},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329}
+      ]
+    },
+    {
+      "id": "PREMIUM_F3_HOME_TRIPLE_B",
+      "target": "FIRST_3:RESULT:HOME",
+      "role": "EARLY_CONTROL_INTERACTION",
+      "atoms": [
+        {"feature": "starter_runrisk_adv", "operator": "GTE", "threshold": 0.015382840768621358},
+        {"feature": "starter_hr_adv", "operator": "GTE", "threshold": 0.006396103065164477},
+        {"feature": "lineup_exposure_rate_adv", "operator": "GTE", "threshold": 0.06336336336336329}
+      ]
+    },
+    {
+      "id": "PREMIUM_F5_OVER45_TRIPLE_C",
+      "target": "FIRST_5:TOTAL:4.5:OVER",
+      "role": "F5_RUN_ENVIRONMENT_INTERACTION",
+      "atoms": [
+        {"feature": "team_rs10_diff", "operator": "LTE", "threshold": -0.8999999999999995},
+        {"feature": "starter_runrisk_adv", "operator": "LTE", "threshold": -0.02507565174873708},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": -0.026169596279787495}
+      ]
+    },
+    {
+      "id": "PREMIUM_FG_OVER85_TRIPLE_D",
+      "target": "FULL_GAME:TOTAL:8.5:OVER",
+      "role": "FULL_GAME_RUN_ENVIRONMENT_INTERACTION",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "LTE", "threshold": -0.19999999999999996},
+        {"feature": "starter_runrisk_adv", "operator": "LTE", "threshold": -0.02507565174873708},
+        {"feature": "starter_kbb_adv", "operator": "LTE", "threshold": -0.026169596279787495}
+      ]
+    },
+    {
+      "id": "PREMIUM_YRFI_TRIPLE_E",
+      "target": "FIRST_INNING:YRFI",
+      "role": "FIRST_INNING_RUN_ENVIRONMENT_INTERACTION",
+      "atoms": [
+        {"feature": "team_win10_diff", "operator": "LTE", "threshold": -0.29999999999999993},
+        {"feature": "team_ra10_adv", "operator": "LTE", "threshold": -1.3999999999999995},
+        {"feature": "lineup_exposure_rate_adv", "operator": "LTE", "threshold": -0.06256366813151897}
+      ]
+    }
+  ],
+  "finalConfirmationPolicy": {
+    "season": 2022,
+    "familywiseCandidateCount": 6,
+    "multiplicity": "HOLM_BONFERRONI_ACROSS_6_PREDECLARED_CANDIDATES",
+    "holmAlpha": 0.05,
+    "minimumDecisiveRowsForPremium": 50,
+    "minimumDecisiveDatesForPremium": 35,
+    "minimumHitRateForPremium": 0.65,
+    "minimumLiftVsBaselineForPremium": 0.10,
+    "requirePositiveIncrementalSynergyVsBestProperSubset": true,
+    "requirePositiveLeaveOneMonthOutLift": true,
+    "requirePositiveLeaveOneDateOutLift": true,
+    "test": "ONE_SIDED_CMH_STRATIFIED_BY_OFFICIAL_DATE",
+    "noThresholdChangesAfterSeeing2022": true,
+    "noBetElitePromotionFromHistoricalEvidenceAlone": true
+  }
+}

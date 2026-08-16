@@ -1,0 +1,93 @@
+name: Validate P0 Step 12N/O Multi-Market Discovery
+
+on:
+  pull_request:
+    branches:
+      - integration/p0-staging-secure
+    paths:
+      - 'scripts/p0-step12n-multimarket-target-matrix.py'
+      - 'scripts/p0-step12o-multimarket-clean-discovery.py'
+      - 'scripts/p0-step12i-clean-t5-feature-table.py'
+      - 'scripts/p0-step12i-acquire-2025-clean-cohort.mjs'
+      - 'scripts/p0-step12h-t5-starter-identity-audit.mjs'
+      - '.github/workflows/validate-p0-step12no-multimarket-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-multimarket-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Syntax-check research surfaces
+        run: |
+          python -m py_compile scripts/p0-step12n-multimarket-target-matrix.py
+          python -m py_compile scripts/p0-step12o-multimarket-clean-discovery.py
+      - name: Acquire frozen 2025 clean cohort
+        run: >-
+          node --import tsx scripts/p0-step12i-acquire-2025-clean-cohort.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12no/cohort
+      - name: Audit 2025 T-5 starter identities
+        run: >-
+          node --import tsx scripts/p0-step12h-t5-starter-identity-audit.mjs
+          --start 2025-03-01 --end 2025-10-01 --concurrency 6
+          --out artifacts/p0-step12no/audit
+      - name: Build clean T-5 feature table
+        run: >-
+          python scripts/p0-step12i-clean-t5-feature-table.py
+          --dataset artifacts/p0-step12no/cohort/dataset.json
+          --starter-history artifacts/p0-step12no/cohort/starting-pitcher-history.json
+          --lineup-history artifacts/p0-step12no/cohort/pregame-lineup-history.json
+          --t5-audit artifacts/p0-step12no/audit/t5-starter-identity-audit.json
+          --out artifacts/p0-step12no/feature-table.json
+      - name: Build multi-market target matrix
+        run: >-
+          python scripts/p0-step12n-multimarket-target-matrix.py
+          --feature-table artifacts/p0-step12no/feature-table.json
+          --dataset artifacts/p0-step12no/cohort/dataset.json
+          --out artifacts/p0-step12no/target-matrix.json
+      - name: Discover multi-market pockets from discovery only
+        run: >-
+          python scripts/p0-step12o-multimarket-clean-discovery.py
+          --matrix artifacts/p0-step12no/target-matrix.json
+          --out artifacts/p0-step12no/discovery.json
+      - name: Validate research-only contract
+        run: |
+          python - <<'PY'
+          import json
+          with open('artifacts/p0-step12no/target-matrix.json',encoding='utf-8') as f:m=json.load(f)
+          with open('artifacts/p0-step12no/discovery.json',encoding='utf-8') as f:r=json.load(f)
+          assert m['schemaVersion']=='courtedge-p0-step12n-multimarket-target-matrix.v1'
+          assert r['schemaVersion']=='courtedge-p0-step12o-multimarket-clean-discovery.v1'
+          assert len(r['searchContract']['targets'])==42
+          assert r['searchContract']['holdoutUsedForSelection'] is False
+          assert r['searchContract']['holdoutUsedForThresholdTuning'] is False
+          assert r['policy']['historicalPricesUsed'] is False
+          assert r['policy']['betEliteProduced'] is False
+          assert r['policy']['livePickFiltersChanged'] is False
+          assert r['policy']['step11cCapturePopulationChanged'] is False
+          print({'targets':len(r['searchContract']['targets']),'familySize':r['frozenFamilySize']})
+          PY
+      - name: Preserve live regressions
+        run: |
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Upload multi-market research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12no-multimarket-discovery
+          path: artifacts/p0-step12no/
+          if-no-files-found: error
+          retention-days: 30
