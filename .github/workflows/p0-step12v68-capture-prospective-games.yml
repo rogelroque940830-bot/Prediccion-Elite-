@@ -50,6 +50,9 @@ jobs:
           assert op['firstCanonicalGameCaptureImmutable'] is True
           assert op['serializedDataLedgerWritesRequired'] is True
           assert op['outcomesOrMarketPricesInPregameLedgerAllowed'] is False
+          text=open('.github/workflows/p0-step12v68-capture-prospective-games.yml').read()
+          assert 'ledger/v68/final/evaluation.json' in text
+          assert "steps.cohort.outputs.open == 'true'" in text
           print('V68_AUTOMATED_CAPTURE_BOUNDARY_VERIFIED')
           PY
 
@@ -75,7 +78,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check prospective cohort remains open
+        id: cohort
+        shell: bash
+        run: |
+          if test -s ledger/v68/final/evaluation.json; then
+            echo 'open=false' >> "$GITHUB_OUTPUT"
+            echo 'V68 single prospective evaluation already exists; capture ledger is permanently closed.'
+          else
+            echo 'open=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve MLB official date in Eastern time
+        if: steps.cohort.outputs.open == 'true'
         id: date
         shell: bash
         run: |
@@ -88,11 +103,11 @@ jobs:
           PY
 
       - name: Stop before first eligible official date
-        if: steps.date.outputs.eligible != 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible != 'true'
         run: echo 'V68 prospective capture is not eligible before 2026-08-17.'
 
       - name: Require immutable prior-date state
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +117,7 @@ jobs:
           }
 
       - name: Download immutable V16 control manifest
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true'
         uses: actions/download-artifact@v4
         with:
           name: p0-step12v16-pure-ml-f5-settlement-probability
@@ -112,7 +127,7 @@ jobs:
           run-id: 31704085189
 
       - name: Poll authoritative MLB feed for exact pregame-ready games
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true'
         id: source
         working-directory: code
         shell: bash
@@ -135,7 +150,7 @@ jobs:
           PY
 
       - name: Score V16 and frozen V68 before outcomes exist
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true'
         id: score
         working-directory: code
         shell: bash
@@ -161,7 +176,7 @@ jobs:
           PY
 
       - name: Preserve first source evidence and canonical probability ledger
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
         working-directory: code
         shell: bash
         run: |
@@ -196,7 +211,7 @@ jobs:
           PY
 
       - name: Commit only newly captured immutable games
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
         working-directory: ledger
         shell: bash
         run: |
