@@ -1,0 +1,183 @@
+name: P0 Step 12V68 Final Evaluation After Embargo
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '47 9 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-materialize-outcomes-after-embargo.py'
+      - 'scripts/p0-step12v68-fg-winner-prospective-evaluate.py'
+      - 'research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'
+      - '.github/workflows/p0-step12v68-final-evaluation-after-embargo.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: p0-step12v68-prospective-ledger
+  cancel-in-progress: false
+
+jobs:
+  validate-embargo-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove official outcome materializer cannot read outcomes before embargo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/p0-step12v68-materialize-outcomes-after-embargo.py \
+            scripts/p0-step12v68-fg-winner-prospective-evaluate.py
+          mkdir -p work
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          payload={
+            'schemaVersion':'courtedge-p0-step12v68-fg-winner-prospective-capture.v1',
+            'rows':[{'gamePk':9999991,'officialDate':'2026-08-17','homeTeamId':1,'awayTeamId':2}],
+          }
+          json.dump(payload,open('work/immature-capture.json','w'))
+          assert c['outcomeEmbargo']['minimumCanonicalGamesBeforeOutcomeScoring']==500
+          assert c['outcomeEmbargo']['minimumDistinctOfficialDatesBeforeOutcomeScoring']==30
+          PY
+          python scripts/p0-step12v68-materialize-outcomes-after-embargo.py \
+            --capture work/immature-capture.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --out work/immature-outcomes.json
+          python - <<'PY'
+          import json
+          x=json.load(open('work/immature-outcomes.json'))
+          assert x['scientificStatus']=='OUTCOMES_NOT_READ_BECAUSE_PROSPECTIVE_EMBARGO_NOT_MATURE'
+          assert x['outcomesRead'] is False
+          assert x['rows']==[]
+          print('V68_OUTCOME_ACQUISITION_EMBARGO_VERIFIED')
+          PY
+
+  evaluate-once-after-maturity:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout frozen V68 code from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout prospective data ledger branch
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check one-shot sentinel and capture availability
+        id: gate
+        shell: bash
+        run: |
+          if test -s ledger/v68/final/evaluation.json; then
+            echo 'done=true' >> "$GITHUB_OUTPUT"
+            echo 'capture=false' >> "$GITHUB_OUTPUT"
+          elif test -s ledger/v68/captures/canonical.json; then
+            echo 'done=false' >> "$GITHUB_OUTPUT"
+            echo 'capture=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'done=false' >> "$GITHUB_OUTPUT"
+            echo 'capture=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Materialize official outcomes only if the frozen embargo is mature
+        if: steps.gate.outputs.done != 'true' && steps.gate.outputs.capture == 'true'
+        id: outcomes
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          python scripts/p0-step12v68-materialize-outcomes-after-embargo.py \
+            --capture ../ledger/v68/captures/canonical.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --out ../work/outcomes.json \
+            --workers 8
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work/outcomes.json'))
+          mature=bool(x['captureMaturity']['mature'])
+          all_final=bool(x.get('allCapturedGamesOfficialFinal',False))
+          print(f'mature={str(mature).lower()}')
+          print(f'all_final={str(all_final).lower()}')
+          print(f'outcomes_read={str(bool(x["outcomesRead"])).lower()}')
+          PY
+
+      - name: Download immutable V16 control manifest after maturity only
+        if: steps.outcomes.outputs.mature == 'true' && steps.outcomes.outputs.all_final == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Run the single frozen primary V68 evaluation
+        if: steps.outcomes.outputs.mature == 'true' && steps.outcomes.outputs.all_final == 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-fg-winner-prospective-evaluate.py \
+            --capture ../ledger/v68/captures/canonical.json \
+            --outcomes ../work/outcomes.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest ../v16/pure-settlement-model-manifest.json \
+            --out ../work/evaluation.json
+          python - <<'PY'
+          import json,os
+          e=json.load(open('../work/evaluation.json'))
+          assert e['scientificStatus']=='SINGLE_PROSPECTIVE_EVALUATION_COMPLETED_AFTER_FROZEN_EMBARGO'
+          assert e['outcomesRead'] is True
+          assert e['captureMaturity']['canonicalGames']>=500
+          assert e['captureMaturity']['distinctOfficialDates']>=30
+          os.makedirs('../ledger/v68/final',exist_ok=True)
+          for src,dst in [('../work/outcomes.json','../ledger/v68/final/outcomes.json'),('../work/evaluation.json','../ledger/v68/final/evaluation.json')]:
+              open(dst,'wb').write(open(src,'rb').read())
+          receipt={
+            'schemaVersion':'courtedge-p0-step12v68-final-evaluation-receipt.v1',
+            'githubRunId':'${{ github.run_id }}',
+            'githubRunAttempt':'${{ github.run_attempt }}',
+            'classification':e['classification'],
+            'canonicalGames':e['captureMaturity']['canonicalGames'],
+            'distinctOfficialDates':e['captureMaturity']['distinctOfficialDates'],
+            'singlePrimaryEvaluation':True,
+            'researchOnly':True,
+            'realFinancialExposure':0,
+          }
+          open('../ledger/v68/final/receipt.json','w').write(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(receipt,indent=2))
+          PY
+
+      - name: Commit the one-and-only post-embargo evaluation
+        if: steps.outcomes.outputs.mature == 'true' && steps.outcomes.outputs.all_final == 'true'
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -s v68/final/evaluation.json || true
+          git config user.name 'court-edge-v68-research-bot'
+          git config user.email 'v68-research-bot@users.noreply.github.com'
+          git add v68/final
+          git diff --cached --quiet && exit 0
+          git commit -m 'V68: record single frozen prospective evaluation after embargo'
+          git push origin HEAD:data/p0-step12v68-prospective
