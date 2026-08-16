@@ -6,8 +6,10 @@ on:
     branches: [main]
     paths:
       - 'research/p0-step12v66-game-horizon-exposure-suite-contract.json'
+      - 'research/p0-step12v66-preoutcome-zero-variance-correction.json'
       - 'scripts/p0-step12v66-acquire-bullpen.py'
       - 'scripts/p0-step12v66-game-horizon-exposure-custody.py'
+      - 'scripts/p0-step12v66-run-custody.py'
       - '.github/workflows/validate-p0-step12v66-game-horizon-exposure-custody.yml'
 
 permissions:
@@ -53,12 +55,21 @@ jobs:
           assert c['statistics']['modelSearchAllowed'] is False
           assert c['policy']['betEliteAllowed'] is False
           assert c['policy']['realFinancialExposure']==0
+          z=json.load(open('research/p0-step12v66-preoutcome-zero-variance-correction.json'))
+          assert z['scientificStatus']=='FROZEN_TECHNICAL_CORRECTION_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS'
+          assert z['observedInWorkflowRunId']==31960945745
+          assert z['correction']['sourceSemanticsChanged'] is False
+          assert z['correction']['featureRemoved'] is False
+          assert z['outcomeBoundary']['v66OutcomeScorerExistedBeforeCorrection'] is False
+          assert z['outcomeBoundary']['v66OutcomeMetricsAvailableBeforeCorrection'] is False
+          assert z['outcomeBoundary']['postResultRetuning'] is False
           print('V66_PREOUTCOME_CONTRACT_CHRONOLOGY_VERIFIED')
           PY
       - name: Syntax check V66 custody code
         run: |
           python -m py_compile scripts/p0-step12v66-acquire-bullpen.py
           python -m py_compile scripts/p0-step12v66-game-horizon-exposure-custody.py
+          python -m py_compile scripts/p0-step12v66-run-custody.py
 
   acquire-2022-bullpen:
     needs: preflight
@@ -171,7 +182,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/p0-step12v66
-          python scripts/p0-step12v66-game-horizon-exposure-custody.py \
+          python scripts/p0-step12v66-run-custody.py \
             --control-root artifacts/p0-step12v-control \
             --step12v3-root artifacts/p0-step12v3 \
             --hands-root artifacts/p0-step12v60-custody \
@@ -203,11 +214,16 @@ jobs:
             for h in ('f3','f5','fg'):
               v=first.get(f'{side}_{h}_starter_share')
               assert v is None or 0.0<=float(v)<=1.0
+          q=r['qualityIndex']['2022TrainingScaler']
+          assert q['whiff']['zeroVarianceTraining'] is True
+          assert q['whiff']['rawScale']==0.0
+          assert q['whiff']['scale']==1.0
           print(json.dumps({
             'classification':r['classification'],
             'rowsBySeason':r['rowsBySeason'],
             'coverageBySeason':r['coverageBySeason'],
             'qualityCustodyBySeason':r['qualityCustodyBySeason'],
+            'qualityIndex':r['qualityIndex'],
             'bullpenSourcePacks':r['bullpenSourcePacks'],
             'outputSha256':r['output']['sha256']
           },indent=2))
@@ -215,7 +231,7 @@ jobs:
       - name: Verify research-only scope
         run: |
           set -euo pipefail
-          ! grep -E "betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]|automaticBetPlacementAllowed[^\n]*True" scripts/p0-step12v66-game-horizon-exposure-custody.py
+          ! grep -E "betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]|automaticBetPlacementAllowed[^\n]*True" scripts/p0-step12v66-game-horizon-exposure-custody.py scripts/p0-step12v66-run-custody.py
           git diff --check
       - name: Upload V66 pre-outcome custody
         uses: actions/upload-artifact@v4
