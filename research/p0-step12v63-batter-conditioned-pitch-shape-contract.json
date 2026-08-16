@@ -1,14 +1,21 @@
 {
   "schemaVersion": "courtedge-p0-step12v63-batter-conditioned-pitch-shape-contract.v1",
-  "contractRevision": 2,
+  "contractRevision": 3,
   "scientificStatus": "FROZEN_FINAL_BATTER_CONDITIONED_PITCH_SHAPE_WINNER_HYPOTHESIS_BEFORE_OUTCOME_SCORER",
-  "preOutcomeClarification": {
-    "performedBeforeV63WinnerOutcomeScorerExisted": true,
-    "reason": "Revision 2 makes the hierarchical shape-response anchor mathematically explicit before any V63 winner outcome scorer exists. The custody extractor can inspect telemetry coverage but contains no winner target and cannot produce winner-model metrics.",
-    "revision1CustodyExtractorMayAlreadyExist": true,
-    "custodyExtractorContainsWinnerTarget": false,
-    "custodyCoverageMayNotSelectFeaturesOrRetuneShapeGeometry": true
-  },
+  "preOutcomeCorrections": [
+    {
+      "revision": 2,
+      "performedBeforeV63WinnerOutcomeScorerExisted": true,
+      "reason": "Made the hierarchical shape-response anchor mathematically explicit before any V63 winner outcome scorer existed."
+    },
+    {
+      "revision": 3,
+      "performedBeforeV63WinnerOutcomeScorerExisted": true,
+      "reason": "Custody-only run 31928458791 showed that pitchData.coordinates.pfxX/pfxZ were populated for only about 28%/27% of recognized 2022 pitches, leaving only about 10% shape-complete custody. Without reading any V63 winner target or model metric, the movement source is corrected to the direct MLB pitchData.breaks horizontal and induced-vertical movement fields. Shape dimensions, bucket widths, kernel bandwidths, shrinkage, model, chronology and pass/fail rubric remain unchanged.",
+      "custodyRunContainsWinnerTarget": false,
+      "custodyRunMayNotSelectFeaturesOrRetuneGeometry": true
+    }
+  ],
   "objective": "Test whether the exact T-minus-5 lineup becomes more predictive of Full Game winner probability when each individual batter is evaluated against the opposing probable starter's strictly prior-date pitch shapes rather than only exact pitch-type labels or pitcher-level quality summaries. Pitch shape is frozen as exact pitch type plus velocity, horizontal movement, vertical movement and spin. The resulting batter-conditioned matchup signal is aggregated through the nine confirmed hitters into game-level winner probability, with certified V16 C4 preserved as the promotion control.",
   "parentEvidence": {
     "mainBaseSha": "f5273856e3e70b99448a5d915bd3252df705a853",
@@ -66,9 +73,9 @@
     "batterIdentitySource": "matchup.batter.id",
     "pitchTypeSource": "playEvents[].details.type.code",
     "velocitySource": "playEvents[].pitchData.startSpeed",
-    "horizontalMovementSource": "playEvents[].pitchData.coordinates.pfxX",
-    "verticalMovementSource": "playEvents[].pitchData.coordinates.pfxZ",
-    "movementSourceUnits": "FEET_CONVERTED_TO_INCHES_BY_MULTIPLYING_BY_12",
+    "horizontalMovementSource": "playEvents[].pitchData.breaks.breakHorizontal",
+    "verticalMovementSource": "playEvents[].pitchData.breaks.breakVerticalInduced",
+    "movementSourceUnits": "MLB_BREAKS_NATIVE_INCHES_NO_CONVERSION",
     "spinSource": "playEvents[].pitchData.breaks.spinRate",
     "hardHitSource": "playEvents[].hitData.launchSpeed>=95",
     "terminalPaShapeDefinition": "LAST_RECOGNIZED_SHAPE_COMPLETE_PITCH_EVENT_IN_COMPLETED_PLATE_APPEARANCE",
