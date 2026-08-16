@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-historical-replay-audit-spec.v1",
+  "specRevision": 1,
+  "scientificStatus": "FROZEN_RETROSPECTIVE_AUDIT_PLAN_BEFORE_REPLAY_SCORER_EXISTS",
+  "purpose": "Deep retrospective characterization of the already-frozen V68 Full Game winner model without changing, promoting, retuning, recalibrating, filtering, stopping, or otherwise influencing the prospectively frozen V68 confirmation experiment.",
+  "evidenceClass": "RETROSPECTIVE_ADAPTIVE_SELECTION_EVIDENCE_ONLY_NOT_INDEPENDENT_CONFIRMATION",
+  "parent": {
+    "mainShaAtAuditStart": "bbd5261f803486d0942c66e28a8b7c569d409748",
+    "v68Contract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+    "v68HypothesisKey": "CONTROL_PLUS_STARTER_QUALITY5_PLUS_EXPOSURE_FG_PLUS_QUALITY_X_EXPOSURE5",
+    "v68CandidateName": "V68_C4_PLUS_STARTER_QUALITY5_PLUS_FG_EXPOSURE_PLUS_QUALITY_X_EXPOSURE5",
+    "formalControl": "FROZEN_V16_C4"
+  },
+  "immutableInputs": {
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+      "containsOutcomeTargets": false
+    },
+    "v66WinnerScore": {
+      "workflowRunId": 31963437044,
+      "artifactId": 9267831427,
+      "artifactName": "p0-step12v66-f5-fullgame-winner",
+      "artifactDigest": "sha256:53c9d39746586c694b58a0a99822c8d79b440d8d79b57250a34077cae643c92d",
+      "use": "Prove exact V68 model-snapshot identity and historical metric parity with the frozen V66 no-bullpen diagnostic that motivated V68."
+    },
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "artifact2023": {"id": 9166404151, "name": "p0-step12v3-season-2023", "digest": "sha256:bdabd102dea36901f9636f73fc725b3557a628fcc5262339d93a686ad77ab445"},
+      "artifact2024": {"id": 9165877540, "name": "p0-step12v3-season-2024", "digest": "sha256:ca97f96838364708ed1bb740df164c3e5a0edd4b63541873fd9ed4dbef9d4367"},
+      "artifact2025": {"id": 9166353960, "name": "p0-step12v3-season-2025", "digest": "sha256:0ce9e7fdcc86160dfc70804c550f245a64760901d6a4f43799cfc1050198230f"},
+      "artifact2026Ytd": {"id": 9166093353, "name": "p0-step12v3-season-2026_YTD", "digest": "sha256:f05592f235cffe4e9fa68b96fa5f2385b8ec29d0b6ef0d3d4dd996cd4e2b55c5"}
+    },
+    "v16": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactName": "p0-step12v16-pure-ml-f5-settlement-probability",
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+      "manifestCanonicalSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+    }
+  },
+  "chronologyAndSeasons": {
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "calibrationSeasonMayBeReportedAsContext": true,
+    "2022OutcomePerformanceReported": false,
+    "sameDateFeatureUpdatesAllowed": false,
+    "futureDataAllowed": false
+  },
+  "modelIdentityChecks": {
+    "v68SnapshotMustEqualFrozenV66DiagnosticModel": true,
+    "v16ManifestMustMatchCanonicalSha256": true,
+    "v68FeatureSetMustRemainExactly15": true,
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "thresholdOptimizationAllowed": false,
+    "subsetSelectionAllowed": false
+  },
+  "primaryCharacterization": {
+    "metrics": ["LOG_LOSS", "BRIER", "ECE10", "ABSOLUTE_MEAN_PROBABILITY_GAP", "ROC_AUC", "ACCURACY_AT_0_5"],
+    "reportBySeason": true,
+    "reportCombined2024Through2026Ytd": true,
+    "improvementOrientation": "V16_MINUS_V68_SO_POSITIVE_IS_BETTER",
+    "pairedBootstrap": {
+      "unit": "OFFICIAL_DATE_CLUSTER",
+      "resamples": 10000,
+      "seed": 20260816,
+      "confidenceLevel": 0.95,
+      "metrics": ["LOG_LOSS_IMPROVEMENT", "BRIER_IMPROVEMENT"]
+    },
+    "dateLevelStability": {
+      "reportMeanAndMedianPairedImprovement": true,
+      "reportPositiveDateShare": true,
+      "reportDistinctOfficialDates": true
+    }
+  },
+  "fixedDiagnostics": {
+    "probabilityReliabilityBins": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    "v68ConfidenceDistanceFromHalfBins": [0.0, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.5],
+    "absoluteV68MinusV16ProbabilityShiftBins": [0.0, 0.0025, 0.005, 0.01, 0.02, 0.03, 0.05, 1.0],
+    "absoluteFgExposureAdvBins": [0.0, 0.01, 0.02, 0.04, 0.06, 0.1, 1.0],
+    "absoluteExpectedStarterOutsGapBins": [0.0, 0.5, 1.0, 2.0, 3.0, 100.0],
+    "absoluteStarterQualityIndexGapBins": [0.0, 0.25, 0.5, 1.0, 2.0, 100.0],
+    "reportMonthlyChronologicalTable": true,
+    "reportDecisionFlipsAtHalf": true,
+    "reportPerGameDirectionOfBrierChange": true,
+    "reportFeatureMissingnessForAll15FrozenFeatures": true,
+    "reportProbabilityShiftQuantiles": [0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 1.0]
+  },
+  "interpretationRules": {
+    "historicalReplayMayConfirmV68Prospectively": false,
+    "historicalReplayMayChangeProspectiveV68": false,
+    "historicalReplayMayCreateProductionPromotion": false,
+    "historicalReplayMayEstablishPositiveEv": false,
+    "smallSliceResultsAreExploratoryOnly": true,
+    "noPosthocThresholdOrSubsetMayBePromotedFromThisAudit": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "productionV16Changed": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
