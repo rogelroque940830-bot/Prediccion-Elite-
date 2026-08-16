@@ -1,0 +1,319 @@
+name: Validate P0 Step 12V60 Individual Lineup Platoon Winner
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v60-individual-lineup-platoon-winner-contract.json'
+      - 'scripts/p0-step12v60-acquire-pregame-hands.py'
+      - 'scripts/p0-step12v60-acquire-batter-hand-pbp.py'
+      - 'scripts/p0-step12v60-individual-lineup-platoon-winner.py'
+      - '.github/workflows/validate-p0-step12v60-individual-lineup-platoon-winner.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify V60 contract is frozen before outcome comparison
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v60-individual-lineup-platoon-winner-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v60-individual-lineup-platoon-winner-contract.v1'
+          assert c['parentEvidence']['mainBaseSha']=='102e01d26b351cc5705d6fcd6e2b2394e1c83628'
+          assert c['parentEvidence']['winnerAnatomyWorkflowRunId']==31649438822
+          assert c['parentEvidence']['step12v3WorkflowRunId']==31659518059
+          assert c['parentEvidence']['v8WorkflowRunId']==31666193156
+          assert c['parentEvidence']['v9WorkflowRunId']==31666803576
+          assert c['parentEvidence']['v16WorkflowRunId']==31704085189
+          assert c['parentEvidence']['v41WorkflowRunId']==31905076013
+          assert c['parentEvidence']['v58WorkflowRunId']==31918463429
+          assert c['parentEvidence']['v59WorkflowRunId']==31919170677
+          assert c['sportingTarget']['primaryTarget']=='FULL_GAME_HOME_WIN'
+          assert c['sportingTarget']['winnerProbabilityIsPrimaryProjectObjective'] is True
+          assert c['sportingTarget']['sportsbookPriceMayCreateSportsThesis'] is False
+          assert c['dataBoundary']['expectedRowsBySeason']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert c['dataBoundary']['sameDateHistoryAllowed'] is False
+          assert c['dataBoundary']['scoreWholeOfficialDateBeforeUpdatingAnySameDateState'] is True
+          assert c['pregameIdentityBoundary']['cutoff']=='T_MINUS_5_MINUTES'
+          assert c['pregameIdentityBoundary']['exactNineBattersPerTeamRequired'] is True
+          assert c['pregameIdentityBoundary']['probableStarterIdentityMustMatchFrozenT5Table'] is True
+          assert c['pregameIdentityBoundary']['finalBoxscoreLineupBackfillAllowed'] is False
+          assert c['pregameIdentityBoundary']['projectedLineupFallbackAllowed'] is False
+          assert c['pregameIdentityBoundary']['currentPlayerMetadataFallbackAllowed'] is False
+          assert c['pregameIdentityBoundary']['currentGamePlayByPlayMaySupplyStarterHand'] is False
+          assert c['historicalSplitCustody']['retainedUnit']=='PER_GAME_BATTER_BY_PITCHER_HAND_AGGREGATES'
+          assert c['historicalSplitCustody']['sameDateOutcomeMayTrainSameDate'] is False
+          assert c['historicalSplitCustody']['maximumExcludedPlateAppearanceShare']==0.005
+          assert c['control']['featureSetRequired']=='C4'
+          assert c['control']['featuresExactly']==['lineup_exposure_rate_adv','starter_kbb_adv','combined_team_rs10','team_rd10_diff']
+          assert c['genericLineupBenchmark']['featureCount']==5
+          assert c['playerPriorEngineering']['batterOverallRateShrinkagePriorPlateAppearances']==100
+          assert c['playerPriorEngineering']['batterVsHandShrinkagePriorPlateAppearances']==50
+          assert c['playerPriorEngineering']['lineupSlotWorkloadShrinkagePriorStarts']==20
+          assert c['platoonAdjustmentLayer']['featureCount']==5
+          assert c['challenger']['featureCount']==14
+          assert c['challenger']['l2Strength']==1.0
+          assert c['coverageGate']['minimumPregameStarterHandPairShareEachSeason']==0.98
+          assert c['coverageGate']['doNotDropRowsForMissingPregameHand'] is True
+          assert c['pairedBootstrap']['unit']=='OFFICIAL_DATE_CLUSTER'
+          assert c['pairedBootstrap']['resamples']==5000
+          assert c['pairedBootstrap']['seed']==20260816
+          for k in ['thresholdSearchAllowed','featureSearchAllowed','modelSearchAllowed','hyperparameterSearchAllowed','subsetMiningAllowed','homeAwaySubsetMiningAllowed','seasonExclusionAfterResultsAllowed','postResultRuleChangeAllowed','postResultFeatureAdditionAllowed','postResultFeatureRemovalAllowed','postResultShrinkageChangeAllowed']:
+              assert c['statistics'][k] is False,k
+          for k in ['productionMarketRegistryChangeAllowed','liveLookupAuthorizationChangeAllowed','liveMarketDiscoveryChangeAllowed','rankingChangeAllowed','stakeChangeAllowed','betEliteAllowed','finalRecommendationChangeAllowed','automaticBetPlacementAllowed','positiveEvClaimAllowed']:
+              assert c['policy'][k] is False,k
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V60_CONTRACT_FROZEN')
+          PY
+      - name: Syntax check V60 scripts
+        run: |
+          python -m py_compile scripts/p0-step12v60-acquire-pregame-hands.py
+          python -m py_compile scripts/p0-step12v60-acquire-batter-hand-pbp.py
+          python -m py_compile scripts/p0-step12v60-individual-lineup-platoon-winner.py
+
+  acquire-custody:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        season: ['2022','2023','2024','2025','2026_YTD']
+    name: custody-${{ matrix.season }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Acquire exact T-minus-5 probable-starter handedness
+        run: |
+          mkdir -p artifacts/p0-step12v60-${{ matrix.season }}
+          python scripts/p0-step12v60-acquire-pregame-hands.py \
+            --season '${{ matrix.season }}' \
+            --table 'artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json' \
+            --lineups 'artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json' \
+            --out 'artifacts/p0-step12v60-${{ matrix.season }}/pregame-hands-${{ matrix.season }}.json' \
+            --workers 6
+      - name: Acquire historical batter-by-pitcher-hand outcomes
+        run: |
+          python scripts/p0-step12v60-acquire-batter-hand-pbp.py \
+            --season '${{ matrix.season }}' \
+            --table 'artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json' \
+            --out 'artifacts/p0-step12v60-${{ matrix.season }}/batter-hand-${{ matrix.season }}.json' \
+            --workers 6
+      - name: Validate custody integrity without forcing favorable coverage
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          python - <<'PY'
+          import json,os
+          s=os.environ['SEASON']
+          c=json.load(open('research/p0-step12v60-individual-lineup-platoon-winner-contract.json'))
+          exp=c['dataBoundary']['expectedRowsBySeason'][s]
+          h=json.load(open(f'artifacts/p0-step12v60-{s}/pregame-hands-{s}.json'))
+          p=json.load(open(f'artifacts/p0-step12v60-{s}/batter-hand-{s}.json'))
+          assert h['schemaVersion']=='courtedge-p0-step12v60-pregame-starter-hands.v1'
+          assert h['gamesExpected']==exp and len(h['snapshots'])==exp
+          assert p['schemaVersion']=='courtedge-p0-step12v60-batter-hand-pbp.v1'
+          assert p['gamesExpected']==exp and p['gamesFetched']==exp and not p['failures']
+          denom=p['validPlateAppearances']+p['excludedPlateAppearances']
+          share=(p['excludedPlateAppearances']/denom) if denom else 0.0
+          assert share <= c['historicalSplitCustody']['maximumExcludedPlateAppearanceShare'], (s,share,p['excludedReasons'])
+          assert h['policy']['currentPlayerMetadataFallbackAllowed'] is False
+          assert h['policy']['currentGamePlayByPlayMaySupplyStarterHand'] is False
+          assert p['policy']['sameDateOutcomeMayTrainSameDate'] is False
+          print({'season':s,'expected':exp,'pregameHandUsable':h['usableGames'],'pregameHandShare':h['usableShare'],'handUnusableReasons':h['unusableReasons'],'validHistoricalPA':p['validPlateAppearances'],'excludedPA':p['excludedPlateAppearances'],'excludedShare':share})
+          PY
+      - name: Upload V60 season custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v60-matchup-custody-${{ matrix.season }}
+          path: artifacts/p0-step12v60-${{ matrix.season }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  score-winner:
+    needs: acquire-custody
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.17.0'
+      - name: Download frozen winner-anatomy control source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Download frozen T-minus-5 lineup lineage
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download certified batter outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v41-batter-historical-custody
+          path: artifacts/p0-step12v41
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31905076013
+      - name: Download certified V16 pure winner model
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/p0-step12v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Download frozen V58 additive-lineup benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v58-lineup-winner-incremental-value
+          path: artifacts/p0-step12v58
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31918463429
+      - name: Download frozen V59 lineup-starter benchmark
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v59-lineup-starter-interaction
+          path: artifacts/p0-step12v59
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31919170677
+      - name: Download all V60 season custody packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v60-matchup-custody-*
+          path: artifacts/p0-step12v60-custody
+          merge-multiple: true
+      - name: Verify immutable parent custody before scoring
+        run: |
+          python - <<'PY'
+          import hashlib,json,os
+          c=json.load(open('research/p0-step12v60-individual-lineup-platoon-winner-contract.json'))
+          v16=json.load(open('artifacts/p0-step12v16/pure-settlement-probability-report.json'))
+          m=json.load(open('artifacts/p0-step12v16/pure-settlement-model-manifest.json'))
+          v41=json.load(open('artifacts/p0-step12v41/batter-historical-custody-certification.json'))
+          v58=json.load(open('artifacts/p0-step12v58/lineup-winner-incremental-value-report.json'))
+          v59=json.load(open('artifacts/p0-step12v59/lineup-starter-interaction-report.json'))
+          assert v16['classification']==c['parentEvidence']['v16RequiredClassification']
+          assert v16['sourceRows']==c['dataBoundary']['expectedRowsBySeason']
+          raw=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(raw).hexdigest()==c['parentEvidence']['v16ManifestSha256']
+          assert m['modelVersion']=='rogel-pure-settlement-ml-f5-v1'
+          assert m['fullGame']['featureSet']=='C4'
+          assert m['fullGame']['preprocessor']['features']==c['control']['featuresExactly']
+          assert v41['classification']=='BATTER_HISTORICAL_CUSTODY_CERTIFIED_FOR_FUTURE_RESEARCH_TARGETS_ONLY'
+          assert v41['fiveSeasonCustodyDigest']==c['parentEvidence']['v41FiveSeasonCustodyDigest']
+          assert v58['classification']==c['parentEvidence']['v58FrozenClassification']
+          assert v59['classification']==c['parentEvidence']['v59FrozenClassification']
+          for s,n in c['dataBoundary']['expectedRowsBySeason'].items():
+              t=json.load(open(f'artifacts/p0-step12v-control/{s}/game-anatomy-feature-table.json'))
+              l=json.load(open(f'artifacts/p0-step12v3/{s}/game-anatomy-feature-table.json'))
+              assert sum(r.get('t5PregameValid') is True for r in t['rows'])==n
+              assert sum(r.get('t5PregameValid') is True for r in l['rows'])==n
+              assert os.path.getsize(f'artifacts/p0-step12v60-custody/pregame-hands-{s}.json')>0
+              assert os.path.getsize(f'artifacts/p0-step12v60-custody/batter-hand-{s}.json')>0
+          print('V60_PARENT_CUSTODY_VERIFIED')
+          PY
+      - name: Run frozen V60 individual hitter platoon winner experiment
+        run: |
+          mkdir -p artifacts/p0-step12v60
+          python scripts/p0-step12v60-individual-lineup-platoon-winner.py \
+            --control-root artifacts/p0-step12v-control \
+            --lineup-root artifacts/p0-step12v3 \
+            --batter-root artifacts/p0-step12v41 \
+            --custody-root artifacts/p0-step12v60-custody \
+            --v16-report artifacts/p0-step12v16/pure-settlement-probability-report.json \
+            --v16-manifest artifacts/p0-step12v16/pure-settlement-model-manifest.json \
+            --v58-report artifacts/p0-step12v58/lineup-winner-incremental-value-report.json \
+            --v59-report artifacts/p0-step12v59/lineup-starter-interaction-report.json \
+            --contract research/p0-step12v60-individual-lineup-platoon-winner-contract.json \
+            --out artifacts/p0-step12v60/individual-lineup-platoon-winner-report.json
+      - name: Validate V60 evidence without requiring a favorable result
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v60/individual-lineup-platoon-winner-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v60-individual-lineup-platoon-winner.v1'
+          assert r['classification'] in {'INDIVIDUAL_LINEUP_PLATOON_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH','INDIVIDUAL_LINEUP_PLATOON_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE','INDIVIDUAL_LINEUP_PLATOON_CUSTODY_INSUFFICIENT'}
+          assert isinstance(r['candidateRubricPassed'],bool)
+          assert isinstance(r['coverageGatePassed'],bool)
+          assert r['target']=='FULL_GAME_HOME_WIN'
+          assert r['data']['seasonRows']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['controlParity']['combinedAndBySeasonMetricsReproduced'] is True
+          assert r['controlParity']['manifestSha256']=='059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb'
+          assert r['features']['controlCount']==4
+          assert r['features']['genericLineupCount']==5
+          assert r['features']['platoonAdjustmentCount']==5
+          assert r['features']['challengerCount']==14
+          assert r['combinedEvaluation2024_2026Ytd']['rows']==6610
+          b=r['pairedDateBootstrapVsControl2024_2026Ytd']
+          assert b['unit']=='OFFICIAL_DATE_CLUSTER' and b['resamples']==5000 and b['distinctDates']>400
+          p=r['policy']
+          for k in ['sameDateOutcomeLeakageAllowed','futureGameDataAllowed','historicalPricesUsed','marketOddsUsedAsFeatures','featureSearchUsed','modelSearchUsed','hyperparameterSearchUsed','subsetMiningUsed','homeAwaySubsetMiningUsed','seasonExclusionAfterResultsUsed','postResultRuleChangeAllowed','postResultShrinkageChangeAllowed','v16ProductionChanged','productionMarketRegistryChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed','positiveEvEstablished']:
+              assert p[k] is False,k
+          assert p['realFinancialExposure']==0
+          print(json.dumps({'classification':r['classification'],'candidateRubricPassed':r['candidateRubricPassed'],'coverageGatePassed':r['coverageGatePassed'],'custody':r['data']['custody'],'combined':r['combinedEvaluation2024_2026Ytd']['improvementVsControl'],'bootstrapVsControl':r['pairedDateBootstrapVsControl2024_2026Ytd'],'bySeason':{s:v['improvementVsControl'] for s,v in r['evaluationBySeason'].items()},'vsV58':r['combinedEvaluation2024_2026Ytd']['improvementVsAdditiveBenchmark'],'vsV59':r['diagnostics']['improvementVsFrozenV59Combined'],'checks':r['candidateRubricChecks']},indent=2))
+          PY
+      - name: Preserve live regressions
+        run: |
+          npm ci
+          npx tsx --test server/mlb-operating-envelope-calibration.test.ts
+          npx tsx --test server/mlb-elite-evidence-ledger.test.ts
+          npm run build:backend
+      - name: Verify exact research-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "historicalPricesUsed':False" scripts/p0-step12v60-individual-lineup-platoon-winner.py
+          grep -F "betEliteAllowed':False" scripts/p0-step12v60-individual-lineup-platoon-winner.py
+          grep -F "realFinancialExposure':0" scripts/p0-step12v60-individual-lineup-platoon-winner.py
+          ! grep -E 'apiKey|automaticBetPlacementAllowed[^\n]*True|betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]' scripts/p0-step12v60-individual-lineup-platoon-winner.py
+          git diff --check
+      - name: Upload V60 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v60-individual-lineup-platoon-winner
+          path: artifacts/p0-step12v60/
+          if-no-files-found: error
+          retention-days: 30
