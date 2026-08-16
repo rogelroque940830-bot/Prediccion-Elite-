@@ -1,0 +1,223 @@
+{
+  "schemaVersion": "courtedge-p0-step12v61-individual-pitchmix-winner-contract.v1",
+  "scientificStatus": "FROZEN_INDIVIDUAL_BATTER_BY_SPECIFIC_STARTER_PITCHMIX_WINNER_HYPOTHESIS",
+  "objective": "Test whether exact T-minus-5 lineup identity becomes more predictive of Full Game winner probability when each hitter is evaluated against the opposing probable starter's strictly pregame pitch-family distribution and the hitter's strictly prior-date performance on plate appearances ending with those pitch families, while preserving the certified price-independent V16 C4 model as the promotion control.",
+  "parentEvidence": {
+    "mainBaseSha": "ddb497b1b33f99ea5650fa78b9295a9ce161867a",
+    "winnerAnatomyWorkflowRunId": 31649438822,
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "v12HistoricalPitchFamilyContractBranch": "research/p0-step12v12-pitchmix-lineup-matchup",
+    "v12HistoricalPitchFamilyContractCommit": "50b5b36dc99b2768f683aa997ed83db8c07bd45b",
+    "v16WorkflowRunId": 31704085189,
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "v16RequiredClassification": "PURE_SETTLEMENT_MODEL_ELIGIBLE_FOR_RUNTIME_RESEARCH_ADAPTER",
+    "v41WorkflowRunId": 31905076013,
+    "v41ArtifactId": 9252168716,
+    "v41FiveSeasonCustodyDigest": "bdacde2c684f0cb005516b3292bcdb4c70a9af971746dbd33159f78487a160a3",
+    "v58WorkflowRunId": 31918463429,
+    "v58ArtifactId": 9255620854,
+    "v58FrozenClassification": "LINEUP_WINNER_INCREMENTAL_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v59WorkflowRunId": 31919170677,
+    "v59ArtifactId": 9255820216,
+    "v59FrozenClassification": "LINEUP_STARTER_INTERACTION_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "v60WorkflowRunId": 31919873754,
+    "v60ArtifactId": 9256536823,
+    "v60ArtifactDigest": "sha256:7410bf1355b8d19e246f7ee20626440fe2beaa2bd2a68e66e400147b5d79da74",
+    "v60FrozenClassification": "INDIVIDUAL_LINEUP_PLATOON_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE"
+  },
+  "sportingTarget": {
+    "primaryTarget": "FULL_GAME_HOME_WIN",
+    "winnerProbabilityIsPrimaryProjectObjective": true,
+    "playerPropPromotionIsObjective": false,
+    "teamTotalPromotionIsObjective": false,
+    "sportsbookPriceMayCreateSportsThesis": false
+  },
+  "dataBoundary": {
+    "warmupSeason": "2021",
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "expectedRowsBySeason": {
+      "2022": 2398,
+      "2023": 2399,
+      "2024": 2406,
+      "2025": 2423,
+      "2026_YTD": 1781
+    },
+    "rollingLookbackDays": 365,
+    "sameDateHistoryAllowed": false,
+    "scoreWholeOfficialDateBeforeUpdatingAnySameDateState": true,
+    "crossSeasonRollingHistoryAllowed": true,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "pregameIdentityBoundary": {
+    "lineupSource": "CANONICAL_STEP12V3_T_MINUS_5_LINEUP_HISTORY",
+    "starterSource": "V60_EXACT_T_MINUS_5_PROBABLE_STARTER_CUSTODY",
+    "cutoff": "T_MINUS_5_MINUTES",
+    "exactNineBattersPerTeamRequired": true,
+    "probableStarterIdentityMustMatchFrozenT5Table": true,
+    "finalBoxscoreLineupBackfillAllowed": false,
+    "projectedLineupFallbackAllowed": false,
+    "postgameStarterSubstitutionAllowed": false,
+    "currentPlayerMetadataFallbackAllowed": false
+  },
+  "historicalPitchCustody": {
+    "source": "MLB_STATS_API_FINAL_PLAY_BY_PLAY",
+    "warmupGameUniverse": "2021_MLB_REGULAR_SEASON_FINAL_GAMES",
+    "targetGameUniverse": "CANONICAL_STEP12V3_GAMES_ONLY",
+    "pitcherIdentitySource": "matchup.pitcher.id",
+    "batterIdentitySource": "matchup.batter.id",
+    "pitchTypeSource": "playEvents[].details.type.code",
+    "terminalPitchFamilyDefinition": "LAST_MAPPED_IS_PITCH_EVENT_IN_COMPLETED_PLATE_APPEARANCE",
+    "sameDateOutcomeMayTrainSameDate": false,
+    "featureStateUpdatedOnlyAfterAllGamesOnOfficialDateAreScored": true,
+    "maximumTargetGameFetchFailureShareEachSeason": 0.002,
+    "minimumMappedPitchShareEachSeason": 0.90
+  },
+  "pitchFamilies": {
+    "FASTBALL": ["FF", "SI", "FC", "FA", "FT"],
+    "BREAKING": ["SL", "ST", "CU", "KC", "SV"],
+    "OFFSPEED": ["CH", "FS", "FO", "SC"]
+  },
+  "eventDefinitions": {
+    "hits": ["single", "double", "triple", "home_run"],
+    "totalBases": {"single": 1, "double": 2, "triple": 3, "home_run": 4},
+    "walks": ["walk", "intent_walk", "intentional_walk"],
+    "strikeouts": ["strikeout", "strikeout_double_play"],
+    "homeRuns": ["home_run"],
+    "plateAppearanceDenominator": "completed plate appearances with valid batter identity and at least one mapped pitch family; outcome is assigned to the final mapped pitch family"
+  },
+  "specificMatchupEngineering": {
+    "starterPitchMixLookbackDays": 365,
+    "starterPitchMixShrinkagePriorPitches": 250,
+    "starterPitchMixShrinkageAnchor": "LEAGUE_PREGAME_PITCH_FAMILY_SHARE_IN_SAME_365_DAY_WINDOW",
+    "batterGenericLookbackDays": 365,
+    "batterGenericShrinkagePriorPlateAppearances": 100,
+    "batterGenericShrinkageAnchor": "LEAGUE_PREGAME_TERMINAL_PA_RATE_IN_SAME_365_DAY_WINDOW",
+    "batterPitchFamilyLookbackDays": 365,
+    "batterPitchFamilyShrinkagePriorPlateAppearances": 50,
+    "batterPitchFamilyShrinkageAnchor": "THE_SAME_BATTER_GENERIC_PREGAME_RATE",
+    "lineupSlotWorkloadShrinkagePriorStarts": 20,
+    "lineupSlotExpectedPaDefinition": "REPRODUCE_FROZEN_V58_V60_TRAINING_CHRONOLOGY_AND_SLOT_WORKLOAD_SHRINKAGE",
+    "specificExpectedRateDefinition": "SUM_OVER_FASTBALL_BREAKING_OFFSPEED_OF_SHRUNK_STARTER_FAMILY_SHARE_TIMES_SHRUNK_BATTER_RATE_FOR_THAT_TERMINAL_PITCH_FAMILY",
+    "interactionAdjustmentDefinition": "SPECIFIC_EXPECTED_RATE_MINUS_SAME_BATTER_GENERIC_PREGAME_RATE",
+    "noOutcomeChosenReliabilityThreshold": true,
+    "starterPriorRationale": "250 pitches is inherited from the frozen Step 12V12 starter pitch-mix reliability scale and is frozen before V61 outcomes are read.",
+    "batterFamilyPriorRationale": "50 PA is inherited from the frozen V60 split reliability scale and is frozen before V61 outcomes are read."
+  },
+  "control": {
+    "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "featureSetRequired": "C4",
+    "featuresExactly": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "combined_team_rs10",
+      "team_rd10_diff"
+    ],
+    "featureCount": 4,
+    "metricParityAbsoluteTolerance": 1e-12
+  },
+  "genericLineupBenchmark": {
+    "definition": "Reproduce the frozen V58 generic lineup layer exactly before adding V61 interaction residuals.",
+    "gameLevelFeaturesExactly": [
+      "lineup_expected_hits_diff",
+      "lineup_expected_total_bases_diff",
+      "lineup_expected_walks_diff",
+      "lineup_expected_strikeouts_diff",
+      "lineup_expected_home_runs_diff"
+    ],
+    "featureCount": 5
+  },
+  "pitchMixAdjustmentLayer": {
+    "definition": "For each exact T-5 hitter, estimate the matchup residual created by the opposing probable starter's pregame FASTBALL/BREAKING/OFFSPEED distribution against the hitter's prior-date terminal-PA performance by those families, weight by frozen lineup-slot expected PA, sum the nine hitters, then take HOME minus AWAY.",
+    "featuresExactly": [
+      "lineup_pitchmix_hits_adjustment_diff",
+      "lineup_pitchmix_total_bases_adjustment_diff",
+      "lineup_pitchmix_walks_adjustment_diff",
+      "lineup_pitchmix_strikeouts_adjustment_diff",
+      "lineup_pitchmix_home_runs_adjustment_diff"
+    ],
+    "featureCount": 5,
+    "postResultFeatureSelectionAllowed": false,
+    "postResultPitchFamilyChangeAllowed": false,
+    "postResultSignFlipAllowed": false
+  },
+  "challenger": {
+    "featureSet": "V16_C4_PLUS_V58_GENERIC_LINEUP5_PLUS_V61_INDIVIDUAL_SPECIFIC_STARTER_PITCHMIX_ADJUSTMENT5",
+    "featureCount": 14,
+    "l2Strength": 1.0,
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "trainingOnlyMedianImputationAllowed": true,
+    "trainingOnlyStandardizationAllowed": true,
+    "modelFamily": "L2_LOGISTIC_REGRESSION_WITH_FROZEN_CALIBRATION_PROCEDURE",
+    "noModelFamilySearch": true,
+    "noHyperparameterSearch": true
+  },
+  "diagnosticBenchmarks": {
+    "v58": "COMBINED_PROPER_SCORES_ONLY_NO_TUNING",
+    "v59": "COMBINED_PROPER_SCORES_ONLY_NO_TUNING",
+    "v60": "COMBINED_PROPER_SCORES_ONLY_NO_TUNING",
+    "beatingAnyDiagnosticBenchmarkIsNotRequiredForPromotion": true
+  },
+  "coverageGate": {
+    "minimumPregameStarterIdentityPairShareEachTargetSeason": 0.98,
+    "minimumMappedPitchShareEachTargetSeason": 0.90,
+    "maximumTargetGameFetchFailureShareEachSeason": 0.002,
+    "doNotDropTargetRowsForMissingDerivedPitchmix": true,
+    "missingDerivedPitchmixRowsUseTrainingMedian": true,
+    "belowGateClassification": "INDIVIDUAL_SPECIFIC_PITCHMIX_CUSTODY_INSUFFICIENT"
+  },
+  "pairedBootstrap": {
+    "unit": "OFFICIAL_DATE_CLUSTER",
+    "resamples": 5000,
+    "seed": 20260816,
+    "confidenceLevel": 0.95
+  },
+  "candidateRubric": {
+    "passingClassification": "INDIVIDUAL_SPECIFIC_PITCHMIX_VALUE_CERTIFIED_FOR_NEXT_WINNER_MODEL_RESEARCH",
+    "failingClassification": "INDIVIDUAL_SPECIFIC_PITCHMIX_VALUE_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "ece10AbsoluteMaximum": 0.02,
+    "meanProbabilityGapComparisonTolerance": 0.002,
+    "requireCombinedLogLossImprovementVsC4": true,
+    "requireCombinedBrierImprovementVsC4": true,
+    "requireBootstrapLogLossLowerBoundPositive": true,
+    "requireBootstrapBrierLowerBoundPositive": true,
+    "requireAtLeastTwoOfThreeEvaluationSeasonsImproveBoth": true,
+    "requireNoEvaluationSeasonWorseOnBoth": true,
+    "beatV58CombinedProperScoresIsDiagnosticOnly": true,
+    "beatV59CombinedProperScoresIsDiagnosticOnly": true,
+    "beatV60CombinedProperScoresIsDiagnosticOnly": true
+  },
+  "statistics": {
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "homeAwaySubsetMiningAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultRuleChangeAllowed": false,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultFeatureRemovalAllowed": false,
+    "postResultShrinkageChangeAllowed": false,
+    "postResultLookbackChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "v16ProductionChanged": false,
+    "productionMarketRegistryChangeAllowed": false,
+    "liveLookupAuthorizationChangeAllowed": false,
+    "liveMarketDiscoveryChangeAllowed": false,
+    "rankingChangeAllowed": false,
+    "stakeChangeAllowed": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChangeAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvClaimAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
