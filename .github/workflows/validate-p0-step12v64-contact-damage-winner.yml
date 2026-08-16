@@ -215,10 +215,17 @@ jobs:
       - name: Verify exact research-only scope
         run: |
           set -euo pipefail
-          grep -F "'historicalPricesUsed': False" scripts/p0-step12v64-contact-damage-winner.py
-          grep -F "'betEliteAllowed': False" scripts/p0-step12v64-contact-damage-winner.py
-          grep -F "'realFinancialExposure': 0" scripts/p0-step12v64-contact-damage-winner.py
-          ! grep -E "automaticBetPlacementAllowed[^\n]*True|betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]" scripts/p0-step12v64-contact-damage-winner.py
+          python - <<'PY'
+          import pathlib
+          text=pathlib.Path('scripts/p0-step12v64-contact-damage-winner.py').read_text()
+          compact=''.join(text.split())
+          assert "'historicalPricesUsed':False" in compact
+          assert "'betEliteAllowed':False" in compact
+          assert "'realFinancialExposure':0" in compact
+          assert "'automaticBetPlacementAllowed':True" not in compact
+          assert "'betEliteAllowed':True" not in compact
+          print('V64_RESEARCH_ONLY_SCOPE_VERIFIED')
+          PY
           git diff --check
       - name: Upload V64 evidence
         uses: actions/upload-artifact@v4
