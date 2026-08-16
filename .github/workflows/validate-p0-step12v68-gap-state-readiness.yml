@@ -1,0 +1,89 @@
+name: Validate P0 Step 12V68 Gap State Readiness
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-build-gap-cohort.mjs'
+      - 'scripts/p0-step12v68-acquire-gap-pitch-quality.py'
+      - 'scripts/p0-step12v68-prospective-ledger.py'
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - '.github/workflows/validate-p0-step12v68-gap-state-readiness.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  real-gap-state-dry-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Node graph
+        run: npm ci --ignore-scripts
+      - name: Download frozen V68 source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+      - name: Rehearse real chronology-safe gap through 2026-08-15
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base work/gap work/ledger
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          BASE_ROOT="$(dirname "$TABLE")"
+          npx tsx scripts/p0-step12v68-build-gap-cohort.mjs \
+            --start 2026-08-11 \
+            --end 2026-08-15 \
+            --out work/gap \
+            --concurrency 4
+          python scripts/p0-step12v68-acquire-gap-pitch-quality.py \
+            --cohort-root work/gap \
+            --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/gap-pitch.json \
+            --workers 4
+          python scripts/p0-step12v68-prospective-ledger.py merge-gap \
+            --daily-root work/gap \
+            --daily-pitch work/gap-pitch.json \
+            --ledger-root work/ledger/gap
+          python scripts/p0-step12v68-prospective-source.py prepare \
+            --base-root "$BASE_ROOT" \
+            --v62-2025 frozen/v62-2025/pitch-quality-2025.json \
+            --v62-2026 frozen/v62-2026/pitch-quality-2026_YTD.json \
+            --gap-root work/ledger/gap \
+            --gap-pitch work/ledger/gap/pitch-quality-gap.json \
+            --target-date 2026-08-16 \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/state-2026-08-16.json
+          python - <<'PY'
+          import json
+          s=json.load(open('work/state-2026-08-16.json'))
+          g=json.load(open('work/ledger/gap/ledger-manifest.json'))
+          assert s['chronology']['historyStrictlyBeforeTargetDate'] is True
+          assert s['chronology']['sameDateOutcomesUsed'] is False
+          assert s['chronology']['latestHistoricalOfficialDate'] <= '2026-08-15'
+          assert g['firstOfficialDate'] >= '2026-08-11'
+          assert g['lastOfficialDate'] <= '2026-08-15'
+          assert g['officialGames'] > 0
+          assert g['canonicalT5EquivalentGames'] > 0
+          assert g['pitchQualityGames'] > 0
+          assert s['custody']['historicalOfficialGames'] > 1781
+          print('V68_REAL_GAP_AND_NEXT_DAY_STATE_REHEARSAL_PASSED')
+          print(json.dumps({'gap':g,'stateCustody':s['custody']},indent=2))
+          PY

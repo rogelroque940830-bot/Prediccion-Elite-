@@ -1,0 +1,94 @@
+name: Preserve P0 Step 12V68 Prospective Source Base
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/preserve-p0-step12v68-prospective-source-base.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/preserve-p0-step12v68-prospective-source-base.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preserve-frozen-source-base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download frozen Step12V3 2026 YTD base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2026_YTD
+          path: artifacts/v68-source/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download frozen V62 2025 pitch quality
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-2025
+          path: artifacts/v68-source/v62-2025
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download frozen V62 2026 YTD pitch quality
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-2026_YTD
+          path: artifacts/v68-source/v62-2026
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/v68-source/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Verify and manifest frozen identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/v68-source/step12v3/2026_YTD.tgz
+          test -s artifacts/v68-source/v62-2025/pitch-quality-2025.json
+          test -s artifacts/v68-source/v62-2026/pitch-quality-2026_YTD.json
+          test -s artifacts/v68-source/v16/pure-settlement-model-manifest.json
+          python - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('artifacts/v68-source')
+          m=json.load(open(root/'v16/pure-settlement-model-manifest.json'))
+          canonical=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(canonical).hexdigest()=='059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb'
+          files={}
+          for p in sorted(root.rglob('*')):
+            if p.is_file():files[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+          manifest={
+            'schemaVersion':'courtedge-p0-step12v68-frozen-source-base.v1',
+            'sourceParents':{
+              'step12v3':{'runId':31659518059,'artifactId':9166093353,'artifactDigest':'sha256:f05592f235cffe4e9fa68b96fa5f2385b8ec29d0b6ef0d3d4dd996cd4e2b55c5'},
+              'v62_2025':{'runId':31925270654,'artifactId':9257692826,'artifactDigest':'sha256:cc700a43a8d059d9d981c364bc24de91056b05900dffe5a94e4c2a511027855e'},
+              'v62_2026Ytd':{'runId':31925270654,'artifactId':9257688101,'artifactDigest':'sha256:7015e5563ec6ade8c7d676465165c8e14c936daffe73cb3e73794dbbedcd83f5'},
+              'v16':{'runId':31704085189,'artifactId':9182440949,'artifactDigest':'sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063'}
+            },
+            'fileSha256':files,
+            'retentionDays':90,
+            'researchOnly':True,
+          }
+          (root/'v68-frozen-source-base-manifest.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(manifest,indent=2))
+          PY
+      - name: Upload V68 frozen prospective source base
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: artifacts/v68-source/
+          if-no-files-found: error
+          retention-days: 90

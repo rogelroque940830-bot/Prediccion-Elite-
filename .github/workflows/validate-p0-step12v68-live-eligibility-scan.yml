@@ -1,0 +1,117 @@
+name: Validate P0 Step 12V68 Live Eligibility Scan
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-live-eligibility-scan.mjs'
+      - '.github/workflows/validate-p0-step12v68-live-eligibility-scan.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-live-eligibility-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Exercise strict live pregame eligibility gate on synthetic slate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v68-live-test
+          cat > artifacts/v68-live-test/slate.json <<'JSON'
+          {
+            "games": [
+              {
+                "gamePk": 9901001,
+                "officialDate": "2026-08-17",
+                "startTime": "2026-08-17T23:10:00Z",
+                "state": "PREGAME",
+                "readiness": "READY_TO_ANALYZE",
+                "lineupState": "CONFIRMED",
+                "homeLineupCount": 9,
+                "awayLineupCount": 9,
+                "homeTeam": {"id": 101},
+                "awayTeam": {"id": 102},
+                "homePitcher": {"id": 501, "confirmed": true},
+                "awayPitcher": {"id": 502, "confirmed": true},
+                "source": {"quality": "AUTHORITATIVE"}
+              },
+              {
+                "gamePk": 9901002,
+                "officialDate": "2026-08-17",
+                "startTime": "2026-08-17T23:20:00Z",
+                "state": "PREGAME",
+                "readiness": "PROVISIONAL_WAITING_FOR_LINEUPS",
+                "lineupState": "PARTIAL",
+                "homeLineupCount": 7,
+                "awayLineupCount": 9,
+                "homeTeam": {"id": 103},
+                "awayTeam": {"id": 104},
+                "homePitcher": {"id": 503, "confirmed": true},
+                "awayPitcher": {"id": 504, "confirmed": true},
+                "source": {"quality": "AUTHORITATIVE"}
+              },
+              {
+                "gamePk": 9901003,
+                "officialDate": "2026-08-17",
+                "startTime": "2026-08-17T22:00:00Z",
+                "state": "IN_PROGRESS",
+                "readiness": "GAME_ALREADY_STARTED",
+                "lineupState": "CONFIRMED",
+                "homeLineupCount": 9,
+                "awayLineupCount": 9,
+                "homeTeam": {"id": 105},
+                "awayTeam": {"id": 106},
+                "homePitcher": {"id": 505, "confirmed": true},
+                "awayPitcher": {"id": 506, "confirmed": true},
+                "source": {"quality": "AUTHORITATIVE"}
+              }
+            ]
+          }
+          JSON
+          node --import tsx scripts/p0-step12v68-live-eligibility-scan.mjs \
+            --slate-json artifacts/v68-live-test/slate.json \
+            --date 2026-08-17 \
+            --now 2026-08-17T22:55:00Z \
+            --max-minutes-before-start 75 \
+            --out artifacts/v68-live-test/scan.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('artifacts/v68-live-test/scan.json','utf8'));
+          if(x.schemaVersion!=='courtedge-p0-step12v68-live-eligibility-scan.v1') throw new Error('schema');
+          if(x.scientificStatus!=='LIVE_PREGAME_ELIGIBILITY_ONLY_NOT_YET_CANONICAL_V68_CAPTURE') throw new Error('status');
+          if(x.summary.eligibleNow!==1 || x.rows.length!==1 || x.rows[0].gamePk!==9901001) throw new Error('eligibility');
+          if(x.rows[0].containsOutcome!==false || x.rows[0].containsMarketPrice!==false) throw new Error('boundary');
+          if(x.policy.canonicalV68ProbabilitiesCaptured!==false || x.policy.realFinancialExposure!==0) throw new Error('policy');
+          const partial=x.skipped.find(r=>r.gamePk===9901002);
+          const started=x.skipped.find(r=>r.gamePk===9901003);
+          if(!partial || !partial.reasons.some(r=>r.includes('READINESS_')) || !partial.reasons.includes('LINEUP_NOT_CONFIRMED_9X9')) throw new Error('partial');
+          if(!started || !started.reasons.includes('NOT_STRICTLY_PREGAME') || !started.reasons.includes('STATE_IN_PROGRESS')) throw new Error('started');
+          console.log('V68_LIVE_ELIGIBILITY_FAIL_CLOSED_VERIFIED');
+          NODE
+      - name: Reject pre-freeze eligibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > artifacts/v68-live-test/prefreeze.json <<'JSON'
+          {"games":[{"gamePk":9901099,"officialDate":"2026-08-16","startTime":"2026-08-16T23:10:00Z","state":"PREGAME","readiness":"READY_TO_ANALYZE","lineupState":"CONFIRMED","homeLineupCount":9,"awayLineupCount":9,"homeTeam":{"id":101},"awayTeam":{"id":102},"homePitcher":{"id":501,"confirmed":true},"awayPitcher":{"id":502,"confirmed":true},"source":{"quality":"AUTHORITATIVE"}}]}
+          JSON
+          node --import tsx scripts/p0-step12v68-live-eligibility-scan.mjs \
+            --slate-json artifacts/v68-live-test/prefreeze.json \
+            --date 2026-08-16 --now 2026-08-16T22:55:00Z \
+            --out artifacts/v68-live-test/prefreeze-scan.json
+          node - <<'NODE'
+          const fs=require('fs'); const x=JSON.parse(fs.readFileSync('artifacts/v68-live-test/prefreeze-scan.json','utf8'));
+          if(x.summary.eligibleNow!==0) throw new Error('pre-freeze accepted');
+          if(!x.skipped[0].reasons.includes('PRE_FREEZE_DATE')) throw new Error('missing reason');
+          console.log('V68_LIVE_PRE_FREEZE_REJECTION_VERIFIED');
+          NODE
