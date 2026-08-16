@@ -1,0 +1,177 @@
+name: Validate P0 Step 12V66 Totals
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v66-game-horizon-exposure-suite-contract.json'
+      - 'research/p0-step12v66-f5-total-scoring-spec.json'
+      - 'research/p0-step12v66-fullgame-total-scoring-spec.json'
+      - 'scripts/p0-step12v66-totals.py'
+      - '.github/workflows/validate-p0-step12v66-totals.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify both total scoring freezes predate the scorer
+        run: |
+          set -euo pipefail
+          FREEZE=3cc219714eca317bacf086ba33120c9e0135ab77
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v66-f5-total-scoring-spec.json"
+          git cat-file -e "$FREEZE:research/p0-step12v66-fullgame-total-scoring-spec.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v66-totals.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v66-game-horizon-exposure-suite-contract.json'))
+          f=json.load(open('research/p0-step12v66-f5-total-scoring-spec.json'))
+          g=json.load(open('research/p0-step12v66-fullgame-total-scoring-spec.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS'
+          assert f['scientificStatus']=='FROZEN_F5_TOTAL_SCORING_SEMANTICS_BEFORE_FIRST_V66_F5_TOTAL_OUTCOME_SCORER'
+          assert g['scientificStatus']=='FROZEN_FULL_GAME_TOTAL_SCORING_SEMANTICS_BEFORE_FIRST_V66_FULL_GAME_TOTAL_OUTCOME_SCORER'
+          assert f['primaryCandidate']['featuresExactly']==c['totalMechanisticFeatures']['F5Exactly']
+          assert g['primaryCandidate']['featuresExactly']==c['totalMechanisticFeatures']['FULL_GAMEExactly']
+          assert f['formalBaseline']['fixedHalfRunLinesExactly']==[2.5,3.5,4.5,5.5,6.5]
+          assert g['formalBaseline']['fixedHalfRunLinesExactly']==[6.5,7.5,8.5,9.5,10.5]
+          assert f['primaryCandidate']['nb2DiagnosticUsed'] is False and g['primaryCandidate']['nb2DiagnosticUsed'] is False
+          assert f['policy']['betEliteAllowed'] is False and g['policy']['betEliteAllowed'] is False
+          print('V66_TOTALS_PREOUTCOME_SCORING_FREEZES_VERIFIED')
+          PY
+          python -m py_compile scripts/p0-step12v66-totals.py
+
+  score-totals:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen numerical dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2' 'scipy==1.18.0'
+      - name: Download frozen V66 predictor custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: artifacts/p0-step12v66
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+      - name: Download frozen V28 F5 outcomes
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v28-f5-total-baseline
+          path: artifacts/p0-step12v28
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896949764
+      - name: Download frozen V30 diagnostic reference
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v30-f5-total-no-retune-robustness
+          path: artifacts/p0-step12v30
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31897557943
+      - name: Download frozen Step12 full-game outcome source
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v-winner-anatomy-walkforward
+          path: artifacts/p0-step12v-control
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31649438822
+      - name: Verify immutable input custody
+        run: |
+          set -euo pipefail
+          test -s artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz
+          test -s artifacts/p0-step12v66/v66-custody-report.json
+          test -s artifacts/p0-step12v28/f5-outcomes.json
+          test -s artifacts/p0-step12v30/f5-total-no-retune-robustness-report.json
+          for s in 2022 2023 2024 2025 2026_YTD; do test -s "artifacts/p0-step12v-control/${s}/game-anatomy-feature-table.json"; done
+          python - <<'PY'
+          import json
+          c=json.load(open('artifacts/p0-step12v66/v66-custody-report.json'))
+          assert c['classification']=='V66_PREOUTCOME_CUSTODY_FROZEN_READY_FOR_SEPARATE_OUTCOME_SCORER'
+          assert c['rows']==11407 and c['output']['containsOutcomeTargets'] is False
+          f=json.load(open('artifacts/p0-step12v28/f5-outcomes.json'))
+          assert f['schemaVersion']=='courtedge-p0-step12v28-f5-outcomes.v1'
+          assert f['acquisition']['canonicalGames']==11407 and f['acquisition']['outcomeCompleteGames']==11405
+          v30=json.load(open('artifacts/p0-step12v30/f5-total-no-retune-robustness-report.json'))
+          assert v30['schemaVersion']=='courtedge-p0-step12v30-f5-total-no-retune-robustness.v1'
+          assert v30['classification']=='F5_TOTAL_NOT_ROBUST_ENOUGH_FOR_SHADOW_CLOSE_CURRENT_INFORMATION_SET'
+          for s in ('2022','2023','2024','2025','2026_YTD'):
+            x=json.load(open(f'artifacts/p0-step12v-control/{s}/game-anatomy-feature-table.json'))
+            assert x['schemaVersion']=='courtedge-p0-step12v-game-anatomy-feature-table.v1'
+          print('V66_TOTALS_INPUTS_VERIFIED')
+          PY
+      - name: Score predeclared F5 and Full Game total mechanisms
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-step12v66-totals
+          python scripts/p0-step12v66-totals.py \
+            --custody artifacts/p0-step12v66/v66-pregame-custody.jsonl.gz \
+            --f5-outcomes artifacts/p0-step12v28/f5-outcomes.json \
+            --fullgame-root artifacts/p0-step12v-control \
+            --v30-report artifacts/p0-step12v30/f5-total-no-retune-robustness-report.json \
+            --contract research/p0-step12v66-game-horizon-exposure-suite-contract.json \
+            --f5-spec research/p0-step12v66-f5-total-scoring-spec.json \
+            --fg-spec research/p0-step12v66-fullgame-total-scoring-spec.json \
+            --out artifacts/p0-step12v66-totals/v66-totals-report.json
+      - name: Validate independent total route decisions and research-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/p0-step12v66-totals/v66-totals-report.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v66-totals-score.v1'
+          assert r['scientificStatus']=='OUTCOME_SCORING_COMPLETED_WITH_PREDECLARED_TOTAL_MODELS_AND_GATES'
+          assert r['joins']['F5']['coverageShare']>=0.995
+          assert r['joins']['FULL_GAME']['coverageShare']==1.0
+          expected={
+            'V66_D_F5_TOTAL':{'V66_F5_TOTAL_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE','V66_D_F5_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE'},
+            'V66_E_FULL_GAME_TOTAL':{'V66_FULL_GAME_TOTAL_MECHANISM_CERTIFIED_FOR_NEXT_RESEARCH_STAGE','V66_E_FULL_GAME_TOTAL_NOT_ROBUST_ENOUGH_TO_ADVANCE'},
+          }
+          for k,v in r['routes'].items():
+            assert v['classification'] in expected[k]
+            assert len(v['pairedBootstrap']['poissonDevianceImprovement']['ci95'])==2
+            assert len(v['pairedBootstrap']['averageFixedLineBrierImprovement']['ci95'])==2
+          pol=r['policy']
+          for k in ('historicalPricesUsed','marketOddsUsedAsFeatures','positiveEvEstablished','v16ProductionChanged','routingChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed'):
+            assert pol[k] is False
+          assert pol['realFinancialExposure']==0
+          print(json.dumps({k:{
+            'classification':v['classification'],'passed':v['passed'],
+            'validation2023':{m:v['bySeason']['2023'][m] for m in ('poissonDevianceImprovement','averageFixedLineBrierImprovement','absoluteMeanRunBias','baselineAbsoluteMeanRunBias')},
+            'combined':{m:v['combinedEvaluation'][m] for m in ('poissonDevianceImprovement','averageFixedLineBrierImprovement','absoluteMeanRunBias','baselineAbsoluteMeanRunBias')},
+            'bySeason':{s:{m:v['bySeason'][s][m] for m in ('poissonDevianceImprovement','averageFixedLineBrierImprovement')} for s in ('2024','2025','2026_YTD')},
+            'bootstrap':v['pairedBootstrap'],'checks':v['promotionChecks']
+          } for k,v in r['routes'].items()},indent=2))
+          PY
+      - name: Verify no production policy changes
+        run: |
+          set -euo pipefail
+          git diff --check
+          ! grep -E "betEliteAllowed[^\n]*True|realFinancialExposure[^\n]*[1-9]|automaticBetPlacementAllowed[^\n]*True" scripts/p0-step12v66-totals.py
+      - name: Upload V66 total evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v66-totals
+          path: artifacts/p0-step12v66-totals/v66-totals-report.json
+          if-no-files-found: error
+          retention-days: 30

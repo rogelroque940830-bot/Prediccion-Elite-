@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "courtedge-p0-step12v66-f5-total-scoring-spec.v1",
+  "scientificStatus": "FROZEN_F5_TOTAL_SCORING_SEMANTICS_BEFORE_FIRST_V66_F5_TOTAL_OUTCOME_SCORER",
+  "route": "V66_D_F5_TOTAL",
+  "parentContract": "research/p0-step12v66-game-horizon-exposure-suite-contract.json",
+  "outcomeSource": {
+    "source": "FROZEN_V28_OFFICIAL_MLB_F5_LINESCORE_OUTCOMES",
+    "workflowRunId": 31896949764,
+    "artifactId": 9250077249,
+    "artifactDigest": "sha256:6ad4b42e1e87c595382856724e6706fefda12aea3d8892611fe8e47cee7e8a80",
+    "outcomeFile": "f5-outcomes.json",
+    "schema": "courtedge-p0-step12v28-f5-outcomes.v1",
+    "target": "HOME_RUNS_FIRST_5_PLUS_AWAY_RUNS_FIRST_5",
+    "joinIdentityExactly": ["gamePk", "officialDate", "homeTeamId", "awayTeamId", "season"],
+    "minimumCoverageShare": 0.995,
+    "knownCoverageShare": 0.9998246690628562,
+    "knownUnresolvedGamePks": [745873, 746402]
+  },
+  "formalBaseline": {
+    "trainingSeason": "2022",
+    "countMean": "EMPIRICAL_2022_F5_TOTAL_RUN_MEAN",
+    "fixedLineProbabilities": "EMPIRICAL_2022_P_F5_TOTAL_RUNS_GT_LINE",
+    "fixedHalfRunLinesExactly": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "pushesPossibleAtEvaluationLines": false
+  },
+  "primaryCandidate": {
+    "family": "POISSON_REGRESSION",
+    "alpha": 1.0,
+    "trainingSeason": "2022",
+    "validationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "featuresExactly": [
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "mean_f5_starter_share",
+      "min_f5_starter_share",
+      "combined_f5_expected_bullpen_share",
+      "quality_weighted_combined_f5_starter_share",
+      "bullpen_pitches_1d_combined_weighted_f5",
+      "bullpen_pitches_3d_combined_weighted_f5",
+      "bullpen_core3_pitches_2d_combined_weighted_f5",
+      "bullpen_b2b_arms_combined_weighted_f5"
+    ],
+    "featureCount": 10,
+    "trainingOnlyMedianImputation": true,
+    "trainingOnlyStandardization": true,
+    "zeroVarianceScale": 1.0,
+    "objective": "MEAN_POISSON_NEGATIVE_LOG_LIKELIHOOD_UP_TO_Y_CONSTANT_PLUS_ALPHA_OVER_2_L2_ON_STANDARDIZED_FEATURE_COEFFICIENTS_INTERCEPT_UNPENALIZED",
+    "solver": "SCIPY_L_BFGS_B",
+    "maxIter": 12000,
+    "primaryFixedLineProbability": "POISSON_SURVIVAL_PROBABILITY_P_Y_GT_LINE_FROM_FROZEN_POISSON_MEAN",
+    "nb2DiagnosticUsed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "evaluation": {
+    "primaryMetrics": ["MEAN_POISSON_DEVIANCE", "AVERAGE_FIXED_LINE_BRIER"],
+    "calibrationMetric": "ABSOLUTE_MEAN_RUN_BIAS",
+    "improvementOrientation": "FORMAL_BASELINE_LOSS_MINUS_CANDIDATE_LOSS_SO_POSITIVE_IS_BETTER",
+    "bootstrap": {
+      "unit": "OFFICIAL_DATE_CLUSTER",
+      "resamples": 5000,
+      "seed": 20260816,
+      "confidenceLevel": 0.95,
+      "combinedEvaluationOnly": "2024_PLUS_2025_PLUS_2026_YTD",
+      "clusterResampling": "SAMPLE_DISTINCT_OFFICIAL_DATES_WITH_REPLACEMENT_AND_RETAIN_ALL_GAMES_PER_SELECTED_DATE"
+    }
+  },
+  "promotionChecksExactly": [
+    "2023_POISSON_DEVIANCE_IMPROVEMENT_POSITIVE",
+    "2023_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_POSITIVE",
+    "COMBINED_2024_2026_YTD_POISSON_DEVIANCE_IMPROVEMENT_POSITIVE",
+    "COMBINED_2024_2026_YTD_AVERAGE_FIXED_LINE_BRIER_IMPROVEMENT_POSITIVE",
+    "BOOTSTRAP_POISSON_DEVIANCE_95CI_LOWER_BOUND_POSITIVE",
+    "BOOTSTRAP_AVERAGE_FIXED_LINE_BRIER_95CI_LOWER_BOUND_POSITIVE",
+    "AT_LEAST_TWO_OF_THREE_EVALUATION_SEASONS_IMPROVE_BOTH_PRIMARY_METRICS",
+    "NO_EVALUATION_SEASON_WORSE_ON_BOTH_PRIMARY_METRICS",
+    "COMBINED_ABSOLUTE_MEAN_RUN_BIAS_NOT_WORSE_THAN_FORMAL_BASELINE"
+  ],
+  "diagnosticReference": {
+    "source": "FROZEN_V30_F5_TOTAL_NO_RETUNE_ROBUSTNESS_REPORT",
+    "workflowRunId": 31897557943,
+    "artifactId": 9250233592,
+    "artifactDigest": "sha256:d50abbaf8fc4e3c12ee6596f1510780f905d988ab4a3134f7e2d762811d9e169",
+    "classification": "F5_TOTAL_NOT_ROBUST_ENOUGH_FOR_SHADOW_CLOSE_CURRENT_INFORMATION_SET",
+    "mayReplaceFormalBaselineOrPrimaryCandidate": false
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultFeatureChangeAllowed": false,
+    "postResultModelChangeAllowed": false,
+    "postResultMetricChangeAllowed": false,
+    "postResultControlChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "positiveEvEstablished": false,
+    "v16ProductionChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "finalRecommendationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
