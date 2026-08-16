@@ -1,0 +1,240 @@
+name: Validate P0 Step 12V68 FG Winner Prospective Confirmation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'
+      - 'scripts/p0-step12v68-fg-winner-prospective-capture.py'
+      - 'scripts/p0-step12v68-fg-winner-prospective-evaluate.py'
+      - '.github/workflows/validate-p0-step12v68-fg-winner-prospective-confirmation.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-freeze-and-embargo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify V68 contract predates every capture and outcome scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          FREEZE=baded9bf82bdb2891020cba1b31e77178d1e7cd2
+          git merge-base --is-ancestor "$FREEZE" HEAD
+          git cat-file -e "$FREEZE:research/p0-step12v68-fg-winner-prospective-confirmation-contract.json"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v68-fg-winner-prospective-capture.py"
+          ! git cat-file -e "$FREEZE:scripts/p0-step12v68-fg-winner-prospective-evaluate.py"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V68_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS'
+          assert c['versioning']['actualLabel']=='V68_FULL_GAME_WINNER_PROSPECTIVE_CONFIRMATION'
+          assert c['prospectiveCohort']['firstEligibleOfficialDate']=='2026-08-17'
+          assert c['outcomeEmbargo']['minimumCanonicalGamesBeforeOutcomeScoring']==500
+          assert c['outcomeEmbargo']['minimumDistinctOfficialDatesBeforeOutcomeScoring']==30
+          assert c['outcomeEmbargo']['interimOutcomePeekingAllowed'] is False
+          assert c['outcomeEmbargo']['singlePrimaryEvaluationAfterEmbargo'] is True
+          assert c['primaryCandidate']['featureCount']==15
+          assert c['primaryCandidate']['refitAllowed'] is False
+          assert c['primaryCandidate']['recalibrationAllowed'] is False
+          assert c['mechanism']['bullpenWorkloadFeaturesAllowed'] is False
+          assert c['mechanism']['bullpenQualityFeaturesAllowed'] is False
+          assert c['statistics']['historical2023Or2024_2026YtdMayDecideV68'] is False
+          assert c['policy']['v16ProductionChanged'] is False
+          assert c['policy']['betEliteAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V68_PRECAPTURE_CONTRACT_FREEZE_VERIFIED')
+          PY
+          python -m py_compile scripts/p0-step12v68-fg-winner-prospective-capture.py
+          python -m py_compile scripts/p0-step12v68-fg-winner-prospective-evaluate.py
+
+      - name: Install frozen evaluation dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.4.2'
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Verify frozen V16 manifest identity
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          p='artifacts/v16/pure-settlement-model-manifest.json'
+          m=json.load(open(p))
+          canonical=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(canonical).hexdigest()=='059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb'
+          assert m['modelVersion']=='rogel-pure-settlement-ml-f5-v1'
+          assert m['fullGame']['preprocessor']['features']==[
+            'lineup_exposure_rate_adv','starter_kbb_adv','combined_team_rs10','team_rd10_diff'
+          ]
+          print('V68_V16_CONTROL_MANIFEST_VERIFIED')
+          PY
+
+      - name: Exercise canonical prospective capture without outcomes or prices
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v68-test
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          f=c['primaryCandidate']['featuresExactly']
+          med=c['primaryCandidate']['modelSnapshot']['preprocessor']['medianImpute']
+          row={
+            'gamePk':9900001,'officialDate':'2026-08-17','homeTeamId':101,'awayTeamId':102,
+            'startTime':'2026-08-17T23:10:00Z','capturedAt':'2026-08-17T23:04:00Z',
+            'sourceCutoffAt':'2026-08-17T23:04:00Z',
+            'exactPregameLineupSemantics':True,'exactPregameProbableStarterSemantics':True,
+            'wholeOfficialDatePriorStateOnly':True,
+            'featureSource':'SYNTHETIC_CI_ONLY','sourceEvidenceDigest':'synthetic',
+            'features':{k:v for k,v in zip(f,med)},
+          }
+          json.dump({'rows':[row]},open('artifacts/v68-test/input.json','w'))
+          PY
+          python scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            --input artifacts/v68-test/input.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+            --out artifacts/v68-test/capture.json
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/v68-test/capture.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v68-fg-winner-prospective-capture.v1'
+          assert x['summary']['canonicalGames']==1
+          assert x['rows'][0]['containsOutcome'] is False
+          assert x['rows'][0]['containsMarketPrice'] is False
+          assert 0 < x['rows'][0]['v16']['homeWinProbability'] < 1
+          assert 0 < x['rows'][0]['v68']['homeWinProbability'] < 1
+          assert x['policy']['outcomesRead'] is False and x['policy']['pricesRead'] is False
+          print('V68_CAPTURE_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Prove immature evaluator does not open outcome source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-fg-winner-prospective-evaluate.py \
+            --capture artifacts/v68-test/capture.json \
+            --outcomes artifacts/v68-test/THIS_FILE_MUST_NOT_BE_OPENED.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+            --out artifacts/v68-test/immature.json
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/v68-test/immature.json'))
+          assert r['classification']=='V68_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE'
+          assert r['scientificStatus']=='OUTCOMES_NOT_READ_BECAUSE_PROSPECTIVE_EMBARGO_NOT_MATURE'
+          assert r['outcomesRead'] is False
+          print('V68_NO_INTERIM_OUTCOME_PEEKING_VERIFIED')
+          PY
+
+      - name: Exercise mature evaluation path on synthetic CI data only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,datetime
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          f=c['primaryCandidate']['featuresExactly']
+          med=c['primaryCandidate']['modelSnapshot']['preprocessor']['medianImpute']
+          rows=[]; outcomes=[]; start=datetime.date(2026,8,17)
+          for i in range(510):
+            d=start+datetime.timedelta(days=i%30); gp=9910000+i
+            feat={k:float(v) for k,v in zip(f,med)}
+            feat['team_rd10_diff']=(i%9-4)*0.2
+            rows.append({
+              'gamePk':gp,'officialDate':d.isoformat(),'homeTeamId':101+(i%15),'awayTeamId':201+(i%15),
+              'startTime':f'{d.isoformat()}T23:10:00Z','capturedAt':f'{d.isoformat()}T23:04:00Z',
+              'sourceCutoffAt':f'{d.isoformat()}T23:04:00Z',
+              'exactPregameLineupSemantics':True,'exactPregameProbableStarterSemantics':True,
+              'wholeOfficialDatePriorStateOnly':True,'featureSource':'SYNTHETIC_CI_ONLY',
+              'sourceEvidenceDigest':f'synthetic-{i}','features':feat,
+            })
+            home_runs=5 if i%2==0 else 3; away_runs=3 if i%2==0 else 5
+            outcomes.append({'gamePk':gp,'officialDate':d.isoformat(),'homeTeamId':101+(i%15),'awayTeamId':201+(i%15),'homeRuns':home_runs,'awayRuns':away_runs})
+          json.dump({'rows':rows},open('artifacts/v68-test/mature-input.json','w'))
+          json.dump({'rows':outcomes},open('artifacts/v68-test/synthetic-outcomes.json','w'))
+          PY
+          python scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            --input artifacts/v68-test/mature-input.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+            --out artifacts/v68-test/mature-capture.json
+          python scripts/p0-step12v68-fg-winner-prospective-evaluate.py \
+            --capture artifacts/v68-test/mature-capture.json \
+            --outcomes artifacts/v68-test/synthetic-outcomes.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+            --out artifacts/v68-test/mature-evaluation.json
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/v68-test/mature-evaluation.json'))
+          assert r['scientificStatus']=='SINGLE_PROSPECTIVE_EVALUATION_COMPLETED_AFTER_FROZEN_EMBARGO'
+          assert r['outcomesRead'] is True
+          assert r['captureMaturity']['canonicalGames']==510
+          assert r['captureMaturity']['distinctOfficialDates']==30
+          assert r['classification'] in {
+            'V68_FULL_GAME_WINNER_PROSPECTIVELY_CONFIRMED_FOR_NEXT_RESEARCH_STAGE',
+            'V68_FULL_GAME_WINNER_NOT_PROSPECTIVELY_CONFIRMED',
+          }
+          assert r['pairedBootstrap']['resamples']==5000
+          print('V68_SYNTHETIC_MATURE_EVALUATOR_PATH_VERIFIED')
+          PY
+
+      - name: Reject pre-freeze prospective rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          f=c['primaryCandidate']['featuresExactly']; med=c['primaryCandidate']['modelSnapshot']['preprocessor']['medianImpute']
+          row={'gamePk':9990001,'officialDate':'2026-08-16','homeTeamId':1,'awayTeamId':2,
+            'startTime':'2026-08-16T23:10:00Z','capturedAt':'2026-08-16T23:04:00Z','sourceCutoffAt':'2026-08-16T23:04:00Z',
+            'exactPregameLineupSemantics':True,'exactPregameProbableStarterSemantics':True,'wholeOfficialDatePriorStateOnly':True,
+            'features':{k:v for k,v in zip(f,med)}}
+          json.dump({'rows':[row]},open('artifacts/v68-test/prefreeze.json','w'))
+          PY
+          if python scripts/p0-step12v68-fg-winner-prospective-capture.py \
+              --input artifacts/v68-test/prefreeze.json \
+              --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+              --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+              --out artifacts/v68-test/should-not-exist.json; then
+            echo 'V68 accepted a pre-freeze game' >&2
+            exit 1
+          fi
+          echo 'V68_PRE_FREEZE_REJECTION_VERIFIED'
+
+      - name: Preserve zero-production-change policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          ! grep -E 'betEliteAllowed[^[:cntrl:]]*True|automaticBetPlacementAllowed[^[:cntrl:]]*True|realFinancialExposure[^[:cntrl:]]*[1-9]' \
+            scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            scripts/p0-step12v68-fg-winner-prospective-evaluate.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v68-fg-winner-prospective-confirmation-contract.json'))
+          p=c['policy']
+          assert all(p[k] is False for k in ('v16ProductionChanged','marketRegistryChanged','liveLookupAuthorizationChanged','routingChanged','rankingChanged','stakeChanged','betEliteAllowed','finalRecommendationChanged','automaticBetPlacementAllowed'))
+          assert p['realFinancialExposure']==0
+          print('V68_RESEARCH_ONLY_BOUNDARY_VERIFIED')
+          PY
