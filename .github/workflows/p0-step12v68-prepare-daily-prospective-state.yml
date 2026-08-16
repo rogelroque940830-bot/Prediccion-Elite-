@@ -1,0 +1,222 @@
+name: P0 Step 12V68 Prepare Daily Prospective State
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10-14 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - 'scripts/p0-step12v68-prospective-ledger.py'
+      - 'scripts/p0-step12v68-build-gap-cohort.mjs'
+      - 'scripts/p0-step12v68-acquire-gap-pitch-quality.py'
+      - 'research/p0-step12v68-prospective-source-manifests.json'
+      - '.github/workflows/p0-step12v68-prepare-daily-prospective-state.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: p0-step12v68-prospective-ledger
+  cancel-in-progress: false
+
+jobs:
+  validate-operational-boundary:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate V68 operational scripts and frozen boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/p0-step12v68-prospective-source.py \
+            scripts/p0-step12v68-prospective-ledger.py \
+            scripts/p0-step12v68-acquire-gap-pitch-quality.py
+          python - <<'PY'
+          import json
+          m=json.load(open('research/p0-step12v68-prospective-source-manifests.json'))
+          assert m['scientificStatus']=='FROZEN_SOURCE_ADAPTERS_BEFORE_FIRST_REAL_V68_PROSPECTIVE_CAPTURE'
+          op=m['operationalProspectiveCapture']
+          assert op['dataBranch']=='data/p0-step12v68-prospective'
+          assert op['preparedStateUsesOnlyOfficialDatesStrictlyBeforeTargetDate'] is True
+          assert op['preparedStateFirstWritePerOfficialDateImmutable'] is True
+          assert op['outcomesOrMarketPricesInPregameLedgerAllowed'] is False
+          assert m['policy']['realFinancialExposure']==0
+          print('V68_DAILY_STATE_OPERATIONAL_BOUNDARY_VERIFIED')
+          PY
+
+  prepare-daily-state:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout frozen V68 code from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout immutable prospective data ledger branch
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve target and required gap range
+        id: dates
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt, json, os
+          from zoneinfo import ZoneInfo
+          today=dt.datetime.now(ZoneInfo('America/New_York')).date()
+          yesterday=today-dt.timedelta(days=1)
+          manifest='../ledger/v68/gap/ledger-manifest.json'
+          start=dt.date(2026,8,11)
+          if os.path.exists(manifest):
+              m=json.load(open(manifest))
+              last=m.get('lastOfficialDate')
+              if last:
+                  start=dt.date.fromisoformat(last)+dt.timedelta(days=1)
+          print(f'target={today.isoformat()}')
+          print(f'yesterday={yesterday.isoformat()}')
+          print(f'gap_start={start.isoformat()}')
+          print(f'need_gap={str(start<=yesterday).lower()}')
+          print(f'eligible={str(today>=dt.date(2026,8,17)).lower()}')
+          PY
+
+      - name: Stop before first eligible official date
+        if: steps.dates.outputs.eligible != 'true'
+        run: echo 'V68 prospective state is not eligible before 2026-08-17.'
+
+      - name: Check whether immutable state already exists
+        if: steps.dates.outputs.eligible == 'true'
+        id: existing
+        shell: bash
+        run: |
+          if test -s "ledger/v68/states/${{ steps.dates.outputs.target }}.json"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Node dependencies for chronology-safe gap acquisition
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true' && steps.dates.outputs.need_gap == 'true'
+        working-directory: code
+        run: npm ci --ignore-scripts
+
+      - name: Download frozen V68 source base
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Expand frozen Step12V3 source base
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          BASE_ROOT="$(dirname "$TABLE")"
+          test -s "$BASE_ROOT/cohort/official-acquisition.json"
+          test -s "$BASE_ROOT/cohort/starting-pitcher-history.json"
+          test -s "$BASE_ROOT/cohort/pregame-lineup-history.json"
+          test -s "$BASE_ROOT/t5-audit/t5-starter-identity-audit.json"
+          echo "root=$BASE_ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire missing chronology-safe gap history
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true' && steps.dates.outputs.need_gap == 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work/daily-gap
+          npx tsx scripts/p0-step12v68-build-gap-cohort.mjs \
+            --start '${{ steps.dates.outputs.gap_start }}' \
+            --end '${{ steps.dates.outputs.yesterday }}' \
+            --out ../work/daily-gap \
+            --concurrency 4
+          python scripts/p0-step12v68-acquire-gap-pitch-quality.py \
+            --cohort-root ../work/daily-gap \
+            --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out ../work/daily-gap-pitch.json \
+            --workers 4
+
+      - name: Append gap sources to immutable cumulative ledger
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true' && steps.dates.outputs.need_gap == 'true'
+        working-directory: code
+        run: |
+          python scripts/p0-step12v68-prospective-ledger.py merge-gap \
+            --daily-root ../work/daily-gap \
+            --daily-pitch ../work/daily-gap-pitch.json \
+            --ledger-root ../ledger/v68/gap
+
+      - name: Build prior-date-only frozen feature state
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ../ledger/v68/gap/official-acquisition.json
+          test -s ../ledger/v68/gap/starting-pitcher-history.json
+          test -s ../ledger/v68/gap/pregame-lineup-history.json
+          test -s ../ledger/v68/gap/t5-starter-identity-audit.json
+          test -s ../ledger/v68/gap/pitch-quality-gap.json
+          python scripts/p0-step12v68-prospective-source.py prepare \
+            --base-root '../${{ steps.base.outputs.root }}' \
+            --v62-2025 ../frozen/v62-2025/pitch-quality-2025.json \
+            --v62-2026 ../frozen/v62-2026/pitch-quality-2026_YTD.json \
+            --gap-root ../ledger/v68/gap \
+            --gap-pitch ../ledger/v68/gap/pitch-quality-gap.json \
+            --target-date '${{ steps.dates.outputs.target }}' \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out ../work/state.json
+          python scripts/p0-step12v68-prospective-ledger.py install-state \
+            --input ../work/state.json \
+            --ledger-root ../ledger/v68 \
+            --date '${{ steps.dates.outputs.target }}'
+
+      - name: Commit first-write state and cumulative gap ledger
+        if: steps.dates.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet && test -z "$(git status --porcelain)"; then
+            echo 'No new V68 ledger state to commit.'
+            exit 0
+          fi
+          git config user.name 'court-edge-v68-research-bot'
+          git config user.email 'v68-research-bot@users.noreply.github.com'
+          git add v68/gap v68/states
+          git commit -m "V68 state ${{ steps.dates.outputs.target }}: freeze prior-date prospective inputs"
+          git push origin HEAD:data/p0-step12v68-prospective
