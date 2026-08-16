@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-prospective-source-manifests.v1",
+  "scientificStatus": "FROZEN_SOURCE_ADAPTERS_BEFORE_FIRST_REAL_V68_PROSPECTIVE_CAPTURE",
+  "parentContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "canonicalHistoricalBase": {
+    "workflowRunId": 31659518059,
+    "artifactId2026Ytd": 9166093353,
+    "artifactName2026Ytd": "p0-step12v3-season-2026_YTD",
+    "artifactDigest2026Ytd": "sha256:f05592f235cffe4e9fa68b96fa5f2385b8ec29d0b6ef0d3d4dd996cd4e2b55c5",
+    "frozenRangeEnd": "2026-08-10",
+    "canonicalT5Definition": "OFFICIAL_FINAL_GAME_INTERSECTION_WITH_T_MINUS_5_LINEUP_SNAPSHOT_WHERE_IDENTITY_OK_AND_SOURCE_HISTORICAL_AND_PREGAME_AND_LINEUP_COMPLETE",
+    "cutoffSecondsBeforeScheduledStart": 300,
+    "sameDateHistoryAllowed": false
+  },
+  "gapCanonicalization": {
+    "firstGapDate": "2026-08-11",
+    "officialGameSourceModule": "server/mlb-market-historical-source.ts",
+    "starterHistorySourceModule": "server/mlb-market-starting-pitcher-history.ts",
+    "lineupHistorySourceModule": "server/mlb-market-pregame-lineup-history.ts",
+    "lineupSourceVersionRequired": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4",
+    "t5AuditSemanticsSource": "FROZEN_STEP12H_T5_AUDIT_SEMANTICS",
+    "futureTargetDateExcluded": true,
+    "scoreWholeOfficialDateBeforeSameDateStateUpdate": true
+  },
+  "starterQuality": {
+    "contract": "research/p0-step12v62-pitch-quality-winner-contract.json",
+    "acquisitionImplementation": "scripts/p0-step12v62-acquire-pitch-quality.py",
+    "featureImplementation": "scripts/p0-step12v62-pitch-quality-winner.py::starter_quality",
+    "packSchema": "courtedge-p0-step12v62-pitch-quality-pbp.v1",
+    "lookbackDays": 365,
+    "artifact2025": {
+      "workflowRunId": 31925270654,
+      "artifactId": 9257692826,
+      "digest": "sha256:cc700a43a8d059d9d981c364bc24de91056b05900dffe5a94e4c2a511027855e",
+      "file": "pitch-quality-2025.json"
+    },
+    "artifact2026Ytd": {
+      "workflowRunId": 31925270654,
+      "artifactId": 9257688101,
+      "digest": "sha256:7015e5563ec6ade8c7d676465165c8e14c936daffe73cb3e73794dbbedcd83f5",
+      "file": "pitch-quality-2026_YTD.json",
+      "frozenRangeEnd": "2026-08-10"
+    },
+    "frozenWhiffSemanticsPreserved": true,
+    "whiffSourceCorrectionAllowedInsideV68": false,
+    "gameFeatureOrientation": "HOME_STARTER_QUALITY_MINUS_AWAY_STARTER_QUALITY"
+  },
+  "expectedStarterOuts": {
+    "contract": "research/p0-step12v39-pitcher-outs-baseline-contract.json",
+    "implementation": "scripts/p0-step12v39-pitcher-outs-baseline.py",
+    "modelFamily": "POISSON_REGRESSOR_ALPHA_1",
+    "fitSeason": "2022",
+    "featuresExactly": [
+      "pitcher_outs_per_start_shrunk",
+      "pitcher_bf_per_start_shrunk",
+      "pitcher_pitches_per_start_shrunk",
+      "pitcher_kbf_shrunk",
+      "pitcher_bbbf_shrunk",
+      "pitcher_erbf_shrunk",
+      "pitcher_recent5_outs_per_start",
+      "pitcher_recent5_pitches_per_start",
+      "opponent_vs_starters_outs_per_game_shrunk",
+      "opponent_rs10",
+      "opponent_lineup_continuity",
+      "pitcher_prior_starts"
+    ],
+    "intercept": 2.744740694633872,
+    "coefficients": [
+      0.020267278253949222,
+      0.021067992246530252,
+      -0.004602790140888043,
+      0.0077479405191903244,
+      -0.0041752323311302336,
+      -0.002599687206457183,
+      0.01940743060865778,
+      0.04836472135186163,
+      -0.005595854885672543,
+      -0.007573928518193434,
+      0.001898077179502012,
+      0.020933639462693998
+    ],
+    "medianImpute": [
+      15.412825018533262,
+      21.68806657124414,
+      84.4045634050022,
+      0.21499449608124652,
+      0.07683456050663819,
+      0.1029987395598155,
+      15.8,
+      87.4,
+      15.307954545454544,
+      4.211111111111112,
+      0.7777777777777778,
+      9.0
+    ],
+    "mean": [
+      15.465055990941428,
+      21.651538622092147,
+      83.97043140821603,
+      0.21819424167465346,
+      0.07756823989928466,
+      0.10329558079481943,
+      15.754012281069013,
+      85.52808247854303,
+      15.209859248182932,
+      4.298913444381312,
+      0.7467494708440909,
+      10.675319238015492
+    ],
+    "scale": [
+      1.447241373222674,
+      1.6900465350423275,
+      6.328557350421655,
+      0.03752812970492753,
+      0.018131849260105973,
+      0.021215389428418465,
+      2.7986648417855124,
+      12.06702981178793,
+      0.8341772803421766,
+      1.0646192444106428,
+      0.12036107192344651,
+      8.155612105847807
+    ],
+    "sourceEvidence": {
+      "v66CustodyWorkflowRunId": 31962659793,
+      "v66CustodyArtifactId": 9267784926,
+      "v66CustodyArtifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    },
+    "featureEngineering": {
+      "rateShrinkagePriorBattersFaced": 72,
+      "workloadShrinkagePriorStarts": 5,
+      "opponentWorkloadShrinkagePriorGames": 5,
+      "recentStartsWindow": 5,
+      "seasonHistoryReset": true,
+      "leaguePriorsCurrentSeasonStrictlyPriorDateOnly": true
+    }
+  },
+  "currentTargetC4": {
+    "slateSource": "server/mlb-p1-daily-slate.ts",
+    "materializerSource": "server/mlb-c4-certified-materializer.ts",
+    "featureBuilderSource": "server/mlb-c4-live-feature-builder.ts",
+    "requiresReadyToAnalyze": true,
+    "requiresConfirmedNineByNineLineups": true,
+    "requiresBothProbablePitchers": true,
+    "historicalSnapshotEndsPreviousOfficialDate": true,
+    "featuresExactly": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "combined_team_rs10",
+      "team_rd10_diff"
+    ]
+  },
+  "policy": {
+    "researchOnly": true,
+    "marketOddsUsedAsFeatures": false,
+    "outcomesAllowedInPregameCapture": false,
+    "currentMetadataBackfillForHistoricalT5IdentityAllowed": false,
+    "postCaptureFeatureRetuningAllowed": false,
+    "v16ProductionChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
