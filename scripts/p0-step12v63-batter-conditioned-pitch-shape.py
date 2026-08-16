@@ -44,8 +44,6 @@ def nested_add(d,k1,k2,src,fields,sign):
     if sign<0 and is_zero(rec,fields):
         del m[k2]
         if not m:del d[k1]
-def cell_get(d,k1,k2,cell):
-    return d.get(k1,{}).get(k2,{}).get(cell,zero(CELL_FIELDS))
 def cell_add(d,k1,k2,cell,src,sign):
     m=d.setdefault(k1,{});n=m.setdefault(k2,{})
     rec=n.setdefault(cell,zero(CELL_FIELDS));add_rec(rec,src,CELL_FIELDS,sign)
@@ -54,7 +52,6 @@ def cell_add(d,k1,k2,cell,src,sign):
         if not n:del m[k2]
         if not m:del d[k1]
 
-def league_cell_get(d,pt,cell):return d.get(pt,{}).get(cell,zero(CELL_FIELDS))
 def league_cell_add(d,pt,cell,src,sign):
     m=d.setdefault(pt,{});rec=m.setdefault(cell,zero(CELL_FIELDS));add_rec(rec,src,CELL_FIELDS,sign)
     if sign<0 and is_zero(rec,CELL_FIELDS):
@@ -114,39 +111,57 @@ def metric_prior(c,metric,den):
     if den=='swings':return float(c['batterShapeResponseEngineering']['genericShrinkagePrior']['swings'])
     return float(c['batterShapeResponseEngineering']['genericShrinkagePrior']['ballsInPlay'])
 
-def local_shape_rate(bid,pt,cent,metric,bg,bc,lg,lc,c):
-    _,num,den,prior_key,lo,hi=metric
+def shape_context(pt,cent,lg,lc,c):
     lgen=lg.get(pt)
-    if not lgen:return None,0.0
-    league_generic=rate(lgen,num,den)
-    if league_generic is None:return None,0.0
-    bgen=nested_get(bg,int(bid),pt,CELL_FIELDS);gp=metric_prior(c,metric,den)
-    batter_generic=shrink(bgen.get(num,0.0),bgen.get(den,0.0),league_generic,gp)
+    if not lgen:return None
+    league_generic={}
+    for name,num,den,_,_,_ in METRICS:
+        v=rate(lgen,num,den)
+        if v is None:return None
+        league_generic[name]=v
     bw=c['shapeCellEngineering']['bucketWidth'];band=c['shapeCellEngineering']['kernelBandwidth'];rad=int(c['shapeCellEngineering']['neighborRadiusCellsEachDimension'])
-    vals=(cent['velocityMph'],cent['horizontalMovementInches'],cent['verticalMovementInches'],cent['spinRpm']);widths=(float(bw['velocityMph']),float(bw['horizontalMovementInches']),float(bw['verticalMovementInches']),float(bw['spinRpm']));bands=(float(band['velocityMph']),float(band['horizontalMovementInches']),float(band['verticalMovementInches']),float(band['spinRpm']))
-    base=tuple(int(math.floor(v/w)) for v,w in zip(vals,widths));bn=bd=ln=ld=0.0
+    vals=(cent['velocityMph'],cent['horizontalMovementInches'],cent['verticalMovementInches'],cent['spinRpm'])
+    widths=(float(bw['velocityMph']),float(bw['horizontalMovementInches']),float(bw['verticalMovementInches']),float(bw['spinRpm']))
+    bands=(float(band['velocityMph']),float(band['horizontalMovementInches']),float(band['verticalMovementInches']),float(band['spinRpm']))
+    base=tuple(int(math.floor(v/w)) for v,w in zip(vals,widths));neighbors=[]
+    league_num={m[0]:0.0 for m in METRICS};league_den={m[0]:0.0 for m in METRICS};lmap=lc.get(pt,{})
     for offs in itertools.product(range(-rad,rad+1),repeat=4):
-        cell=tuple(b+o for b,o in zip(base,offs));center=tuple((x+0.5)*w for x,w in zip(cell,widths));dist=sum(((x-v)/h)**2 for x,v,h in zip(center,vals,bands));kw=math.exp(-0.5*dist)
-        br=cell_get(bc,int(bid),pt,cell);lr=league_cell_get(lc,pt,cell)
-        bn+=kw*float(br.get(num,0.0));bd+=kw*float(br.get(den,0.0));ln+=kw*float(lr.get(num,0.0));ld+=kw*float(lr.get(den,0.0))
-    league_local=ln/ld if ld>0 else league_generic
-    anchor=clip(batter_generic+league_local-league_generic,lo,hi)
-    sp=float(c['batterShapeResponseEngineering']['shapeSpecificShrinkagePrior'][prior_key]);final=(bn+sp*anchor)/(bd+sp)
-    return clip(final,lo,hi),bd
+        cell=tuple(b+o for b,o in zip(base,offs));center=tuple((x+0.5)*w for x,w in zip(cell,widths));dist=sum(((x-v)/h)**2 for x,v,h in zip(center,vals,bands));kw=math.exp(-0.5*dist);neighbors.append((cell,kw));lr=lmap.get(cell)
+        if lr is None:continue
+        for name,num,den,_,_,_ in METRICS:
+            league_num[name]+=kw*float(lr.get(num,0.0));league_den[name]+=kw*float(lr.get(den,0.0))
+    league_local={name:(league_num[name]/league_den[name] if league_den[name]>0 else league_generic[name]) for name,_,_,_,_,_ in METRICS}
+    return {'neighbors':neighbors,'leagueGeneric':league_generic,'leagueLocal':league_local}
+
+def local_shape_rates(bid,pt,ctx,bg,bc,c):
+    bgen=nested_get(bg,int(bid),pt,CELL_FIELDS);bmap=bc.get(int(bid),{}).get(pt,{})
+    bnum={m[0]:0.0 for m in METRICS};bden={m[0]:0.0 for m in METRICS}
+    for cell,kw in ctx['neighbors']:
+        br=bmap.get(cell)
+        if br is None:continue
+        for name,num,den,_,_,_ in METRICS:
+            bnum[name]+=kw*float(br.get(num,0.0));bden[name]+=kw*float(br.get(den,0.0))
+    values={};exposure=[]
+    for met in METRICS:
+        name,num,den,prior_key,lo,hi=met;league_generic=ctx['leagueGeneric'][name];gp=metric_prior(c,met,den);batter_generic=shrink(bgen.get(num,0.0),bgen.get(den,0.0),league_generic,gp);anchor=clip(batter_generic+ctx['leagueLocal'][name]-league_generic,lo,hi);sp=float(c['batterShapeResponseEngineering']['shapeSpecificShrinkagePrior'][prior_key]);final=(bnum[name]+sp*anchor)/(bden[name]+sp);values[name]=clip(final,lo,hi);exposure.append(bden[name])
+    return values,exposure
 
 def team_shape(ids,epas,starter_id,ps,bg,bc,lp,lg,lc,c):
     if any(x is None for x in epas):return None,{'missingSlotExpectedPa':True}
     shape,diag=starter_shape(starter_id,ps,lp,c)
     if shape is None:return None,diag
+    contexts={}
+    for pt,u,cent in shape:
+        ctx=shape_context(pt,cent,lg,lc,c)
+        if ctx is None:return None,{**diag,'missingLeaguePitchTypeAnchor':pt}
+        contexts[pt]=(u,ctx)
     totals={m[0]:0.0 for m in METRICS};local_exposure=[];total_epa=sum(float(x) for x in epas)
     if total_epa<=0:return None,{**diag,'missingSlotExpectedPa':True}
     for bid,epa in zip(ids,epas):
         per={m[0]:0.0 for m in METRICS}
-        for pt,u,cent in shape:
-            for met in METRICS:
-                val,loc=local_shape_rate(bid,pt,cent,met,bg,bc,lg,lc,c)
-                if val is None:return None,{**diag,'missingLeaguePitchTypeAnchor':pt}
-                per[met[0]]+=u*val;local_exposure.append(loc)
+        for pt,u,_ in shape:
+            vals,locs=local_shape_rates(bid,pt,contexts[pt][1],bg,bc,c);local_exposure.extend(locs)
+            for name in per:per[name]+=u*vals[name]
         for name in ('hitsPerPa','totalBasesPerPa','strikeoutsPerPa','homeRunsPerPa'):totals[name]+=per[name]*float(epa)
         for name in ('whiffPerSwing','hardHitPerBallInPlay'):totals[name]+=per[name]*float(epa)/total_epa
     diag={**diag,'meanKernelWeightedBatterLocalDenominator':float(np.mean(local_exposure)) if local_exposure else 0.0}
