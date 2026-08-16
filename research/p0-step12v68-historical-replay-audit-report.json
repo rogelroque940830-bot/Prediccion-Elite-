@@ -1,0 +1,316 @@
+{
+  "boundaries": {
+    "2022OutcomePerformanceReported": false,
+    "2023Role": "FROZEN_CALIBRATION_SEASON_CONTEXT_ONLY_AND_ADAPTIVE_SELECTION_EVIDENCE",
+    "2024Through2026YtdRole": "RETROSPECTIVE_CHARACTERIZATION_ONLY",
+    "positiveEvEstablished": false,
+    "productionPromotionAllowed": false,
+    "prospectiveV68MayBeChangedByThisAudit": false,
+    "prospectiveV68MayBeConfirmedByThisAudit": false
+  },
+  "classification": "V68_HISTORICAL_REPLAY_COMPLETED_RETROSPECTIVE_CHARACTERIZATION_ONLY",
+  "combinedEvaluation2024_2026Ytd": {
+    "delta": {
+      "absoluteMeanProbabilityGapChangePositiveMeansLower": 0.000492126020678052,
+      "accuracyAt0_5Change": 0.0001512859304084735,
+      "brierImprovement": 0.00020536447863281349,
+      "ece10ChangePositiveMeansLower": 0.0004921260206779497,
+      "logLossImprovement": 0.0004540532490397986,
+      "rocAucChange": -0.0003271635134751705
+    },
+    "v16": {
+      "absoluteMeanProbabilityGap": 0.013594012297387992,
+      "accuracyAt0_5": 0.5532526475037821,
+      "brier": 0.24534486846517414,
+      "ece10": 0.013594012297387882,
+      "logLoss": 0.6837094013428716,
+      "meanPredictedHome": 0.5172683175059403,
+      "n": 6610,
+      "observedHomeRate": 0.5308623298033283,
+      "rocAuc": 0.5692288562997678
+    },
+    "v68": {
+      "absoluteMeanProbabilityGap": 0.01310188627670994,
+      "accuracyAt0_5": 0.5534039334341906,
+      "brier": 0.24513950398654133,
+      "ece10": 0.013101886276709933,
+      "logLoss": 0.6832553480938318,
+      "meanPredictedHome": 0.5177604435266183,
+      "n": 6610,
+      "observedHomeRate": 0.5308623298033283,
+      "rocAuc": 0.5689016927862927
+    }
+  },
+  "evaluationBySeason": {
+    "2023": {
+      "delta": {
+        "absoluteMeanProbabilityGapChangePositiveMeansLower": 1.5487570115269023e-09,
+        "accuracyAt0_5Change": 0.011254689453939148,
+        "brierImprovement": 0.0005451958347907904,
+        "ece10ChangePositiveMeansLower": -0.004906472818763866,
+        "logLossImprovement": 0.0011314363243921655,
+        "rocAucChange": 0.004462283831471403
+      },
+      "v16": {
+        "absoluteMeanProbabilityGap": 6.9755833331797135e-09,
+        "accuracyAt0_5": 0.5543976656940391,
+        "brier": 0.24485811149432002,
+        "ece10": 0.0025570476357924437,
+        "logLoss": 0.6826966755819849,
+        "meanPredictedHome": 0.5214672710569302,
+        "n": 2399,
+        "observedHomeRate": 0.5214672780325136,
+        "rocAuc": 0.575484211933589
+      },
+      "v68": {
+        "absoluteMeanProbabilityGap": 5.426826321652811e-09,
+        "accuracyAt0_5": 0.5656523551479783,
+        "brier": 0.24431291565952923,
+        "ece10": 0.00746352045455631,
+        "logLoss": 0.6815652392575927,
+        "meanPredictedHome": 0.5214672834593399,
+        "n": 2399,
+        "observedHomeRate": 0.5214672780325136,
+        "rocAuc": 0.5799464957650604
+      }
+    },
+    "2024": {
+      "delta": {
+        "absoluteMeanProbabilityGapChangePositiveMeansLower": 0.0005253994530270978,
+        "accuracyAt0_5Change": 0.0,
+        "brierImprovement": 0.0004307613729016835,
+        "ece10ChangePositiveMeansLower": 0.0021696392737245622,
+        "logLossImprovement": 0.0008986080062158841,
+        "rocAucChange": 0.003775549698018299
+      },
+      "v16": {
+        "absoluteMeanProbabilityGap": 0.005771709134974046,
+        "accuracyAt0_5": 0.5544472152950956,
+        "brier": 0.244974631540231,
+        "ece10": 0.008279078459559695,
+        "logLoss": 0.6829536429298796,
+        "meanPredictedHome": 0.5166721811393402,
+        "n": 2406,
+        "observedHomeRate": 0.5224438902743143,
+        "rocAuc": 0.5726615028944958
+      },
+      "v68": {
+        "absoluteMeanProbabilityGap": 0.005246309681946948,
+        "accuracyAt0_5": 0.5544472152950956,
+        "brier": 0.2445438701673293,
+        "ece10": 0.006109439185835132,
+        "logLoss": 0.6820550349236637,
+        "meanPredictedHome": 0.5171975805923673,
+        "n": 2406,
+        "observedHomeRate": 0.5224438902743143,
+        "rocAuc": 0.5764370525925141
+      }
+    },
+    "2025": {
+      "delta": {
+        "absoluteMeanProbabilityGapChangePositiveMeansLower": 0.0003854384365724606,
+        "accuracyAt0_5Change": 0.007841518778373913,
+        "brierImprovement": 3.970581454137978e-05,
+        "ece10ChangePositiveMeansLower": 0.0006323632929199179,
+        "logLossImprovement": 0.00012124188646422951,
+        "rocAucChange": -0.0014235185726780841
+      },
+      "v16": {
+        "absoluteMeanProbabilityGap": 0.026524080272098183,
+        "accuracyAt0_5": 0.5555096987205943,
+        "brier": 0.24455392044414892,
+        "ece10": 0.026771005128445626,
+        "logLoss": 0.6821004786351844,
+        "meanPredictedHome": 0.5170169845236097,
+        "n": 2423,
+        "observedHomeRate": 0.5435410647957079,
+        "rocAuc": 0.573416417113254
+      },
+      "v68": {
+        "absoluteMeanProbabilityGap": 0.026138641835525722,
+        "accuracyAt0_5": 0.5633512174989682,
+        "brier": 0.24451421462960754,
+        "ece10": 0.02613864183552571,
+        "logLoss": 0.6819792367487202,
+        "meanPredictedHome": 0.5174024229601821,
+        "n": 2423,
+        "observedHomeRate": 0.5435410647957079,
+        "rocAuc": 0.5719928985405759
+      }
+    },
+    "2026_YTD": {
+      "delta": {
+        "absoluteMeanProbabilityGapChangePositiveMeansLower": 0.0005923214940389832,
+        "accuracyAt0_5Change": -0.010106681639528325,
+        "brierImprovement": 0.00012624376862857556,
+        "ece10ChangePositiveMeansLower": 0.0014768680029045873,
+        "logLossImprovement": 0.0003062728929217329,
+        "rocAucChange": -0.004470866360728687
+      },
+      "v16": {
+        "absoluteMeanProbabilityGap": 0.006570377657323601,
+        "accuracyAt0_5": 0.5485682201010668,
+        "brier": 0.24692109367368467,
+        "ece10": 0.01604665126883641,
+        "logLoss": 0.6869192690926664,
+        "meanPredictedHome": 0.5184155852848438,
+        "n": 1781,
+        "observedHomeRate": 0.5249859629421674,
+        "rocAuc": 0.5585106382978723
+      },
+      "v68": {
+        "absoluteMeanProbabilityGap": 0.005978056163284617,
+        "accuracyAt0_5": 0.5384615384615384,
+        "brier": 0.2467948499050561,
+        "ece10": 0.014569783265931823,
+        "logLoss": 0.6866129961997447,
+        "meanPredictedHome": 0.5190079067788828,
+        "n": 1781,
+        "observedHomeRate": 0.5249859629421674,
+        "rocAuc": 0.5540397719371436
+      }
+    }
+  },
+  "historicalMetricParityToDisclosedV66Diagnostic": {
+    "passed": true,
+    "tolerance": 1e-12
+  },
+  "pairedDateClusterBootstrap2024_2026Ytd": {
+    "brierImprovement": {
+      "ci95": [-0.0002900054287056222, 0.0007115400512704706],
+      "pointEstimate": 0.00020536447863278104
+    },
+    "dateLevelStability": {
+      "meanDateBrierImprovement": 0.000202162330495489,
+      "meanDateLogLossImprovement": 0.00044620892514229244,
+      "medianDateBrierImprovement": 0.0005277094621809161,
+      "medianDateLogLossImprovement": 0.0010689597205267632,
+      "positiveDateShareBrier": 0.5366336633663367,
+      "positiveDateShareLogLoss": 0.5425742574257426
+    },
+    "distinctDates": 505,
+    "logLossImprovement": {
+      "ci95": [-0.0005543499268785855, 0.0014827030085860877],
+      "pointEstimate": 0.00045405324903966926
+    },
+    "resamples": 10000,
+    "seed": 20260816,
+    "unit": "OFFICIAL_DATE_CLUSTER"
+  },
+  "diagnostics2024_2026Ytd": {
+    "decisionFlipsAt0_5": {
+      "n": 659,
+      "share": 0.09969742813918306,
+      "delta": {
+        "logLossImprovement": -0.0010114523948494547,
+        "brierImprovement": -0.0005078208738941992,
+        "rocAucChange": -0.017834430127744327,
+        "accuracyAt0_5Change": 0.0015174506828528056
+      }
+    },
+    "perGameBrierDirection": {
+      "exactOrNumericalTieGames": 0,
+      "v68BetterGames": 3372,
+      "v68BetterShare": 0.5101361573373676,
+      "v68WorseGames": 3238,
+      "v68WorseShare": 0.4898638426626324
+    },
+    "probabilityShift": {
+      "meanAbsoluteShift": 0.016205835027285693,
+      "meanSignedShift": 0.0004921260206779927,
+      "maximumAbsoluteShift": 0.19203393403254332,
+      "absoluteShiftMedian": 0.013115963930276975,
+      "absoluteShiftP90": 0.03360601368434588,
+      "absoluteShiftP95": 0.0410279135699891,
+      "absoluteShiftP99": 0.058889036384691056
+    },
+    "predeclaredSliceSummary": {
+      "confidenceAbsPMinusHalf": [
+        {"range": "0.000-0.025", "n": 1920, "logLossImprovement": -0.0009106458374411597, "brierImprovement": -0.00045510083442720783},
+        {"range": "0.025-0.050", "n": 1653, "logLossImprovement": -0.00011597448085842732, "brierImprovement": -0.00006255511677685788},
+        {"range": "0.050-0.075", "n": 1279, "logLossImprovement": -0.00001539152820140277, "brierImprovement": -0.000013334478621201962},
+        {"range": "0.075-0.100", "n": 797, "logLossImprovement": 0.002816174425662954, "brierImprovement": 0.0013745936940200432},
+        {"range": "0.100-0.150", "n": 776, "logLossImprovement": 0.0025782250660110195, "brierImprovement": 0.0012366695533087557},
+        {"range": "0.150-0.200", "n": 165, "logLossImprovement": 0.0011757785821702171, "brierImprovement": 0.00040087667336685673},
+        {"range": "0.200-0.500", "n": 20, "logLossImprovement": 0.026096321546566437, "brierImprovement": 0.01151799067222932}
+      ],
+      "absoluteFgExposureAdv": [
+        {"range": "0.00-0.01", "n": 1024, "logLossImprovement": 0.0000615085600580434, "brierImprovement": 0.000020683321592857018},
+        {"range": "0.01-0.02", "n": 794, "logLossImprovement": -0.0005385396567313405, "brierImprovement": -0.00026851126608998244},
+        {"range": "0.02-0.04", "n": 1455, "logLossImprovement": -0.0011313529784962029, "brierImprovement": -0.0005570580999489649},
+        {"range": "0.04-0.06", "n": 1155, "logLossImprovement": -0.0005254161406322844, "brierImprovement": -0.00028521457242949855},
+        {"range": "0.06-0.10", "n": 1284, "logLossImprovement": 0.0015993115630664745, "brierImprovement": 0.0007598872375415844},
+        {"range": "0.10+", "n": 873, "logLossImprovement": 0.0041381136408600305, "brierImprovement": 0.0019978532308604358}
+      ],
+      "absoluteExpectedStarterOutsGap": [
+        {"range": "0.0-0.5", "n": 1704, "logLossImprovement": -0.00016961304918305942, "brierImprovement": -0.00009234605774791071},
+        {"range": "0.5-1.0", "n": 1368, "logLossImprovement": -0.0018455190766794027, "brierImprovement": -0.0009107028816516538},
+        {"range": "1.0-2.0", "n": 1943, "logLossImprovement": 0.0005242979771014067, "brierImprovement": 0.000237092611974965},
+        {"range": "2.0-3.0", "n": 889, "logLossImprovement": 0.001561569963161813, "brierImprovement": 0.0007452576464807015},
+        {"range": "3.0+", "n": 681, "logLossImprovement": 0.005073778815428587, "brierImprovement": 0.002449125880633729}
+      ],
+      "absoluteStarterQualityIndexGap": [
+        {"range": "0.00-0.25", "n": 2020, "logLossImprovement": -0.0008036960152096873, "brierImprovement": -0.0004073847429089117},
+        {"range": "0.25-0.50", "n": 1668, "logLossImprovement": 0.0012088260296339026, "brierImprovement": 0.0005823725400566082},
+        {"range": "0.50-1.00", "n": 1968, "logLossImprovement": 0.0010659396123618992, "brierImprovement": 0.0005085102452200285},
+        {"range": "1.00-2.00", "n": 750, "logLossImprovement": -0.0002398136090795422, "brierImprovement": -0.00017791087385077287},
+        {"range": "2.00+", "n": 16, "logLossImprovement": 0.00936865339233428, "brierImprovement": 0.004695455951052502}
+      ]
+    },
+    "monthlyLogLossImprovement": {
+      "2024-03": 0.008170,
+      "2024-04": -0.002237,
+      "2024-05": -0.000020,
+      "2024-06": 0.000831,
+      "2024-07": 0.002671,
+      "2024-08": 0.003967,
+      "2024-09": -0.000855,
+      "2025-03": -0.001469,
+      "2025-04": 0.002272,
+      "2025-05": -0.000361,
+      "2025-06": -0.000972,
+      "2025-07": 0.002106,
+      "2025-08": -0.003943,
+      "2025-09": 0.002464,
+      "2026-03": 0.009758,
+      "2026-04": 0.000477,
+      "2026-05": -0.001348,
+      "2026-06": -0.001287,
+      "2026-07": 0.001436,
+      "2026-08": 0.001175
+    }
+  },
+  "sample": {
+    "combinedDistinctOfficialDates": 505,
+    "combinedEvaluationRows": 6610,
+    "rowsBySeason": {
+      "2023": 2399,
+      "2024": 2406,
+      "2025": 2423,
+      "2026_YTD": 1781
+    }
+  },
+  "scientificInterpretation": "Historical outcomes helped select the V68 hypothesis in V66, so these results characterize behavior and stability but cannot independently confirm V68 or change its frozen prospective experiment.",
+  "sourceEvidence": {
+    "workflowRunId": 31972322661,
+    "artifactId": 9270119186,
+    "artifactDigest": "sha256:02642f4345f79eef191f4e00d30da8bd53c9b71b8433048a2d7c11b79865358c",
+    "auditPlanFreezeCommit": "91e967ca5e3520f9990d583735e98c8982ae4e1e"
+  },
+  "policy": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "refitPerformed": false,
+    "recalibrationPerformed": false,
+    "featureSearchPerformed": false,
+    "thresholdOptimizationPerformed": false,
+    "productionV16Changed": false,
+    "prospectiveV68Changed": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
