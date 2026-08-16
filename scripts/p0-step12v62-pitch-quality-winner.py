@@ -44,6 +44,7 @@ def team_expected(ids,epas,starter_id,target,ph,bh,lph,lbh,c):
     days=int(c['dataBoundary']['rollingLookbackDays']);sp=sum_records(ph[int(starter_id)],target,days,empty_pitch);lp=sum_records(lph,target,days,empty_pitch);lb=sum_records(lbh,target,days,empty_out)
     total=sum(float(r['pitches']) for r in sp.values())
     if starter_id<=0 or total<float(c['exactPitchTypeBatterEngineering']['hardEligibilityMinimumPriorRecognizedPitches']):return None,{'starterPriorRecognizedPitches':total}
+    if any(epa is None for epa in epas):return None,{'starterPriorRecognizedPitches':total,'missingSlotExpectedPa':True}
     usage={pt:float(r['pitches'])/total for pt,r in sp.items() if r['pitches']>0}
     league_generic=sum_out_map(lb);keys=('h','tb','bb','k','hr')
     if league_generic['pa']<=0:return None,{'starterPriorRecognizedPitches':total}
