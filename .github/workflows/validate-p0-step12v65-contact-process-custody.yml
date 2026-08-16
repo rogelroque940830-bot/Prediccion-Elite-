@@ -24,24 +24,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify V65 winner hypothesis was frozen before custody and outcome scorer
+      - name: Verify V65 revision 2 source correction was frozen before outcome scorer
         run: |
           set -euo pipefail
-          FREEZE=0c0afa279fa58409609d02b25d70247ba14190ec
-          git merge-base --is-ancestor "$FREEZE" HEAD
-          git cat-file -e "$FREEZE:research/p0-step12v65-contact-process-matchup-winner-contract.json"
-          ! git cat-file -e "$FREEZE:scripts/p0-step12v65-acquire-contact-process.py"
-          ! git cat-file -e "$FREEZE:scripts/p0-step12v65-contact-process-matchup-winner.py"
+          INITIAL_FREEZE=0c0afa279fa58409609d02b25d70247ba14190ec
+          CORRECTION_FREEZE=f71e5b24d87786dccf0afea31b38e2a80542581b
+          git merge-base --is-ancestor "$INITIAL_FREEZE" "$CORRECTION_FREEZE"
+          git merge-base --is-ancestor "$CORRECTION_FREEZE" HEAD
+          git cat-file -e "$CORRECTION_FREEZE:research/p0-step12v65-contact-process-matchup-winner-contract.json"
+          ! git cat-file -e "$CORRECTION_FREEZE:scripts/p0-step12v65-contact-process-matchup-winner.py"
           test ! -e scripts/p0-step12v65-contact-process-matchup-winner.py
+          ! git diff --quiet "$CORRECTION_FREEZE" HEAD -- scripts/p0-step12v65-acquire-contact-process.py
           python - <<'PY'
           import json
           c=json.load(open('research/p0-step12v65-contact-process-matchup-winner-contract.json'))
           assert c['schemaVersion']=='courtedge-p0-step12v65-contact-process-matchup-winner-contract.v1'
-          assert c['contractRevision']==1
-          assert c['scientificStatus']=='FROZEN_CONTACT_PROCESS_PLUS_STARTER_QUALITY_WINNER_HYPOTHESIS_BEFORE_V65_OUTCOME_SCORER'
+          assert c['contractRevision']==2
+          assert c['scientificStatus']=='FROZEN_CONTACT_PROCESS_SOURCE_SEMANTICS_CORRECTED_BEFORE_V65_OUTCOME_SCORER'
+          p=c['preOutcomeCorrection']
+          assert p['performedBeforeV65OutcomeScorerExisted'] is True
+          assert p['v65OutcomeMetricsAvailableAtCorrection'] is False
+          assert p['custodyRunContainsWinnerTarget'] is False
+          assert p['postResultRetuning'] is False
           assert c['sportingTarget']['primaryTarget']=='FULL_GAME_HOME_WIN'
-          assert c['historicalContactProcessCustody']['containsPlateAppearanceOutcomeFeatures'] is False
-          assert c['historicalContactProcessCustody']['containsPitchShapeBuckets'] is False
+          h=c['historicalContactProcessCustody']
+          assert h['battedBallEventSource']=='NONEMPTY_playEvents[].hitData_ON_IS_PITCH_EVENT'
+          assert h['containsPlateAppearanceOutcomeFeatures'] is False
+          assert h['containsPitchShapeBuckets'] is False
+          assert h['minimumLaunchSpeedTelemetryShareOfHitDataBattedBallEventsEachSeason']==0.80
+          assert c['eventDefinitions']['whiffDescriptionsNormalized']==['swinging_strike','swinging_strike_blocked','missed_bunt']
+          assert c['eventDefinitions']['foulDescriptionsNormalized']==['foul','foul_tip','foul_bunt']
           assert c['contactProcessEngineering']['featuresExactly']==[
             'lineup_contact_exit_velocity_matchup_diff',
             'lineup_contact_hard_hit_matchup_diff',
@@ -60,7 +72,7 @@ jobs:
           assert c['policy']['v16ProductionChanged'] is False
           assert c['policy']['betEliteAllowed'] is False
           assert c['policy']['realFinancialExposure']==0
-          print('V65_PRE_OUTCOME_HYPOTHESIS_FROZEN')
+          print('V65_REVISION2_PRE_OUTCOME_SOURCE_SEMANTICS_FROZEN')
           PY
       - name: Syntax check custody extractor
         run: python -m py_compile scripts/p0-step12v65-acquire-contact-process.py
@@ -87,7 +99,7 @@ jobs:
           github-token: ${{ github.token }}
           repository: rogelroque940830-bot/Prediccion-Elite-
           run-id: 31659518059
-      - name: Acquire immutable contact-process custody
+      - name: Acquire immutable corrected contact-process custody
         run: |
           set -euo pipefail
           mkdir -p artifacts/p0-step12v65-contact-process
@@ -111,9 +123,11 @@ jobs:
           p=f'artifacts/p0-step12v65-contact-process/contact-process-{s}.json'
           r=json.load(open(p))
           assert r['schemaVersion']=='courtedge-p0-step12v65-contact-process-pbp.v1'
+          assert r['contractRevision']==2
           assert r['season']==s
           assert r['gamesFetched']>2000 if s!='2026_YTD' else r['gamesFetched']>1500
-          assert r['launchSpeedTelemetryShareOfInPlayEvents']>=0.80
+          assert r['swings']>0 and r['whiffs']>0 and r['battedBallEvents']>0 and r['launchSpeedN']>0
+          assert r['launchSpeedTelemetryShareOfHitDataBattedBallEvents']>=0.80
           q=r['policy']
           assert q['sameDateOutcomeMayTrainSameDate'] is False
           assert q['futureGameDataAllowed'] is False
@@ -121,7 +135,7 @@ jobs:
           assert q['containsWinnerTarget'] is False
           assert q['containsPlateAppearanceOutcomeFeatures'] is False
           assert q['containsSportsbookPrice'] is False
-          print(json.dumps({k:r[k] for k in ['season','gamesExpected','gamesFetched','failureShare','pitchEvents','swings','whiffs','inPlayEvents','launchSpeedN','launchSpeedTelemetryShareOfInPlayEvents','hardHitN']},indent=2))
+          print(json.dumps({k:r[k] for k in ['season','gamesExpected','gamesFetched','failureShare','pitchEvents','swings','whiffs','battedBallEvents','launchSpeedN','launchSpeedTelemetryShareOfHitDataBattedBallEvents','hardHitN']},indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -151,7 +165,7 @@ jobs:
           assert len(files)==6,files
           rows=[]
           for p in files:
-            r=json.load(open(p)); rows.append((r['season'],r['gamesFetched'],r['failureShare'],r['launchSpeedTelemetryShareOfInPlayEvents']))
+            r=json.load(open(p)); rows.append((r['season'],r['gamesFetched'],r['failureShare'],r['launchSpeedTelemetryShareOfHitDataBattedBallEvents'],r['whiffs'],r['battedBallEvents']))
           print(json.dumps(rows,indent=2))
           PY
       - name: Verify exact custody-only scope
