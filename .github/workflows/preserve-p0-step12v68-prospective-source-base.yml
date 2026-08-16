@@ -1,0 +1,77 @@
+name: Preserve P0 Step 12V68 Prospective Source Base
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/preserve-p0-step12v68-prospective-source-base.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preserve-frozen-source-base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download frozen Step12V3 2026 YTD base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-season-2026_YTD
+          path: artifacts/v68-source/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download frozen V62 2025 pitch quality
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-2025
+          path: artifacts/v68-source/v62-2025
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download frozen V62 2026 YTD pitch quality
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v62-pitch-quality-2026_YTD
+          path: artifacts/v68-source/v62-2026
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31925270654
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/v68-source/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Verify frozen identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/v68-source/step12v3/2026_YTD.tgz
+          test -s artifacts/v68-source/v62-2025/pitch-quality-2025.json
+          test -s artifacts/v68-source/v62-2026/pitch-quality-2026_YTD.json
+          test -s artifacts/v68-source/v16/pure-settlement-model-manifest.json
+          python - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('artifacts/v68-source')
+          m=json.load(open(root/'v16/pure-settlement-model-manifest.json'))
+          canonical=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(canonical).hexdigest()=='059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb'
+          for p in sorted(root.rglob('*')):
+            if p.is_file():
+              h=hashlib.sha256(p.read_bytes()).hexdigest()
+              print(f'{h}  {p}')
+          PY
+      - name: Upload V68 frozen prospective source base
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: artifacts/v68-source/
+          if-no-files-found: error
+          retention-days: 90
