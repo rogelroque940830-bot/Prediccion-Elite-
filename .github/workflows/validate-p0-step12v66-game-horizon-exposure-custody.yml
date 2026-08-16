@@ -28,7 +28,7 @@ jobs:
       - name: Verify V66 contract predates all V66 predictor custody code
         run: |
           set -euo pipefail
-          FREEZE=12d9c7e0478f89c9b3d2fc63edf91431046fdc8b
+          FREEZE=262be86daae01a37f3fec5f02cb12721745e2ae5
           git merge-base --is-ancestor "$FREEZE" HEAD
           git cat-file -e "$FREEZE:research/p0-step12v66-game-horizon-exposure-suite-contract.json"
           ! git cat-file -e "$FREEZE:scripts/p0-step12v66-acquire-bullpen.py"
