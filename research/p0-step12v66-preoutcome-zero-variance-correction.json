@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "courtedge-p0-step12v66-preoutcome-zero-variance-correction.v1",
+  "scientificStatus": "FROZEN_TECHNICAL_CORRECTION_BEFORE_ANY_V66_OUTCOME_SCORER_EXISTS",
+  "observedInWorkflowRunId": 31960945745,
+  "observedInFailedJobId": 95198879100,
+  "observedFailure": "V66_QUALITY_TRAINING_SCALE_INVALID:whiff:0.0",
+  "cause": "The V66 custody intentionally inherits the exact frozen V62 starter-quality source semantics. Under those frozen semantics the 2022 whiff-quality component is constant, so its raw training standard deviation is zero.",
+  "correction": {
+    "rule": "For a finite non-empty training component with raw standard deviation exactly zero, preserve its frozen raw values and training mean, use an effective standardization scale of 1.0, and mark zeroVarianceTraining=true. The standardized contribution is therefore zero rather than an error.",
+    "equivalence": "SCIKIT_LEARN_STANDARD_SCALER_ZERO_VARIANCE_CONVENTION",
+    "featureRemoved": false,
+    "featureReplaced": false,
+    "sourceSemanticsChanged": false,
+    "hypothesisChanged": false,
+    "candidateChanged": false,
+    "metricChanged": false,
+    "gateChanged": false,
+    "seasonChanged": false,
+    "modelChanged": false,
+    "hyperparameterChanged": false
+  },
+  "outcomeBoundary": {
+    "v66OutcomeScorerExistedBeforeCorrection": false,
+    "v66OutcomeMetricsAvailableBeforeCorrection": false,
+    "postResultRetuning": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
