@@ -1,0 +1,155 @@
+name: Validate P0 Step 12V84 Margin Warning Across Routes
+
+on:
+  pull_request:
+    paths:
+      - 'research/p0-step12v84-margin-warning-across-established-routes-contract.json'
+      - 'scripts/p0-step12v84-margin-warning-across-established-routes.py'
+      - '.github/workflows/validate-p0-step12v84-margin-warning-across-established-routes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  historical-cross-route-transport:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen analysis dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
+
+      - name: Prove V84 plan predates V84 scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          C='research/p0-step12v84-margin-warning-across-established-routes-contract.json'
+          S='scripts/p0-step12v84-margin-warning-across-established-routes.py'
+          CADD="$(git log --diff-filter=A --format=%H -- "$C" | tail -1)"
+          SADD="$(git log --diff-filter=A --format=%H -- "$S" | tail -1)"
+          test -n "$CADD" && test -n "$SADD" && test "$CADD" != "$SADD"
+          git merge-base --is-ancestor "$CADD" "$SADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v84-margin-warning-across-established-routes-contract.json'))
+          assert c['scientificStatus']=='FROZEN_CROSS_ROUTE_MARGIN_WARNING_PLAN_BEFORE_ANY_V84_SCORER_EXISTS'
+          assert c['warningExactly']['warningThresholdExactly']==0.01180849970596913
+          assert c['warningExactly']['warningDirection']=='LOW_IS_WARNING'
+          assert len(c['primaryEstablishedRouteViewsExactly'])==10
+          assert c['statisticsBoundary']['newThresholdSearchAllowed'] is False
+          assert c['statisticsBoundary']['routeAdditionAfterOutcomeInspectionAllowed'] is False
+          assert c['decisionBoundary']['v80Changed'] is False
+          assert c['decisionBoundary']['realFinancialExposure']==0
+          print('V84_FREEZE_FIRST_PLAN_PROVED')
+          PY
+
+      - name: Syntax check
+        run: python -m py_compile scripts/p0-step12v84-margin-warning-across-established-routes.py
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+            test -s "inputs/step12v3/$S/cohort/official-acquisition.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY" && test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen V84 cross-route warning study
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/p0-step12v84-margin-warning-across-established-routes.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v83-contract research/p0-step12v83-elite-47-5-loss-anatomy-contract.json \
+            --v83-scorer scripts/p0-step12v83-elite-47-5-loss-anatomy.py \
+            --contract research/p0-step12v84-margin-warning-across-established-routes-contract.json \
+            --out work/v84-margin-warning-across-established-routes.json
+
+      - name: Enforce V84 integrity and print route decision table
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v84-margin-warning-across-established-routes.json'))
+          assert r['classification'] in {
+            'V84_MARGIN_WARNING_BROADLY_POSITIVE_HISTORICALLY_SHADOW_INTEGRATION_SUPPORTED',
+            'V84_MARGIN_WARNING_NOT_BROADLY_POSITIVE_LEAVE_PROJECT_UNCHANGED'
+          }
+          assert len(r['routeReports'])==10
+          i=r['integrity']
+          assert i['refitPerformed'] is False
+          assert i['recalibrationPerformed'] is False
+          assert i['newFeatureSearchPerformed'] is False
+          assert i['newThresholdSearchPerformed'] is False
+          assert i['warningDirectionChanged'] is False
+          assert i['routeListChangedAfterOutcomeInspection'] is False
+          assert i['positivityGateChangedAfterOutcomeInspection'] is False
+          assert i['multiSignalCombinationSearchPerformed'] is False
+          assert i['v80Changed'] is False
+          assert i['productionChanged'] is False
+          assert i['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'gate':r['globalConsistencyGate'],
+            'routeReports':r['routeReports']
+          },indent=2))
+          PY
+
+      - name: Upload V84 cross-route report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v84-margin-warning-across-established-routes
+          path: work/v84-margin-warning-across-established-routes.json
+          if-no-files-found: error
+          retention-days: 90
