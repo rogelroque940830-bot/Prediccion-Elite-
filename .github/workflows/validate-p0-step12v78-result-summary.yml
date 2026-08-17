@@ -1,0 +1,51 @@
+name: Validate P0 Step 12V78 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v78-route-aware-warning-veto-flip-audit-result-summary.json'
+      - '.github/workflows/validate-p0-step12v78-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download immutable V78 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v78-route-aware-warning-veto-flip-audit
+          path: inputs/v78
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 32051054840
+      - name: Validate summary against immutable report
+        run: |
+          python - <<'PY'
+          import json, math
+          s=json.load(open('research/p0-step12v78-route-aware-warning-veto-flip-audit-result-summary.json'))
+          r=json.load(open('inputs/v78/v78-route-aware-warning-veto-flip-audit.json'))
+          assert s['classification']==r['classification']=='V78_ROUTE_AWARE_WARNING_VETO_FLIP_RETROSPECTIVE_AUDIT_COMPLETE'
+          assert s['sourceArtifact']=={'workflowRunId':32051054840,'artifactId':9294743217,'artifactDigest':'sha256:fb6a79ef611690c5f08c4d321e0b50f830e4f1be9192c60d1683f89d13ec453b'}
+          assert s['parentParity']==r['parentParity']
+          assert s['oracleCounterfactualBoundary']['decisiveLosses']==r['oracleCounterfactualCeiling']['decisiveHistoricalLosses']==138
+          assert s['combinedPrimaryWarning']['flaggedRows']==r['flagDiagnostics']['combinedPrimaryFlag']['flaggedRows']==86
+          assert s['combinedPrimaryWarning']['flaggedOriginalLosses']==r['flagDiagnostics']['combinedPrimaryFlag']['flaggedOriginalLosses']==47
+          assert s['combinedPrimaryWarning']['flaggedOriginalWins']==r['flagDiagnostics']['combinedPrimaryFlag']['flaggedOriginalWins']==39
+          for key in ('BASELINE_KEEP','PRIMARY_COUNTERSIDE_FLIP','PRIMARY_VETO'):
+            a=s['primaryPolicies'][key]; b=r['policies'][key]
+            for f in ('opportunities','decisiveRows','wins','losses','pushes'):
+              assert a[f]==b[f], (key,f,a[f],b[f])
+            assert math.isclose(a['decisiveHitRate'],b['decisiveHitRate'],abs_tol=1e-15)
+          assert s['primaryPolicies']['PRIMARY_COUNTERSIDE_FLIP']['seasonRobust'] is False
+          assert s['guardrails']['liveVetoCreated'] is False and s['guardrails']['liveCounterSideSwitchCreated'] is False
+          assert s['guardrails']['realFinancialExposure']==0
+          print('V78_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          PY
