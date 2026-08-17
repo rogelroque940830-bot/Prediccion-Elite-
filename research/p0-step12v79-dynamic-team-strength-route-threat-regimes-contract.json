@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "courtedge-p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_BEFORE_ANY_V79_SCORER_EXISTS",
+  "objective": "Test the hypothesis that the frozen Winner TOP1 routes have context-dependent reliability because the same A+, Premium-A, or General V16+V68 rule is currently applied across materially different pregame team-strength matchups. Reconstruct leakage-free TOP/MID/BOTTOM team strength as of each game's official date, cross it with route and opponent-threat evidence, and determine whether some historical losses were concentrated in pregame contexts where NO PLAY or the exact opposite ML side would have been more defensible. This is retrospective discovery only and cannot create a live rule.",
+  "immutableParentEvidence": {
+    "mainBaseCommit": "d1357abcb7d2ba46f66697649eff6e5eee85adb5",
+    "v69Scorer": {"path":"scripts/p0-step12v69-confluence-frequency-quality-frontier.py","gitBlobSha":"4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v72Scorer": {"path":"scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py","gitBlobSha":"e38ab509b90ab682f927d96416b8da270a068f39"},
+    "v77Scorer": {"path":"scripts/p0-step12v77-general-consensus-loss-threat-geometry.py","gitBlobSha":"4166da7044720b605210c77a3d690a5ba9efd892"},
+    "v78Scorer": {"path":"scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py","gitBlobSha":"a4a973dce8678fb67acaebe104874cca651ecfe2"},
+    "v78ResultSummary": {
+      "path":"research/p0-step12v78-route-aware-warning-veto-flip-audit-result-summary.json",
+      "gitBlobSha":"85adac993934465596c36532386832d68e8c8674",
+      "requiredClassification":"V78_ROUTE_AWARE_WARNING_VETO_FLIP_RETROSPECTIVE_AUDIT_COMPLETE",
+      "sourceWorkflowRunId":32051054840,
+      "sourceArtifactId":9294743217,
+      "sourceArtifactDigest":"sha256:fb6a79ef611690c5f08c4d321e0b50f830e4f1be9192c60d1683f89d13ec453b"
+    }
+  },
+  "parentPortfolio": {
+    "name":"CONFLUENCE_LEDGER_TOP1_T0.550",
+    "window":"MAY01",
+    "officialDateRule":"MM-DD >= 05-01",
+    "expectedPickDays":395,
+    "expectedDecisiveRows":392,
+    "expectedWins":254,
+    "expectedLosses":138,
+    "expectedPushes":3,
+    "routeParity": {
+      "A_PLUS_V68_AGREE_D1_ROUTER":{"wins":62,"losses":9},
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH":{"wins":64,"losses":34},
+      "V16_V68_CONSENSUS_T0.550":{"wins":128,"losses":95}
+    }
+  },
+  "pregameStrengthDefinition": {
+    "source":"same immutable Step12V3 official-acquisition regular-season games used by the historical universe",
+    "strictAsOfRule":"For a target officialDate D, use only same-season regular-season Final games with officialDate strictly earlier than D. All games on D are excluded from the strength snapshot, including earlier games of a doubleheader.",
+    "minimumPriorGamesPerTeam":20,
+    "rawMetricsExactly":["cumulative_win_pct","cumulative_run_differential_per_game"],
+    "rankingUniverse":"All MLB teams with at least 20 prior same-season games as of D, not merely teams appearing in the target slate.",
+    "percentileRule":"For each raw metric independently, assign average-rank percentile from 0=weakest to 1=strongest across the ranking universe. Ties receive the average rank. If N>1, percentile=(average_rank_1_based-1)/(N-1).",
+    "primaryStrengthScore":"Equal-weight arithmetic mean of win-pct percentile and run-differential-per-game percentile. No fitted or outcome-weighted coefficients.",
+    "tierRule": {
+      "BOTTOM":"strengthScore < 1/3",
+      "MID":"1/3 <= strengthScore < 2/3",
+      "TOP":"strengthScore >= 2/3"
+    },
+    "recordTierSensitivity":"Also report tiers from cumulative_win_pct percentile alone using the same thirds; this is sensitivity context only and cannot replace the primary composite after outcomes are seen.",
+    "strengthGap":"opponentStrengthScore - selectedStrengthScore; positive means the opponent was stronger pregame.",
+    "tierRelation": {
+      "SELECTED_STRONGER":"selected tier ordinal > opponent tier ordinal",
+      "PEER":"same tier",
+      "SELECTED_WEAKER":"selected tier ordinal < opponent tier ordinal"
+    },
+    "extremeOpponentGapNaturalBoundary":"strengthGap >= 1/3, exactly one full tier width; no threshold search."
+  },
+  "opponentEvidenceDefinition": {
+    "directionalSignalsExactly":[
+      "team_rd10_diff","team_win10_diff","starter_kbb_adv","team_ra10_adv","lineup_exposure_rate_adv","starter_runrisk_adv","team_rs10_diff","starter_hr_adv","lineup_continuity_rate_adv","starter_velocity_adv","starter_spin_adv","starter_swing_miss_adv","starter_in_zone_adv","starter_weak_contact_adv","fg_exposure_adv","bullpen_pitches_1d_adv"
+    ],
+    "orientation":"Reuse V72/V77 opponentWarning exactly: positive means the opponent is stronger / selected side weaker on that directional dimension.",
+    "opponentAdvantageShare":"Among nonmissing frozen directional signals, fraction with opponentWarning > 0. Require at least 12 nonmissing signals.",
+    "majorityOpponentAdvantageNaturalBoundary":"opponentAdvantageShare > 0.5. No count/threshold search.",
+    "reuseV78FlagsExactly":true,
+    "v78CombinedFlagMeaning":"General route uses HIGH all-signal threat plus LOW consensus conviction; Premium-A uses starter_hr_adv opponent warning > 0; A+ is never V78-flagged. No V79 retuning."
+  },
+  "predeclaredContextPolicies": [
+    "ALL_SELECTED_WEAKER_TIER",
+    "V78_WARNING_AND_SELECTED_WEAKER_TIER",
+    "V78_WARNING_AND_POSITIVE_STRENGTH_GAP",
+    "V78_WARNING_AND_EXTREME_OPPONENT_STRENGTH_GAP_GE_ONE_THIRD",
+    "V78_WARNING_AND_SELECTED_NOT_TOP_VS_OPPONENT_TOP",
+    "V78_WARNING_AND_SELECTED_WEAKER_AND_OPPONENT_ADVANTAGE_MAJORITY",
+    "SELECTED_WEAKER_AND_OPPONENT_ADVANTAGE_MAJORITY",
+    "SELECTED_NOT_TOP_VS_OPPONENT_TOP_AND_OPPONENT_ADVANTAGE_MAJORITY"
+  ],
+  "requiredAnalyses": {
+    "routeBySelectedTierByOpponentTier":"Full 3 routes x 3 selected tiers x 3 opponent tiers matrix with W/L/P, hit rate, loss rate, and season breakdown. Report every cell; no cell selection.",
+    "routeByTierRelation":"For every route, SELECTED_STRONGER/PEER/SELECTED_WEAKER W/L/P and season breakdown.",
+    "strengthGapLossAssociation":"Overall and within each route compare strengthGap on wins vs losses using medians, Mann-Whitney two-sided, Cliff's delta, loss-warning AUC, and season direction.",
+    "v78WarningByStrengthContext":"Cross exact inherited V78 warnings with strength tier/relation and report loss capture, original-win destruction, counter-side precision, veto record, flip record, and season behavior.",
+    "predeclaredContextPolicies":"Evaluate every frozen context policy as both VETO and exact same-market counter-side FLIP. Report flagged W/L/P, loss capture, win destruction, net decision change, retained hit rate, coverage, and per-season records.",
+    "opponentEvidenceWithinStrengthRelation":"Report opponentAdvantageShare distribution and majority-opponent-advantage frequency by route x tierRelation x outcome.",
+    "lossAccounting":"For all 138 losses, report route, selected/opponent primary tier, tierRelation, strengthGap, V78 inherited flag, opponentAdvantageShare, and which predeclared contexts apply. Do not expose outcome-derived rule selection.",
+    "recordTierSensitivity":"Repeat high-level route x tierRelation loss rates using record-only tiers to detect dependence on the composite definition."
+  },
+  "formalCellTesting": {
+    "test":"For each route's nine primary strength cells, Fisher exact two-sided comparing that cell's decisive loss rate with the remainder of the same route.",
+    "holmCorrection":"Holm correction separately across the nine cells within each route.",
+    "minimumCellDecisiveRowsForInterpretiveLabel":12,
+    "strongRiskCellLabelRequires":"Holm-adjusted p < 0.05, cell loss rate > route remainder loss rate, at least 12 decisive rows, and same adverse direction in every season having at least 3 decisive rows in that cell.",
+    "noCellSearch":true
+  },
+  "counterSideInterpretationBoundary": {
+    "oracleOppositeSideForKnownLosses":"The exact opposite side mechanically wins every decisive original loss after the outcome is known. This is an impossible hindsight ceiling, not predictive skill.",
+    "contextCounterSideIsActionableOnlyIf":"Never actionable in V79. Report whether predeclared pregame contexts have counter-side precision >50%, Wilson 95% interval, and direction by season. Any live switch requires a separate frozen future validation.",
+    "noAutomaticOpponentBet":true
+  },
+  "statisticsBoundary": {
+    "refitAllowed":false,
+    "recalibrationAllowed":false,
+    "newPredictiveFeatureFitAllowed":false,
+    "thresholdSearchAllowed":false,
+    "tierBoundarySearchAllowed":false,
+    "strengthWeightSearchAllowed":false,
+    "routeSearchAllowed":false,
+    "dateCutoffSearchAllowed":false,
+    "cellSelectionAfterOutcomeInspectionAllowed":false,
+    "outcomeWeightedCompositeAllowed":false,
+    "bestPolicySelectionAfterOutcomeInspectionAllowed":false,
+    "claimCausationAllowed":false,
+    "claimIndependentConfirmationAllowed":false,
+    "liveVetoCreatedByV79":false,
+    "liveCounterSideSwitchCreatedByV79":false
+  },
+  "decisionBoundary": {
+    "researchOnly":true,
+    "historicalPricesUsed":false,
+    "marketOddsUsedAsFeatures":false,
+    "productionChanged":false,
+    "prospectiveV68Changed":false,
+    "routingChanged":false,
+    "rankingChanged":false,
+    "stakeChanged":false,
+    "betEliteAllowed":false,
+    "automaticBetPlacementAllowed":false,
+    "positiveEvEstablished":false,
+    "realFinancialExposure":0
+  }
+}
