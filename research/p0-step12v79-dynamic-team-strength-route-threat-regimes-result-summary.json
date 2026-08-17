@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "courtedge-p0-step12v79-dynamic-team-strength-route-threat-regimes-result-summary.v1",
+  "classification": "V79_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_RETROSPECTIVE_COMPLETE",
+  "sourceArtifact": {
+    "workflowRunId": 32054316379,
+    "artifactId": 9295845084,
+    "artifactDigest": "sha256:c19fe3a0208f05deabe7e979bd387051a26ba7ffc526a8c851360f6e9760333d"
+  },
+  "implementationRepair": {
+    "firstRunId": 32054132686,
+    "firstRunResult": "FAILED_BEFORE_REPORT_OUTPUT",
+    "failure": "V79_OPPONENT_ADVANTAGE_SHARE_MISSING_TARGET",
+    "repair": "The preregistered contract defines opponentAdvantageShare only when at least 12 of 16 frozen opponent-warning signals are nonmissing. The initial scorer then incorrectly imposed a global abort if any target row had unavailable share. The repair runner verifies the exact frozen initial scorer blob and removes only that contradictory abort: unavailable share remains null, no value is imputed, no threshold is changed, and no outcome-dependent logic is added.",
+    "repairRunner": "scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py"
+  },
+  "parentParity": {"pickDays":395,"decisiveRows":392,"wins":254,"losses":138,"pushes":3},
+  "strengthGapAssociation": {
+    "definition": "opponentStrengthScore - selectedStrengthScore; larger means the opponent was closer/stronger pregame",
+    "all": {
+      "medianWins": -0.43965517241379315,
+      "medianLosses": -0.33620689655172414,
+      "lossWarningAuc": 0.5995520940317243,
+      "cliffsDeltaLossMinusWin": 0.1991041880634486,
+      "mannWhitneyTwoSidedP": 0.0011278993528560154,
+      "sameAdverseDirectionAllThreeSeasons": true
+    },
+    "generalV16V68": {
+      "medianWins": -0.39655172413793105,
+      "medianLosses": -0.28448275862068967,
+      "lossWarningAuc": 0.5967105263157895,
+      "cliffsDeltaLossMinusWin": 0.19342105263157894,
+      "mannWhitneyTwoSidedP": 0.01361019204829083,
+      "sameAdverseDirectionAllThreeSeasons": true
+    },
+    "premiumA": {
+      "lossWarningAuc": 0.5078125,
+      "mannWhitneyTwoSidedP": 0.9019830261738088,
+      "interpretation": "No useful strength-gap separation; Premium-A losses are not explained by relative team tier in V79."
+    },
+    "aPlus": {
+      "lossWarningAuc": 0.6612903225806451,
+      "mannWhitneyTwoSidedP": 0.12187412473207378,
+      "interpretation": "Direction is adverse in all three seasons but only nine A+ losses exist, so uncertainty remains large."
+    }
+  },
+  "routeByPrimaryTierRelation": {
+    "A_PLUS_V68_AGREE_D1_ROUTER": {
+      "SELECTED_STRONGER": {"decisiveRows":59,"wins":53,"losses":6,"hitRate":0.8983050847457628},
+      "PEER": {"decisiveRows":11,"wins":8,"losses":3,"hitRate":0.7272727272727273},
+      "SELECTED_WEAKER": {"decisiveRows":1,"wins":1,"losses":0,"hitRate":1.0}
+    },
+    "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {
+      "SELECTED_STRONGER": {"decisiveRows":71,"wins":45,"losses":26,"hitRate":0.6338028169014085},
+      "PEER": {"decisiveRows":23,"wins":16,"losses":7,"hitRate":0.6956521739130435},
+      "SELECTED_WEAKER": {"decisiveRows":4,"wins":3,"losses":1,"hitRate":0.75}
+    },
+    "V16_V68_CONSENSUS_T0.550": {
+      "SELECTED_STRONGER": {"decisiveRows":150,"wins":91,"losses":59,"hitRate":0.6066666666666667},
+      "PEER": {"decisiveRows":56,"wins":29,"losses":27,"hitRate":0.5178571428571429},
+      "SELECTED_WEAKER": {"decisiveRows":17,"wins":8,"losses":9,"hitRate":0.47058823529411764}
+    }
+  },
+  "generalRoutePrimaryTierCellsOfInterest": {
+    "TOP_VS_TOP": {
+      "decisiveRows":18,"wins":6,"losses":12,"hitRate":0.3333333333333333,
+      "bySeason":{"2024":{"wins":2,"losses":3},"2025":{"wins":3,"losses":2},"2026_YTD":{"wins":1,"losses":7}},
+      "rawFisherPVsRouteRemainder":0.04497240620987659,
+      "holmAdjustedPWithinNineCells":0.4047516558888893,
+      "formalStrongRiskCell":false
+    },
+    "TOP_VS_MID": {
+      "decisiveRows":36,"wins":26,"losses":10,"hitRate":0.7222222222222222,
+      "bySeason":{"2024":{"wins":9,"losses":5},"2025":{"wins":8,"losses":2},"2026_YTD":{"wins":9,"losses":3}},
+      "holmAdjustedPWithinNineCells":0.5204071419584806,
+      "formalStrongRiskCell":false
+    },
+    "TOP_VS_BOTTOM": {"decisiveRows":75,"wins":46,"losses":29,"hitRate":0.6133333333333333},
+    "MID_VS_TOP": {"decisiveRows":7,"wins":3,"losses":4,"hitRate":0.42857142857142855},
+    "MID_VS_MID": {"decisiveRows":21,"wins":11,"losses":10,"hitRate":0.5238095238095238},
+    "MID_VS_BOTTOM": {"decisiveRows":39,"wins":19,"losses":20,"hitRate":0.48717948717948717},
+    "BOTTOM_VS_TOP": {"decisiveRows":3,"wins":1,"losses":2,"hitRate":0.3333333333333333},
+    "BOTTOM_VS_MID": {"decisiveRows":7,"wins":4,"losses":3,"hitRate":0.5714285714285714},
+    "BOTTOM_VS_BOTTOM": {"decisiveRows":17,"wins":12,"losses":5,"hitRate":0.7058823529411765}
+  },
+  "formalRiskCellResult": {
+    "predeclaredStrongRiskCells": [],
+    "interpretation": "No route x selected-tier x opponent-tier cell survived the preregistered combination of Holm correction, minimum sample, higher loss rate, and season-direction requirement. The cell geometry is descriptive discovery, not a live rule."
+  },
+  "aPlusContext": {
+    "TOP_VS_MID": {"wins":7,"losses":0},
+    "TOP_VS_BOTTOM": {"wins":30,"losses":3,"hitRate":0.9090909090909091},
+    "MID_VS_BOTTOM": {"wins":16,"losses":3,"hitRate":0.8421052631578947},
+    "interpretation": "A+ remains exceptionally strong when the selected team is in a stronger pregame tier; V79 gives no reason to dilute this route with a broad global veto."
+  },
+  "inheritedV78WarningByTierRelation": {
+    "PEER": {
+      "decisiveRows":25,"originalWins":10,"originalLosses":15,"originalHitRate":0.4,"counterSidePrecision":0.6,
+      "counterSideWilson95":{"lower":0.40739127785127344,"upper":0.7659694233580909},
+      "bySeason":{"2024":{"wins":2,"losses":6},"2025":{"wins":5,"losses":3},"2026_YTD":{"wins":3,"losses":6}}
+    },
+    "SELECTED_STRONGER": {"decisiveRows":50,"originalWins":23,"originalLosses":27,"originalHitRate":0.46,"counterSidePrecision":0.54},
+    "SELECTED_WEAKER": {"decisiveRows":11,"originalWins":6,"originalLosses":5,"originalHitRate":0.5454545454545454,"counterSidePrecision":0.45454545454545453},
+    "interpretation": "The inherited V78 warning is most dangerous in peer-strength matchups, not when the selected team is in the weaker tier. Even there, automatic opponent flipping is not season-robust because 2025 reversed direction."
+  },
+  "predeclaredCounterSideContextResults": {
+    "ALL_SELECTED_WEAKER_TIER": {"decisiveRows":22,"originalWins":12,"originalLosses":10,"counterSidePrecision":0.45454545454545453,"netFlipChange":-2},
+    "V78_WARNING_AND_SELECTED_WEAKER_TIER": {"decisiveRows":11,"originalWins":6,"originalLosses":5,"counterSidePrecision":0.45454545454545453,"netFlipChange":-1},
+    "V78_WARNING_AND_POSITIVE_STRENGTH_GAP": {"decisiveRows":24,"originalWins":13,"originalLosses":11,"counterSidePrecision":0.4583333333333333,"netFlipChange":-2},
+    "V78_WARNING_AND_EXTREME_OPPONENT_STRENGTH_GAP_GE_ONE_THIRD": {"decisiveRows":8,"originalWins":4,"originalLosses":4,"counterSidePrecision":0.5,"netFlipChange":0},
+    "V78_WARNING_AND_SELECTED_NOT_TOP_VS_OPPONENT_TOP": {"decisiveRows":7,"originalWins":3,"originalLosses":4,"counterSidePrecision":0.5714285714285714,"netFlipChange":1,"interpretation":"Too small for a reliable opponent-switch rule."},
+    "majorityOpponentAdvantageContexts": {"decisiveRows":1,"interpretation":"The >50% majority of 16 directional opponent warnings was too rare among TOP1 candidates to be useful."}
+  },
+  "scientificConclusion": "V79 supports the user's core contextual hypothesis: a fixed route condition does not carry the same historical reliability across all pregame competitive-strength regimes. The effect is clearest in General V16+V68, where selected-stronger was 91-59 (60.67%), peers were 29-27 (51.79%), and selected-weaker was 8-9 (47.06%); strength gap also separated General wins from losses in the same adverse direction across all three seasons. A+ behaves differently and remains extremely strong when its selected team is pregame stronger. Premium-A does not show a useful team-strength-gap effect and should retain its separate HR-risk investigation. Crucially, V79 rejects the simple rule 'stronger opponent means bet the opponent': every broad predeclared stronger-opponent flip context was approximately coin-flip or negative. The more plausible use of dynamic strength is route-aware qualification / NO PLAY, especially around competitive parity, not automatic side reversal. Because the specific cell patterns were observed on the same retrospective window, no live context gate is promoted by V79; any next gate must be frozen and validated on fresh data.",
+  "guardrails": {
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "strictPregameStrengthOnly": true,
+    "sameDateGamesExcluded": true,
+    "finalStandingsNotUsed": true,
+    "fixedThirdsTierBoundaries": true,
+    "equalOutcomeBlindStrengthWeights": true,
+    "allNineCellsReported": true,
+    "thresholdSearchPerformed": false,
+    "cellSelectionAfterOutcomes": false,
+    "liveVetoCreated": false,
+    "liveCounterSideSwitchCreated": false,
+    "historicalPricesUsed": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
