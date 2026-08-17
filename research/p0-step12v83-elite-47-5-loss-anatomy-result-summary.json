@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "courtedge-p0-step12v83-elite-47-5-loss-anatomy-result-summary.v1",
+  "classification": "V83_ELITE_47_5_LOSS_ANATOMY_RETROSPECTIVE_COMPLETE",
+  "sourceWorkflowRunId": 32067929137,
+  "sourceArtifact": {
+    "name": "p0-step12v83-elite-47-5-loss-anatomy",
+    "artifactId": 9300626561,
+    "sha256": "fd6cb4a255b474b8544bfcc8583db85d94b1556ce174c5cd58546fb7157fa598"
+  },
+  "targetParity": {
+    "decisiveRows": 52,
+    "wins": 47,
+    "losses": 5,
+    "hitRate": 0.9038461538461539
+  },
+  "bySeason": {
+    "2024": {"rows": 18, "wins": 17, "losses": 1, "hitRate": 0.9444444444444444},
+    "2025": {"rows": 25, "wins": 21, "losses": 4, "hitRate": 0.84},
+    "2026_YTD": {"rows": 9, "wins": 9, "losses": 0, "hitRate": 1.0}
+  },
+  "fiveLosses": [
+    {"date": "2024-06-01", "gamePk": 747111, "selectedTeamId": 144, "opponentTeamId": 133},
+    {"date": "2025-06-29", "gamePk": 777301, "selectedTeamId": 158, "opponentTeamId": 115},
+    {"date": "2025-07-28", "gamePk": 776968, "selectedTeamId": 114, "opponentTeamId": 115},
+    {"date": "2025-08-06", "gamePk": 776859, "selectedTeamId": 116, "opponentTeamId": 142},
+    {"date": "2025-09-21", "gamePk": 776237, "selectedTeamId": 121, "opponentTeamId": 120}
+  ],
+  "headline": {
+    "simpleSingleSignalCandidateCount": 0,
+    "bestSingleSignalDescriptiveCandidate": null,
+    "interpretation": "NO_PREDECLARED_SIMPLE_SINGLE_SIGNAL_CAUGHT_AT_LEAST_4_OF_5_LOSSES"
+  },
+  "strongestDescriptiveSignals": [
+    {
+      "signal": "minimumPremiumMargin",
+      "orientation": "LOW_IS_LOSS",
+      "lossWarningAucBestOrientation": 0.8425531914893617,
+      "winsMedian": 0.04290175636465358,
+      "lossesMedian": 5.551115123125783e-17,
+      "mannWhitneyTwoSidedP": 0.013002044944149646,
+      "holmAdjustedP": 0.48107566293353693,
+      "lossesCaughtAtWinP10": 3,
+      "winsAtWinP10": 5,
+      "deployable": false
+    },
+    {
+      "signal": "lineup_exposure_rate_adv",
+      "orientation": "HIGH_IS_LOSS",
+      "lossWarningAucBestOrientation": 0.8085106382978723,
+      "winsMedian": 0.19634703196347025,
+      "lossesMedian": 0.30378359869885296,
+      "mannWhitneyTwoSidedP": 0.02542622667618384,
+      "holmAdjustedP": 0.9153441603426182,
+      "lossesCaughtAtWinP90": 3,
+      "winsAtWinP90": 5,
+      "deployable": false
+    },
+    {
+      "signal": "team_win10_diff",
+      "orientation": "LOW_IS_LOSS",
+      "lossWarningAucBestOrientation": 0.7276595744680852,
+      "winsMedian": 0.30000000000000004,
+      "lossesMedian": 0.10000000000000003,
+      "holmAdjustedP": 1.0,
+      "lossesCaughtAtWinP10": 3,
+      "winsAtWinP10": 6,
+      "deployable": false
+    }
+  ],
+  "categoricalFindings": {
+    "allFiveRemainSelectedStronger": true,
+    "allFiveOpponentsPrimaryTierBottom": true,
+    "allFiveOpponentsRecordTierBottom": true,
+    "f5ConsensusLossSplit": {"true": 3, "false": 2},
+    "selectedPrimaryTierLossSplit": {"TOP": 3, "MID": 2}
+  },
+  "scientificConclusion": "The five losses are heterogeneous. No predeclared single existing pregame signal cleanly captures at least four of the five. The strongest descriptive clue is low minimumPremiumMargin, but it captures only three losses and is not significant after Holm multiplicity correction. High lineup exposure also appears in three losses, while one loss occurred despite exceptionally high General/A+ confidence. The 47-5 cohort therefore currently looks more consistent with residual baseball upset variance plus several distinct failure modes than with one simple missing veto.",
+  "boundary": {
+    "retrospectiveOnly": true,
+    "newThresholdSearchPerformed": false,
+    "multiSignalCombinationSearchPerformed": false,
+    "warningPromotedToVeto": false,
+    "v80Changed": false,
+    "productionChanged": false,
+    "realFinancialExposure": 0
+  }
+}
