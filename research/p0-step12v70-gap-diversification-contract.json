@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "courtedge-p0-step12v70-gap-diversification-contract.v1",
+  "scientificStatus": "FROZEN_ADAPTIVE_DIVERSIFICATION_PLAN_BEFORE_ANY_V70_SCORER_EXISTS",
+  "objective": "Test whether already-frozen F5 route families from V19 can fill the zero-selection slate days of the frozen V69 high-coverage portfolio without weakening V69 thresholds, forcing a play, or exceeding two selections on any slate day.",
+  "adaptiveSelectionDisclosure": "V70 is motivated by the observed V69 drought structure, including 13 zero-selection slate days and a maximum four-slate-day drought. Therefore this is adaptive retrospective diversification, not independent confirmation. The candidate F5 routes themselves predate V69 and are frozen from V19; their overlap and outcome performance on V69 gap days have not been used to define this V70 contract.",
+  "mainBaseSha": "53f8807744065886b8a2501300ca7b2cc9fac889",
+  "evaluationUniverse": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "expectedRows": 6610,
+    "expectedEligibleSlateDays": 505,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "oddsUsedAsPredictiveFeatures": false
+  },
+  "frozenBaseline": {
+    "name": "V69_CONFLUENCE_LEDGER_TOP2_T0.550",
+    "consensusThreshold": 0.55,
+    "dailyCap": 2,
+    "expectedOpportunities": 969,
+    "expectedDecisiveRows": 964,
+    "expectedWins": 616,
+    "expectedLosses": 348,
+    "expectedPushes": 5,
+    "expectedHitRate": 0.6390041493775933,
+    "expectedMeanSelectionsPerSlateDay": 1.9188118811881187,
+    "expectedPctDaysAtLeast1": 97.42574257425743,
+    "expectedZeroSlateDays": 13,
+    "expectedMaxNoPlaySlateDayStreak": 4,
+    "v69ResultSummaryPath": "research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json",
+    "v69ResultSummaryGitBlobSha": "ac979e63b198bc7383e395456be460fb096fcefb"
+  },
+  "frozenDiversificationSources": {
+    "v19ContractPath": "research/p0-step12v19-volume-expansion-shadow-contract.json",
+    "v19ContractGitBlobSha": "8ca5207ec7c33715d95842f1f52cc3ec7cda65d1",
+    "v19ScorerPath": "scripts/p0-step12v19-volume-expansion-shadow.py",
+    "v19ScorerGitBlobSha": "fdd957c33e82e94f35e81d5b9a0903b4c452e2fd",
+    "v19FrozenAnchors": {
+      "F5_CONSENSUS": {"selectedRows": 124, "decisiveRows": 109, "wins": 87, "losses": 22, "pushes": 15},
+      "F5_CONSENSUS_OUTSIDE_A": {"selectedRows": 79, "decisiveRows": 67, "wins": 49, "losses": 18, "pushes": 12},
+      "F5_OUTSIDE_A_HRPA_OR_AT2": {"selectedRows": 59, "decisiveRows": 50, "wins": 39, "losses": 11, "pushes": 9},
+      "F5_OUTSIDE_A_PARETO_UNION": {"selectedRows": 61, "decisiveRows": 52, "wins": 40, "losses": 12, "pushes": 9}
+    },
+    "pitchmixWorkflowRunId": 31669146698,
+    "pitchmixArtifacts": {
+      "2023": {"artifactId": 9169089040, "digest": "sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"},
+      "2024": {"artifactId": 9169099182, "digest": "sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231"},
+      "2025": {"artifactId": 9169102385, "digest": "sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},
+      "2026_YTD": {"artifactId": 9169078788, "digest": "sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}
+    }
+  },
+  "candidateGapFillPoliciesExactly": {
+    "PARETO_ONLY": "On a V69 baseline zero-selection slate day only, add at most one FIRST_5_HOME_ML opportunity from frozen V19 F5_OUTSIDE_A_PARETO_UNION.",
+    "HRPA_OR_AT2_ONLY": "On a V69 baseline zero-selection slate day only, add at most one FIRST_5_HOME_ML opportunity from frozen V19 F5_OUTSIDE_A_HRPA_OR_AT2.",
+    "F5_CONSENSUS_OUTSIDE_A": "On a V69 baseline zero-selection slate day only, add at most one FIRST_5_HOME_ML opportunity from frozen V19 F5_CONSENSUS_OUTSIDE_A.",
+    "PARETO_THEN_ANY_OUTSIDE_A": "On a V69 baseline zero-selection slate day only, prefer frozen PARETO_UNION; if none exists, fall back to any frozen F5_CONSENSUS_OUTSIDE_A. Add at most one opportunity.",
+    "F5_CONSENSUS_ALL": "On a V69 baseline zero-selection slate day only, add at most one frozen F5_CONSENSUS FIRST_5_HOME_ML opportunity. This is a descriptive upper-coverage variant and may not override or duplicate a V69 baseline game."
+  },
+  "gapFillTieBreakExactly": [
+    "prefer_PARETO_UNION_when_policy_allows",
+    "then_prefer_HRPA_OR_AT2_when_policy_allows",
+    "then_higher_min_frozen_F5_C4_F5_FULL13_home_probability",
+    "then_lower_gamePk"
+  ],
+  "portfolioRules": {
+    "gapFillAllowedOnlyWhenV69BaselineHasZeroSelectionsThatSlateDay": true,
+    "gapFillMaximumPerZeroDay": 1,
+    "hardMaximumSelectionsPerSlateDay": 2,
+    "maximumSelectionsPerGame": 1,
+    "contradictorySameGameSelectionsAllowed": false,
+    "existingV69SelectionsMayBeReplaced": false,
+    "existingV69ThresholdMayBeLowered": false,
+    "forcedPlayAllowed": false,
+    "carryForwardPressureFromPriorNoPlayDaysAllowed": false
+  },
+  "operationalDiagnostics": {
+    "preferencesNotPromotionGates": true,
+    "preferredMaximumNoPlaySlateDayStreak": 2,
+    "preferredPctSlateDaysWithAtLeast1": 98.0,
+    "preferredCombinedDecisiveHitRateMin": 0.60,
+    "preferredCombinedWilson95LowerMin": 0.58,
+    "preferredMeanSelectionsPerSlateDayMax": 2.0,
+    "reportGapDaysCovered": true,
+    "reportGapDaysStillUncovered": true,
+    "reportGapFillStandaloneWinsLossesPushes": true,
+    "reportBySeason": true,
+    "reportNoPlayStreakDistribution": true,
+    "reportOfficialDateClusterBootstrap": true,
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260820
+  },
+  "statistics": {
+    "newFeatureSearchAllowed": false,
+    "newNumericThresholdSearchAllowed": false,
+    "v69ThresholdRelaxationAllowed": false,
+    "v19RouteMutationAllowed": false,
+    "postOutcomeGapFillRouteAdditionAllowed": false,
+    "bestRetrospectivePolicyMayBeDescribedButNotPromoted": true,
+    "allFivePoliciesMustBeReported": true,
+    "historicalHitRateEstablishesPositiveEv": false
+  },
+  "decisionBoundary": {
+    "canChangeProspectiveV68": false,
+    "canPromoteProduction": false,
+    "canChangeLiveLookupAuthorization": false,
+    "canChangeRouting": false,
+    "canChangeRanking": false,
+    "canChangeStake": false,
+    "canEnableBetElite": false,
+    "canEnableAutomaticBetting": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0,
+    "futureProspectiveFreezeRequiredBeforePromotion": true
+  }
+}
