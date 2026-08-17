@@ -1,0 +1,134 @@
+name: Validate P0 Step 12V78 Route-Aware Warning Veto Flip Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v78-route-aware-warning-veto-flip-audit-contract.json'
+      - 'scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py'
+      - '.github/workflows/validate-p0-step12v78-route-aware-warning-veto-flip-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  route-aware-warning-veto-flip-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+      - name: Prove V78 contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v78-route-aware-warning-veto-flip-audit-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py | tail -1)"
+          test -n "$CONTRACT_ADD"; test -n "$SCORER_ADD"; test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v78-route-aware-warning-veto-flip-audit-contract.json'))
+          assert c['scientificStatus']=='FROZEN_ROUTE_AWARE_VETO_AND_COUNTERSIDE_AUDIT_BEFORE_ANY_V78_SCORER_EXISTS'
+          assert c['oracleCounterfactualBoundary']['expectedDecisiveLossesMechanicallyFlippableWithOutcomeOracle']==138
+          assert c['oracleCounterfactualBoundary']['actionableInferenceAllowedFromOracle'] is False
+          assert c['pregameWarningArchitecture']['aPlus']['flagRule']=='NEVER_FLAG_IN_V78'
+          assert c['statisticsBoundary']['thresholdSearchAllowed'] is False
+          assert c['statisticsBoundary']['liveCounterSideSwitchCreatedByV78'] is False
+          assert c['decisionBoundary']['realFinancialExposure']==0
+          print('V78_CONTRACT_PRE_SCORER_FREEZE_PROVED')
+          PY
+      - name: Syntax check V78 scorer
+        run: python -m py_compile scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+      - name: Resolve immutable inputs
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"; done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY"; test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+      - name: Execute frozen V78 audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v72-scorer scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py \
+            --v77-scorer scripts/p0-step12v77-general-consensus-loss-threat-geometry.py \
+            --v77-summary research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json \
+            --contract research/p0-step12v78-route-aware-warning-veto-flip-audit-contract.json \
+            --out work/v78-route-aware-warning-veto-flip-audit.json
+      - name: Validate parity and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v78-route-aware-warning-veto-flip-audit.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v78-route-aware-warning-veto-flip-audit.v1'
+          assert r['classification']=='V78_ROUTE_AWARE_WARNING_VETO_FLIP_RETROSPECTIVE_AUDIT_COMPLETE'
+          assert r['parentParity']=={'pickDays':395,'decisiveRows':392,'wins':254,'losses':138,'pushes':3}
+          assert r['oracleCounterfactualCeiling']['decisiveHistoricalLosses']==138
+          assert r['oracleCounterfactualCeiling']['oppositeSideWouldMechanicallyWinAllDecisiveLosses']==138
+          expected={'BASELINE_KEEP','PRIMARY_VETO','PRIMARY_COUNTERSIDE_FLIP','GENERAL_PRIMARY_VETO_ONLY','GENERAL_PRIMARY_COUNTERSIDE_ONLY','GENERAL_RED_CORNER_COMPARATOR_VETO','GENERAL_RED_CORNER_COMPARATOR_FLIP','PREMIUM_HR_VETO_ONLY','PREMIUM_HR_COUNTERSIDE_ONLY'}
+          assert set(r['policies'])==expected
+          assert r['policies']['BASELINE_KEEP']['wins']==254 and r['policies']['BASELINE_KEEP']['losses']==138
+          g=r['guardrails']
+          assert g['strictlyPregameFlagInputsOnly'] is True and g['oracleCeilingNotActionable'] is True
+          assert g['outcomeThresholdSearchPerformed'] is False and g['bestPolicySelectedAfterOutcomes'] is False
+          assert g['liveVetoCreated'] is False and g['liveCounterSideSwitchCreated'] is False
+          assert g['productionChanged'] is False and g['prospectiveV68Changed'] is False
+          assert g['positiveEvEstablished'] is False and g['realFinancialExposure']==0
+          print(json.dumps({'flags':r['flagDiagnostics'],'policies':{k:{'n':v['opportunities'],'w':v['wins'],'l':v['losses'],'p':v['pushes'],'hit':v['decisiveHitRate'],'coverage':v['coverageVsBaselinePickDays'],'delta':v['hitRateDeltaVsBaseline']} for k,v in r['policies'].items()}},indent=2))
+          PY
+      - name: Upload V78 report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v78-route-aware-warning-veto-flip-audit
+          path: work/v78-route-aware-warning-veto-flip-audit.json
+          if-no-files-found: error
+          retention-days: 90
