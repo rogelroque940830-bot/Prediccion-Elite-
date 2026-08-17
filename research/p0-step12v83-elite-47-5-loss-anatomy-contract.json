@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "courtedge-p0-step12v83-elite-47-5-loss-anatomy-contract.v1",
+  "scientificStatus": "FROZEN_47_5_LOSS_ANATOMY_PLAN_BEFORE_ANY_V83_SCORER_EXISTS",
+  "objective": "Decompose one by one the five historical losses inside the exact V82 highest-confluence cohort and compare them with its 47 wins using only already-existing pregame evidence. The goal is to determine whether any single simple pre-existing warning signal consistently distinguishes those losses without inventing a new multi-layer model. This is bounded retrospective diagnosis only because the outcomes and the 47-5 headline were already inspected in V82.",
+  "adaptiveSelectionDisclosure": "V82 already exposed that the target cohort is 52 decisive rows with 47 wins and 5 losses. Therefore V83 cannot independently validate, promote, or certify any warning discovered here. Any apparent warning may only define a later freeze-first prospective hypothesis.",
+  "immutableParents": {
+    "v82BranchHeadAtV83Start": "5b76e46faf51f1888268b15f25afa35d1c7a48ca",
+    "v82Contract": {"path": "research/p0-step12v82-general-x-premium-a-contract.json", "gitBlobSha": "a2a58e92e21585fdcb350fdfeb84e838a65f7e8d"},
+    "v82Scorer": {"path": "scripts/p0-step12v82-general-x-premium-a.py", "gitBlobSha": "58f474de0ed98ed62ed2b7181ed12d4f008b8e79"},
+    "v79Scorer": {"path": "scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py", "gitBlobSha": "4a4f9f8a98d824f529b802477cc98568d9f78b4d"},
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "frozenClassifier": {"path": "server/mlb-frozen-a-plus-classifier.ts", "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2", "requiredVersion": "mlb-frozen-a-plus-classifier.v1"},
+    "sourceV82WorkflowRunId": 32066644746,
+    "sourceV82ArtifactId": 9300152235,
+    "sourceV82ArtifactDigest": "sha256:17fba3d21fedb18286c7a46512346162d4e5b2a3bcc42e030f2096d9c348affc"
+  },
+  "targetCohortExactly": {
+    "parentCandidate": "GENERAL_CONSENSUS_TOP1_T0.550 before specialized-route deduplication",
+    "officialDateMonthDayMinimum": "05-01",
+    "side": "HOME",
+    "strengthRelation": "SELECTED_STRONGER",
+    "classifierCondition": "exact frozen A+ = Premium-A true AND A_PLUS_C4_2022_FROZEN >= 0.69 AND A_PLUS_FULL13_2022_FROZEN >= 0.64",
+    "expectedDecisiveRows": 52,
+    "expectedWins": 47,
+    "expectedLosses": 5,
+    "outcomeMarket": "FULL_GAME_ML"
+  },
+  "pregameSignalsExactly": {
+    "modelConviction": [
+      "consensusScore",
+      "p16Selected",
+      "p68Selected",
+      "classifierScore"
+    ],
+    "dynamicStrength": [
+      "selectedStrengthScore",
+      "opponentStrengthScore",
+      "strengthGap",
+      "selectedWinPct",
+      "opponentWinPct",
+      "selectedRunDifferentialPerGame",
+      "opponentRunDifferentialPerGame"
+    ],
+    "frozenClassifierProbabilities": [
+      "aPlusC4PHome",
+      "aPlusFull13PHome",
+      "aPlusMinHome",
+      "aPlusProbabilityDisagreementAbs",
+      "f5C4PHome",
+      "f5Full13PHome",
+      "f5MinHome"
+    ],
+    "premiumMargins": [
+      "team_win10_diff_margin_vs_frozen_premium_threshold",
+      "starter_kbb_adv_margin_vs_frozen_premium_threshold",
+      "lineup_exposure_rate_adv_margin_vs_frozen_premium_threshold",
+      "minimumPremiumMargin"
+    ],
+    "rawFrozenClassifierFeatures": [
+      "team_rd10_diff",
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "team_ra10_adv",
+      "lineup_exposure_rate_adv",
+      "starter_runrisk_adv",
+      "team_rs10_diff",
+      "starter_hr_adv",
+      "min_probable_prior_bf",
+      "lineup_continuity_rate_adv",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10"
+    ],
+    "custodySignals": [
+      "bullpen_pitches_1d_adv",
+      "fg_exposure_adv"
+    ],
+    "preExistingCategoricalFlags": [
+      "f5Consensus",
+      "recordTierRelation",
+      "selectedPrimaryTier",
+      "opponentPrimaryTier",
+      "selectedRecordTier",
+      "opponentRecordTier"
+    ]
+  },
+  "fixedDerivedSignalDefinitions": {
+    "aPlusMinHome": "min(aPlusC4PHome, aPlusFull13PHome)",
+    "aPlusProbabilityDisagreementAbs": "abs(aPlusC4PHome - aPlusFull13PHome)",
+    "f5MinHome": "min(f5C4PHome, f5Full13PHome)",
+    "premiumMargins": "raw frozen Premium-A component value minus its already-frozen Premium-A threshold",
+    "minimumPremiumMargin": "minimum of the three already-defined Premium-A component margins",
+    "strengthGap": "opponentStrengthScore - selectedStrengthScore; more negative means selected team is stronger"
+  },
+  "predeclaredDiagnostics": {
+    "listAllFiveLossesIndividually": true,
+    "compareAgainstAll47Wins": true,
+    "continuousMetrics": [
+      "medianWins",
+      "medianLosses",
+      "meanWins",
+      "meanLosses",
+      "mannWhitneyTwoSidedP",
+      "holmAdjustedPWithinPredeclaredContinuousSignals",
+      "cliffsDeltaLossMinusWin",
+      "lossWarningAucRaw",
+      "lossWarningAucBestOrientation"
+    ],
+    "winReferenceTailDiagnostic": {
+      "lowerQuantile": 0.10,
+      "upperQuantile": 0.90,
+      "rule": "For each continuous signal, compute thresholds from WIN values only, then report how many of the five losses fall below the win 10th percentile or above the win 90th percentile and how many wins are flagged. This is descriptive, not a deployable threshold search."
+    },
+    "categoricalDiagnostics": "For each pre-existing categorical flag, report exact W/L counts and loss concentration by category without inventing new categories.",
+    "seasonBreakdown": ["2024", "2025", "2026_YTD"],
+    "simpleWarningCandidateDisplayRule": "A signal may be highlighted descriptively only if it captures at least 4 of 5 losses in one predeclared win-reference tail OR a pre-existing categorical state captures at least 4 of 5 losses while sacrificing no more than 20 percent of wins. It remains retrospective and cannot be promoted.",
+    "noCombinationSearch": true
+  },
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "newFeatureSearchAllowed": false,
+    "newRawSignalAdditionAfterOutcomeInspectionAllowed": false,
+    "newThresholdSearchAllowed": false,
+    "multiSignalCombinationSearchAllowed": false,
+    "decisionTreeSearchAllowed": false,
+    "interactionSearchAllowed": false,
+    "postOutcomeRuleOptimizationAllowed": false,
+    "claimIndependentConfirmationAllowed": false,
+    "claimCausationAllowed": false,
+    "promoteRetrospectiveWarningToVetoAllowed": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "v80Changed": false,
+    "productionChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
