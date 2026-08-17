@@ -1,0 +1,68 @@
+name: Validate P0 Step 12V71 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v71-operational-start-window-top1-result-summary.json'
+      - '.github/workflows/validate-p0-step12v71-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable successful V71 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v71-operational-start-window-top1
+          path: inputs/v71
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31990116239
+
+      - name: Validate summary against immutable full report
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="$(find inputs/v71 -type f -name 'v71-operational-start-window-top1.json' -print -quit)"
+          test -n "$REPORT"
+          python - "$REPORT" <<'PY'
+          import json,sys
+          report=json.load(open(sys.argv[1]))
+          summary=json.load(open('research/p0-step12v71-operational-start-window-top1-result-summary.json'))
+          assert report['classification']==summary['classification']
+          assert report['fullSeasonTop1Parity']==summary['fullSeasonTop1Parity']
+          assert report['fullSeasonTop1Stats']['decisiveHitRate']==summary['fullSeasonDecisiveHitRate']
+          assert summary['sourceArtifact']=={
+            'workflowRunId':31990116239,
+            'artifactId':9275037711,
+            'artifactDigest':'sha256:0f25e57ae1f19e5b6d9dda0f279e282b734aad966aa20282d0b59211909a415d',
+          }
+          for wid in ('MAY01','MAY15'):
+              r=report['operationalStartWindows'][wid]
+              s=summary['operationalStartWindows'][wid]
+              for key in (
+                  'eligibleSlateDays','activeTop1PickDays','wins','losses','pushes','decisiveRows',
+                  'winRateAcrossAllPickDays','decisiveHitRate','pctEligibleSlateDaysWithTop1Pick',
+                  'wilson95OnDecisiveHitRate','officialDateBootstrapDecisiveHitRate',
+                  'decisiveHitRateDifferenceVsFullSeason','bySeason',
+              ):
+                  assert r[key]==s[key],(wid,key,r[key],s[key])
+              assert r['lossStreaks']['maximumConsecutiveLosingSelectedDaysWithinSeason']==s['maximumConsecutiveLosingSelectedDaysWithinSeason']
+          assert summary['guardrails']==report['interpretationGuardrails']
+          assert summary['guardrails']['newDateCutoffSearchPerformed'] is False
+          assert summary['guardrails']['historicalBestWindowChosenForPromotion'] is False
+          assert summary['guardrails']['positiveEvEstablished'] is False
+          assert summary['guardrails']['productionChanged'] is False
+          assert summary['guardrails']['prospectiveV68Changed'] is False
+          assert summary['guardrails']['realFinancialExposure']==0
+          print('V71_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          PY
