@@ -1,0 +1,203 @@
+name: Validate P0 Step 12V80 General Strength Historical Parity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v80-general-strength-prospective-confirmation-contract.json'
+      - 'scripts/p0-step12v80-general-strength-historical-parity.py'
+      - '.github/workflows/validate-p0-step12v80-general-strength-historical-parity.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  historical-parity-before-any-prospective-capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Prove V80 contract predates parity scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/p0-step12v80-general-strength-prospective-confirmation-contract.json'
+          SCORER='scripts/p0-step12v80-general-strength-historical-parity.py'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- "$SCORER" | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v80-general-strength-prospective-confirmation-contract.json'))
+          assert c['scientificStatus']=='FROZEN_GENERAL_STRENGTH_PROSPECTIVE_CONFIRMATION_BEFORE_ANY_V80_SCORER_OR_CAPTURE_EXISTS'
+          assert c['mainBaseSha']=='f9038d998c40794e2ee351076f09d7048b594fec'
+          assert c['prospectiveCohort']['firstEligibleOfficialDate']=='2026-08-18'
+          assert c['prospectiveCohort']['targetRouteExactly']=='V16_V68_CONSENSUS_T0.550'
+          assert c['historicalParityGateBeforeProspectiveCapture']['required'] is True
+          assert c['historicalParityGateBeforeProspectiveCapture']['maximumNumericAbsoluteDifference']==1e-12
+          assert c['outcomeEmbargo']['minimumGeneralTop1Decisions']==50
+          assert c['outcomeEmbargo']['minimumDistinctOfficialDatesWithGeneralTop1Decision']==40
+          assert c['outcomeEmbargo']['minimumSelectedStrongerDecisions']==15
+          assert c['outcomeEmbargo']['minimumPeerOrWeakerDecisions']==15
+          assert c['outcomeEmbargo']['interimOutcomePeekingAllowed'] is False
+          assert c['decisionBoundary']['realFinancialExposure']==0
+          print('V80_CONTRACT_PRE_PARITY_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check V80 parity scorer and frozen V79 runner
+        run: |
+          python -m py_compile scripts/p0-step12v80-general-strength-historical-parity.py
+          python -m py_compile scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py
+          python -m py_compile scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Download preserved successful V79 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v79-dynamic-team-strength-route-threat-regimes
+          path: inputs/v79-official
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 32054316379
+
+      - name: Resolve immutable inputs
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+            test -s "inputs/step12v3/$S/cohort/official-acquisition.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          V79="$(find inputs/v79-official -type f -name v79-dynamic-team-strength-route-threat-regimes.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          test -n "$V79"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "v79=$V79" >> "$GITHUB_OUTPUT"
+
+      - name: Reproduce successful frozen V79 report from immutable custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v72-scorer scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py \
+            --v77-scorer scripts/p0-step12v77-general-consensus-loss-threat-geometry.py \
+            --v78-scorer scripts/p0-step12v78-route-aware-warning-veto-flip-audit.py \
+            --v78-summary research/p0-step12v78-route-aware-warning-veto-flip-audit-result-summary.json \
+            --contract research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json \
+            --out work/v79-rerun.json
+
+      - name: Execute V80 historical parity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v80-general-strength-historical-parity.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v72-scorer scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py \
+            --v79-contract research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json \
+            --v79-scorer scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py \
+            --official-v79-report '${{ steps.paths.outputs.v79 }}' \
+            --rerun-v79-report work/v79-rerun.json \
+            --v80-contract research/p0-step12v80-general-strength-prospective-confirmation-contract.json \
+            --out work/v80-historical-parity.json
+
+      - name: Enforce V80 parity gate result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v80-historical-parity.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v80-general-strength-historical-parity.v1'
+          assert r['classification']=='V80_HISTORICAL_PARITY_GATE_PASSED'
+          assert r['prospectiveCaptureAuthorizedAfterThisGate'] is True
+          assert r['fullOfficialV79Reproduction']['exactJsonEquality'] is True
+          assert r['fullOfficialV79Reproduction']['officialCanonicalSha256']==r['fullOfficialV79Reproduction']['rerunCanonicalSha256']
+          s=r['v79StrengthReproduction']
+          assert s['preservedLossRowsCompared']==138
+          assert s['lossRouteOrGameIdentityMismatches']==0
+          assert s['lossStrengthTierMismatches']==0
+          assert s['numericMismatchesAboveTolerance']==0
+          assert s['maximumNumericAbsoluteDifference'] <= 1e-12
+          i=r['integrity']
+          assert i['prospectiveOutcomesRead'] is False
+          assert i['prospectiveCaptureCreated'] is False
+          assert i['v68Changed'] is False and i['productionChanged'] is False
+          assert i['routingChanged'] is False and i['rankingChanged'] is False and i['stakingChanged'] is False
+          assert i['oddsUsedAsFeatures'] is False and i['realFinancialExposure']==0
+          print(json.dumps({
+            'classification':r['classification'],
+            'generalRows':r['v69GeneralTop1Reproduction']['generalRows'],
+            'generalFingerprint':r['v69GeneralTop1Reproduction']['generalTop1StructuralFingerprintSha256'],
+            'maxAbsDiff':s['maximumNumericAbsoluteDifference']
+          },indent=2))
+          PY
+
+      - name: Upload V80 historical parity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v80-general-strength-historical-parity
+          path: work/v80-historical-parity.json
+          if-no-files-found: error
+          retention-days: 90

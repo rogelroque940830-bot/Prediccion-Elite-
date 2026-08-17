@@ -1,0 +1,233 @@
+name: P0 Step 12V80 Capture General Strength Prospective
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v80-general-strength-live-context.ts'
+      - 'scripts/p0-step12v80-general-strength-prospective.py'
+      - '.github/workflows/p0-step12v80-capture-general-strength-prospective.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: p0-step12v80-capture-general-strength-prospective
+  cancel-in-progress: false
+
+jobs:
+  validate-capture-boundary:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate outcome-free capture implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/p0-step12v80-general-strength-prospective.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v80-general-strength-prospective-confirmation-contract.json'))
+          assert c['prospectiveCohort']['firstEligibleOfficialDate']=='2026-08-18'
+          assert c['prospectiveCohort']['maximumSelectionsPerOfficialDate']==1
+          assert c['prospectiveCohort']['firstCanonicalGameSnapshotImmutable'] is True
+          assert c['prospectiveCohort']['sameDateCompletedGamesMayNotUpdateAnyFeatureForLaterGames'] is True
+          assert c['marketBoundary']['oddsMayBeModelFeatures'] is False
+          assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
+          text=open('scripts/p0-step12v80-general-strength-prospective.py').read()
+          assert 'outcome-query' in text or 'no outcome-query' in text.lower()
+          assert 'CONFLUENCE_LEDGER_TOP1_T0.550' in text
+          assert 'V16_V68_CONSENSUS_T0.550' in text
+          print('V80_OUTCOME_FREE_CAPTURE_BOUNDARY_VERIFIED')
+          PY
+
+  capture-live-pregame:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Checkout V80 code from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout V68 immutable source ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: v68-ledger
+          fetch-depth: 1
+
+      - name: Checkout V80 immutable prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v80-general-strength-prospective
+          path: v80-ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve MLB official date in Eastern time
+        id: date
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          d=dt.datetime.now(ZoneInfo('America/New_York')).date()
+          print(f'target={d.isoformat()}')
+          print(f'eligible={str(d>=dt.date(2026,8,18)).lower()}')
+          PY
+
+      - name: Stop before first V80 eligible official date
+        if: steps.date.outputs.eligible != 'true'
+        run: echo 'V80 prospective capture is not eligible before 2026-08-18.'
+
+      - name: Require immutable prior-date V68 and V80 states
+        if: steps.date.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "v68-ledger/v68/states/${{ steps.date.outputs.target }}.json" || { echo 'V80_FAIL_CLOSED_V68_STATE_MISSING' >&2; exit 1; }
+          test -s "v80-ledger/v80/states/${{ steps.date.outputs.target }}.json" || { echo 'V80_FAIL_CLOSED_V80_STATE_MISSING' >&2; exit 1; }
+
+      - name: Install Node dependencies
+        if: steps.date.outputs.eligible == 'true'
+        working-directory: code
+        run: npm ci --ignore-scripts
+
+      - name: Download immutable V16 control manifest
+        if: steps.date.outputs.eligible == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Poll exact pregame identity and build Full13 classifier context
+        if: steps.date.outputs.eligible == 'true'
+        id: source
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
+            --mode live \
+            --state '../v80-ledger/v80/states/${{ steps.date.outputs.target }}.json' \
+            --target-date '${{ steps.date.outputs.target }}' \
+            --max-lead-minutes 20 \
+            --out ../work/context.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work/context.json'))
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          assert x['policy']['realFinancialExposure']==0
+          n=len(x.get('rows',[]))
+          print(f'rows={n}')
+          print(f'has_rows={str(n>0).lower()}')
+          PY
+
+      - name: Score frozen V16/V68 and preserve V80 first captures
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true'
+        id: score
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING=()
+          if test -s ../v80-ledger/v80/captures/canonical.json; then
+            EXISTING=(--existing ../v80-ledger/v80/captures/canonical.json)
+          fi
+          python scripts/p0-step12v80-general-strength-prospective.py capture \
+            --context ../work/context.json \
+            --contract research/p0-step12v80-general-strength-prospective-confirmation-contract.json \
+            --v68-state '../v68-ledger/v68/states/${{ steps.date.outputs.target }}.json' \
+            --v68-source-script scripts/p0-step12v68-prospective-source.py \
+            --v68-capture-script scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            --v68-source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest ../v16/pure-settlement-model-manifest.json \
+            "${EXISTING[@]}" \
+            --out ../work/canonical.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work/canonical.json'))
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          assert x['policy']['oddsUsedAsFeatures'] is False
+          assert x['policy']['realFinancialExposure']==0
+          n=int(x['summary']['newCaptures'])
+          print(f'new={n}')
+          print(f'has_new={str(n>0).lower()}')
+          print(f'total={x["summary"]["canonicalGames"]}')
+          PY
+
+      - name: Preserve immutable context evidence canonical capture and receipt
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "v80-ledger/v80/source-records/${{ steps.date.outputs.target }}" v80-ledger/v80/captures v80-ledger/v80/receipts
+          python - <<'PY'
+          import json,os
+          ctx=json.load(open('work/context.json'))
+          for row in ctx.get('rows',[]):
+              gp=int(row['gamePk'])
+              p=f'v80-ledger/v80/source-records/${{ steps.date.outputs.target }}/{gp}.json'
+              if os.path.exists(p):
+                  continue
+              with open(p,'w') as f: json.dump(row,f,indent=2,sort_keys=True);f.write('\n')
+          cap=json.load(open('work/canonical.json'))
+          assert cap['policy']['outcomesRead'] is False and cap['policy']['pricesRead'] is False
+          with open('v80-ledger/v80/captures/canonical.json','w') as f: json.dump(cap,f,indent=2,sort_keys=True);f.write('\n')
+          receipt={
+            'schemaVersion':'courtedge-p0-step12v80-capture-receipt.v1',
+            'officialDate':'${{ steps.date.outputs.target }}',
+            'githubRunId':'${{ github.run_id }}',
+            'githubRunAttempt':'${{ github.run_attempt }}',
+            'contextRows':len(ctx.get('rows',[])),
+            'captureSummary':cap['summary'],
+            'outcomesRead':False,
+            'pricesRead':False,
+            'oddsUsedAsFeatures':False,
+            'researchOnly':True,
+            'realFinancialExposure':0,
+          }
+          with open('v80-ledger/v80/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w') as f: json.dump(receipt,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+
+      - name: Commit only newly captured immutable games
+        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        working-directory: v80-ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'court-edge-v80-research-bot'
+          git config user.email 'v80-research-bot@users.noreply.github.com'
+          git add v80/captures v80/source-records v80/receipts
+          git diff --cached --quiet && exit 0
+          git commit -m "V80 capture ${{ steps.date.outputs.target }}: add ${{ steps.score.outputs.new }} immutable pregame game(s)"
+          git pull --rebase origin data/p0-step12v80-general-strength-prospective
+          git push origin HEAD:data/p0-step12v80-general-strength-prospective

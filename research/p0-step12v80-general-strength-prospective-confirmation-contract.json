@@ -1,0 +1,226 @@
+{
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-prospective-confirmation-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_GENERAL_STRENGTH_PROSPECTIVE_CONFIRMATION_BEFORE_ANY_V80_SCORER_OR_CAPTURE_EXISTS",
+  "mainBaseSha": "f9038d998c40794e2ee351076f09d7048b594fec",
+  "objective": "Prospectively confirm or reject, on fresh post-V79 data, the specific V79 finding that the exact frozen General Winner TOP1 route is more reliable when the selected team is structurally stronger pregame than when the matchup is peer-strength or the selected team is structurally weaker. V80 freezes the cohort definition, team-strength construction, embargo, and statistical tests before any eligible V80 capture or outcome scorer exists.",
+  "adaptiveSelectionDisclosure": "The 2024-2026_YTD outcomes through V79 were inspected and motivated this exact hypothesis. They are discovery evidence only and are forbidden from deciding V80. The first V80-eligible official date is 2026-08-18.",
+  "immutableParentEvidence": {
+    "v79Contract": {
+      "path": "research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json",
+      "gitBlobSha": "7389806995657451e14df9203dad1cb0a7aff4fc",
+      "requiredScientificStatus": "FROZEN_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_BEFORE_ANY_V79_SCORER_EXISTS"
+    },
+    "v79ResultSummary": {
+      "path": "research/p0-step12v79-dynamic-team-strength-route-threat-regimes-result-summary.json",
+      "gitBlobSha": "17875caf90d20bf248a2a8def95dfa3aaeccc9cc",
+      "requiredClassification": "V79_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_RETROSPECTIVE_COMPLETE",
+      "sourceWorkflowRunId": 32054316379,
+      "sourceArtifactId": 9295845084,
+      "sourceArtifactDigest": "sha256:c19fe3a0208f05deabe7e979bd387051a26ba7ffc526a8c851360f6e9760333d"
+    },
+    "v69Contract": {
+      "path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json",
+      "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"
+    },
+    "v69Scorer": {
+      "path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
+    },
+    "v68Contract": {
+      "path": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+      "gitBlobSha": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+      "requiredScientificStatus": "FROZEN_BEFORE_ANY_V68_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS"
+    },
+    "frozenClassifierSource": {
+      "path": "server/mlb-frozen-a-plus-classifier.ts",
+      "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2",
+      "requiredVersion": "mlb-frozen-a-plus-classifier.v1"
+    },
+    "frozenRouterSource": {
+      "path": "server/mlb-frozen-research-route-assessor.ts",
+      "gitBlobSha": "7f98543b34332a0f40bf2c40bf0154e4c3045540",
+      "requiredVersion": "mlb-frozen-research-route-assessor.v1"
+    },
+    "full13LiveFeatureBuilder": {
+      "path": "server/mlb-full13-live-feature-builder.ts",
+      "gitBlobSha": "ed373ebdd261365138366fd055f500ba8b040587",
+      "requiredVersion": "mlb-full13-live-canonical-v1"
+    }
+  },
+  "prospectiveCohort": {
+    "firstEligibleOfficialDate": "2026-08-18",
+    "officialDatesOnOrBefore2026_08_17Eligible": false,
+    "targetSport": "MLB_REGULAR_SEASON",
+    "parentPortfolioExactly": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "targetRouteExactly": "V16_V68_CONSENSUS_T0.550",
+    "generalDecisionDefinition": "A V80 decision exists only when the deterministic CONFLUENCE_LEDGER_TOP1_T0.550 winner for that official date is the exact General route V16_V68_CONSENSUS_T0.550 after all higher-priority frozen V69 routes are respected.",
+    "specialRoutePriorityExactly": [
+      "A_PLUS_V68_AGREE_D1_ROUTER",
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
+      "A_PLUS_D1_ROUTER",
+      "PREMIUM_A_ROUTE_SWITCH",
+      "GENERAL_V16_V68_FULL_GAME"
+    ],
+    "withinPriorityTieBreakExactly": [
+      "higher_consensus_score",
+      "higher_frozen_classifier_score_for_home_only_routes",
+      "lower_gamePk"
+    ],
+    "generalConsensusThreshold": 0.55,
+    "v16V68DecisionBoundary": 0.5,
+    "maximumSelectionsPerOfficialDate": 1,
+    "captureEveryEligibleGamePregameBeforeDailyPortfolioMaterialization": true,
+    "eachGameSnapshotMustBeStrictlyBeforeItsScheduledStart": true,
+    "requiresExactPregameLineupSemantics": true,
+    "requiresExactPregameProbableStarterSemantics": true,
+    "firstCanonicalGameSnapshotImmutable": true,
+    "duplicateGameCaptureReturnsExistingCanonicalSnapshot": true,
+    "sameDateCompletedGamesMayNotUpdateAnyFeatureForLaterGames": true,
+    "wholeOfficialDateMustUsePriorDateStateOnly": true,
+    "dailyPortfolioMayBeMaterializedOnlyFromImmutableOutcomeFreePregameSnapshots": true,
+    "dailyPortfolioMaterializationMayNotReadAnyOutcome": true,
+    "historicalOrSameDayOutcomeBackfillIntoPregameSnapshotsAllowed": false,
+    "liveDecisionTimeActionabilityClaimedByV80": false,
+    "reasonLiveActionabilityNotClaimed": "Exact V69 slate-wide TOP1 reproduction may require immutable pregame snapshots from games with different start times. V80 validates the fresh-data structural hypothesis without pretending that a slate-wide choice was known at the earliest game's live decision time. A separate frozen operational timing rule is required before production promotion."
+  },
+  "pregameStrengthDefinition": {
+    "strictAsOfRule": "For target officialDate D, use only same-season MLB regular-season Final games with officialDate strictly earlier than D. Every game on D is excluded, including earlier same-day games and doubleheader Game 1 results.",
+    "minimumPriorGamesPerTeam": 20,
+    "rawMetricsExactly": [
+      "cumulative_win_pct",
+      "cumulative_run_differential_per_game"
+    ],
+    "rankingUniverse": "All MLB teams with at least 20 prior same-season regular-season games as of D.",
+    "percentileRule": "For each raw metric independently, assign average-rank percentile from 0=weakest to 1=strongest across the ranking universe. Ties receive the average rank. If N>1, percentile=(average_rank_1_based-1)/(N-1).",
+    "primaryStrengthScore": "Equal-weight arithmetic mean of win-pct percentile and run-differential-per-game percentile. No fitted or outcome-weighted coefficients.",
+    "tierRule": {
+      "BOTTOM": "strengthScore < 1/3",
+      "MID": "1/3 <= strengthScore < 2/3",
+      "TOP": "strengthScore >= 2/3"
+    },
+    "strengthGap": "opponentStrengthScore - selectedStrengthScore; larger values mean a structurally stronger opponent relative to the selected side.",
+    "tierRelation": {
+      "SELECTED_STRONGER": "selected tier ordinal > opponent tier ordinal",
+      "PEER": "selected tier ordinal == opponent tier ordinal",
+      "SELECTED_WEAKER": "selected tier ordinal < opponent tier ordinal"
+    },
+    "primaryComparisonGroups": {
+      "STRONGER": ["SELECTED_STRONGER"],
+      "PEER_OR_WEAKER": ["PEER", "SELECTED_WEAKER"]
+    },
+    "weightsSearchAllowed": false,
+    "tierBoundarySearchAllowed": false,
+    "strengthGapThresholdSearchAllowed": false
+  },
+  "historicalParityGateBeforeProspectiveCapture": {
+    "required": true,
+    "sourceWindow": "V79 historical target dates",
+    "mustReproduceV79StrengthFormulaExactly": true,
+    "mustReproduceV69GeneralTop1IdentityExactly": true,
+    "maximumNumericAbsoluteDifference": 1e-12,
+    "routeOrGameIdentityMismatchesAllowed": 0,
+    "strengthTierMismatchesAllowed": 0,
+    "outcomesMayNotBeUsedToRepairParity": true
+  },
+  "outcomeEmbargo": {
+    "allMinimumsRequiredSimultaneously": true,
+    "minimumGeneralTop1Decisions": 50,
+    "minimumDistinctOfficialDatesWithGeneralTop1Decision": 40,
+    "minimumSelectedStrongerDecisions": 15,
+    "minimumPeerOrWeakerDecisions": 15,
+    "interimOutcomePeekingAllowed": false,
+    "interimWinLossCountsAllowed": false,
+    "interimGroupHitRatesAllowed": false,
+    "interimStrengthGapOutcomeAssociationAllowed": false,
+    "outcomesMayBeQueriedBeforeEmbargoMaturity": false,
+    "singlePrimaryEvaluationAfterEmbargo": true,
+    "postCaptureStoppingRuleChangeAllowed": false,
+    "reason": "The V79 strength regime was selected after retrospective outcome inspection. V80 must accumulate a fresh, outcome-blind General TOP1 cohort before any result is opened."
+  },
+  "formalHypothesis": {
+    "primaryStatement": "Among fresh V80 General TOP1 decisions, selected-stronger hit rate is greater than peer-or-weaker hit rate.",
+    "primaryEffect": "deltaHitRate = hitRate(STRONGER) - hitRate(PEER_OR_WEAKER)",
+    "expectedPrimaryEffectDirection": "POSITIVE",
+    "continuousStatement": "As strengthGap increases, selected-side win probability decreases.",
+    "continuousModel": "Univariate logistic regression of selected-side binary win outcome on continuous strengthGap with intercept; no additional covariates, transforms, splines, cutpoints, or interactions.",
+    "expectedContinuousSlopeDirection": "NEGATIVE"
+  },
+  "statistics": {
+    "evaluationUnit": "GENERAL_TOP1_DECISION",
+    "clusterUnit": "OFFICIAL_DATE",
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260818,
+    "confidenceLevel": 0.95,
+    "primaryBootstrap": "Resample official-date clusters with replacement; recompute STRONGER and PEER_OR_WEAKER hit rates and deltaHitRate for each resample. Resamples lacking either comparison group are discarded and reported.",
+    "continuousBootstrap": "Resample official-date clusters with replacement; refit the frozen univariate logistic model win ~ strengthGap and retain the strengthGap slope for each valid resample.",
+    "exactPrimaryConfirmationChecks": [
+      "deltaHitRate_point_estimate_gt_0",
+      "deltaHitRate_cluster_bootstrap_95CI_lower_gt_0",
+      "strengthGap_logistic_slope_point_estimate_lt_0",
+      "strengthGap_slope_cluster_bootstrap_95CI_upper_lt_0",
+      "no_capture_chronology_violations",
+      "no_route_identity_drift",
+      "no_strength_formula_drift",
+      "no_interim_outcome_access"
+    ],
+    "classificationRules": {
+      "V80_GENERAL_STRENGTH_PROSPECTIVELY_CONFIRMED_FOR_NEXT_RESEARCH_STAGE": "All exact primary confirmation checks pass.",
+      "V80_GENERAL_STRENGTH_DIRECTIONALLY_SUPPORTED_BUT_NOT_CONFIRMED": "Both point-estimate directions are correct but at least one 95% bootstrap interval includes zero, with no integrity violation.",
+      "V80_GENERAL_STRENGTH_PROSPECTIVE_HYPOTHESIS_FAILED": "Either primary point estimate is nonpositive, continuous slope point estimate is nonnegative, or an integrity/chronology/freeze violation occurs.",
+      "V80_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE": "Any embargo minimum is not yet satisfied; outcomes remain unread."
+    },
+    "secondaryDescriptivesExactly": [
+      "W_L_hit_rate_Wilson95_for_SELECTED_STRONGER",
+      "W_L_hit_rate_Wilson95_for_PEER",
+      "W_L_hit_rate_Wilson95_for_SELECTED_WEAKER",
+      "W_L_hit_rate_Wilson95_for_PEER_OR_WEAKER",
+      "median_strengthGap_on_wins_and_losses",
+      "Mann_Whitney_two_sided_for_strengthGap_wins_vs_losses",
+      "loss_warning_AUC_for_strengthGap"
+    ],
+    "secondaryDescriptivesCanOverridePrimaryClassification": false,
+    "subgroupMiningAllowed": false,
+    "routeSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "refitParentModelsAllowed": false,
+    "recalibrateParentModelsAllowed": false,
+    "excludeDatesAfterOutcomeInspectionAllowed": false,
+    "excludeGamesAfterOutcomeInspectionAllowed": false,
+    "multipleInterimLooksAllowed": false
+  },
+  "target": {
+    "marketConcept": "FULL_GAME_MONEYLINE_WINNER",
+    "selectedSide": "Exact side selected by the frozen General V16+V68 consensus route when that route wins CONFLUENCE_LEDGER_TOP1_T0.550 for the date.",
+    "outcome": "SELECTED_SIDE_WIN_BINARY",
+    "homeWinDefinition": "Official final home runs greater than official final away runs.",
+    "awayWinDefinition": "Official final away runs greater than official final home runs.",
+    "tiesAllowed": false,
+    "extraInningsIncluded": true
+  },
+  "marketBoundary": {
+    "historicalPricesUsed": false,
+    "prospectivePricesRequired": false,
+    "oddsMayBeModelFeatures": false,
+    "oddsMayAffectCohortMembership": false,
+    "marketPriceOptimizationAllowed": false,
+    "positiveEvEstablishedByV80": false,
+    "economicValidationStillRequiredBeforeAnyBettingClaim": true
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "v68Changed": false,
+    "productionChanged": false,
+    "liveRecommendationChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "v80PassMayOnlyAdvanceToNextFrozenResearchStage": true,
+    "v80PassMayDirectlyPromoteNoPlayGateToProduction": false,
+    "v80PassMayDirectlyPromoteCounterSideSwitchToProduction": false
+  }
+}

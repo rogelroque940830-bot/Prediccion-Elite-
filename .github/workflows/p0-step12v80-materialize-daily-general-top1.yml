@@ -1,0 +1,235 @@
+name: P0 Step 12V80 Materialize Daily General TOP1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 10 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v80-general-strength-prospective-confirmation-contract.json'
+      - 'scripts/p0-step12v80-general-strength-prospective.py'
+      - '.github/workflows/p0-step12v80-materialize-daily-general-top1.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: p0-step12v80-materialize-daily-general-top1
+  cancel-in-progress: false
+
+jobs:
+  validate-daily-boundary:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exact frozen daily materialization and embargo boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/p0-step12v80-general-strength-prospective.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v80-general-strength-prospective-confirmation-contract.json'))
+          assert c['prospectiveCohort']['parentPortfolioExactly']=='CONFLUENCE_LEDGER_TOP1_T0.550'
+          assert c['prospectiveCohort']['targetRouteExactly']=='V16_V68_CONSENSUS_T0.550'
+          assert c['prospectiveCohort']['maximumSelectionsPerOfficialDate']==1
+          assert c['prospectiveCohort']['dailyPortfolioMaterializationMayNotReadAnyOutcome'] is True
+          assert c['outcomeEmbargo']['allMinimumsRequiredSimultaneously'] is True
+          assert c['outcomeEmbargo']['minimumGeneralTop1Decisions']==50
+          assert c['outcomeEmbargo']['minimumDistinctOfficialDatesWithGeneralTop1Decision']==40
+          assert c['outcomeEmbargo']['minimumSelectedStrongerDecisions']==15
+          assert c['outcomeEmbargo']['minimumPeerOrWeakerDecisions']==15
+          assert c['outcomeEmbargo']['interimOutcomePeekingAllowed'] is False
+          assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
+          text=open('scripts/p0-step12v80-general-strength-prospective.py').read()
+          assert 'A_PLUS_V68_AGREE_D1_ROUTER' in text
+          assert 'PREMIUM_A_V68_AGREE_ROUTE_SWITCH' in text
+          assert 'A_PLUS_D1_ROUTER' in text
+          assert 'PREMIUM_A_ROUTE_SWITCH' in text
+          assert 'V16_V68_CONSENSUS_T0.550' in text
+          print('V80_DAILY_TOP1_AND_EMBARGO_BOUNDARY_VERIFIED')
+          PY
+
+  materialize-yesterday:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout frozen V80 code from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout immutable V80 prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v80-general-strength-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve completed official date in Eastern time
+        id: date
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          today=dt.datetime.now(ZoneInfo('America/New_York')).date()
+          target=today-dt.timedelta(days=1)
+          print(f'target={target.isoformat()}')
+          print(f'eligible={str(target>=dt.date(2026,8,18)).lower()}')
+          PY
+
+      - name: Stop before first V80 eligible official date
+        if: steps.date.outputs.eligible != 'true'
+        run: echo 'No V80 daily portfolio may exist before officialDate 2026-08-18.'
+
+      - name: Check immutable daily decision already exists
+        if: steps.date.outputs.eligible == 'true'
+        id: existing
+        shell: bash
+        run: |
+          if test -s "ledger/v80/daily/${{ steps.date.outputs.target }}.json"; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require outcome-free canonical pregame capture ledger
+        if: steps.date.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ledger/v80/captures/canonical.json || { echo 'V80_FAIL_CLOSED_CANONICAL_CAPTURE_MISSING' >&2; exit 1; }
+          python - <<'PY'
+          import json
+          x=json.load(open('ledger/v80/captures/canonical.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v80-general-strength-prospective-capture.v1'
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          assert x['policy']['oddsUsedAsFeatures'] is False
+          assert x['policy']['realFinancialExposure']==0
+          target='${{ steps.date.outputs.target }}'
+          rows=[r for r in x.get('rows',[]) if r.get('officialDate')==target]
+          for r in rows:
+              assert r['containsOutcome'] is False
+              assert r['containsMarketPrice'] is False
+              assert r['canonicalFirstCaptureImmutable'] is True
+          print({'officialDate':target,'capturedPregameGames':len(rows)})
+          PY
+
+      - name: Materialize exact V69 confluence TOP1 without outcomes
+        if: steps.date.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          python scripts/p0-step12v80-general-strength-prospective.py materialize \
+            --capture ../ledger/v80/captures/canonical.json \
+            --contract research/p0-step12v80-general-strength-prospective-confirmation-contract.json \
+            --date '${{ steps.date.outputs.target }}' \
+            --out ../work/daily.json
+          python - <<'PY'
+          import json
+          x=json.load(open('../work/daily.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v80-general-strength-daily-top1.v1'
+          assert x['officialDate']=='${{ steps.date.outputs.target }}'
+          assert x['parentPortfolio']=='CONFLUENCE_LEDGER_TOP1_T0.550'
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          assert x['policy']['sameDateCompletedGameOutcomesUsed'] is False
+          assert x['policy']['realFinancialExposure']==0
+          assert x['top1'] is None or isinstance(x['top1'],dict)
+          if x['generalTop1DecisionExists']:
+              g=x['generalTop1Decision']
+              assert g['route']=='V16_V68_CONSENSUS_T0.550'
+              assert g['tierRelation'] in ('SELECTED_STRONGER','PEER','SELECTED_WEAKER')
+              assert isinstance(g['strengthGap'],(int,float))
+          print({'officialDate':x['officialDate'],'generalTop1DecisionExists':x['generalTop1DecisionExists'],'top1Route':x['top1']['route'] if x['top1'] else None})
+          PY
+
+      - name: Install immutable daily decision and recompute outcome-blind embargo maturity
+        if: steps.date.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ledger/v80/daily ledger/v80/status ledger/v80/receipts
+          test ! -e "ledger/v80/daily/${{ steps.date.outputs.target }}.json"
+          cp work/daily.json "ledger/v80/daily/${{ steps.date.outputs.target }}.json"
+          python - <<'PY'
+          import glob,json,os
+          files=sorted(glob.glob('ledger/v80/daily/*.json'))
+          general=[]
+          for p in files:
+              x=json.load(open(p))
+              assert x['policy']['outcomesRead'] is False
+              assert x['policy']['pricesRead'] is False
+              if x.get('generalTop1DecisionExists'):
+                  general.append(x['generalTop1Decision'])
+          dates={g['officialDate'] for g in general}
+          stronger=sum(g['tierRelation']=='SELECTED_STRONGER' for g in general)
+          peer_weaker=sum(g['tierRelation'] in ('PEER','SELECTED_WEAKER') for g in general)
+          minimums={'generalTop1Decisions':50,'distinctOfficialDatesWithGeneralTop1Decision':40,'selectedStrongerDecisions':15,'peerOrWeakerDecisions':15}
+          counts={'generalTop1Decisions':len(general),'distinctOfficialDatesWithGeneralTop1Decision':len(dates),'selectedStrongerDecisions':stronger,'peerOrWeakerDecisions':peer_weaker}
+          met={k:counts[k]>=minimums[k] for k in minimums}
+          mature=all(met.values())
+          status={
+            'schemaVersion':'courtedge-p0-step12v80-general-strength-embargo-maturity.v1',
+            'scientificStatus':'V80_OUTCOME_EMBARGO_MATURE_OUTCOME_SCORER_MAY_BE_IMPLEMENTED' if mature else 'V80_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE',
+            'counts':counts,
+            'minimums':minimums,
+            'minimumChecks':met,
+            'allMinimumsRequiredSimultaneously':True,
+            'embargoMature':mature,
+            'outcomesRead':False,
+            'winLossCountsRead':False,
+            'groupHitRatesRead':False,
+            'strengthGapOutcomeAssociationRead':False,
+            'pricesRead':False,
+            'researchOnly':True,
+            'realFinancialExposure':0,
+          }
+          with open('ledger/v80/status/embargo-maturity.json','w') as f:json.dump(status,f,indent=2,sort_keys=True);f.write('\n')
+          daily=json.load(open('work/daily.json'))
+          receipt={
+            'schemaVersion':'courtedge-p0-step12v80-daily-materialization-receipt.v1',
+            'officialDate':'${{ steps.date.outputs.target }}',
+            'githubRunId':'${{ github.run_id }}',
+            'githubRunAttempt':'${{ github.run_attempt }}',
+            'generalTop1DecisionExists':daily['generalTop1DecisionExists'],
+            'top1Route':daily['top1']['route'] if daily['top1'] else None,
+            'embargoMatureAfterMaterialization':mature,
+            'outcomesRead':False,
+            'pricesRead':False,
+            'researchOnly':True,
+            'realFinancialExposure':0,
+          }
+          with open('ledger/v80/receipts/daily-${{ github.run_id }}-${{ github.run_attempt }}.json','w') as f:json.dump(receipt,f,indent=2,sort_keys=True);f.write('\n')
+          print(json.dumps(status,indent=2))
+          PY
+
+      - name: Commit immutable daily decision and outcome-blind maturity status
+        if: steps.date.outputs.eligible == 'true' && steps.existing.outputs.exists != 'true'
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'court-edge-v80-research-bot'
+          git config user.email 'v80-research-bot@users.noreply.github.com'
+          git add v80/daily v80/status v80/receipts
+          git diff --cached --quiet && exit 0
+          git commit -m "V80 daily ${{ steps.date.outputs.target }}: freeze confluence TOP1 without outcomes"
+          git pull --rebase origin data/p0-step12v80-general-strength-prospective
+          git push origin HEAD:data/p0-step12v80-general-strength-prospective

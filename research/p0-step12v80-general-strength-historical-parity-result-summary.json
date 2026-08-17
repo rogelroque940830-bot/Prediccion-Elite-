@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-historical-parity-result-summary.v1",
+  "classification": "V80_HISTORICAL_PARITY_GATE_PASSED",
+  "scientificMeaning": "The pre-capture integrity gate required by the frozen V80 contract passed. This authorizes implementation of outcome-free V80 prospective capture beginning no earlier than officialDate 2026-08-18. It does not validate the V80 hypothesis and does not authorize production, ranking, routing, staking, BET_ELITE, counter-side switching, or real financial exposure.",
+  "freezeChronology": {
+    "mainBaseSha": "f9038d998c40794e2ee351076f09d7048b594fec",
+    "v80ContractCommitSha": "517602c04539be70da44571647fd6f7d73447553",
+    "v80ParityScorerCommitSha": "3f9ed1560b2d569dde563aec22bd2968843765ce",
+    "v80ParityWorkflowCommitSha": "7686fc7d4109fbc0066c816f766d651e398068ea",
+    "contractPredatesAnyV80ScorerOrCapture": true,
+    "prospectiveCaptureExistedAtGateTime": false
+  },
+  "sourceWorkflow": {
+    "runId": 32060320564,
+    "workflowName": "Validate P0 Step 12V80 General Strength Historical Parity",
+    "headSha": "7686fc7d4109fbc0066c816f766d651e398068ea",
+    "conclusion": "success",
+    "artifactId": 9297912062,
+    "artifactName": "p0-step12v80-general-strength-historical-parity",
+    "artifactDigest": "sha256:c5f1acad5c9faaab92a932afef2c7c2a07390c2ea0795007a6683249333f14a2"
+  },
+  "fullV79Reproduction": {
+    "exactJsonEquality": true,
+    "officialCanonicalSha256": "a9d63594a40fada90de6d90389b82cca4de0a40c6e3ff77fcf8818cce2720f84",
+    "rerunCanonicalSha256": "a9d63594a40fada90de6d90389b82cca4de0a40c6e3ff77fcf8818cce2720f84",
+    "v79Classification": "V79_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_RETROSPECTIVE_COMPLETE"
+  },
+  "v69Top1Reproduction": {
+    "expectedDailyCapCalls": 48,
+    "actualDailyCapCalls": 48,
+    "exactDailyCapCallIndex": 4,
+    "allTop1StructuralFingerprintSha256": "48134c8795a5b2d51cf3466d5e0b22e899e48a5b00b92becb01d829d1976dcf0",
+    "generalTop1StructuralFingerprintSha256": "03ab3831a53d82cb21fdd7574ad57f4f150cc3d06a44157c48eaa10560f83dfd",
+    "generalRows": 223,
+    "parentParity": {
+      "pickDays": 395,
+      "decisiveRows": 392,
+      "wins": 254,
+      "losses": 138,
+      "pushes": 3
+    },
+    "routeParity": {
+      "A_PLUS_V68_AGREE_D1_ROUTER": {"decisiveRows": 71, "wins": 62, "losses": 9},
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {"decisiveRows": 98, "wins": 64, "losses": 34},
+      "V16_V68_CONSENSUS_T0.550": {"decisiveRows": 223, "wins": 128, "losses": 95}
+    }
+  },
+  "v79StrengthReproduction": {
+    "preservedLossRowsCompared": 138,
+    "routeOrGameIdentityMismatches": 0,
+    "strengthTierMismatches": 0,
+    "numericMismatchesAboveTolerance": 0,
+    "maximumNumericAbsoluteDifference": 0.0,
+    "allowedMaximumNumericAbsoluteDifference": 1e-12,
+    "generalTierRelation": {
+      "SELECTED_STRONGER": {"decisiveRows": 150, "wins": 91, "losses": 59, "hitRate": 0.6066666666666667},
+      "PEER": {"decisiveRows": 56, "wins": 29, "losses": 27, "hitRate": 0.5178571428571429},
+      "SELECTED_WEAKER": {"decisiveRows": 17, "wins": 8, "losses": 9, "hitRate": 0.47058823529411764}
+    }
+  },
+  "parentBlobIntegrity": {
+    "v79Contract": "7389806995657451e14df9203dad1cb0a7aff4fc",
+    "v79Scorer": "4a4f9f8a98d824f529b802477cc98568d9f78b4d",
+    "v69Contract": "d58e159951bf26da54830a2e8f1eba225679dee0",
+    "v69Scorer": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83",
+    "v68Contract": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+    "frozenClassifierSource": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2",
+    "frozenRouterSource": "7f98543b34332a0f40bf2c40bf0154e4c3045540"
+  },
+  "integrity": {
+    "prospectiveOutcomesRead": false,
+    "prospectiveCaptureCreated": false,
+    "oddsUsedAsFeatures": false,
+    "v68Changed": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "realFinancialExposure": 0
+  },
+  "nextAuthorizedStage": "IMPLEMENT_OUTCOME_FREE_V80_PROSPECTIVE_CAPTURE_ONLY",
+  "firstEligibleOfficialDate": "2026-08-18",
+  "outcomeEmbargoRemainsFrozen": {
+    "minimumGeneralTop1Decisions": 50,
+    "minimumDistinctOfficialDatesWithGeneralTop1Decision": 40,
+    "minimumSelectedStrongerDecisions": 15,
+    "minimumPeerOrWeakerDecisions": 15,
+    "interimOutcomePeekingAllowed": false
+  }
+}
