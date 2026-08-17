@@ -1,0 +1,58 @@
+name: Validate P0 Step 12V77 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json'
+      - '.github/workflows/validate-p0-step12v77-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download immutable V77 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v77-general-consensus-loss-threat-geometry
+          path: inputs/v77
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 32049400781
+      - name: Validate summary against immutable report
+        run: |
+          python - <<'PY'
+          import json, math
+          s=json.load(open('research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json'))
+          r=json.load(open('inputs/v77/v77-general-consensus-loss-threat-geometry.json'))
+          assert s['classification']==r['classification']=='V77_GENERAL_CONSENSUS_LOSS_THREAT_GEOMETRY_RETROSPECTIVE_COMPLETE'
+          assert s['sourceArtifact']=={'workflowRunId':32049400781,'artifactId':9294112054,'artifactDigest':'sha256:5228b62eddeca3d7483fd6a6e99746ff91b46e1244c6d7ae003aa86f53be0df8'}
+          assert s['parentParity']==r['parentParity']
+          for route,v in s['routeParity'].items(): assert v==r['routeParity'][route]
+          p=r['primaryRoute']; q=s['generalConsensusRoute']
+          assert p['wins']==128 and p['losses']==95
+          assert q['singleSignalConclusion']['signalsPassingAllPredeclaredStrongAssociationCriteria']==p['predeclaredStrongAssociationSignals']==[]
+          ai=p['allSignalThreatIndexAnalysis']; si=q['allSignalThreatIndex']
+          assert math.isclose(si['medianLosses'],ai['medianLosses'],abs_tol=1e-15)
+          assert math.isclose(si['medianWins'],ai['medianWins'],abs_tol=1e-15)
+          assert math.isclose(si['cliffsDelta'],ai['cliffsDeltaLossMinusWin'],abs_tol=1e-15)
+          assert math.isclose(si['lossWarningAuc'],ai['lossWarningAuc'],abs_tol=1e-15)
+          m=p['lineupWarningByConsensusScoreMatrix']; sm=q['lineupWarningByConsensusGeometry']
+          assert sm['redCorner']['rows']==m['redCorner']['rows'] and sm['redCorner']['losses']==m['redCorner']['losses']
+          assert sm['comparisonCorner']['rows']==m['comparisonCorner']['rows'] and sm['comparisonCorner']['losses']==m['comparisonCorner']['losses']
+          assert math.isclose(sm['riskRatioRedVsComparison'],m['riskRatioRedVsComparison'],abs_tol=1e-15)
+          hr=r['referenceRoutesContextOnly']['PREMIUM_A_V68_AGREE_ROUTE_SWITCH']['directionalOpponentWarningSignalAnalysis']['starter_hr_adv']
+          sh=s['premiumARouteFinding']
+          assert math.isclose(sh['holmP'],hr['holm_adjusted_p_across_directional_signal_family'],abs_tol=1e-15)
+          assert math.isclose(sh['cliffsDelta'],hr['cliffs_delta_loss_minus_win'],abs_tol=1e-15)
+          assert math.isclose(sh['lossWarningAuc'],hr['loss_warning_univariate_auc'],abs_tol=1e-15)
+          assert s['guardrails']['liveVetoCreated'] is False and s['guardrails']['realFinancialExposure']==0
+          print('V77_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          PY
