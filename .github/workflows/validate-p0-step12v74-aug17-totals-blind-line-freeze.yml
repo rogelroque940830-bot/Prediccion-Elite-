@@ -1,0 +1,242 @@
+name: Validate P0 Step 12V74 Aug17 Totals Blind Line Freeze
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v74-aug17-totals-blind-line-freeze-contract.json'
+      - 'scripts/p0-step12v74-aug17-totals-blind-line-freeze.py'
+      - '.github/workflows/validate-p0-step12v74-aug17-totals-blind-line-freeze.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  freeze-aug17-totals-before-lines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prove V74 contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v74-aug17-totals-blind-line-freeze-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v74-aug17-totals-blind-line-freeze.py | tail -1)"
+          test -n "$CONTRACT_ADD"; test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v74-aug17-totals-blind-line-freeze-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_V74_SCORER_AND_BEFORE_ANY_SPORTSBOOK_LINE_IS_READ'
+          assert c['targetOfficialDate']=='2026-08-17'
+          assert c['marketLineEmbargo']['assistantMayReadSportsbookLinesBeforePredictionArtifactFreeze'] is False
+          assert c['marketLineEmbargo']['webOddsSearchAllowedBeforePredictionArtifactFreeze'] is False
+          assert c['statistics']['refitAllowed'] is False
+          assert c['statistics']['postLinePredictionChangeAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V74_CONTRACT_PRE_SCORER_AND_PRE_LINE_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check
+        run: |
+          python -m py_compile scripts/p0-step12v74-aug17-totals-blind-line-freeze.py
+          python -m py_compile scripts/p0-step12v68-prospective-source.py
+          python -m py_compile scripts/p0-step12v68-acquire-gap-pitch-quality.py
+
+      - name: Install frozen numerical and acquisition dependencies
+        run: |
+          npm ci --ignore-scripts
+          python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Download frozen V68 prospective source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Expand frozen source base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          ROOT="$(dirname "$TABLE")"
+          test -s "$ROOT/cohort/official-acquisition.json"
+          test -s "$ROOT/cohort/starting-pitcher-history.json"
+          test -s "$ROOT/cohort/pregame-lineup-history.json"
+          test -s "$ROOT/t5-audit/t5-starter-identity-audit.json"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire chronology-safe Aug11-Aug16 gap history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/gap
+          npx tsx scripts/p0-step12v68-build-gap-cohort.mjs \
+            --start '2026-08-11' \
+            --end '2026-08-16' \
+            --out work/gap \
+            --concurrency 4
+          python scripts/p0-step12v68-acquire-gap-pitch-quality.py \
+            --cohort-root work/gap \
+            --contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/gap-pitch.json \
+            --workers 4
+
+      - name: Require complete prior official-date history through Aug16
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open('work/gap/official-acquisition.json'))
+          games=p.get('games',[])
+          dates=sorted({str(g['officialDate']) for g in games})
+          assert dates and dates[0]>='2026-08-11' and dates[-1]=='2026-08-16', dates
+          aug16=[g for g in games if str(g['officialDate'])=='2026-08-16']
+          assert aug16, 'V74_AUG16_OFFICIAL_GAMES_MISSING'
+          for g in aug16:
+            assert 'homeFinalRuns' in g and 'awayFinalRuns' in g, g.get('gamePk')
+          print({'gapDates':dates,'aug16Games':len(aug16)})
+          PY
+
+      - name: Build strictly prior-date Aug17 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-prospective-source.py prepare \
+            --base-root '${{ steps.base.outputs.root }}' \
+            --v62-2025 frozen/v62-2025/pitch-quality-2025.json \
+            --v62-2026 frozen/v62-2026/pitch-quality-2026_YTD.json \
+            --gap-root work/gap \
+            --gap-pitch work/gap-pitch.json \
+            --target-date '2026-08-17' \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/state-2026-08-17.json
+          python - <<'PY'
+          import json
+          s=json.load(open('work/state-2026-08-17.json'))
+          assert s['targetOfficialDate']=='2026-08-17'
+          assert s['chronology']['historyStrictlyBeforeTargetDate'] is True
+          assert s['chronology']['sameDateOutcomesUsed'] is False
+          assert s['chronology']['latestHistoricalOfficialDate']=='2026-08-16'
+          assert s['policy']['containsTargetOutcomes'] is False
+          assert s['policy']['containsMarketPrices'] is False
+          print({'stateDigest':s['stateDigest'],'latestHistory':s['chronology']['latestHistoricalOfficialDate']})
+          PY
+
+      - name: Download immutable V66 totals evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-totals
+          path: inputs/v66-totals
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965267742
+
+      - name: Download immutable V66 custody evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V67 NB2 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v67-total-distribution-calibration
+          path: inputs/v67
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965619576
+
+      - name: Resolve frozen parent files
+        id: parents
+        shell: bash
+        run: |
+          set -euo pipefail
+          V66="$(find inputs/v66-totals -type f -name v66-totals-report.json -print -quit)"
+          CUST="$(find inputs/v66-custody -type f -name v66-custody-report.json -print -quit)"
+          V67="$(find inputs/v67 -type f -name v67-total-distribution-calibration-report.json -print -quit)"
+          test -n "$V66"; test -n "$CUST"; test -n "$V67"
+          echo "v66=$V66" >> "$GITHUB_OUTPUT"
+          echo "cust=$CUST" >> "$GITHUB_OUTPUT"
+          echo "v67=$V67" >> "$GITHUB_OUTPUT"
+
+      - name: Freeze Aug17 total-run predictions without market lines
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v74-aug17-totals-blind-line-freeze.py \
+            --state work/state-2026-08-17.json \
+            --v68-source-script scripts/p0-step12v68-prospective-source.py \
+            --v68-source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --v66-totals-report '${{ steps.parents.outputs.v66 }}' \
+            --v66-custody-report '${{ steps.parents.outputs.cust }}' \
+            --v67-report '${{ steps.parents.outputs.v67 }}' \
+            --contract research/p0-step12v74-aug17-totals-blind-line-freeze-contract.json \
+            --out work/v74-aug17-totals-blind-line-freeze.json
+
+      - name: Validate line-blind prediction artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v74-aug17-totals-blind-line-freeze.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v74-aug17-totals-blind-line-freeze.v1'
+          assert r['classification']=='V74_AUG17_TOTALS_BLIND_LINE_PREDICTIONS_FROZEN'
+          assert r['targetOfficialDate']=='2026-08-17'
+          assert r['slate']['predictedRows']>0
+          assert r['slate']['predictedRows']==len(r['rows'])
+          p=r['policy']
+          assert p['sportsbookLinesRead'] is False
+          assert p['sportsbookPricesRead'] is False
+          assert p['targetOutcomesRead'] is False
+          assert p['marketOddsUsedAsFeatures'] is False
+          assert p['predictionMayChangeAfterLineDisclosure'] is False
+          assert p['productionChanged'] is False
+          assert p['prospectiveV68Changed'] is False
+          assert p['realFinancialExposure']==0
+          for x in r['rows']:
+            assert x['officialDate']=='2026-08-17'
+            assert x['f5ExpectedRunsMu']>0 and x['fullGameExpectedRunsMu']>0
+            assert len(x['f5CountPmf0To20'])==21
+            assert len(x['fullGameCountPmf0To25'])==26
+            assert 'sportsbookLine' not in x and 'odds' not in x and 'price' not in x
+          print(json.dumps([{'game':x['awayTeam']+' @ '+x['homeTeam'],'F5_mu':x['f5ExpectedRunsMu'],'FG_mu':x['fullGameExpectedRunsMu']} for x in r['rows']],indent=2))
+          PY
+
+      - name: Upload immutable pre-line V74 predictions
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v74-aug17-totals-blind-line-freeze
+          path: work/v74-aug17-totals-blind-line-freeze.json
+          if-no-files-found: error
+          retention-days: 90
