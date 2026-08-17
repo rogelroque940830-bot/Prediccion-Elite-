@@ -328,8 +328,11 @@ def main():
     ):
         if abs(float(got)-exp) > 1e-15:
             raise SystemExit(f"V70_V69_BASELINE_PARITY_FAILED:{name}:{got}:{exp}")
-    if summary69["closestHighCoveragePoint"]["name"] != b["name"]:
-        raise SystemExit("V70_V69_SUMMARY_NAME_DRIFT")
+    summary_name = summary69["closestHighCoveragePoint"]["name"]
+    contract_name = b["name"]
+    normalized_contract_name = contract_name[4:] if contract_name.startswith("V69_") else contract_name
+    if summary_name not in (contract_name, normalized_contract_name):
+        raise SystemExit(f"V70_V69_SUMMARY_NAME_DRIFT:{summary_name}:{contract_name}")
 
     all_pitch = (v19c["dataBoundary"]["pitchmixWarmupSeason"],) + seasons
     enrich = v19.make_pitchmix_enricher(
