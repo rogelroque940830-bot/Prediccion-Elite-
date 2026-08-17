@@ -327,21 +327,22 @@ async function live(): Promise<void> {
   const out = arg("--out") as string;
   const maxLead = Number(arg("--max-lead-minutes", false) ?? "20");
   const nowArg = arg("--now", false);
-  const now = nowArg ? parseTime(nowArg) : new Date();
+  const fixedNow = nowArg ? parseTime(nowArg) : null;
   const state = load(stateFile);
   if (state.schemaVersion !== STATE_SCHEMA || state.targetOfficialDate !== targetDate) throw new Error("V80_LIVE_CONTEXT_STATE_DATE_OR_SCHEMA_INVALID");
   if (state?.chronology?.wholeOfficialDatePriorStateOnly !== true || state?.chronology?.sameDateCompletedGamesUsed !== false) throw new Error("V80_LIVE_CONTEXT_STATE_CHRONOLOGY_INVALID");
   if (!(maxLead > 0 && maxLead <= 60)) throw new Error("V80_LIVE_CONTEXT_CAPTURE_WINDOW_INVALID");
   const schedule = await fetchJson(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R&date=${targetDate}`, "schedule");
   const games = (schedule.dates ?? []).flatMap((d: Json) => d.games ?? []);
-  const capturedAt = now.toISOString();
   const rows: Json[] = [];
   for (const game of games) {
     const gp = Number(game.gamePk);
     if (!Number.isInteger(gp) || gp <= 0) continue;
     const feed = await fetchJson(`https://statsapi.mlb.com/api/v1.1/game/${gp}/feed/live`, `feed:${gp}`);
-    const identity = exactIdentity(feed, game, targetDate, now, maxLead);
+    const observedAt = fixedNow ?? new Date();
+    const identity = exactIdentity(feed, game, targetDate, observedAt, maxLead);
     if (!identity) continue;
+    const capturedAt = observedAt.toISOString();
     const homeStrength = state.strengthSnapshot?.[String(identity.homeTeamId)];
     const awayStrength = state.strengthSnapshot?.[String(identity.awayTeamId)];
     if (!homeStrength || !awayStrength) throw new Error(`V80_LIVE_CONTEXT_STRENGTH_MISSING:${gp}`);
@@ -397,6 +398,7 @@ async function live(): Promise<void> {
       containsMarketPrice: false,
     });
   }
+  const capturedAt = (fixedNow ?? new Date()).toISOString();
   const payload = {
     schemaVersion: SOURCE_SCHEMA,
     targetOfficialDate: targetDate,
