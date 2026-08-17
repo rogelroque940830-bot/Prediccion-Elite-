@@ -23,6 +23,20 @@ def module(path,name):
     m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 
 
+def assert_no_forbidden_output_fields(value,path='$'):
+    forbidden_exact={
+      'homeFinalRuns','awayFinalRuns','totalRuns','homeScore','awayScore','score','winner','result',
+      'sportsbookLine','sportsbookOdds','sportsbookPrice','odds','price'
+    }
+    if isinstance(value,dict):
+        for k,v in value.items():
+            if k in forbidden_exact:
+                raise SystemExit(f'V76_FORBIDDEN_TARGET_OR_MARKET_FIELD_EMITTED:{path}.{k}')
+            assert_no_forbidden_output_fields(v,f'{path}.{k}')
+    elif isinstance(value,list):
+        for i,v in enumerate(value):assert_no_forbidden_output_fields(v,f'{path}[{i}]')
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--state',required=True)
@@ -94,10 +108,7 @@ def main():
       'sourceBoundary':{'targetIdentitySource':'ARCHIVED_MLB_T_MINUS_5_FEED','targetFinalStarterIdentityUsed':False,'targetRunScoresUsed':False,'targetF5RunsUsed':False,'sportsbookLinesRead':False,'sportsbookPricesRead':False},
       'policy':{'researchOnly':True,'retrospectivePseudoPregame':True,'targetOutcomesReadByScorer':False,'marketOddsUsedAsFeatures':False,'predictionMayChangeAfterUserDisclosesResults':False,'productionChanged':False,'prospectiveV68Changed':False,'positiveEvEstablished':False,'realFinancialExposure':0}
     }
-    forbidden=('homeFinalRuns','awayFinalRuns','totalRuns','winner','result','score','sportsbookLine','odds','price')
-    txt=json.dumps(report)
-    for token in forbidden:
-        if token in txt:raise SystemExit(f'V76_FORBIDDEN_TARGET_OR_MARKET_TOKEN_EMITTED:{token}')
+    assert_no_forbidden_output_fields(report)
     dump(a.out,report)
     print(json.dumps({'classification':report['classification'],'predictedRows':len(rows),'predictions':[{'game':r['awayTeam']+' @ '+r['homeTeam'],'F5_mu':round(r['f5ExpectedRunsMu'],4),'FG_mu':round(r['fullGameExpectedRunsMu'],4),'awaySP':r['awayProbablePitcher'],'homeSP':r['homeProbablePitcher']} for r in rows],'targetOutcomesRead':False},indent=2))
 
