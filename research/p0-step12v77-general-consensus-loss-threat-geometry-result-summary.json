@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "courtedge-p0-step12v77-general-consensus-loss-threat-geometry-result-summary.v1",
+  "classification": "V77_GENERAL_CONSENSUS_LOSS_THREAT_GEOMETRY_RETROSPECTIVE_COMPLETE",
+  "sourceArtifact": {
+    "workflowRunId": 32049400781,
+    "artifactId": 9294112054,
+    "artifactDigest": "sha256:5228b62eddeca3d7483fd6a6e99746ff91b46e1244c6d7ae003aa86f53be0df8"
+  },
+  "parentParity": {
+    "pickDays": 395,
+    "decisiveRows": 392,
+    "wins": 254,
+    "losses": 138,
+    "pushes": 3
+  },
+  "routeParity": {
+    "A_PLUS_V68_AGREE_D1_ROUTER": {"decisiveRows": 71, "wins": 62, "losses": 9},
+    "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {"decisiveRows": 98, "wins": 64, "losses": 34},
+    "V16_V68_CONSENSUS_T0.550": {"decisiveRows": 223, "wins": 128, "losses": 95}
+  },
+  "primaryFinding": "The 95 general-consensus losses were not explained by one dominant opponent feature. Instead, losses were associated with a broader accumulation of opponent-oriented pregame threat plus lower V16/V68 conviction. The equal-weight all-signal threat index separated losses from wins more clearly than any single directional feature within this route.",
+  "generalConsensusRoute": {
+    "shareOfAllMay01Losses": 0.6884057971014492,
+    "singleSignalConclusion": {
+      "signalsPassingAllPredeclaredStrongAssociationCriteria": [],
+      "interpretation": "Within the general V16+V68 consensus route, no single one of the 16 frozen directional opponent-warning signals survived the complete multiple-testing/effect-size/AUC/all-season criterion. This differs from V72's pooled-route result and means the 95-loss mechanism is multidimensional rather than reducible to lineup exposure alone."
+    },
+    "notableSingleSignals": {
+      "fg_exposure_adv": {"medianLossWarning": -0.04797476609617257, "medianWinWarning": -0.06744954348559806, "cliffsDelta": 0.14115209283050145, "auc": 0.5705760464152507, "rawP": 0.07229883197600487, "holmP": 1.0, "sameDirectionAllThreeSeasons": true},
+      "lineup_exposure_rate_adv": {"medianLossWarning": -0.10204081632653061, "medianWinWarning": -0.1473540076481253, "cliffsDelta": 0.1180921052631579, "auc": 0.5590460526315789, "rawP": 0.1320700579611338, "holmP": 1.0, "sameDirectionAllThreeSeasons": true},
+      "starter_runrisk_adv": {"medianLossWarning": -0.020857551292182974, "medianWinWarning": -0.02439710862670562, "cliffsDelta": 0.1300986842105263, "auc": 0.5650493421052631, "rawP": 0.0970732183990639, "holmP": 1.0, "sameDirectionAllThreeSeasons": false}
+    },
+    "modelConviction": {
+      "consensusScore": {"medianLosses": 0.616207099930348, "medianWins": 0.6273226473190667, "cliffsDeltaLowConvictionWarning": 0.21282894736842106, "lossWarningAuc": 0.6064144736842105, "p": 0.006628024253567947},
+      "p16Selected": {"medianLosses": 0.618837245902089, "medianWins": 0.6323138190338661, "cliffsDeltaLowConvictionWarning": 0.2125, "lossWarningAuc": 0.60625, "p": 0.006712519249708258},
+      "p68Selected": {"medianLosses": 0.6220314226804459, "medianWins": 0.6351134751755431, "cliffsDeltaLowConvictionWarning": 0.22286184210526316, "lossWarningAuc": 0.6114309210526315, "p": 0.004468925656821725}
+    },
+    "allSignalThreatIndex": {
+      "definition": "Equal-weight percentile-rank average of all available frozen opponent-warning signals; no fitted/outcome weights.",
+      "medianLosses": 0.5283053156091273,
+      "medianWins": 0.48085544842131167,
+      "meanDifferenceLossMinusWin": 0.03291559355840851,
+      "bootstrap95": [0.006652524226011348, 0.05907034719899701],
+      "cliffsDelta": 0.22104018912529552,
+      "lossWarningAuc": 0.6105200945626478,
+      "p": 0.005083678023725336,
+      "tertiles": {
+        "LOW": {"rows": 74, "wins": 51, "losses": 23, "historicalLossRate": 0.3108108108108108},
+        "MID": {"rows": 73, "wins": 43, "losses": 30, "historicalLossRate": 0.410958904109589},
+        "HIGH": {"rows": 73, "wins": 32, "losses": 41, "historicalLossRate": 0.5616438356164384}
+      }
+    },
+    "strongestDomain": {
+      "id": "EXPOSURE_AND_BULLPEN",
+      "medianLosses": 0.5416313174160707,
+      "medianWins": 0.487506564860825,
+      "meanDifferenceLossMinusWin": 0.06112835023851443,
+      "bootstrap95": [0.010276096148200816, 0.11109920502641751],
+      "cliffsDelta": 0.1825657894736842,
+      "lossWarningAuc": 0.5912828947368421,
+      "rawP": 0.019871067987735764,
+      "tertiles": {
+        "LOW": {"rows": 75, "wins": 48, "losses": 27, "historicalLossRate": 0.36},
+        "MID": {"rows": 74, "wins": 45, "losses": 29, "historicalLossRate": 0.3918918918918919},
+        "HIGH": {"rows": 74, "wins": 35, "losses": 39, "historicalLossRate": 0.527027027027027}
+      },
+      "interpretationBoundary": "This five-domain family was descriptive and not Holm-corrected across domains, so this is a strong contextual result, not a promoted rule."
+    },
+    "lineupWarningByConsensusGeometry": {
+      "cutpoints": {"lineupWarningQ33": -0.18641590708049693, "lineupWarningQ67": -0.07671587671587665, "consensusScoreQ33": 0.6069581984825051, "consensusScoreQ67": 0.6337596758309809},
+      "redCorner": {"definition": "highest lineup-warning tertile + lowest consensus-score tertile", "rows": 37, "wins": 15, "losses": 22, "historicalLossRate": 0.5945945945945946, "shareOf95Losses": 0.23157894736842105},
+      "comparisonCorner": {"definition": "lowest lineup-warning tertile + highest consensus-score tertile", "rows": 36, "wins": 24, "losses": 12, "historicalLossRate": 0.3333333333333333, "shareOf95Losses": 0.12631578947368421},
+      "riskRatioRedVsComparison": 1.783783783783784,
+      "lossRateDifference": 0.2612612612612613,
+      "bySeason": {
+        "2024": {"redCornerLossRate": 0.7857142857142857, "comparisonCornerLossRate": 0.29411764705882354},
+        "2025": {"redCornerLossRate": 0.38461538461538464, "comparisonCornerLossRate": 0.38461538461538464},
+        "2026_YTD": {"redCornerLossRate": 0.6, "comparisonCornerLossRate": 0.3333333333333333}
+      },
+      "importantCounterexample": {"cell": "highest lineup-warning tertile + highest consensus-score tertile", "rows": 17, "wins": 16, "losses": 1, "historicalLossRate": 0.058823529411764705},
+      "interpretation": "Opponent lineup closeness was dangerous mainly when model conviction was also low; however the red-corner separation vanished in 2025 and the matrix is not monotonic, so it cannot be promoted as a live veto from V77."
+    }
+  },
+  "premiumARouteFinding": {
+    "signal": "starter_hr_adv",
+    "wins": 64,
+    "losses": 34,
+    "medianLossWarning": 0.0037483179807777066,
+    "medianWinWarning": -0.005394015103236963,
+    "meanDifferenceLossMinusWin": 0.00689753851363806,
+    "bootstrap95": [0.002443905268979869, 0.011289857791124536],
+    "cliffsDelta": 0.3795955882352941,
+    "lossWarningAuc": 0.6897977941176471,
+    "rawP": 0.0020790512766280396,
+    "holmP": 0.033264820426048634,
+    "sameDirectionAllThreeSeasons": true,
+    "seasonMedians": {
+      "2024": {"losses": 0.0022333740097149543, "wins": -0.0037626516102480453},
+      "2025": {"losses": 0.001219379028677848, "wins": -0.006564946728234329},
+      "2026_YTD": {"losses": 0.004367239266700705, "wins": -0.014917353501808374}
+    },
+    "interpretation": "The Premium-A losses had a materially worse selected-side starter HR-risk advantage / more opponent-oriented HR-risk signal before the game. This is the strongest single route-specific opponent warning discovered in V77, but remains retrospective and adaptive."
+  },
+  "aPlusRouteContext": {
+    "wins": 62,
+    "losses": 9,
+    "interpretation": "Only nine losses make inference sparse. Recent run-differential and bullpen warning showed large descriptive effects, but none survived the frozen 16-signal multiple-testing criteria."
+  },
+  "scientificConclusion": "The 138 historical losses do not share one universal rival trait. The largest 95-loss cluster is characterized more by cumulative opponent threat plus weaker model conviction than by one dominant signal. Premium-A losses show a separate starter-HR-risk warning. A+ losses are too sparse for stable inference. The next scientific step should freeze a small candidate warning architecture based on these route-specific mechanisms and validate it on fresh/unseen data; V77 itself must not alter live selection rules.",
+  "guardrails": {
+    "strictlyPregameSignalsOnly": true,
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "associationNotCausation": true,
+    "outcomeOptimizedThresholdSearchPerformed": false,
+    "outcomeWeightedCompositePerformed": false,
+    "liveVetoCreated": false,
+    "historicalPricesUsed": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
