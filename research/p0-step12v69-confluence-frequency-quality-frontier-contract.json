@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "courtedge-p0-step12v69-confluence-frequency-quality-frontier-contract.v1",
+  "scientificStatus": "FROZEN_DISCOVERY_AUDIT_PLAN_BEFORE_ANY_V69_SCORER_EXISTS",
+  "objective": "Characterize whether a finite portfolio of already-frozen V16/A/A+/F5/V68 signals can deliver a practical maximum of one or two high-quality MLB winner opportunities per eligible slate day, with short no-play droughts, without forcing plays or relaxing any frozen parent threshold.",
+  "adaptiveSelectionDisclosure": "The 2024-2026_YTD outcomes have already been inspected in prior V9/V12/V14/V19/V66/V68 research. Therefore V69 is retrospective discovery/portfolio characterization only. Its results may define a future frozen prospective hypothesis but may not independently confirm or promote any route.",
+  "mainBaseSha": "5a3c15062cbb72042bf662b4c74b93f4f90fa373",
+  "evaluationUniverse": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "expectedCanonicalRowsBySeason": {"2024": 2406, "2025": 2423, "2026_YTD": 1781},
+    "expectedCombinedRows": 6610,
+    "expectedEligibleSlateDays": 505,
+    "eligibleGameDefinition": "Step12V3 row with t5PregameValid=true",
+    "slateDayDefinition": "Official date containing at least one eligible game in the evaluation universe",
+    "droughtDefinition": "Consecutive ordered eligible slate days with zero selected opportunities; raw calendar off-days are not counted as drought days",
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "oddsUsedAsPredictiveFeatures": false
+  },
+  "immutableParentEvidence": {
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "fullArtifactId": 9166442982,
+      "fullArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v16": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+      "manifestCanonicalSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    },
+    "v68Contract": {
+      "path": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+      "gitBlobSha": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+      "requiredScientificStatus": "FROZEN_BEFORE_ANY_V68_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS"
+    },
+    "frozenClassifierSource": {
+      "path": "server/mlb-frozen-a-plus-classifier.ts",
+      "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2",
+      "requiredVersion": "mlb-frozen-a-plus-classifier.v1"
+    },
+    "frozenRouterSource": {
+      "path": "server/mlb-frozen-research-route-assessor.ts",
+      "gitBlobSha": "7f98543b34332a0f40bf2c40bf0154e4c3045540",
+      "requiredVersion": "mlb-frozen-research-route-assessor.v1"
+    }
+  },
+  "frozenSignalSemantics": {
+    "A": "Use the existing frozen Premium A classifier exactly as implemented in mlb-frozen-a-plus-classifier.v1; no threshold change.",
+    "A_PLUS": "Use the existing frozen A+ classifier exactly as implemented in mlb-frozen-a-plus-classifier.v1. A+ remains a subset of Premium A.",
+    "F5_CONSENSUS": "Use the existing frozen F5 C4 and F5 Full13 models and thresholds exactly as implemented in mlb-frozen-a-plus-classifier.v1.",
+    "A_PLUS_D1_ROUTER": "For A+ only, bullpen_pitches_1d_adv > 0 routes HOME to FIRST_5; otherwise routes HOME to FULL_GAME, matching A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1. bullpen_pitches_1d_adv is away workload minus home workload from chronology-safe V66/V14-equivalent custody.",
+    "PREMIUM_A_ROUTE_SWITCH": "For Premium A, route HOME to FIRST_5 when frozen F5 Consensus matches; otherwise route HOME to FULL_GAME. This preserves the frozen V19 route-switch semantics.",
+    "V16": "Frozen Full Game binary C4 probability from the immutable V16 manifest; no refit or recalibration.",
+    "V68": "Exact frozen V68 15-feature Full Game binary probability from the V68 contract; no refit, recalibration, feature change, exposure change, or bullpen addition.",
+    "V16_V68_AGREEMENT": "V16 and V68 select the same Full Game side at the 0.5 decision boundary.",
+    "V68_REINFORCES_V16": "After V16 and V68 agree on side, V68 assigned probability to that selected side is greater than or equal to V16 assigned probability to the same side.",
+    "EXPOSURE_SIGN_SUPPORT": "For a HOME selection fg_exposure_adv > 0; for an AWAY selection fg_exposure_adv < 0. Zero gives no sign support. No magnitude threshold may be learned or used in V69."
+  },
+  "predeclaredConsensusScoreGrid": [0.55, 0.575, 0.60, 0.625, 0.65, 0.675],
+  "consensusScoreDefinition": "min(V16 probability of selected side, V68 probability of selected side), conditional on V16_V68_AGREEMENT",
+  "predeclaredRouteFamilies": [
+    "PREMIUM_A_FULL_GAME_HOME",
+    "A_PLUS_FULL_GAME_HOME",
+    "PREMIUM_A_ROUTE_SWITCH",
+    "A_PLUS_D1_ROUTER",
+    "PREMIUM_A_V68_AGREE_FULL_GAME_HOME",
+    "PREMIUM_A_V68_REINFORCE_FULL_GAME_HOME",
+    "A_PLUS_V68_AGREE_D1_ROUTER",
+    "V16_V68_CONSENSUS_T_GRID_FULL_GAME",
+    "V16_V68_REINFORCED_T_GRID_FULL_GAME",
+    "V16_V68_EXPOSURE_SIGN_T_GRID_FULL_GAME",
+    "V16_V68_REINFORCED_EXPOSURE_SIGN_T_GRID_FULL_GAME"
+  ],
+  "portfolioConstruction": {
+    "maxSelectionsPerGame": 1,
+    "contradictorySameGameSelectionsAllowed": false,
+    "dailyCaps": [1, 2],
+    "dailySelectionMustBeDeterministicAndOutcomeBlind": true,
+    "specialRoutePriorityExactly": [
+      "A_PLUS_V68_AGREE_D1_ROUTER",
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
+      "A_PLUS_D1_ROUTER",
+      "PREMIUM_A_ROUTE_SWITCH",
+      "GENERAL_V16_V68_FULL_GAME"
+    ],
+    "withinPriorityTieBreakExactly": [
+      "higher_consensus_score",
+      "higher_frozen_classifier_score_for_home_only_routes",
+      "lower_gamePk"
+    ],
+    "portfolioFamilies": [
+      "GENERAL_CONSENSUS_TOP1_T_GRID",
+      "GENERAL_CONSENSUS_TOP2_T_GRID",
+      "GENERAL_REINFORCED_TOP1_T_GRID",
+      "GENERAL_REINFORCED_TOP2_T_GRID",
+      "CONFLUENCE_LEDGER_TOP1_T_GRID",
+      "CONFLUENCE_LEDGER_TOP2_T_GRID",
+      "CONFLUENCE_REINFORCED_LEDGER_TOP1_T_GRID",
+      "CONFLUENCE_REINFORCED_LEDGER_TOP2_T_GRID"
+    ]
+  },
+  "qualityFrequencyDiagnostics": {
+    "theseAreOperationalPreferencesNotPromotionGates": true,
+    "preferredMeanSelectionsPerEligibleSlateDayMin": 0.8,
+    "preferredMeanSelectionsPerEligibleSlateDayMax": 2.0,
+    "preferredPctEligibleSlateDaysWithAtLeastOne": 70.0,
+    "preferredMaximumNoPlaySlateDayStreak": 2,
+    "preferredDecisiveHitRateMin": 0.57,
+    "preferredWilson95LowerMin": 0.55,
+    "maximumDailySelectionsHardCap": 2,
+    "forcedDailyPlayAllowed": false,
+    "relaxThresholdBecausePriorDaysHadNoPlayAllowed": false
+  },
+  "reporting": {
+    "reportEveryPredeclaredRouteAndPortfolio": true,
+    "reportBySeason": true,
+    "reportOpportunities": true,
+    "reportDecisiveWinsLossesPushes": true,
+    "reportHitRate": true,
+    "reportWilson95": true,
+    "reportOfficialDateClusterBootstrap": true,
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260819,
+    "reportMeanSelectionsPerSlateDay": true,
+    "reportPctDaysWithZero": true,
+    "reportPctDaysWithAtLeast1": true,
+    "reportPctDaysWithExactly1": true,
+    "reportPctDaysWithAtLeast2": true,
+    "reportMaximumNoPlaySlateDayStreak": true,
+    "reportNoPlayStreakCountsAtLeast2AndAtLeast3": true,
+    "reportOverlapAndIncrementalCoverage": true,
+    "reportQualityFrequencyParetoFrontier": true,
+    "reportV16V68ProbabilityMetricsForPureFullGameFamilies": true
+  },
+  "statistics": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "parentThresholdRelaxationAllowed": false,
+    "postOutcomeThresholdAdditionAllowed": false,
+    "postOutcomeRouteAdditionAllowed": false,
+    "subsetMiningForPromotionAllowed": false,
+    "gridResultsMustAllBeReported": true,
+    "bestHistoricalGridPointMayBeDescribedButNotPromoted": true,
+    "mixedF5FullGamePortfolioRowsAssumedIndependent": false,
+    "historicalHitRateEstablishesPositiveEv": false
+  },
+  "decisionBoundary": {
+    "v69CanConfirmProspectiveV68": false,
+    "v69CanChangeProspectiveV68": false,
+    "v69CanPromoteProduction": false,
+    "v69CanChangeLiveLookupAuthorization": false,
+    "v69CanChangeRouting": false,
+    "v69CanChangeRanking": false,
+    "v69CanChangeStake": false,
+    "v69CanEnableBetElite": false,
+    "v69CanEnableAutomaticBetting": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0,
+    "futureProspectiveFreezeRequiredBeforeAnyPromotion": true
+  }
+}
