@@ -7,6 +7,7 @@ on:
     paths:
       - 'research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json'
       - 'scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py'
+      - 'scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py'
       - '.github/workflows/validate-p0-step12v79-dynamic-team-strength-route-threat-regimes.yml'
 
 permissions:
@@ -47,8 +48,10 @@ jobs:
           assert c['decisionBoundary']['realFinancialExposure']==0
           print('V79_CONTRACT_PRE_SCORER_FREEZE_PROVED')
           PY
-      - name: Syntax check V79 scorer
-        run: python -m py_compile scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py
+      - name: Syntax check V79 scorer and repair runner
+        run: |
+          python -m py_compile scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py
+          python -m py_compile scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py
       - name: Download immutable Step12V3 historical universe
         uses: actions/download-artifact@v4
         with:
@@ -92,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work
-          python scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py \
+          python scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes-runner.py \
             --root inputs/step12v3 \
             --custody '${{ steps.paths.outputs.custody }}' \
             --v16-manifest '${{ steps.paths.outputs.v16 }}' \
