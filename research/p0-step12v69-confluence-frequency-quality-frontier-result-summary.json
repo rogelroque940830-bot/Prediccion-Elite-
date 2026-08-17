@@ -1,0 +1,288 @@
+{
+  "allPredeclaredOperationalPreferencesMatched": false,
+  "classification": "V69_CONFLUENCE_FREQUENCY_QUALITY_FRONTIER_COMPLETED_RETROSPECTIVE_DISCOVERY_ONLY",
+  "closestHighCoveragePoint": {
+    "decisiveRows": 964,
+    "hitRate": 0.6390041493775933,
+    "losses": 348,
+    "maximumNoPlaySlateDayStreak": 4,
+    "meanSelectionsPerEligibleSlateDay": 1.9188118811881187,
+    "name": "CONFLUENCE_LEDGER_TOP2_T0.550",
+    "noPlaySlateDays": 13,
+    "noPlayStreakLengthDistribution": {
+      "1": 4,
+      "2": 1,
+      "3": 1,
+      "4": 1
+    },
+    "numberNoPlayStreaksAtLeast3": 2,
+    "officialDateClusterBootstrapHitRate": {
+      "ci95": [
+        0.6089211618257261,
+        0.6690721649484536
+      ],
+      "distinctDatesWithDecisions": 492,
+      "pointEstimate": 0.6390041493775933,
+      "resamples": 10000,
+      "seed": 20260819,
+      "unit": "OFFICIAL_DATE_CLUSTER"
+    },
+    "opportunities": 969,
+    "pctDaysWithAtLeast1": 97.42574257425743,
+    "pushes": 5,
+    "wilson95": {
+      "lower": 0.6081882177812824,
+      "upper": 0.6687165980480846
+    },
+    "wins": 616
+  },
+  "diagnosis": {
+    "doNotForcePlays": true,
+    "doNotRelaxFrozenThresholdsPostHoc": true,
+    "historicalPricesUsed": false,
+    "nextScientificMove": "Freeze a separate diversification experiment using independent already-frozen route families to seek coverage of V69 no-play slate days without weakening current confluence rules.",
+    "positiveEvEstablished": false,
+    "preferredDroughtConstraintMet": false,
+    "preferredMaximumNoPlaySlateDayStreak": 2,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "realFinancialExposure": 0,
+    "strongHistoricalQualityFrequencyFrontierFound": true
+  },
+  "fixedRouteAnchors": {
+    "A_PLUS_D1_ROUTER": {
+      "decisiveRows": 90,
+      "hitRate": 0.8444444444444444,
+      "losses": 14,
+      "maximumNoPlaySlateDayStreak": 39,
+      "meanSelectionsPerEligibleSlateDay": 0.18811881188118812,
+      "numberNoPlayStreaksAtLeast3": 44,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.7666666666666667,
+          0.9120879120879121
+        ],
+        "distinctDatesWithDecisions": 79,
+        "pointEstimate": 0.8444444444444444,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 95,
+      "pctDaysWithAtLeast1": 16.237623762376238,
+      "pushes": 5,
+      "wilson95": {
+        "lower": 0.755669687335892,
+        "upper": 0.9050181099736166
+      },
+      "wins": 76
+    },
+    "PREMIUM_A_ROUTE_SWITCH": {
+      "decisiveRows": 265,
+      "hitRate": 0.7358490566037735,
+      "losses": 70,
+      "maximumNoPlaySlateDayStreak": 13,
+      "meanSelectionsPerEligibleSlateDay": 0.5306930693069307,
+      "numberNoPlayStreaksAtLeast3": 41,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.6793893129770993,
+          0.7905138339920948
+        ],
+        "distinctDatesWithDecisions": 197,
+        "pointEstimate": 0.7358490566037735,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 268,
+      "pctDaysWithAtLeast1": 39.603960396039604,
+      "pushes": 3,
+      "wilson95": {
+        "lower": 0.6796691115421042,
+        "upper": 0.7852886926072534
+      },
+      "wins": 195
+    },
+    "PREMIUM_A_V68_REINFORCE_FULL_GAME_HOME": {
+      "decisiveRows": 143,
+      "hitRate": 0.7832167832167832,
+      "losses": 31,
+      "maximumNoPlaySlateDayStreak": 23,
+      "meanSelectionsPerEligibleSlateDay": 0.28316831683168314,
+      "numberNoPlayStreaksAtLeast3": 53,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.7132867132867133,
+          0.8503401360544217
+        ],
+        "distinctDatesWithDecisions": 124,
+        "pointEstimate": 0.7832167832167832,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 143,
+      "pctDaysWithAtLeast1": 24.554455445544555,
+      "pushes": 0,
+      "wilson95": {
+        "lower": 0.708749079926142,
+        "upper": 0.8428657213290882
+      },
+      "wins": 112
+    }
+  },
+  "fullReportArtifact": {
+    "artifactDigest": "sha256:b071c8a70ccd16118a13268510ebacf26cbd407aacb4ef4d1defea9ede04645e",
+    "artifactId": 9274431264,
+    "workflowRunId": 31988197440
+  },
+  "onePlayAlternative": {
+    "decisiveRows": 467,
+    "hitRate": 0.6595289079229122,
+    "losses": 159,
+    "maximumNoPlaySlateDayStreak": 5,
+    "meanSelectionsPerEligibleSlateDay": 0.9326732673267327,
+    "name": "CONFLUENCE_REINFORCED_LEDGER_TOP1_T0.550",
+    "numberNoPlayStreaksAtLeast3": 3,
+    "officialDateClusterBootstrapHitRate": {
+      "ci95": [
+        0.6167023554603854,
+        0.702355460385439
+      ],
+      "distinctDatesWithDecisions": 467,
+      "pointEstimate": 0.6595289079229122,
+      "resamples": 10000,
+      "seed": 20260819,
+      "unit": "OFFICIAL_DATE_CLUSTER"
+    },
+    "opportunities": 471,
+    "pctDaysWithAtLeast1": 93.26732673267327,
+    "pushes": 4,
+    "wilson95": {
+      "lower": 0.6154043781848414,
+      "upper": 0.7010502426473025
+    },
+    "wins": 308
+  },
+  "qualityFrequencyTradeoff": {
+    "T0.575_TOP2": {
+      "decisiveRows": 844,
+      "hitRate": 0.6540284360189573,
+      "losses": 292,
+      "maximumNoPlaySlateDayStreak": 7,
+      "meanSelectionsPerEligibleSlateDay": 1.6811881188118811,
+      "numberNoPlayStreaksAtLeast3": 4,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.6219362679410055,
+          0.6872788957344222
+        ],
+        "distinctDatesWithDecisions": 460,
+        "pointEstimate": 0.6540284360189573,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 849,
+      "pctDaysWithAtLeast1": 91.08910891089108,
+      "pushes": 5,
+      "wilson95": {
+        "lower": 0.6213032250246142,
+        "upper": 0.6853578305310462
+      },
+      "wins": 552
+    },
+    "T0.600_TOP2": {
+      "decisiveRows": 625,
+      "hitRate": 0.672,
+      "losses": 205,
+      "maximumNoPlaySlateDayStreak": 10,
+      "meanSelectionsPerEligibleSlateDay": 1.2475247524752475,
+      "numberNoPlayStreaksAtLeast3": 7,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.6350245499181669,
+          0.709323067335508
+        ],
+        "distinctDatesWithDecisions": 384,
+        "pointEstimate": 0.672,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 630,
+      "pctDaysWithAtLeast1": 76.23762376237623,
+      "pushes": 5,
+      "wilson95": {
+        "lower": 0.63423920038719,
+        "upper": 0.7076592999664764
+      },
+      "wins": 420
+    },
+    "T0.625_TOP2": {
+      "decisiveRows": 435,
+      "hitRate": 0.7126436781609196,
+      "losses": 125,
+      "maximumNoPlaySlateDayStreak": 11,
+      "meanSelectionsPerEligibleSlateDay": 0.8712871287128713,
+      "numberNoPlayStreaksAtLeast3": 16,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.6696279761904762,
+          0.7546296296296297
+        ],
+        "distinctDatesWithDecisions": 311,
+        "pointEstimate": 0.7126436781609196,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 440,
+      "pctDaysWithAtLeast1": 61.98019801980198,
+      "pushes": 5,
+      "wilson95": {
+        "lower": 0.6684015074668938,
+        "upper": 0.7531629021059453
+      },
+      "wins": 310
+    },
+    "T0.650_TOP2": {
+      "decisiveRows": 311,
+      "hitRate": 0.7459807073954984,
+      "losses": 79,
+      "maximumNoPlaySlateDayStreak": 11,
+      "meanSelectionsPerEligibleSlateDay": 0.6257425742574257,
+      "numberNoPlayStreaksAtLeast3": 30,
+      "officialDateClusterBootstrapHitRate": {
+        "ci95": [
+          0.6968724798387097,
+          0.7935483870967742
+        ],
+        "distinctDatesWithDecisions": 240,
+        "pointEstimate": 0.7459807073954984,
+        "resamples": 10000,
+        "seed": 20260819,
+        "unit": "OFFICIAL_DATE_CLUSTER"
+      },
+      "opportunities": 316,
+      "pctDaysWithAtLeast1": 47.92079207920792,
+      "pushes": 5,
+      "wilson95": {
+        "lower": 0.694801018697313,
+        "upper": 0.7911576347970155
+      },
+      "wins": 232
+    }
+  },
+  "sample": {
+    "eligibleSlateDays": 505,
+    "rows": 6610,
+    "rowsBySeason": {
+      "2024": 2406,
+      "2025": 2423,
+      "2026_YTD": 1781
+    }
+  },
+  "schemaVersion": "courtedge-p0-step12v69-confluence-frequency-quality-frontier-result-summary.v1"
+}
