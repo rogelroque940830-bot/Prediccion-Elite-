@@ -100,21 +100,43 @@ jobs:
         if: steps.date.outputs.eligible != 'true'
         run: echo 'V80 prospective capture is not eligible before 2026-08-18.'
 
-      - name: Require immutable prior-date V68 and V80 states
+      - name: Check immutable prior-date state readiness
         if: steps.date.outputs.eligible == 'true'
+        id: states
         shell: bash
         run: |
           set -euo pipefail
-          test -s "v68-ledger/v68/states/${{ steps.date.outputs.target }}.json" || { echo 'V80_FAIL_CLOSED_V68_STATE_MISSING' >&2; exit 1; }
-          test -s "v80-ledger/v80/states/${{ steps.date.outputs.target }}.json" || { echo 'V80_FAIL_CLOSED_V80_STATE_MISSING' >&2; exit 1; }
+          V68="v68-ledger/v68/states/${{ steps.date.outputs.target }}.json"
+          V80="v80-ledger/v80/states/${{ steps.date.outputs.target }}.json"
+          if test -s "$V68" && test -s "$V80"; then
+            python - <<'PY'
+          import json
+          target='${{ steps.date.outputs.target }}'
+          v68=json.load(open(f'v68-ledger/v68/states/{target}.json'))
+          v80=json.load(open(f'v80-ledger/v80/states/{target}.json'))
+          assert v68['schemaVersion']=='courtedge-p0-step12v68-prospective-state.v1'
+          assert v68['targetOfficialDate']==target
+          assert v68['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert v68['chronology']['sameDateOutcomesUsed'] is False
+          assert v80['schemaVersion']=='courtedge-p0-step12v80-general-strength-live-state.v1'
+          assert v80['targetOfficialDate']==target
+          assert v80['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert v80['chronology']['sameDateCompletedGamesUsed'] is False
+          print('V80_CAPTURE_STATES_READY')
+          PY
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'V80_CAPTURE_WAITING_FOR_IMMUTABLE_DAILY_STATES'
+          fi
 
       - name: Install Node dependencies
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
         working-directory: code
         run: npm ci --ignore-scripts
 
       - name: Download immutable V16 control manifest
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
         uses: actions/download-artifact@v4
         with:
           name: p0-step12v16-pure-ml-f5-settlement-probability
@@ -124,7 +146,7 @@ jobs:
           run-id: 31704085189
 
       - name: Poll exact pregame identity and build Full13 classifier context
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
         id: source
         working-directory: code
         shell: bash
@@ -149,7 +171,7 @@ jobs:
           PY
 
       - name: Score frozen V16/V68 and preserve V80 first captures
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true'
         id: score
         working-directory: code
         shell: bash
@@ -185,7 +207,7 @@ jobs:
           PY
 
       - name: Preserve immutable context evidence canonical capture and receipt
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -219,7 +241,7 @@ jobs:
           PY
 
       - name: Commit only newly captured immutable games
-        if: steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
         working-directory: v80-ledger
         shell: bash
         run: |
