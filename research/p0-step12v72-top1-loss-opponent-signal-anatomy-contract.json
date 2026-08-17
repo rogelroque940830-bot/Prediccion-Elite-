@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "courtedge-p0-step12v72-top1-loss-opponent-signal-anatomy-contract.v1",
+  "scientificStatus": "FROZEN_TOP1_LOSS_OPPONENT_SIGNAL_ANATOMY_BEFORE_ANY_V72_SCORER_EXISTS",
+  "objective": "Explain, descriptively and without post-outcome rule changes, which strictly pregame opponent-facing signals were systematically stronger on days when the already-frozen V69 CONFLUENCE_LEDGER_TOP1_T0.550 selection lost, compared with days when that same frozen TOP1 selection won.",
+  "adaptiveSelectionDisclosure": "The 2024-2026_YTD outcomes have already been inspected in prior research. V72 is therefore retrospective loss anatomy and warning-signal discovery only. It may identify recurring pregame characteristics of historical TOP1 losses, but it may not independently create a live veto, promote a filter, establish positive EV, or alter V68.",
+  "mainBaseSha": "282c1b7936eb4b891bab5d55b431f45a34c90c74",
+  "frozenParentPortfolio": {
+    "name": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "consensusThreshold": 0.55,
+    "maximumSelectionsPerEligibleSlateDay": 1,
+    "selectionRankingMayChange": false,
+    "forcedPlayAllowed": false
+  },
+  "evaluationWindows": {
+    "primary": {
+      "id": "MAY01",
+      "officialDateRule": "MM-DD >= 05-01 within each season",
+      "expectedEligibleSlateDays": 395,
+      "expectedTop1PickDays": 395,
+      "expectedWins": 254,
+      "expectedLosses": 138,
+      "expectedPushes": 3,
+      "expectedDecisiveRows": 392
+    },
+    "sensitivity": {
+      "id": "MAY15",
+      "officialDateRule": "MM-DD >= 05-15 within each season",
+      "expectedEligibleSlateDays": 353,
+      "expectedTop1PickDays": 353,
+      "expectedWins": 227,
+      "expectedLosses": 123,
+      "expectedPushes": 3,
+      "expectedDecisiveRows": 350
+    },
+    "seasonSetExactly": ["2024", "2025", "2026_YTD"],
+    "pushesExcludedFromWinVsLossSignalTests": true,
+    "pushesReportedSeparately": true,
+    "betterHistoricalWindowMayBeSelectedForPromotion": false
+  },
+  "immutableParentEvidence": {
+    "v71ResultSummary": {
+      "path": "research/p0-step12v71-operational-start-window-top1-result-summary.json",
+      "requiredClassification": "V71_OPERATIONAL_START_WINDOW_TOP1_RETROSPECTIVE_AUDIT_COMPLETE",
+      "sourceWorkflowRunId": 31990116239,
+      "sourceArtifactId": 9275037711,
+      "sourceArtifactDigest": "sha256:0f25e57ae1f19e5b6d9dda0f279e282b734aad966aa20282d0b59211909a415d"
+    },
+    "v69Contract": {
+      "path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json",
+      "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"
+    },
+    "v69Scorer": {
+      "path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
+    },
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v16": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    }
+  },
+  "pregameSignalPolicy": {
+    "strictlyPregameOnly": true,
+    "sameDateCompletedGamesMayNotUpdateLaterGames": true,
+    "futureGameDataAllowed": false,
+    "outcomeMayNotEnterSignalValue": true,
+    "historicalSportsbookPricesUsed": false,
+    "oddsUsedAsPredictiveFeatures": false,
+    "injuryOrNewsBackfillAfterGameAllowed": false,
+    "currentMetadataFallbackAllowed": false
+  },
+  "signalOrientation": {
+    "selectedSideSupportDefinition": "Every directional signal is transformed to the perspective of the frozen TOP1 selected side. Positive means the pregame signal supported the selected side; negative means it supported the eventual opponent.",
+    "opponentWarningDefinition": "opponent_warning = -1 * selected_side_support for directional advantage signals, so larger positive values indicate stronger pregame evidence favoring the opponent.",
+    "homeSelectionMultiplier": 1,
+    "awaySelectionMultiplier": -1
+  },
+  "directionalOpponentWarningSignalsExactly": [
+    "team_rd10_diff",
+    "team_win10_diff",
+    "starter_kbb_adv",
+    "team_ra10_adv",
+    "lineup_exposure_rate_adv",
+    "starter_runrisk_adv",
+    "team_rs10_diff",
+    "starter_hr_adv",
+    "lineup_continuity_rate_adv",
+    "starter_velocity_adv",
+    "starter_spin_adv",
+    "starter_swing_miss_adv",
+    "starter_in_zone_adv",
+    "starter_weak_contact_adv",
+    "fg_exposure_adv",
+    "bullpen_pitches_1d_adv"
+  ],
+  "modelConvictionSignalsExactly": [
+    "consensusScore",
+    "p16Selected",
+    "p68Selected",
+    "p68MinusP16Selected",
+    "classifierScore",
+    "routePriority"
+  ],
+  "predeclaredCompositeDiagnostics": {
+    "opponentWarningSignalCount": {
+      "definition": "Count among the 16 directional signals whose opponent_warning is strictly greater than zero and nonmissing.",
+      "thresholdSearchAllowed": false,
+      "reportEveryObservedCount": true
+    },
+    "strongOpponentWarningCount": {
+      "definition": "Count among directional signals whose selected-side support is at or below the frozen 25th percentile of that same signal in all MAY01 TOP1 decisive rows, where the percentile is computed once across the entire MAY01 analysis cohort only for descriptive anatomy and never used for production.",
+      "mayBecomeLiveFilterFromV72": false
+    }
+  },
+  "statisticalPlan": {
+    "primaryContrast": "MAY01_TOP1_LOSSES_VS_MAY01_TOP1_WINS",
+    "sensitivityContrast": "MAY15_TOP1_LOSSES_VS_MAY15_TOP1_WINS",
+    "perSignalReportExactly": [
+      "n_nonmissing_wins",
+      "n_nonmissing_losses",
+      "median_wins",
+      "median_losses",
+      "iqr_wins",
+      "iqr_losses",
+      "mean_wins",
+      "mean_losses",
+      "mann_whitney_two_sided_p",
+      "cliffs_delta_loss_minus_win",
+      "loss_warning_univariate_auc",
+      "holm_adjusted_p_across_directional_signal_family",
+      "seasonal_direction_check"
+    ],
+    "bootstrap": {
+      "unit": "OFFICIAL_DATE",
+      "resamples": 10000,
+      "seed": 20260824,
+      "reportMeanDifferenceCI": true
+    },
+    "predeclaredRobustHistoricalWarningLabel": {
+      "holmAdjustedPLt": 0.05,
+      "minimumAbsoluteCliffsDelta": 0.147,
+      "minimumLossWarningAuc": 0.58,
+      "directionMustBeLossGreaterThanWin": true,
+      "directionMustMatchAllThreeSeasons": true,
+      "interpretation": "A signal meeting all criteria is a robust retrospective opponent-warning descriptor, not an approved live veto."
+    },
+    "multipleTestingFamily": "16_DIRECTIONAL_OPPONENT_WARNING_SIGNALS_ONLY",
+    "modelConvictionSignalsExploratoryOnly": true
+  },
+  "reporting": {
+    "reportEveryFrozenSignal": true,
+    "reportMissingnessByOutcome": true,
+    "reportCombinedAndBySeason": true,
+    "reportTop1LossCountAndWinCount": true,
+    "reportRoutesAmongLossesAndWins": true,
+    "reportHomeVsAwaySelectedSideAmongLossesAndWins": true,
+    "reportOpponentWarningCountDistribution": true,
+    "reportStrongOpponentWarningCountDistribution": true,
+    "reportRobustHistoricalWarningSignals": true,
+    "reportSignalsThatDoNotDifferentiateLosses": true,
+    "reportMay15SensitivityWithoutSelectingIt": true
+  },
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureAdditionAfterOutcomeInspectionAllowed": false,
+    "featureRemovalAfterOutcomeInspectionAllowed": false,
+    "thresholdSearchAllowed": false,
+    "routeSearchAllowed": false,
+    "dateCutoffSearchAllowed": false,
+    "lossSubsetMiningForPromotionAllowed": false,
+    "newLiveVetoMayBeCreatedByV72": false,
+    "historicalHitRateOrLossAnatomyEstablishesPositiveEv": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "v72CanChangeProspectiveV68": false,
+    "v72CanPromoteProduction": false,
+    "v72CanChangeRouting": false,
+    "v72CanChangeRanking": false,
+    "v72CanChangeStake": false,
+    "v72CanEnableBetElite": false,
+    "v72CanEnableAutomaticBetting": false,
+    "futureProspectiveFreezeRequiredBeforeAnyOpponentWarningRuleCanAffectRecommendations": true,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}

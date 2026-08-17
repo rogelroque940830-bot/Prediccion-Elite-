@@ -1,0 +1,76 @@
+name: Validate P0 Step 12V72 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v72-top1-loss-opponent-signal-anatomy-result-summary.json'
+      - '.github/workflows/validate-p0-step12v72-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-v72-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable successful V72 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v72-top1-loss-opponent-signal-anatomy
+          path: inputs/v72-report
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31991653000
+
+      - name: Validate preserved summary against exact report
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="$(find inputs/v72-report -type f -name '*.json' -print -quit)"
+          test -n "$REPORT"
+          python - "$REPORT" <<'PY'
+          import json,sys
+          report=json.load(open(sys.argv[1]))
+          summary=json.load(open('research/p0-step12v72-top1-loss-opponent-signal-anatomy-result-summary.json'))
+          assert report['classification']=='V72_TOP1_LOSS_OPPONENT_SIGNAL_ANATOMY_RETROSPECTIVE_COMPLETE'
+          assert summary['classification']==report['classification']
+          assert summary['sourceArtifact']=={
+            'workflowRunId':31991653000,
+            'artifactId':9275526486,
+            'artifactDigest':'sha256:63886c47487069f6bcc4c376db52e8bcec787b820015dc6a4b6cba886fb25e4c',
+          }
+          assert report['fullSeasonTop1Parity']==summary['parentParity']['fullSeason']
+          a=report['primaryMay01']
+          assert a['parentParity']['pickDays']==summary['parentParity']['MAY01']['pickDays']
+          assert a['parentParity']['wins']==summary['parentParity']['MAY01']['wins']
+          assert a['parentParity']['losses']==summary['parentParity']['MAY01']['losses']
+          assert a['parentParity']['pushes']==summary['parentParity']['MAY01']['pushes']
+          assert a['predeclaredRobustHistoricalWarningSignals']==['lineup_exposure_rate_adv']
+          x=a['directionalOpponentWarningSignalAnalysis']['lineup_exposure_rate_adv']
+          sx=summary['primaryMay01Finding']['lineupExposureOpponentWarning']
+          assert x['median_losses']==sx['medianLosses']
+          assert x['median_wins']==sx['medianWins']
+          assert x['cliffs_delta_loss_minus_win']==sx['cliffsDeltaLossMinusWin']
+          assert x['loss_warning_univariate_auc']==sx['lossWarningAuc']
+          assert x['holm_adjusted_p_across_directional_signal_family']==sx['holmAdjustedP']
+          assert x['seasonal_direction_check']['lossGreaterThanWinInAllSeasons'] is True
+          b=report['sensitivityMay15']
+          assert b['predeclaredRobustHistoricalWarningSignals']==[]
+          y=b['directionalOpponentWarningSignalAnalysis']['lineup_exposure_rate_adv']
+          sy=summary['may15Sensitivity']['lineupExposureOpponentWarning']
+          assert y['loss_warning_univariate_auc']==sy['lossWarningAuc']
+          assert y['holm_adjusted_p_across_directional_signal_family']==sy['holmAdjustedP']
+          assert y['seasonal_direction_check']['lossGreaterThanWinInAllSeasons'] is True
+          assert summary['guardrails']['causalWhyEstablished'] is False
+          assert summary['guardrails']['liveVetoCreated'] is False
+          assert summary['guardrails']['positiveEvEstablished'] is False
+          assert summary['guardrails']['productionChanged'] is False
+          assert summary['guardrails']['realFinancialExposure']==0
+          print('V72_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          PY
