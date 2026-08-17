@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "courtedge-p0-step12v72-top1-loss-opponent-signal-anatomy-result-summary.v1",
+  "classification": "V72_TOP1_LOSS_OPPONENT_SIGNAL_ANATOMY_RETROSPECTIVE_COMPLETE",
+  "sourceArtifact": {
+    "workflowRunId": 31991653000,
+    "artifactId": 9275526486,
+    "artifactDigest": "sha256:63886c47487069f6bcc4c376db52e8bcec787b820015dc6a4b6cba886fb25e4c"
+  },
+  "parentParity": {
+    "fullSeason": {
+      "opportunities": 492,
+      "decisiveRows": 488,
+      "wins": 311,
+      "losses": 177,
+      "pushes": 4
+    },
+    "MAY01": {
+      "pickDays": 395,
+      "decisiveRows": 392,
+      "wins": 254,
+      "losses": 138,
+      "pushes": 3
+    },
+    "MAY15": {
+      "pickDays": 353,
+      "decisiveRows": 350,
+      "wins": 227,
+      "losses": 123,
+      "pushes": 3
+    }
+  },
+  "primaryMay01Finding": {
+    "predeclaredRobustHistoricalWarningSignals": ["lineup_exposure_rate_adv"],
+    "lineupExposureOpponentWarning": {
+      "interpretation": "Historical TOP1 losses occurred when the selected side's pregame lineup-exposure advantage was materially weaker, meaning the opponent was closer on lineup exposure. The median opponent-warning value remained negative in both wins and losses, so this does not mean the opponent usually had an outright lineup-exposure advantage.",
+      "medianLosses": -0.12823268842420693,
+      "medianWins": -0.1707723830272851,
+      "meanDifferenceLossMinusWin": 0.025839179320117672,
+      "bootstrapMeanDifference95": [0.005574565666052361, 0.04577743262112626],
+      "cliffsDeltaLossMinusWin": 0.1819867625242497,
+      "lossWarningAuc": 0.5909933812621249,
+      "mannWhitneyP": 0.0029164627495526516,
+      "holmAdjustedP": 0.046663403992842425,
+      "lossGreaterThanWinInAllThreeSeasons": true,
+      "seasonalMedians": {
+        "2024": {"losses": -0.13147310206133733, "wins": -0.1886042357416403},
+        "2025": {"losses": -0.13008096871993186, "wins": -0.1641364704744987},
+        "2026_YTD": {"losses": -0.12161576781459826, "wins": -0.12572523447756323}
+      }
+    },
+    "nearWarningNotRobustAcrossSeasons": {
+      "signal": "starter_runrisk_adv",
+      "cliffsDeltaLossMinusWin": 0.18150176880063906,
+      "lossWarningAuc": 0.5907508844003195,
+      "holmAdjustedP": 0.046663403992842425,
+      "lossGreaterThanWinInAllThreeSeasons": false,
+      "failureReason": "Direction reversed in 2025, so it failed the frozen cross-season robustness requirement."
+    },
+    "otherDirectionalSignals": {
+      "noneMetAllPredeclaredRobustWarningCriteria": true,
+      "importantNulls": [
+        "starter_kbb_adv",
+        "starter_velocity_adv",
+        "starter_spin_adv",
+        "starter_swing_miss_adv",
+        "starter_weak_contact_adv",
+        "bullpen_pitches_1d_adv",
+        "fg_exposure_adv"
+      ]
+    }
+  },
+  "may15Sensitivity": {
+    "predeclaredRobustHistoricalWarningSignals": [],
+    "lineupExposureOpponentWarning": {
+      "medianLosses": -0.1311475409836067,
+      "medianWins": -0.17580872011251747,
+      "cliffsDeltaLossMinusWin": 0.16127645857956377,
+      "lossWarningAuc": 0.5806382292897819,
+      "mannWhitneyP": 0.012743887406635538,
+      "holmAdjustedP": 0.1982576010059655,
+      "lossGreaterThanWinInAllThreeSeasons": true,
+      "interpretation": "The same direction persisted in all three seasons, but the smaller MAY15 sample did not survive the frozen 16-signal Holm family."
+    }
+  },
+  "routeContextMay01": {
+    "A_PLUS_V68_AGREE_D1_ROUTER": {
+      "wins": 62,
+      "losses": 9,
+      "historicalLossRateAmongDecisions": 0.1267605633802817
+    },
+    "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {
+      "wins": 64,
+      "losses": 34,
+      "historicalLossRateAmongDecisions": 0.3469387755102041
+    },
+    "V16_V68_CONSENSUS_T0.550": {
+      "wins": 128,
+      "losses": 95,
+      "historicalLossRateAmongDecisions": 0.4260089686098655
+    },
+    "interpretation": "Losses were disproportionately concentrated in the general V16/V68 consensus TOP1 route rather than the stronger A+ confluence route. This is route context, not an opponent-signal veto."
+  },
+  "modelConvictionContextMay01": {
+    "consensusScoreMedian": {"losses": 0.6162489488484346, "wins": 0.6281243107454828},
+    "p16SelectedMedian": {"losses": 0.6219881189889513, "wins": 0.6337482199180375},
+    "p68SelectedMedian": {"losses": 0.624281021654808, "wins": 0.6359324861854496},
+    "classifierScoreMedian": {"losses": 0.60890217775951, "wins": 0.6548432828935496},
+    "interpretation": "Historical losses tended to occur on lower-conviction TOP1 selections even though they still passed the frozen portfolio rules. These conviction variables were frozen as exploratory context and are not live vetoes."
+  },
+  "guardrails": {
+    "strictlyPregameSignalsOnly": true,
+    "causalWhyEstablished": false,
+    "associationNotCausation": true,
+    "newSignalAddedAfterInspection": false,
+    "newThresholdSearched": false,
+    "newRouteSearched": false,
+    "liveVetoCreated": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "prospectiveV68Changed": false,
+    "productionChanged": false,
+    "realFinancialExposure": 0,
+    "futureProspectiveFreezeRequiredBeforeAnyWarningRuleAffectsRecommendations": true
+  }
+}
