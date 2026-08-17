@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "courtedge-p0-step12v73-unified-best-opportunity-audit-result-summary.v1",
+  "classification": "V73_UNIFIED_BEST_OPPORTUNITY_RETROSPECTIVE_AUDIT_COMPLETE",
+  "sourceArtifact": {
+    "workflowRunId": 31993421888,
+    "artifactId": 9276063364,
+    "artifactDigest": "sha256:9d255967670cda0ed705df03e5c7d0f42be4569b455f768fc7a16467e8187ae5"
+  },
+  "parentParity": {
+    "fullSeason": {"opportunities": 492, "decisiveRows": 488, "wins": 311, "losses": 177, "pushes": 4},
+    "may01": {"pickDays": 395, "decisiveRows": 392, "wins": 254, "losses": 138, "pushes": 3}
+  },
+  "primaryFinding": "The frozen Winner TOP1 remained the strongest price-blind daily hit-rate path. Adding certified V67 F5/Full Game total distributions through the preregistered model-central line rule did not improve the daily #1 hit rate.",
+  "policies": {
+    "FROZEN_WINNER_TOP1": {
+      "opportunities": 395,
+      "wins": 254,
+      "losses": 138,
+      "pushes": 3,
+      "decisiveHitRate": 0.6479591836734694,
+      "wilson95": [0.5994506928183636, 0.6935958187155429],
+      "bootstrap95": [0.6020408163265306, 0.6938775510204082],
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 4
+    },
+    "F5_TOTAL_NB2_CENTRAL_LINE_TOP1": {
+      "opportunities": 395,
+      "wins": 212,
+      "losses": 183,
+      "pushes": 0,
+      "decisiveHitRate": 0.5367088607594936,
+      "wilson95": [0.48741533046795854, 0.5852952393422116],
+      "bootstrap95": [0.48860759493670886, 0.5848734177215181],
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 9
+    },
+    "FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1": {
+      "opportunities": 395,
+      "wins": 219,
+      "losses": 176,
+      "pushes": 0,
+      "decisiveHitRate": 0.5544303797468354,
+      "wilson95": [0.5051238175592401, 0.6026884066420468],
+      "bootstrap95": [0.5063291139240507, 0.6050632911392405],
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 6
+    },
+    "TOTALS_CROSS_HORIZON_TOP1": {
+      "opportunities": 395,
+      "wins": 213,
+      "losses": 182,
+      "pushes": 0,
+      "decisiveHitRate": 0.5392405063291139,
+      "marketShare": {"F5_TOTAL": 389, "FULL_GAME_TOTAL": 6},
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 9
+    },
+    "UNIFIED_ALL_MARKETS_TOP1": {
+      "opportunities": 395,
+      "wins": 253,
+      "losses": 139,
+      "pushes": 3,
+      "decisiveHitRate": 0.6454081632653061,
+      "wilson95": [0.5968480934696954, 0.6911458920032818],
+      "bootstrap95": [0.5969387755102041, 0.6913265306122449],
+      "marketShare": {"FROZEN_WINNER_TOP1": 381, "F5_TOTAL": 14},
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 4
+    }
+  },
+  "headToHeadUnifiedVsFrozenWinner": {
+    "daysUnifiedDiffersFromFrozenWinner": 14,
+    "differentDaysBothDecisive": 14,
+    "unifiedWinsOnDifferentBothDecisiveDays": 9,
+    "winnerWinsOnDifferentBothDecisiveDays": 10,
+    "unifiedWinWinnerLoss": 1,
+    "unifiedLossWinnerWin": 2,
+    "bothWin": 8,
+    "bothLose": 3
+  },
+  "lineUsage": {
+    "F5_TOTAL_DAILY_TOP1": {"2.5": 1, "3.5": 171, "4.5": 217, "5.5": 6},
+    "FULL_GAME_TOTAL_DAILY_TOP1": {"7.5": 183, "8.5": 210, "9.5": 2}
+  },
+  "scientificInterpretation": {
+    "winnerRemainsPrimaryPredictiveTop1": true,
+    "totalsShouldReplaceWinnerTop1Now": false,
+    "v67DistributionSignalRemainsValid": true,
+    "reasonTotalsRemainUseful": "V67 established improved total-run distribution probability quality, but V73 shows that when converted into a price-blind model-central daily hit-rate contest, the totals do not beat the frozen winner TOP1. Their likely future value is line/price-dependent and should be tested later against actual offered totals and prices rather than promoted on raw hit rate.",
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "positiveEvEstablished": false
+  },
+  "guardrails": {
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "outcomeDependentLineSearchPerformed": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "realFinancialExposure": 0
+  }
+}

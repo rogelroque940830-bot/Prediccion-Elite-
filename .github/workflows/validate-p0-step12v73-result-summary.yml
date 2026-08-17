@@ -1,0 +1,64 @@
+name: Validate P0 Step 12V73 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v73-unified-best-opportunity-audit-result-summary.json'
+      - '.github/workflows/validate-p0-step12v73-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable V73 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v73-unified-best-opportunity-audit
+          path: inputs/v73
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31993421888
+
+      - name: Validate preserved summary against immutable report
+        run: |
+          python - <<'PY'
+          import json, math
+          s=json.load(open('research/p0-step12v73-unified-best-opportunity-audit-result-summary.json'))
+          r=json.load(open('inputs/v73/v73-unified-best-opportunity-audit.json'))
+          assert s['classification']==r['classification']=='V73_UNIFIED_BEST_OPPORTUNITY_RETROSPECTIVE_AUDIT_COMPLETE'
+          assert s['sourceArtifact']=={
+            'workflowRunId':31993421888,
+            'artifactId':9276063364,
+            'artifactDigest':'sha256:9d255967670cda0ed705df03e5c7d0f42be4569b455f768fc7a16467e8187ae5'
+          }
+          assert s['parentParity']==r['parentParity']
+          mapping={
+            'FROZEN_WINNER_TOP1':'FROZEN_WINNER_TOP1',
+            'F5_TOTAL_NB2_CENTRAL_LINE_TOP1':'F5_TOTAL_NB2_CENTRAL_LINE_TOP1',
+            'FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1':'FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1',
+            'TOTALS_CROSS_HORIZON_TOP1':'TOTALS_CROSS_HORIZON_TOP1',
+            'UNIFIED_ALL_MARKETS_TOP1':'UNIFIED_ALL_MARKETS_TOP1',
+          }
+          for sk,rk in mapping.items():
+            a=s['policies'][sk]; b=r['policies'][rk]
+            for k in ('opportunities','wins','losses','pushes'):
+              assert a[k]==b[k], (sk,k,a[k],b[k])
+            assert math.isclose(a['decisiveHitRate'],b['decisiveHitRate'],rel_tol=0,abs_tol=1e-15)
+          h=s['headToHeadUnifiedVsFrozenWinner']; q=r['unifiedVsFrozenWinner']
+          for k,v in h.items(): assert v==q[k], (k,v,q[k])
+          assert s['scientificInterpretation']['winnerRemainsPrimaryPredictiveTop1'] is True
+          assert s['scientificInterpretation']['totalsShouldReplaceWinnerTop1Now'] is False
+          assert s['guardrails']['historicalPricesUsed'] is False
+          assert s['guardrails']['productionChanged'] is False
+          assert s['guardrails']['realFinancialExposure']==0
+          print('V73_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          PY

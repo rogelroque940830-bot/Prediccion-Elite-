@@ -1,0 +1,184 @@
+name: Validate P0 Step 12V73 Unified Best Opportunity Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v73-unified-best-opportunity-audit-contract.json'
+      - 'scripts/p0-step12v73-unified-best-opportunity-audit.py'
+      - '.github/workflows/validate-p0-step12v73-unified-best-opportunity-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  unified-best-opportunity-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen analysis dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Prove V73 contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v73-unified-best-opportunity-audit-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v73-unified-best-opportunity-audit.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v73-unified-best-opportunity-audit-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V73_SCORER_EXISTS'
+          assert c['immutableParentEvidence']['v69Scorer']['portfolioExactly']=='CONFLUENCE_LEDGER_TOP1_T0.550'
+          assert c['evaluationUniverse']['operationalStartRule']=='MM-DD >= 05-01'
+          assert c['unifiedRule']['dailyHardCap']==1
+          assert c['unifiedRule']['forcedPlayAllowed'] is False
+          assert c['statistics']['lineSearchAfterOutcomesAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V73_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check V73 scorer
+        run: python -m py_compile scripts/p0-step12v73-unified-best-opportunity-audit.py
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Download immutable V66 totals evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-totals
+          path: inputs/v66-totals
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965267742
+
+      - name: Download immutable V67 total distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v67-total-distribution-calibration
+          path: inputs/v67
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965619576
+
+      - name: Download immutable V28 F5 outcomes
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v28-f5-total-baseline
+          path: inputs/f5
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31896949764
+
+      - name: Resolve immutable inputs
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"; done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          V66="$(find inputs/v66-totals -type f -name v66-totals-report.json -print -quit)"
+          V67="$(find inputs/v67 -type f -name v67-total-distribution-calibration-report.json -print -quit)"
+          F5="$(find inputs/f5 -type f -name f5-outcomes.json -print -quit)"
+          test -n "$CUSTODY"; test -n "$V16"; test -n "$V66"; test -n "$V67"; test -n "$F5"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "v66=$V66" >> "$GITHUB_OUTPUT"
+          echo "v67=$V67" >> "$GITHUB_OUTPUT"
+          echo "f5=$F5" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen V73 unified audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/p0-step12v73-unified-best-opportunity-audit.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v66-totals-report '${{ steps.paths.outputs.v66 }}' \
+            --v67-report '${{ steps.paths.outputs.v67 }}' \
+            --f5-outcomes '${{ steps.paths.outputs.f5 }}' \
+            --contract research/p0-step12v73-unified-best-opportunity-audit-contract.json \
+            --out work/v73-unified-best-opportunity-audit.json
+
+      - name: Validate frozen parity and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v73-unified-best-opportunity-audit.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v73-unified-best-opportunity-audit.v1'
+          assert r['classification']=='V73_UNIFIED_BEST_OPPORTUNITY_RETROSPECTIVE_AUDIT_COMPLETE'
+          assert r['parentParity']['fullSeason']=={'opportunities':492,'decisiveRows':488,'wins':311,'losses':177,'pushes':4}
+          assert r['parentParity']['may01']=={'pickDays':395,'decisiveRows':392,'wins':254,'losses':138,'pushes':3}
+          assert set(r['policies'])=={'FROZEN_WINNER_TOP1','F5_TOTAL_NB2_CENTRAL_LINE_TOP1','FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1','TOTALS_CROSS_HORIZON_TOP1','UNIFIED_ALL_MARKETS_TOP1'}
+          for p in r['policies'].values():
+            assert p['opportunities']>0
+            assert p['decisiveRows']>0
+            assert 0 <= p['decisiveHitRate'] <= 1
+            assert len(p['officialDateClusterBootstrap95']['ci95'])==2
+          g=r['guardrails']
+          assert g['historicalPricesUsed'] is False
+          assert g['marketOddsUsedAsFeatures'] is False
+          assert g['outcomeDependentLineSearchPerformed'] is False
+          assert g['refitPerformed'] is False and g['recalibrationPerformed'] is False
+          assert g['productionChanged'] is False and g['prospectiveV68Changed'] is False
+          assert g['positiveEvEstablished'] is False and g['realFinancialExposure']==0
+          print(json.dumps({k:{'n':v['opportunities'],'w':v['wins'],'l':v['losses'],'p':v['pushes'],'hit':v['decisiveHitRate'],'marketShare':v['marketShare']} for k,v in r['policies'].items()},indent=2))
+          print(json.dumps(r['unifiedVsFrozenWinner'],indent=2))
+          PY
+
+      - name: Upload V73 report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v73-unified-best-opportunity-audit
+          path: work/v73-unified-best-opportunity-audit.json
+          if-no-files-found: error
+          retention-days: 90

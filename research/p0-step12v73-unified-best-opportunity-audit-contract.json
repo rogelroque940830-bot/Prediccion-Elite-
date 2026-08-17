@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "courtedge-p0-step12v73-unified-best-opportunity-audit-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_ANY_V73_SCORER_EXISTS",
+  "objective": "Price-blind retrospective research audit to determine whether certified F5 and Full Game total distributions add a higher historical daily win-probability path than the already-frozen V69/V71 TOP1 winner path after the May 1 operational start. This stage studies predictive hit probability only; sportsbook price/EV remains a later economic layer.",
+  "immutableParentEvidence": {
+    "mainBaseCommit": "28f066fbed03b1f2be3b76efb894a11f180ec48c",
+    "v69Scorer": {
+      "path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83",
+      "portfolioExactly": "CONFLUENCE_LEDGER_TOP1_T0.550"
+    },
+    "v71OperationalWindow": {
+      "startRule": "OFFICIAL_DATE_MMDD_GTE_05-01",
+      "expectedPickDays": 395,
+      "expectedDecisiveRows": 392,
+      "expectedWins": 254,
+      "expectedLosses": 138,
+      "expectedPushes": 3,
+      "expectedDecisiveHitRate": 0.6479591836734694
+    },
+    "v67": {
+      "workflowRunId": 31965619576,
+      "artifactId": 9268405221,
+      "artifactDigest": "sha256:fec5bb47bf2befc83d2b00e5be793dd37a9c980f784d06d6aab8a801581a50ac",
+      "f5Classification": "V67_F5_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "fullGameClassification": "V67_FULL_GAME_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+      "f5Alpha": 0.2700236647757673,
+      "fullGameAlpha": 0.1388512142635545
+    },
+    "v66Totals": {
+      "workflowRunId": 31965267742,
+      "artifactId": 9268313420,
+      "artifactDigest": "sha256:ac69d321fbb5e6560832df221998825ce25c46340f8f76f571539e940180e0b1",
+      "meanModelsMustBeLoadedExactlyFromArtifact": true
+    }
+  },
+  "evaluationUniverse": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "operationalStartRule": "MM-DD >= 05-01",
+    "strictPregameOnly": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "candidateMarketFamilies": [
+    "FROZEN_WINNER_TOP1",
+    "F5_TOTAL_NB2_CENTRAL_LINE_TOP1",
+    "FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1",
+    "TOTALS_CROSS_HORIZON_TOP1",
+    "UNIFIED_ALL_MARKETS_TOP1"
+  ],
+  "totalCandidateRule": {
+    "f5FixedHalfRunLinesExactly": [2.5, 3.5, 4.5, 5.5, 6.5],
+    "fullGameFixedHalfRunLinesExactly": [6.5, 7.5, 8.5, 9.5, 10.5],
+    "lineSelectionPerGame": "Choose the frozen half-run line whose V67 NB2 Over probability is closest to 0.5; ties choose the numerically smaller line. This model-central rule is frozen specifically to prevent trivial hit-rate inflation from selecting extreme easy lines.",
+    "sideSelectionPerGame": "OVER if pOver > 0.5 else UNDER; exact 0.5 ties choose UNDER.",
+    "candidateConfidence": "max(pOver, 1-pOver)",
+    "dailyTop1WithinHorizon": "Highest candidateConfidence across all eligible games on that official date; ties use smaller gamePk.",
+    "crossHorizonTotalsTop1": "Higher candidateConfidence of the F5 and Full Game daily total candidates; ties prefer FULL_GAME then smaller gamePk.",
+    "noOutcomeDependentLineOrSideSearch": true
+  },
+  "winnerCandidateRule": {
+    "reproduceV69Top1Exactly": true,
+    "routeHierarchyMayNotChange": true,
+    "winnerUnifiedConfidence": {
+      "A_PLUS_V68_AGREE_D1_ROUTER": "min(classifierScore, p68Home)",
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": "min(classifierScore, p68Home)",
+      "V16_V68_CONSENSUS_T0.550": "consensusScore"
+    },
+    "reason": "Use only frozen pregame probabilities already attached to the selected winner route; no outcome-based recalibration or threshold search is allowed in V73."
+  },
+  "unifiedRule": {
+    "candidateSetPerDate": "exact frozen winner TOP1 candidate plus F5 total daily TOP1 plus Full Game total daily TOP1, when available",
+    "selection": "highest frozen candidateConfidence",
+    "tieBreak": ["FROZEN_WINNER_TOP1", "FULL_GAME_TOTAL_NB2_CENTRAL_LINE_TOP1", "F5_TOTAL_NB2_CENTRAL_LINE_TOP1", "smallerGamePk"],
+    "dailyHardCap": 1,
+    "forcedPlayAllowed": false
+  },
+  "reporting": {
+    "primaryEndpoints": [
+      "opportunities",
+      "decisiveRows",
+      "wins",
+      "losses",
+      "pushes",
+      "decisiveHitRate",
+      "wilson95",
+      "officialDateClusterBootstrap95",
+      "bySeason",
+      "marketShare",
+      "maximumConsecutiveLosingSelectedDaysWithinSeason",
+      "daysUnifiedDiffersFromFrozenWinner",
+      "headToHeadOutcomeWhenUnifiedDiffers"
+    ],
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260824,
+    "allPredeclaredPoliciesMustBeReported": true
+  },
+  "interpretation": {
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "historicalHitRateMayNotBeCalledFutureWinProbability": true,
+    "highHitRateDoesNotEstablishPositiveEv": true,
+    "totalCentralLinesAreSyntheticPriceBlindResearchPropositionsNotClaimsOfHistoricalSportsbookMainLines": true,
+    "futureEconomicLayerMustUseActualOfferedLineAndPrice": true
+  },
+  "statistics": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "routeSearchAllowed": false,
+    "lineSearchAfterOutcomesAllowed": false,
+    "marketFamilyAdditionAfterOutcomesAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
