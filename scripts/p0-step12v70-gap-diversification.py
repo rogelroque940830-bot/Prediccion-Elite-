@@ -285,18 +285,18 @@ def main():
     for r in rows:
         if r["premiumA"]:
             market = "FIRST_5_ML" if r["f5Consensus"] else "FULL_GAME_ML"
-            routes["PREMIUM_A_ROUTE_SWITCH"].append(v69.make_opp(r, market, "PREMIUM_A_ROUTE_SWITCH", 3, r["classifierScore"]))
+            routes["PREMIUM_A_ROUTE_SWITCH"].append(v69.make_opp(r, market, "HOME", "PREMIUM_A_ROUTE_SWITCH", 3, r["classifierScore"]))
         if r["aPlus"]:
             if not finite(r["bullpenPitches1dAdv"]):
                 raise SystemExit(f"V70_APLUS_D1_MISSING:{r['season']}:{r['gamePk']}")
             market = "FIRST_5_ML" if r["bullpenPitches1dAdv"] > 0 else "FULL_GAME_ML"
-            routes["A_PLUS_D1_ROUTER"].append(v69.make_opp(r, market, "A_PLUS_D1_ROUTER", 2, r["classifierScore"]))
+            routes["A_PLUS_D1_ROUTER"].append(v69.make_opp(r, market, "HOME", "A_PLUS_D1_ROUTER", 2, r["classifierScore"]))
         if r["premiumA"] and r["p68Home"] >= 0.5:
             market = "FIRST_5_ML" if r["f5Consensus"] else "FULL_GAME_ML"
-            routes["PREMIUM_A_V68_AGREE_ROUTE_SWITCH"].append(v69.make_opp(r, market, "PREMIUM_A_V68_AGREE_ROUTE_SWITCH", 1, min(r["p68Home"], r["classifierScore"])))
+            routes["PREMIUM_A_V68_AGREE_ROUTE_SWITCH"].append(v69.make_opp(r, market, "HOME", "PREMIUM_A_V68_AGREE_ROUTE_SWITCH", 1, min(r["p68Home"], r["classifierScore"])))
         if r["aPlus"] and r["p68Home"] >= 0.5:
             market = "FIRST_5_ML" if r["bullpenPitches1dAdv"] > 0 else "FULL_GAME_ML"
-            routes["A_PLUS_V68_AGREE_D1_ROUTER"].append(v69.make_opp(r, market, "A_PLUS_V68_AGREE_D1_ROUTER", 0, min(r["p68Home"], r["classifierScore"])))
+            routes["A_PLUS_V68_AGREE_D1_ROUTER"].append(v69.make_opp(r, market, "HOME", "A_PLUS_V68_AGREE_D1_ROUTER", 0, min(r["p68Home"], r["classifierScore"])))
         if r["v16v68Agree"] and r["consensusScore"] is not None and r["consensusScore"] >= float(c["frozenBaseline"]["consensusThreshold"]):
             general.append(v69.make_opp(r, "FULL_GAME_ML", r["selectedSide"], "V16_V68_CONSENSUS_T0.550", 4, r["consensusScore"]))
 
