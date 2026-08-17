@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "courtedge-p0-step12v74-aug17-totals-blind-line-freeze-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_V74_SCORER_AND_BEFORE_ANY_SPORTSBOOK_LINE_IS_READ",
+  "objective": "Freeze price-blind F5 and Full Game total-run distributions for the 2026-08-17 MLB slate before reading any sportsbook total line from the user or the web, so later disclosed market lines can be compared against a genuinely pre-line model forecast.",
+  "targetOfficialDate": "2026-08-17",
+  "baseMainCommit": "ec160fe4c79743d2e304a6f50206efbd7cb661d2",
+  "marketLineEmbargo": {
+    "sportsbookLinesMayBePublicAlready": true,
+    "assistantMayReadSportsbookLinesBeforePredictionArtifactFreeze": false,
+    "webOddsSearchAllowedBeforePredictionArtifactFreeze": false,
+    "userDisclosedLinesMayBeReadBeforePredictionArtifactFreeze": false,
+    "marketPriceOrLineUsedAsPredictiveFeature": false,
+    "releaseCondition": "ONLY_AFTER_V74_PREDICTION_ARTIFACT_IS_IMMUTABLY_GENERATED_AND_IDENTIFIED_BY_DIGEST"
+  },
+  "frozenParents": {
+    "v66TotalsWorkflowRunId": 31965267742,
+    "v66TotalsArtifactId": 9268313420,
+    "v66TotalsArtifactDigest": "sha256:ac69d321fbb5e6560832df221998825ce25c46340f8f76f571539e940180e0b1",
+    "v66CustodyWorkflowRunId": 31962659793,
+    "v66CustodyArtifactId": 9267784926,
+    "v66CustodyArtifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+    "v67WorkflowRunId": 31965619576,
+    "v67ArtifactId": 9268405221,
+    "v67ArtifactDigest": "sha256:fec5bb47bf2befc83d2b00e5be793dd37a9c980f784d06d6aab8a801581a50ac",
+    "v67F5Classification": "V67_F5_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+    "v67FullGameClassification": "V67_FULL_GAME_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+    "v68FrozenSourceBaseWorkflowRunId": 31967561655
+  },
+  "predictionRoutes": {
+    "F5_TOTAL": {
+      "meanEngine": "EXACT_FROZEN_V66_D_F5_TOTAL_PRIMARY_CANDIDATE_MODEL",
+      "distribution": "EXACT_V67_NB2_WITH_2022_ONLY_ALPHA",
+      "requiredFeatureSetExactly": [
+        "combined_team_rs10",
+        "combined_team_ra10",
+        "mean_f5_starter_share",
+        "min_f5_starter_share",
+        "combined_f5_expected_bullpen_share",
+        "quality_weighted_combined_f5_starter_share",
+        "bullpen_pitches_1d_combined_weighted_f5",
+        "bullpen_pitches_3d_combined_weighted_f5",
+        "bullpen_core3_pitches_2d_combined_weighted_f5",
+        "bullpen_b2b_arms_combined_weighted_f5"
+      ]
+    },
+    "FULL_GAME_TOTAL": {
+      "meanEngine": "EXACT_FROZEN_V66_E_FULL_GAME_TOTAL_PRIMARY_CANDIDATE_MODEL",
+      "distribution": "EXACT_V67_NB2_WITH_2022_ONLY_ALPHA",
+      "requiredFeatureSetExactly": [
+        "combined_team_rs10",
+        "combined_team_ra10",
+        "mean_fg_starter_share",
+        "min_fg_starter_share",
+        "combined_fg_expected_bullpen_share",
+        "quality_weighted_combined_fg_starter_share",
+        "bullpen_pitches_1d_combined_weighted_fg",
+        "bullpen_pitches_3d_combined_weighted_fg",
+        "bullpen_core3_pitches_2d_combined_weighted_fg",
+        "bullpen_b2b_arms_combined_weighted_fg"
+      ]
+    }
+  },
+  "liveAdapterSemantics": {
+    "officialScheduleSource": "MLB_STATS_API",
+    "targetGameStatusRequired": "STRICTLY_PREGAME",
+    "bothCurrentProbablePitchersRequired": true,
+    "currentLineupsRequired": false,
+    "reasonCurrentLineupsNotRequired": "The V66 total feature sets do not contain lineup exposure. Expected-starter-outs chronology is evaluated night-before with current-lineup-continuity unavailable and that single V39 continuity slot median-imputed using the frozen 2022 V39 preprocessor value.",
+    "priorStateOfficialDates": "STRICTLY_BEFORE_2026-08-17",
+    "sameDateOutcomeDataAllowed": false,
+    "futureDataAllowed": false,
+    "teamForm": "LAST_UP_TO_10_PRIOR_OFFICIAL_TEAM_GAMES_FROM_CHRONOLOGY_SAFE_STATE",
+    "starterExpectedOuts": "FROZEN_V39_MODEL_WITH_CURRENT_LINEUP_CONTINUITY_SLOT_MISSING_AND_FROZEN_MEDIAN_IMPUTATION",
+    "starterQuality": "FROZEN_V62_365_DAY_PRIOR_PITCH_QUALITY_STATE",
+    "bullpenWorkload": "STRICTLY_PRIOR_GAME_BOXSCORES; 30D RELIEVER POOL, 1D/3D TOTAL PITCHES, CORE3 2D PITCHES, B2B ARMS; ACTUAL FIRST-LISTED HISTORICAL PITCHER EXCLUDED AS STARTER",
+    "bullpenAdapterDifferenceFromV66HistoricalCustody": "For newly acquired post-base prior games, actual first-listed historical starter is used to identify relievers rather than archived T-5 starter identity. This affects only prior-state construction for the live Aug17 adapter and must be disclosed in the report.",
+    "failClosedIfProbableStarterMissing": true
+  },
+  "frozenOutput": {
+    "oneRowPerPregameGameWithBothProbableStarters": true,
+    "mustInclude": [
+      "gamePk", "officialDate", "awayTeam", "homeTeam", "scheduledStart",
+      "awayProbablePitcher", "homeProbablePitcher",
+      "f5ExpectedRunsMu", "fullGameExpectedRunsMu",
+      "f5Nb2Alpha", "fullGameNb2Alpha",
+      "f5CountPmf0To20", "fullGameCountPmf0To25",
+      "f5MedianCount", "fullGameMedianCount",
+      "featureVectorF5", "featureVectorFullGame"
+    ],
+    "noSportsbookLineFieldsAllowed": true,
+    "noOutcomeFieldsAllowed": true,
+    "predictionRankingBeforeLines": "Report absolute distribution concentration diagnostics only; do not rank Over/Under edge because no market line has been read."
+  },
+  "postFreezeComparisonPlan": {
+    "userWillProvideActualSportsbookLinesAfterFreeze": true,
+    "allowedAfterFreeze": [
+      "compute P_OVER, P_UNDER, and P_PUSH at each disclosed line from the frozen NB2 distribution",
+      "compute model expected-runs minus disclosed line",
+      "identify model-favored side without changing any prediction",
+      "later settle against final outcomes after games finish"
+    ],
+    "priceAnalysisDeferred": true,
+    "oddsMayBeAddedLaterOnlyAsEconomicLayer": true
+  },
+  "statistics": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "distributionChangeAllowed": false,
+    "lineSearchAllowedBeforeUserDisclosure": false,
+    "postLinePredictionChangeAllowed": false,
+    "postOutcomePredictionChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
