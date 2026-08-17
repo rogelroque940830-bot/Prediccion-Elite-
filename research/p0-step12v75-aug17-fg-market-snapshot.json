@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "courtedge-p0-step12v75-aug17-fg-market-snapshot.v1",
+  "classification": "POST_V74_FREEZE_PREOUTCOME_USER_SUPPLIED_FG_MARKET_SNAPSHOT",
+  "officialDate": "2026-08-17",
+  "capturedWindowLocalEt": "2026-08-17T00:44:00-04:00/2026-08-17T00:45:59-04:00",
+  "parentBlindPredictionMergeCommit": "c9eb72510e8d93080718e8c1160d238bf748828d",
+  "parentBlindPredictionArtifact": {
+    "workflowRunId": 31995233764,
+    "artifactId": 9276610695,
+    "digest": "sha256:ea36004c1f75080b59cf406e8a0dee11a16d43c406bf30f9cb651645327d96d1"
+  },
+  "source": {
+    "type": "USER_SUPPLIED_SPORTSBOOK_SCREENSHOTS",
+    "screenshots": [
+      {"displayTime":"12:44","sha256":"cd066cbf047899d1d39ff9617638df0cc065b6cdf6a5d6435272451f673cba25"},
+      {"displayTime":"12:45","sha256":"b2ff9730380b10cb2bc9c98edaba806c38d4d784b7588c9dc2182536dd0781b4"},
+      {"displayTime":"12:45","sha256":"6cc70d05d0b09c4742a5352c01b8770133a91153a68e81ba38e8523b8bc88541"}
+    ],
+    "manualTranscriptionFromVisibleMarketCells": true
+  },
+  "fullGameTotals": [
+    {"away":"Baltimore Orioles","home":"Tampa Bay Rays","line":7.5,"overOddsAmerican":-115,"underOddsAmerican":105,"v74BlindPredictionAvailable":true},
+    {"away":"Miami Marlins","home":"Philadelphia Phillies","line":8.5,"overOddsAmerican":105,"underOddsAmerican":-115,"v74BlindPredictionAvailable":true},
+    {"away":"Detroit Tigers","home":"Pittsburgh Pirates","line":8.5,"overOddsAmerican":110,"underOddsAmerican":-120,"v74BlindPredictionAvailable":true},
+    {"away":"San Diego Padres","home":"New York Mets","line":8.5,"overOddsAmerican":110,"underOddsAmerican":-120,"v74BlindPredictionAvailable":true},
+    {"away":"Arizona Diamondbacks","home":"Boston Red Sox","line":8.5,"overOddsAmerican":-125,"underOddsAmerican":115,"v74BlindPredictionAvailable":false,"exclusionReason":"NO_CLEAN_V74_PRELINE_FREEZE_BOTH_STARTERS_NOT_AVAILABLE_AT_FREEZE"},
+    {"away":"Atlanta Braves","home":"Minnesota Twins","line":8.5,"overOddsAmerican":-130,"underOddsAmerican":120,"v74BlindPredictionAvailable":true},
+    {"away":"Athletics","home":"Kansas City Royals","line":9.5,"overOddsAmerican":110,"underOddsAmerican":-120,"v74BlindPredictionAvailable":true},
+    {"away":"Chicago White Sox","home":"Chicago Cubs","line":8.5,"overOddsAmerican":100,"underOddsAmerican":-110,"v74BlindPredictionAvailable":true},
+    {"away":"Los Angeles Dodgers","home":"Colorado Rockies","line":10.5,"overOddsAmerican":-115,"underOddsAmerican":105,"v74BlindPredictionAvailable":true}
+  ],
+  "policy": {
+    "marketSnapshotOccurredAfterBlindPredictionFreeze": true,
+    "outcomesRead": false,
+    "marketPricesUsedAsPredictiveFeatures": false,
+    "productionChanged": false,
+    "v68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
