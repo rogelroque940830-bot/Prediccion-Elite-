@@ -3,7 +3,7 @@ name: P0 Step 12V80 Prepare Daily General Strength State
 on:
   workflow_dispatch:
   schedule:
-    - cron: '5 11 * * *'
+    - cron: '5 11-15 * * *'
   pull_request:
     branches: [main]
     paths:
