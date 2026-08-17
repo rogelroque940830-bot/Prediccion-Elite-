@@ -18,15 +18,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Download immutable V77 report
+      - name: Download successful final-head V77 replay
         uses: actions/download-artifact@v4
         with:
           name: p0-step12v77-general-consensus-loss-threat-geometry
           path: inputs/v77
           github-token: ${{ github.token }}
           repository: rogelroque940830-bot/Prediccion-Elite-
-          run-id: 32049400781
-      - name: Validate summary against immutable report
+          run-id: 32049626405
+      - name: Validate preserved summary against deterministic replay
         run: |
           python - <<'PY'
           import json, math
@@ -54,5 +54,5 @@ jobs:
           assert math.isclose(sh['cliffsDelta'],hr['cliffs_delta_loss_minus_win'],abs_tol=1e-15)
           assert math.isclose(sh['lossWarningAuc'],hr['loss_warning_univariate_auc'],abs_tol=1e-15)
           assert s['guardrails']['liveVetoCreated'] is False and s['guardrails']['realFinancialExposure']==0
-          print('V77_RESULT_SUMMARY_MATCHES_IMMUTABLE_REPORT')
+          print('V77_RESULT_SUMMARY_MATCHES_DETERMINISTIC_FINAL_REPLAY')
           PY
