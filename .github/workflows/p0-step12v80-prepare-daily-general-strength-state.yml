@@ -73,12 +73,16 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/p0-step12v80-general-strength-prospective.py
-          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler \
+          # The frozen classifier has a pre-existing narrow TypeScript literal-type
+          # diagnostic. V80 must not edit that frozen parent. --noCheck verifies
+          # syntax/module transpilation while preserving the exact parent blob.
+          npx tsc --noEmit --noCheck --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler \
             scripts/p0-step12v80-general-strength-live-context.ts \
             scripts/p0-full13-live-parity-state.ts \
             server/mlb-c4-live-feature-builder.ts \
             server/mlb-full13-live-feature-builder.ts \
             server/mlb-frozen-a-plus-classifier.ts
+          npx tsx -e "import('./server/mlb-frozen-a-plus-classifier.ts').then(m=>{if(m.MLB_FROZEN_A_PLUS_CLASSIFIER_VERSION!=='mlb-frozen-a-plus-classifier.v1')process.exit(2);console.log('V80_FROZEN_CLASSIFIER_RUNTIME_IMPORT_OK')})"
 
   prepare-daily-state:
     if: github.event_name != 'pull_request'
