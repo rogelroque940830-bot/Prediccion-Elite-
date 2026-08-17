@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "courtedge-p0-step12v84-margin-warning-across-established-routes-contract.v1",
+  "scientificStatus": "FROZEN_CROSS_ROUTE_MARGIN_WARNING_PLAN_BEFORE_ANY_V84_SCORER_EXISTS",
+  "objective": "Apply the exact V83 minimumPremiumMargin warning, without retuning, across the already-established frozen MLB winner routes and the two established TOP1 portfolio views to determine whether the warning is broadly positive historically. If the predeclared consistency gate passes, V84 may support adding the signal to the project as a SHADOW confidence diagnostic only; it may not alter production routing, ranking, stake, BET_ELITE, automatic betting, or V80.",
+  "adaptiveSelectionDisclosure": "The exact warning threshold came from the already-inspected V83 47W-5L cohort. Therefore V84 is retrospective transport/consistency testing, not independent prospective validation. No threshold, direction, route list, or positivity gate may be changed after V84 outcomes are opened.",
+  "immutableParents": {
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v69Contract": {"path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json", "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"},
+    "v83Contract": {"path": "research/p0-step12v83-elite-47-5-loss-anatomy-contract.json", "gitBlobSha": "fdda500ce149936939f28c0356bbb4a9e9f07cf2"},
+    "v83Scorer": {"path": "scripts/p0-step12v83-elite-47-5-loss-anatomy.py", "gitBlobSha": "a6d9a2a7c061196ce08ec6005fa8c6dd3f5e43d9"},
+    "frozenClassifier": {"path": "server/mlb-frozen-a-plus-classifier.ts", "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2", "requiredVersion": "mlb-frozen-a-plus-classifier.v1"}
+  },
+  "warningExactly": {
+    "name": "minimumPremiumMargin",
+    "premiumComponents": ["team_win10_diff", "starter_kbb_adv", "lineup_exposure_rate_adv"],
+    "premiumThresholdsExactly": {
+      "team_win10_diff": 0.09999999999999998,
+      "starter_kbb_adv": 0.02481042579422841,
+      "lineup_exposure_rate_adv": 0.09876543209876554
+    },
+    "definition": "minimum over the three raw frozen Premium-A component values minus their corresponding already-frozen Premium-A thresholds",
+    "warningDirection": "LOW_IS_WARNING",
+    "warningThresholdExactly": 0.01180849970596913,
+    "safeSideRule": "KEEP when minimumPremiumMargin > 0.01180849970596913; FLAG when minimumPremiumMargin <= 0.01180849970596913",
+    "thresholdProvenance": "V83 lower 10th percentile of the 47 wins only inside the predeclared 47W-5L cohort; transported unchanged into V84"
+  },
+  "evaluationUniverse": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "officialDateMonthDayMinimum": "05-01",
+    "outcomesAllowed": true,
+    "historicalPricesUsed": false,
+    "oddsUsedAsPredictiveFeatures": false,
+    "homeSemanticsOnly": true,
+    "reasonHomeOnly": "The frozen Premium-A component thresholds are HOME-oriented. V84 will not invent an AWAY-symmetric margin after outcomes are known."
+  },
+  "primaryEstablishedRouteViewsExactly": [
+    "PREMIUM_A_FULL_GAME_HOME",
+    "A_PLUS_FULL_GAME_HOME",
+    "PREMIUM_A_ROUTE_SWITCH",
+    "A_PLUS_D1_ROUTER",
+    "PREMIUM_A_V68_AGREE_FULL_GAME_HOME",
+    "PREMIUM_A_V68_REINFORCE_FULL_GAME_HOME",
+    "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
+    "A_PLUS_V68_AGREE_D1_ROUTER",
+    "GENERAL_CONSENSUS_TOP1_T0.550_HOME",
+    "CONFLUENCE_LEDGER_TOP1_T0.550_HOME"
+  ],
+  "routeSemantics": {
+    "specializedRoutes": "Use exact V69 frozen route opportunities and their exact market settlement semantics.",
+    "GENERAL_CONSENSUS_TOP1_T0.550_HOME": "Use the first V69 daily-cap call: GENERAL_CONSENSUS_TOP1 at threshold 0.550, then restrict to selected side HOME before applying the margin warning.",
+    "CONFLUENCE_LEDGER_TOP1_T0.550_HOME": "Use the fifth V69 daily-cap call: CONFLUENCE_LEDGER_TOP1 at threshold 0.550, then restrict to selected side HOME before applying the margin warning.",
+    "noRouteRedefinition": true
+  },
+  "perRouteReporting": {
+    "baseline": ["decisiveRows", "wins", "losses", "hitRate", "wilson95", "bySeason"],
+    "flagged": ["decisiveRows", "wins", "losses", "hitRate", "shareOfBaseline", "bySeason"],
+    "kept": ["decisiveRows", "wins", "losses", "hitRate", "wilson95", "coverageRetained", "bySeason"],
+    "effect": ["hitRateDeltaPercentagePoints", "winsRemoved", "lossesRemoved", "winRemovalRate", "lossRemovalRate", "lossToWinRemovalLift"]
+  },
+  "perRouteHistoricalPositiveRule": {
+    "minimumBaselineDecisiveRowsForPrimaryVote": 30,
+    "requirementsAll": [
+      "kept hitRate strictly greater than baseline hitRate",
+      "lossRemovalRate strictly greater than winRemovalRate",
+      "coverageRetained at least 0.70",
+      "kept decisiveRows at least 20"
+    ],
+    "smallRoutes": "Routes with baseline decisiveRows below 30 are reported but do not vote in the global consistency gate."
+  },
+  "globalConsistencyGate": {
+    "minimumVotingRoutes": 5,
+    "minimumPositiveShareAmongVotingRoutes": 0.75,
+    "maximumAllowedMaterialDeteriorationRoutes": 0,
+    "materialDeteriorationDefinition": "kept hitRate is at least 1.0 percentage point below baseline hitRate on a voting route",
+    "minimumRoutesWithAtLeastTwoPointImprovement": 3,
+    "passClassification": "V84_MARGIN_WARNING_BROADLY_POSITIVE_HISTORICALLY_SHADOW_INTEGRATION_SUPPORTED",
+    "failClassification": "V84_MARGIN_WARNING_NOT_BROADLY_POSITIVE_LEAVE_PROJECT_UNCHANGED"
+  },
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "newFeatureSearchAllowed": false,
+    "newThresholdSearchAllowed": false,
+    "warningDirectionChangeAllowed": false,
+    "routeAdditionAfterOutcomeInspectionAllowed": false,
+    "routeRemovalAfterOutcomeInspectionAllowed": false,
+    "positivityGateChangeAllowed": false,
+    "multiSignalCombinationSearchAllowed": false,
+    "claimIndependentConfirmationAllowed": false,
+    "claimPositiveEvAllowed": false
+  },
+  "decisionBoundary": {
+    "ifGlobalGatePasses": "A new non-binding SHADOW confidence diagnostic may be added in a separate commit/PR, preserving the exact threshold and label semantics. It may not suppress or create picks until future prospective confirmation.",
+    "ifGlobalGateFails": "Do not add the warning to the project and leave the system exactly as it was at V83.",
+    "v80Changed": false,
+    "productionChangedByV84Study": false,
+    "routingChangedByV84Study": false,
+    "rankingChangedByV84Study": false,
+    "stakeChangedByV84Study": false,
+    "betEliteAllowed": false,
+    "automaticBettingAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
