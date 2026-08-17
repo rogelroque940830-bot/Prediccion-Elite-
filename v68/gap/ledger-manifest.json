@@ -1,0 +1,31 @@
+{
+  "canonicalT5EquivalentGames": 83,
+  "distinctOfficialDates": 6,
+  "firstOfficialDate": "2026-08-11",
+  "generatedAt": "2026-08-17T10:51:44.962174+00:00",
+  "kind": "V68_CUMULATIVE_GAP_LEDGER",
+  "lastMerge": {
+    "auditAdded": 83,
+    "duplicates": {
+      "audit": 0,
+      "lineup": 0,
+      "official": 0,
+      "pitch": 0,
+      "starter": 0
+    },
+    "lineupAdded": 83,
+    "officialAdded": 83,
+    "pitchAdded": 83,
+    "starterAdded": 83
+  },
+  "lastOfficialDate": "2026-08-16",
+  "officialGames": 83,
+  "pitchQualityGames": 83,
+  "policy": {
+    "marketPricesUsed": false,
+    "outcomesUsedOnlyAsStrictlyPriorDateHistory": true,
+    "realFinancialExposure": 0,
+    "researchOnly": true
+  },
+  "schemaVersion": "courtedge-p0-step12v68-prospective-ledger.v1"
+}
