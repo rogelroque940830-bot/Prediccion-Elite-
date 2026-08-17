@@ -1,0 +1,67 @@
+name: Validate P0 Step 12V70 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v70-gap-diversification-result-summary.json'
+      - '.github/workflows/validate-p0-step12v70-result-summary.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable successful V70 report
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v70-gap-diversification
+          path: inputs/v70
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31988935708
+
+      - name: Validate summary against immutable full report
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="$(find inputs/v70 -type f -name v70-gap-diversification.json -print -quit)"
+          test -n "$REPORT"
+          python - "$REPORT" <<'PY'
+          import json,sys,math
+          r=json.load(open(sys.argv[1]))
+          s=json.load(open('research/p0-step12v70-gap-diversification-result-summary.json'))
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          b=r['baselineV69']['stats']; sb=s['baselineV69']
+          for k in ('opportunities','decisiveRows','wins','losses','pushes','zeroSlateDays','maximumNoPlaySlateDayStreak'):
+              assert sb[k]==b[k],(k,sb[k],b[k])
+          for k in ('hitRate','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1'):
+              assert math.isclose(sb[k],b[k],rel_tol=0,abs_tol=1e-15),(k,sb[k],b[k])
+          assert sb['gapDateList']==r['baselineV69']['gapDateList']
+          assert len(sb['gapDateList'])==13
+          assert all(d[5:7] in ('03','04') for d in sb['gapDateList'])
+          for name,obj in r['policies'].items():
+              x=s['frozenV19GapFillResult'][name]
+              g=obj['gapFill']
+              assert x['coveredGapDays']==g['coveredGapDays']==0,name
+              assert x['opportunities']==g['opportunities']==0,name
+              assert x['remainingGapDays']==g['remainingGapDays']==13,name
+          assert r['operationalPreferenceMatches']==[]
+          assert s['coreFinding']['anyFrozenF5ConsensusPresentOnV69GapDays'] is False
+          assert s['coreFinding']['thereforeFrozenV19F5RoutesCanReduceV69Drought'] is False
+          assert s['interpretation']['doNotForcePlays'] is True
+          assert s['interpretation']['doNotRelaxV69Threshold'] is True
+          assert s['interpretation']['positiveEvEstablished'] is False
+          assert s['interpretation']['prospectiveV68Changed'] is False
+          assert s['interpretation']['productionChanged'] is False
+          assert s['interpretation']['realFinancialExposure']==0
+          print('V70_RESULT_SUMMARY_MATCHES_IMMUTABLE_FULL_REPORT')
+          PY

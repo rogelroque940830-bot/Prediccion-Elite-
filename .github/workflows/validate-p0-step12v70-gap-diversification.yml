@@ -1,0 +1,212 @@
+name: Validate P0 Step 12V70 Gap Diversification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v70-gap-diversification-contract.json'
+      - 'scripts/p0-step12v70-gap-diversification.py'
+      - '.github/workflows/validate-p0-step12v70-gap-diversification.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gap-diversification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen analysis dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
+
+      - name: Prove V70 contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v70-gap-diversification-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v70-gap-diversification.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v70-gap-diversification-contract.json'))
+          assert c['scientificStatus']=='FROZEN_ADAPTIVE_DIVERSIFICATION_PLAN_BEFORE_ANY_V70_SCORER_EXISTS'
+          assert len(c['candidateGapFillPoliciesExactly'])==5
+          assert c['portfolioRules']['gapFillAllowedOnlyWhenV69BaselineHasZeroSelectionsThatSlateDay'] is True
+          assert c['portfolioRules']['hardMaximumSelectionsPerSlateDay']==2
+          assert c['portfolioRules']['forcedPlayAllowed'] is False
+          assert c['statistics']['newFeatureSearchAllowed'] is False
+          assert c['statistics']['newNumericThresholdSearchAllowed'] is False
+          assert c['statistics']['v69ThresholdRelaxationAllowed'] is False
+          assert c['statistics']['v19RouteMutationAllowed'] is False
+          assert c['decisionBoundary']['positiveEvEstablished'] is False
+          assert c['decisionBoundary']['realFinancialExposure']==0
+          print('V70_CONTRACT_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check V70 scorer
+        run: python -m py_compile scripts/p0-step12v70-gap-diversification.py
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Download frozen pitchmix 2023
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-2023
+          path: inputs/pitchmix-2023
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+
+      - name: Download frozen pitchmix 2024
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-2024
+          path: inputs/pitchmix-2024
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+
+      - name: Download frozen pitchmix 2025
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-2025
+          path: inputs/pitchmix-2025
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+
+      - name: Download frozen pitchmix 2026 YTD
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v12-pitchmix-2026_YTD
+          path: inputs/pitchmix-2026_YTD
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31669146698
+
+      - name: Resolve immutable inputs
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"; done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          mkdir -p work/pitchmix
+          for S in 2023 2024 2025 2026_YTD; do
+            SRC="$(find "inputs/pitchmix-$S" -type f -name "pitchmix-$S.json" -print -quit)"
+            test -n "$SRC"
+            cp "$SRC" "work/pitchmix/pitchmix-$S.json"
+          done
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen V70 gap diversification audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v70-gap-diversification.py \
+            --root inputs/step12v3 \
+            --pitch-dir work/pitchmix \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --v69-summary research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json \
+            --v19-scorer scripts/p0-step12v19-volume-expansion-shadow.py \
+            --v19-contract research/p0-step12v19-volume-expansion-shadow-contract.json \
+            --contract research/p0-step12v70-gap-diversification-contract.json \
+            --out work/v70-gap-diversification.json
+
+      - name: Validate baseline parity and no-forced-play boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v70-gap-diversification.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v70-gap-diversification.v1'
+          assert r['sample']['rows']==6610
+          assert r['sample']['eligibleSlateDays']==505
+          b=r['baselineV69']['stats']
+          assert (b['opportunities'],b['decisiveRows'],b['wins'],b['losses'],b['pushes'])==(969,964,616,348,5)
+          assert b['zeroSlateDays']==13
+          assert b['maximumNoPlaySlateDayStreak']==4
+          assert r['v19AnchorParity']['passed'] is True
+          assert len(r['policies'])==5
+          for name,obj in r['policies'].items():
+              s=obj['combinedPortfolio'];g=obj['gapFill']
+              assert s['maximumSelectionsOneDay']<=2,name
+              assert g['opportunities']<=13,name
+              assert g['coveredGapDays']==g['opportunities'],name
+              assert s['opportunities']==969+g['opportunities'],name
+          i=r['interpretation'];p=r['policy']
+          assert i['forcedPlayAllowed'] is False
+          assert i['v69ThresholdRelaxed'] is False
+          assert i['v19RouteMutated'] is False
+          assert i['historicalPricesUsed'] is False
+          assert i['positiveEvEstablished'] is False
+          assert i['prospectiveV68Changed'] is False
+          assert i['productionChanged'] is False
+          assert i['realFinancialExposure']==0
+          assert p['newFeatureSearchPerformed'] is False
+          assert p['newNumericThresholdSearchPerformed'] is False
+          assert p['postOutcomeRouteAdditionPerformed'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBettingAllowed'] is False
+          print(json.dumps({
+            'classification':r['classification'],
+            'operationalPreferenceMatches':r['operationalPreferenceMatches'],
+            'policies':{k:{'gapFill':v['gapFill'],'combined':{x:v['combinedPortfolio'][x] for x in ('opportunities','hitRate','wilson95','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1','zeroSlateDays','maximumNoPlaySlateDayStreak','meetsAllOperationalPreferences')}} for k,v in r['policies'].items()},
+          },indent=2))
+          PY
+
+      - name: Upload V70 report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v70-gap-diversification
+          path: work/v70-gap-diversification.json
+          if-no-files-found: error
+          retention-days: 90

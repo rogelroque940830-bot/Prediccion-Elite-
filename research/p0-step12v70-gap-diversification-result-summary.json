@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "courtedge-p0-step12v70-gap-diversification-result-summary.v1",
+  "classification": "V70_EXISTING_F5_DIVERSIFICATION_DOES_NOT_MEET_ALL_RETROSPECTIVE_OPERATIONAL_PREFERENCES",
+  "sample": {
+    "rows": 6610,
+    "eligibleSlateDays": 505,
+    "seasons": ["2024", "2025", "2026_YTD"]
+  },
+  "baselineV69": {
+    "name": "CONFLUENCE_LEDGER_TOP2_T0.550",
+    "opportunities": 969,
+    "decisiveRows": 964,
+    "wins": 616,
+    "losses": 348,
+    "pushes": 5,
+    "hitRate": 0.6390041493775933,
+    "wilson95": {
+      "lower": 0.6081882177812824,
+      "upper": 0.6687165980480846
+    },
+    "officialDateClusterBootstrapHitRate": {
+      "pointEstimate": 0.6390041493775933,
+      "ci95": [0.6087408949011447, 0.6687435098650052],
+      "resamples": 10000,
+      "seed": 20260820,
+      "unit": "OFFICIAL_DATE_CLUSTER"
+    },
+    "meanSelectionsPerEligibleSlateDay": 1.9188118811881187,
+    "pctDaysWithAtLeast1": 97.42574257425743,
+    "zeroSlateDays": 13,
+    "maximumNoPlaySlateDayStreak": 4,
+    "gapDateList": [
+      "2024-03-20",
+      "2024-03-21",
+      "2024-03-28",
+      "2024-03-29",
+      "2024-04-01",
+      "2025-03-18",
+      "2025-03-19",
+      "2025-03-27",
+      "2025-04-14",
+      "2026-03-25",
+      "2026-03-26",
+      "2026-03-30",
+      "2026-04-02"
+    ],
+    "gapDatesBySeason": {
+      "2024": 5,
+      "2025": 4,
+      "2026_YTD": 4
+    },
+    "allGapDatesAreMarchOrApril": true
+  },
+  "frozenV19GapFillResult": {
+    "F5_CONSENSUS_ALL": {
+      "coveredGapDays": 0,
+      "opportunities": 0,
+      "remainingGapDays": 13
+    },
+    "F5_CONSENSUS_OUTSIDE_A": {
+      "coveredGapDays": 0,
+      "opportunities": 0,
+      "remainingGapDays": 13
+    },
+    "HRPA_OR_AT2_ONLY": {
+      "coveredGapDays": 0,
+      "opportunities": 0,
+      "remainingGapDays": 13
+    },
+    "PARETO_ONLY": {
+      "coveredGapDays": 0,
+      "opportunities": 0,
+      "remainingGapDays": 13
+    },
+    "PARETO_THEN_ANY_OUTSIDE_A": {
+      "coveredGapDays": 0,
+      "opportunities": 0,
+      "remainingGapDays": 13
+    }
+  },
+  "coreFinding": {
+    "anyFrozenF5ConsensusPresentOnV69GapDays": false,
+    "thereforeFrozenV19F5RoutesCanReduceV69Drought": false,
+    "preferredMaximumNoPlaySlateDayStreak": 2,
+    "observedMaximumNoPlaySlateDayStreakAfterAllFivePolicies": 4,
+    "operationalPreferenceMatches": []
+  },
+  "interpretation": {
+    "qualityFrequencyCoreRemainsStrongHistorically": true,
+    "droughtProblemIsConcentratedInEarlySeasonDates": true,
+    "causalColdStartExplanationEstablished": false,
+    "doNotForcePlays": true,
+    "doNotRelaxV69Threshold": true,
+    "doNotMutateFrozenV19Routes": true,
+    "nextResearchNeedsIndependentGapSourceRatherThanMoreF5Filtering": true,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "prospectiveV68Changed": false,
+    "productionChanged": false,
+    "realFinancialExposure": 0
+  },
+  "fullReportArtifact": {
+    "workflowRunId": 31988935708,
+    "artifactId": 9274663624,
+    "artifactDigest": "sha256:0254684a10a9bf6f459ab7e005e213cf009a4a29988cbe57747b547b2500be48"
+  }
+}
