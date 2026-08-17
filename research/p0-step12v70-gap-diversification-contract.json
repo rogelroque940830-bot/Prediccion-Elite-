@@ -28,7 +28,9 @@
     "expectedZeroSlateDays": 13,
     "expectedMaxNoPlaySlateDayStreak": 4,
     "v69ResultSummaryPath": "research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json",
-    "v69ResultSummaryGitBlobSha": "ac979e63b198bc7383e395456be460fb096fcefb"
+    "v69ResultSummaryGitBlobSha": "ac979e63b198bc7383e395456be460fb096fcefb",
+    "v69ScorerPath": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+    "v69ScorerGitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
   },
   "frozenDiversificationSources": {
     "v19ContractPath": "research/p0-step12v19-volume-expansion-shadow-contract.json",
