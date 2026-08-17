@@ -1,0 +1,183 @@
+{
+  "classification": "V71_OPERATIONAL_START_WINDOW_TOP1_RETROSPECTIVE_AUDIT_COMPLETE",
+  "frozenPortfolio": "CONFLUENCE_LEDGER_TOP1_T0.550",
+  "fullSeasonDecisiveHitRate": 0.6372950819672131,
+  "fullSeasonTop1Parity": {
+    "decisiveRows": 488,
+    "losses": 177,
+    "opportunities": 492,
+    "pushes": 4,
+    "wins": 311
+  },
+  "guardrails": {
+    "bothFrozenWindowsReported": true,
+    "forcedPlayAllowed": false,
+    "historicalBestWindowChosenForPromotion": false,
+    "historicalPricesUsed": false,
+    "newDateCutoffSearchPerformed": false,
+    "positiveEvEstablished": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "realFinancialExposure": 0,
+    "v69PortfolioChanged": false,
+    "v69ThresholdChanged": false
+  },
+  "operationalStartWindows": {
+    "MAY01": {
+      "activeTop1PickDays": 395,
+      "bySeason": {
+        "2024": {
+          "activeTop1PickDays": 149,
+          "decisiveHitRate": 0.6394557823129252,
+          "decisiveRows": 147,
+          "eligibleSlateDays": 149,
+          "losses": 53,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 2,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.5591952051688388,
+            "upper": 0.7126131023537544
+          },
+          "winRateAcrossAllPickDays": 0.6308724832214765,
+          "wins": 94
+        },
+        "2025": {
+          "activeTop1PickDays": 147,
+          "decisiveHitRate": 0.6712328767123288,
+          "decisiveRows": 146,
+          "eligibleSlateDays": 147,
+          "losses": 48,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 1,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.5914970439204464,
+            "upper": 0.7421886615178298
+          },
+          "winRateAcrossAllPickDays": 0.6666666666666666,
+          "wins": 98
+        },
+        "2026_YTD": {
+          "activeTop1PickDays": 99,
+          "decisiveHitRate": 0.6262626262626263,
+          "decisiveRows": 99,
+          "eligibleSlateDays": 99,
+          "losses": 37,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 0,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.5279226260765785,
+            "upper": 0.7151696634249464
+          },
+          "winRateAcrossAllPickDays": 0.6262626262626263,
+          "wins": 62
+        }
+      },
+      "decisiveHitRate": 0.6479591836734694,
+      "decisiveHitRateDifferenceVsFullSeason": 0.010664101706256313,
+      "decisiveRows": 392,
+      "eligibleSlateDays": 395,
+      "losses": 138,
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 4,
+      "officialDateBootstrapDecisiveHitRate": {
+        "ci95": [
+          0.5994897959183674,
+          0.6938775510204082
+        ],
+        "distinctDatesWithDecisions": 392,
+        "pointEstimate": 0.6479591836734694,
+        "resamples": 10000,
+        "seed": 20260822,
+        "unit": "OFFICIAL_DATE"
+      },
+      "pctEligibleSlateDaysWithTop1Pick": 100.0,
+      "pushes": 3,
+      "wilson95OnDecisiveHitRate": {
+        "lower": 0.5994506928183636,
+        "upper": 0.6935958187155429
+      },
+      "winRateAcrossAllPickDays": 0.6430379746835443,
+      "wins": 254
+    },
+    "MAY15": {
+      "activeTop1PickDays": 353,
+      "bySeason": {
+        "2024": {
+          "activeTop1PickDays": 135,
+          "decisiveHitRate": 0.6466165413533834,
+          "decisiveRows": 133,
+          "eligibleSlateDays": 135,
+          "losses": 47,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 2,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.5623020269501777,
+            "upper": 0.7226990253613998
+          },
+          "winRateAcrossAllPickDays": 0.6370370370370371,
+          "wins": 86
+        },
+        "2025": {
+          "activeTop1PickDays": 133,
+          "decisiveHitRate": 0.6742424242424242,
+          "decisiveRows": 132,
+          "eligibleSlateDays": 133,
+          "losses": 43,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 1,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.5903484794634238,
+            "upper": 0.7482812186555617
+          },
+          "winRateAcrossAllPickDays": 0.6691729323308271,
+          "wins": 89
+        },
+        "2026_YTD": {
+          "activeTop1PickDays": 85,
+          "decisiveHitRate": 0.611764705882353,
+          "decisiveRows": 85,
+          "eligibleSlateDays": 85,
+          "losses": 33,
+          "pctEligibleSlateDaysWithTop1Pick": 100.0,
+          "pushes": 0,
+          "wilson95OnDecisiveHitRate": {
+            "lower": 0.505475154675872,
+            "upper": 0.7083886208527093
+          },
+          "winRateAcrossAllPickDays": 0.611764705882353,
+          "wins": 52
+        }
+      },
+      "decisiveHitRate": 0.6485714285714286,
+      "decisiveHitRateDifferenceVsFullSeason": 0.011276346604215504,
+      "decisiveRows": 350,
+      "eligibleSlateDays": 353,
+      "losses": 123,
+      "maximumConsecutiveLosingSelectedDaysWithinSeason": 4,
+      "officialDateBootstrapDecisiveHitRate": {
+        "ci95": [
+          0.5971428571428572,
+          0.7
+        ],
+        "distinctDatesWithDecisions": 350,
+        "pointEstimate": 0.6485714285714286,
+        "resamples": 10000,
+        "seed": 20260823,
+        "unit": "OFFICIAL_DATE"
+      },
+      "pctEligibleSlateDaysWithTop1Pick": 100.0,
+      "pushes": 3,
+      "wilson95OnDecisiveHitRate": {
+        "lower": 0.5971873105751553,
+        "upper": 0.696729515484867
+      },
+      "winRateAcrossAllPickDays": 0.6430594900849859,
+      "wins": 227
+    }
+  },
+  "schemaVersion": "courtedge-p0-step12v71-operational-start-window-top1-result-summary.v1",
+  "sourceArtifact": {
+    "artifactDigest": "sha256:0f25e57ae1f19e5b6d9dda0f279e282b734aad966aa20282d0b59211909a415d",
+    "artifactId": 9275037711,
+    "workflowRunId": 31990116239
+  }
+}
