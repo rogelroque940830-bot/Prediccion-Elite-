@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "courtedge-p0-step12v71-operational-start-window-top1-contract.v1",
+  "scientificStatus": "FROZEN_OPERATIONAL_START_WINDOW_TOP1_AUDIT_BEFORE_ANY_V71_SCORER_EXISTS",
+  "objective": "Measure how often the single highest-priority V69 CONFLUENCE_LEDGER_TOP1_T0.550 selection wins when the predictor is only used after the first approximately one month or one and one-half months of each MLB season.",
+  "adaptiveSelectionDisclosure": "This is a retrospective operational-robustness audit of an already-inspected historical portfolio. It may describe the historical behavior of the frozen V69 TOP1 path but cannot independently confirm, promote, or establish positive EV.",
+  "mainBaseSha": "f2e464a97c27c72ca79e1ab7f394b6eeb6449484",
+  "frozenPortfolioExactly": "CONFLUENCE_LEDGER_TOP1_T0.550",
+  "frozenConsensusThreshold": 0.55,
+  "evaluationUniverse": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "expectedCanonicalRowsBySeason": {"2024": 2406, "2025": 2423, "2026_YTD": 1781},
+    "expectedCombinedRows": 6610,
+    "expectedEligibleSlateDaysFullUniverse": 505,
+    "eligibleGameDefinition": "Exact V69 Step12V3 t5PregameValid=true universe.",
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "oddsUsedAsPredictiveFeatures": false
+  },
+  "immutableParentEvidence": {
+    "v69Contract": {
+      "path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json",
+      "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"
+    },
+    "v69Scorer": {
+      "path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
+    },
+    "v69SuccessfulReport": {
+      "workflowRunId": 31988197440,
+      "artifactId": 9274431264,
+      "artifactDigest": "sha256:b071c8a70ccd16118a13268510ebacf26cbd407aacb4ef4d1defea9ede04645e"
+    },
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v16": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    }
+  },
+  "fullSeasonTop1ParityExpected": {
+    "opportunities": 492,
+    "decisiveRows": 488,
+    "wins": 311,
+    "losses": 177,
+    "pushes": 4
+  },
+  "operationalStartWindowsExactly": [
+    {
+      "id": "MAY01",
+      "officialDateRule": "MM-DD >= 05-01 within each season",
+      "interpretation": "Approximately one month after the regular season begins."
+    },
+    {
+      "id": "MAY15",
+      "officialDateRule": "MM-DD >= 05-15 within each season",
+      "interpretation": "Approximately one and one-half months after the regular season begins."
+    }
+  ],
+  "windowSelectionPolicy": {
+    "bothWindowsMustBeReported": true,
+    "choosingTheBetterHistoricalWindowForPromotionAllowed": false,
+    "newDateCutoffSearchAllowed": false,
+    "v69PortfolioMutationAllowed": false,
+    "v69ThresholdRelaxationAllowed": false,
+    "forcedPlayAllowed": false
+  },
+  "reporting": {
+    "reportFullSeasonParity": true,
+    "reportCombinedAndBySeason": true,
+    "reportEligibleSlateDaysInWindow": true,
+    "reportActiveTop1PickDays": true,
+    "reportWinsLossesPushes": true,
+    "reportWinRateAcrossAllPickDays": true,
+    "reportDecisiveHitRate": true,
+    "reportWilson95": true,
+    "reportOfficialDateBootstrap": true,
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260821,
+    "reportMaximumConsecutiveLosingSelectedDaysWithinSeason": true
+  },
+  "statistics": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "routeSearchAllowed": false,
+    "subsetMiningForPromotionAllowed": false,
+    "historicalHitRateEstablishesPositiveEv": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "v71CanChangeProspectiveV68": false,
+    "v71CanPromoteProduction": false,
+    "v71CanChangeRouting": false,
+    "v71CanChangeRanking": false,
+    "v71CanChangeStake": false,
+    "v71CanEnableBetElite": false,
+    "v71CanEnableAutomaticBetting": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
