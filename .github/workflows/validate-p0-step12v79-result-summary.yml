@@ -1,0 +1,53 @@
+name: Validate P0 Step 12V79 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v79-dynamic-team-strength-route-threat-regimes-result-summary.json'
+      - '.github/workflows/validate-p0-step12v79-result-summary.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-v79-summary:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate immutable V79 summary
+        run: |
+          python - <<'PY'
+          import json
+          p='research/p0-step12v79-dynamic-team-strength-route-threat-regimes-result-summary.json'
+          r=json.load(open(p))
+          assert r['classification']=='V79_DYNAMIC_TEAM_STRENGTH_ROUTE_THREAT_REGIMES_RETROSPECTIVE_COMPLETE'
+          assert r['sourceArtifact']=={
+            'workflowRunId':32054316379,
+            'artifactId':9295845084,
+            'artifactDigest':'sha256:c19fe3a0208f05deabe7e979bd387051a26ba7ffc526a8c851360f6e9760333d'
+          }
+          assert r['parentParity']=={'pickDays':395,'decisiveRows':392,'wins':254,'losses':138,'pushes':3}
+          g=r['routeByPrimaryTierRelation']['V16_V68_CONSENSUS_T0.550']
+          assert g['SELECTED_STRONGER']['wins']==91 and g['SELECTED_STRONGER']['losses']==59
+          assert g['PEER']['wins']==29 and g['PEER']['losses']==27
+          assert g['SELECTED_WEAKER']['wins']==8 and g['SELECTED_WEAKER']['losses']==9
+          a=r['routeByPrimaryTierRelation']['A_PLUS_V68_AGREE_D1_ROUTER']
+          assert a['SELECTED_STRONGER']['wins']==53 and a['SELECTED_STRONGER']['losses']==6
+          assert r['formalRiskCellResult']['predeclaredStrongRiskCells']==[]
+          assert r['predeclaredCounterSideContextResults']['ALL_SELECTED_WEAKER_TIER']['netFlipChange']==-2
+          assert r['inheritedV78WarningByTierRelation']['PEER']['originalWins']==10
+          assert r['inheritedV78WarningByTierRelation']['PEER']['originalLosses']==15
+          guard=r['guardrails']
+          assert guard['strictPregameStrengthOnly'] is True
+          assert guard['sameDateGamesExcluded'] is True
+          assert guard['thresholdSearchPerformed'] is False
+          assert guard['liveVetoCreated'] is False and guard['liveCounterSideSwitchCreated'] is False
+          assert guard['productionChanged'] is False and guard['prospectiveV68Changed'] is False
+          assert guard['realFinancialExposure']==0
+          print('V79_RESULT_SUMMARY_VALID')
+          PY
