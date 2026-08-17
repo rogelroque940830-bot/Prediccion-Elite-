@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'research/p0-step12v69-confluence-frequency-quality-frontier-contract.json'
+      - 'research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json'
       - 'scripts/p0-step12v69-confluence-frequency-quality-frontier.py'
       - '.github/workflows/validate-p0-step12v69-confluence-frequency-quality-frontier.yml'
 
@@ -156,6 +157,46 @@ jobs:
             'qualityFrequencyParetoFrontier':r['qualityFrequencyParetoFrontier'],
             'fixedRouteSummary':{k:{x:v[x] for x in ('opportunities','hitRate','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1','maximumNoPlaySlateDayStreak')} for k,v in r['fixedRoutes'].items()},
           },indent=2))
+          PY
+
+      - name: Validate preserved result summary against fresh replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math
+          r=json.load(open('work/v69-confluence-frequency-quality-frontier.json'))
+          s=json.load(open('research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json'))
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          assert s['allPredeclaredOperationalPreferencesMatched'] is (len(r['operationalPreferenceMatches'])>0)
+          pairs={
+            'closestHighCoveragePoint':'CONFLUENCE_LEDGER_TOP2_T0.550',
+            'onePlayAlternative':'CONFLUENCE_REINFORCED_LEDGER_TOP1_T0.550',
+          }
+          for sk,rk in pairs.items():
+              a=s[sk];b=r['dailyCappedPortfolios'][rk]
+              assert a['name']==rk
+              for k in ('opportunities','decisiveRows','wins','losses','pushes','maximumNoPlaySlateDayStreak'):
+                  assert a[k]==b[k],(sk,k,a[k],b[k])
+              for k in ('hitRate','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1'):
+                  assert math.isclose(a[k],b[k],rel_tol=0,abs_tol=1e-15),(sk,k,a[k],b[k])
+          trade={'T0.575_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.575','T0.600_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.600','T0.625_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.625','T0.650_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.650'}
+          for sk,rk in trade.items():
+              a=s['qualityFrequencyTradeoff'][sk];b=r['dailyCappedPortfolios'][rk]
+              assert a['opportunities']==b['opportunities'] and math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-15)
+          fixed={'PREMIUM_A_ROUTE_SWITCH','A_PLUS_D1_ROUTER','PREMIUM_A_V68_REINFORCE_FULL_GAME_HOME'}
+          for name in fixed:
+              a=s['fixedRouteAnchors'][name];b=r['fixedRoutes'][name]
+              assert a['opportunities']==b['opportunities'] and math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-15)
+          assert s['diagnosis']['preferredDroughtConstraintMet'] is False
+          assert s['diagnosis']['doNotForcePlays'] is True
+          assert s['diagnosis']['doNotRelaxFrozenThresholdsPostHoc'] is True
+          assert s['diagnosis']['positiveEvEstablished'] is False
+          assert s['diagnosis']['prospectiveV68Changed'] is False
+          assert s['diagnosis']['productionChanged'] is False
+          assert s['diagnosis']['realFinancialExposure']==0
+          print('V69_PRESERVED_RESULT_SUMMARY_MATCHES_FRESH_REPLAY')
           PY
 
       - name: Upload V69 discovery report
