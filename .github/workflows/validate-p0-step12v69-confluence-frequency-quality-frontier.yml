@@ -1,0 +1,208 @@
+name: Validate P0 Step 12V69 Confluence Frequency Quality Frontier
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v69-confluence-frequency-quality-frontier-contract.json'
+      - 'research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json'
+      - 'scripts/p0-step12v69-confluence-frequency-quality-frontier.py'
+      - '.github/workflows/validate-p0-step12v69-confluence-frequency-quality-frontier.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  confluence-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen analysis dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
+
+      - name: Prove discovery contract predates V69 scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v69-confluence-frequency-quality-frontier-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v69-confluence-frequency-quality-frontier.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v69-confluence-frequency-quality-frontier-contract.json'))
+          assert c['scientificStatus']=='FROZEN_DISCOVERY_AUDIT_PLAN_BEFORE_ANY_V69_SCORER_EXISTS'
+          assert c['statistics']['refitAllowed'] is False
+          assert c['statistics']['recalibrationAllowed'] is False
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['parentThresholdRelaxationAllowed'] is False
+          assert c['statistics']['postOutcomeThresholdAdditionAllowed'] is False
+          assert c['statistics']['postOutcomeRouteAdditionAllowed'] is False
+          assert c['qualityFrequencyDiagnostics']['forcedDailyPlayAllowed'] is False
+          assert c['qualityFrequencyDiagnostics']['maximumDailySelectionsHardCap']==2
+          assert c['decisionBoundary']['v69CanPromoteProduction'] is False
+          assert c['decisionBoundary']['positiveEvEstablished'] is False
+          assert c['decisionBoundary']['realFinancialExposure']==0
+          assert c['predeclaredConsensusScoreGrid']==[0.55,0.575,0.60,0.625,0.65,0.675]
+          print('V69_DISCOVERY_CONTRACT_PREOUTCOME_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check V69 scorer
+        run: python -m py_compile scripts/p0-step12v69-confluence-frequency-quality-frontier.py
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V16 control manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Resolve immutable input paths
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"; done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen V69 confluence frequency-quality audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.paths.outputs.custody }}' \
+            --v16-manifest '${{ steps.paths.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --out work/v69-confluence-frequency-quality-frontier.json
+
+      - name: Validate exact parent anchors and research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v69-confluence-frequency-quality-frontier.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v69-confluence-frequency-quality-frontier.v1'
+          assert r['classification']=='V69_CONFLUENCE_FREQUENCY_QUALITY_FRONTIER_COMPLETED_RETROSPECTIVE_DISCOVERY_ONLY'
+          assert r['sample']=={'rows':6610,'rowsBySeason':{'2024':2406,'2025':2423,'2026_YTD':1781},'eligibleSlateDays':505}
+          o=r['overlapAndIncrementalCoverage']
+          assert o['premiumAGames']==268, o
+          assert o['aPlusGames']==95, o
+          assert o['f5ConsensusGames']==124, o
+          assert r['fixedRoutes']['PREMIUM_A_FULL_GAME_HOME']['opportunities']==268
+          assert r['fixedRoutes']['A_PLUS_FULL_GAME_HOME']['opportunities']==95
+          for name,st in r['dailyCappedPortfolios'].items():
+              assert st['maximumSelectionsOneDay']<=2,(name,st['maximumSelectionsOneDay'])
+          assert r['interpretationGuardrails']['frequencyMayNotForceAPlay'] is True
+          assert r['interpretationGuardrails']['historicalPricesUsed'] is False
+          assert r['interpretationGuardrails']['positiveEvEstablished'] is False
+          assert r['interpretationGuardrails']['prospectiveV68Changed'] is False
+          assert r['interpretationGuardrails']['productionChanged'] is False
+          p=r['policy']
+          assert p['refitPerformed'] is False
+          assert p['recalibrationPerformed'] is False
+          assert p['featureSearchPerformed'] is False
+          assert p['parentThresholdRelaxationPerformed'] is False
+          assert p['forcedDailyPlayAllowed'] is False
+          assert p['dailyHardCap']==2
+          assert p['routingChanged'] is False
+          assert p['rankingChanged'] is False
+          assert p['betEliteAllowed'] is False
+          assert p['automaticBetPlacementAllowed'] is False
+          assert p['realFinancialExposure']==0
+          print(json.dumps({
+            'operationalPreferenceMatches':r['operationalPreferenceMatches'],
+            'qualityFrequencyParetoFrontier':r['qualityFrequencyParetoFrontier'],
+            'fixedRouteSummary':{k:{x:v[x] for x in ('opportunities','hitRate','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1','maximumNoPlaySlateDayStreak')} for k,v in r['fixedRoutes'].items()},
+          },indent=2))
+          PY
+
+      - name: Validate preserved result summary against fresh replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math
+          r=json.load(open('work/v69-confluence-frequency-quality-frontier.json'))
+          s=json.load(open('research/p0-step12v69-confluence-frequency-quality-frontier-result-summary.json'))
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          assert s['allPredeclaredOperationalPreferencesMatched'] is (len(r['operationalPreferenceMatches'])>0)
+          pairs={
+            'closestHighCoveragePoint':'CONFLUENCE_LEDGER_TOP2_T0.550',
+            'onePlayAlternative':'CONFLUENCE_REINFORCED_LEDGER_TOP1_T0.550',
+          }
+          for sk,rk in pairs.items():
+              a=s[sk];b=r['dailyCappedPortfolios'][rk]
+              assert a['name']==rk
+              for k in ('opportunities','decisiveRows','wins','losses','pushes','maximumNoPlaySlateDayStreak'):
+                  assert a[k]==b[k],(sk,k,a[k],b[k])
+              for k in ('hitRate','meanSelectionsPerEligibleSlateDay','pctDaysWithAtLeast1'):
+                  assert math.isclose(a[k],b[k],rel_tol=0,abs_tol=1e-15),(sk,k,a[k],b[k])
+          trade={'T0.575_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.575','T0.600_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.600','T0.625_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.625','T0.650_TOP2':'CONFLUENCE_LEDGER_TOP2_T0.650'}
+          for sk,rk in trade.items():
+              a=s['qualityFrequencyTradeoff'][sk];b=r['dailyCappedPortfolios'][rk]
+              assert a['opportunities']==b['opportunities'] and math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-15)
+          fixed={'PREMIUM_A_ROUTE_SWITCH','A_PLUS_D1_ROUTER','PREMIUM_A_V68_REINFORCE_FULL_GAME_HOME'}
+          for name in fixed:
+              a=s['fixedRouteAnchors'][name];b=r['fixedRoutes'][name]
+              assert a['opportunities']==b['opportunities'] and math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-15)
+          assert s['diagnosis']['preferredDroughtConstraintMet'] is False
+          assert s['diagnosis']['doNotForcePlays'] is True
+          assert s['diagnosis']['doNotRelaxFrozenThresholdsPostHoc'] is True
+          assert s['diagnosis']['positiveEvEstablished'] is False
+          assert s['diagnosis']['prospectiveV68Changed'] is False
+          assert s['diagnosis']['productionChanged'] is False
+          assert s['diagnosis']['realFinancialExposure']==0
+          print('V69_PRESERVED_RESULT_SUMMARY_MATCHES_FRESH_REPLAY')
+          PY
+
+      - name: Upload V69 discovery report
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v69-confluence-frequency-quality-frontier
+          path: work/v69-confluence-frequency-quality-frontier.json
+          if-no-files-found: error
+          retention-days: 90
