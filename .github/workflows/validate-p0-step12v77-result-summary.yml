@@ -1,0 +1,53 @@
+name: Validate P0 Step 12V77 Result Summary
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json'
+      - '.github/workflows/validate-p0-step12v77-result-summary.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-summary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate preserved V77 summary and immutable custody metadata
+        run: |
+          python - <<'PY'
+          import json, math
+          s=json.load(open('research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json'))
+          assert s['schemaVersion']=='courtedge-p0-step12v77-general-consensus-loss-threat-geometry-result-summary.v1'
+          assert s['classification']=='V77_GENERAL_CONSENSUS_LOSS_THREAT_GEOMETRY_RETROSPECTIVE_COMPLETE'
+          assert s['sourceArtifact']=={
+            'workflowRunId':32049400781,
+            'artifactId':9294112054,
+            'artifactDigest':'sha256:5228b62eddeca3d7483fd6a6e99746ff91b46e1244c6d7ae003aa86f53be0df8'
+          }
+          assert s['parentParity']=={'pickDays':395,'decisiveRows':392,'wins':254,'losses':138,'pushes':3}
+          assert s['routeParity']['V16_V68_CONSENSUS_T0.550']=={'decisiveRows':223,'wins':128,'losses':95}
+          assert s['generalConsensusRoute']['singleSignalConclusion']['signalsPassingAllPredeclaredStrongAssociationCriteria']==[]
+          ai=s['generalConsensusRoute']['allSignalThreatIndex']
+          assert ai['tertiles']['LOW']=={'rows':74,'wins':51,'losses':23,'historicalLossRate':23/74}
+          assert ai['tertiles']['MID']=={'rows':73,'wins':43,'losses':30,'historicalLossRate':30/73}
+          assert ai['tertiles']['HIGH']=={'rows':73,'wins':32,'losses':41,'historicalLossRate':41/73}
+          m=s['generalConsensusRoute']['lineupWarningByConsensusGeometry']
+          assert m['redCorner']['rows']==37 and m['redCorner']['wins']==15 and m['redCorner']['losses']==22
+          assert m['comparisonCorner']['rows']==36 and m['comparisonCorner']['wins']==24 and m['comparisonCorner']['losses']==12
+          assert math.isclose(m['riskRatioRedVsComparison'],(22/37)/(12/36),abs_tol=1e-15)
+          hr=s['premiumARouteFinding']
+          assert hr['signal']=='starter_hr_adv'
+          assert math.isclose(hr['holmP'],0.033264820426048634,abs_tol=1e-15)
+          assert hr['sameDirectionAllThreeSeasons'] is True
+          assert s['guardrails']['strictlyPregameSignalsOnly'] is True
+          assert s['guardrails']['liveVetoCreated'] is False
+          assert s['guardrails']['productionChanged'] is False
+          assert s['guardrails']['prospectiveV68Changed'] is False
+          assert s['guardrails']['realFinancialExposure']==0
+          print('V77_RESULT_SUMMARY_STATIC_CUSTODY_VALIDATION_PASSED')
+          PY

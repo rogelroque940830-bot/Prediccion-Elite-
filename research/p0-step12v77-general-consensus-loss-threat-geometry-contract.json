@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "courtedge-p0-step12v77-general-consensus-loss-threat-geometry-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_GENERAL_CONSENSUS_LOSS_THREAT_GEOMETRY_BEFORE_ANY_V77_SCORER_EXISTS",
+  "objective": "Deep retrospective pregame-only anatomy of the frozen V69/V71 TOP1 losses, with primary focus on the general V16+V68 consensus route where 95 of 138 MAY01 losses occurred. Determine which opponent-oriented signals and combinations were disproportionately present before losses, while explicitly separating association from causation and avoiding outcome-optimized live filters.",
+  "immutableParentEvidence": {
+    "mainBaseCommit": "c9eb72510e8d93080718e8c1160d238bf748828d",
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v72Scorer": {"path": "scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py", "gitBlobSha": "e38ab509b90ab682f927d96416b8da270a068f39"},
+    "v72Summary": {
+      "path": "research/p0-step12v72-top1-loss-opponent-signal-anatomy-result-summary.json",
+      "requiredClassification": "V72_TOP1_LOSS_OPPONENT_SIGNAL_ANATOMY_RETROSPECTIVE_COMPLETE",
+      "sourceWorkflowRunId": 31991653000,
+      "sourceArtifactId": 9275526486,
+      "sourceArtifactDigest": "sha256:63886c47487069f6bcc4c376db52e8bcec787b820015dc6a4b6cba886fb25e4c"
+    }
+  },
+  "parentPortfolio": {
+    "name": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "window": "MAY01",
+    "officialDateRule": "MM-DD >= 05-01",
+    "expectedPickDays": 395,
+    "expectedDecisiveRows": 392,
+    "expectedWins": 254,
+    "expectedLosses": 138,
+    "expectedPushes": 3,
+    "routeParity": {
+      "A_PLUS_V68_AGREE_D1_ROUTER": {"wins": 62, "losses": 9},
+      "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {"wins": 64, "losses": 34},
+      "V16_V68_CONSENSUS_T0.550": {"wins": 128, "losses": 95}
+    }
+  },
+  "primaryRoute": {
+    "id": "V16_V68_CONSENSUS_T0.550",
+    "expectedDecisiveRows": 223,
+    "expectedWins": 128,
+    "expectedLosses": 95,
+    "reason": "This route contains 95/138 MAY01 TOP1 losses and is the largest concentration of historical losses."
+  },
+  "directionalOpponentWarningSignalsExactly": [
+    "team_rd10_diff",
+    "team_win10_diff",
+    "starter_kbb_adv",
+    "team_ra10_adv",
+    "lineup_exposure_rate_adv",
+    "starter_runrisk_adv",
+    "team_rs10_diff",
+    "starter_hr_adv",
+    "lineup_continuity_rate_adv",
+    "starter_velocity_adv",
+    "starter_spin_adv",
+    "starter_swing_miss_adv",
+    "starter_in_zone_adv",
+    "starter_weak_contact_adv",
+    "fg_exposure_adv",
+    "bullpen_pitches_1d_adv"
+  ],
+  "signalDomainsExactly": {
+    "RECENT_TEAM_PERFORMANCE": ["team_rd10_diff", "team_win10_diff", "team_ra10_adv", "team_rs10_diff"],
+    "LINEUP_ESTABLISHMENT": ["lineup_exposure_rate_adv", "lineup_continuity_rate_adv"],
+    "STARTER_RESULTS_RISK": ["starter_kbb_adv", "starter_runrisk_adv", "starter_hr_adv"],
+    "STARTER_PITCH_QUALITY": ["starter_velocity_adv", "starter_spin_adv", "starter_swing_miss_adv", "starter_in_zone_adv", "starter_weak_contact_adv"],
+    "EXPOSURE_AND_BULLPEN": ["fg_exposure_adv", "bullpen_pitches_1d_adv"]
+  },
+  "inheritedV72Hypotheses": {
+    "primaryWarning": "lineup_exposure_rate_adv",
+    "nearWarningNotCrossSeasonRobust": "starter_runrisk_adv",
+    "interpretationBoundary": "Larger opponent-warning means the selected-side advantage was weaker or the opponent was stronger on the directional dimension. A negative warning can still mean the selected side retained an advantage."
+  },
+  "modelConvictionSignalsExactly": ["consensusScore", "p16Selected", "p68Selected"],
+  "threatGeometry": {
+    "quantileRule": "Within the 223 primary-route decisive rows, compute outcome-blind empirical tertile cutpoints using all rows before splitting wins/losses.",
+    "lineupWarningAxis": "opponentWarning.lineup_exposure_rate_adv, higher = opponent closer/stronger",
+    "convictionAxis": "consensusScore, lower = weaker selected-side model conviction",
+    "matrix": "3x3 lineup-warning tertile by consensus-score tertile",
+    "redCornerDefinition": "highest lineup-warning tertile AND lowest consensus-score tertile",
+    "comparisonCornerDefinition": "lowest lineup-warning tertile AND highest consensus-score tertile",
+    "noCutpointSearch": true
+  },
+  "allSignalThreatIndex": {
+    "definition": "For each of the 16 opponent-warning signals, transform the primary-route value to its empirical percentile rank across all 223 decisive rows, then average all available ranks with equal weight. No outcome weighting and no fitted coefficients.",
+    "reportTertiles": true,
+    "minimumNonmissingSignals": 12,
+    "noSignalSelection": true
+  },
+  "domainThreatIndexes": {
+    "definition": "Equal-weight empirical percentile-rank mean within each frozen domain. Larger index means more opponent-oriented warning across that domain.",
+    "reportTertiles": true,
+    "noOutcomeWeights": true
+  },
+  "statisticalPlan": {
+    "continuousComparisons": "losses vs wins within primary route using median/IQR, Mann-Whitney two-sided, Cliff's delta, loss-warning AUC, and 10000 bootstrap resamples",
+    "holmCorrectionAcross16DirectionalSignals": true,
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260831,
+    "seasonConsistency": ["2024", "2025", "2026_YTD"],
+    "reportAllRouteReferenceAnalyses": true,
+    "referenceRoutesAreContextOnly": true,
+    "predeclaredStrongAssociationLabel": {
+      "holmAdjustedPLt": 0.05,
+      "minimumAbsoluteCliffsDelta": 0.147,
+      "minimumLossWarningAuc": 0.58,
+      "requireLossMedianGreaterThanWinMedian": true,
+      "requireSameDirectionAllThreeSeasons": true
+    }
+  },
+  "requiredOutputs": [
+    "exact_parent_and_route_parity",
+    "primary_route_16_signal_analysis",
+    "primary_route_signal_ranking",
+    "five_domain_threat_index_analysis",
+    "all_signal_threat_index_tertiles",
+    "lineup_warning_x_consensus_3x3_matrix",
+    "red_corner_vs_comparison_corner_loss_rates",
+    "share_of_95_losses_in_each_matrix_cell",
+    "season_specific_red_corner_direction",
+    "reference_route_signal_context",
+    "scientific_interpretation"
+  ],
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureAdditionAfterOutcomeInspectionAllowed": false,
+    "featureRemovalAfterOutcomeInspectionAllowed": false,
+    "thresholdSearchAllowed": false,
+    "routeSearchAllowed": false,
+    "dateCutoffSearchAllowed": false,
+    "outcomeWeightedCompositeAllowed": false,
+    "liveVetoCreatedByV77": false,
+    "causalClaimAllowed": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
