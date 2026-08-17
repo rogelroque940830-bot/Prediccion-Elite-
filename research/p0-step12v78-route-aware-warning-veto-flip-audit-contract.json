@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "courtedge-p0-step12v78-route-aware-warning-veto-flip-audit-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_ROUTE_AWARE_VETO_AND_COUNTERSIDE_AUDIT_BEFORE_ANY_V78_SCORER_EXISTS",
+  "objective": "Retrospective research-only audit of whether the route-specific pregame warning mechanisms discovered in V77 could have avoided some of the frozen MAY01 TOP1 losses, and whether choosing the opposite moneyline side on those predeclared warning cases would historically convert more losses to wins than wins to losses. Explicitly separate the impossible outcome-oracle flip ceiling from actionable pregame-identifiable warning policies.",
+  "immutableParentEvidence": {
+    "mainBaseCommit": "b4bad6a0c7200c4951ea8640c5ed72e1ec88c20e",
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v72Scorer": {"path": "scripts/p0-step12v72-top1-loss-opponent-signal-anatomy.py", "gitBlobSha": "e38ab509b90ab682f927d96416b8da270a068f39"},
+    "v77Scorer": {"path": "scripts/p0-step12v77-general-consensus-loss-threat-geometry.py", "gitBlobSha": "4166da7044720b605210c77a3d690a5ba9efd892"},
+    "v77Summary": {
+      "path": "research/p0-step12v77-general-consensus-loss-threat-geometry-result-summary.json",
+      "requiredClassification": "V77_GENERAL_CONSENSUS_LOSS_THREAT_GEOMETRY_RETROSPECTIVE_COMPLETE",
+      "parentParity": {"pickDays": 395, "decisiveRows": 392, "wins": 254, "losses": 138, "pushes": 3},
+      "routeParity": {
+        "A_PLUS_V68_AGREE_D1_ROUTER": {"decisiveRows": 71, "wins": 62, "losses": 9},
+        "PREMIUM_A_V68_AGREE_ROUTE_SWITCH": {"decisiveRows": 98, "wins": 64, "losses": 34},
+        "V16_V68_CONSENSUS_T0.550": {"decisiveRows": 223, "wins": 128, "losses": 95}
+      }
+    }
+  },
+  "parentPortfolio": {
+    "name": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "window": "MAY01",
+    "officialDateRule": "MM-DD >= 05-01",
+    "dailyHardCap": 1,
+    "expectedPickDays": 395,
+    "expectedDecisiveRows": 392,
+    "expectedWins": 254,
+    "expectedLosses": 138,
+    "expectedPushes": 3
+  },
+  "oracleCounterfactualBoundary": {
+    "reportOracleFlipCeiling": true,
+    "definition": "For a decisive historical loss only, replacing the selected ML side with the exact opposite side in the same market/horizon necessarily maps y=0 to y=1. This is hindsight/oracle arithmetic, not an actionable strategy and must never be reported as model skill.",
+    "expectedDecisiveLossesMechanicallyFlippableWithOutcomeOracle": 138,
+    "actionableInferenceAllowedFromOracle": false
+  },
+  "pregameWarningArchitecture": {
+    "generalConsensus": {
+      "route": "V16_V68_CONSENSUS_T0.550",
+      "primaryFlagId": "GENERAL_ALL_THREAT_HIGH_AND_CONSENSUS_LOW",
+      "allSignalThreatIndex": "Exact V77 equal-weight percentile-rank average of all 16 opponent-warning signals, minimum 12 nonmissing signals.",
+      "flagRule": "Within all 223 decisive general-consensus rows, compute outcome-blind empirical tertiles before outcome splitting. Flag only rows where allSignalThreatIndex is HIGH and consensusScore is LOW.",
+      "noOutcomeCutpointSearch": true,
+      "secondaryInheritedComparator": {
+        "id": "GENERAL_LINEUP_HIGH_AND_CONSENSUS_LOW",
+        "rule": "Exact V77 inherited red corner: lineup_exposure opponent-warning HIGH tertile and consensusScore LOW tertile using outcome-blind empirical tertiles across all 223 decisive general-consensus rows. Report separately; do not choose between primary and comparator after results."
+      }
+    },
+    "premiumA": {
+      "route": "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
+      "flagId": "PREMIUM_A_STARTER_HR_OPPONENT_ADVANTAGE",
+      "signal": "starter_hr_adv",
+      "orientation": "opponentWarning = -selectedSideSupport",
+      "flagRule": "Flag only when opponentWarning.starter_hr_adv > 0, meaning the frozen selected side had a negative starter-HR-risk advantage and the opponent had the directional edge on this signal.",
+      "thresholdRationale": "Natural sign boundary fixed before V78 scorer; no empirical threshold optimization."
+    },
+    "aPlus": {
+      "route": "A_PLUS_V68_AGREE_D1_ROUTER",
+      "flagRule": "NEVER_FLAG_IN_V78",
+      "reason": "Only nine V77 losses; no frozen 16-signal warning survived the predeclared robust criteria."
+    },
+    "combinedPrimaryFlag": "Flag a row iff it satisfies GENERAL_ALL_THREAT_HIGH_AND_CONSENSUS_LOW on the general-consensus route OR PREMIUM_A_STARTER_HR_OPPONENT_ADVANTAGE on the Premium-A route. A+ is never flagged."
+  },
+  "predeclaredPolicies": {
+    "BASELINE_KEEP": "Keep exact frozen TOP1 selection.",
+    "PRIMARY_VETO": "If combinedPrimaryFlag=true, make NO PLAY; otherwise keep exact frozen TOP1 selection.",
+    "PRIMARY_COUNTERSIDE_FLIP": "If combinedPrimaryFlag=true, choose the exact opposite HOME/AWAY side in the same frozen F5-ML or Full-Game-ML market/horizon; otherwise keep exact frozen TOP1 selection. For decisive rows yFlip=1-y; pushes remain pushes.",
+    "GENERAL_PRIMARY_VETO_ONLY": "Apply only GENERAL_ALL_THREAT_HIGH_AND_CONSENSUS_LOW as a veto; leave all other routes unchanged.",
+    "GENERAL_PRIMARY_COUNTERSIDE_ONLY": "Apply only GENERAL_ALL_THREAT_HIGH_AND_CONSENSUS_LOW as an opposite-side switch; leave all other routes unchanged.",
+    "GENERAL_RED_CORNER_COMPARATOR_VETO": "Apply only inherited GENERAL_LINEUP_HIGH_AND_CONSENSUS_LOW as a veto; context comparator only.",
+    "GENERAL_RED_CORNER_COMPARATOR_FLIP": "Apply only inherited GENERAL_LINEUP_HIGH_AND_CONSENSUS_LOW as an opposite-side switch; context comparator only.",
+    "PREMIUM_HR_VETO_ONLY": "Apply only PREMIUM_A_STARTER_HR_OPPONENT_ADVANTAGE as a veto; leave all other routes unchanged.",
+    "PREMIUM_HR_COUNTERSIDE_ONLY": "Apply only PREMIUM_A_STARTER_HR_OPPONENT_ADVANTAGE as an opposite-side switch; leave all other routes unchanged."
+  },
+  "requiredOutputs": [
+    "exact_parent_and_route_parity",
+    "oracle_flip_ceiling_with_explicit_hindsight_warning",
+    "outcome_blind_general_threat_and_conviction_cutpoints",
+    "flag_counts_by_route_and_season",
+    "flagged_original_wins_and_losses",
+    "losses_avoided_by_veto",
+    "wins_sacrificed_by_veto",
+    "losses_converted_to_wins_by_counter_side",
+    "wins_converted_to_losses_by_counter_side",
+    "net_correct_decision_change",
+    "policy_record_hit_rate_and_coverage",
+    "route_specific_policy_effects",
+    "season_specific_policy_effects",
+    "flagged_historical_loss_ledger_with_date_gamepk_market_original_side_counter_side_and_warning_values",
+    "scientific_interpretation"
+  ],
+  "evaluation": {
+    "allPredeclaredPoliciesMustBeReported": true,
+    "noBestPolicySelectionAfterOutcomes": true,
+    "reportAbsoluteAndPercentagePointChanges": true,
+    "reportCounterSidePrecisionAmongFlaggedDecisiveRows": true,
+    "reportLossCaptureRate": true,
+    "reportWinDestructionRate": true,
+    "reportCoverage": true,
+    "seasonConsistency": ["2024", "2025", "2026_YTD"]
+  },
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "newFeatureSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "routeSearchAllowed": false,
+    "dateCutoffSearchAllowed": false,
+    "outcomeWeightedCompositeAllowed": false,
+    "policySelectionAfterOutcomeInspectionAllowed": false,
+    "claimIndependentConfirmationAllowed": false,
+    "claimCausationAllowed": false,
+    "liveVetoCreatedByV78": false,
+    "liveCounterSideSwitchCreatedByV78": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
