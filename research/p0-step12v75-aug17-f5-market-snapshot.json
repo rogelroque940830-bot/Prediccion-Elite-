@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "courtedge-p0-step12v75-aug17-f5-market-snapshot.v1",
+  "classification": "POST_V74_FREEZE_PREOUTCOME_USER_SUPPLIED_F5_MARKET_SNAPSHOT",
+  "officialDate": "2026-08-17",
+  "capturedWindowLocalEt": "2026-08-17T00:45:00-04:00/2026-08-17T00:53:59-04:00",
+  "parentBlindPredictionMergeCommit": "c9eb72510e8d93080718e8c1160d238bf748828d",
+  "parentBlindPredictionArtifact": {
+    "workflowRunId": 31995233764,
+    "artifactId": 9276610695,
+    "digest": "sha256:ea36004c1f75080b59cf406e8a0dee11a16d43c406bf30f9cb651645327d96d1"
+  },
+  "source": {
+    "type": "USER_SUPPLIED_SPORTSBOOK_SCREENSHOTS",
+    "manualTranscriptionFromVisibleMarketCells": true,
+    "screenshotSha256": [
+      "53b18e5766327fac5f869933bbb21efca1437229008cdce7f6fcf2f1c88abd36",
+      "63694815697c0fdcb71163d7458064699a00a03de114deb63b1e86725f20fe52",
+      "65a737ccf46152dfdc6e1e6a72a6cd4fec265206af4babcde39cf233c6977560",
+      "d2583f649562c2959279901e5a20a77825d436cc9fe9e9fde986ea31a1da3ece",
+      "91945b39105a015b82c986b41cc4e70b0d154747389e5d0f4cd1207ee1473e64",
+      "49f7bb039cd1ebe9b36aa9fe99f387d6c6271cd01d0500cc866e3a960179b323",
+      "abd1c75f2bce5be31332cd58c6627d80f7a97392865aaf2b37cbdb52bc2f4083",
+      "7bf38bb27e4cecd612a2c2b3cc291f15aaa8a43fb104015027b8bd8fe61e63f7",
+      "ecb7a9c7006fcc9a9abf14e2c5a92bc44e77aef5522800e3475e77e9d790dec5"
+    ]
+  },
+  "canonicalHouseCenterRule": {
+    "definition": "Among visible half-run F5 lines for a game, choose the line whose normalized two-sided implied Over probability is closest to 0.50; ties choose the smaller line.",
+    "purpose": "Identify the sportsbook's approximately balanced F5 total line without outcome information. Prices are used only to identify the market center, not as predictive model features and not for EV/ranking in this stage."
+  },
+  "f5AlternateTotals": [
+    {"away":"Baltimore Orioles","home":"Tampa Bay Rays","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-350,"underOddsAmerican":240},{"line":3.5,"overOddsAmerican":-180,"underOddsAmerican":130},{"line":4.5,"overOddsAmerican":-105,"underOddsAmerican":-125}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.4796954314720812},
+    {"away":"Miami Marlins","home":"Philadelphia Phillies","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-375,"underOddsAmerican":240},{"line":3.5,"overOddsAmerican":-185,"underOddsAmerican":135},{"line":4.5,"overOddsAmerican":-105,"underOddsAmerican":-125}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.4796954314720812},
+    {"away":"Detroit Tigers","home":"Pittsburgh Pirates","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-350,"underOddsAmerican":230},{"line":3.5,"overOddsAmerican":-175,"underOddsAmerican":130},{"line":4.5,"overOddsAmerican":-105,"underOddsAmerican":-125},{"line":5.5,"overOddsAmerican":155,"underOddsAmerican":-210},{"line":6.5,"overOddsAmerican":240,"underOddsAmerican":-350}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.4796954314720812},
+    {"away":"San Diego Padres","home":"New York Mets","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-350,"underOddsAmerican":240},{"line":3.5,"overOddsAmerican":-185,"underOddsAmerican":135},{"line":4.5,"overOddsAmerican":-105,"underOddsAmerican":-125},{"line":5.5,"overOddsAmerican":150,"underOddsAmerican":-210},{"line":6.5,"overOddsAmerican":230,"underOddsAmerican":-325}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.4796954314720812},
+    {"away":"Arizona Diamondbacks","home":"Boston Red Sox","v74BlindPredictionAvailable":false,"exclusionReason":"NO_CLEAN_V74_PRELINE_FREEZE_BOTH_STARTERS_NOT_AVAILABLE_AT_FREEZE","visibleLines":[{"line":2.5,"overOddsAmerican":-400,"underOddsAmerican":275},{"line":3.5,"overOddsAmerican":-200,"underOddsAmerican":145},{"line":4.5,"overOddsAmerican":-120,"underOddsAmerican":-110},{"line":5.5,"overOddsAmerican":135,"underOddsAmerican":-185},{"line":6.5,"overOddsAmerican":210,"underOddsAmerican":-300}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.5101214574898786},
+    {"away":"Atlanta Braves","home":"Minnesota Twins","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-575,"underOddsAmerican":350},{"line":3.5,"overOddsAmerican":-275,"underOddsAmerican":195},{"line":4.5,"overOddsAmerican":-155,"underOddsAmerican":115},{"line":5.5,"overOddsAmerican":105,"underOddsAmerican":-135},{"line":6.5,"overOddsAmerican":160,"underOddsAmerican":-225}],"canonicalHouseCenterLine":5.5,"canonicalHouseCenterNoVigOverProbability":0.4592085979482169},
+    {"away":"Athletics","home":"Kansas City Royals","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-525,"underOddsAmerican":325},{"line":3.5,"overOddsAmerican":-260,"underOddsAmerican":185},{"line":4.5,"overOddsAmerican":-150,"underOddsAmerican":110},{"line":5.5,"overOddsAmerican":110,"underOddsAmerican":-145},{"line":6.5,"overOddsAmerican":165,"underOddsAmerican":-230}],"canonicalHouseCenterLine":5.5,"canonicalHouseCenterNoVigOverProbability":0.4458598726114649},
+    {"away":"Chicago White Sox","home":"Chicago Cubs","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-400,"underOddsAmerican":260},{"line":3.5,"overOddsAmerican":-200,"underOddsAmerican":145},{"line":4.5,"overOddsAmerican":-115,"underOddsAmerican":-115},{"line":5.5,"overOddsAmerican":140,"underOddsAmerican":-195},{"line":6.5,"overOddsAmerican":220,"underOddsAmerican":-325}],"canonicalHouseCenterLine":4.5,"canonicalHouseCenterNoVigOverProbability":0.5},
+    {"away":"Los Angeles Dodgers","home":"Colorado Rockies","v74BlindPredictionAvailable":true,"visibleLines":[{"line":2.5,"overOddsAmerican":-800,"underOddsAmerican":450},{"line":3.5,"overOddsAmerican":-375,"underOddsAmerican":250},{"line":4.5,"overOddsAmerican":-210,"underOddsAmerican":155},{"line":5.5,"overOddsAmerican":-130,"underOddsAmerican":100},{"line":6.5,"overOddsAmerican":120,"underOddsAmerican":-160}],"canonicalHouseCenterLine":5.5,"canonicalHouseCenterNoVigOverProbability":0.5306122448979592}
+  ],
+  "policy": {
+    "marketSnapshotOccurredAfterBlindPredictionFreeze": true,
+    "outcomesRead": false,
+    "pricesUsedOnlyToIdentifyHouseCenter": true,
+    "pricesUsedForEvOrBetRanking": false,
+    "marketPricesUsedAsPredictiveFeatures": false,
+    "productionChanged": false,
+    "v68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
