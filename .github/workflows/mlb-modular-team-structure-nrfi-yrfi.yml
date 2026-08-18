@@ -7,6 +7,7 @@ on:
       - research/mlb-modular-team-structure-nrfi-yrfi-v1
     paths:
       - "research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json"
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json"
       - "scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py"
       - ".github/workflows/mlb-modular-team-structure-nrfi-yrfi.yml"
       - "server/mlb-market-universe-registry.ts"
@@ -16,6 +17,7 @@ on:
       - main
     paths:
       - "research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json"
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json"
       - "scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py"
       - ".github/workflows/mlb-modular-team-structure-nrfi-yrfi.yml"
       - "server/mlb-market-universe-registry.ts"
@@ -133,6 +135,15 @@ jobs:
           repository: ${{ github.repository }}
           run-id: 31704085189
 
+      - name: Download prior V27 NRFI YRFI causal-core evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v27-nrfi-yrfi-i1-causal-core
+          path: inputs/v27-nrfi
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31896654032
+
       - name: Resolve immutable inputs
         id: inputs
         shell: bash
@@ -143,10 +154,13 @@ jobs:
           done
           CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
           V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          V27="$(find inputs/v27-nrfi -type f -name nrfi-yrfi-i1-causal-core-report.json -print -quit)"
           test -n "$CUSTODY"
           test -n "$V16"
+          test -n "$V27"
           echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
           echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "v27=$V27" >> "$GITHUB_OUTPUT"
 
       - name: Execute frozen modular and NRFI YRFI study
         shell: bash
@@ -209,6 +223,82 @@ jobs:
             'policyCoverage':{k:v['coverage']['combinedOpportunityCoveragePct'] for k,v in r['policyResults'].items()},
           },indent=2))
           PY
+
+      - name: Verify frozen result summary parity and prior NRFI evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math, os
+          r=json.load(open('work/mlb-modular-team-structure-nrfi-yrfi-v1.json'))
+          s=json.load(open('research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json'))
+          v27_path=os.environ['V27_PATH']
+          v27=json.load(open(v27_path))
+          assert s['schemaVersion']=='courtedge-mlb-modular-team-structure-nrfi-yrfi-result-summary.v1'
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          policy_key={
+            'uniformQ85':'UNIFORM_Q85',
+            'uniformQ90':'UNIFORM_Q90',
+            'modularBalanced':'MODULAR_BALANCED',
+            'modularConservative':'MODULAR_CONSERVATIVE',
+          }
+          for sk,rk in policy_key.items():
+            a=s['teamStrengthFinding'][sk]
+            b=r['policyResults'][rk]
+            assert math.isclose(a['coveragePct'], b['coverage']['combinedOpportunityCoveragePct'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['allSignalHitRate'], b['allSignalStats']['hitRate'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['wilson95Lower'], b['allSignalStats']['wilson95']['lower'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['calibrationGap'], b['allSignalStats']['absoluteCalibrationGap'], rel_tol=0, abs_tol=1e-12)
+            assert a['rescuedParentNoPlayDates']==b['coverage']['rescuedParentNoPlayDates']
+          tiers=s['teamStrengthFinding']['tierDiagnostics']
+          checks=[
+            ('STRONG','uniformQ85','UNIFORM_Q85'),
+            ('STRONG','balancedQ80','MODULAR_BALANCED'),
+            ('MIDDLE','q85','UNIFORM_Q85'),
+            ('MIDDLE','q90','UNIFORM_Q90'),
+            ('WEAK','q85','UNIFORM_Q85'),
+            ('WEAK','q90','UNIFORM_Q90'),
+            ('WEAK','q95','MODULAR_CONSERVATIVE'),
+            ('UNSTABLE','q85','UNIFORM_Q85'),
+            ('UNSTABLE','q95','MODULAR_BALANCED'),
+          ]
+          for tier,sk,pk in checks:
+            a=tiers[tier][sk]
+            b=r['policyResults'][pk]['byStrengthTier'][tier]
+            assert a['decisive']==b['decisive']
+            assert math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-12)
+            assert math.isclose(a['wilson95Lower'],b['wilson95']['lower'],rel_tol=0,abs_tol=1e-12)
+            if 'calibrationGap' in a:
+              assert math.isclose(a['calibrationGap'],b['absoluteCalibrationGap'],rel_tol=0,abs_tol=1e-12)
+          fi=s['nrfiYrfiFinding']
+          assert fi['validation2023']==r['firstInningRuns']['validation']
+          oos=r['firstInningRuns']['outOfSampleRobustness']
+          assert math.isclose(fi['outOfSampleRobustness']['combinedModelBrier'],oos['combinedModelBrier'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['outOfSampleRobustness']['combinedBaselineBrier'],oos['combinedBaselineBrier'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['outOfSampleRobustness']['combinedBrierImprovement'],oos['combinedBrierImprovement'],rel_tol=0,abs_tol=1e-12)
+          assert fi['coverageContribution']==0
+          assert r['firstInningRuns']['validation']['validationQualified'] is False
+          assert all(v['brierImprovement'] < 0 for v in oos['bySeason'].values())
+          assert v27['classification']=='NRFI_YRFI_I1_CAUSAL_CORE_REJECTED'
+          assert v27['parent']['v26Classification']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          assert math.isclose(fi['priorRepositoryEvidence']['v27ValidationBrierImprovement'],v27['validation2023']['brierImprovement'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['priorRepositoryEvidence']['v27CombinedEvaluationBrierImprovement'],v27['evaluation2024_2026Ytd']['brierImprovement'],rel_tol=0,abs_tol=1e-12)
+          boundary=s['scientificBoundary']
+          assert boundary['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert boundary['prospectiveConfirmationRequired'] is True
+          assert boundary['winnerDeclaredFromRetrospectiveEvaluation'] is False
+          assert boundary['historicalPricesUsed'] is False
+          assert boundary['positiveEvEstablished'] is False
+          assert boundary['betEliteProduced'] is False
+          assert boundary['stakeCalculated'] is False
+          assert boundary['automaticBetPlacement'] is False
+          assert boundary['realFinancialExposure']==0
+          assert boundary['productionChanged'] is False
+          print('MODULAR_NRFI_RESULT_SUMMARY_PARITY_VERIFIED')
+          PY
+        env:
+          V27_PATH: ${{ steps.inputs.outputs.v27 }}
 
       - name: Upload modular research artifact
         uses: actions/upload-artifact@v4
