@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-aplus-premium-feature-engineering-freeze.v1",
+  "status": "FROZEN_BEFORE_SCORER",
+  "selectedSideOrientation": {
+    "HOME": 1.0,
+    "AWAY": -1.0,
+    "directionalSuffixes": ["_adv", "_diff"],
+    "formula": "selected_side_value = orientation * canonical_home_oriented_value",
+    "nonDirectionalCombinedFeaturesAreNotSignFlipped": true
+  },
+  "premiumCore": {
+    "pillars": [
+      {"feature": "team_win10_diff", "threshold": 0.09999999999999998},
+      {"feature": "starter_kbb_adv", "threshold": 0.02481042579422841},
+      {"feature": "lineup_exposure_rate_adv", "threshold": 0.09876543209876554}
+    ],
+    "supportCount": "COUNT(selected_side_value >= threshold)",
+    "weakestMargin": "MIN((selected_side_value - threshold) / training_std)",
+    "trainingStdSource": "2022 canonical Step12V3 rows only",
+    "zeroStdAction": "FAIL_CLOSED"
+  },
+  "aPlusFrozenModels": {
+    "sourceCommit": "51dccf751fd325bc6a7a18675c4eaaf2e50a8e6e",
+    "sourcePath": "research/p0-step12v2-a-plus-consensus-frozen.json",
+    "homeProbability": "EXACT_FROZEN_INTERCEPT_COEFFICIENT_MEAN_SCALE_MEDIAN_IMPUTE",
+    "awaySelectedProbability": "1 - frozen_home_probability",
+    "c4Reference": 0.69,
+    "full13Reference": 0.64,
+    "consensusWeakestMargin": "MIN(c4_selected_probability - 0.69, full13_selected_probability - 0.64)",
+    "analogueIsDiagnosticNotProductionRelabel": true
+  },
+  "numericPreprocessing": {
+    "fitWindowFor2024": ["2023"],
+    "fitWindowFor2025": ["2023", "2024"],
+    "fitWindowFor2026_YTD": ["2023", "2024", "2025"],
+    "medianImpute": "FIT_WINDOW_ONLY",
+    "standardizationMeanStd": "FIT_WINDOW_ONLY",
+    "clipStandardizedValue": 6.0,
+    "futureRowsMayAffectPreprocessing": false
+  },
+  "categoricalLevels": {
+    "market": ["F3_RL_HOME_PLUS_0_5", "F5_ML", "F5_RL_HOME_MINUS_0_5", "F5_RL_HOME_PLUS_0_5", "FG_ML", "FG_RL_HOME_MINUS_1_5", "FG_RL_HOME_PLUS_1_5"],
+    "horizon": ["F3", "F5", "FG"],
+    "lineGeometry": ["PROTECTED", "NEUTRAL_ML", "AGGRESSIVE"],
+    "strengthTier": ["STRONG", "MIDDLE", "WEAK", "UNSTABLE"],
+    "matchupStructure": ["SUPPORTIVE", "MIXED", "CONFLICTING", "UNKNOWN"],
+    "frontier": ["Q80", "Q85", "Q90", "Q95"],
+    "side": ["HOME", "AWAY"]
+  },
+  "encoding": {
+    "categorical": "FULL_ONE_HOT_WITH_L2_REGULARIZATION",
+    "interactionContinuousOperand": "STANDARDIZED_AFTER_FIT_WINDOW_PREPROCESSING",
+    "interactionCategoricalOperand": "ONE_HOT_INDICATOR",
+    "unseenCategoricalLevelAction": "FAIL_CLOSED"
+  },
+  "dailyCoverageInvariant": {
+    "sameEligibleCandidateSetAsParentFullModular": true,
+    "sameShadowDatesAsParentFullModular": true,
+    "challengerChangesRankingOnly": true,
+    "challengerCannotDeleteOrCreateOpportunity": true
+  }
+}
