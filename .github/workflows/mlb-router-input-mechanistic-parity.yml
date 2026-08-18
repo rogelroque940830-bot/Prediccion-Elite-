@@ -53,6 +53,44 @@ jobs:
           git merge-base --is-ancestor "$V39_ADD" "$BUILDER_ADD"
           echo MLB_ROUTER_INPUT_FROZEN_CHRONOLOGY_PROVED
 
+      - name: Set up Python for frozen scientific serializer
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Recompute frozen V39 Python-canonical parameter digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+
+          path='research/mlb-full-modular-v39-expected-outs-snapshot-v1.json'
+          with open(path, encoding='utf-8') as f:
+              snapshot=json.load(f)
+          m=snapshot['model']
+          payload={
+              'features':m['features'],
+              'medianImpute':m['medianImpute'],
+              'mean':m['mean'],
+              'scale':m['scale'],
+              'intercept':m['intercept'],
+              'coefficients':m['coefficients'],
+              'alpha':m['alpha'],
+              'maxIter':m['maxIter'],
+          }
+          canonical=json.dumps(payload,sort_keys=True,separators=(',',':'),allow_nan=False).encode('utf-8')
+          digest='sha256:'+hashlib.sha256(canonical).hexdigest()
+          expected='sha256:29efa6b950c3dde20e6362cb604341add4df8528ef6d16deadb5f60869d8c0fa'
+          assert digest==expected,(digest,expected)
+          assert m['parameterPayloadSha256']==expected
+          assert snapshot['scoring']['runtimeModelFitAllowed'] is False
+          assert snapshot['scoring']['runtimePreprocessingFitAllowed'] is False
+          assert snapshot['prospectiveOutcomesUsed'] is False
+          print('MLB_V39_PYTHON_CANONICAL_PARAMETER_DIGEST_PASSED',digest)
+          PY
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
