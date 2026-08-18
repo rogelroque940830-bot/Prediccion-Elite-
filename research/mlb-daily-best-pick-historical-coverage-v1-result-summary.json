@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-best-pick-historical-coverage-result-summary.v1",
+  "classification": "DAILY_BEST_PICK_HISTORICAL_PARENT_ROUTE_COVERAGE_VERIFIED_PRODUCTION_RANK_POPULATION_NOT_RECONSTRUCTED",
+  "scientificStatus": "RETROSPECTIVE_DERIVED_AUDIT_USING_FROZEN_PARENT_EVIDENCE",
+  "ci": {
+    "workflow": "MLB Daily BEST PICK Historical Coverage",
+    "runId": 32098536723,
+    "jobId": 95594463352,
+    "conclusion": "success",
+    "artifactId": 9310751899,
+    "artifactName": "mlb-daily-best-pick-historical-coverage-v1",
+    "artifactZipSha256": "b367a9e2f54aa4ae44a22a9cd263b29106ce96be300b2918c3f380656e2a5dbd"
+  },
+  "verifiedParentRouteAvailabilityCeiling": {
+    "eligibleSlateDates": 505,
+    "aPlusTierDates": 82,
+    "premiumFallbackOnlyDates": 118,
+    "parentRouteActiveDates": 200,
+    "parentRouteNoPlayDates": 305,
+    "parentRouteAvailabilityPct": 39.603960396039604,
+    "parentRouteNoPlayPct": 60.396039603960396,
+    "aPlusShareOfActiveDatesPct": 41.0,
+    "premiumFallbackShareOfActiveDatesPct": 59.0,
+    "maximumDailySelectedTiers": 1,
+    "maximumNoPlayEligibleDateStreakWithinSeason": 12,
+    "bySeason": {
+      "2024": {
+        "eligibleSlateDates": 185,
+        "aPlusTierDates": 27,
+        "premiumFallbackOnlyDates": 50,
+        "parentRouteActiveDates": 77,
+        "parentRouteNoPlayDates": 108,
+        "parentRouteAvailabilityPct": 41.62162162162162,
+        "parentRouteNoPlayPct": 58.37837837837838,
+        "maximumNoPlayEligibleDateStreak": 9
+      },
+      "2025": {
+        "eligibleSlateDates": 184,
+        "aPlusTierDates": 37,
+        "premiumFallbackOnlyDates": 44,
+        "parentRouteActiveDates": 81,
+        "parentRouteNoPlayDates": 103,
+        "parentRouteAvailabilityPct": 44.02173913043478,
+        "parentRouteNoPlayPct": 55.97826086956522,
+        "maximumNoPlayEligibleDateStreak": 9
+      },
+      "2026_YTD": {
+        "eligibleSlateDates": 136,
+        "aPlusTierDates": 18,
+        "premiumFallbackOnlyDates": 24,
+        "parentRouteActiveDates": 42,
+        "parentRouteNoPlayDates": 94,
+        "parentRouteAvailabilityPct": 30.88235294117647,
+        "parentRouteNoPlayPct": 69.11764705882354,
+        "maximumNoPlayEligibleDateStreak": 12
+      }
+    }
+  },
+  "sameTierRankSensitivity": {
+    "activeDates": 200,
+    "singleCandidateDates": 167,
+    "multiCandidateSameOutcomeDates": 21,
+    "rankSensitiveOutcomeDates": 12,
+    "outcomeDeterminateWithoutCurrentRankDates": 188,
+    "outcomeDeterminateWithoutCurrentRankPct": 94.0,
+    "exactCurrentDailySelectedWinLossCertified": false,
+    "currentProductionPrepriceRankPresentInParentRows": false,
+    "currentProductionPrepriceRankSubstitutionPerformed": false,
+    "outcomesUsedToChooseCandidate": false,
+    "byTier": {
+      "A_PLUS": {
+        "activeDates": 82,
+        "singleCandidateDates": 69,
+        "multiCandidateSameOutcomeDates": 8,
+        "rankSensitiveOutcomeDates": 5
+      },
+      "PREMIUM": {
+        "activeDates": 118,
+        "singleCandidateDates": 98,
+        "multiCandidateSameOutcomeDates": 13,
+        "rankSensitiveOutcomeDates": 7
+      }
+    },
+    "outcomeBounds": {
+      "possibleAggregateStates": 34,
+      "selectedDayWinCountRange": [140, 151],
+      "winRateAcrossAllActiveDatesRange": [0.7, 0.755],
+      "decisiveHitRateRange": [0.7142857142857143, 0.7704081632653061],
+      "interpretation": "Bounds only; not the exact current production Daily BEST PICK result."
+    }
+  },
+  "parentRoutePoolOutcomeDiagnostics": {
+    "warning": "These are all historical route opportunities, not the exactly one-per-day production selection performance.",
+    "aPlusD1Router": {
+      "opportunities": 95,
+      "decisiveRows": 90,
+      "wins": 76,
+      "losses": 14,
+      "pushes": 5,
+      "hitRate": 0.8444444444444444,
+      "eligibleSlateDays": 505,
+      "pctDaysWithAtLeast1": 16.237623762376238,
+      "maximumNoPlaySlateDayStreak": 39
+    },
+    "premiumAFullGameHome": {
+      "opportunities": 268,
+      "decisiveRows": 268,
+      "wins": 196,
+      "losses": 72,
+      "pushes": 0,
+      "hitRate": 0.7313432835820896,
+      "eligibleSlateDays": 505,
+      "pctDaysWithAtLeast1": 39.603960396039604,
+      "maximumNoPlaySlateDayStreak": 13
+    }
+  },
+  "productionCoverageBoundary": {
+    "exactCurrentStep11cCoverageCertified": false,
+    "reason": "The historical V69 route rows do not preserve the current certified shortlist payloads or current intrinsic rankedGames membership. The current runtime only adapts frozen route evaluations for games in runtime.intrinsic.rankedGames, capped at eight.",
+    "certifiedQuantity": "PARENT_ROUTE_AVAILABILITY_CEILING",
+    "currentProductionCoverageRelation": "LESS_THAN_OR_EQUAL_TO_PARENT_ROUTE_AVAILABILITY_CEILING",
+    "parentRouteAvailabilityPctUpperBound": 39.603960396039604
+  },
+  "interpretation": {
+    "dailyPlayExpectationSupported": false,
+    "finding": "The strict A+ -> Premium -> NO_PLAY hierarchy cannot be expected to produce a play every eligible MLB slate date. Even before current Step11c top-8 population enforcement, the frozen parent-route family was available on only 200 of 505 eligible dates (39.60%).",
+    "aPlusAddsCoverageBeyondPremium": false,
+    "aPlusRole": "PRIORITY_AND_MARKET_ROUTING_WITHIN_THE_PREMIUM_PARENT_FAMILY",
+    "noPlayIsHistoricallyCommonUnderStrictHierarchy": true,
+    "independentProspectiveConfirmationClaimed": false
+  },
+  "policy": {
+    "aPlusAlwaysPrecedesPremium": true,
+    "maximumDailyPicks": 1,
+    "forcedDailyPlayAllowed": false,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "historicalPricesUsed": false,
+    "thresholdRelaxationPerformed": false,
+    "newRankingFormulaAdded": false,
+    "v69DailyRankSubstitutionPerformed": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "productionChanged": false
+  }
+}

@@ -1,0 +1,257 @@
+name: MLB Daily BEST PICK Historical Coverage
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-daily-best-pick-historical-coverage-v1
+    paths:
+      - "research/mlb-daily-best-pick-historical-coverage-v1-contract.json"
+      - "research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json"
+      - "scripts/mlb-daily-best-pick-historical-coverage-v1.py"
+      - ".github/workflows/mlb-daily-best-pick-historical-coverage.yml"
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-intrinsic-edge.ts"
+      - "server/mlb-shortlist.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-daily-best-pick-historical-coverage-v1-contract.json"
+      - "research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json"
+      - "scripts/mlb-daily-best-pick-historical-coverage-v1.py"
+      - ".github/workflows/mlb-daily-best-pick-historical-coverage.yml"
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-intrinsic-edge.ts"
+      - "server/mlb-shortlist.ts"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  historical-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen parent dependency
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
+
+      - name: Prove audit contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-daily-best-pick-historical-coverage-v1-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-daily-best-pick-historical-coverage-v1.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-contract.json'))
+          assert c['scientificStatus']=='RETROSPECTIVE_DERIVED_AUDIT_USING_FROZEN_PARENT_EVIDENCE'
+          assert c['currentProductionHierarchyExactly']['maximumDailyPicks']==1
+          assert c['currentProductionHierarchyExactly']['generalV68FallbackAllowed'] is False
+          assert c['currentProductionHierarchyExactly']['v80DependencyAllowed'] is False
+          assert c['populationLimitation']['exactProductionStep11cCoverageCanBeCertifiedFromParentArtifact'] is False
+          assert c['populationLimitation']['historicalParentRouteAvailabilityIsUpperBoundForCurrentPipeline'] is True
+          assert c['rankingLimitation']['v69DailyCapMaySubstituteForCurrentPrepriceRank'] is False
+          assert c['selectionBoundary']['forcedDailyPlayAllowed'] is False
+          print('DAILY_BEST_PICK_AUDIT_CONTRACT_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check audit scorer
+        run: python -m py_compile scripts/mlb-daily-best-pick-historical-coverage-v1.py
+
+      - name: Materialize immutable V69 parent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          PARENT_REF="refs/remotes/origin/${PARENT_BRANCH}"
+          git fetch origin "refs/heads/${PARENT_BRANCH}:${PARENT_REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${PARENT_REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute Daily BEST PICK historical coverage replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-daily-best-pick-historical-coverage-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --audit-contract research/mlb-daily-best-pick-historical-coverage-v1-contract.json \
+            --selector server/mlb-daily-best-pick-selector.ts \
+            --runtime-adapter server/mlb-daily-best-pick-runtime-adapter.ts \
+            --intrinsic-rank server/mlb-intrinsic-edge.ts \
+            --shortlist server/mlb-shortlist.ts \
+            --out work/mlb-daily-best-pick-historical-coverage-v1.json
+
+      - name: Validate certified coverage ceiling and fail-closed boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-daily-best-pick-historical-coverage-v1.json'))
+          assert r['schemaVersion']=='courtedge-mlb-daily-best-pick-historical-coverage.v1'
+          assert r['classification']=='DAILY_BEST_PICK_HISTORICAL_PARENT_ROUTE_COVERAGE_VERIFIED_PRODUCTION_RANK_POPULATION_NOT_RECONSTRUCTED'
+          c=r['verifiedParentRouteAvailabilityCeiling']
+          assert c['eligibleSlateDates']==505, c
+          assert c['aPlusTierDates']==82, c
+          assert c['premiumFallbackOnlyDates']==118, c
+          assert c['parentRouteActiveDates']==200, c
+          assert c['parentRouteNoPlayDates']==305, c
+          assert abs(c['parentRouteAvailabilityPct']-39.603960396039604)<1e-12, c
+          assert abs(c['parentRouteNoPlayPct']-60.396039603960396)<1e-12, c
+          assert c['maximumDailySelectedTiers']==1
+          assert r['productionCoverageBoundary']['exactCurrentStep11cCoverageCertified'] is False
+          assert r['productionCoverageBoundary']['currentProductionCoverageRelation']=='LESS_THAN_OR_EQUAL_TO_PARENT_ROUTE_AVAILABILITY_CEILING'
+          assert r['sameTierRankSensitivity']['currentProductionPrepriceRankSubstitutionPerformed'] is False
+          assert r['sameTierRankSensitivity']['outcomesUsedToChooseCandidate'] is False
+          p=r['policy']
+          assert p['forcedDailyPlayAllowed'] is False
+          assert p['generalV68FallbackAllowed'] is False
+          assert p['v80DependencyAllowed'] is False
+          assert p['thresholdRelaxationPerformed'] is False
+          assert p['newRankingFormulaAdded'] is False
+          assert p['betEliteProduced'] is False
+          assert p['stakeCalculated'] is False
+          assert p['automaticBetPlacement'] is False
+          assert p['realFinancialExposure']==0
+          assert p['productionChanged'] is False
+          print('DAILY_BEST_PICK_HISTORICAL_REPLAY_BOUNDARIES_VALID')
+          PY
+
+      - name: Verify frozen result summary parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-daily-best-pick-historical-coverage-v1.json'))
+          s=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json'))
+          assert s['classification']==r['classification']
+          rc=r['verifiedParentRouteAvailabilityCeiling']
+          sc=s['verifiedParentRouteAvailabilityCeiling']
+          for key in (
+            'eligibleSlateDates','aPlusTierDates','premiumFallbackOnlyDates',
+            'parentRouteActiveDates','parentRouteNoPlayDates','parentRouteAvailabilityPct',
+            'parentRouteNoPlayPct','aPlusShareOfActiveDatesPct','premiumFallbackShareOfActiveDatesPct',
+            'maximumDailySelectedTiers','maximumNoPlayEligibleDateStreakWithinSeason'
+          ):
+            assert sc[key]==rc[key], (key,sc[key],rc[key])
+          for season in ('2024','2025','2026_YTD'):
+            rs=rc['bySeason'][season]
+            ss=sc['bySeason'][season]
+            for key in (
+              'eligibleSlateDates','aPlusTierDates','premiumFallbackOnlyDates',
+              'parentRouteActiveDates','parentRouteNoPlayDates','parentRouteAvailabilityPct','parentRouteNoPlayPct'
+            ):
+              assert ss[key]==rs[key], (season,key,ss[key],rs[key])
+            assert ss['maximumNoPlayEligibleDateStreak']==rs['noPlayStreaks']['maximumNoPlayEligibleDateStreak']
+          rr=r['sameTierRankSensitivity']
+          sr=s['sameTierRankSensitivity']
+          for key in (
+            'activeDates','singleCandidateDates','multiCandidateSameOutcomeDates',
+            'rankSensitiveOutcomeDates','outcomeDeterminateWithoutCurrentRankDates',
+            'exactCurrentDailySelectedWinLossCertified','currentProductionPrepriceRankPresentInParentRows',
+            'currentProductionPrepriceRankSubstitutionPerformed','outcomesUsedToChooseCandidate'
+          ):
+            assert sr[key]==rr[key], (key,sr[key],rr[key])
+          assert sr['outcomeDeterminateWithoutCurrentRankPct']==100.0*rr['outcomeDeterminateWithoutCurrentRankDates']/rr['activeDates']
+          assert sr['byTier']==rr['byTier']
+          for key in ('possibleAggregateStates','selectedDayWinCountRange','winRateAcrossAllActiveDatesRange','decisiveHitRateRange'):
+            assert sr['outcomeBounds'][key]==rr['outcomeBounds'][key], key
+          assert s['productionCoverageBoundary']==r['productionCoverageBoundary']
+          rp=r['policy']; sp=s['policy']
+          for key in (
+            'aPlusAlwaysPrecedesPremium','maximumDailyPicks','forcedDailyPlayAllowed',
+            'generalV68FallbackAllowed','v80DependencyAllowed','historicalPricesUsed',
+            'thresholdRelaxationPerformed','newRankingFormulaAdded','v69DailyRankSubstitutionPerformed',
+            'betEliteProduced','stakeCalculated','automaticBetPlacement','realFinancialExposure','productionChanged'
+          ):
+            assert sp[key]==rp[key], (key,sp[key],rp[key])
+          assert s['interpretation']['dailyPlayExpectationSupported'] is False
+          assert s['interpretation']['noPlayIsHistoricallyCommonUnderStrictHierarchy'] is True
+          print('DAILY_BEST_PICK_FROZEN_RESULT_SUMMARY_PARITY_VERIFIED')
+          PY
+
+      - name: Upload Daily BEST PICK historical audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-daily-best-pick-historical-coverage-v1
+          path: work/mlb-daily-best-pick-historical-coverage-v1.json
+          if-no-files-found: error
+          retention-days: 90
