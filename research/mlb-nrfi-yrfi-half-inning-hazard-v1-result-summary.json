@@ -1,157 +1,118 @@
 {
-  "candidateFrontiers": {
-    "combinedOpportunityCoverage": {
-      "Q80": {
-        "combinedOpportunityCoveragePct": 44.554455445544555,
-        "combinedOpportunityDates": 225,
-        "eligibleSlateDates": 505,
-        "parentActiveDates": 200,
-        "remainingNoPlayDates": 280,
-        "rescuedParentNoPlayDates": 25
-      },
-      "Q85": {
-        "combinedOpportunityCoveragePct": 43.56435643564357,
-        "combinedOpportunityDates": 220,
-        "eligibleSlateDates": 505,
-        "parentActiveDates": 200,
-        "remainingNoPlayDates": 285,
-        "rescuedParentNoPlayDates": 20
-      },
-      "Q90": {
-        "combinedOpportunityCoveragePct": 42.17821782178218,
-        "combinedOpportunityDates": 213,
-        "eligibleSlateDates": 505,
-        "parentActiveDates": 200,
-        "remainingNoPlayDates": 292,
-        "rescuedParentNoPlayDates": 13
-      },
-      "Q95": {
-        "combinedOpportunityCoveragePct": 40.396039603960396,
-        "combinedOpportunityDates": 204,
-        "eligibleSlateDates": 505,
-        "parentActiveDates": 200,
-        "remainingNoPlayDates": 301,
-        "rescuedParentNoPlayDates": 4
-      }
-    },
-    "frontiers": {
-      "Q80": {
-        "absoluteCalibrationGap": 0.11933405974226019,
-        "candidates": 58,
-        "distinctCandidateDates": 42,
-        "hitRate": 0.5172413793103449,
-        "losses": 28,
-        "meanPredictedProbability": 0.636575439052605,
-        "rescuedDates": ["2024-03-21","2024-03-28","2024-04-29","2024-05-11","2024-05-30","2024-06-20","2024-07-06","2024-07-27","2024-08-07","2024-08-21","2024-08-24","2024-08-28","2024-09-27","2025-03-19","2025-03-27","2025-06-17","2025-06-27","2025-07-26","2025-08-02","2025-09-05","2026-04-08","2026-04-14","2026-04-29","2026-05-01","2026-07-31"],
-        "rescuedParentNoPlayDates": 25,
-        "wilson95": {"lower": 0.3916226178340948,"upper": 0.6407181457594501},
-        "wins": 30
-      },
-      "Q85": {
-        "absoluteCalibrationGap": 0.16939663577478786,
-        "candidates": 49,
-        "distinctCandidateDates": 33,
-        "hitRate": 0.46938775510204084,
-        "losses": 26,
-        "meanPredictedProbability": 0.6387843908768287,
-        "rescuedDates": ["2024-03-21","2024-03-28","2024-04-29","2024-05-11","2024-05-30","2024-06-20","2024-07-06","2024-07-27","2024-08-07","2024-08-21","2024-08-24","2024-08-28","2024-09-27","2025-03-19","2025-03-27","2025-06-27","2025-07-26","2025-08-02","2025-09-05","2026-04-29"],
-        "rescuedParentNoPlayDates": 20,
-        "wilson95": {"lower": 0.3370350369317515,"upper": 0.6061913601633808},
-        "wins": 23
-      },
-      "Q90": {
-        "absoluteCalibrationGap": 0.15488044698402942,
-        "candidates": 39,
-        "distinctCandidateDates": 24,
-        "hitRate": 0.48717948717948717,
-        "losses": 20,
-        "meanPredictedProbability": 0.6420599341635166,
-        "rescuedDates": ["2024-03-21","2024-03-28","2024-04-29","2024-05-11","2024-07-27","2024-08-07","2024-08-21","2024-08-24","2025-03-19","2025-03-27","2025-06-27","2025-08-02","2025-09-05"],
-        "rescuedParentNoPlayDates": 13,
-        "wilson95": {"lower": 0.33865175329862,"upper": 0.6380063711554202},
-        "wins": 19
-      },
-      "Q95": {
-        "absoluteCalibrationGap": 0.14551291919540676,
-        "candidates": 22,
-        "distinctCandidateDates": 10,
-        "hitRate": 0.5,
-        "losses": 11,
-        "meanPredictedProbability": 0.6455129191954068,
-        "rescuedDates": ["2024-03-21","2025-03-19","2025-03-27","2025-09-05"],
-        "rescuedParentNoPlayDates": 4,
-        "wilson95": {"lower": 0.3072210627372502,"upper": 0.6927789372627497},
-        "wins": 11
-      }
-    },
-    "status": "EVALUATED_AFTER_VALIDATION_GATE_PASS",
-    "thresholds": {"Q80":0.11714820684831781,"Q85":0.12091820677121543,"Q90":0.12358409999452731,"Q95":0.14016352176395225},
-    "validationEligibleScores": 79
-  },
+  "schemaVersion": "courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v2",
   "classification": "NRFI_YRFI_HALF_INNING_HAZARD_RETROSPECTIVE_ROBUSTNESS_CANDIDATE_ONLY",
-  "data": {
-    "custodyBySeason": {
-      "2022": {"canonicalT5Rows":2398,"halfInningRows":4796,"outcomeJoinedGames":2398,"step12v3VsV26FirstInningLabelMismatches":0},
-      "2023": {"canonicalT5Rows":2399,"halfInningRows":4798,"outcomeJoinedGames":2399,"step12v3VsV26FirstInningLabelMismatches":0},
-      "2024": {"canonicalT5Rows":2406,"halfInningRows":4808,"outcomeJoinedGames":2404,"step12v3VsV26FirstInningLabelMismatches":0},
-      "2025": {"canonicalT5Rows":2423,"halfInningRows":4846,"outcomeJoinedGames":2423,"step12v3VsV26FirstInningLabelMismatches":0},
-      "2026_YTD": {"canonicalT5Rows":1781,"halfInningRows":3562,"outcomeJoinedGames":1781,"step12v3VsV26FirstInningLabelMismatches":0}
-    },
-    "evaluationGames": 6608,
-    "evaluationHalfInningRows": 13216,
-    "featureCount": 12,
-    "features": ["batting_offense_i1_score_rate_shrunk","defending_team_i1_allow_rate_shrunk","opposing_starter_i1_allow_rate_shrunk","batting_team_rs10","defending_team_ra10","batting_top3_continuity","batting_lineup_exposure_rate","opposing_starter_erbf","opposing_starter_hrbf","opposing_starter_kbb","opposing_probable_prior_bf","batting_is_home"],
+  "sourceWorkflow": {
+    "runId": 32144338154,
+    "jobId": 95734325693,
+    "conclusion": "success",
+    "artifactId": 9327193308,
+    "artifactName": "mlb-nrfi-yrfi-half-inning-hazard-v1",
+    "artifactDigest": "sha256:1666de992bc25b4e88491b14003be32a358f66e5fe79aff2294939a2f5916a0a"
+  },
+  "validationGatePassed": true,
+  "sample": {
     "trainingGames2022": 2398,
     "trainingHalfInningRows2022": 4796,
     "validationGames2023": 2399,
-    "validationHalfInningRows2023": 4798
+    "validationHalfInningRows2023": 4798,
+    "evaluationGames": 6608,
+    "evaluationHalfInningRows": 13216,
+    "featureCount": 12,
+    "firstInningLabelMismatchTotal": 0
   },
-  "gameLevelValidation2023": {
-    "absoluteMeanCalibrationBias":0.019898122414261976,"baselineAbsoluteMeanCalibrationBias":0.018140203678138067,"baselineBinaryLogLoss":0.6938056745883057,"baselineBrierScore":0.25032902355051495,"binaryLogLoss":0.6915940469285765,"brierImprovement":0.001111920807084693,"brierScore":0.24921710274343026,"logLossImprovement":0.002211627659729154,"meanPredictedProbability":0.4798934574106651,"observedRate":0.49979157982492706,"rocAuc":0.539179872115652,"rows":2399,"trainingClimatologyProbability":0.481651376146789
+  "validation2023": {
+    "halfInning": {
+      "logLossImprovement": 0.005460376422089963,
+      "brierImprovement": 0.0023191003823345435,
+      "rocAuc": 0.5654532434393216
+    },
+    "gameLevel": {
+      "logLossImprovement": 0.002211627659729154,
+      "brierImprovement": 0.001111920807084693,
+      "rocAuc": 0.539179872115652
+    },
+    "allSixFrozenChecksPassed": true
   },
-  "halfInningValidation2023": {
-    "absoluteMeanCalibrationBias":0.017642565836235247,"baselineAbsoluteMeanCalibrationBias":0.018433712823768322,"baselineBinaryLogLoss":0.6082356262793467,"baselineBrierScore":0.20870611251938814,"binaryLogLoss":0.6027752498572567,"brierImprovement":0.0023191003823345435,"brierScore":0.2063870121370536,"logLossImprovement":0.005460376422089963,"meanPredictedProbability":0.2783140827673496,"observedRate":0.29595664860358484,"rocAuc":0.5654532434393216,"rows":4798,"trainingClimatologyProbability":0.2775229357798165
+  "retrospectiveCombined2024_2026Ytd": {
+    "halfInning": {
+      "logLossImprovement": 0.0009045422679481163,
+      "brierImprovement": 0.00038844557270589775,
+      "rocAuc": 0.5398377845490774
+    },
+    "gameLevel": {
+      "logLossImprovement": -0.0016646196125307267,
+      "brierImprovement": -0.000811076028252089,
+      "rocAuc": 0.5143203051694816
+    }
   },
-  "interpretation": {
-    "bottomHalfFinding": "DESCRIPTIVE_ONLY_BOTTOM_HALF_BRIER_IMPROVEMENT_WAS_NEGATIVE_IN_2024_AND_2025_AND_POSITIVE_IN_2026_YTD",
-    "nextResearchBoundary": "ANY_ASYMMETRIC_TOP_VS_BOTTOM_MODEL_OR_CONTEXT_MODULE_MUST_BE_FROZEN_IN_A_NEW_PROTOCOL_BEFORE_SCORING",
+  "topHalfBrierImprovement": {
+    "2024": 0.0010673009169497871,
+    "2025": 0.0003886959546160196,
+    "2026_YTD": 0.0014328617764211848
+  },
+  "bottomHalfBrierImprovement": {
+    "2024": -0.0011496127553370927,
+    "2025": -0.0006658300530380801,
+    "2026_YTD": 0.0002081696445913328
+  },
+  "frontiers": {
+    "Q80": {
+      "candidates": 58,
+      "hitRate": 0.5172413793103449,
+      "wilson95Lower": 0.3916226178340948,
+      "meanPredictedProbability": 0.636575439052605,
+      "calibrationGap": 0.11933405974226019,
+      "rescuedParentNoPlayDates": 25,
+      "combinedOpportunityCoveragePct": 44.554455445544555
+    },
+    "Q85": {
+      "candidates": 49,
+      "hitRate": 0.46938775510204084,
+      "wilson95Lower": 0.3370350369317515,
+      "meanPredictedProbability": 0.6387843908768287,
+      "calibrationGap": 0.16939663577478786,
+      "rescuedParentNoPlayDates": 20,
+      "combinedOpportunityCoveragePct": 43.56435643564357
+    },
+    "Q90": {
+      "candidates": 39,
+      "hitRate": 0.48717948717948717,
+      "wilson95Lower": 0.33865175329862,
+      "meanPredictedProbability": 0.6420599341635166,
+      "calibrationGap": 0.15488044698402942,
+      "rescuedParentNoPlayDates": 13,
+      "combinedOpportunityCoveragePct": 42.17821782178218
+    },
+    "Q95": {
+      "candidates": 22,
+      "hitRate": 0.5,
+      "wilson95Lower": 0.3072210627372502,
+      "meanPredictedProbability": 0.6455129191954068,
+      "calibrationGap": 0.14551291919540676,
+      "rescuedParentNoPlayDates": 4,
+      "combinedOpportunityCoveragePct": 40.396039603960396
+    }
+  },
+  "decision": {
+    "validationDecision": "PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES",
+    "retrospectiveRobustnessDecision": "FAILED_FOR_ELITE_PROMOTION",
     "nrfiYrfiCoverageContributionToEliteRouter": 0,
     "nrfiYrfiProductionPromotionAllowed": false,
     "postHocTopOnlyPromotionAllowed": false,
-    "reason": "Combined 2024-2026 game-level Brier and log-loss improvements were negative and all Q80-Q95 retrospective candidate frontiers had hit rates near chance with large overconfidence gaps.",
-    "retrospectiveRobustnessDecision": "NOT_STABLE_ENOUGH_FOR_ELITE_ROUTE_OR_PRODUCTION_PROMOTION",
-    "topHalfFinding": "DESCRIPTIVE_ONLY_TOP_HALF_BRIER_IMPROVEMENT_REMAINED_POSITIVE_IN_2024_2025_2026_YTD",
-    "validationDecision": "PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES"
+    "nextResearchMustFreezeAsymmetricArchitectureBeforeScoring": true,
+    "reason": "Combined 2024-2026 game-level Brier and log-loss improvements were negative, while Q80-Q95 candidate hit rates remained near chance with material overconfidence."
   },
-  "retrospectiveRobustness": {
-    "halfInningCombined2024_2026Ytd": {"absoluteMeanCalibrationBias":0.005988214732212782,"baselineAbsoluteMeanCalibrationBias":0.010839655019214967,"baselineBinaryLogLoss":0.600969767757005,"baselineBrierScore":0.20532710514763738,"binaryLogLoss":0.6000652254890568,"brierImprovement":0.00038844557270589775,"brierScore":0.2049386595749315,"logLossImprovement":0.0009045422679481163,"meanPredictedProbability":0.2823743760668187,"observedRate":0.2883625907990315,"rocAuc":0.5398377845490774,"rows":13216,"trainingClimatologyProbability":0.2775229357798165},
-    "gameLevelCombined2024_2026Ytd": {"absoluteMeanCalibrationBias":0.005835294953394521,"baselineAbsoluteMeanCalibrationBias":0.009874047582024592,"baselineBinaryLogLoss":0.693198711671489,"baselineBrierScore":0.2500256783726759,"binaryLogLoss":0.6948633312840198,"brierImprovement":-0.000811076028252089,"brierScore":0.250836754400928,"logLossImprovement":-0.0016646196125307267,"meanPredictedProbability":0.48569012877541906,"observedRate":0.4915254237288136,"rocAuc":0.5143203051694816,"rows":6608,"trainingClimatologyProbability":0.481651376146789},
-    "halfInningBySeason": {
-      "2024": {"absoluteMeanCalibrationBias":0.0015123844849912471,"baselineAbsoluteMeanCalibrationBias":0.0021485597398830936,"baselineBinaryLogLoss":0.5885428764524888,"baselineBrierScore":0.1995479453695066,"binaryLogLoss":0.5886038013208895,"brierImprovement":-0.00004855589119895365,"brierScore":0.19959650126070555,"logLossImprovement":-0.00006092486840070244,"meanPredictedProbability":0.27688676052492467,"observedRate":0.2753743760399334,"rocAuc":0.536150910853587,"rows":4808,"trainingClimatologyProbability":0.2775229357798165},
-      "2025": {"absoluteMeanCalibrationBias":0.00958058942723894,"baselineAbsoluteMeanCalibrationBias":0.017772152953159148,"baselineBinaryLogLoss":0.6076026576415491,"baselineBrierScore":0.20841174872375015,"binaryLogLoss":0.6079533243248562,"brierImprovement":-0.00007387599611874407,"brierScore":0.2084856247198689,"logLossImprovement":-0.00035066668330707707,"meanPredictedProbability":0.2857144993057367,"observedRate":0.29529508873297566,"rocAuc":0.5326927385962166,"rows":4846,"trainingClimatologyProbability":0.2775229357798165},
-      "2026_YTD": {"absoluteMeanCalibrationBias":0.011225225755295443,"baselineAbsoluteMeanCalibrationBias":0.01893972564634855,"baselineBinaryLogLoss":0.6087197702869358,"baselineBrierScore":0.208931265013839,"binaryLogLoss":0.6048043609304559,"brierImprovement":0.0016072870552938934,"brierScore":0.2073239779585451,"logLossImprovement":0.0039154093564799375,"meanPredictedProbability":0.2852374356708696,"observedRate":0.29646266142616506,"rocAuc":0.5509060451885173,"rows":3562,"trainingClimatologyProbability":0.2775229357798165}
-    },
-    "gameLevelBySeason": {
-      "2024": {"absoluteMeanCalibrationBias":0.009378583685017983,"baselineAbsoluteMeanCalibrationBias":0.013265352852279866,"baselineBinaryLogLoss":0.691499644073722,"baselineBrierScore":0.2491765260631602,"binaryLogLoss":0.6941259671267033,"brierImprovement":-0.0012923159883668212,"brierScore":0.25046884205152703,"logLossImprovement":-0.002626323052981272,"meanPredictedProbability":0.4777646069795271,"observedRate":0.4683860232945091,"rocAuc":0.506489449823075,"rows":2404,"trainingClimatologyProbability":0.481651376146789},
-      "2025": {"absoluteMeanCalibrationBias":0.011770381382411543,"baselineAbsoluteMeanCalibrationBias":0.020618537183792918,"baselineBinaryLogLoss":0.6939876523438605,"baselineBrierScore":0.2504199715690711,"binaryLogLoss":0.6962096704003292,"brierImprovement":-0.0010840028537856816,"brierScore":0.25150397442285677,"logLossImprovement":-0.002222018056468711,"meanPredictedProbability":0.49049953194817036,"observedRate":0.5022699133305819,"rocAuc":0.5075219629052764,"rows":2423,"trainingClimatologyProbability":0.481651376146789},
-      "2026_YTD": {"absoluteMeanCalibrationBias":0.018296524503779277,"baselineAbsoluteMeanCalibrationBias":0.02649011739616436,"baselineBinaryLogLoss":0.6944187876152715,"baselineBrierScore":0.2506354424025526,"binaryLogLoss":0.6940269717979848,"brierImprovement":0.00020981255253615938,"brierScore":0.25042562985001643,"logLossImprovement":0.00039181581728675585,"meanPredictedProbability":0.48984496903917407,"observedRate":0.5081414935429533,"rocAuc":0.521871137011529,"rows":1781,"trainingClimatologyProbability":0.481651376146789}
-    },
-    "topHalfBySeason": {
-      "2023": {"absoluteMeanCalibrationBias":0.013499843947863244,"baselineAbsoluteMeanCalibrationBias":0.014901781775211453,"baselineBinaryLogLoss":0.5793429150740963,"baselineBrierScore":0.1952446174817562,"binaryLogLoss":0.5780463718619786,"brierImprovement":0.0005430783715707765,"brierScore":0.19470153911018542,"logLossImprovement":0.0012965432121176956,"meanPredictedProbability":0.2520274590950713,"observedRate":0.26552730304293454,"rocAuc":0.54039936065232,"rows":2399,"trainingClimatologyProbability":0.2506255212677231},
-      "2024": {"absoluteMeanCalibrationBias":0.01153318663113545,"baselineAbsoluteMeanCalibrationBias":0.011437706685687887,"baselineBinaryLogLoss":0.5755487865395333,"baselineBrierScore":0.19351691364227738,"binaryLogLoss":0.5729863847237702,"brierImprovement":0.0010673009169497871,"brierScore":0.1924496127253276,"logLossImprovement":0.002562401815763171,"meanPredictedProbability":0.2505300413222755,"observedRate":0.26206322795341097,"rocAuc":0.5478015783540023,"rows":2404,"trainingClimatologyProbability":0.2506255212677231},
-      "2025": {"absoluteMeanCalibrationBias":0.021695706122887293,"baselineAbsoluteMeanCalibrationBias":0.03001830869513289,"baselineBinaryLogLoss":0.5958997288405817,"baselineBrierScore":0.20278396952355188,"binaryLogLoss":0.5952105009453313,"brierImprovement":0.0003886959546160196,"brierScore":0.20239527356893586,"logLossImprovement":0.0006892278952503883,"meanPredictedProbability":0.2589481238399687,"observedRate":0.280643829962856,"rocAuc":0.5299361310789376,"rows":2423,"trainingClimatologyProbability":0.2506255212677231},
-      "2026_YTD": {"absoluteMeanCalibrationBias":0.010457443002884481,"baselineAbsoluteMeanCalibrationBias":0.017763024493085477,"baselineBinaryLogLoss":0.5824767740002574,"baselineBrierScore":0.1966716593043489,"binaryLogLoss":0.5786338658160619,"brierImprovement":0.0014328617764211848,"brierScore":0.19523879752792772,"logLossImprovement":0.003842908184195526,"meanPredictedProbability":0.2579311027579241,"observedRate":0.26838854576080856,"rocAuc":0.5513122276561653,"rows":1781,"trainingClimatologyProbability":0.2506255212677231}
-    },
-    "bottomHalfBySeason": {
-      "2023": {"absoluteMeanCalibrationBias":0.02178528772460725,"baselineAbsoluteMeanCalibrationBias":0.021965643872325136,"baselineBinaryLogLoss":0.6327142654623513,"baselineBrierScore":0.22034066648838485,"binaryLogLoss":0.6275041278525348,"brierImprovement":0.0022681813244630755,"brierScore":0.21807248516392178,"logLossImprovement":0.005210137609816479,"meanPredictedProbability":0.30460070643962783,"observedRate":0.3263859941642351,"rocAuc":0.5632598820226851,"rows":2399,"trainingClimatologyProbability":0.30442035029190995},
-      "2024": {"absoluteMeanCalibrationBias":0.014557955601118,"baselineAbsoluteMeanCalibrationBias":0.01573482616545402,"baselineBinaryLogLoss":0.6015610080143253,"baselineBrierScore":0.2055937770407464,"binaryLogLoss":0.6042212179180089,"brierImprovement":-0.0011496127553370927,"brierScore":0.2067433897960835,"logLossImprovement":-0.0026602099036835414,"meanPredictedProbability":0.30324347972757393,"observedRate":0.28868552412645593,"rocAuc":0.5122836510103308,"rows":2404,"trainingClimatologyProbability":0.30442035029190995},
-      "2025": {"absoluteMeanCalibrationBias":0.002534527268409359,"baselineAbsoluteMeanCalibrationBias":0.005525997211185407,"baselineBinaryLogLoss":0.6191295927971073,"baselineBrierScore":0.21391014581776385,"binaryLogLoss":0.620696147704381,"brierImprovement":-0.0006658300530380801,"brierScore":0.21457597587080193,"logLossImprovement":-0.0015665549072736429,"meanPredictedProbability":0.3124808747715047,"observedRate":0.30994634750309535,"rocAuc":0.5209178830140356,"rows":2423,"trainingClimatologyProbability":0.30442035029190995},
-      "2026_YTD": {"absoluteMeanCalibrationBias":0.01199300850770646,"baselineAbsoluteMeanCalibrationBias":0.020116426799611675,"baselineBinaryLogLoss":0.6311861907331556,"baselineBrierScore":0.21961732803375378,"binaryLogLoss":0.6309748560448502,"brierImprovement":0.0002081696445913328,"brierScore":0.21940915838916245,"logLossImprovement":0.00021133468830547564,"meanPredictedProbability":0.31254376858381516,"observedRate":0.3245367770915216,"rocAuc":0.5288156483071446,"rows":1781,"trainingClimatologyProbability":0.30442035029190995}
-    }
-  },
-  "schemaVersion": "courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v1",
-  "scientificBoundary": {"automaticBetPlacement":false,"betEliteProduced":false,"currentAPlusPremiumHierarchyChanged":false,"forcedDailyPlayAllowed":false,"historicalPricesUsed":false,"positiveEvEstablished":false,"productionChanged":false,"prospectiveConfirmationRequired":true,"realFinancialExposure":0,"retrospective2024To2026IsIndependentConfirmation":false,"stakeCalculated":false},
-  "sourceWorkflow": {"artifactDigest":"sha256:1666de992bc25b4e88491b14003be32a358f66e5fe79aff2294939a2f5916a0a","artifactId":9327193308,"artifactName":"mlb-nrfi-yrfi-half-inning-hazard-v1","conclusion":"success","jobId":95734325693,"runId":32144338154},
-  "validationGateChecks": {"gameValidationBrierBeatsBaseline":true,"gameValidationLogLossBeatsBaseline":true,"gameValidationRocAucAboveHalf":true,"halfValidationBrierBeatsBaseline":true,"halfValidationLogLossBeatsBaseline":true,"halfValidationRocAucAboveHalf":true},
-  "validationGatePassed": true
+  "scientificBoundary": {
+    "retrospective2024To2026IsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "forcedDailyPlayAllowed": false
+  }
 }
