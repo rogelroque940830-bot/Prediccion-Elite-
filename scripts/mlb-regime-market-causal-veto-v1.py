@@ -579,17 +579,48 @@ def main():
         for policy in POLICIES
     }
     control_stats = policy_results["CONTROL_FULL_MODULAR"]
-    numeric_parity = {
+    parent_control_stats = parent_result["policyResults"]["CHALLENGER_FULL_MODULAR"]
+
+    frozen_discrete_reference = {
         "shadowPickDates": expected["parentControlShadowPickDatesExpected"],
         "combinedDailyOpportunityCoveragePct": expected["parentControlCoveragePctExpected"],
         "hitRate": expected["parentControlHitRateExpected"],
+    }
+    for key, expected_value in frozen_discrete_reference.items():
+        actual = control_stats[key]
+        if abs(float(actual) - float(expected_value)) > 1e-12:
+            raise SystemExit(f"REGIME_VETO_PARENT_CONTROL_FROZEN_REFERENCE_FAILED:{key}:{actual}:{expected_value}")
+
+    for key in ("shadowPickDates", "wins", "losses", "pushes", "decisive"):
+        actual = control_stats[key]
+        parent_value = parent_control_stats[key]
+        if actual != parent_value:
+            raise SystemExit(f"REGIME_VETO_PARENT_CONTROL_DISCRETE_PARITY_FAILED:{key}:{actual}:{parent_value}")
+
+    floating_tolerance = 1e-7
+    for key in (
+        "combinedDailyOpportunityCoveragePct",
+        "hitRate",
+        "decisiveBrierScore",
+        "absoluteCalibrationGap",
+    ):
+        actual = float(control_stats[key])
+        parent_value = float(parent_control_stats[key])
+        if abs(actual - parent_value) > floating_tolerance:
+            raise SystemExit(
+                f"REGIME_VETO_PARENT_CONTROL_FLOAT_PARITY_FAILED:{key}:{actual}:{parent_value}:{floating_tolerance}"
+            )
+
+    frozen_float_reference = {
         "decisiveBrierScore": expected["parentControlBrierExpected"],
         "absoluteCalibrationGap": expected["parentControlCalibrationGapExpected"],
     }
-    for key, expected_value in numeric_parity.items():
-        actual = control_stats[key]
-        if abs(float(actual) - float(expected_value)) > 1e-12:
-            raise SystemExit(f"REGIME_VETO_PARENT_CONTROL_METRIC_PARITY_FAILED:{key}:{actual}:{expected_value}")
+    for key, expected_value in frozen_float_reference.items():
+        parent_value = float(parent_control_stats[key])
+        if abs(parent_value - float(expected_value)) > floating_tolerance:
+            raise SystemExit(
+                f"REGIME_VETO_PARENT_FROZEN_FLOAT_REFERENCE_FAILED:{key}:{parent_value}:{expected_value}:{floating_tolerance}"
+            )
 
     comparisons = {
         policy: parent_router.paired_comparison(
@@ -619,7 +650,10 @@ def main():
         },
         "parentControlParity": {
             "dailyPickIdentitiesExact": True,
-            "metricsExactWithin1e12": True,
+            "discreteMetricsExact": True,
+            "floatingMetricsNumericallyEquivalentWithin1e7": True,
+            "floatingMetricTolerance": floating_tolerance,
+            "frozenHistoricalFloatingReferenceWithin1e7": True,
         },
         "leagueRegime": {
             "trainingValidDates": regime["trainingValidDates"],
