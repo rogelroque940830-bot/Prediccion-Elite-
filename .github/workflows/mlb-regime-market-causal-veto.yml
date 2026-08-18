@@ -221,8 +221,12 @@ jobs:
           assert r['sample']['eligibleSlateDates']==505
           assert r['sample']['parentActiveDates']==200
           assert r['sample']['parentNoPlayDates']==305
-          assert r['parentControlParity']['dailyPickIdentitiesExact'] is True
-          assert r['parentControlParity']['metricsExactWithin1e12'] is True
+          parity=r['parentControlParity']
+          assert parity['dailyPickIdentitiesExact'] is True
+          assert parity['discreteMetricsExact'] is True
+          assert parity['floatingMetricsNumericallyEquivalentWithin1e7'] is True
+          assert parity['floatingMetricTolerance']==1e-7
+          assert parity['frozenHistoricalFloatingReferenceWithin1e7'] is True
           assert set(r['policyResults'])=={
             'CONTROL_FULL_MODULAR','CHALLENGER_MARKET_GUARD',
             'CHALLENGER_CAUSAL_VETO','CHALLENGER_MARKET_X_CAUSAL_VETO'
