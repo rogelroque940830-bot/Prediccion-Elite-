@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "courtedge-mlb-router-input-parity-contract.v1",
+  "scientificStatus": "FROZEN_BEFORE_FULL_MODULAR_LIVE_SOURCE_BRIDGE_IMPLEMENTATION",
+  "objective": "Certify the exact route inputs required before any unified A+ -> Premium -> PP_HORIZON -> Full Modular -> NO_PLAY hierarchy is wired. Reuse already-certified A+/Premium and persisted PP_HORIZON authorities, then build and falsify an exact Full Modular live-source bridge without changing model semantics.",
+  "base": {
+    "branch": "research/mlb-full-modular-pp-horizon-prospective-v1",
+    "sha": "45bde059aa4e7bc29267e31fdf0f023a5a4a756e"
+  },
+  "acceptedExistingAuthorities": {
+    "aPlusAndPremium": {
+      "status": "ACCEPT_EXISTING_CERTIFIED_CHAIN_NO_REIMPLEMENTATION",
+      "full13Parity": {
+        "pr": 545,
+        "headSha": "725f52ebc14bfc5e32c681906ed023e762d4f099",
+        "workflowRunId": 31801098242,
+        "workflowJobId": 94769013407,
+        "rowsCompared": 11504,
+        "featureChecks": 149552,
+        "mismatchCount": 0,
+        "maximumObservedAbsoluteDifference": 4.440892098500626e-16,
+        "classification": "FULL13_LIVE_PARITY_GATE_PASS",
+        "artifactId": 9219327909,
+        "artifactZipSha256": "sha256:49cf85116123ecfe3ff8401166f62cb09579f11675455a95b9077ec0cec46a1f"
+      },
+      "liveFrozenRouteProvider": {
+        "pr": 547,
+        "headSha": "083b9f3a0fb14cd62ec2c8c90ebe4744c77070cc",
+        "mergeSha": "320b2399a697aa9f0f4e2697d89c21801973005c",
+        "workflowRunId": 31805486480,
+        "workflowJobId": 94783267001,
+        "conclusion": "SUCCESS"
+      },
+      "semanticRequirements": {
+        "premiumAExactInclusiveThresholdsPreserved": true,
+        "aPlusRequiresPremiumAPlusBothFrozenV6ProbabilityGates": true,
+        "priceIndependentClassification": true,
+        "failClosedOnIncompleteCertifiedEvidence": true
+      },
+      "historicalDailySelectedWinLossExactnessClaimed": false,
+      "historicalDailySelectedWinLossCaveat": "Twelve parent active dates are prepriceRank-sensitive in the historical coverage audit; classifier/live-feature parity does not certify exact current one-pick historical W/L on those dates."
+    },
+    "ppHorizon": {
+      "status": "PERSISTED_SNAPSHOT_IS_PROSPECTIVE_IMPLEMENTATION_AUTHORITY",
+      "snapshotPath": "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json",
+      "snapshotCommitSha": "031650c0684de1ef216622581fb118496e7b8552",
+      "snapshotGitBlobSha": "f29eaa2fba54b7588eac2b7fb103dc709a5c5c83",
+      "snapshotFileSha256": "sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9",
+      "parameterPayloadDigest": "sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275",
+      "modelRefitAllowed": false,
+      "preprocessingRefitAllowed": false,
+      "maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot": 1e-12
+    }
+  },
+  "fullModularAuthority": {
+    "policy": "CHALLENGER_FULL_MODULAR",
+    "parentHeadSha": "e352e25c131a53536745323bcd3268dcec75a66d",
+    "parentScorerPath": "scripts/mlb-market-state-matchup-modular-router-v1.py",
+    "historicalShadowSelections": 236,
+    "historicalResult": {
+      "wins": 177,
+      "losses": 58,
+      "pushes": 1,
+      "decisiveHitRate": 0.7531914893617021
+    },
+    "marketsExactly": [
+      "F3_RL_HOME_PLUS_0_5",
+      "F5_ML",
+      "F5_RL_HOME_MINUS_0_5",
+      "F5_RL_HOME_PLUS_0_5",
+      "FG_ML",
+      "FG_RL_HOME_MINUS_1_5",
+      "FG_RL_HOME_PLUS_1_5"
+    ],
+    "full13ControlFeaturesReused": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "combined_team_rs10",
+      "team_rd10_diff",
+      "combined_team_ra10"
+    ],
+    "additionalMechanisticSourceFamiliesRequired": [
+      "V62_STARTER_PITCH_QUALITY",
+      "V39_EXPECTED_STARTER_OUTS",
+      "V66_HORIZON_EXPOSURE",
+      "V66_BULLPEN_WORKLOAD"
+    ]
+  },
+  "sourceCustody": {
+    "v62": {
+      "sourceBranch": "research/p0-step12v62-pitch-quality-winner",
+      "acquisitionPath": "scripts/p0-step12v62-acquire-pitch-quality.py",
+      "acquisitionBlobSha": "a0d97fd992e898f5d9c08356fc1dde10acb57c0e",
+      "engineeringPath": "scripts/p0-step12v62-pitch-quality-winner.py",
+      "engineeringBlobSha": "a4276091e6d5d618a352613098fa66b0b8365d68",
+      "contractPath": "research/p0-step12v62-pitch-quality-winner-contract.json",
+      "contractBlobSha": "cff20b987375a08cc9b5f608d9a25fc1924be232",
+      "pregameSource": "MLB_STATSAPI_GAME_FEED_LIVE_FOR_STRICTLY_PRIOR_FINAL_GAMES",
+      "sameDateHistoryAllowed": false
+    },
+    "v39": {
+      "sourceBranch": "research/p0-step12v39-pitcher-outs-baseline",
+      "scorerPath": "scripts/p0-step12v39-pitcher-outs-baseline.py",
+      "scorerBlobSha": "9ab915853f4761b94c1b422fe5c393abec0fe2e1",
+      "contractPath": "research/p0-step12v39-pitcher-outs-baseline-contract.json",
+      "contractBlobSha": "fe63a4da6553ab067854be44dea81049319b3af9",
+      "modelUse": "EXPECTED_STARTER_OUTS_ONLY_AS_MECHANISTIC_EXPOSURE_INPUT",
+      "futureRuntimeRefitAllowed": false
+    },
+    "v66": {
+      "authoritativeWorkflowRunId": 31962659793,
+      "authoritativeHeadSha": "1e5b68801181f900ee0531eee9e392da02599006",
+      "custodyPath": "scripts/p0-step12v66-game-horizon-exposure-custody.py",
+      "custodyBlobSha": "19dcb84205f5a3559d7f702b9b9d3cfcb207994f",
+      "contractPath": "research/p0-step12v66-game-horizon-exposure-suite-contract.json",
+      "contractBlobSha": "6a8022461b8b3ccab88d88dd3f2f80b75c851721",
+      "sameDateHistoryAllowed": false,
+      "wholeOfficialDateScoredBeforeStateUpdate": true
+    }
+  },
+  "requiredFullModularBridgeFeatures": {
+    "starterQualityAdvantages": [
+      "starter_velocity_adv",
+      "starter_spin_adv",
+      "starter_swing_miss_adv",
+      "starter_in_zone_adv",
+      "starter_weak_contact_adv"
+    ],
+    "expectedStarterOuts": [
+      "home_expected_starter_outs",
+      "away_expected_starter_outs"
+    ],
+    "horizonExposure": [
+      "f3_exposure_adv",
+      "f5_exposure_adv",
+      "fg_exposure_adv",
+      "mean_f3_starter_share",
+      "mean_f5_starter_share",
+      "mean_fg_starter_share"
+    ],
+    "qualityByHorizonInteractions": [
+      "starter_velocity_adv_x_f3_mean_starter_share",
+      "starter_spin_adv_x_f3_mean_starter_share",
+      "starter_swing_miss_adv_x_f3_mean_starter_share",
+      "starter_in_zone_adv_x_f3_mean_starter_share",
+      "starter_weak_contact_adv_x_f3_mean_starter_share",
+      "starter_velocity_adv_x_f5_mean_starter_share",
+      "starter_spin_adv_x_f5_mean_starter_share",
+      "starter_swing_miss_adv_x_f5_mean_starter_share",
+      "starter_in_zone_adv_x_f5_mean_starter_share",
+      "starter_weak_contact_adv_x_f5_mean_starter_share",
+      "starter_velocity_adv_x_fg_mean_starter_share",
+      "starter_spin_adv_x_fg_mean_starter_share",
+      "starter_swing_miss_adv_x_fg_mean_starter_share",
+      "starter_in_zone_adv_x_fg_mean_starter_share",
+      "starter_weak_contact_adv_x_fg_mean_starter_share"
+    ],
+    "bullpenRawPerSide": [
+      "bullpen_pitches_1d",
+      "bullpen_pitches_3d",
+      "bullpen_core3_pitches_2d",
+      "bullpen_b2b_arms"
+    ],
+    "bullpenWeightedAdvantages": [
+      "bullpen_pitches_1d_adv_weighted_f5",
+      "bullpen_pitches_3d_adv_weighted_f5",
+      "bullpen_core3_pitches_2d_adv_weighted_f5",
+      "bullpen_b2b_arms_adv_weighted_f5",
+      "bullpen_pitches_1d_adv_weighted_fg",
+      "bullpen_pitches_3d_adv_weighted_fg",
+      "bullpen_core3_pitches_2d_adv_weighted_fg",
+      "bullpen_b2b_arms_adv_weighted_fg"
+    ]
+  },
+  "frozenEngineering": {
+    "quality": {
+      "rollingLookbackDaysComesFromV62Contract": true,
+      "pitchTypeUsageWeighted": true,
+      "velocityRangeMphInclusive": [50, 110],
+      "spinRangeRpmInclusive": [300, 4000],
+      "hardHitLaunchSpeedThresholdMph": 95,
+      "leagueAnchorUsesStrictlyPriorDatePitchTypeHistory": true,
+      "qualityAdvantagesAreHomeMinusAway": true
+    },
+    "exposure": {
+      "homeStarterShare": "CLIP_0_1(home_expected_starter_outs / horizon_outs)",
+      "awayStarterShare": "CLIP_0_1(away_expected_starter_outs / horizon_outs)",
+      "horizonOuts": {"f3": 9, "f5": 15, "fg": 27},
+      "exposureAdv": "home_starter_share - away_starter_share",
+      "meanStarterShare": "(home_starter_share + away_starter_share) / 2"
+    },
+    "bullpen": {
+      "lookbackDays": 30,
+      "coreRelievers": "TOP_3_BY_TOTAL_PITCHES_OVER_PRIOR_30D_TIEBREAK_PITCHER_ID_ASC",
+      "pitches1d": "SUM_BULLPEN_PITCHES_ON_D_MINUS_1",
+      "pitches3d": "SUM_BULLPEN_PITCHES_D_MINUS_3_THROUGH_D_MINUS_1",
+      "core3Pitches2d": "SUM_CORE3_PITCHES_D_MINUS_2_THROUGH_D_MINUS_1",
+      "b2bArms": "COUNT_RELIEVER_IDS_USED_ON_BOTH_D_MINUS_1_AND_D_MINUS_2",
+      "rawAdvConvention": "away_minus_home_positive_favors_home_freshness",
+      "weightedAdv": "raw_adv * mean_expected_bullpen_share_for_horizon"
+    }
+  },
+  "parityGatesBeforeUnifiedRouter": {
+    "stage1SourceBridgeHistorical": {
+      "required": true,
+      "comparisonAuthority": "IMMUTABLE_V66_CUSTODY_FROM_RUN_31962659793",
+      "identityKey": ["season", "officialDate", "gamePk"],
+      "requiredZeroIdentityMismatches": true,
+      "requiredNumericAbsoluteTolerance": 1e-12,
+      "missingnessPatternMustMatchExactly": true,
+      "sameDateLeakageMustBeZero": true,
+      "futureGameLeakageMustBeZero": true
+    },
+    "stage2FullModularHistoricalSelections": {
+      "required": true,
+      "requiredShadowSelectionCount": 236,
+      "requiredWins": 177,
+      "requiredLosses": 58,
+      "requiredPushes": 1,
+      "requiredDailyIdentityMismatches": 0,
+      "parentPolicy": "CHALLENGER_FULL_MODULAR"
+    },
+    "stage3LiveOperational": {
+      "required": true,
+      "mustUseExactPregameProbableStarters": true,
+      "mustRequireFinalConfirmedLineupsWhereParentSemanticsRequireThem": true,
+      "mustFailClosedOnMissingRequiredSource": true,
+      "mayNotUseTargetGameOutcome": true,
+      "mayNotUseSameDateCompletedGamesToChangeAnotherSameDateGame": true,
+      "mayNotUseFutureGames": true,
+      "mayNotUseSportsbookPriceToBuildIntrinsicFeatures": true
+    }
+  },
+  "routerNotYetAuthorized": {
+    "unifiedHierarchyMayBeWiredByThisContractAlone": false,
+    "requiredFutureHierarchy": ["A_PLUS", "PREMIUM_A", "PP_HORIZON", "FULL_MODULAR", "NO_PLAY"],
+    "winnerSelectionRemainsPrimaryTarget": true,
+    "propsMayOnlySupplySupportingMechanisticSignals": true
+  },
+  "safety": {
+    "researchOnly": true,
+    "productionRecommendationChanged": false,
+    "oddsAcquisitionChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
