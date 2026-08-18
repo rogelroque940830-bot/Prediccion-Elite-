@@ -231,8 +231,14 @@ test("frozen matches outside the existing ranked preprice population are not pro
 });
 
 test("corrupt final A+ semantics fail closed instead of inventing a market", () => {
-  const corrupted = entry({ gamePk: 7001, aPlus: true, router: "FIRST_5_HOME" });
-  corrupted.routers.A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1 = "NOT_APPLICABLE";
+  const base = entry({ gamePk: 7001, aPlus: true, router: "FIRST_5_HOME" });
+  const corrupted = {
+    ...base,
+    routers: {
+      ...base.routers,
+      A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1: "NOT_APPLICABLE" as const,
+    },
+  } as MlbFrozenResearchRouteLedgerEntry;
 
   assert.throws(
     () => selectMlbDailyBestPickFromUnifiedPreprice({
@@ -243,8 +249,14 @@ test("corrupt final A+ semantics fail closed instead of inventing a market", () 
 });
 
 test("corrupt provisional evaluation fails closed", () => {
-  const corrupted = entry({ gamePk: 7002, finalInputs: false });
-  corrupted.routes.PREMIUM_A_HOME_ML = "MATCH";
+  const base = entry({ gamePk: 7002, finalInputs: false });
+  const corrupted = {
+    ...base,
+    routes: {
+      ...base.routes,
+      PREMIUM_A_HOME_ML: "MATCH" as const,
+    },
+  } as MlbFrozenResearchRouteLedgerEntry;
 
   assert.throws(
     () => selectMlbDailyBestPickFromUnifiedPreprice({
