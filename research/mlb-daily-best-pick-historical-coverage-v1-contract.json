@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-best-pick-historical-coverage-contract.v1",
+  "classification": "POSTHOC_REPRODUCIBLE_COVERAGE_AUDIT_CONTRACT_V1",
+  "purpose": "Measure historical daily availability of the current production Daily BEST PICK hierarchy A+ -> Premium -> NO_PLAY, with a hard maximum of one selected tier per official date, without relaxing any route or threshold.",
+  "scientificStatus": "RETROSPECTIVE_DERIVED_AUDIT_USING_FROZEN_PARENT_EVIDENCE",
+  "productionSnapshot": {
+    "mainCommit": "119bf80c66a137759f94eae93aa148acb5d5a6e5",
+    "selector": {
+      "path": "server/mlb-daily-best-pick-selector.ts",
+      "gitBlobSha": "c0ae657410f438623a3c9aa6621b8ac106d9dd78",
+      "schemaVersion": "courtedge-mlb-daily-best-pick-selector.v2"
+    },
+    "runtimeAdapter": {
+      "path": "server/mlb-daily-best-pick-runtime-adapter.ts",
+      "gitBlobSha": "f64656281d5a376ae91171c9a087d76a992f9287",
+      "schemaVersion": "courtedge-mlb-daily-best-pick-runtime-adapter.v1"
+    },
+    "intrinsicRank": {
+      "path": "server/mlb-intrinsic-edge.ts",
+      "gitBlobSha": "81ba8d2037ecb60186434c3cce62009a97e06137",
+      "schemaVersion": "courtedge-p0-mlb-intrinsic-edge.v3"
+    }
+  },
+  "immutableHistoricalInputs": {
+    "step12v3HistoricalUniverse": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    },
+    "v16PureSettlementManifest": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactName": "p0-step12v16-pure-ml-f5-settlement-probability",
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063"
+    },
+    "v69ParentAudit": {
+      "workflowRunId": 31988197440,
+      "artifactId": 9274431264,
+      "artifactName": "p0-step12v69-confluence-frequency-quality-frontier",
+      "artifactDigest": "sha256:b071c8a70ccd16118a13268510ebacf26cbd407aacb4ef4d1defea9ede04645e",
+      "scorerPath": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "scorerGitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
+    }
+  },
+  "currentProductionHierarchyExactly": {
+    "maximumDailyPicks": 1,
+    "firstTier": {
+      "productionRoute": "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1",
+      "historicalParentRoute": "A_PLUS_D1_ROUTER"
+    },
+    "fallbackTier": {
+      "productionRoute": "PREMIUM_A_HOME_ML",
+      "historicalParentRoute": "PREMIUM_A_FULL_GAME_HOME"
+    },
+    "emptyDecision": "NO_PLAY",
+    "aPlusAlwaysPrecedesPremium": true,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false
+  },
+  "questionsExactly": [
+    "How many eligible MLB slate dates historically had at least one current-route candidate?",
+    "How many selected-tier dates were A+ versus Premium fallback-only?",
+    "How many eligible slate dates were NO_PLAY?",
+    "What was the longest consecutive NO_PLAY streak in eligible slate dates?",
+    "How did coverage differ across 2024, 2025, and 2026_YTD?",
+    "Which route-pool outcome rates are supported by the frozen parent evidence?",
+    "How many daily outcomes are rank-sensitive because the current production prepriceRank is not preserved in the V69 route opportunity rows?"
+  ],
+  "selectionBoundary": {
+    "outcomesMayDetermineEligibility": false,
+    "outcomesMayDetermineTierPriority": false,
+    "outcomesMayBreakSameTierTies": false,
+    "historicalPricesUsed": false,
+    "v68MayCreateCurrentDailyBestPick": false,
+    "generalMayCreateCurrentDailyBestPick": false,
+    "v80MayCreateCurrentDailyBestPick": false,
+    "thresholdRelaxationAllowed": false,
+    "newRankingFormulaAllowed": false,
+    "forcedDailyPlayAllowed": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "rankingLimitation": {
+    "exactCurrentPrepriceRankRequiredForExactDailySelectedWinLoss": true,
+    "v69RouteRowsCarryCurrentPrepriceRank": false,
+    "v69DailyCapMaySubstituteForCurrentPrepriceRank": false,
+    "requiredHandling": "FAIL_CLOSED_ON_EXACT_DAILY_SELECTED_WIN_LOSS_AND_REPORT_RANK_SENSITIVITY_OR_OUTCOME_BOUNDS_INSTEAD"
+  },
+  "interpretation": {
+    "coverageCanBeCertifiedFromRoutePresence": true,
+    "routePoolHitRatesAreNotTheSameAsDailySelectedHitRate": true,
+    "retrospectiveAdaptiveDiscoveryOnly": true,
+    "independentProspectiveConfirmationClaimed": false,
+    "productionChangedByThisAudit": false
+  }
+}
