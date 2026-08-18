@@ -1,0 +1,142 @@
+name: MLB Router Input V62 Source Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "scripts/mlb-router-input-v62-source-parity-v1.ts"
+      - ".github/workflows/mlb-router-input-v62-source-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "scripts/mlb-router-input-v62-source-parity-v1.ts"
+      - ".github/workflows/mlb-router-input-v62-source-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  v62-source-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove source parity chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-router-input-parity-v1-contract.json'
+          PARITY='scripts/mlb-router-input-v62-source-parity-v1.ts'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          PARITY_ADD="$(git log --diff-filter=A --format=%H -- "$PARITY" | tail -1)"
+          test "$CONTRACT_ADD" = '624da74a251ed9443a2d56a731e5c57db92aa27d'
+          test "$PARITY_ADD" = '3f4e90efed719a06a3639f1c45d2c3aeeb980bae'
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$PARITY_ADD"
+          echo MLB_ROUTER_INPUT_V62_SOURCE_PARITY_CHRONOLOGY_PROVED
+
+      - name: Download frozen V62 pitch-quality packs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v62-pitch-quality-*
+          path: inputs/pitch
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31925270654
+
+      - name: Download frozen V60 T-minus-5 starter custody
+        uses: actions/download-artifact@v4
+        with:
+          pattern: p0-step12v60-matchup-custody-*
+          path: inputs/hands
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31919873754
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Verify required source packs and custody bytes
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for s in 2021 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/pitch/pitch-quality-${s}.json"
+          done
+          for s in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/hands/pregame-hands-${s}.json"
+          done
+          CUSTODY="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          test "sha256:$(sha256sum "$CUSTODY" | awk '{print $1}')" = 'sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo MLB_ROUTER_INPUT_V62_SOURCE_PACKS_PRESENT
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Reconstruct V62 starter-quality advantages from raw frozen source packs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          npx tsx scripts/mlb-router-input-v62-source-parity-v1.ts \
+            --pitch-root inputs/pitch \
+            --hands-root inputs/hands \
+            --custody '${{ steps.source.outputs.custody }}' \
+            --out work/mlb-router-input-v62-source-parity-v1.json
+
+      - name: Validate exact source parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('work/mlb-router-input-v62-source-parity-v1.json','utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-router-input-v62-source-parity.v1') throw new Error('schema');
+          if(r.classification!=='V62_RAW_SOURCE_TO_V66_PARITY_PASS') throw new Error('classification');
+          if(r.rows!==11407) throw new Error(`rows ${r.rows}`);
+          if(r.comparisons!==57035) throw new Error(`comparisons ${r.comparisons}`);
+          if(r.totalMismatches!==0 || r.numericMismatches!==0 || r.missingnessMismatches!==0) throw new Error('mismatch');
+          if(r.maximumAbsoluteDifference>1e-12) throw new Error(`maxdiff ${r.maximumAbsoluteDifference}`);
+          if(r.rollingLookbackDays!==365 || r.sameDateStateUpdateAfterScoring!==true) throw new Error('chronology');
+          if(r.targetGameOutcomeUsed!==false || r.productionChanged!==false || r.realFinancialExposure!==0) throw new Error('safety');
+          console.log('MLB_ROUTER_INPUT_V62_RAW_SOURCE_PARITY_PASSED');
+          console.log('MLB_ROUTER_INPUT_V62_MAX_ABS_DIFF',r.maximumAbsoluteDifference);
+          console.log('MLB_ROUTER_INPUT_V62_QUALITY_AVAILABLE_ROWS',r.qualityAvailableRows);
+          NODE
+
+      - name: Typecheck V62 parity driver
+        run: npx tsc --noEmit --skipLibCheck --module ESNext --moduleResolution bundler --target ES2022 --types node scripts/mlb-router-input-v62-source-parity-v1.ts
+
+      - name: Upload V62 source parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-router-input-v62-source-parity-v1
+          path: work/mlb-router-input-v62-source-parity-v1.json
+          if-no-files-found: error
+          retention-days: 90
