@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "courtedge-mlb-unified-elite-router-contract.v1",
+  "scientificStatus": "FROZEN_BEFORE_UNIFIED_ROUTER_IMPLEMENTATION",
+  "scope": "RESEARCH_ONLY",
+  "productionChanged": false,
+  "realFinancialExposure": 0,
+  "objective": "Freeze a deterministic one-pick hierarchy that preserves A+ and Premium priority, evaluates PP_HORIZON only after both parent routes return NO_PLAY, and permits Full Modular after PP_HORIZON only for preregistered technical unavailability.",
+  "parentStage3Head": "164df6644b259df2be42a340003c89a2499269e2",
+  "firstProspectiveEligibleOfficialDate": "2026-08-19",
+  "frozenPpHorizon": {
+    "snapshotPath": "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json",
+    "snapshotFileSha256": "sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9",
+    "parameterPayloadSha256": "sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275",
+    "featureCount": 49,
+    "runtimeRetuningAllowed": false,
+    "prospectiveOutcomeRefitAllowed": false
+  },
+  "controlHierarchy": [
+    "A_PLUS",
+    "PREMIUM",
+    "FULL_MODULAR",
+    "NO_PLAY"
+  ],
+  "challengerHierarchy": [
+    "A_PLUS",
+    "PREMIUM",
+    "PP_HORIZON",
+    "FULL_MODULAR_TECHNICAL_FALLBACK_ONLY",
+    "NO_PLAY"
+  ],
+  "ppTechnicalUnavailableReasons": [
+    "PP_SNAPSHOT_INTEGRITY_FAILED",
+    "PP_REQUIRED_FEATURE_MISSING",
+    "PP_PREGAME_SOURCE_UNAVAILABLE",
+    "PP_SOURCE_PARITY_FAILED",
+    "PP_RUNTIME_INTEGRITY_FAILED"
+  ],
+  "ppDecisionSemantics": {
+    "SELECTION": "Select PP_HORIZON after A+ and Premium both return NO_PLAY. Full Modular may not override it.",
+    "NO_PLAY": "Return NO_PLAY in the challenger. Full Modular fallback is forbidden.",
+    "TECHNICAL_UNAVAILABLE": "Full Modular may be consulted only when the reason is one of the frozen technical-unavailability reasons."
+  },
+  "fullModularFallbackForbiddenFor": [
+    "LOW_PP_PROBABILITY",
+    "LOW_PP_CONFIDENCE",
+    "RETROSPECTIVE_PP_PERFORMANCE",
+    "DISCRETIONARY_HUMAN_CONFIDENCE",
+    "MARKET_PRICE_PREFERENCE",
+    "OUTCOME_INFORMED_REASON"
+  ],
+  "routingInvariants": {
+    "aPlusAbsolutePriority": true,
+    "premiumOnlyWhenAPlusNoPlay": true,
+    "ppOnlyWhenAPlusAndPremiumNoPlay": true,
+    "fullModularCannotOverrideAPlus": true,
+    "fullModularCannotOverridePremium": true,
+    "fullModularCannotOverridePpSelection": true,
+    "challengerFullModularRequiresFrozenPpTechnicalUnavailableReason": true,
+    "ppRegularNoPlayDoesNotActivateFullModular": true,
+    "controlIgnoresPpStateAfterParentNoPlay": true,
+    "probabilityComparisonsInsideRouterForbidden": true,
+    "tierProbabilityBlendingForbidden": true,
+    "outcomeFieldsInsideRouterForbidden": true,
+    "maximumSelectionsPerArmPerOfficialDate": 1
+  },
+  "inputIntegrity": {
+    "allTierDecisionsMustMatchRouterOfficialDate": true,
+    "selectionGamePkMustBePositiveInteger": true,
+    "selectionMarketRequired": true,
+    "selectionHorizonRequired": true,
+    "selectionSideRequired": true,
+    "invalidTierDecisionFailsClosed": true
+  },
+  "prospectiveGovernance": {
+    "controlAndChallengerEmittedTogether": true,
+    "outcomesAvailableToRouter": false,
+    "interimWinLossMetricsAllowedBeforeEmbargoMaturity": false,
+    "productionPromotionFromRetrospectiveEvidence": false,
+    "stakeOrAutobetChangeAllowed": false,
+    "firstSnapshotImmutable": true
+  },
+  "requiredTestsBeforeFreezeCompletion": [
+    "A_PLUS_OVERRIDES_ALL",
+    "PREMIUM_REQUIRES_A_PLUS_NO_PLAY",
+    "PP_REQUIRES_PARENT_NO_PLAY",
+    "PP_SELECTION_BLOCKS_FULL_MODULAR",
+    "PP_NO_PLAY_BLOCKS_FULL_MODULAR",
+    "EACH_FROZEN_PP_TECHNICAL_REASON_ALLOWS_FULL_MODULAR",
+    "INVALID_PP_TECHNICAL_REASON_FAILS_CLOSED",
+    "CONTROL_USES_FULL_MODULAR_AFTER_PARENT_NO_PLAY",
+    "NO_VALID_LOWER_TIER_RETURNS_NO_PLAY",
+    "DATE_MISMATCH_FAILS_CLOSED",
+    "MAX_ONE_SELECTION_PER_ARM",
+    "NO_PROBABILITY_OR_OUTCOME_ROUTING"
+  ]
+}
