@@ -190,12 +190,65 @@ jobs:
           assert b['automaticBetPlacement'] is False
           assert b['realFinancialExposure']==0
           assert b['productionChanged'] is False
-          print(json.dumps({
-            'classification':r['classification'],
-            'sample':s,
-            'validationGates':r['validationGates'],
-            'overallNoPlayRescueFrontier':r['overallNoPlayRescueFrontier'],
-          },indent=2))
+          print('MULTI_MARKET_RESEARCH_BOUNDARIES_VALID')
+          PY
+
+      - name: Verify frozen result summary parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-multi-market-coverage-expansion-v1.json'))
+          s=json.load(open('research/mlb-multi-market-coverage-expansion-v1-result-summary.json'))
+          assert s['schemaVersion']=='courtedge-mlb-multi-market-coverage-expansion-result-summary.v1'
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          expected_qualified={v for v,g in r['validationGates']['variants'].items() if g['validationQualified']}
+          assert set(s['validation']['qualifiedVariants'])==expected_qualified
+          for variant, compact in s['validation']['qualifiedVariants'].items():
+            raw=r['variantResults'][variant]
+            assert compact['family']==raw['family']
+            assert compact['validationBrierImprovement']==raw['validation']['brierImprovement']
+            assert compact['combinedOosBrierImprovement']==raw['outOfSampleBrier']['combinedBrierImprovement']
+            assert compact['positiveEvaluationSeasons']==raw['outOfSampleBrier']['positiveEvaluationSeasons']==3
+            assert raw['outOfSampleBrier']['stableAcrossEvaluation'] is True
+          assert s['validation']['failedDirectionalVariants']['F3_RL_HOME_MINUS_0_5']==r['validationGates']['variants']['F3_RL_HOME_MINUS_0_5']['brierImprovement']
+          for family, compact in s['validation']['totalFamilyGates'].items():
+            raw=r['validationGates']['totalFamilies'][family]
+            assert compact==[raw['averageFixedLineBrierImprovement'],raw['validationQualified']]
+          order=s['qualifiedVariantFrontierMetricOrder']
+          assert order==['rescuedNoPlayDates','decisive','pushes','hitRate','wilson95Lower','meanPredictedProbability','absoluteCalibrationGap']
+          for variant, frontiers in s['qualifiedVariantFrontiers'].items():
+            for q, compact in frontiers.items():
+              raw=r['variantResults'][variant]['frontiers'][q]
+              expected=[raw['rescuedParentNoPlayDates'],raw['decisive'],raw['pushes'],raw['hitRate'],raw['wilson95']['lower'],raw['meanPredictedProbabilityOnDecisive'],raw['absoluteCalibrationGap']]
+              assert compact==expected,(variant,q,compact,expected)
+          for family, compact in s['familyRescueDates'].items():
+            expected={q:raw['rescuedParentNoPlayDates'] for q,raw in r['familyResults'][family]['frontiers'].items()}
+            assert compact==expected,(family,compact,expected)
+          for q, compact in s['overallNoPlayRescueFrontier'].items():
+            raw=r['overallNoPlayRescueFrontier'][q]
+            assert compact['rescuedParentNoPlayDates']==raw['rescuedParentNoPlayDates']
+            assert compact['combinedOpportunityDates']==raw['combinedOpportunityDates']
+            assert compact['combinedOpportunityCoveragePct']==raw['combinedOpportunityCoveragePct']
+            assert compact['remainingNoPlayDates']==raw['remainingNoPlayDates']
+            assert compact['maximumRemainingNoPlayStreak']==raw['remainingNoPlayStreaksAcrossCombinedEligibleSequence']['maximumNoPlayEligibleDateStreak']
+            for season, values in compact['bySeason'].items():
+              rr=raw['bySeason'][season]
+              expected=[rr['combinedOpportunityDates'],rr['combinedOpportunityCoveragePct'],rr['remainingNoPlayDates'],rr['remainingNoPlayStreaks']['maximumNoPlayEligibleDateStreak']]
+              assert values==expected,(q,season,values,expected)
+          assert s['interpretation']['baselineParentRouteCoveragePct']==100.0*r['sample']['parentRouteActiveDates']/r['sample']['eligibleSlateDates']
+          assert s['interpretation']['highestVolumeCombinedOpportunityCoveragePct']==r['overallNoPlayRescueFrontier']['Q80']['combinedOpportunityCoveragePct']
+          assert s['interpretation']['highestVolume2026YtdCoveragePct']==r['overallNoPlayRescueFrontier']['Q80']['bySeason']['2026_YTD']['combinedOpportunityCoveragePct']
+          assert s['interpretation']['totalsPassFrozenFamilyValidationGate'] is False
+          assert s['interpretation']['opportunityCoverageIsNotExecutableOnePickDailyRate'] is True
+          assert s['interpretation']['historicalPricesUsed'] is False
+          assert s['interpretation']['positiveEvEstablished'] is False
+          assert s['interpretation']['prospectiveIndependentConfirmationRequired'] is True
+          assert s['interpretation']['productionPromotionAuthorized'] is False
+          assert s['policy']==r['scientificBoundary']
+          print('MULTI_MARKET_FROZEN_RESULT_SUMMARY_PARITY_VERIFIED')
           PY
 
       - name: Upload multi-market research artifact
