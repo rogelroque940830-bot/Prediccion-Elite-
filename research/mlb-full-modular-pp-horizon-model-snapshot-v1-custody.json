@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-pp-horizon-model-snapshot-custody.v1",
+  "scientificStatus": "IMMUTABLE_PRE_PROSPECTIVE_SNAPSHOT_CUSTODY",
+  "snapshotPath": "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json",
+  "snapshotCommitSha": "031650c0684de1ef216622581fb118496e7b8552",
+  "snapshotGitBlobSha": "f29eaa2fba54b7588eac2b7fb103dc709a5c5c83",
+  "snapshotFileSha256": "sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9",
+  "parameterPayloadDigest": "sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275",
+  "successfulFreezeEvidence": {
+    "workflowRunId": 32176758471,
+    "workflowJobId": 95840377968,
+    "branchHeadShaEvaluated": "87e28b17b6fcd73250a0ea529fd509284b899e28",
+    "pullRequestMergeRefShaEvaluated": "7569033e1be80ae11f28cfb6b9cedf095b7e433e",
+    "conclusion": "SUCCESS",
+    "artifactId": 9339321591,
+    "artifactName": "mlb-full-modular-pp-horizon-model-snapshot-v1",
+    "artifactZipSha256": "sha256:5675564a914772a251dc12e8ae441994a18fede063107319491dd36e559f11f8"
+  },
+  "frozenHistoricalEvidence": {
+    "evaluationSeason": "2026_YTD",
+    "scoreCandidateRows": 311,
+    "ppHorizonDailySelections": 71,
+    "controlDailySelections": 71,
+    "ppHorizonIdentityMismatches": 0,
+    "controlIdentityMismatches": 0,
+    "ppHorizonWins": 53,
+    "ppHorizonLosses": 18,
+    "ppHorizonPushes": 0,
+    "ppHorizonHitRate": 0.7464788732394366,
+    "maximumHistoricalProbabilityAbsoluteDifference": 3.163180227749862e-07,
+    "originalHistoricalProbabilityTolerance": 1e-12,
+    "historicalProbabilityBitParityCertified": false,
+    "semanticSelectionParityCertified": true
+  },
+  "prospectiveAuthority": {
+    "firstEligibleOfficialDate": "2026-08-19",
+    "persistedSnapshotIsProbabilityImplementationAuthority": true,
+    "futureRuntimeMustNotRefitModel": true,
+    "futureRuntimeMustNotRefitPreprocessing": true,
+    "maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot": 1e-12,
+    "prospectiveOutcomesMayEnterTraining": false,
+    "outcomesMayBeReadBeforeEmbargoMaturity": false
+  },
+  "parityValidation": {
+    "workflowPath": ".github/workflows/mlb-full-modular-pp-horizon-snapshot-parity.yml",
+    "validationMustNotRefitModel": true,
+    "validationMustRecomputeParameterPayloadDigest": true,
+    "validationMustVerifySnapshotFileSha256": true,
+    "validationMustVerifyHistoricalSemanticSelectionParity": true
+  },
+  "scientificChoicesChangedByCustody": false,
+  "productionChanged": false,
+  "realFinancialExposure": 0
+}

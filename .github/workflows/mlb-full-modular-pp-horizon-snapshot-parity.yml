@@ -1,0 +1,213 @@
+name: MLB Full Modular PP Horizon Snapshot Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1-custody.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json"
+      - ".github/workflows/mlb-full-modular-pp-horizon-snapshot-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-partial-pooling-v1
+    paths:
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1-custody.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json"
+      - ".github/workflows/mlb-full-modular-pp-horizon-snapshot-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout frozen branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prove snapshot custody chronology and Git identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          SNAPSHOT='research/mlb-full-modular-pp-horizon-model-snapshot-v1.json'
+          CUSTODY='research/mlb-full-modular-pp-horizon-model-snapshot-v1-custody.json'
+          SNAPSHOT_ADD="$(git log --diff-filter=A --format=%H -- "$SNAPSHOT" | tail -1)"
+          CUSTODY_ADD="$(git log --diff-filter=A --format=%H -- "$CUSTODY" | tail -1)"
+          test "$SNAPSHOT_ADD" = '031650c0684de1ef216622581fb118496e7b8552'
+          test "$CUSTODY_ADD" = '1fe7db0a6796f1619e804845cd1afa3557b40623'
+          test "$SNAPSHOT_ADD" != "$CUSTODY_ADD"
+          git merge-base --is-ancestor "$SNAPSHOT_ADD" "$CUSTODY_ADD"
+          test "$(git rev-parse 031650c0684de1ef216622581fb118496e7b8552:${SNAPSHOT})" = 'f29eaa2fba54b7588eac2b7fb103dc709a5c5c83'
+          test "sha256:$(sha256sum "$SNAPSHOT" | awk '{print $1}')" = 'sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
+          echo PP_HORIZON_COMMITTED_SNAPSHOT_GIT_CUSTODY_PROVED
+
+      - name: Validate frozen snapshot content and parameter digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import math
+
+          snapshot_path='research/mlb-full-modular-pp-horizon-model-snapshot-v1.json'
+          custody_path='research/mlb-full-modular-pp-horizon-model-snapshot-v1-custody.json'
+          contract_path='research/mlb-full-modular-pp-horizon-prospective-v1-contract.json'
+          amendment_path='research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json'
+
+          with open(snapshot_path, encoding='utf-8') as f:
+              s=json.load(f)
+          with open(custody_path, encoding='utf-8') as f:
+              c=json.load(f)
+          with open(contract_path, encoding='utf-8') as f:
+              contract=json.load(f)
+          with open(amendment_path, encoding='utf-8') as f:
+              amendment=json.load(f)
+
+          expected_parameter_digest='sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275'
+          expected_file_digest='sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
+
+          assert s['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-model-snapshot.v1'
+          assert s['scientificStatus']=='FROZEN_2023_2025_PP_HORIZON_RECONSTRUCTED_PROSPECTIVE_IMPLEMENTATION_SNAPSHOT_CAPTURE_NOT_YET_STARTED'
+          assert s['policy']=='CHALLENGER_PP_HORIZON'
+          assert s['training']=={
+              'candidateRows':2780,
+              'decisiveRows':2738,
+              'prospectiveOutcomesUsed':False,
+              'seasons':['2023','2024','2025'],
+              'uniqueGames':1249,
+              'weightedPositiveRate':0.7364196118799802,
+          }
+
+          m=s['model']
+          assert m['family']=='L2_REGULARIZED_LOGISTIC_REGRESSION_WITH_SCALED_HORIZON_DEVIATION_FEATURES'
+          assert m['solver']=='lbfgs'
+          assert m['regularizationC']==0.25
+          assert m['maxIterations']==5000
+          assert m['classWeight'] is None
+          assert m['signalDeviationFeatureScale']==0.35
+          assert m['groupInterceptFeatureScale']==0.2
+          assert len(m['featureNames'])==49
+          assert len(m['rawCoefficients'])==49
+          assert len(set(m['featureNames']))==49
+          assert all(math.isfinite(float(v)) for v in m['rawCoefficients']+[m['intercept']])
+          assert set(m['preprocessing'])=={
+              'frozen_c4_selected_side_probability',
+              'frozen_full13_selected_side_probability',
+              'modelProbability',
+              'premium_core_support_count_0_to_3',
+              'premium_core_weakest_margin',
+              'qualityPercentile',
+              'sel_lineup_exposure_rate_adv',
+              'sel_starter_kbb_adv',
+              'sel_starter_runrisk_adv',
+              'sel_team_ra10_adv',
+              'sel_team_win10_diff',
+              'structureObservedFeatureFraction',
+              'structureScore',
+          }
+          for prep in m['preprocessing'].values():
+              assert prep['clip']==6.0
+              assert all(math.isfinite(float(prep[k])) for k in ('mean','median','std'))
+              assert float(prep['std'])>0
+
+          parameter_payload={
+              'featureNames':m['featureNames'],
+              'preprocessing':m['preprocessing'],
+              'intercept':m['intercept'],
+              'rawCoefficients':m['rawCoefficients'],
+          }
+          actual_parameter_digest='sha256:'+hashlib.sha256(
+              json.dumps(parameter_payload,sort_keys=True,separators=(',',':'),allow_nan=False).encode('utf-8')
+          ).hexdigest()
+          assert actual_parameter_digest==expected_parameter_digest
+          assert m['parameterPayloadDigest']==expected_parameter_digest
+
+          with open(snapshot_path,'rb') as f:
+              actual_file_digest='sha256:'+hashlib.sha256(f.read()).hexdigest()
+          assert actual_file_digest==expected_file_digest
+
+          p=s['historicalParity']
+          assert p['evaluationSeason']=='2026_YTD'
+          assert p['scoreCandidateRows']==311
+          assert p['ppHorizonDailySelections']==71
+          assert p['controlDailySelections']==71
+          assert p['ppHorizonIdentityMismatches']==0
+          assert p['controlIdentityMismatches']==0
+          assert p['ppHorizonSeasonResult']=={'wins':53,'losses':18,'pushes':0,'hitRate':0.7464788732394366}
+          assert p['maximumPartialPoolProbabilityAbsoluteDifference']==3.163180227749862e-07
+          assert p['originalContractProbabilityTolerance']==1e-12
+          assert p['historicalProbabilityBitParityCertified'] is False
+          assert p['historicalProbabilityExactnessClaimed'] is False
+          assert p['semanticSelectionParityPassed'] is True
+          assert p['passedUnderReproducibilityAmendment'] is True
+
+          src=s['source']
+          assert src['parentPartialPoolingHeadSha']=='37b6b0e63e58ff4a1a10bb5d8acc495724c269fc'
+          assert src['parentWorkflowRunId']==32164873526
+          assert src['parentArtifactId']==9335023982
+          assert src['parentArtifactDigest']=='sha256:3696e05880faed143e69c459b518bcce0254c12303418743efd9ef8222e0df1a'
+          assert src['firstFailedFreezeRunId']==32173532902
+          assert src['firstFailedFreezeJobId']==95830057083
+
+          assert c['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-model-snapshot-custody.v1'
+          assert c['scientificStatus']=='IMMUTABLE_PRE_PROSPECTIVE_SNAPSHOT_CUSTODY'
+          assert c['snapshotPath']==snapshot_path
+          assert c['snapshotCommitSha']=='031650c0684de1ef216622581fb118496e7b8552'
+          assert c['snapshotGitBlobSha']=='f29eaa2fba54b7588eac2b7fb103dc709a5c5c83'
+          assert c['snapshotFileSha256']==expected_file_digest
+          assert c['parameterPayloadDigest']==expected_parameter_digest
+          e=c['successfulFreezeEvidence']
+          assert e['workflowRunId']==32176758471
+          assert e['workflowJobId']==95840377968
+          assert e['branchHeadShaEvaluated']=='87e28b17b6fcd73250a0ea529fd509284b899e28'
+          assert e['pullRequestMergeRefShaEvaluated']=='7569033e1be80ae11f28cfb6b9cedf095b7e433e'
+          assert e['conclusion']=='SUCCESS'
+          assert e['artifactId']==9339321591
+          assert e['artifactName']=='mlb-full-modular-pp-horizon-model-snapshot-v1'
+          assert e['artifactZipSha256']=='sha256:5675564a914772a251dc12e8ae441994a18fede063107319491dd36e559f11f8'
+
+          a=s['postSnapshotAuthority']
+          assert a['futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit'] is True
+          assert a['maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot']==1e-12
+          assert a['modelRefitAllowed'] is False
+          assert a['preprocessingRefitAllowed'] is False
+          b=s['prospectiveBoundary']
+          assert b['firstEligibleOfficialDate']=='2026-08-19'
+          assert b['modelRefitAllowed'] is False
+          assert b['preprocessingRefitAllowed'] is False
+          assert b['outcomeReadBeforeEmbargoMaturityAllowed'] is False
+          assert b['productionChanged'] is False
+          assert b['realFinancialExposure']==0
+
+          assert contract['historicalParityGateBeforeProspectiveCapture']['maximumProbabilityAbsoluteDifference']==1e-12
+          assert contract['frozenModel']['globalTrainingSeasonsExactly']==['2023','2024','2025']
+          assert contract['frozenModel']['prospective2026OutcomesMayEnterTraining'] is False
+          assert contract['prospectiveBoundary']['firstEligibleOfficialDate']=='2026-08-19'
+          assert amendment['historicalParentProbabilityStatement']['bitLevelProbabilityParityCertified'] is False
+          assert amendment['reconstructedProspectiveSnapshotAcceptance']['historicalProbabilityDifferenceIsDiagnosticNotAcceptanceThreshold'] is True
+          assert amendment['postSnapshotAuthority']['futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit'] is True
+          assert amendment['postSnapshotAuthority']['maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot']==1e-12
+          assert amendment['scientificChoicesUnchanged']['featuresChanged'] is False
+          assert amendment['scientificChoicesUnchanged']['hyperparametersChanged'] is False
+          assert amendment['scientificChoicesUnchanged']['rankingChanged'] is False
+
+          print('PP_HORIZON_COMMITTED_SNAPSHOT_PARITY_PASSED')
+          print('PP_HORIZON_SNAPSHOT_FILE_DIGEST',actual_file_digest)
+          print('PP_HORIZON_PARAMETER_DIGEST',actual_parameter_digest)
+          print('PP_HORIZON_FUTURE_RUNTIME_REFIT_FORBIDDEN')
+          PY
