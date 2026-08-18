@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-live-operational-parity-contract.v1",
+  "scientificStatus": "FROZEN_BEFORE_LIVE_OPERATIONAL_SOURCE_BRIDGE_IMPLEMENTATION",
+  "objective": "Certify an outcome-free, deterministic, fail-closed live source bridge that reproduces the mechanistic Full Modular feature semantics before freezing the unified elite hierarchy.",
+  "scope": "RESEARCH_ONLY",
+  "productionChanged": false,
+  "realFinancialExposure": 0,
+  "parentRouterInputParityHead": "9b09838627f42b82e54f4c7d9fef0d0f5f3e1375",
+  "decisionTimestampPolicy": {
+    "name": "T_MINUS_5",
+    "minutesBeforeScheduledFirstPitch": 5,
+    "requiredPregameSnapshotAtOrBeforeDecisionTimestamp": true,
+    "firstAcceptedSnapshotImmutable": true,
+    "sameDateHistoryAllowed": false,
+    "wholeOfficialDateFrozenBeforeAnyTargetDateOutcome": true
+  },
+  "authoritativeInputSemantics": {
+    "full13": {
+      "builder": "server/mlb-full13-live-feature-builder.ts",
+      "builderVersion": "mlb-full13-live-canonical-v1",
+      "required": true,
+      "confirmedLineupsRequired": true,
+      "exactNineUniqueBattersPerTeam": true,
+      "probableStarterIdsRequired": true,
+      "priorDateOnly": true
+    },
+    "v39ExpectedStarterOuts": {
+      "snapshot": "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json",
+      "family": "POISSON_REGRESSION_LOG_LINK",
+      "runtimeFitAllowed": false,
+      "runtimePreprocessingFitAllowed": false,
+      "requiredRawFeatureOrder": [
+        "pitcher_outs_per_start_shrunk",
+        "pitcher_bf_per_start_shrunk",
+        "pitcher_pitches_per_start_shrunk",
+        "pitcher_kbf_shrunk",
+        "pitcher_bbbf_shrunk",
+        "pitcher_erbf_shrunk",
+        "pitcher_recent5_outs_per_start",
+        "pitcher_recent5_pitches_per_start",
+        "opponent_vs_starters_outs_per_game_shrunk",
+        "opponent_rs10",
+        "opponent_lineup_continuity",
+        "pitcher_prior_starts"
+      ],
+      "imputation": "NONFINITE_FEATURE_REPLACED_BY_FROZEN_2022_MEDIAN_BY_INDEX",
+      "standardization": "z_i=(x_i-median_if_missing_then_value_i-mean_i)/scale_i",
+      "prediction": "exp(intercept + sum(coefficient_i * z_i))",
+      "priorDateOnly": true
+    },
+    "v62StarterPhysicalQuality": {
+      "sourceContract": "research/p0-step12v62-pitch-quality-winner-contract.json",
+      "requiredSelectedSideAdvantages": [
+        "starter_velocity_adv",
+        "starter_spin_adv",
+        "starter_swing_miss_adv",
+        "starter_in_zone_adv",
+        "starter_weak_contact_adv"
+      ],
+      "sourceSemantics": "latest eligible prior regular-season starter appearance with frozen V62 fallback semantics",
+      "priorDateOnly": true
+    },
+    "v66BullpenWorkload": {
+      "sourceAlgorithm": "scripts/p0-step12v66-acquire-bullpen.py",
+      "requiredPerTeamMetrics": [
+        "bullpen_pitches_1d",
+        "bullpen_pitches_3d",
+        "bullpen_core3_pitches_2d",
+        "bullpen_b2b_arms"
+      ],
+      "priorDateOnly": true
+    },
+    "v66DerivedExposure": {
+      "sourceAlgorithm": "scripts/p0-step12v66-game-horizon-exposure-custody.py",
+      "horizonOuts": {"F3": 9, "F5": 15, "FG": 27},
+      "starterShareFormula": "clamp(expectedStarterOuts / horizonOuts, 0, 1)",
+      "bullpenShareFormula": "1 - starterShare"
+    }
+  },
+  "forbiddenInformation": {
+    "targetGameOutcome": true,
+    "sameDateCompletedGameOutcome": true,
+    "futureScheduledGameInformationAsHistoricalEvidence": true,
+    "sportsbookPriceInsideIntrinsicTeamMarketStrengthOrStructureFeatures": true,
+    "postDecisionTimestampLineupOrStarterUpdate": true
+  },
+  "failClosedConditions": [
+    "DECISION_TIMESTAMP_MISSING_OR_LATE",
+    "PROBABLE_STARTER_UNAVAILABLE",
+    "CONFIRMED_LINEUP_UNAVAILABLE",
+    "FULL13_PRIOR_KNOWLEDGE_MISSING",
+    "V39_REQUIRED_RAW_FEATURE_MISSING",
+    "V39_SOURCE_NOT_PRIOR_DATE",
+    "V62_REQUIRED_STARTER_QUALITY_MISSING",
+    "V62_SOURCE_NOT_PRIOR_DATE",
+    "V66_REQUIRED_BULLPEN_WORKLOAD_MISSING",
+    "V66_SOURCE_NOT_PRIOR_DATE",
+    "FULL_MODULAR_REQUIRED_LIVE_INPUT_MISSING",
+    "SOURCE_INTEGRITY_FAILED"
+  ],
+  "requiredRuntimeInvariants": {
+    "completeValidInputReturnsReady": true,
+    "missingRequiredInputReturnsNoPlay": true,
+    "sameInputIsDeterministic": true,
+    "sameDateLeakageRejected": true,
+    "futureLeakageRejected": true,
+    "outcomeFieldInjectionRejected": true,
+    "v39PredictionUsesFrozenSnapshotOnly": true,
+    "v66ExposureUsesFrozenHorizonFormulasOnly": true,
+    "mechanisticBuilderIsFinalFeatureAuthority": true
+  },
+  "historicalAuthorityGateAlreadySatisfied": {
+    "v39SourceParity": "PASS",
+    "v62SourceParity": "PASS",
+    "v66DerivedParity": "PASS",
+    "fullModularDailySelectionIdentityMismatches": 0,
+    "fullModularShadowSelections": 236,
+    "fullModularWins": 177,
+    "fullModularLosses": 58,
+    "fullModularPushes": 1
+  },
+  "requiredBeforeUnifiedHierarchyFreeze": {
+    "liveBridgeUnitTestsGreen": true,
+    "liveBridgeCiGreen": true,
+    "allFailClosedTestsGreen": true,
+    "noOutcomeDependency": true,
+    "noProductionRouteChange": true
+  }
+}
