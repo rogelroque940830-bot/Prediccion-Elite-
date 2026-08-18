@@ -94,6 +94,7 @@ jobs:
             scripts/mlb-market-state-matchup-modular-router-v1.py \
             research/mlb-market-state-matchup-modular-router-v1-contract.json \
             scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            scripts/mlb-multi-market-coverage-expansion-v1.py \
             research/mlb-multi-market-coverage-expansion-v1-contract.json
           do
             git show "${PIN}:${FILE}" > "inputs/full-modular-parent/${FILE}"
