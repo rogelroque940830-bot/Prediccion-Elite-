@@ -131,14 +131,21 @@ export function parseMlbDailyBestPickManualPriceView(value: unknown): MlbDailyBe
     || execution.providerLastUpdate !== null) return null;
 
   const economics = value.economics;
-  for (const key of ["modelWinProbability", "modelPushProbability", "currentBreakEvenWinProbability", "expectedValuePerUnit", "executionEdgePp"] as const) {
-    if (!finite(economics[key])) return null;
-  }
-  if (economics.modelWinProbability <= 0 || economics.modelWinProbability >= 1
-    || economics.modelPushProbability < 0 || economics.modelPushProbability > 1
-    || economics.currentBreakEvenWinProbability <= 0 || economics.currentBreakEvenWinProbability >= 1) return null;
-  if (value.decision === "MANUAL_PRICE_POSITIVE_EV" && economics.expectedValuePerUnit <= 0) return null;
-  if (value.decision === "MANUAL_PRICE_NO_POSITIVE_EV" && economics.expectedValuePerUnit > 0) return null;
+  if (!finite(economics.modelWinProbability)
+    || !finite(economics.modelPushProbability)
+    || !finite(economics.currentBreakEvenWinProbability)
+    || !finite(economics.expectedValuePerUnit)
+    || !finite(economics.executionEdgePp)) return null;
+
+  const modelWinProbability = economics.modelWinProbability;
+  const modelPushProbability = economics.modelPushProbability;
+  const currentBreakEvenWinProbability = economics.currentBreakEvenWinProbability;
+  const expectedValuePerUnit = economics.expectedValuePerUnit;
+  if (modelWinProbability <= 0 || modelWinProbability >= 1
+    || modelPushProbability < 0 || modelPushProbability > 1
+    || currentBreakEvenWinProbability <= 0 || currentBreakEvenWinProbability >= 1) return null;
+  if (value.decision === "MANUAL_PRICE_POSITIVE_EV" && expectedValuePerUnit <= 0) return null;
+  if (value.decision === "MANUAL_PRICE_NO_POSITIVE_EV" && expectedValuePerUnit > 0) return null;
   if (value.blockers.length !== 0 || !value.warnings.includes("MANUAL_PRICE_NOT_PROVIDER_VERIFIED")) return null;
 
   const policy = value.policy;
