@@ -3,6 +3,7 @@ import { Brain, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MlbDailyBestPickCard } from "@/components/mlb-daily-best-pick-card";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 
@@ -122,6 +123,7 @@ interface V16UiResponse {
     schemaVersion: string;
     summary: V16RunnerSummary;
     prepriceSummary: Record<string, number>;
+    dailyBestPick?: unknown;
     noPlayAudit?: V16NoPlayAudit;
     eliteCandidates: V16EliteCandidate[];
   };
@@ -221,6 +223,7 @@ export function MlbUnifiedV16Control() {
   const blocked = result?.status === "CERTIFIED_INPUT_ASSEMBLY_BLOCKED";
   const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
   const runSummary = result?.result?.summary;
+  const dailyBestPick = result?.result?.dailyBestPick;
   const noPlayAudit = result?.result?.noPlayAudit;
   const auditedGames = noPlayAudit?.gameAudits ?? [];
   const eliteCandidates = result?.result?.eliteCandidates ?? [];
@@ -313,6 +316,8 @@ export function MlbUnifiedV16Control() {
                   <div><div className="text-[11px] text-muted-foreground">Candidatos Elite</div><div className="font-semibold">{runSummary.eliteEvidenceCandidates}</div></div>
                   <div><div className="text-[11px] text-muted-foreground">Evidencia capturada</div><div className="font-semibold">{runSummary.eliteEvidenceRowsCaptured}</div></div>
                 </div>
+
+                <MlbDailyBestPickCard value={dailyBestPick} />
 
                 {auditedGames.length > 0 && (
                   <div className="space-y-2" data-testid="mlb-v16-sports-predictions">

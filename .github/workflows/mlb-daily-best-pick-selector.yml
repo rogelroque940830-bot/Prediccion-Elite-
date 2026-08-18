@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "production/mlb-daily-best-pick-router-v2"
+      - "production/mlb-daily-best-pick-ui-v1"
     paths:
       - "server/mlb-daily-best-pick-selector.ts"
       - "server/mlb-daily-best-pick-selector.test.ts"
@@ -14,6 +15,10 @@ on:
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
+      - "frontend/client/src/components/mlb-unified-v16-control.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
+      - "frontend/client/src/lib/mlb-daily-best-pick.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
   pull_request:
@@ -29,6 +34,10 @@ on:
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
+      - "frontend/client/src/components/mlb-unified-v16-control.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
+      - "frontend/client/src/lib/mlb-daily-best-pick.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
   workflow_dispatch:
@@ -39,7 +48,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,9 +56,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Typecheck Daily BEST PICK block
+      - name: Typecheck Daily BEST PICK backend block
         run: npx tsc -p tsconfig.mlb-daily-best-pick-selector.json
-      - name: Test selector, frozen runtime adapter and UI exposure
+      - name: Test selector, frozen runtime adapter and server UI exposure
         run: >-
           npx tsx --test
           server/mlb-daily-best-pick-selector.test.ts
@@ -57,3 +66,15 @@ jobs:
           server/mlb-daily-best-pick-runtime-adapter.integration.test.ts
           server/mlb-unified-v16-ui-routes.test.ts
           server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Test Daily BEST PICK frontend fail-closed presenter
+        working-directory: frontend
+        run: npx tsx --test client/src/lib/mlb-daily-best-pick.test.ts
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run check
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
