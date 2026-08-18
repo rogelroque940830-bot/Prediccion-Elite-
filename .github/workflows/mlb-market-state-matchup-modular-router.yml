@@ -9,6 +9,7 @@ on:
       - "research/mlb-market-state-matchup-modular-router-v1-contract.json"
       - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
       - "scripts/mlb-market-state-matchup-modular-router-v1.py"
+      - "scripts/mlb-multi-market-coverage-report-compat-v1.py"
       - ".github/workflows/mlb-market-state-matchup-modular-router.yml"
   pull_request:
     branches:
@@ -17,6 +18,7 @@ on:
       - "research/mlb-market-state-matchup-modular-router-v1-contract.json"
       - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
       - "scripts/mlb-market-state-matchup-modular-router-v1.py"
+      - "scripts/mlb-multi-market-coverage-report-compat-v1.py"
       - ".github/workflows/mlb-market-state-matchup-modular-router.yml"
 
 permissions:
@@ -78,8 +80,12 @@ jobs:
           print('MARKET_STATE_MATCHUP_MODULAR_ROUTER_PROTOCOL_PRE_SCORER_FREEZE_PROVED')
           PY
 
-      - name: Syntax check frozen scorer
-        run: python -m py_compile scripts/mlb-market-state-matchup-modular-router-v1.py
+      - name: Syntax check frozen scorer and reporting adapter
+        run: |
+          python -m py_compile scripts/mlb-market-state-matchup-modular-router-v1.py
+          python -m py_compile scripts/mlb-multi-market-coverage-report-compat-v1.py
+          grep -q 'No model, threshold, candidate, settlement, ranking' scripts/mlb-multi-market-coverage-report-compat-v1.py
+          grep -q 'maximumNoPlayEligibleDateStreak' scripts/mlb-multi-market-coverage-report-compat-v1.py
 
       - name: Materialize pinned team-state parent research
         shell: bash
@@ -171,7 +177,7 @@ jobs:
             --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
             --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
             --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
-            --multi-market-scorer scripts/mlb-multi-market-coverage-expansion-v1.py \
+            --multi-market-scorer scripts/mlb-multi-market-coverage-report-compat-v1.py \
             --multi-market-contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
             --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
             --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
@@ -198,7 +204,6 @@ jobs:
           for name,p in r['dailyShadowPicks'].items():
             dates=[x['officialDate'] for x in p]
             assert len(dates)==len(set(dates))
-            assert all(x['officialDate'] not in set() for x in p)
           assert r['scientificBoundary']['oneShadowPickMaximumPerParentNoPlayDate'] is True
           assert r['scientificBoundary']['parentAPlusPremiumDatesReplaced'] is False
           assert r['scientificBoundary']['rulesAreTeamStateAndStructureModularNotTeamNameSpecific'] is True
