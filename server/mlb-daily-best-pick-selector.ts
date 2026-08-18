@@ -1,4 +1,4 @@
-export const MLB_DAILY_BEST_PICK_SELECTOR_SCHEMA = "courtedge-mlb-daily-best-pick-selector.v1" as const;
+export const MLB_DAILY_BEST_PICK_SELECTOR_SCHEMA = "courtedge-mlb-daily-best-pick-selector.v2" as const;
 
 export type MlbDailyBestPickEvaluationState =
   | "READY"
@@ -10,11 +10,14 @@ export type MlbDailyBestPickMarket = "FIRST_5_ML" | "FULL_GAME_ML";
 export type MlbDailyBestPickSide = "HOME" | "AWAY";
 export type MlbDailyBestPickTier = "A_PLUS" | "PREMIUM";
 
+/**
+ * Only routes that already exist in the frozen runtime are executable here.
+ * V68/General/V80 route names are deliberately absent: this selector must not
+ * manufacture a fallback or import an experimental portfolio into production.
+ */
 export type MlbDailyBestPickExecutableRoute =
-  | "A_PLUS_V68_AGREE_D1_ROUTER"
-  | "A_PLUS_D1_ROUTER"
-  | "PREMIUM_A_V68_AGREE_ROUTE_SWITCH"
-  | "PREMIUM_A_ROUTE_SWITCH";
+  | "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1"
+  | "PREMIUM_A_HOME_ML";
 
 export interface MlbDailyBestPickRuntimeEvaluation {
   officialDate: string;
@@ -23,9 +26,8 @@ export interface MlbDailyBestPickRuntimeEvaluation {
   side: MlbDailyBestPickSide;
   route: string;
   evaluationState: MlbDailyBestPickEvaluationState;
-  frozenPriority: number | null;
-  consensusScore: number | null;
-  classifierScore: number | null;
+  /** Existing zero-based order from the preprice runtime. No new score is created. */
+  prepriceRank: number | null;
   sourceEvaluationId?: string | null;
 }
 
@@ -33,7 +35,8 @@ export type MlbDailyBestPickRejectionReason =
   | "NOT_READY"
   | "ROUTE_NOT_EXECUTABLE"
   | "DATE_MISMATCH"
-  | "INVALID_GAME_PK";
+  | "INVALID_GAME_PK"
+  | "INVALID_PREPRICE_RANK";
 
 export interface MlbDailyBestPickSelected {
   officialDate: string;
@@ -43,9 +46,7 @@ export interface MlbDailyBestPickSelected {
   route: MlbDailyBestPickExecutableRoute;
   tier: MlbDailyBestPickTier;
   evaluationState: "READY";
-  frozenPriority: number | null;
-  consensusScore: number | null;
-  classifierScore: number | null;
+  prepriceRank: number;
   sourceEvaluationId: string | null;
 }
 
@@ -64,27 +65,24 @@ export interface MlbDailyBestPickSelectorResult {
   policy: {
     readyEvaluationsOnly: true;
     aPlusAlwaysPrecedesPremium: true;
+    existingPrepriceRankPreservedWithinTier: true;
     provisionalAllowed: false;
     unevaluatedAllowed: false;
     generalV68FallbackAllowed: false;
+    v80DependencyAllowed: false;
     numericEligibilityThresholdAdded: false;
-    v80MutationAllowed: false;
-    rankingMutationAllowed: false;
-    routingMutationAllowed: false;
+    rankingFormulaAdded: false;
+    frozenRoutingChanged: false;
     stakingChanged: false;
     automaticBetPlacement: false;
     realFinancialExposure: 0;
   };
 }
 
-const ROUTE_ORDER: readonly MlbDailyBestPickExecutableRoute[] = [
-  "A_PLUS_V68_AGREE_D1_ROUTER",
-  "A_PLUS_D1_ROUTER",
-  "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
-  "PREMIUM_A_ROUTE_SWITCH",
-] as const;
-
-const ROUTE_ORDER_INDEX = new Map<string, number>(ROUTE_ORDER.map((route, index) => [route, index]));
+const TIER_ORDER: Readonly<Record<MlbDailyBestPickExecutableRoute, number>> = Object.freeze({
+  A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1: 0,
+  PREMIUM_A_HOME_ML: 1,
+});
 
 function validDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -93,50 +91,29 @@ function validDate(value: string): boolean {
 }
 
 function executableRoute(route: string): route is MlbDailyBestPickExecutableRoute {
-  return ROUTE_ORDER_INDEX.has(route);
+  return route === "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1" || route === "PREMIUM_A_HOME_ML";
 }
 
 function tier(route: MlbDailyBestPickExecutableRoute): MlbDailyBestPickTier {
-  return route.startsWith("A_PLUS_") ? "A_PLUS" : "PREMIUM";
+  return route === "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1" ? "A_PLUS" : "PREMIUM";
 }
 
-function finiteOrNull(value: number | null): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function compareFiniteNullableDescending(left: number | null, right: number | null): number {
-  const leftValue = finiteOrNull(left);
-  const rightValue = finiteOrNull(right);
-  if (leftValue == null && rightValue == null) return 0;
-  if (leftValue == null) return 1;
-  if (rightValue == null) return -1;
-  return rightValue - leftValue;
-}
-
-function frozenPriority(value: number | null): number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? value
-    : Number.MAX_SAFE_INTEGER;
+function validPrepriceRank(value: number | null): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 function compareReadyExecutable(
-  left: MlbDailyBestPickRuntimeEvaluation & { route: MlbDailyBestPickExecutableRoute },
-  right: MlbDailyBestPickRuntimeEvaluation & { route: MlbDailyBestPickExecutableRoute },
+  left: MlbDailyBestPickRuntimeEvaluation & { route: MlbDailyBestPickExecutableRoute; prepriceRank: number },
+  right: MlbDailyBestPickRuntimeEvaluation & { route: MlbDailyBestPickExecutableRoute; prepriceRank: number },
 ): number {
-  // Tier/route order is fixed here so a Premium candidate can never jump ahead of A+.
-  const routeDelta = ROUTE_ORDER_INDEX.get(left.route)! - ROUTE_ORDER_INDEX.get(right.route)!;
-  if (routeDelta !== 0) return routeDelta;
+  // Fixed tier boundary: Premium can never outrank A+.
+  const tierDelta = TIER_ORDER[left.route] - TIER_ORDER[right.route];
+  if (tierDelta !== 0) return tierDelta;
 
-  // Frozen priority and frozen scores are tie-breakers only inside the exact same authorized route.
-  const priorityDelta = frozenPriority(left.frozenPriority) - frozenPriority(right.frozenPriority);
-  if (priorityDelta !== 0) return priorityDelta;
+  // Inside the same tier, preserve the existing preprice order exactly.
+  if (left.prepriceRank !== right.prepriceRank) return left.prepriceRank - right.prepriceRank;
 
-  const consensusDelta = compareFiniteNullableDescending(left.consensusScore, right.consensusScore);
-  if (consensusDelta !== 0) return consensusDelta;
-
-  const classifierDelta = compareFiniteNullableDescending(left.classifierScore, right.classifierScore);
-  if (classifierDelta !== 0) return classifierDelta;
-
+  // Identity-only deterministic fallback; it carries no scientific weight.
   if (left.gamePk !== right.gamePk) return left.gamePk - right.gamePk;
   if (left.market !== right.market) return left.market.localeCompare(right.market);
   if (left.side !== right.side) return left.side.localeCompare(right.side);
@@ -149,6 +126,7 @@ function emptyRejectionCounts(): Record<MlbDailyBestPickRejectionReason, number>
     ROUTE_NOT_EXECUTABLE: 0,
     DATE_MISMATCH: 0,
     INVALID_GAME_PK: 0,
+    INVALID_PREPRICE_RANK: 0,
   };
 }
 
@@ -160,7 +138,10 @@ export function selectMlbDailyBestPick(input: {
 
   const rejectionCounts = emptyRejectionCounts();
   let readyEvaluations = 0;
-  const eligible: Array<MlbDailyBestPickRuntimeEvaluation & { route: MlbDailyBestPickExecutableRoute }> = [];
+  const eligible: Array<MlbDailyBestPickRuntimeEvaluation & {
+    route: MlbDailyBestPickExecutableRoute;
+    prepriceRank: number;
+  }> = [];
 
   for (const evaluation of input.evaluations) {
     if (evaluation.evaluationState === "READY") readyEvaluations += 1;
@@ -178,12 +159,18 @@ export function selectMlbDailyBestPick(input: {
       continue;
     }
     if (!executableRoute(evaluation.route)) {
-      // This intentionally excludes V16_V68_CONSENSUS_T0.550 and every other
-      // General/V68 fallback route. A route must already be an A+ or Premium route.
       rejectionCounts.ROUTE_NOT_EXECUTABLE += 1;
       continue;
     }
-    eligible.push({ ...evaluation, route: evaluation.route });
+    if (!validPrepriceRank(evaluation.prepriceRank)) {
+      rejectionCounts.INVALID_PREPRICE_RANK += 1;
+      continue;
+    }
+    eligible.push({
+      ...evaluation,
+      route: evaluation.route,
+      prepriceRank: evaluation.prepriceRank,
+    });
   }
 
   eligible.sort(compareReadyExecutable);
@@ -199,9 +186,7 @@ export function selectMlbDailyBestPick(input: {
         route: winner.route,
         tier: tier(winner.route),
         evaluationState: "READY" as const,
-        frozenPriority: finiteOrNull(winner.frozenPriority),
-        consensusScore: finiteOrNull(winner.consensusScore),
-        classifierScore: finiteOrNull(winner.classifierScore),
+        prepriceRank: winner.prepriceRank,
         sourceEvaluationId: winner.sourceEvaluationId ?? null,
       })
     : null;
@@ -221,13 +206,14 @@ export function selectMlbDailyBestPick(input: {
     policy: Object.freeze({
       readyEvaluationsOnly: true as const,
       aPlusAlwaysPrecedesPremium: true as const,
+      existingPrepriceRankPreservedWithinTier: true as const,
       provisionalAllowed: false as const,
       unevaluatedAllowed: false as const,
       generalV68FallbackAllowed: false as const,
+      v80DependencyAllowed: false as const,
       numericEligibilityThresholdAdded: false as const,
-      v80MutationAllowed: false as const,
-      rankingMutationAllowed: false as const,
-      routingMutationAllowed: false as const,
+      rankingFormulaAdded: false as const,
+      frozenRoutingChanged: false as const,
       stakingChanged: false as const,
       automaticBetPlacement: false as const,
       realFinancialExposure: 0 as const,
