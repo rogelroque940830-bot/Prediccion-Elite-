@@ -36,7 +36,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: 32144338154
 
-      - name: Verify frozen summary field parity and governance
+      - name: Verify concise frozen result metrics and governance
         shell: bash
         run: |
           set -euo pipefail
@@ -44,51 +44,86 @@ jobs:
           test -n "$RESULT"
           test -s "$RESULT"
           python - "$RESULT" <<'PY'
-          import json, sys
+          import json, math, sys
           result=json.load(open(sys.argv[1]))
           summary=json.load(open('research/mlb-nrfi-yrfi-half-inning-hazard-v1-result-summary.json'))
 
-          assert summary['schemaVersion']=='courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v1'
-          assert summary['classification']==result['classification']
+          def close(a,b,tol=1e-15):
+              assert math.isclose(float(a),float(b),rel_tol=0,abs_tol=tol),(a,b)
+
+          assert summary['schemaVersion']=='courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v2'
+          assert summary['classification']==result['classification']=='NRFI_YRFI_HALF_INNING_HAZARD_RETROSPECTIVE_ROBUSTNESS_CANDIDATE_ONLY'
           assert summary['validationGatePassed']==result['validationGatePassed'] is True
-          assert summary['data']==result['data']
-          assert summary['validationGateChecks']==result['validationGateChecks']
-          assert summary['halfInningValidation2023']==result['halfInningValidation2023']
-          assert summary['gameLevelValidation2023']==result['gameLevelValidation2023']
-          assert summary['candidateFrontiers']==result['candidateFrontiers']
-          assert summary['scientificBoundary']==result['scientificBoundary']
-
-          robust=summary['retrospectiveRobustness']
-          assert robust['halfInningCombined2024_2026Ytd']==result['halfInningEvaluation2024_2026Ytd']
-          assert robust['gameLevelCombined2024_2026Ytd']==result['gameLevelEvaluation2024_2026Ytd']
-          for season in ('2024','2025','2026_YTD'):
-              assert robust['halfInningBySeason'][season]==result['halfInningBySeason'][season]
-              assert robust['gameLevelBySeason'][season]==result['gameLevelBySeason'][season]
-          for season in ('2023','2024','2025','2026_YTD'):
-              assert robust['topHalfBySeason'][season]==result['topBottomDescriptive']['TOP'][season]
-              assert robust['bottomHalfBySeason'][season]==result['topBottomDescriptive']['BOTTOM'][season]
-
           assert all(result['validationGateChecks'].values())
-          assert result['gameLevelEvaluation2024_2026Ytd']['brierImprovement'] < 0
+          assert summary['validation2023']['allSixFrozenChecksPassed'] is True
+
+          sample=summary['sample']
+          assert sample['trainingGames2022']==result['data']['trainingGames2022']==2398
+          assert sample['trainingHalfInningRows2022']==result['data']['trainingHalfInningRows2022']==4796
+          assert sample['validationGames2023']==result['data']['validationGames2023']==2399
+          assert sample['validationHalfInningRows2023']==result['data']['validationHalfInningRows2023']==4798
+          assert sample['evaluationGames']==result['data']['evaluationGames']==6608
+          assert sample['evaluationHalfInningRows']==result['data']['evaluationHalfInningRows']==13216
+          assert sample['featureCount']==result['data']['featureCount']==12
+          mismatch=sum(v['step12v3VsV26FirstInningLabelMismatches'] for v in result['data']['custodyBySeason'].values())
+          assert sample['firstInningLabelMismatchTotal']==mismatch==0
+
+          metric_map=(
+              ('validation2023','halfInning','halfInningValidation2023'),
+              ('validation2023','gameLevel','gameLevelValidation2023'),
+              ('retrospectiveCombined2024_2026Ytd','halfInning','halfInningEvaluation2024_2026Ytd'),
+              ('retrospectiveCombined2024_2026Ytd','gameLevel','gameLevelEvaluation2024_2026Ytd'),
+          )
+          for group,level,result_key in metric_map:
+              src=summary[group][level]
+              dst=result[result_key]
+              close(src['logLossImprovement'],dst['logLossImprovement'])
+              close(src['brierImprovement'],dst['brierImprovement'])
+              close(src['rocAuc'],dst['rocAuc'])
+
+          assert result['halfInningValidation2023']['logLossImprovement'] > 0
+          assert result['halfInningValidation2023']['brierImprovement'] > 0
+          assert result['halfInningValidation2023']['rocAuc'] > 0.5
+          assert result['gameLevelValidation2023']['logLossImprovement'] > 0
+          assert result['gameLevelValidation2023']['brierImprovement'] > 0
+          assert result['gameLevelValidation2023']['rocAuc'] > 0.5
+
           assert result['gameLevelEvaluation2024_2026Ytd']['logLossImprovement'] < 0
-          assert all(result['topBottomDescriptive']['TOP'][s]['brierImprovement'] > 0 for s in ('2024','2025','2026_YTD'))
+          assert result['gameLevelEvaluation2024_2026Ytd']['brierImprovement'] < 0
+
+          for season in ('2024','2025','2026_YTD'):
+              close(summary['topHalfBrierImprovement'][season], result['topBottomDescriptive']['TOP'][season]['brierImprovement'])
+              assert result['topBottomDescriptive']['TOP'][season]['brierImprovement'] > 0
+              close(summary['bottomHalfBrierImprovement'][season], result['topBottomDescriptive']['BOTTOM'][season]['brierImprovement'])
           assert result['topBottomDescriptive']['BOTTOM']['2024']['brierImprovement'] < 0
           assert result['topBottomDescriptive']['BOTTOM']['2025']['brierImprovement'] < 0
           assert result['topBottomDescriptive']['BOTTOM']['2026_YTD']['brierImprovement'] > 0
 
           assert result['candidateFrontiers']['status']=='EVALUATED_AFTER_VALIDATION_GATE_PASS'
-          assert set(result['candidateFrontiers']['frontiers'])=={'Q80','Q85','Q90','Q95'}
-          for frontier in result['candidateFrontiers']['frontiers'].values():
-              assert frontier['hitRate'] < 0.55
-              assert frontier['absoluteCalibrationGap'] > 0.10
+          assert set(summary['frontiers'])==set(result['candidateFrontiers']['frontiers'])=={'Q80','Q85','Q90','Q95'}
+          for q in ('Q80','Q85','Q90','Q95'):
+              src=summary['frontiers'][q]
+              raw=result['candidateFrontiers']['frontiers'][q]
+              cov=result['candidateFrontiers']['combinedOpportunityCoverage'][q]
+              assert src['candidates']==raw['candidates']
+              close(src['hitRate'],raw['hitRate'])
+              close(src['wilson95Lower'],raw['wilson95']['lower'])
+              close(src['meanPredictedProbability'],raw['meanPredictedProbability'])
+              close(src['calibrationGap'],raw['absoluteCalibrationGap'])
+              assert src['rescuedParentNoPlayDates']==raw['rescuedParentNoPlayDates']
+              close(src['combinedOpportunityCoveragePct'],cov['combinedOpportunityCoveragePct'])
+              assert raw['hitRate'] < 0.55
+              assert raw['absoluteCalibrationGap'] > 0.10
 
-          interpretation=summary['interpretation']
-          assert interpretation['validationDecision']=='PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES'
-          assert interpretation['retrospectiveRobustnessDecision']=='NOT_STABLE_ENOUGH_FOR_ELITE_ROUTE_OR_PRODUCTION_PROMOTION'
-          assert interpretation['postHocTopOnlyPromotionAllowed'] is False
-          assert interpretation['nrfiYrfiProductionPromotionAllowed'] is False
-          assert interpretation['nrfiYrfiCoverageContributionToEliteRouter']==0
+          decision=summary['decision']
+          assert decision['validationDecision']=='PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES'
+          assert decision['retrospectiveRobustnessDecision']=='FAILED_FOR_ELITE_PROMOTION'
+          assert decision['nrfiYrfiCoverageContributionToEliteRouter']==0
+          assert decision['nrfiYrfiProductionPromotionAllowed'] is False
+          assert decision['postHocTopOnlyPromotionAllowed'] is False
+          assert decision['nextResearchMustFreezeAsymmetricArchitectureBeforeScoring'] is True
 
+          assert summary['scientificBoundary']==result['scientificBoundary']
           boundary=result['scientificBoundary']
           assert boundary['retrospective2024To2026IsIndependentConfirmation'] is False
           assert boundary['prospectiveConfirmationRequired'] is True
@@ -106,8 +141,9 @@ jobs:
           print(json.dumps({
               'classification':result['classification'],
               'validationGatePassed':result['validationGatePassed'],
-              'game2023':result['gameLevelValidation2023'],
-              'game2024_2026':result['gameLevelEvaluation2024_2026Ytd'],
-              'frontiers':result['candidateFrontiers']['frontiers'],
+              'validation2023':summary['validation2023'],
+              'retrospectiveCombined2024_2026Ytd':summary['retrospectiveCombined2024_2026Ytd'],
+              'frontiers':summary['frontiers'],
+              'decision':summary['decision'],
           },indent=2))
           PY
