@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-pp-horizon-reproducibility-amendment.v1",
+  "amendmentRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_AND_BEFORE_ACCEPTED_MODEL_SNAPSHOT",
+  "amendsContractPath": "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json",
+  "doesNotRewriteOriginalContract": true,
+  "prospectiveBoundaryUnchanged": {
+    "firstEligibleOfficialDate": "2026-08-19",
+    "officialDatesOnOrBefore2026_08_18Eligible": false
+  },
+  "reason": "The parent retrospective PP_HORIZON study preserved immutable source code, configuration, candidate and daily-selection outputs, result metrics and artifact custody, but its workflow did not serialize the fitted 2023-2025 preprocessing statistics, intercept or 49 coefficients. Therefore bit-level reproduction of the unpersisted optimizer state cannot be certified after the fact. The first pre-prospective reconstruction attempt used the exact frozen source lineage and exact pinned scientific dependencies and proved exact PP_HORIZON and CONTROL_FULL_MODULAR daily-selection identity before stopping only on a 3.163180227749862e-07 maximum selected-probability difference versus the parent artifact. No model feature, coefficient rule, regularization choice, ranking rule, candidate rule or outcome rule may be changed to repair this numerical difference.",
+  "firstReconstructionEvidence": {
+    "workflowRunId": 32173532902,
+    "jobId": 95830057083,
+    "conclusion": "FAILURE_ON_HISTORICAL_PROBABILITY_BIT_PARITY_ONLY",
+    "maximumSelectedProbabilityAbsoluteDifferenceObserved": 3.163180227749862e-07,
+    "originalContractMaximumProbabilityAbsoluteDifference": 1e-12,
+    "ppHorizonDailySelectionIdentityCheckExecutedBeforeFailure": true,
+    "ppHorizonDailySelectionIdentityMismatches": 0,
+    "controlDailySelectionIdentityCheckExecutedBeforeFailure": true,
+    "controlDailySelectionIdentityMismatches": 0,
+    "scientificDependencyPins": {
+      "python": "3.12",
+      "numpy": "2.2.6",
+      "scipy": "1.15.3",
+      "scikitLearn": "1.8.0"
+    }
+  },
+  "historicalParentProbabilityStatement": {
+    "bitLevelProbabilityParityCertified": false,
+    "reason": "The original fitted solver state was not serialized. A fresh optimizer solve is not accepted as evidence of bit identity merely because it uses the same code and dependencies.",
+    "parentProbabilitiesRemainImmutableHistoricalEvidence": true,
+    "observedDifferenceMustBeRecordedInProspectiveSnapshot": true,
+    "differenceMayNotBeHiddenRoundedAwayOrRelabeledAsExactParity": true
+  },
+  "reconstructedProspectiveSnapshotAcceptance": {
+    "purpose": "Create one immutable pre-outcome implementation state for future prospective scoring without claiming that its unpersisted floating-point optimizer state is bit-identical to the parent run.",
+    "mustUseExactParentSourceLineage": true,
+    "mustUseExactFrozenModelFamilyAndHyperparameters": true,
+    "mustUseExactFrozenFeatureSetAndFeatureOrder": true,
+    "mustUseExactFrozenPreprocessingAlgorithm": true,
+    "mustUseTrainingSeasonsExactly": [
+      "2023",
+      "2024",
+      "2025"
+    ],
+    "prospective2026OutcomesMayEnterTraining": false,
+    "mustReproduceControlDailySelectionIdentity": true,
+    "mustReproducePpHorizonDailySelectionIdentity": true,
+    "dailySelectionIdentityMismatchesAllowed": 0,
+    "mustReproduce2026YtdPpHorizonSeasonResultFromImmutableParent": {
+      "wins": 53,
+      "losses": 18,
+      "pushes": 0,
+      "hitRate": 0.7464788732394366
+    },
+    "historicalProbabilityDifferenceIsDiagnosticNotAcceptanceThreshold": true,
+    "outcomesMayBeUsedToRepairReconstruction": false,
+    "retuningToRepairReconstruction": false,
+    "snapshotMustPersist": [
+      "featureNames",
+      "preprocessing",
+      "intercept",
+      "all49RawCoefficients",
+      "parameterPayloadDigest",
+      "historicalSelectionIdentityEvidence",
+      "observedHistoricalProbabilityDifference"
+    ]
+  },
+  "postSnapshotAuthority": {
+    "acceptedSnapshotBecomesExactProspectiveProbabilityImplementationAuthority": true,
+    "futureModelRefitAllowed": false,
+    "futurePreprocessingRefitAllowed": false,
+    "futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit": true,
+    "maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot": 1e-12,
+    "featureOrderMismatchesAllowed": 0,
+    "candidateIdentityMismatchesAllowed": 0,
+    "dailySelectionIdentityMismatchesAllowed": 0
+  },
+  "scientificChoicesUnchanged": {
+    "policy": "CHALLENGER_PP_HORIZON",
+    "solver": "lbfgs",
+    "regularizationC": 0.25,
+    "maxIterations": 5000,
+    "classWeight": null,
+    "signalDeviationFeatureScale": 0.35,
+    "groupInterceptFeatureScale": 0.2,
+    "ranking": [
+      "DESC_partialPoolProbability",
+      "DESC_qualityPercentile",
+      "DESC_modelProbability",
+      "ASC_market",
+      "ASC_gamePk"
+    ],
+    "candidateUniverseChanged": false,
+    "featuresChanged": false,
+    "hyperparametersChanged": false,
+    "rankingChanged": false,
+    "promotionRulesChanged": false,
+    "outcomeEmbargoChanged": false
+  },
+  "governance": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "betEliteChanged": false,
+    "stakeChanged": false,
+    "autobetChanged": false,
+    "realFinancialExposure": 0
+  }
+}
