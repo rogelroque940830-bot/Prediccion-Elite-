@@ -2,7 +2,9 @@
   "extends": "./tsconfig.json",
   "include": [
     "server/mlb-daily-best-pick-selector.ts",
-    "server/mlb-daily-best-pick-selector.test.ts"
+    "server/mlb-daily-best-pick-selector.test.ts",
+    "server/mlb-daily-best-pick-runtime-adapter.ts",
+    "server/mlb-daily-best-pick-runtime-adapter.test.ts"
   ],
   "exclude": [
     "node_modules",
