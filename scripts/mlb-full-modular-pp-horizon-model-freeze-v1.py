@@ -11,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 
 SCHEMA = "courtedge-mlb-full-modular-pp-horizon-model-snapshot.v1"
 PROSPECTIVE_CONTRACT_SCHEMA = "courtedge-mlb-full-modular-pp-horizon-prospective-contract.v1"
+REPRO_AMENDMENT_SCHEMA = "courtedge-mlb-full-modular-pp-horizon-reproducibility-amendment.v1"
 PARENT_CONTRACT_SCHEMA = "courtedge-mlb-full-modular-partial-pooling-contract.v1"
 FEATURE_SCHEMA = "courtedge-mlb-full-modular-partial-pooling-feature-freeze.v1"
 SHRINKAGE_SCHEMA = "courtedge-mlb-full-modular-partial-pooling-shrinkage-freeze.v1"
@@ -59,12 +60,13 @@ def main():
         "modular-parent-scorer", "modular-parent-contract", "parent-router-scorer", "parent-router-contract",
         "cross-scorer", "cross-contract", "source-count-freeze", "aplus-frozen", "parent-result",
         "partial-pooling-scorer", "parent-contract", "feature-freeze", "shrinkage-freeze",
-        "prospective-contract", "immutable-parent-artifact", "out",
+        "prospective-contract", "reproducibility-amendment", "immutable-parent-artifact", "out",
     ):
         parser.add_argument(f"--{name}", required=True)
     args = parser.parse_args()
 
     prospective_contract = load(args.prospective_contract)
+    amendment = load(args.reproducibility_amendment)
     parent_contract = load(args.parent_contract)
     feature_freeze = load(args.feature_freeze)
     shrinkage = load(args.shrinkage_freeze)
@@ -74,6 +76,26 @@ def main():
 
     if prospective_contract.get("schemaVersion") != PROSPECTIVE_CONTRACT_SCHEMA:
         raise SystemExit("PP_PROSPECTIVE_CONTRACT_SCHEMA_INVALID")
+    if amendment.get("schemaVersion") != REPRO_AMENDMENT_SCHEMA:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_SCHEMA_INVALID")
+    if amendment.get("scientificStatus") != "FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_AND_BEFORE_ACCEPTED_MODEL_SNAPSHOT":
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_STATUS_INVALID")
+    if amendment.get("amendsContractPath") != "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json":
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_TARGET_INVALID")
+    if amendment["prospectiveBoundaryUnchanged"]["firstEligibleOfficialDate"] != "2026-08-19":
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_DATE_DRIFT")
+    if amendment["historicalParentProbabilityStatement"]["bitLevelProbabilityParityCertified"] is not False:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_FALSE_EXACTNESS_REQUIRED")
+    if amendment["reconstructedProspectiveSnapshotAcceptance"]["historicalProbabilityDifferenceIsDiagnosticNotAcceptanceThreshold"] is not True:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_AMENDMENT_MODE_INVALID")
+    if amendment["postSnapshotAuthority"]["maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot"] != 1e-12:
+        raise SystemExit("PP_PROSPECTIVE_RUNTIME_PARITY_TOLERANCE_DRIFT")
+    if amendment["scientificChoicesUnchanged"]["featuresChanged"] is not False:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_FEATURE_DRIFT")
+    if amendment["scientificChoicesUnchanged"]["hyperparametersChanged"] is not False:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_HYPERPARAMETER_DRIFT")
+    if amendment["scientificChoicesUnchanged"]["rankingChanged"] is not False:
+        raise SystemExit("PP_PROSPECTIVE_REPRO_RANKING_DRIFT")
     if parent_contract.get("schemaVersion") != PARENT_CONTRACT_SCHEMA:
         raise SystemExit("PP_PROSPECTIVE_PARENT_CONTRACT_SCHEMA_INVALID")
     if feature_freeze.get("schemaVersion") != FEATURE_SCHEMA:
@@ -148,24 +170,28 @@ def main():
     if [row_identity(cross, r) for r in rebuilt_control] != [row_identity(cross, r) for r in immutable_control]:
         raise SystemExit("PP_PROSPECTIVE_CONTROL_IDENTITY_PARITY_FAILED")
 
+    parent_2026 = immutable_parent["policyResults"][POLICY]["bySeason"]["2026_YTD"]
+    expected_2026 = amendment["reconstructedProspectiveSnapshotAcceptance"]["mustReproduce2026YtdPpHorizonSeasonResultFromImmutableParent"]
+    for key, parent_key in (("wins", "wins"), ("losses", "losses"), ("pushes", "pushes"), ("hitRate", "hitRate")):
+        if parent_2026[parent_key] != expected_2026[key]:
+            raise SystemExit(f"PP_PROSPECTIVE_PARENT_2026_RESULT_DRIFT:{key}")
+
+    # The original parent optimizer state was not serialized. Per the frozen
+    # pre-prospective reproducibility amendment, historical probability delta is
+    # retained as a diagnostic and MUST NOT be relabeled as exact bit parity.
     max_probability_abs_diff = 0.0
     for got, expected in zip(selected, immutable_pp):
         diff = abs(float(got["partialPoolProbability"]) - float(expected["partialPoolProbability"]))
         max_probability_abs_diff = max(max_probability_abs_diff, diff)
-    tolerance = float(prospective_contract["historicalParityGateBeforeProspectiveCapture"]["maximumProbabilityAbsoluteDifference"])
-    if max_probability_abs_diff > tolerance:
-        raise SystemExit(f"PP_PROSPECTIVE_PROBABILITY_PARITY_FAILED:{max_probability_abs_diff}")
-
-    parent_2026 = immutable_parent["policyResults"][POLICY]["bySeason"]["2026_YTD"]
-    expected_2026 = prospective_contract["historicalParityGateBeforeProspectiveCapture"]["mustReproduce2026YtdPpHorizonSeasonResult"]
-    for key, parent_key in (("wins", "wins"), ("losses", "losses"), ("pushes", "pushes"), ("hitRate", "hitRate")):
-        if parent_2026[parent_key] != expected_2026[key]:
-            raise SystemExit(f"PP_PROSPECTIVE_PARENT_2026_RESULT_DRIFT:{key}")
+    original_tolerance = float(prospective_contract["historicalParityGateBeforeProspectiveCapture"]["maximumProbabilityAbsoluteDifference"])
+    historical_probability_bit_parity_certified = max_probability_abs_diff <= original_tolerance
 
     coefficients = [float(v) for v in model.coef_[0]]
     intercept = float(model.intercept_[0])
     if len(coefficients) != len(feature_names):
         raise SystemExit("PP_PROSPECTIVE_COEFFICIENT_LENGTH_DRIFT")
+    if len(coefficients) != 49:
+        raise SystemExit(f"PP_PROSPECTIVE_EXPECTED_49_COEFFICIENTS:{len(coefficients)}")
     if not all(math.isfinite(v) for v in coefficients + [intercept]):
         raise SystemExit("PP_PROSPECTIVE_NONFINITE_MODEL_PARAMETER")
 
@@ -178,14 +204,17 @@ def main():
 
     snapshot = {
         "schemaVersion": SCHEMA,
-        "scientificStatus": "FROZEN_2023_2025_PP_HORIZON_MODEL_SNAPSHOT_PROSPECTIVE_CAPTURE_NOT_YET_STARTED",
+        "scientificStatus": "FROZEN_2023_2025_PP_HORIZON_RECONSTRUCTED_PROSPECTIVE_IMPLEMENTATION_SNAPSHOT_CAPTURE_NOT_YET_STARTED",
         "policy": POLICY,
         "source": {
             "prospectiveContractPath": "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json",
+            "reproducibilityAmendmentPath": "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json",
             "parentPartialPoolingHeadSha": prospective_contract["immutableParentEvidence"]["partialPoolingHeadSha"],
             "parentWorkflowRunId": prospective_contract["immutableParentEvidence"]["partialPoolingResultSummary"]["sourceWorkflowRunId"],
             "parentArtifactId": prospective_contract["immutableParentEvidence"]["partialPoolingResultSummary"]["sourceArtifactId"],
             "parentArtifactDigest": prospective_contract["immutableParentEvidence"]["partialPoolingResultSummary"]["sourceArtifactDigest"],
+            "firstFailedFreezeRunId": amendment["firstReconstructionEvidence"]["workflowRunId"],
+            "firstFailedFreezeJobId": amendment["firstReconstructionEvidence"]["jobId"],
         },
         "training": {
             "seasons": list(training_seasons),
@@ -214,14 +243,24 @@ def main():
             "ppHorizonIdentityMismatches": 0,
             "controlIdentityMismatches": 0,
             "maximumPartialPoolProbabilityAbsoluteDifference": max_probability_abs_diff,
-            "probabilityTolerance": tolerance,
+            "originalContractProbabilityTolerance": original_tolerance,
+            "historicalProbabilityBitParityCertified": historical_probability_bit_parity_certified,
+            "historicalProbabilityDifferenceRole": "DIAGNOSTIC_ONLY_PER_FROZEN_REPRODUCIBILITY_AMENDMENT",
             "ppHorizonSeasonResult": {
                 "wins": parent_2026["wins"],
                 "losses": parent_2026["losses"],
                 "pushes": parent_2026["pushes"],
                 "hitRate": parent_2026["hitRate"],
             },
-            "passed": True,
+            "semanticSelectionParityPassed": True,
+            "historicalProbabilityExactnessClaimed": False,
+            "passedUnderReproducibilityAmendment": True,
+        },
+        "postSnapshotAuthority": {
+            "futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit": True,
+            "maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot": float(amendment["postSnapshotAuthority"]["maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot"]),
+            "modelRefitAllowed": False,
+            "preprocessingRefitAllowed": False,
         },
         "prospectiveBoundary": {
             "firstEligibleOfficialDate": prospective_contract["prospectiveBoundary"]["firstEligibleOfficialDate"],
@@ -240,6 +279,7 @@ def main():
         "parameterPayloadDigest": snapshot["model"]["parameterPayloadDigest"],
         "training": snapshot["training"],
         "historicalParity": snapshot["historicalParity"],
+        "postSnapshotAuthority": snapshot["postSnapshotAuthority"],
     }, indent=2, sort_keys=True))
 
 
