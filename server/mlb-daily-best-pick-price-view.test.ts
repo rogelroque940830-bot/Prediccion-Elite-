@@ -9,17 +9,20 @@ function dailyPick(input: {
   market?: "FIRST_5_ML" | "FULL_GAME_ML";
   tier?: "A_PLUS" | "PREMIUM";
   gamePk?: number;
+  policy?: Record<string, unknown>;
+  side?: "HOME" | "AWAY";
+  schemaVersion?: string;
 } = {}) {
   const market = input.market ?? "FIRST_5_ML";
   return {
-    schemaVersion: "courtedge-mlb-daily-best-pick-ui.v1",
+    schemaVersion: input.schemaVersion ?? "courtedge-mlb-daily-best-pick-ui.v1",
     decision: "BEST_PICK",
     pick: {
       gamePk: input.gamePk ?? 123,
       awayTeam: "Away",
       homeTeam: "Home",
       market,
-      side: "HOME",
+      side: input.side ?? "HOME",
       route: market === "FIRST_5_ML" ? "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1" : "PREMIUM_A_HOME_ML",
       tier: input.tier ?? (market === "FIRST_5_ML" ? "A_PLUS" : "PREMIUM"),
       prepriceRank: 0,
@@ -40,6 +43,7 @@ function dailyPick(input: {
       v80Changed: false,
       automaticBetPlacement: false,
       realFinancialExposure: 0,
+      ...input.policy,
     },
   } as any;
 }
@@ -142,6 +146,7 @@ function priced(input: {
   edgeMarkets?: any[];
   otherGames?: any[];
   policy?: Record<string, unknown>;
+  edgePolicy?: Record<string, unknown>;
   envelopePolicy?: Record<string, unknown>;
   sourceRunId?: string;
 } = {}) {
@@ -159,6 +164,18 @@ function priced(input: {
         { gamePk: 123, markets: input.edgeMarkets ?? [edgeMarket()] },
         ...otherGames.map((row) => ({ gamePk: row.gamePk, markets: row.edgeMarkets ?? [] })),
       ],
+      policy: {
+        fixedEdgeFloorApplied: false,
+        legacyM4aBetLeanThresholdsApplied: false,
+        priceCanCreateIntrinsicThesis: false,
+        marketRankingProduced: false,
+        eliteLabelProduced: false,
+        recommendsBet: false,
+        stakeCalculated: false,
+        automaticBetPlacement: false,
+        realFinancialExposure: 0,
+        ...input.edgePolicy,
+      },
     },
     operatingEnvelope: {
       sourceRunId,
@@ -300,6 +317,23 @@ test("a future policy that produces BET_ELITE is rejected by this visibility lay
   );
 });
 
+test("market-edge recommendation or legacy threshold drift is rejected", () => {
+  assert.throws(
+    () => buildMlbDailyBestPickPriceView({
+      dailyBestPick: dailyPick(),
+      priced: priced({ edgePolicy: { recommendsBet: true } }),
+    }),
+    /MLB_DAILY_BEST_PICK_PRICE_MARKET_EDGE_POLICY_VIOLATION/,
+  );
+  assert.throws(
+    () => buildMlbDailyBestPickPriceView({
+      dailyBestPick: dailyPick(),
+      priced: priced({ edgePolicy: { legacyM4aBetLeanThresholdsApplied: true } }),
+    }),
+    /MLB_DAILY_BEST_PICK_PRICE_MARKET_EDGE_POLICY_VIOLATION/,
+  );
+});
+
 test("new fixed EV or probability thresholds are rejected", () => {
   assert.throws(
     () => buildMlbDailyBestPickPriceView({
@@ -314,5 +348,32 @@ test("new fixed EV or probability thresholds are rejected", () => {
       priced: priced({ envelopePolicy: { fixedProbabilityThresholdApplied: true } }),
     }),
     /MLB_DAILY_BEST_PICK_PRICE_ENVELOPE_POLICY_VIOLATION/,
+  );
+});
+
+test("corrupted Daily BEST PICK schema or fallback policy fails closed", () => {
+  assert.throws(
+    () => buildMlbDailyBestPickPriceView({
+      dailyBestPick: dailyPick({ schemaVersion: "future-schema" }),
+      priced: priced(),
+    }),
+    /MLB_DAILY_BEST_PICK_PRICE_UNTRUSTED_DAILY_SCHEMA/,
+  );
+  assert.throws(
+    () => buildMlbDailyBestPickPriceView({
+      dailyBestPick: dailyPick({ policy: { generalV68FallbackAllowed: true } }),
+      priced: priced(),
+    }),
+    /MLB_DAILY_BEST_PICK_PRICE_DAILY_POLICY_VIOLATION/,
+  );
+});
+
+test("frozen Daily BEST PICK home-side identity cannot be changed by the price layer", () => {
+  assert.throws(
+    () => buildMlbDailyBestPickPriceView({
+      dailyBestPick: dailyPick({ side: "AWAY" }),
+      priced: priced(),
+    }),
+    /MLB_DAILY_BEST_PICK_PRICE_NON_FROZEN_SIDE/,
   );
 });
