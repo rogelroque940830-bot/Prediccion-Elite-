@@ -47,7 +47,7 @@ jobs:
           CONTRACT='research/mlb-full-modular-live-operational-parity-v1-contract.json'
           BRIDGE='server/mlb-full-modular-live-operational-bridge.ts'
           TEST='scripts/mlb-full-modular-live-operational-parity-v1.test.ts'
-          CONTRACT_FREEZE='d0ea1e30b0c70b644125ffd434346db38523f530'
+          CONTRACT_FREEZE='e6d13fefa0b3adfa65b270b3a764a76b389cf416'
           PARENT='9b09838627f42b82e54f4c7d9fef0d0f5f3e1375'
           BRIDGE_ADD="$(git log --diff-filter=A --format=%H -- "$BRIDGE" | tail -1)"
           TEST_ADD="$(git log --diff-filter=A --format=%H -- "$TEST" | tail -1)"
