@@ -1,0 +1,124 @@
+name: MLB Full Modular Live Operational Parity V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-full-modular-live-operational-parity-v1
+    paths:
+      - "research/mlb-full-modular-live-operational-parity-v1-contract.json"
+      - "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json"
+      - "server/mlb-c4-live-feature-builder.ts"
+      - "server/mlb-full13-live-feature-builder.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-full-modular-live-operational-bridge.ts"
+      - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - ".github/workflows/mlb-full-modular-live-operational-parity-v1.yml"
+  pull_request:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-full-modular-live-operational-parity-v1-contract.json"
+      - "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json"
+      - "server/mlb-c4-live-feature-builder.ts"
+      - "server/mlb-full13-live-feature-builder.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-full-modular-live-operational-bridge.ts"
+      - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - ".github/workflows/mlb-full-modular-live-operational-parity-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live-operational-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove chronology and frozen parent authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-full-modular-live-operational-parity-v1-contract.json'
+          BRIDGE='server/mlb-full-modular-live-operational-bridge.ts'
+          TEST='scripts/mlb-full-modular-live-operational-parity-v1.test.ts'
+          CONTRACT_FREEZE='d0ea1e30b0c70b644125ffd434346db38523f530'
+          PARENT='9b09838627f42b82e54f4c7d9fef0d0f5f3e1375'
+          BRIDGE_ADD="$(git log --diff-filter=A --format=%H -- "$BRIDGE" | tail -1)"
+          TEST_ADD="$(git log --diff-filter=A --format=%H -- "$TEST" | tail -1)"
+          test -n "$BRIDGE_ADD"
+          test -n "$TEST_ADD"
+          git merge-base --is-ancestor "$PARENT" "$CONTRACT_FREEZE"
+          git merge-base --is-ancestor "$CONTRACT_FREEZE" "$BRIDGE_ADD"
+          git merge-base --is-ancestor "$CONTRACT_FREEZE" "$TEST_ADD"
+          test "$(git rev-parse HEAD:server/mlb-c4-live-feature-builder.ts)" = '4b909f0860e54813f5c4e2a2cf887455d408985d'
+          test "$(git rev-parse HEAD:server/mlb-full13-live-feature-builder.ts)" = 'ed373ebdd261365138366fd055f500ba8b040587'
+          test "$(git rev-parse HEAD:server/mlb-full-modular-mechanistic-feature-builder.ts)" = '2661986ebc830e7b8274b01e015d8f98bc4b2c96'
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-full-modular-live-operational-parity-v1-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_LIVE_OPERATIONAL_SOURCE_BRIDGE_IMPLEMENTATION'
+          assert c['scope']=='RESEARCH_ONLY'
+          assert c['productionChanged'] is False
+          assert c['realFinancialExposure']==0
+          assert c['parentRouterInputParityHead']=='9b09838627f42b82e54f4c7d9fef0d0f5f3e1375'
+          assert c['decisionTimestampPolicy']['name']=='T_MINUS_5'
+          assert c['decisionTimestampPolicy']['sameDateHistoryAllowed'] is False
+          assert c['authoritativeInputSemantics']['v39ExpectedStarterOuts']['runtimeFitAllowed'] is False
+          assert c['authoritativeInputSemantics']['v39ExpectedStarterOuts']['runtimePreprocessingFitAllowed'] is False
+          assert len(c['authoritativeInputSemantics']['v39ExpectedStarterOuts']['requiredRawFeatureOrder'])==12
+          assert c['historicalAuthorityGateAlreadySatisfied']['fullModularDailySelectionIdentityMismatches']==0
+          assert c['historicalAuthorityGateAlreadySatisfied']['fullModularShadowSelections']==236
+          assert (c['historicalAuthorityGateAlreadySatisfied']['fullModularWins'],c['historicalAuthorityGateAlreadySatisfied']['fullModularLosses'],c['historicalAuthorityGateAlreadySatisfied']['fullModularPushes'])==(177,58,1)
+          print('MLB_FULL_MODULAR_LIVE_OPERATIONAL_CONTRACT_AND_CHRONOLOGY_PROVED')
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check bridge and parity test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-full-modular-live-operational-bridge.ts \
+            scripts/mlb-full-modular-live-operational-parity-v1.test.ts
+
+      - name: Execute fail-closed operational parity suite
+        run: npx tsx scripts/mlb-full-modular-live-operational-parity-v1.test.ts
+
+      - name: Prove research-only change surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='9b09838627f42b82e54f4c7d9fef0d0f5f3e1375'
+          mapfile -t CHANGED < <(git diff --name-only "${BASE}...HEAD")
+          printf '%s\n' "${CHANGED[@]}"
+          for FILE in "${CHANGED[@]}"; do
+            case "$FILE" in
+              research/mlb-full-modular-live-operational-parity-v1-contract.json|server/mlb-full-modular-live-operational-bridge.ts|scripts/mlb-full-modular-live-operational-parity-v1.test.ts|.github/workflows/mlb-full-modular-live-operational-parity-v1.yml)
+                ;;
+              *)
+                echo "FORBIDDEN_STAGE3_CHANGE:$FILE" >&2
+                exit 1
+                ;;
+            esac
+          done
+          echo MLB_FULL_MODULAR_LIVE_OPERATIONAL_RESEARCH_ONLY_SURFACE_PROVED
