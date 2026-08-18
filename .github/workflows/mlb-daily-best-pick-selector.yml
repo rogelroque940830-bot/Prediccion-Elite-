@@ -23,8 +23,11 @@ on:
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
       - "frontend/client/src/components/mlb-unified-v16-control.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-price-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
       - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
@@ -48,8 +51,11 @@ on:
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
       - "frontend/client/src/components/mlb-unified-v16-control.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-price-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
       - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
@@ -85,9 +91,12 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: Test Daily BEST PICK frontend fail-closed presenter
+      - name: Test Daily BEST PICK frontend fail-closed presenters
         working-directory: frontend
-        run: npx tsx --test client/src/lib/mlb-daily-best-pick.test.ts
+        run: >-
+          npx tsx --test
+          client/src/lib/mlb-daily-best-pick.test.ts
+          client/src/lib/mlb-daily-best-pick-price.test.ts
       - name: Verify frontend exactly through production pipeline
         working-directory: frontend
         run: COURTEDGE_STANDALONE_DOCKER_BUILD=true npm run verify
