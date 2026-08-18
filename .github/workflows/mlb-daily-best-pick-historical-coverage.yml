@@ -7,6 +7,7 @@ on:
       - research/mlb-daily-best-pick-historical-coverage-v1
     paths:
       - "research/mlb-daily-best-pick-historical-coverage-v1-contract.json"
+      - "research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json"
       - "scripts/mlb-daily-best-pick-historical-coverage-v1.py"
       - ".github/workflows/mlb-daily-best-pick-historical-coverage.yml"
       - "server/mlb-daily-best-pick-selector.ts"
@@ -18,6 +19,7 @@ on:
       - main
     paths:
       - "research/mlb-daily-best-pick-historical-coverage-v1-contract.json"
+      - "research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json"
       - "scripts/mlb-daily-best-pick-historical-coverage-v1.py"
       - ".github/workflows/mlb-daily-best-pick-historical-coverage.yml"
       - "server/mlb-daily-best-pick-selector.ts"
@@ -189,13 +191,61 @@ jobs:
           assert p['automaticBetPlacement'] is False
           assert p['realFinancialExposure']==0
           assert p['productionChanged'] is False
-          print(json.dumps({
-            'classification':r['classification'],
-            'coverageCeiling':c,
-            'rankSensitivity':r['sameTierRankSensitivity'],
-            'routePoolDiagnostics':r['parentRoutePoolOutcomeDiagnostics'],
-            'productionCoverageBoundary':r['productionCoverageBoundary'],
-          },indent=2))
+          print('DAILY_BEST_PICK_HISTORICAL_REPLAY_BOUNDARIES_VALID')
+          PY
+
+      - name: Verify frozen result summary parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-daily-best-pick-historical-coverage-v1.json'))
+          s=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json'))
+          assert s['classification']==r['classification']
+          rc=r['verifiedParentRouteAvailabilityCeiling']
+          sc=s['verifiedParentRouteAvailabilityCeiling']
+          for key in (
+            'eligibleSlateDates','aPlusTierDates','premiumFallbackOnlyDates',
+            'parentRouteActiveDates','parentRouteNoPlayDates','parentRouteAvailabilityPct',
+            'parentRouteNoPlayPct','aPlusShareOfActiveDatesPct','premiumFallbackShareOfActiveDatesPct',
+            'maximumDailySelectedTiers','maximumNoPlayEligibleDateStreakWithinSeason'
+          ):
+            assert sc[key]==rc[key], (key,sc[key],rc[key])
+          for season in ('2024','2025','2026_YTD'):
+            rs=rc['bySeason'][season]
+            ss=sc['bySeason'][season]
+            for key in (
+              'eligibleSlateDates','aPlusTierDates','premiumFallbackOnlyDates',
+              'parentRouteActiveDates','parentRouteNoPlayDates','parentRouteAvailabilityPct','parentRouteNoPlayPct'
+            ):
+              assert ss[key]==rs[key], (season,key,ss[key],rs[key])
+            assert ss['maximumNoPlayEligibleDateStreak']==rs['noPlayStreaks']['maximumNoPlayEligibleDateStreak']
+          rr=r['sameTierRankSensitivity']
+          sr=s['sameTierRankSensitivity']
+          for key in (
+            'activeDates','singleCandidateDates','multiCandidateSameOutcomeDates',
+            'rankSensitiveOutcomeDates','outcomeDeterminateWithoutCurrentRankDates',
+            'exactCurrentDailySelectedWinLossCertified','currentProductionPrepriceRankPresentInParentRows',
+            'currentProductionPrepriceRankSubstitutionPerformed','outcomesUsedToChooseCandidate'
+          ):
+            assert sr[key]==rr[key], (key,sr[key],rr[key])
+          assert sr['outcomeDeterminateWithoutCurrentRankPct']==100.0*rr['outcomeDeterminateWithoutCurrentRankDates']/rr['activeDates']
+          assert sr['byTier']==rr['byTier']
+          for key in ('possibleAggregateStates','selectedDayWinCountRange','winRateAcrossAllActiveDatesRange','decisiveHitRateRange'):
+            assert sr['outcomeBounds'][key]==rr['outcomeBounds'][key], key
+          assert s['productionCoverageBoundary']==r['productionCoverageBoundary']
+          rp=r['policy']; sp=s['policy']
+          for key in (
+            'aPlusAlwaysPrecedesPremium','maximumDailyPicks','forcedDailyPlayAllowed',
+            'generalV68FallbackAllowed','v80DependencyAllowed','historicalPricesUsed',
+            'thresholdRelaxationPerformed','newRankingFormulaAdded','v69DailyRankSubstitutionPerformed',
+            'betEliteProduced','stakeCalculated','automaticBetPlacement','realFinancialExposure','productionChanged'
+          ):
+            assert sp[key]==rp[key], (key,sp[key],rp[key])
+          assert s['interpretation']['dailyPlayExpectationSupported'] is False
+          assert s['interpretation']['noPlayIsHistoricallyCommonUnderStrictHierarchy'] is True
+          print('DAILY_BEST_PICK_FROZEN_RESULT_SUMMARY_PARITY_VERIFIED')
           PY
 
       - name: Upload Daily BEST PICK historical audit
