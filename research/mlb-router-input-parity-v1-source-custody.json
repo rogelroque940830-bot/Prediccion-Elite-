@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "courtedge-mlb-router-input-source-custody.v1",
+  "scientificStatus": "SOURCE_CUSTODY_PINNED_AFTER_PARITY_CONTRACT_BEFORE_FULL_MODULAR_BRIDGE",
+  "contractCommitSha": "624da74a251ed9443a2d56a731e5c57db92aa27d",
+  "aPlusPremium": {
+    "full13ParityRunId": 31801098242,
+    "full13ParityJobId": 94769013407,
+    "rowsCompared": 11504,
+    "featureChecks": 149552,
+    "mismatchCount": 0,
+    "maximumAbsoluteDifference": 4.440892098500626e-16,
+    "classification": "FULL13_LIVE_PARITY_GATE_PASS",
+    "liveRouteProviderRunId": 31805486480,
+    "liveRouteProviderJobId": 94783267001,
+    "liveRouteProviderConclusion": "SUCCESS"
+  },
+  "ppHorizon": {
+    "snapshotCommitSha": "031650c0684de1ef216622581fb118496e7b8552",
+    "parameterPayloadDigest": "sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275"
+  },
+  "v66": {
+    "workflowRunId": 31962659793,
+    "workflowHeadSha": "1e5b68801181f900ee0531eee9e392da02599006",
+    "buildCustodyJobId": 95203075516,
+    "artifactId": 9267784926,
+    "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+    "artifactZipSha256": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+    "pregameCustodyRawSha256": "sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2",
+    "rows": 11407,
+    "rowsBySeason": {"2022":2398,"2023":2399,"2024":2406,"2025":2423,"2026_YTD":1781}
+  },
+  "v62PitchQualityArtifacts": {
+    "workflowRunId": 31925270654,
+    "2021": {"artifactId":9257656574,"sha256":"sha256:df57f939a75fb73c1da5a7d6ee2153c9f46dc5e4f632944563b71362ca481a87"},
+    "2022": {"artifactId":9257645460,"sha256":"sha256:39319f073a7c40d46d7a5eb82fe9d889972a8908dea82933979f38277c5ddae7"},
+    "2023": {"artifactId":9257665302,"sha256":"sha256:b26b1720a65340438564c65852c94d0aa495dc5705c6f2ad9846612a08db6d60"},
+    "2024": {"artifactId":9257675821,"sha256":"sha256:be97eefb37ccb4d6ba2f618f6c723e7db01f94ba72bf6fdce7f75e31f728e0d7"},
+    "2025": {"artifactId":9257692826,"sha256":"sha256:cc700a43a8d059d9d981c364bc24de91056b05900dffe5a94e4c2a511027855e"},
+    "2026_YTD": {"artifactId":9257688101,"sha256":"sha256:7015e5563ec6ade8c7d676465165c8e14c936daffe73cb3e73794dbbedcd83f5"}
+  },
+  "bullpenArtifacts": {
+    "2022": {"workflowRunId":31962659793,"artifactId":9267648756,"sha256":"sha256:8eb91f6e7083e7c8ec4de3de7f066ace6a7a14a7df15ed07461ed086ce59c528"},
+    "2023": {"workflowRunId":31672480680,"artifactId":9170236781,"sha256":"sha256:81d1b30ab28fd18d7bd726930e600061500e82756dc6cb358ca59be6587fee04"},
+    "2024": {"workflowRunId":31672480680,"artifactId":9170227832,"sha256":"sha256:678a49e3b0b1656223578d3381c9d41faadeed563748b6b75fe1642820827f24"},
+    "2025": {"workflowRunId":31672480680,"artifactId":9170224929,"sha256":"sha256:c8131f56db348b65bfdfacd51d8d09f8d696f1ea5450476d22b3b1a11e2801f1"},
+    "2026_YTD": {"workflowRunId":31672480680,"artifactId":9170235137,"sha256":"sha256:54d44a9955d66637098f93b24f72dae1b8b86b08c96ee4b005e2cf777702c7e0"}
+  },
+  "sourceSemanticsChanged": false,
+  "productionChanged": false,
+  "realFinancialExposure": 0
+}

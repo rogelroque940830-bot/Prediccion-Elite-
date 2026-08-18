@@ -1,0 +1,160 @@
+name: MLB Router Input V66 Authority Extraction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - ".github/workflows/mlb-router-input-v66-authority-extraction.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - ".github/workflows/mlb-router-input-v66-authority-extraction.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extract-v66-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prove contract predates extraction workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-router-input-parity-v1-contract.json'
+          WORKFLOW='.github/workflows/mlb-router-input-v66-authority-extraction.yml'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          WORKFLOW_ADD="$(git log --diff-filter=A --format=%H -- "$WORKFLOW" | tail -1)"
+          test "$CONTRACT_ADD" = '624da74a251ed9443a2d56a731e5c57db92aa27d'
+          test -n "$WORKFLOW_ADD"
+          test "$CONTRACT_ADD" != "$WORKFLOW_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$WORKFLOW_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-router-input-parity-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-router-input-parity-contract.v1'
+          assert c['scientificStatus']=='FROZEN_BEFORE_FULL_MODULAR_LIVE_SOURCE_BRIDGE_IMPLEMENTATION'
+          assert c['sourceCustody']['v66']['authoritativeWorkflowRunId']==31962659793
+          assert c['sourceCustody']['v66']['authoritativeHeadSha']=='1e5b68801181f900ee0531eee9e392da02599006'
+          assert c['parityGatesBeforeUnifiedRouter']['stage1SourceBridgeHistorical']['requiredNumericAbsoluteTolerance']==1e-12
+          assert c['routerNotYetAuthorized']['unifiedHierarchyMayBeWiredByThisContractAlone'] is False
+          print('MLB_ROUTER_INPUT_PARITY_PREIMPLEMENTATION_CONTRACT_PROVED')
+          PY
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Extract exact V39 and V66 parameter authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="$(find inputs/v66 -type f -name 'v66-custody-report.json' -print -quit)"
+          CUSTODY="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          test -n "$REPORT" && test -s "$REPORT"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          mkdir -p work
+          python - "$REPORT" "$CUSTODY" <<'PY'
+          import gzip, hashlib, json, math, sys
+          report_path,custody_path=sys.argv[1:3]
+          with open(report_path,encoding='utf-8') as f:
+              r=json.load(f)
+          assert r['schemaVersion']=='courtedge-p0-step12v66-game-horizon-exposure-custody.v1'
+          assert r['classification']=='V66_PREOUTCOME_CUSTODY_FROZEN_READY_FOR_SEPARATE_OUTCOME_SCORER'
+          assert r['rows']==11407
+          assert r['rowsBySeason']=={'2022':2398,'2023':2399,'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert r['chronology']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['chronology']['futureGameDataAllowed'] is False
+          assert r['chronology']['qualityStateUpdatedAfterWholeOfficialDate'] is True
+          assert r['chronology']['bullpenProfilesUseOfficialDateStrictlyBeforeTarget'] is True
+          assert r['output']['containsOutcomeTargets'] is False
+          assert r['output']['sha256']=='1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          h=hashlib.sha256()
+          with open(custody_path,'rb') as f:
+              for chunk in iter(lambda:f.read(1<<20),b''):
+                  h.update(chunk)
+          assert h.hexdigest()==r['output']['sha256']
+          model=r['expectedStarterOutsModel']
+          assert model['source']=='FROZEN_V39_POISSON_MODEL_RECONSTRUCTION'
+          assert model['fitSeason']=='2022'
+          assert float(model['alpha'])==1.0
+          assert int(model['maxIter'])==1000
+          assert len(model['features'])==12
+          assert len(model['coefficients'])==12
+          assert len(model['medianImpute'])==12
+          assert len(model['mean'])==12
+          assert len(model['scale'])==12
+          assert all(math.isfinite(float(x)) for x in [model['intercept'],*model['coefficients'],*model['medianImpute'],*model['mean'],*model['scale']])
+          assert all(float(x)>0 for x in model['scale'])
+          q=r['qualityTrainingStandardization']
+          assert q['fitSeason']=='2022'
+          assert q['scalarDefinition']=='UNWEIGHTED_MEAN_OF_FIVE_2022_STANDARDIZED_V62_SIDE_COMPONENTS'
+          assert set(q['sideLevelComponentParameters'])=={'velocity','spin','whiff','strike','hard'}
+          out={
+            'schemaVersion':'courtedge-mlb-router-input-v66-authority.v1',
+            'scientificStatus':'EXTRACTED_FROM_IMMUTABLE_PREOUTCOME_V66_CUSTODY_BEFORE_FULL_MODULAR_LIVE_BRIDGE',
+            'source':{
+              'workflowRunId':31962659793,
+              'workflowHeadSha':'1e5b68801181f900ee0531eee9e392da02599006',
+              'artifactId':9267784926,
+              'artifactName':'p0-step12v66-game-horizon-exposure-custody',
+              'artifactZipSha256':'sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12',
+              'pregameCustodyRawSha256':'sha256:'+r['output']['sha256'],
+              'rows':r['rows'],
+              'rowsBySeason':r['rowsBySeason'],
+            },
+            'expectedStarterOutsModel':model,
+            'qualityTrainingStandardization':q,
+            'coverageBySeason':r['coverageBySeason'],
+            'bullpenSourcePacks':r['bullpenSourcePacks'],
+            'chronology':r['chronology'],
+            'runtimeRules':{
+              'v39ModelRefitAllowed':False,
+              'v39PreprocessingRefitAllowed':False,
+              'qualityScalerRefitAllowed':False,
+              'sameDateHistoryAllowed':False,
+              'futureGameDataAllowed':False,
+              'targetGameOutcomeAllowed':False,
+            },
+            'productionChanged':False,
+            'realFinancialExposure':0,
+          }
+          payload=json.dumps(out,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+          out['authorityPayloadSha256']='sha256:'+hashlib.sha256(payload).hexdigest()
+          with open('work/mlb-router-input-v66-authority-v1.json','w',encoding='utf-8') as f:
+              json.dump(out,f,indent=2,sort_keys=True,allow_nan=False);f.write('\n')
+          print('MLB_ROUTER_INPUT_V66_AUTHORITY_BEGIN')
+          print(json.dumps(out,sort_keys=True,separators=(',',':'),allow_nan=False))
+          print('MLB_ROUTER_INPUT_V66_AUTHORITY_END')
+          print('MLB_ROUTER_INPUT_V66_AUTHORITY_PAYLOAD_SHA256',out['authorityPayloadSha256'])
+          PY
+
+      - name: Upload extracted immutable authority
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-router-input-v66-authority-v1
+          path: work/mlb-router-input-v66-authority-v1.json
+          if-no-files-found: error
+          retention-days: 90

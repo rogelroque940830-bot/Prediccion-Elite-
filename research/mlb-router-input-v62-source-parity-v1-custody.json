@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "courtedge-mlb-router-input-v62-source-parity-custody.v1",
+  "scientificStatus": "IMMUTABLE_V62_RAW_SOURCE_TO_V66_PARITY_EVIDENCE",
+  "contractCommitSha": "624da74a251ed9443a2d56a731e5c57db92aa27d",
+  "parityDriverCommitSha": "3f4e90efed719a06a3639f1c45d2c3aeeb980bae",
+  "workflowRunId": 32180533751,
+  "workflowJobId": 95852250242,
+  "conclusion": "SUCCESS",
+  "artifactId": 9340598263,
+  "artifactName": "mlb-router-input-v62-source-parity-v1",
+  "artifactZipSha256": "sha256:beee2aeaadc5e1068266b5acd81f0d84c724681b43e88d79e6d6a7b746ffd965",
+  "sourceAuthority": {
+    "v62PitchQualityWorkflowRunId": 31925270654,
+    "v60StarterCustodyWorkflowRunId": 31919873754,
+    "v66WorkflowRunId": 31962659793,
+    "v66PregameCustodyRawSha256": "sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2"
+  },
+  "result": {
+    "classification": "V62_RAW_SOURCE_TO_V66_PARITY_PASS",
+    "rows": 11407,
+    "starterIdentityUsableRows": 11396,
+    "qualityAvailableRows": 11091,
+    "qualityFields": [
+      "starter_velocity_adv",
+      "starter_spin_adv",
+      "starter_swing_miss_adv",
+      "starter_in_zone_adv",
+      "starter_weak_contact_adv"
+    ],
+    "comparisons": 57035,
+    "numericMismatches": 0,
+    "missingnessMismatches": 0,
+    "totalMismatches": 0,
+    "maximumAbsoluteDifference": 5.395683899678261e-13,
+    "requiredTolerance": 1e-12,
+    "rollingLookbackDays": 365,
+    "sameDateStateUpdateAfterScoring": true,
+    "targetGameOutcomeUsed": false
+  },
+  "productionChanged": false,
+  "realFinancialExposure": 0
+}

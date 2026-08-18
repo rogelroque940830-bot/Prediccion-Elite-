@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "courtedge-mlb-router-input-v39-source-parity-custody.v1",
+  "scientificStatus": "IMMUTABLE_V39_STEP12V3_SOURCE_TO_V66_PARITY_EVIDENCE",
+  "contractCommitSha": "624da74a251ed9443a2d56a731e5c57db92aa27d",
+  "snapshotCommitSha": "0970e5c35a4610ca8d5a43a737ad6a35173402bd",
+  "parityDriverInitialCommitSha": "7a681c54ed3e0e72e4f5611059642598a9ef2e45",
+  "typingOnlyFixCommitSha": "34990b8cc257857b2c7e76ecc5473d5648ec4c8c",
+  "workflowRunId": 32180829112,
+  "workflowJobId": 95853181959,
+  "conclusion": "SUCCESS",
+  "artifactId": 9340696558,
+  "artifactName": "mlb-router-input-v39-source-parity-v1",
+  "artifactZipSha256": "sha256:d305e9450bbc5ebe83b0faf7032ffcc0b16dc16e50584ff70aa8200f022515a3",
+  "sourceAuthority": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3ArtifactId": 9166442982,
+    "step12v3ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "v66WorkflowRunId": 31962659793,
+    "v39ParameterPayloadDigest": "sha256:29efa6b950c3dde20e6362cb604341add4df8528ef6d16deadb5f60869d8c0fa"
+  },
+  "result": {
+    "classification": "V39_STEP12V3_SOURCE_TO_V66_PARITY_PASS",
+    "rows": 11407,
+    "comparisons": 22814,
+    "livePregameProbableStarterSlots": 22792,
+    "historicalExactProbableRecordedEligibleSlots": 22753,
+    "numericMismatches": 0,
+    "missingnessMismatches": 0,
+    "totalMismatches": 0,
+    "maximumAbsoluteDifference": 3.197442310920451e-14,
+    "requiredTolerance": 1e-12,
+    "historicalReplayUsesRecordedStarterOnlyForEligibilityAudit": true,
+    "recordedStarterIdentityIsNotALiveRuntimeFeature": true,
+    "seasonHistoryReset": true,
+    "sameDateStateUpdateAfterScoring": true,
+    "futureGameDataUsed": false,
+    "targetGameOutcomeUsedAsModelFeature": false
+  },
+  "productionChanged": false,
+  "realFinancialExposure": 0
+}
