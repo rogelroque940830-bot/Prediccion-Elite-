@@ -7,6 +7,8 @@ on:
     paths:
       - "server/mlb-daily-best-pick-selector.ts"
       - "server/mlb-daily-best-pick-selector.test.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.test.ts"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
   workflow_dispatch:
@@ -25,7 +27,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Typecheck selector
+      - name: Typecheck Daily BEST PICK block
         run: npx tsc -p tsconfig.mlb-daily-best-pick-selector.json
-      - name: Test selector
-        run: npx tsx --test server/mlb-daily-best-pick-selector.test.ts
+      - name: Test selector and frozen runtime adapter
+        run: npx tsx --test server/mlb-daily-best-pick-selector.test.ts server/mlb-daily-best-pick-runtime-adapter.test.ts
