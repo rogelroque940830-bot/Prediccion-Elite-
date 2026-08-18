@@ -20,6 +20,7 @@ import {
 } from "./mlb-unified-v16-live-input-assembler";
 import { createMlbUnifiedV16DefaultLiveEvidenceProviders } from "./mlb-unified-v16-live-providers";
 import { auditMlbV16NoPlayFunnel } from "./mlb-v16-no-play-funnel-audit";
+import { buildMlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
 export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v2" as const;
@@ -212,6 +213,7 @@ export async function executeMlbUnifiedV16UiCommand(
     reserveCredits: runtime.reserveCredits,
   });
   const noPlayAudit = auditMlbV16NoPlayFunnel(result);
+  const dailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
 
   return {
     httpStatus: 200,
@@ -224,14 +226,20 @@ export async function executeMlbUnifiedV16UiCommand(
         schemaVersion: result.schemaVersion,
         summary: result.summary,
         prepriceSummary: result.preprice.summary,
+        dailyBestPick,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. The no-play funnel is exposed separately from the price-independent sports prediction; no threshold, stake, or final recommendation is changed by this diagnostic.",
+      nextBoundary: "Priced V16 evidence run completed. Daily BEST PICK is exposed only from the trusted FINAL frozen preprice runtime; it adds no threshold, General/V68/V80 fallback, stake, or automatic wager.",
       policy: {
         explicitInvocationRequired: true,
         certifiedServerAssemblyComplete: true,
         pricedRunnerCalled: true,
+        dailyBestPickDerivedFromTrustedPreprice: true,
+        dailyBestPickBrowserInputAllowed: false,
+        dailyBestPickChangesFrozenRouting: false,
+        dailyBestPickGeneralV68FallbackAllowed: false,
+        dailyBestPickV80DependencyAllowed: false,
         browserReceivesProviderSecret: false,
         browserMayForgeCertifiedInputs: false,
         automaticPolling: false,
