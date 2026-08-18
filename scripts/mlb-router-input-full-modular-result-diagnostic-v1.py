@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Workflow trigger only: diagnostic comparison logic unchanged.
 import argparse
 import hashlib
 import json
@@ -29,7 +30,6 @@ def recursive_diff(a, b, path="$", out=None, limit=200):
     if len(out) >= limit:
         return out
     if type(a) is not type(b):
-        # Python int/float are scientifically comparable even when JSON lexical form differed.
         if finite_number(a) and finite_number(b) and float(a) == float(b):
             return out
         out.append({"path": path, "kind": "TYPE", "original": a, "generated": b})
