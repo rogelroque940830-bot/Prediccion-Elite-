@@ -1,0 +1,43 @@
+name: Validate Railway Healthcheck Contract
+
+on:
+  push:
+    branches:
+      - "ops/railway-healthcheck-v1"
+    paths:
+      - "railway.toml"
+      - "server/index.ts"
+      - ".github/workflows/railway-healthcheck-contract.yml"
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - "railway.toml"
+      - "server/index.ts"
+      - ".github/workflows/railway-healthcheck-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Verify Railway probes the dedicated health route
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^path = "/health"$' railway.toml
+          grep -q 'app.get("/health"' server/index.ts
+          ! grep -q '^path = "/api/mlb/all"$' railway.toml
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Build backend
+        run: npm run build:backend
