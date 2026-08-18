@@ -19,6 +19,12 @@
       "path": "server/mlb-intrinsic-edge.ts",
       "gitBlobSha": "81ba8d2037ecb60186434c3cce62009a97e06137",
       "schemaVersion": "courtedge-p0-mlb-intrinsic-edge.v3"
+    },
+    "shortlist": {
+      "path": "server/mlb-shortlist.ts",
+      "gitBlobSha": "d1b382dac50445bacf76cc1f87759d0c1bde57af",
+      "schemaVersion": "courtedge-p0-mlb-shortlist.v1",
+      "hardMaximumCandidates": 8
     }
   },
   "immutableHistoricalInputs": {
@@ -98,7 +104,7 @@
     "exactProductionStep11cCoverageCanBeCertifiedFromParentArtifact": false,
     "parentRouteAvailabilityCanBeCertified": true,
     "historicalParentRouteAvailabilityIsUpperBoundForCurrentPipeline": true,
-    "requiredHandling": "REPORT_PARENT_ROUTE_AVAILABILITY_AS_A_CERTIFIED_CEILING_AND_DO_NOT_LABEL_IT_EXACT_PRODUCTION_COVERAGE_UNLESS_CURRENT_STEP11C_POPULATION_PARITY_IS RECONSTRUCTED"
+    "requiredHandling": "REPORT_PARENT_ROUTE_AVAILABILITY_AS_A_CERTIFIED_CEILING_AND_DO_NOT_LABEL_IT_EXACT_PRODUCTION_COVERAGE_UNLESS_CURRENT_STEP11C_POPULATION_PARITY_IS_RECONSTRUCTED"
   },
   "rankingLimitation": {
     "exactCurrentPrepriceRankRequiredForExactDailySelectedWinLoss": true,
