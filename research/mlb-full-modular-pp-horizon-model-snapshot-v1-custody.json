@@ -41,6 +41,13 @@
     "prospectiveOutcomesMayEnterTraining": false,
     "outcomesMayBeReadBeforeEmbargoMaturity": false
   },
+  "parityValidation": {
+    "workflowPath": ".github/workflows/mlb-full-modular-pp-horizon-snapshot-parity.yml",
+    "validationMustNotRefitModel": true,
+    "validationMustRecomputeParameterPayloadDigest": true,
+    "validationMustVerifySnapshotFileSha256": true,
+    "validationMustVerifyHistoricalSemanticSelectionParity": true
+  },
   "scientificChoicesChangedByCustody": false,
   "productionChanged": false,
   "realFinancialExposure": 0
