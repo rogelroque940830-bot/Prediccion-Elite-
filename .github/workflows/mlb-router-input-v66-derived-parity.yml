@@ -1,0 +1,125 @@
+name: MLB Router Input V66 Derived Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "scripts/mlb-router-input-v66-derived-parity-v1.ts"
+      - ".github/workflows/mlb-router-input-v66-derived-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "scripts/mlb-router-input-v66-derived-parity-v1.ts"
+      - ".github/workflows/mlb-router-input-v66-derived-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  v66-derived-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove historical parity code follows frozen contract and builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-router-input-parity-v1-contract.json'
+          BUILDER='server/mlb-full-modular-mechanistic-feature-builder.ts'
+          PARITY='scripts/mlb-router-input-v66-derived-parity-v1.ts'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          BUILDER_ADD="$(git log --diff-filter=A --format=%H -- "$BUILDER" | tail -1)"
+          PARITY_ADD="$(git log --diff-filter=A --format=%H -- "$PARITY" | tail -1)"
+          test "$CONTRACT_ADD" = '624da74a251ed9443a2d56a731e5c57db92aa27d'
+          test "$BUILDER_ADD" = '8880cc961d0444d5d4a995536972ddf0d8c5bad2'
+          test "$PARITY_ADD" = '22e8090768b1cdbd62392104d19670269fbdda23'
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$BUILDER_ADD"
+          git merge-base --is-ancestor "$BUILDER_ADD" "$PARITY_ADD"
+          echo MLB_ROUTER_INPUT_V66_DERIVED_PARITY_CHRONOLOGY_PROVED
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Resolve and verify immutable custody bytes
+        id: custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          test -n "$FILE" && test -s "$FILE"
+          ACTUAL="sha256:$(sha256sum "$FILE" | awk '{print $1}')"
+          EXPECTED='sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          test "$ACTUAL" = "$EXPECTED"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo MLB_ROUTER_INPUT_V66_CUSTODY_BYTES_VERIFIED "$ACTUAL"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Recompute every V66 derived Full Modular input
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          npx tsx scripts/mlb-router-input-v66-derived-parity-v1.ts \
+            --custody '${{ steps.custody.outputs.file }}' \
+            --out work/mlb-router-input-v66-derived-parity-v1.json
+
+      - name: Validate zero mismatch gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('work/mlb-router-input-v66-derived-parity-v1.json','utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-router-input-v66-derived-parity.v1') throw new Error('schema');
+          if(r.classification!=='V66_DERIVED_RUNTIME_PARITY_PASS') throw new Error('classification');
+          if(r.rows!==11407 || r.uniqueIdentityRows!==11407) throw new Error('rows');
+          const expected={"2022":2398,"2023":2399,"2024":2406,"2025":2423,"2026_YTD":1781};
+          if(JSON.stringify(r.rowsBySeason)!==JSON.stringify(expected)) throw new Error('season counts');
+          if(r.tolerance!==1e-12) throw new Error('tolerance');
+          if(r.derivedFeatureCount!==68) throw new Error(`feature count ${r.derivedFeatureCount}`);
+          if(r.comparisons!==775676) throw new Error(`comparison count ${r.comparisons}`);
+          if(r.numericMismatches!==0 || r.missingnessMismatches!==0 || r.totalMismatches!==0) throw new Error('mismatch');
+          if(r.maximumAbsoluteDifference>1e-12) throw new Error(`max diff ${r.maximumAbsoluteDifference}`);
+          if(r.sameDateOutcomeInputsUsed!==false || r.targetGameOutcomeInputsUsed!==false) throw new Error('outcome boundary');
+          if(r.productionChanged!==false || r.realFinancialExposure!==0) throw new Error('safety');
+          console.log('MLB_ROUTER_INPUT_V66_11407_ROW_DERIVED_PARITY_PASSED');
+          console.log('MLB_ROUTER_INPUT_V66_MAX_ABS_DIFF',r.maximumAbsoluteDifference);
+          NODE
+
+      - name: Typecheck historical parity driver
+        run: npx tsc --noEmit --skipLibCheck --module ESNext --moduleResolution bundler --target ES2022 --types node scripts/mlb-router-input-v66-derived-parity-v1.ts server/mlb-full-modular-mechanistic-feature-builder.ts
+
+      - name: Upload parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-router-input-v66-derived-parity-v1
+          path: work/mlb-router-input-v66-derived-parity-v1.json
+          if-no-files-found: error
+          retention-days: 90
