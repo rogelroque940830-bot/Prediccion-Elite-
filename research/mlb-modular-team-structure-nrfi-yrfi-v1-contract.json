@@ -141,9 +141,16 @@
       "MODULAR_BALANCED": {"STRONG": "Q80", "MIDDLE": "Q85", "WEAK": "Q90", "UNSTABLE": "Q95"},
       "MODULAR_CONSERVATIVE": {"STRONG": "Q85", "MIDDLE": "Q90", "WEAK": "Q95", "UNSTABLE": "NO_PLAY"}
     },
+    "nrfiYrfiFrontierByPolicy": {
+      "UNIFORM_Q85": "Q85",
+      "UNIFORM_Q90": "Q90",
+      "MODULAR_BALANCED": "Q85",
+      "MODULAR_CONSERVATIVE": "Q90"
+    },
     "directionConstraint": "WEAK and UNSTABLE may never receive a looser frontier than MIDDLE; MIDDLE may never receive a looser frontier than STRONG.",
     "postOutcomeTemplateEditingAllowed": false,
     "postOutcomeTierEditingAllowed": false,
+    "postOutcomeNrfiYrfiFrontierEditingAllowed": false,
     "forcedCandidateAllowed": false
   },
   "nrfiYrfiModel": {
