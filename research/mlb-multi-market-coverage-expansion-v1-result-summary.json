@@ -1,0 +1,166 @@
+{
+  "schemaVersion": "courtedge-mlb-multi-market-coverage-expansion-result-summary.v1",
+  "classification": "MULTI_MARKET_NO_PLAY_RESCUE_DISCOVERY_COMPLETE_NOT_PRICE_VALIDATED_NOT_PRODUCTION_PROMOTED",
+  "scientificStatus": "RETROSPECTIVE_MULTI_MARKET_DISCOVERY_WITH_PREDECLARED_MODELS_AND_FRONTIERS_NOT_PRICE_VALIDATION",
+  "ci": {
+    "workflow": "MLB Multi-Market Coverage Expansion",
+    "runId": 32100496103,
+    "jobId": 95599917813,
+    "conclusion": "success",
+    "artifactId": 9311385359,
+    "artifactName": "mlb-multi-market-coverage-expansion-v1",
+    "artifactDigest": "sha256:7aee0ab1a58c3160d35e3b2513c55d4e5cb9b0c848e2d5b7d018f28977260e96"
+  },
+  "sample": {
+    "trainingRows2022": 2398,
+    "validationRows2023": 2399,
+    "evaluationRows": 6610,
+    "eligibleSlateDates": 505,
+    "parentRouteActiveDates": 200,
+    "parentRouteNoPlayDates": 305
+  },
+  "validation": {
+    "qualifiedVariants": {
+      "F3_RL_HOME_PLUS_0_5": 0.0022269629656443968,
+      "F5_ML": 0.005634722394607383,
+      "F5_RL_HOME_MINUS_0_5": 0.004048569069741048,
+      "F5_RL_HOME_PLUS_0_5": 0.003363758190425087,
+      "FG_ML": 0.004233874376870367,
+      "FG_RL_HOME_MINUS_1_5": 0.006695737628457404,
+      "FG_RL_HOME_PLUS_1_5": 0.003277111843938696
+    },
+    "failedDirectionalVariants": {
+      "F3_RL_HOME_MINUS_0_5": -0.0004161956734160539
+    },
+    "totalFamilyGates": {
+      "F3_TOTAL": {"averageFixedLineBrierImprovement": -0.004588486014523496, "validationQualified": false},
+      "F5_TOTAL": {"averageFixedLineBrierImprovement": -0.005180229758346033, "validationQualified": false},
+      "FG_TOTAL": {"averageFixedLineBrierImprovement": -0.0003660940838928595, "validationQualified": false}
+    }
+  },
+  "qualifiedVariantOosEvidence": {
+    "F3_RL_HOME_PLUS_0_5": {
+      "family": "F3_RUN_LINE", "combinedBrierImprovement": 0.001339645113286242, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 175, "hitRate": 0.7448494453248812, "wilson95Lower": 0.7094239236844657, "decisive": 631},
+      "Q85": {"rescuedNoPlayDates": 145, "hitRate": 0.7651991614255765, "wilson95Lower": 0.7251348068026687, "decisive": 477},
+      "Q90": {"rescuedNoPlayDates": 97, "hitRate": 0.7993197278911565, "wilson95Lower": 0.7498106744212294, "decisive": 294},
+      "Q95": {"rescuedNoPlayDates": 45, "hitRate": 0.8362068965517241, "wilson95Lower": 0.7582995878695619, "decisive": 116}
+    },
+    "F5_ML": {
+      "family": "F5_ML", "combinedBrierImprovement": 0.0033749468842332875, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 142, "hitRate": 0.6547231270358306, "wilson95Lower": 0.5999208194131986, "decisive": 307, "pushes": 43},
+      "Q85": {"rescuedNoPlayDates": 106, "hitRate": 0.6588785046728972, "wilson95Lower": 0.5930588026473669, "decisive": 214, "pushes": 31},
+      "Q90": {"rescuedNoPlayDates": 79, "hitRate": 0.6376811594202898, "wilson95Lower": 0.5547613929154616, "decisive": 138, "pushes": 21},
+      "Q95": {"rescuedNoPlayDates": 21, "hitRate": 0.8387096774193549, "wilson95Lower": 0.6736564604120674, "decisive": 31, "pushes": 7}
+    },
+    "F5_RL_HOME_MINUS_0_5": {
+      "family": "F5_RUN_LINE", "combinedBrierImprovement": 0.0027699974553846707, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 137, "hitRate": 0.6647230320699709, "wilson95Lower": 0.6131824919511863, "decisive": 343},
+      "Q85": {"rescuedNoPlayDates": 100, "hitRate": 0.6554621848739496, "wilson95Lower": 0.5930490564334877, "decisive": 238},
+      "Q90": {"rescuedNoPlayDates": 76, "hitRate": 0.6863905325443787, "wilson95Lower": 0.6129561359666054, "decisive": 169},
+      "Q95": {"rescuedNoPlayDates": 29, "hitRate": 0.7230769230769231, "wilson95Lower": 0.6041936164611803, "decisive": 65}
+    },
+    "F5_RL_HOME_PLUS_0_5": {
+      "family": "F5_RUN_LINE", "combinedBrierImprovement": 0.001969483341129008, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 186, "hitRate": 0.6937394247038917, "wilson95Lower": 0.6554254145081723, "decisive": 591},
+      "Q85": {"rescuedNoPlayDates": 138, "hitRate": 0.7086419753086419, "wilson95Lower": 0.662592882097524, "decisive": 405},
+      "Q90": {"rescuedNoPlayDates": 107, "hitRate": 0.6956521739130435, "wilson95Lower": 0.6363772964562959, "decisive": 253},
+      "Q95": {"rescuedNoPlayDates": 54, "hitRate": 0.6363636363636364, "wilson95Lower": 0.5381589889509573, "decisive": 99}
+    },
+    "FG_ML": {
+      "family": "FG_ML", "combinedBrierImprovement": 0.0039166781682414276, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 120, "hitRate": 0.7153024911032029, "wilson95Lower": 0.6599122148006408, "decisive": 281},
+      "Q85": {"rescuedNoPlayDates": 91, "hitRate": 0.7403846153846154, "wilson95Lower": 0.6768261975402383, "decisive": 208},
+      "Q90": {"rescuedNoPlayDates": 63, "hitRate": 0.7586206896551724, "wilson95Lower": 0.6828764882654638, "decisive": 145},
+      "Q95": {"rescuedNoPlayDates": 31, "hitRate": 0.8142857142857143, "wilson95Lower": 0.7077442179325669, "decisive": 70}
+    },
+    "FG_RL_HOME_MINUS_1_5": {
+      "family": "FG_RUN_LINE", "combinedBrierImprovement": 0.0026100050671777897, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 211, "hitRate": 0.7495881383855024, "wilson95Lower": 0.7136251083780912, "decisive": 607},
+      "Q85": {"rescuedNoPlayDates": 164, "hitRate": 0.7603911980440098, "wilson95Lower": 0.7167227369990472, "decisive": 409},
+      "Q90": {"rescuedNoPlayDates": 117, "hitRate": 0.7384615384615385, "wilson95Lower": 0.6818476946358017, "decisive": 260},
+      "Q95": {"rescuedNoPlayDates": 61, "hitRate": 0.7348484848484849, "wilson95Lower": 0.6536809748547596, "decisive": 132}
+    },
+    "FG_RL_HOME_PLUS_1_5": {
+      "family": "FG_RUN_LINE", "combinedBrierImprovement": 0.0028713678680811205, "positiveEvaluationSeasons": 3,
+      "Q80": {"rescuedNoPlayDates": 168, "hitRate": 0.7678275290215588, "wilson95Lower": 0.7324964439811906, "decisive": 603},
+      "Q85": {"rescuedNoPlayDates": 127, "hitRate": 0.797752808988764, "wilson95Lower": 0.7579570683805525, "decisive": 445},
+      "Q90": {"rescuedNoPlayDates": 85, "hitRate": 0.8053691275167785, "wilson95Lower": 0.7566495606724349, "decisive": 298},
+      "Q95": {"rescuedNoPlayDates": 48, "hitRate": 0.8263888888888888, "wilson95Lower": 0.7562655721912297, "decisive": 144}
+    }
+  },
+  "familyRescueDates": {
+    "F3_RUN_LINE": {"Q80": 175, "Q85": 145, "Q90": 97, "Q95": 45},
+    "F3_TOTAL": {"Q80": 0, "Q85": 0, "Q90": 0, "Q95": 0},
+    "F5_ML": {"Q80": 142, "Q85": 106, "Q90": 79, "Q95": 21},
+    "F5_RUN_LINE": {"Q80": 213, "Q85": 158, "Q90": 126, "Q95": 58},
+    "F5_TOTAL": {"Q80": 0, "Q85": 0, "Q90": 0, "Q95": 0},
+    "FG_ML": {"Q80": 120, "Q85": 91, "Q90": 63, "Q95": 31},
+    "FG_RUN_LINE": {"Q80": 253, "Q85": 217, "Q90": 160, "Q95": 86},
+    "FG_TOTAL": {"Q80": 0, "Q85": 0, "Q90": 0, "Q95": 0}
+  },
+  "overallNoPlayRescueFrontier": {
+    "Q80": {
+      "rescuedParentNoPlayDates": 273, "combinedOpportunityDates": 473, "combinedOpportunityCoveragePct": 93.66336633663366, "remainingNoPlayDates": 32, "maximumRemainingNoPlayStreak": 5,
+      "bySeason": {
+        "2024": {"combinedOpportunityDates": 173, "combinedOpportunityCoveragePct": 93.51351351351352, "remainingNoPlayDates": 12},
+        "2025": {"combinedOpportunityDates": 177, "combinedOpportunityCoveragePct": 96.19565217391305, "remainingNoPlayDates": 7},
+        "2026_YTD": {"combinedOpportunityDates": 123, "combinedOpportunityCoveragePct": 90.44117647058823, "remainingNoPlayDates": 13}
+      }
+    },
+    "Q85": {
+      "rescuedParentNoPlayDates": 247, "combinedOpportunityDates": 447, "combinedOpportunityCoveragePct": 88.51485148514851, "remainingNoPlayDates": 58, "maximumRemainingNoPlayStreak": 5,
+      "bySeason": {
+        "2024": {"combinedOpportunityDates": 166, "combinedOpportunityCoveragePct": 89.72972972972973, "remainingNoPlayDates": 19},
+        "2025": {"combinedOpportunityDates": 168, "combinedOpportunityCoveragePct": 91.30434782608695, "remainingNoPlayDates": 16},
+        "2026_YTD": {"combinedOpportunityDates": 113, "combinedOpportunityCoveragePct": 83.08823529411765, "remainingNoPlayDates": 23}
+      }
+    },
+    "Q90": {
+      "rescuedParentNoPlayDates": 203, "combinedOpportunityDates": 403, "combinedOpportunityCoveragePct": 79.8019801980198, "remainingNoPlayDates": 102, "maximumRemainingNoPlayStreak": 9,
+      "bySeason": {
+        "2024": {"combinedOpportunityDates": 151, "combinedOpportunityCoveragePct": 81.62162162162163, "remainingNoPlayDates": 34},
+        "2025": {"combinedOpportunityDates": 149, "combinedOpportunityCoveragePct": 80.97826086956522, "remainingNoPlayDates": 35},
+        "2026_YTD": {"combinedOpportunityDates": 103, "combinedOpportunityCoveragePct": 75.73529411764706, "remainingNoPlayDates": 33}
+      }
+    },
+    "Q95": {
+      "rescuedParentNoPlayDates": 125, "combinedOpportunityDates": 325, "combinedOpportunityCoveragePct": 64.35643564356435, "remainingNoPlayDates": 180, "maximumRemainingNoPlayStreak": 9,
+      "bySeason": {
+        "2024": {"combinedOpportunityDates": 125, "combinedOpportunityCoveragePct": 67.56756756756756, "remainingNoPlayDates": 60},
+        "2025": {"combinedOpportunityDates": 123, "combinedOpportunityCoveragePct": 66.84782608695652, "remainingNoPlayDates": 61},
+        "2026_YTD": {"combinedOpportunityDates": 77, "combinedOpportunityCoveragePct": 56.61764705882353, "remainingNoPlayDates": 59}
+      }
+    }
+  },
+  "interpretation": {
+    "baselineParentRouteCoveragePct": 39.603960396039604,
+    "totalsPassFrozenFamilyValidationGate": false,
+    "runLineAndMoneylineFamiliesProvideComplementaryCoverage": true,
+    "highestVolumeResearchFrontier": "Q80",
+    "highestVolumeCombinedOpportunityCoveragePct": 93.66336633663366,
+    "highestVolume2026YtdCoveragePct": 90.44117647058823,
+    "opportunityCoverageIsNotExecutableOnePickDailyRate": true,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "prospectiveIndependentConfirmationRequired": true,
+    "productionPromotionAuthorized": false
+  },
+  "policy": {
+    "allEightRequestedMarketFamiliesStudied": true,
+    "frontiersReportedWithoutPostOutcomeSelection": true,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "currentAPlusPremiumDatesReplacedByNewMarkets": false,
+    "unionCoverageIsOpportunityCeilingNotOnePickDailyRecommendationRate": true,
+    "exactHistoricalHardRockLineAvailabilityKnown": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "highHitRateAloneEstablishesBettingEdge": false,
+    "independentProspectiveConfirmationStillRequired": true,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "productionChanged": false
+  }
+}
