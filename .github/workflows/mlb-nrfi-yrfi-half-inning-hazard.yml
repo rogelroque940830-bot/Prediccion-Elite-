@@ -1,0 +1,263 @@
+name: MLB NRFI YRFI Half Inning Hazard
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-nrfi-yrfi-half-inning-hazard-v1
+    paths:
+      - "research/mlb-nrfi-yrfi-half-inning-hazard-v1-contract.json"
+      - "scripts/mlb-nrfi-yrfi-half-inning-hazard-v1.py"
+      - "scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py"
+      - ".github/workflows/mlb-nrfi-yrfi-half-inning-hazard.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-nrfi-yrfi-half-inning-hazard-v1-contract.json"
+      - "scripts/mlb-nrfi-yrfi-half-inning-hazard-v1.py"
+      - "scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py"
+      - ".github/workflows/mlb-nrfi-yrfi-half-inning-hazard.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  half-inning-hazard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'pandas==2.2.3' 'scipy==1.15.3' 'scikit-learn==1.6.1'
+
+      - name: Prove contract predates scorer and adapter is non-scientific custody wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-nrfi-yrfi-half-inning-hazard-v1-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-nrfi-yrfi-half-inning-hazard-v1.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-nrfi-yrfi-half-inning-hazard-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-nrfi-yrfi-half-inning-hazard-contract.v1'
+          assert c['scientificStatus']=='RETROSPECTIVE_HALF_INNING_HAZARD_DISCOVERY_AFTER_THREE_GLOBAL_NRFI_YRFI_REJECTIONS_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert c['unitOfAnalysis']['trainingRowsPerGame']==2
+          assert c['halfInningFeatures']['featureCount']==12
+          assert len(c['halfInningFeatures']['genericRolesExactly'])==12
+          assert c['chronology']['scoreWholeDateBeforeAnySameDateStateUpdate'] is True
+          assert c['chronology']['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert c['gameCombination']['nrfiProbability']=='(1 - P_TOP_SCORE) * (1 - P_BOTTOM_SCORE)'
+          assert c['validationGate']['failureAction']=='REJECT_ARCHITECTURE_AND_CONTRIBUTE_ZERO_NRFI_YRFI_RESCUE_COVERAGE'
+          assert c['candidateFrontiers']['postResultThresholdSearchAllowed'] is False
+          assert c['governance']['productionRankingChanged'] is False
+          assert c['governance']['betEliteProduced'] is False
+          assert c['governance']['realFinancialExposure']==0
+          print('NRFI_YRFI_HALF_INNING_PROTOCOL_PRE_SCORER_FREEZE_PROVED')
+          PY
+          grep -q 'args.custody = custody' scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py
+          grep -q 'No scoring rule, threshold, market, or result is changed here' scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py
+
+      - name: Syntax check research code
+        run: |
+          python -m py_compile scripts/mlb-nrfi-yrfi-half-inning-hazard-v1.py
+          python -m py_compile scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py
+
+      - name: Materialize immutable V69 parent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          PARENT_REF="refs/remotes/origin/${PARENT_BRANCH}"
+          git fetch origin "refs/heads/${PARENT_BRANCH}:${PARENT_REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${PARENT_REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download V26 official first inning evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v26-nrfi-yrfi-baseline
+          path: inputs/v26
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31896273442
+
+      - name: Download V27 causal-core evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v27-nrfi-yrfi-i1-causal-core
+          path: inputs/v27
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31896654032
+
+      - name: Download modular global retry evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-modular-team-structure-nrfi-yrfi-v1
+          path: inputs/modular
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32142874224
+
+      - name: Download immutable V66 pregame custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Resolve immutable research inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+            test -s "inputs/step12v3/$S/cohort/starting-pitcher-history.json"
+            test -s "inputs/step12v3/$S/cohort/pregame-lineup-history.json"
+            test -s "inputs/step12v3/$S/t5-audit/t5-starter-identity-audit.json"
+          done
+          V26_OUT="$(find inputs/v26 -type f -name first-inning-outcomes.json -print -quit)"
+          V26_REPORT="$(find inputs/v26 -type f -name nrfi-yrfi-baseline-report.json -print -quit)"
+          V27_REPORT="$(find inputs/v27 -type f -name nrfi-yrfi-i1-causal-core-report.json -print -quit)"
+          MODULAR="$(find inputs/modular -type f -name mlb-modular-team-structure-nrfi-yrfi-v1.json -print -quit)"
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$V26_OUT" && test -s "$V26_OUT"
+          test -n "$V26_REPORT" && test -s "$V26_REPORT"
+          test -n "$V27_REPORT" && test -s "$V27_REPORT"
+          test -n "$MODULAR" && test -s "$MODULAR"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          test -n "$V16" && test -s "$V16"
+          echo "v26_out=$V26_OUT" >> "$GITHUB_OUTPUT"
+          echo "v26_report=$V26_REPORT" >> "$GITHUB_OUTPUT"
+          echo "v27_report=$V27_REPORT" >> "$GITHUB_OUTPUT"
+          echo "modular=$MODULAR" >> "$GITHUB_OUTPUT"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen half inning hazard study
+        shell: bash
+        env:
+          MLB_PARENT_MULTI_MARKET_SCORER_PATH: scripts/mlb-multi-market-coverage-expansion-v1.py
+          MLB_V66_CUSTODY_PATH: ${{ steps.inputs.outputs.custody }}
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-nrfi-yrfi-half-inning-hazard-v1.py \
+            --root inputs/step12v3 \
+            --contract research/mlb-nrfi-yrfi-half-inning-hazard-v1-contract.json \
+            --v26-outcomes '${{ steps.inputs.outputs.v26_out }}' \
+            --v26-report '${{ steps.inputs.outputs.v26_report }}' \
+            --v27-report '${{ steps.inputs.outputs.v27_report }}' \
+            --modular-report '${{ steps.inputs.outputs.modular }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --parent-multi-market-scorer scripts/mlb-nrfi-yrfi-half-inning-parent-adapter-v1.py \
+            --out work/mlb-nrfi-yrfi-half-inning-hazard-v1.json
+
+      - name: Validate fail closed scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-nrfi-yrfi-half-inning-hazard-v1.json'))
+          assert r['schemaVersion']=='courtedge-mlb-nrfi-yrfi-half-inning-hazard.v1'
+          assert r['classification'] in {
+            'NRFI_YRFI_HALF_INNING_HAZARD_REJECTED',
+            'NRFI_YRFI_HALF_INNING_HAZARD_RETROSPECTIVE_ROBUSTNESS_CANDIDATE_ONLY'
+          }
+          assert r['parentEvidence']['v26Classification']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          assert r['parentEvidence']['v27Classification']=='NRFI_YRFI_I1_CAUSAL_CORE_REJECTED'
+          assert r['parentEvidence']['modularGlobalRetryValidationQualified'] is False
+          assert r['data']['featureCount']==12
+          assert all(v['step12v3VsV26FirstInningLabelMismatches']==0 for v in r['data']['custodyBySeason'].values())
+          b=r['scientificBoundary']
+          assert b['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert b['prospectiveConfirmationRequired'] is True
+          assert b['historicalPricesUsed'] is False
+          assert b['positiveEvEstablished'] is False
+          assert b['betEliteProduced'] is False
+          assert b['stakeCalculated'] is False
+          assert b['automaticBetPlacement'] is False
+          assert b['realFinancialExposure']==0
+          assert b['productionChanged'] is False
+          assert b['currentAPlusPremiumHierarchyChanged'] is False
+          assert b['forcedDailyPlayAllowed'] is False
+          if r['validationGatePassed']:
+            assert r['classification']=='NRFI_YRFI_HALF_INNING_HAZARD_RETROSPECTIVE_ROBUSTNESS_CANDIDATE_ONLY'
+            assert r['candidateFrontiers']['status']=='EVALUATED_AFTER_VALIDATION_GATE_PASS'
+            assert set(r['candidateFrontiers']['frontiers'])=={'Q80','Q85','Q90','Q95'}
+          else:
+            assert r['classification']=='NRFI_YRFI_HALF_INNING_HAZARD_REJECTED'
+            assert r['candidateFrontiers']['status']=='NOT_EVALUATED_VALIDATION_GATE_FAILED'
+            assert r['candidateFrontiers']['frontiers']=={}
+          print(json.dumps({
+            'classification':r['classification'],
+            'validationGatePassed':r['validationGatePassed'],
+            'data':r['data'],
+            'validationGateChecks':r['validationGateChecks'],
+            'halfInningValidation2023':r['halfInningValidation2023'],
+            'gameLevelValidation2023':r['gameLevelValidation2023'],
+            'halfInningEvaluation2024_2026Ytd':r['halfInningEvaluation2024_2026Ytd'],
+            'gameLevelEvaluation2024_2026Ytd':r['gameLevelEvaluation2024_2026Ytd'],
+            'candidateFrontiers':r['candidateFrontiers'],
+          },indent=2))
+          PY
+
+      - name: Upload half inning hazard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-nrfi-yrfi-half-inning-hazard-v1
+          path: work/mlb-nrfi-yrfi-half-inning-hazard-v1.json
+          if-no-files-found: error
+          retention-days: 90
