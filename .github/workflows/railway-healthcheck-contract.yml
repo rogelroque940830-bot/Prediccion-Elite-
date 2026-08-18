@@ -5,6 +5,7 @@ on:
     branches:
       - "ops/railway-healthcheck-v1"
       - "ops/railway-config-schema-v1"
+      - "ops/railway-railpack-v1"
     paths:
       - "railway.toml"
       - "server/index.ts"
@@ -31,16 +32,23 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Verify Railway probes the dedicated health route
+      - name: Verify Railway deployment contract
         shell: bash
         run: |
           set -euo pipefail
+          grep -q '^builder = "RAILPACK"$' railway.toml
+          grep -q '^buildCommand = "npm run build:backend"$' railway.toml
           grep -q '^healthcheckPath = "/health"$' railway.toml
           grep -q '^healthcheckTimeout = 300$' railway.toml
           grep -q 'app.get("/health"' server/index.ts
+          grep -q 'process.env.PORT' server/index.ts
+          grep -q 'host: "0.0.0.0"' server/index.ts
+          ! grep -q '^builder = "NIXPACKS"$' railway.toml
           ! grep -q '^healthcheckPath = "/api/mlb/all"$' railway.toml
           ! grep -q '^\[deploy\.healthcheck\]$' railway.toml
       - name: Install backend dependencies
         run: npm ci
-      - name: Build backend
+      - name: Build backend exactly as Railway will
         run: npm run build:backend
+      - name: Verify backend artifact exists
+        run: test -s dist/index.cjs
