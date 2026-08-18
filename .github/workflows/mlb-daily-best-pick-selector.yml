@@ -5,6 +5,7 @@ on:
     branches:
       - "production/mlb-daily-best-pick-router-v2"
       - "production/mlb-daily-best-pick-ui-v1"
+      - "production/mlb-daily-best-pick-price-visibility-v1"
       - "fix/frontend-static-verifier-tests-v1"
     paths:
       - "server/mlb-daily-best-pick-selector.ts"
@@ -13,6 +14,8 @@ on:
       - "server/mlb-daily-best-pick-runtime-adapter.test.ts"
       - "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts"
       - "server/mlb-daily-best-pick-ui-view.ts"
+      - "server/mlb-daily-best-pick-price-view.ts"
+      - "server/mlb-daily-best-pick-price-view.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
@@ -34,6 +37,8 @@ on:
       - "server/mlb-daily-best-pick-runtime-adapter.test.ts"
       - "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts"
       - "server/mlb-daily-best-pick-ui-view.ts"
+      - "server/mlb-daily-best-pick-price-view.ts"
+      - "server/mlb-daily-best-pick-price-view.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
@@ -63,12 +68,13 @@ jobs:
       - run: npm ci
       - name: Typecheck Daily BEST PICK backend block
         run: npx tsc -p tsconfig.mlb-daily-best-pick-selector.json
-      - name: Test selector, frozen runtime adapter and server UI exposure
+      - name: Test selector, frozen runtime adapter, price visibility and server UI exposure
         run: >-
           npx tsx --test
           server/mlb-daily-best-pick-selector.test.ts
           server/mlb-daily-best-pick-runtime-adapter.test.ts
           server/mlb-daily-best-pick-runtime-adapter.integration.test.ts
+          server/mlb-daily-best-pick-price-view.test.ts
           server/mlb-unified-v16-ui-routes.test.ts
           server/mlb-unified-v16-ui-orchestration.test.ts
       - name: Install frontend dependencies
