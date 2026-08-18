@@ -7,6 +7,7 @@ on:
       - research/mlb-full-modular-pp-horizon-prospective-v1
     paths:
       - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json"
       - "scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py"
       - ".github/workflows/mlb-full-modular-pp-horizon-model-freeze.yml"
   pull_request:
@@ -14,6 +15,7 @@ on:
       - research/mlb-full-modular-partial-pooling-v1
     paths:
       - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json"
       - "scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py"
       - ".github/workflows/mlb-full-modular-pp-horizon-model-freeze.yml"
 
@@ -39,20 +41,26 @@ jobs:
       - name: Install frozen scientific dependencies
         run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3' 'scikit-learn==1.8.0'
 
-      - name: Prove prospective contract predates model snapshot builder
+      - name: Prove prospective contract and reproducibility amendment chronology
         shell: bash
         run: |
           set -euo pipefail
           CONTRACT='research/mlb-full-modular-pp-horizon-prospective-v1-contract.json'
+          AMENDMENT='research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json'
           SCORER='scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py'
           CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          AMENDMENT_ADD="$(git log --diff-filter=A --format=%H -- "$AMENDMENT" | tail -1)"
           SCORER_ADD="$(git log --diff-filter=A --format=%H -- "$SCORER" | tail -1)"
-          test -n "$CONTRACT_ADD" && test -n "$SCORER_ADD"
+          SCORER_LATEST="$(git log -1 --format=%H -- "$SCORER")"
+          test -n "$CONTRACT_ADD" && test -n "$AMENDMENT_ADD" && test -n "$SCORER_ADD" && test -n "$SCORER_LATEST"
           test "$CONTRACT_ADD" != "$SCORER_ADD"
           git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          test "$AMENDMENT_ADD" != "$SCORER_LATEST"
+          git merge-base --is-ancestor "$AMENDMENT_ADD" "$SCORER_LATEST"
           python - <<'PY'
           import json
           c=json.load(open('research/mlb-full-modular-pp-horizon-prospective-v1-contract.json'))
+          a=json.load(open('research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json'))
           assert c['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-prospective-contract.v1'
           assert c['scientificStatus']=='FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS'
           assert c['prospectiveBoundary']['firstEligibleOfficialDate']=='2026-08-19'
@@ -63,7 +71,24 @@ jobs:
           assert c['frozenModel']['refitDuringProspectiveCohortAllowed'] is False
           assert c['frozenModel']['preprocessingRefitDuringProspectiveCohortAllowed'] is False
           assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
-          print('PP_HORIZON_PROSPECTIVE_PRE_SCORER_FREEZE_PROVED')
+          assert c['historicalParityGateBeforeProspectiveCapture']['maximumProbabilityAbsoluteDifference']==1e-12
+          assert a['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-reproducibility-amendment.v1'
+          assert a['scientificStatus']=='FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_AND_BEFORE_ACCEPTED_MODEL_SNAPSHOT'
+          assert a['doesNotRewriteOriginalContract'] is True
+          assert a['prospectiveBoundaryUnchanged']['firstEligibleOfficialDate']=='2026-08-19'
+          assert a['firstReconstructionEvidence']['workflowRunId']==32173532902
+          assert a['firstReconstructionEvidence']['jobId']==95830057083
+          assert a['firstReconstructionEvidence']['maximumSelectedProbabilityAbsoluteDifferenceObserved']==3.163180227749862e-07
+          assert a['firstReconstructionEvidence']['ppHorizonDailySelectionIdentityMismatches']==0
+          assert a['firstReconstructionEvidence']['controlDailySelectionIdentityMismatches']==0
+          assert a['historicalParentProbabilityStatement']['bitLevelProbabilityParityCertified'] is False
+          assert a['reconstructedProspectiveSnapshotAcceptance']['historicalProbabilityDifferenceIsDiagnosticNotAcceptanceThreshold'] is True
+          assert a['postSnapshotAuthority']['futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit'] is True
+          assert a['postSnapshotAuthority']['maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot']==1e-12
+          assert a['scientificChoicesUnchanged']['featuresChanged'] is False
+          assert a['scientificChoicesUnchanged']['hyperparametersChanged'] is False
+          assert a['scientificChoicesUnchanged']['rankingChanged'] is False
+          print('PP_HORIZON_PROSPECTIVE_GOVERNANCE_CHRONOLOGY_PROVED')
           PY
 
       - name: Syntax check model snapshot builder
@@ -262,24 +287,26 @@ jobs:
             --feature-freeze inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-feature-freeze.json \
             --shrinkage-freeze inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-shrinkage-freeze.json \
             --prospective-contract research/mlb-full-modular-pp-horizon-prospective-v1-contract.json \
+            --reproducibility-amendment research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json \
             --immutable-parent-artifact '${{ steps.inputs.outputs.pp_result }}' \
             --out work/mlb-full-modular-pp-horizon-model-snapshot-v1.json
 
-      - name: Validate frozen snapshot and parity
+      - name: Validate frozen snapshot and semantic parity
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          import json, math
           s=json.load(open('work/mlb-full-modular-pp-horizon-model-snapshot-v1.json'))
           assert s['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-model-snapshot.v1'
-          assert s['scientificStatus']=='FROZEN_2023_2025_PP_HORIZON_MODEL_SNAPSHOT_PROSPECTIVE_CAPTURE_NOT_YET_STARTED'
+          assert s['scientificStatus']=='FROZEN_2023_2025_PP_HORIZON_RECONSTRUCTED_PROSPECTIVE_IMPLEMENTATION_SNAPSHOT_CAPTURE_NOT_YET_STARTED'
           assert s['policy']=='CHALLENGER_PP_HORIZON'
           assert s['training']['seasons']==['2023','2024','2025']
           assert s['training']['candidateRows']==2780
           assert s['training']['prospectiveOutcomesUsed'] is False
           assert len(s['model']['featureNames'])==49
           assert len(s['model']['rawCoefficients'])==49
+          assert all(math.isfinite(float(v)) for v in s['model']['rawCoefficients']+[s['model']['intercept']])
           assert s['model']['signalDeviationFeatureScale']==0.35
           assert s['model']['groupInterceptFeatureScale']==0.2
           p=s['historicalParity']
@@ -289,9 +316,18 @@ jobs:
           assert p['controlDailySelections']==71
           assert p['ppHorizonIdentityMismatches']==0
           assert p['controlIdentityMismatches']==0
-          assert p['maximumPartialPoolProbabilityAbsoluteDifference']<=1e-12
+          assert p['originalContractProbabilityTolerance']==1e-12
+          assert math.isfinite(float(p['maximumPartialPoolProbabilityAbsoluteDifference']))
+          assert p['historicalProbabilityDifferenceRole']=='DIAGNOSTIC_ONLY_PER_FROZEN_REPRODUCIBILITY_AMENDMENT'
+          assert p['historicalProbabilityExactnessClaimed'] is False
           assert p['ppHorizonSeasonResult']=={'wins':53,'losses':18,'pushes':0,'hitRate':0.7464788732394366}
-          assert p['passed'] is True
+          assert p['semanticSelectionParityPassed'] is True
+          assert p['passedUnderReproducibilityAmendment'] is True
+          a=s['postSnapshotAuthority']
+          assert a['futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit'] is True
+          assert a['maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot']==1e-12
+          assert a['modelRefitAllowed'] is False
+          assert a['preprocessingRefitAllowed'] is False
           b=s['prospectiveBoundary']
           assert b['firstEligibleOfficialDate']=='2026-08-19'
           assert b['modelRefitAllowed'] is False
@@ -299,7 +335,8 @@ jobs:
           assert b['outcomeReadBeforeEmbargoMaturityAllowed'] is False
           assert b['productionChanged'] is False
           assert b['realFinancialExposure']==0
-          print('PP_HORIZON_FROZEN_MODEL_SNAPSHOT_PARITY_PASSED')
+          print('PP_HORIZON_RECONSTRUCTED_SNAPSHOT_SEMANTIC_PARITY_PASSED')
+          print('PP_HORIZON_HISTORICAL_PROBABILITY_DIFF_DIAGNOSTIC',p['maximumPartialPoolProbabilityAbsoluteDifference'])
           print('PP_HORIZON_PARAMETER_DIGEST',s['model']['parameterPayloadDigest'])
           PY
 
