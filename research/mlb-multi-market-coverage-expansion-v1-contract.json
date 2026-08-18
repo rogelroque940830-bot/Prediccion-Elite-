@@ -1,0 +1,319 @@
+{
+  "schemaVersion": "courtedge-mlb-multi-market-coverage-expansion-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_MULTI_MARKET_DISCOVERY_WITH_PREDECLARED_MODELS_AND_FRONTIERS_NOT_PRICE_VALIDATION",
+  "purpose": "Test whether independent MLB market families can recover a substantial share of strict A+ -> Premium -> NO_PLAY dates while preserving predeclared out-of-sample predictive-quality controls. This study expands research across full-game, first-5 and first-3 markets without relaxing the existing Daily BEST PICK hierarchy or promoting any new route to production.",
+  "productionBase": {
+    "mainCommit": "25aa45024154ca94f2cc24599d395521e9d57a0b",
+    "currentHierarchy": ["A_PLUS", "PREMIUM", "NO_PLAY"],
+    "maximumDailyPicks": 1,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "forcedDailyPlayAllowed": false
+  },
+  "immutableHistoricalInputs": {
+    "step12v3HistoricalUniverse": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    },
+    "v16PureSettlementManifest": {
+      "workflowRunId": 31704085189,
+      "artifactId": 9182440949,
+      "artifactName": "p0-step12v16-pure-ml-f5-settlement-probability",
+      "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063"
+    },
+    "v69ParentRouteAudit": {
+      "workflowRunId": 31988197440,
+      "artifactId": 9274431264,
+      "artifactName": "p0-step12v69-confluence-frequency-quality-frontier",
+      "artifactDigest": "sha256:b071c8a70ccd16118a13268510ebacf26cbd407aacb4ef4d1defea9ede04645e",
+      "parentBranch": "research/p0-step12v69-confluence-frequency-quality-frontier",
+      "scorerPath": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py",
+      "scorerGitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"
+    },
+    "dailyBestPickCoverageAnchor": {
+      "contractPath": "research/mlb-daily-best-pick-historical-coverage-v1-contract.json",
+      "expectedEligibleSlateDates": 505,
+      "expectedParentRouteActiveDates": 200,
+      "expectedParentRouteNoPlayDates": 305,
+      "expectedAvailabilityPctCeiling": 39.603960396039604
+    }
+  },
+  "chronology": {
+    "trainingSeason": "2022",
+    "validationSeason": "2023",
+    "frozenOutOfSampleEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "requiresT5PregameValid": true,
+    "v66CustodyMustJoinPregameByExactGameIdentity": true,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "requestedMarketFamiliesExactly": [
+    "FG_ML",
+    "F5_ML",
+    "FG_RUN_LINE",
+    "F5_RUN_LINE",
+    "FG_TOTAL",
+    "F5_TOTAL",
+    "F3_RUN_LINE",
+    "F3_TOTAL"
+  ],
+  "providerCanonicalMapping": {
+    "FG_ML": {"providerMarketKey": "h2h", "canonicalMarketType": "ML"},
+    "F5_ML": {"providerMarketKey": "h2h_1st_5_innings", "canonicalMarketType": "F5_ML"},
+    "FG_RUN_LINE": {"providerMarketKey": "spreads", "canonicalMarketType": "RUN_LINE"},
+    "F5_RUN_LINE": {"providerMarketKey": "spreads_1st_5_innings", "canonicalMarketType": "F5_RUN_LINE"},
+    "FG_TOTAL": {"providerMarketKey": "totals", "canonicalMarketType": "TOTAL"},
+    "F5_TOTAL": {"providerMarketKey": "totals_1st_5_innings", "canonicalMarketType": "F5_TOTAL"},
+    "F3_RUN_LINE": {"providerMarketKey": "spreads_1st_3_innings", "canonicalMarketType": "F3_RUN_LINE"},
+    "F3_TOTAL": {"providerMarketKey": "totals_1st_3_innings", "canonicalMarketType": "F3_TOTAL"}
+  },
+  "outcomeDefinitions": {
+    "FG": "rows[].outcomes.FULL_GAME",
+    "F5": "rows[].outcomes.FIRST_5",
+    "F3": "rows[].outcomes.FIRST_3",
+    "moneyline": "HOME_OR_AWAY_WIN_WITH_F3_F5_TIE_AS_PUSH",
+    "runLine": "HALF_RUN_BINARY_SETTLEMENT_FROM_HOME_MINUS_AWAY_RUN_DIFFERENTIAL",
+    "total": "HALF_RUN_BINARY_OVER_UNDER_SETTLEMENT_FROM_HOME_PLUS_AWAY_TOTAL_RUNS"
+  },
+  "directionalMarginModels": {
+    "family": "L2_MULTINOMIAL_LOGISTIC_REGRESSION_ON_PREDECLARED_MARGIN_BINS",
+    "l2Strength": 1.0,
+    "trainingOnlyMedianImputation": true,
+    "trainingOnlyStandardization": true,
+    "solver": "SCIPY_L_BFGS_B",
+    "maxIter": 12000,
+    "F3MarginBins": ["LE_MINUS_2", "MINUS_1", "ZERO", "PLUS_1", "GE_PLUS_2"],
+    "F5MarginBins": ["LE_MINUS_2", "MINUS_1", "ZERO", "PLUS_1", "GE_PLUS_2"],
+    "FGMarginBins": ["LE_MINUS_2", "MINUS_1", "PLUS_1", "GE_PLUS_2"],
+    "features": {
+      "F3": [
+        "lineup_exposure_rate_adv",
+        "starter_kbb_adv",
+        "team_rd10_diff",
+        "starter_velocity_adv",
+        "starter_spin_adv",
+        "starter_swing_miss_adv",
+        "starter_in_zone_adv",
+        "starter_weak_contact_adv",
+        "f3_exposure_adv",
+        "starter_velocity_adv_x_f3_mean_starter_share",
+        "starter_spin_adv_x_f3_mean_starter_share",
+        "starter_swing_miss_adv_x_f3_mean_starter_share",
+        "starter_in_zone_adv_x_f3_mean_starter_share",
+        "starter_weak_contact_adv_x_f3_mean_starter_share"
+      ],
+      "F5": [
+        "lineup_exposure_rate_adv",
+        "starter_kbb_adv",
+        "team_rd10_diff",
+        "starter_velocity_adv",
+        "starter_spin_adv",
+        "starter_swing_miss_adv",
+        "starter_in_zone_adv",
+        "starter_weak_contact_adv",
+        "f5_exposure_adv",
+        "starter_velocity_adv_x_f5_mean_starter_share",
+        "starter_spin_adv_x_f5_mean_starter_share",
+        "starter_swing_miss_adv_x_f5_mean_starter_share",
+        "starter_in_zone_adv_x_f5_mean_starter_share",
+        "starter_weak_contact_adv_x_f5_mean_starter_share",
+        "bullpen_pitches_1d_adv_weighted_f5",
+        "bullpen_pitches_3d_adv_weighted_f5",
+        "bullpen_core3_pitches_2d_adv_weighted_f5",
+        "bullpen_b2b_arms_adv_weighted_f5"
+      ],
+      "FG": [
+        "lineup_exposure_rate_adv",
+        "starter_kbb_adv",
+        "team_rd10_diff",
+        "starter_velocity_adv",
+        "starter_spin_adv",
+        "starter_swing_miss_adv",
+        "starter_in_zone_adv",
+        "starter_weak_contact_adv",
+        "fg_exposure_adv",
+        "starter_velocity_adv_x_fg_mean_starter_share",
+        "starter_spin_adv_x_fg_mean_starter_share",
+        "starter_swing_miss_adv_x_fg_mean_starter_share",
+        "starter_in_zone_adv_x_fg_mean_starter_share",
+        "starter_weak_contact_adv_x_fg_mean_starter_share",
+        "bullpen_pitches_1d_adv_weighted_fg",
+        "bullpen_pitches_3d_adv_weighted_fg",
+        "bullpen_core3_pitches_2d_adv_weighted_fg",
+        "bullpen_b2b_arms_adv_weighted_fg"
+      ]
+    },
+    "featureSearchAllowed": false,
+    "marginBinSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "totalModels": {
+    "family": "L2_POISSON_REGRESSION",
+    "alpha": 1.0,
+    "trainingOnlyMedianImputation": true,
+    "trainingOnlyStandardization": true,
+    "solver": "SCIPY_L_BFGS_B",
+    "maxIter": 12000,
+    "features": {
+      "F3": [
+        "combined_team_rs10",
+        "combined_team_ra10",
+        "mean_f3_starter_share",
+        "min_f3_starter_share",
+        "quality_weighted_combined_f3_starter_share"
+      ],
+      "F5": [
+        "combined_team_rs10",
+        "combined_team_ra10",
+        "mean_f5_starter_share",
+        "min_f5_starter_share",
+        "combined_f5_expected_bullpen_share",
+        "quality_weighted_combined_f5_starter_share",
+        "bullpen_pitches_1d_combined_weighted_f5",
+        "bullpen_pitches_3d_combined_weighted_f5",
+        "bullpen_core3_pitches_2d_combined_weighted_f5",
+        "bullpen_b2b_arms_combined_weighted_f5"
+      ],
+      "FG": [
+        "combined_team_rs10",
+        "combined_team_ra10",
+        "mean_fg_starter_share",
+        "min_fg_starter_share",
+        "combined_fg_expected_bullpen_share",
+        "quality_weighted_combined_fg_starter_share",
+        "bullpen_pitches_1d_combined_weighted_fg",
+        "bullpen_pitches_3d_combined_weighted_fg",
+        "bullpen_core3_pitches_2d_combined_weighted_fg",
+        "bullpen_b2b_arms_combined_weighted_fg"
+      ]
+    },
+    "fixedHalfRunLines": {
+      "F3_TOTAL": [1.5, 2.5, 3.5, 4.5, 5.5],
+      "F5_TOTAL": [2.5, 3.5, 4.5, 5.5, 6.5],
+      "FG_TOTAL": [6.5, 7.5, 8.5, 9.5, 10.5]
+    },
+    "lineSearchAllowed": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "runLineGeometries": {
+    "FG_RUN_LINE": [
+      {"variant": "FG_RL_HOME_MINUS_1_5", "homeLine": -1.5, "awayLine": 1.5},
+      {"variant": "FG_RL_HOME_PLUS_1_5", "homeLine": 1.5, "awayLine": -1.5}
+    ],
+    "F5_RUN_LINE": [
+      {"variant": "F5_RL_HOME_MINUS_0_5", "homeLine": -0.5, "awayLine": 0.5},
+      {"variant": "F5_RL_HOME_PLUS_0_5", "homeLine": 0.5, "awayLine": -0.5}
+    ],
+    "F3_RUN_LINE": [
+      {"variant": "F3_RL_HOME_MINUS_0_5", "homeLine": -0.5, "awayLine": 0.5},
+      {"variant": "F3_RL_HOME_PLUS_0_5", "homeLine": 0.5, "awayLine": -0.5}
+    ],
+    "orientationReason": "Historical price custody does not identify which team carried the principal favorite run line. Both predeclared symmetric quote orientations are evaluated separately and must never be merged into a claim of exact historical book availability.",
+    "liveExactLineAvailabilityRequiredBeforeAnyFutureExecution": true,
+    "alternateLineSearchAllowed": false
+  },
+  "formalBaselines": {
+    "marginModel": "EMPIRICAL_2022_MARGIN_BIN_CLIMATOLOGY_BY_HORIZON",
+    "moneyline": "EMPIRICAL_2022_SETTLEMENT_PROBABILITY_BY_SIDE_WITH_F3_F5_TIES_CONDITIONED_OUT_FOR_DECISIVE_QUALITY_SCORE",
+    "runLine": "EMPIRICAL_2022_COVER_PROBABILITY_FOR_EXACT_PREDECLARED_HALF_RUN_GEOMETRY",
+    "total": "EMPIRICAL_2022_OVER_PROBABILITY_AT_EACH_FIXED_HALF_RUN_LINE",
+    "poissonCountMean": "EMPIRICAL_2022_TOTAL_RUN_MEAN_BY_HORIZON"
+  },
+  "validationGate": {
+    "season": "2023",
+    "moneylineAndRunLineRequirePositiveBrierImprovementVs2022FormalBaseline": true,
+    "totalRequiresPositiveAverageFixedLineBrierImprovementVs2022FormalBaseline": true,
+    "gateUses2024OrLaterOutcomes": false,
+    "failedVariantMayRescueOutOfSampleNoPlayDates": false
+  },
+  "qualityVolumeFrontier": {
+    "qualityScore": "SELECTED_SIDE_MODEL_SETTLEMENT_PROBABILITY_MINUS_MATCHING_2022_FORMAL_BASELINE_SETTLEMENT_PROBABILITY",
+    "sideSelection": "CHOOSE_THE_SIDE_WITH_THE_LARGEST_POSITIVE_PREDECLARED_QUALITY_SCORE; OUTCOMES_MAY_NOT_SELECT_SIDE",
+    "minimumSelectedSideModelProbability": 0.60,
+    "quantilesExactly": [0.80, 0.85, 0.90, 0.95],
+    "thresholdSource": "2023_POSITIVE_QUALITY_SCORE_DISTRIBUTION_AMONG_VARIANT_ROWS_THAT_MEET_MINIMUM_MODEL_PROBABILITY",
+    "quantileComputationUsesSettlementOutcomes": false,
+    "allFrontiersMustBeReported": true,
+    "postOutcomeFrontierSelectionAllowed": false,
+    "forcedCandidateAllowed": false
+  },
+  "frozenEvaluation": {
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "primaryQuestions": [
+      "Which requested market variants remain positively predictive out of sample after passing the 2023-only validation gate?",
+      "How many strict A+/Premium parent-route NO_PLAY dates does each market family rescue at Q80, Q85, Q90 and Q95?",
+      "What is the union rescue ceiling when any independently qualified requested market produces a candidate?",
+      "How does rescue coverage trade off against decisive hit rate, calibration and sample size?",
+      "How many NO_PLAY streaks remain after each predeclared quality frontier?",
+      "Which market families contribute unique rescued dates not supplied by another family?"
+    ],
+    "reportBySeason": true,
+    "reportByMarketFamily": true,
+    "reportByVariant": true,
+    "reportUniqueRescueDates": true,
+    "reportCrossMarketOverlap": true,
+    "reportNoPlayStreaks": true,
+    "reportCandidateHitRate": true,
+    "reportMeanPredictedProbability": true,
+    "reportCalibrationGap": true,
+    "reportBrierVsBaseline": true,
+    "reportWilson95LowerBoundForDecisiveHitRate": true
+  },
+  "dailyBestPickComplementBoundary": {
+    "currentAPlusPremiumDatesRemainOwnedByCurrentHierarchy": true,
+    "newMarketCoverageMeasuredPrimarilyOnCurrentParentRouteNoPlayDates": true,
+    "newMarketsMayNotReplaceAPlusOrPremiumInThisStudy": true,
+    "crossMarketOnePickDailyRouterIsNotPromotedByThisStudy": true,
+    "unionCoverageIsResearchOpportunityCeilingNotExecutableDailyRecommendationRate": true,
+    "exactCurrentStep11cNoPlayPopulationStillNotHistoricallyReconstructed": true
+  },
+  "statistics": {
+    "featureSearchAllowed": false,
+    "subsetMiningAllowed": false,
+    "marketFamilyDeletionAfterResultsAllowed": false,
+    "lineSearchAllowed": false,
+    "thresholdSearchAllowedBeyondFrozenQuantileProcedure": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "seasonExclusionAfterResultsAllowed": false,
+    "postResultRuleChangeAllowed": false,
+    "outcomesMayBreakSameDayCrossMarketTies": false
+  },
+  "priceAndPromotionBoundary": {
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "highHitRateAloneMayBeCalledBettingEdge": false,
+    "exactHardRockHistoricalAvailabilityEstablished": false,
+    "prospectiveExactPriceCaptureRequiredBeforeEconomicPromotion": true,
+    "prospectiveIndependentConfirmationRequiredBeforeProductionPromotion": true,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "productionPolicy": {
+    "researchOnly": true,
+    "dailyBestPickSelectorChanged": false,
+    "dailyBestPickRuntimeAdapterChanged": false,
+    "aPlusThresholdsChanged": false,
+    "premiumThresholdsChanged": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "settlementLogicChanged": false,
+    "rankingChanged": false,
+    "oddsAcquisitionChanged": false,
+    "productionBehaviorChanged": false
+  }
+}
