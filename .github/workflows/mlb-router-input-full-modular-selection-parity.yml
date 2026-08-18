@@ -1,0 +1,327 @@
+name: MLB Router Input Full Modular Selection Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "research/mlb-router-input-v39-source-parity-v1-custody.json"
+      - "research/mlb-router-input-v62-source-parity-v1-custody.json"
+      - "research/mlb-router-input-v66-derived-parity-v1-custody.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "scripts/mlb-router-input-v66-reconstruct-custody-v1.ts"
+      - ".github/workflows/mlb-router-input-full-modular-selection-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "research/mlb-router-input-v39-source-parity-v1-custody.json"
+      - "research/mlb-router-input-v62-source-parity-v1-custody.json"
+      - "research/mlb-router-input-v66-derived-parity-v1-custody.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "scripts/mlb-router-input-v66-reconstruct-custody-v1.ts"
+      - ".github/workflows/mlb-router-input-full-modular-selection-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  full-modular-selection-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove preimplementation contract and certified-source chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-router-input-parity-v1-contract.json'
+          RECON='scripts/mlb-router-input-v66-reconstruct-custody-v1.ts'
+          test "$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)" = '624da74a251ed9443a2d56a731e5c57db92aa27d'
+          test "$(git log --diff-filter=A --format=%H -- "$RECON" | tail -1)" = 'f2a9b1b4910c2170e2d0e1bdcc0488b0ddc5dc84'
+          git merge-base --is-ancestor 624da74a251ed9443a2d56a731e5c57db92aa27d f2a9b1b4910c2170e2d0e1bdcc0488b0ddc5dc84
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-router-input-parity-v1-contract.json'))
+          v39=json.load(open('research/mlb-router-input-v39-source-parity-v1-custody.json'))
+          v62=json.load(open('research/mlb-router-input-v62-source-parity-v1-custody.json'))
+          v66=json.load(open('research/mlb-router-input-v66-derived-parity-v1-custody.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_FULL_MODULAR_LIVE_SOURCE_BRIDGE_IMPLEMENTATION'
+          assert c['parityGatesBeforeUnifiedRouter']['stage2FullModularHistoricalSelections']['requiredShadowSelectionCount']==236
+          assert c['parityGatesBeforeUnifiedRouter']['stage2FullModularHistoricalSelections']['requiredWins']==177
+          assert c['parityGatesBeforeUnifiedRouter']['stage2FullModularHistoricalSelections']['requiredLosses']==58
+          assert c['parityGatesBeforeUnifiedRouter']['stage2FullModularHistoricalSelections']['requiredPushes']==1
+          assert v39['result']['classification']=='V39_STEP12V3_SOURCE_TO_V66_PARITY_PASS'
+          assert v39['result']['totalMismatches']==0
+          assert v62['result']['classification']=='V62_RAW_SOURCE_TO_V66_PARITY_PASS'
+          assert v62['result']['totalMismatches']==0
+          assert v66['result']['classification']=='V66_DERIVED_RUNTIME_PARITY_PASS'
+          assert v66['result']['totalMismatches']==0
+          print('MLB_FULL_MODULAR_STAGE2_CERTIFIED_INPUT_AUTHORITIES_PROVED')
+          PY
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Resolve immutable V66 custody
+        id: v66
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          test -n "$FILE" && test -s "$FILE"
+          test "sha256:$(sha256sum "$FILE" | awk '{print $1}')" = 'sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Reconstruct V66 custody through certified runtime derivations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          npx tsx scripts/mlb-router-input-v66-reconstruct-custody-v1.ts \
+            --input '${{ steps.v66.outputs.file }}' \
+            --output work/v66-runtime-reconstructed.jsonl.gz \
+            --report work/v66-runtime-reconstructed-report.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('work/v66-runtime-reconstructed-report.json','utf8'));
+          if(r.classification!=='V66_RUNTIME_DERIVED_CUSTODY_RECONSTRUCTION_PASS') throw new Error('classification');
+          if(r.rows!==11407||r.uniqueIdentityRows!==11407) throw new Error('rows');
+          if(r.derivedFeatureCount!==68||r.comparisons!==775676) throw new Error('coverage');
+          if(r.totalMismatches!==0||r.maximumAbsoluteDifference!==0) throw new Error('parity');
+          if(r.targetOutcomeAdded!==false||r.sameDateOutcomeAdded!==false) throw new Error('outcome boundary');
+          console.log('MLB_FULL_MODULAR_V66_RUNTIME_RECONSTRUCTION_PASSED',r.outputGzipSha256);
+          NODE
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install exact parent scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Materialize exact Full Modular parent scorer and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='e352e25c131a53536745323bcd3268dcec75a66d'
+          mkdir -p inputs/full-parent/scripts inputs/full-parent/research
+          for FILE in \
+            scripts/mlb-market-state-matchup-modular-router-v1.py \
+            research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            research/mlb-multi-market-coverage-expansion-v1-contract.json
+          do
+            git show "${PIN}:${FILE}" > "inputs/full-parent/${FILE}"
+            test -s "inputs/full-parent/${FILE}"
+          done
+          test "$(git rev-parse ${PIN}:scripts/mlb-market-state-matchup-modular-router-v1.py)" = '791d7f5a1d499d78a4606e5c77e22a7da5ae2ca6'
+          test "$(git rev-parse 513f166dafb79bd1c5f303042ca5186eebc289df:scripts/mlb-market-state-matchup-modular-router-v1.py)" = '791d7f5a1d499d78a4606e5c77e22a7da5ae2ca6'
+          echo MLB_FULL_MODULAR_ORIGINAL_AND_FINAL_SCORER_BLOB_IDENTICAL
+
+      - name: Materialize exact team-state parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='b2cd717f49d3063c6b7ed679674661961679d2a2'
+          mkdir -p inputs/modular-parent/scripts inputs/modular-parent/research
+          git show "${PIN}:scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py" > inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          git show "${PIN}:research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json" > inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+          test -s inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          test -s inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+
+      - name: Materialize V69 source only after immutable blob verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          REF="refs/remotes/origin/${BRANCH}"
+          git fetch origin "refs/heads/${BRANCH}:${REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          declare -A EXPECTED=(
+            [scripts/p0-step12v69-confluence-frequency-quality-frontier.py]='4525311f2ea8dab4c3e252f39fbab7de2e7d9a83'
+            [research/p0-step12v69-confluence-frequency-quality-frontier-contract.json]='d58e159951bf26da54830a2e8f1eba225679dee0'
+            [research/p0-step12v68-fg-winner-prospective-confirmation-contract.json]='e8e3e9dec96ef06c339507c63882378b968e8b8e'
+            [server/mlb-frozen-a-plus-classifier.ts]='b5b23d69aab6f9d8f3cef87af86d88a314b1cca2'
+            [server/mlb-frozen-research-route-assessor.ts]='7f98543b34332a0f40bf2c40bf0154e4c3045540'
+          )
+          for FILE in "${!EXPECTED[@]}"; do
+            ACTUAL="$(git rev-parse "${REF}:${FILE}")"
+            test "$ACTUAL" = "${EXPECTED[$FILE]}"
+            git show "${REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+          echo MLB_FULL_MODULAR_V69_REQUIRED_BLOBS_VERIFIED
+
+      - name: Download immutable Step12V3 universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Download immutable original Full Modular result
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-market-state-matchup-modular-router-v1
+          path: inputs/original-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32149000672
+
+      - name: Resolve immutable scorer inputs and original result
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+          done
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          ORIGINAL="$(find inputs/original-result -type f -name mlb-market-state-matchup-modular-router-v1.json -print -quit)"
+          test -n "$V16" && test -s "$V16"
+          test -n "$ORIGINAL" && test -s "$ORIGINAL"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "original=$ORIGINAL" >> "$GITHUB_OUTPUT"
+          echo "original_sha=sha256:$(sha256sum "$ORIGINAL" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Execute exact Full Modular parent against reconstructed runtime custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          python inputs/full-parent/scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --root inputs/step12v3 \
+            --custody work/v66-runtime-reconstructed.jsonl.gz \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --multi-market-scorer inputs/full-parent/scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            --multi-market-contract inputs/full-parent/research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --contract inputs/full-parent/research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            --out work/full-modular-reconstructed-result.json
+
+      - name: Prove byte identity and exact Full Modular daily selection parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGINAL='${{ steps.inputs.outputs.original }}'
+          GENERATED='work/full-modular-reconstructed-result.json'
+          test -s "$GENERATED"
+          ORIGINAL_SHA="sha256:$(sha256sum "$ORIGINAL" | awk '{print $1}')"
+          GENERATED_SHA="sha256:$(sha256sum "$GENERATED" | awk '{print $1}')"
+          python - "$ORIGINAL" "$GENERATED" "$ORIGINAL_SHA" "$GENERATED_SHA" <<'PY'
+          import json, math, sys
+          original=json.load(open(sys.argv[1]))
+          generated=json.load(open(sys.argv[2]))
+          original_sha=sys.argv[3]
+          generated_sha=sys.argv[4]
+          assert original['schemaVersion']==generated['schemaVersion']=='courtedge-mlb-market-state-matchup-modular-router.v1'
+          assert original['sample']==generated['sample']=={
+            'trainingRows2022':2398,'calibrationRows2023':2399,'evaluationRows':6610,
+            'eligibleSlateDates':505,'parentActiveDates':200,'parentNoPlayDates':305
+          }
+          op=original['dailyShadowPicks']['CHALLENGER_FULL_MODULAR']
+          gp=generated['dailyShadowPicks']['CHALLENGER_FULL_MODULAR']
+          assert len(op)==len(gp)==236
+          identity_fields=('season','officialDate','gamePk','market','horizon','side','selectedLine','lineGeometry','strengthTier','matchupStructure','frontier')
+          mismatches=[]
+          for i,(a,b) in enumerate(zip(op,gp)):
+            ai=tuple(a[k] for k in identity_fields)
+            bi=tuple(b[k] for k in identity_fields)
+            if ai!=bi: mismatches.append({'index':i,'original':ai,'generated':bi})
+          assert not mismatches,mismatches[:10]
+          assert op==gp
+          fm=generated['policyResults']['CHALLENGER_FULL_MODULAR']
+          assert fm['shadowPickDates']==236
+          assert fm['wins']==177 and fm['losses']==58 and fm['pushes']==1 and fm['decisive']==235
+          assert math.isclose(fm['hitRate'],0.7531914893617021,rel_tol=0,abs_tol=1e-15)
+          assert math.isclose(fm['combinedDailyOpportunityCoveragePct'],86.33663366336634,rel_tol=0,abs_tol=1e-12)
+          assert fm['byMarket']['F3_RL_HOME_PLUS_0_5']['picks']==49
+          assert fm['byMarket']['F5_ML']['picks']==4
+          assert fm['byMarket']['F5_RL_HOME_MINUS_0_5']['picks']==10
+          assert fm['byMarket']['F5_RL_HOME_PLUS_0_5']['picks']==22
+          assert fm['byMarket']['FG_ML']['picks']==15
+          assert fm['byMarket']['FG_RL_HOME_MINUS_1_5']['picks']==81
+          assert fm['byMarket']['FG_RL_HOME_PLUS_1_5']['picks']==55
+          assert fm['byTeamState']['STRONG']['picks']==83
+          assert fm['byTeamState']['MIDDLE']['picks']==53
+          assert fm['byTeamState']['WEAK']['picks']==79
+          assert fm['byTeamState']['UNSTABLE']['picks']==21
+          assert fm['bySelectedSideLineGeometry']['PROTECTED']['picks']==196
+          assert fm['bySelectedSideLineGeometry']['NEUTRAL_ML']['picks']==19
+          assert fm['bySelectedSideLineGeometry']['AGGRESSIVE']['picks']==21
+          assert fm['byMatchupStructure']['SUPPORTIVE']['picks']==166
+          assert fm['byMatchupStructure']['MIXED']['picks']==40
+          assert fm['byMatchupStructure']['CONFLICTING']['picks']==25
+          assert fm['byMatchupStructure']['UNKNOWN']['picks']==5
+          # Strongest possible reconstruction proof: the full JSON is byte-identical.
+          assert original_sha==generated_sha,(original_sha,generated_sha)
+          assert original==generated
+          report={
+            'schemaVersion':'courtedge-mlb-router-input-full-modular-selection-parity.v1',
+            'classification':'FULL_MODULAR_RECONSTRUCTED_CUSTODY_EXACT_RESULT_PARITY_PASS',
+            'originalResultSha256':original_sha,
+            'generatedResultSha256':generated_sha,
+            'fullResultByteIdentical':True,
+            'fullResultJsonIdentical':True,
+            'dailySelectionIdentityMismatches':0,
+            'dailySelectionObjectMismatches':0,
+            'shadowPicks':236,'wins':177,'losses':58,'pushes':1,
+            'decisiveHitRate':fm['hitRate'],
+            'combinedOpportunityCoveragePct':fm['combinedDailyOpportunityCoveragePct'],
+            'productionChanged':False,'realFinancialExposure':0,
+          }
+          json.dump(report,open('work/full-modular-selection-parity-report.json','w'),indent=2,sort_keys=True);open('work/full-modular-selection-parity-report.json','a').write('\n')
+          print('MLB_FULL_MODULAR_236_SELECTION_EXACT_PARITY_PASSED')
+          print(json.dumps(report,indent=2,sort_keys=True))
+          PY
+
+      - name: Upload Full Modular selection parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-router-input-full-modular-selection-parity-v1
+          path: |
+            work/v66-runtime-reconstructed-report.json
+            work/full-modular-selection-parity-report.json
+          if-no-files-found: error
+          retention-days: 90
