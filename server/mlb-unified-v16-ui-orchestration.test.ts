@@ -3,16 +3,18 @@ import test from "node:test";
 import type { MlbP1DailySlate } from "./mlb-p1-daily-slate";
 import { executeMlbUnifiedV16UiCommand } from "./mlb-unified-v16-ui-routes";
 
+const DATE = "2026-08-13";
+
 function slate(stage: "FINAL" | "PROVISIONAL"): MlbP1DailySlate {
   const final = stage === "FINAL";
   return {
     schemaVersion: "courtedge-p1-mlb-daily-slate.v1",
-    date: "2026-08-13",
+    date: DATE,
     generatedAt: "2026-08-13T17:00:00.000Z",
     games: [{
       gamePk: 123,
       startTime: "2026-08-13T23:10:00.000Z",
-      officialDate: "2026-08-13",
+      officialDate: DATE,
       venue: "Test Park",
       state: "PREGAME",
       detailedState: "Pre-Game",
@@ -46,7 +48,23 @@ function settlementEvidence() {
   }];
 }
 
-function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: boolean }) {
+function frozenRoutes(tier: "A_PLUS" | "PREMIUM" | "NONE") {
+  return {
+    PREMIUM_A_HOME_ML: tier === "A_PLUS" || tier === "PREMIUM" ? "MATCH" : "NO_MATCH",
+    A_PLUS_HOME_ML: tier === "A_PLUS" ? "MATCH" : "NO_MATCH",
+    A_PLUS_SLG_POS: "NO_MATCH",
+    A_PLUS_PITCHMIX_AT2: "NO_MATCH",
+    F5_HRPA_OR_AT2: "NO_MATCH",
+    F5_PARETO_UNION: "NO_MATCH",
+  } as const;
+}
+
+function basePreprice(input: {
+  runId: string;
+  plannedMarkets: string[];
+  paidLookupEligibleNow: boolean;
+  dailyTier: "A_PLUS" | "PREMIUM" | "NONE";
+}) {
   const hasThesis = input.plannedMarkets.length > 0;
   const shortlistCandidate = {
     gamePk: 123,
@@ -56,9 +74,14 @@ function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: 
   };
   const intrinsicGame = {
     gamePk: 123,
+    officialDate: DATE,
     researchClassification: hasThesis ? "GAME_ELITE_RESEARCH_CANDIDATE" : "NO_STRONG_THESIS",
   };
   return {
+    schemaVersion: "courtedge-p0-mlb-unified-runner.preprice-step11c.v2",
+    runId: input.runId,
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    date: DATE,
     summary: {
       slateGames: 1,
       analysisEligibleGames: 1,
@@ -97,6 +120,46 @@ function basePreprice(input: { plannedMarkets: string[]; paidLookupEligibleNow: 
         gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
       },
     },
+    frozenRouteLedger: {
+      schemaVersion: "courtedge-p0-mlb-frozen-research-route-ledger.v2",
+      sourceRunId: input.runId,
+      capturedAt: "2026-08-13T17:01:00.000Z",
+      entries: [{
+        observationId: "obs-123",
+        sourceRunId: input.runId,
+        gamePk: 123,
+        gameDate: DATE,
+        scheduledStartTime: "2026-08-13T23:10:00.000Z",
+        evaluatedAt: "2026-08-13T17:00:30.000Z",
+        capturedAt: "2026-08-13T17:01:00.000Z",
+        finalInputs: true,
+        featureSnapshotDigest: "a".repeat(64),
+        scorerVersion: "frozen-route-router-scorer.v2",
+        routes: frozenRoutes(input.dailyTier),
+        routers: {
+          A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1: input.dailyTier === "A_PLUS"
+            ? "FIRST_5_HOME"
+            : "NOT_APPLICABLE",
+        },
+      }],
+      policy: {
+        outcomeMayAffectPregameAssessment: false,
+        liveFilterChangeAllowed: false,
+        rankingChangeAllowed: false,
+        stakeChangeAllowed: false,
+        automaticBetPlacement: false,
+        realFinancialExposure: 0,
+      },
+    },
+    policy: {
+      priceBoundaryCrossed: false,
+      callsTheOddsApi: false,
+      originalStep11cPopulationChanged: false,
+      frozenRouteLedgerChangesRecommendation: false,
+      frozenRouterDecisionChangesRecommendation: false,
+      automaticBetPlacement: false,
+      realFinancialExposure: 0,
+    },
   };
 }
 
@@ -123,10 +186,10 @@ function eliteRunnerResult(input: any) {
   return {
     schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
     runId: input.runId,
-    date: "2026-08-13",
+    date: DATE,
     generatedAt: "2026-08-13T17:01:00.000Z",
     summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 1, positiveEvMarkets: 1, eliteEvidenceCandidates: 1, eliteEvidenceRowsCaptured: 1 },
-    preprice: basePreprice({ plannedMarkets: ["ML"], paidLookupEligibleNow: true }),
+    preprice: basePreprice({ runId: input.runId, plannedMarkets: ["ML"], paidLookupEligibleNow: true, dailyTier: "A_PLUS" }),
     settlementEvidence: settlementEvidence(),
     marketEdge: {
       games: [{ gamePk: 123, markets: [{ classification: "POSITIVE_EV", execution: { bookKey: "fixture" } }] }],
@@ -147,10 +210,10 @@ function noPlayRunnerResult(input: any) {
   return {
     schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
     runId: input.runId,
-    date: "2026-08-13",
+    date: DATE,
     generatedAt: "2026-08-13T17:01:00.000Z",
     summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 0, positiveEvMarkets: 0, eliteEvidenceCandidates: 0, eliteEvidenceRowsCaptured: 0 },
-    preprice: basePreprice({ plannedMarkets: [], paidLookupEligibleNow: false }),
+    preprice: basePreprice({ runId: input.runId, plannedMarkets: [], paidLookupEligibleNow: false, dailyTier: "NONE" }),
     settlementEvidence: settlementEvidence(),
     marketEdge: {
       games: [],
@@ -168,7 +231,7 @@ test("provisional-only command does not assemble or invoke the priced runner", a
   let assemblyCalls = 0;
   let runtimeCalls = 0;
   let pricedCalls = 0;
-  const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
+  const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("PROVISIONAL"),
     assembleLiveInput: (async () => { assemblyCalls += 1; throw new Error("unexpected assembler call"); }) as any,
     resolveRuntimeConfig: () => { runtimeCalls += 1; throw new Error("unexpected runtime call"); },
@@ -181,12 +244,13 @@ test("provisional-only command does not assemble or invoke the priced runner", a
   assert.equal(assemblyCalls, 0);
   assert.equal(runtimeCalls, 0);
   assert.equal(pricedCalls, 0);
+  assert.equal("dailyBestPick" in response.body, false);
 });
 
 test("missing certified evidence blocks before runtime custody and Step 8", async () => {
   let runtimeCalls = 0;
   let pricedCalls = 0;
-  const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
+  const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
     resolveRuntimeConfig: () => { runtimeCalls += 1; throw new Error("unexpected runtime call"); },
     runPriced: (async () => { pricedCalls += 1; throw new Error("unexpected priced call"); }) as any,
@@ -203,13 +267,13 @@ test("missing certified evidence blocks before runtime custody and Step 8", asyn
   assert.equal(policy.theOddsApiCreditsConsumed, 0);
 });
 
-test("complete certified assembly returns Elite evidence and diagnostic without leaking server custody", async () => {
+test("complete certified assembly returns Elite evidence plus one trusted Daily BEST PICK without leaking server custody", async () => {
   let runtimeCalls = 0;
   let pricedCalls = 0;
   let capturedInput: any = null;
   const opaqueKey = "server-only-opaque-key";
   const opaqueScope = "server-only-account-scope";
-  const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
+  const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
     liveEvidenceProviders: {
       shortlistEvidence: async () => ({ value: { 123: {} } }),
@@ -242,6 +306,37 @@ test("complete certified assembly returns Elite evidence and diagnostic without 
   assert.equal(result.noPlayAudit.primaryBlocker, "NONE");
   assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.fullGameHomeWinProbability, 0.612);
   assert.equal(result.noPlayAudit.policy.predictionRemainsPriceIndependent, true);
+  assert.deepEqual(result.dailyBestPick, {
+    schemaVersion: "courtedge-mlb-daily-best-pick-ui.v1",
+    decision: "BEST_PICK",
+    pick: {
+      gamePk: 123,
+      awayTeam: "Away",
+      homeTeam: "Home",
+      market: "FIRST_5_ML",
+      side: "HOME",
+      route: "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1",
+      tier: "A_PLUS",
+      prepriceRank: 0,
+    },
+    audit: {
+      readyAPlusEvaluations: 1,
+      readyPremiumEvaluations: 0,
+      provisionalRowsSkipped: 0,
+      frozenRouteMatchesOutsideRankedPreprice: 0,
+    },
+    policy: {
+      trustedUnifiedPrepriceRuntimeOnly: true,
+      finalFrozenInputsOnly: true,
+      aPlusAlwaysPrecedesPremium: true,
+      existingPrepriceRankPreservedWithinTier: true,
+      generalV68FallbackAllowed: false,
+      v80Read: false,
+      v80Changed: false,
+      automaticBetPlacement: false,
+      realFinancialExposure: 0,
+    },
+  });
   assert.deepEqual(result.eliteCandidates[0], {
     predictionId: "pred-123-home-ml",
     gamePk: 123,
@@ -265,15 +360,23 @@ test("complete certified assembly returns Elite evidence and diagnostic without 
     supportingComponents: ["C4", "FULL13"],
   });
 
+  const policy = response.body.policy as Record<string, unknown>;
+  assert.equal(policy.dailyBestPickDerivedFromTrustedPreprice, true);
+  assert.equal(policy.dailyBestPickBrowserInputAllowed, false);
+  assert.equal(policy.dailyBestPickChangesFrozenRouting, false);
+  assert.equal(policy.dailyBestPickGeneralV68FallbackAllowed, false);
+  assert.equal(policy.dailyBestPickV80DependencyAllowed, false);
+
   const serialized = JSON.stringify(response.body);
   assert.equal(serialized.includes(opaqueKey), false);
   assert.equal(serialized.includes(opaqueScope), false);
   assert.equal(serialized.includes("314159"), false);
   assert.equal(serialized.includes("271828"), false);
+  assert.equal(serialized.includes("obs-123"), false);
 });
 
-test("completed no-play run identifies pre-V16 intrinsic-thesis suppression instead of blaming price", async () => {
-  const response = await executeMlbUnifiedV16UiCommand("2026-08-13", {
+test("completed no-play run exposes explicit Daily BEST PICK NO_PLAY without fabricating a fallback", async () => {
+  const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
     liveEvidenceProviders: {
       shortlistEvidence: async () => ({ value: { 123: {} } }),
@@ -292,6 +395,10 @@ test("completed no-play run identifies pre-V16 intrinsic-thesis suppression inst
   assert.equal(response.body.status, "RUN_COMPLETED");
   const result = response.body.result as Record<string, any>;
   assert.deepEqual(result.eliteCandidates, []);
+  assert.equal(result.dailyBestPick.decision, "NO_PLAY");
+  assert.equal(result.dailyBestPick.pick, null);
+  assert.equal(result.dailyBestPick.policy.generalV68FallbackAllowed, false);
+  assert.equal(result.dailyBestPick.policy.v80Read, false);
   assert.equal(result.noPlayAudit.primaryBlocker, "NO_STRONG_INTRINSIC_THESIS_ON_V16_SCORED_GAMES");
   assert.equal(result.noPlayAudit.counts.v16ScoredGames, 1);
   assert.equal(result.noPlayAudit.counts.v16ScoredSelectedForMarketDiscovery, 1);
