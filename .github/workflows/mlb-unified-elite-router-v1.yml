@@ -1,0 +1,136 @@
+name: MLB Unified Elite Router V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-elite-router-v1
+    paths:
+      - "research/mlb-unified-elite-router-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "server/mlb-unified-elite-router-v1.ts"
+      - "scripts/mlb-unified-elite-router-v1.test.ts"
+      - ".github/workflows/mlb-unified-elite-router-v1.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-live-operational-parity-v1
+    paths:
+      - "research/mlb-unified-elite-router-v1-contract.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "server/mlb-unified-elite-router-v1.ts"
+      - "scripts/mlb-unified-elite-router-v1.test.ts"
+      - ".github/workflows/mlb-unified-elite-router-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unified-elite-router:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove preimplementation freeze chronology and parent gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE3='164df6644b259df2be42a340003c89a2499269e2'
+          CONTRACT_FREEZE='e486c53aae7c44d2dc6ced6cb64e7af97cd452df'
+          ROUTER='server/mlb-unified-elite-router-v1.ts'
+          TEST='scripts/mlb-unified-elite-router-v1.test.ts'
+          ROUTER_ADD="$(git log --diff-filter=A --format=%H -- "$ROUTER" | tail -1)"
+          TEST_ADD="$(git log --diff-filter=A --format=%H -- "$TEST" | tail -1)"
+          test -n "$ROUTER_ADD" && test -n "$TEST_ADD"
+          git merge-base --is-ancestor "$STAGE3" "$CONTRACT_FREEZE"
+          git merge-base --is-ancestor "$CONTRACT_FREEZE" "$ROUTER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_FREEZE" "$TEST_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-unified-elite-router-v1-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_UNIFIED_ROUTER_IMPLEMENTATION'
+          assert c['scope']=='RESEARCH_ONLY'
+          assert c['productionChanged'] is False
+          assert c['realFinancialExposure']==0
+          assert c['parentStage3Head']=='164df6644b259df2be42a340003c89a2499269e2'
+          assert c['firstProspectiveEligibleOfficialDate']=='2026-08-19'
+          assert c['controlHierarchy']==['A_PLUS','PREMIUM','FULL_MODULAR','NO_PLAY']
+          assert c['challengerHierarchy']==['A_PLUS','PREMIUM','PP_HORIZON','FULL_MODULAR_TECHNICAL_FALLBACK_ONLY','NO_PLAY']
+          assert len(c['ppTechnicalUnavailableReasons'])==5
+          assert c['routingInvariants']['aPlusAbsolutePriority'] is True
+          assert c['routingInvariants']['ppRegularNoPlayDoesNotActivateFullModular'] is True
+          assert c['routingInvariants']['maximumSelectionsPerArmPerOfficialDate']==1
+          assert c['prospectiveGovernance']['outcomesAvailableToRouter'] is False
+          assert c['prospectiveGovernance']['stakeOrAutobetChangeAllowed'] is False
+          print('MLB_UNIFIED_ELITE_ROUTER_PREIMPLEMENTATION_FREEZE_PROVED')
+          PY
+          test "sha256:$(sha256sum research/mlb-full-modular-pp-horizon-model-snapshot-v1.json | awk '{print $1}')" = 'sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
+          echo MLB_UNIFIED_ELITE_PP_SNAPSHOT_PIN_PROVED
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check frozen router and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-unified-elite-router-v1.ts \
+            scripts/mlb-unified-elite-router-v1.test.ts
+
+      - name: Execute hierarchy invariant suite
+        run: npx tsx scripts/mlb-unified-elite-router-v1.test.ts
+
+      - name: Prove router has no performance or probability decision inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          src=Path('server/mlb-unified-elite-router-v1.ts').read_text()
+          forbidden=[
+            'modelProbability','partialPoolProbability','confidence','hitRate',
+            'brier','logloss','winner','finalScore','homeScore','awayScore'
+          ]
+          found=[token for token in forbidden if token in src]
+          assert not found, found
+          assert 'PP_TECHNICAL_UNAVAILABLE_REASONS' in src
+          assert 'FULL_MODULAR:FALLBACK_FORBIDDEN' in src
+          assert 'selectionCount: 1' in src
+          assert 'maximumSelectionsPerArm: 1' in src
+          print('MLB_UNIFIED_ELITE_NO_PROBABILITY_PERFORMANCE_ROUTING_PROVED')
+          PY
+
+      - name: Prove research-only change surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='164df6644b259df2be42a340003c89a2499269e2'
+          mapfile -t CHANGED < <(git diff --name-only "${BASE}...HEAD")
+          printf '%s\n' "${CHANGED[@]}"
+          for FILE in "${CHANGED[@]}"; do
+            case "$FILE" in
+              research/mlb-unified-elite-router-v1-contract.json|server/mlb-unified-elite-router-v1.ts|scripts/mlb-unified-elite-router-v1.test.ts|.github/workflows/mlb-unified-elite-router-v1.yml)
+                ;;
+              *)
+                echo "FORBIDDEN_UNIFIED_ROUTER_CHANGE:$FILE" >&2
+                exit 1
+                ;;
+            esac
+          done
+          echo MLB_UNIFIED_ELITE_RESEARCH_ONLY_SURFACE_PROVED
