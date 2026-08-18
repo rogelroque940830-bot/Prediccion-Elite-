@@ -1,7 +1,7 @@
 {
   "schemaVersion": "courtedge-mlb-daily-best-pick-historical-coverage-contract.v1",
   "classification": "POSTHOC_REPRODUCIBLE_COVERAGE_AUDIT_CONTRACT_V1",
-  "purpose": "Measure historical daily availability of the current production Daily BEST PICK hierarchy A+ -> Premium -> NO_PLAY, with a hard maximum of one selected tier per official date, without relaxing any route or threshold.",
+  "purpose": "Measure historical daily availability of the current production Daily BEST PICK hierarchy A+ -> Premium -> NO_PLAY, with a hard maximum of one selected tier per official date, without relaxing any route or threshold, while distinguishing parent-route availability from exact current Step11c population coverage.",
   "scientificStatus": "RETROSPECTIVE_DERIVED_AUDIT_USING_FROZEN_PARENT_EVIDENCE",
   "productionSnapshot": {
     "mainCommit": "119bf80c66a137759f94eae93aa148acb5d5a6e5",
@@ -65,13 +65,14 @@
     "v80DependencyAllowed": false
   },
   "questionsExactly": [
-    "How many eligible MLB slate dates historically had at least one current-route candidate?",
-    "How many selected-tier dates were A+ versus Premium fallback-only?",
-    "How many eligible slate dates were NO_PLAY?",
-    "What was the longest consecutive NO_PLAY streak in eligible slate dates?",
-    "How did coverage differ across 2024, 2025, and 2026_YTD?",
+    "How many eligible MLB slate dates historically had at least one parent-route candidate matching the current A+/Premium route family?",
+    "How many selected-tier dates were A+ versus Premium fallback-only at the parent-route level?",
+    "How many eligible slate dates were parent-route NO_PLAY?",
+    "What was the longest consecutive parent-route NO_PLAY streak in eligible slate dates?",
+    "How did parent-route availability differ across 2024, 2025, and 2026_YTD?",
     "Which route-pool outcome rates are supported by the frozen parent evidence?",
-    "How many daily outcomes are rank-sensitive because the current production prepriceRank is not preserved in the V69 route opportunity rows?"
+    "How many active parent-route dates have same-tier outcome ambiguity because the current production prepriceRank is not preserved in the V69 route opportunity rows?",
+    "Can exact current Step11c production coverage be certified from these parent artifacts alone?"
   ],
   "selectionBoundary": {
     "outcomesMayDetermineEligibility": false,
@@ -89,6 +90,16 @@
     "automaticBetPlacement": false,
     "realFinancialExposure": 0
   },
+  "populationLimitation": {
+    "currentProductionRequiresMembershipInRuntimeIntrinsicRankedGames": true,
+    "currentProductionIntrinsicMaximumCandidates": 8,
+    "v69ParentRouteRowsPreserveCurrentStep11cShortlistPayloads": false,
+    "v69ParentRouteRowsPreserveCurrentIntrinsicRanking": false,
+    "exactProductionStep11cCoverageCanBeCertifiedFromParentArtifact": false,
+    "parentRouteAvailabilityCanBeCertified": true,
+    "historicalParentRouteAvailabilityIsUpperBoundForCurrentPipeline": true,
+    "requiredHandling": "REPORT_PARENT_ROUTE_AVAILABILITY_AS_A_CERTIFIED_CEILING_AND_DO_NOT_LABEL_IT_EXACT_PRODUCTION_COVERAGE_UNLESS_CURRENT_STEP11C_POPULATION_PARITY_IS RECONSTRUCTED"
+  },
   "rankingLimitation": {
     "exactCurrentPrepriceRankRequiredForExactDailySelectedWinLoss": true,
     "v69RouteRowsCarryCurrentPrepriceRank": false,
@@ -96,7 +107,8 @@
     "requiredHandling": "FAIL_CLOSED_ON_EXACT_DAILY_SELECTED_WIN_LOSS_AND_REPORT_RANK_SENSITIVITY_OR_OUTCOME_BOUNDS_INSTEAD"
   },
   "interpretation": {
-    "coverageCanBeCertifiedFromRoutePresence": true,
+    "parentRouteAvailabilityCanBeCertified": true,
+    "exactProductionStep11cCoverageCanBeCertifiedFromParentArtifact": false,
     "routePoolHitRatesAreNotTheSameAsDailySelectedHitRate": true,
     "retrospectiveAdaptiveDiscoveryOnly": true,
     "independentProspectiveConfirmationClaimed": false,
