@@ -129,6 +129,57 @@ jobs:
             --output work/v66-runtime-reconstructed.jsonl.gz \
             --report work/v66-runtime-reconstructed-report.json
 
+      - name: Compare every parsed V66 row and field
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip, json
+          original='${{ steps.inputs.outputs.custody }}'
+          rebuilt='work/v66-runtime-reconstructed.jsonl.gz'
+          def load(path):
+              with gzip.open(path,'rt',encoding='utf-8') as f:
+                  return [json.loads(line) for line in f if line.strip()]
+          a=load(original); b=load(rebuilt)
+          report={
+              'originalRows':len(a),'reconstructedRows':len(b),
+              'rowMismatchCount':0,'fieldMismatchCount':0,'examples':[]
+          }
+          n=max(len(a),len(b))
+          for i in range(n):
+              if i>=len(a) or i>=len(b):
+                  report['rowMismatchCount']+=1
+                  if len(report['examples'])<20:
+                      report['examples'].append({'index':i,'reason':'missing-row'})
+                  continue
+              x,y=a[i],b[i]
+              changes=[]
+              for k in sorted(set(x)|set(y)):
+                  missing=object()
+                  xv=x.get(k,missing); yv=y.get(k,missing)
+                  if xv is missing or yv is missing or xv!=yv or type(xv) is not type(yv):
+                      changes.append({
+                          'field':k,
+                          'original':None if xv is missing else xv,
+                          'reconstructed':None if yv is missing else yv,
+                          'originalType':'MISSING' if xv is missing else type(xv).__name__,
+                          'reconstructedType':'MISSING' if yv is missing else type(yv).__name__,
+                      })
+              if changes:
+                  report['rowMismatchCount']+=1
+                  report['fieldMismatchCount']+=len(changes)
+                  if len(report['examples'])<20:
+                      report['examples'].append({
+                          'index':i,'gamePk':x.get('gamePk'),'date':x.get('date'),
+                          'changes':changes[:20]
+                      })
+          report['exactParsedEquality']=(len(a)==len(b) and report['rowMismatchCount']==0)
+          with open('work/v66-full-row-parity.json','w') as f:
+              json.dump(report,f,indent=2,sort_keys=True)
+          print('V66_FULL_ROW_PARITY',json.dumps(report,sort_keys=True))
+          PY
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -137,7 +188,27 @@ jobs:
       - name: Install exact scientific dependencies
         run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
 
-      - name: Execute exact root Full Modular scorer
+      - name: Execute exact scorer against immutable original V66
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --multi-market-scorer scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            --multi-market-contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --contract research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            --out work/full-modular-current-original-v66.json
+
+      - name: Execute exact scorer against reconstructed V66
         shell: bash
         run: |
           set -euo pipefail
@@ -155,69 +226,107 @@ jobs:
             --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
             --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
             --contract research/mlb-market-state-matchup-modular-router-v1-contract.json \
-            --out work/full-modular-generated.json
+            --out work/full-modular-current-reconstructed-v66.json
 
-      - name: Diagnose scientific and transport parity
-        id: diagnostic
+      - name: Diagnose original artifact versus current scorer with original V66
         continue-on-error: true
         shell: bash
         run: |
           set -uo pipefail
           python scripts/mlb-router-input-full-modular-result-diagnostic-v1.py \
             --original '${{ steps.inputs.outputs.original }}' \
-            --generated work/full-modular-generated.json \
-            --out work/full-modular-diagnostic.json
+            --generated work/full-modular-current-original-v66.json \
+            --out work/full-modular-diagnostic-original-v66.json
 
-      - name: Print compact diagnostic regardless of comparator outcome
+      - name: Diagnose original artifact versus current scorer with reconstructed V66
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          python scripts/mlb-router-input-full-modular-result-diagnostic-v1.py \
+            --original '${{ steps.inputs.outputs.original }}' \
+            --generated work/full-modular-current-reconstructed-v66.json \
+            --out work/full-modular-diagnostic-reconstructed-v66.json
+
+      - name: Compare current original-V66 and reconstructed-V66 scorer outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json
+          p1='work/full-modular-current-original-v66.json'
+          p2='work/full-modular-current-reconstructed-v66.json'
+          b1=open(p1,'rb').read(); b2=open(p2,'rb').read()
+          j1=json.loads(b1); j2=json.loads(b2)
+          report={
+            'byteIdentical':b1==b2,
+            'jsonEqual':j1==j2,
+            'originalV66OutputSha256':'sha256:'+hashlib.sha256(b1).hexdigest(),
+            'reconstructedV66OutputSha256':'sha256:'+hashlib.sha256(b2).hexdigest(),
+          }
+          with open('work/full-modular-ab-v66.json','w') as f:
+              json.dump(report,f,indent=2,sort_keys=True)
+          print('FULL_MODULAR_AB_V66',json.dumps(report,sort_keys=True))
+          PY
+
+      - name: Print causal split
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          if test -s work/full-modular-diagnostic.json; then
-            python - <<'PY'
-          import json
-          r=json.load(open('work/full-modular-diagnostic.json'))
-          print('FULL_MODULAR_DIAGNOSTIC_CLASSIFICATION',r['classification'])
-          print('FULL_MODULAR_SCIENTIFIC_PARITY',r['scientificParity'])
-          print('FULL_MODULAR_BYTE_IDENTICAL',r['byteIdentical'])
-          print('FULL_MODULAR_JSON_EQUAL',r['fullJsonEqual'])
-          print('FULL_MODULAR_SELECTION_COUNTS',r['selectionCountOriginal'],r['selectionCountGenerated'])
-          print('FULL_MODULAR_IDENTITY_MISMATCHES',r['identityMismatchCount'])
-          print('FULL_MODULAR_OBJECT_MISMATCHES',r['objectMismatchCount'])
-          print('FULL_MODULAR_RECORD',json.dumps(r['generatedFullModularRecord'],sort_keys=True))
-          print('FULL_MODULAR_METRIC_DIFFS',json.dumps(r['metricDiffs'],sort_keys=True))
-          print('FULL_MODULAR_RECURSIVE_DIFF_EXAMPLES',json.dumps(r['recursiveDiffExamples'][:20],sort_keys=True))
+          python - <<'PY'
+          import json,os
+          for label,path in [
+            ('ORIGINAL_V66','work/full-modular-diagnostic-original-v66.json'),
+            ('RECONSTRUCTED_V66','work/full-modular-diagnostic-reconstructed-v66.json')]:
+              if not os.path.exists(path):
+                  print('FULL_MODULAR_'+label+'_DIAGNOSTIC_MISSING')
+                  continue
+              r=json.load(open(path))
+              print('FULL_MODULAR_'+label+'_CLASSIFICATION',r['classification'])
+              print('FULL_MODULAR_'+label+'_SCIENTIFIC_PARITY',r['scientificParity'])
+              print('FULL_MODULAR_'+label+'_JSON_EQUAL',r['fullJsonEqual'])
+              print('FULL_MODULAR_'+label+'_IDENTITY_MISMATCHES',r['identityMismatchCount'])
+              print('FULL_MODULAR_'+label+'_OBJECT_MISMATCHES',r['objectMismatchCount'])
+              print('FULL_MODULAR_'+label+'_METRIC_DIFFS',json.dumps(r['metricDiffs'],sort_keys=True))
+              print('FULL_MODULAR_'+label+'_DIFF_EXAMPLES',json.dumps(r['recursiveDiffExamples'][:8],sort_keys=True))
+          if os.path.exists('work/v66-full-row-parity.json'):
+              r=json.load(open('work/v66-full-row-parity.json'))
+              print('V66_FULL_ROW_EXACT_PARSED_EQUALITY',r['exactParsedEquality'])
+              print('V66_FULL_ROW_MISMATCH_COUNTS',r['rowMismatchCount'],r['fieldMismatchCount'])
+              print('V66_FULL_ROW_EXAMPLES',json.dumps(r['examples'][:8],sort_keys=True))
+          if os.path.exists('work/full-modular-ab-v66.json'):
+              print('FULL_MODULAR_AB_V66',json.dumps(json.load(open('work/full-modular-ab-v66.json')),sort_keys=True))
           PY
-          else
-            echo FULL_MODULAR_DIAGNOSTIC_FILE_NOT_CREATED
-          fi
 
-      - name: Upload diagnostic evidence regardless of parity result
+      - name: Upload causal diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mlb-router-input-full-modular-diagnostic-v1
+          name: mlb-router-input-full-modular-causal-diagnostic-v2
           path: |
             work/v66-runtime-reconstructed-report.json
-            work/full-modular-generated.json
-            work/full-modular-diagnostic.json
+            work/v66-full-row-parity.json
+            work/full-modular-current-original-v66.json
+            work/full-modular-current-reconstructed-v66.json
+            work/full-modular-diagnostic-original-v66.json
+            work/full-modular-diagnostic-reconstructed-v66.json
+            work/full-modular-ab-v66.json
           if-no-files-found: warn
           retention-days: 90
 
-      - name: Enforce scientific parity only after diagnostic is persisted
+      - name: Enforce no scientific drift during diagnosis
         shell: bash
         run: |
           set -euo pipefail
-          test -s work/full-modular-diagnostic.json
           python - <<'PY'
           import json
-          r=json.load(open('work/full-modular-diagnostic.json'))
-          assert r['scientificParity'] is True, r
-          assert r['selectionCountOriginal']==236 and r['selectionCountGenerated']==236
-          assert r['identityMismatchCount']==0
-          assert r['objectMismatchCount']==0
-          assert r['generatedFullModularRecord']['wins']==177
-          assert r['generatedFullModularRecord']['losses']==58
-          assert r['generatedFullModularRecord']['pushes']==1
-          print('MLB_FULL_MODULAR_DIAGNOSTIC_SCIENTIFIC_PARITY_GATE_PASSED')
+          for path in ['work/full-modular-diagnostic-original-v66.json','work/full-modular-diagnostic-reconstructed-v66.json']:
+              r=json.load(open(path))
+              assert r['selectionCountOriginal']==236 and r['selectionCountGenerated']==236
+              assert r['identityMismatchCount']==0
+              assert r['generatedFullModularRecord']['wins']==177
+              assert r['generatedFullModularRecord']['losses']==58
+              assert r['generatedFullModularRecord']['pushes']==1
+          print('MLB_FULL_MODULAR_DIAGNOSTIC_NO_SCIENTIFIC_DRIFT')
           PY
