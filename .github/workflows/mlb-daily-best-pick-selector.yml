@@ -5,6 +5,7 @@ on:
     branches:
       - "production/mlb-daily-best-pick-router-v2"
       - "production/mlb-daily-best-pick-ui-v1"
+      - "fix/frontend-static-verifier-tests-v1"
     paths:
       - "server/mlb-daily-best-pick-selector.ts"
       - "server/mlb-daily-best-pick-selector.test.ts"
@@ -19,6 +20,8 @@ on:
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
+      - "frontend/scripts/verify-frontend.mjs"
+      - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
   pull_request:
@@ -38,6 +41,8 @@ on:
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
+      - "frontend/scripts/verify-frontend.mjs"
+      - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
   workflow_dispatch:
@@ -48,7 +53,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,9 +77,6 @@ jobs:
       - name: Test Daily BEST PICK frontend fail-closed presenter
         working-directory: frontend
         run: npx tsx --test client/src/lib/mlb-daily-best-pick.test.ts
-      - name: Typecheck frontend
+      - name: Verify frontend exactly through production pipeline
         working-directory: frontend
-        run: npm run check
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+        run: COURTEDGE_STANDALONE_DOCKER_BUILD=true npm run verify

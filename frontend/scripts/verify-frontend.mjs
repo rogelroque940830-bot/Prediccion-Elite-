@@ -33,6 +33,10 @@ function existsImport(base) {
   return candidates.some((p) => fs.existsSync(p) && fs.statSync(p).isFile());
 }
 
+function isNodeTestSource(file) {
+  return /\.(?:test|spec)\.(?:ts|tsx)$/.test(file);
+}
+
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const lock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
 const declared = new Set([
@@ -84,7 +88,10 @@ if (!workflowCandidates.some((file) => fs.existsSync(file))) {
 }
 
 const sourceFiles = walk(srcRoot).filter((f) => /\.(ts|tsx|css)$/.test(f));
-const codeFiles = sourceFiles.filter((f) => /\.(ts|tsx)$/.test(f));
+const testFiles = sourceFiles.filter((f) => isNodeTestSource(f));
+// Browser dependency verification must inspect only runtime sources. Node test files are
+// intentionally kept under client/src for colocated tests but are excluded from tsconfig/build.
+const codeFiles = sourceFiles.filter((f) => /\.(ts|tsx)$/.test(f) && !isNodeTestSource(f));
 const externalImports = new Set();
 const endpoints = new Set();
 const forbiddenBackendPatterns = [
@@ -156,6 +163,7 @@ if (contextSource.includes('`${API_BASE}/api/picks`')) errors.push("context.tsx 
 const summary = {
   sourceFiles: sourceFiles.length,
   codeFiles: codeFiles.length,
+  nodeTestFilesExcluded: testFiles.length,
   externalPackagesUsed: externalImports.size,
   endpointReferences: endpoints.size,
   warnings: warnings.length,
