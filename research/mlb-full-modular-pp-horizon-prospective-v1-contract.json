@@ -1,0 +1,302 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-pp-horizon-prospective-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS",
+  "objective": "Prospectively confirm or reject, on future unseen MLB dates, whether the exact frozen CHALLENGER_PP_HORIZON ranking from the retrospective partial-pooling study improves daily winner-selection correctness over the exact frozen CONTROL_FULL_MODULAR reference without degrading probability quality.",
+  "adaptiveSelectionDisclosure": "The 2024-2026_YTD outcomes used by the parent retrospective study were already inspected and motivated selection of CHALLENGER_PP_HORIZON. They are discovery evidence only. No outcome on or after the first eligible prospective date may be used to alter features, coefficients, preprocessing, ranking, candidate eligibility, stopping rules, or promotion rules.",
+  "immutableParentEvidence": {
+    "partialPoolingBranch": "research/mlb-full-modular-partial-pooling-v1",
+    "partialPoolingHeadSha": "37b6b0e63e58ff4a1a10bb5d8acc495724c269fc",
+    "partialPoolingContract": {
+      "path": "research/mlb-full-modular-partial-pooling-v1-contract.json",
+      "gitBlobSha": "72fdcddc51afd7d83e082f7b7fa5da5668ba90cf",
+      "requiredSchemaVersion": "courtedge-mlb-full-modular-partial-pooling-contract.v1"
+    },
+    "partialPoolingResultSummary": {
+      "path": "research/mlb-full-modular-partial-pooling-v1-result-summary.json",
+      "gitBlobSha": "36e6630700266cb1030aa20d8440ee930b260ab6",
+      "requiredClassification": "RETROSPECTIVE_PARTIAL_POOLING_COMPLETE_HORIZON_PROMISING_PROSPECTIVE_CONFIRMATION_REQUIRED",
+      "sourceWorkflowRunId": 32164873526,
+      "sourceArtifactId": 9335023982,
+      "sourceArtifactDigest": "sha256:3696e05880faed143e69c459b518bcce0254c12303418743efd9ef8222e0df1a",
+      "sourceHeadSha": "42a06fe3ecb7c5cab81da7ce525d5940116d0c59"
+    },
+    "retrospectiveControl": {
+      "policy": "CONTROL_FULL_MODULAR",
+      "wins": 177,
+      "losses": 58,
+      "pushes": 1,
+      "decisiveHitRate": 0.7531914893617021,
+      "brier": 0.18563005623613243,
+      "logLoss": 0.5596297326660968,
+      "rocAuc": 0.5672121566335477,
+      "absoluteCalibrationGap": 0.026494385947364973
+    },
+    "retrospectiveChallenger": {
+      "policy": "CHALLENGER_PP_HORIZON",
+      "wins": 181,
+      "losses": 55,
+      "pushes": 0,
+      "decisiveHitRate": 0.7669491525423728,
+      "brier": 0.18698696176299026,
+      "logLoss": 0.5668211490356927,
+      "rocAuc": 0.48277247614264196,
+      "absoluteCalibrationGap": 0.011797699945470086,
+      "pairedVsControl": {
+        "overlapDecisiveDates": 235,
+        "bothCorrect": 158,
+        "bothWrong": 36,
+        "challengerOnlyCorrect": 22,
+        "controlOnlyCorrect": 19,
+        "discordantCorrectnessDates": 41,
+        "twoSidedExactPValue": 0.755228657504631
+      }
+    }
+  },
+  "prospectiveBoundary": {
+    "firstEligibleOfficialDate": "2026-08-19",
+    "officialDatesOnOrBefore2026_08_18Eligible": false,
+    "reasonForConservativeNextDayStart": "The retrospective PP_HORIZON result was already known on 2026-08-18. Starting on the next official date removes same-day ambiguity and guarantees that every eligible game is post-freeze.",
+    "targetSport": "MLB_REGULAR_SEASON",
+    "researchOnly": true,
+    "maximumControlSelectionsPerOfficialDate": 1,
+    "maximumChallengerSelectionsPerOfficialDate": 1,
+    "existingAPlusPremiumProductionDatesTouched": false,
+    "parentActiveDateProducesShadowComparison": false,
+    "parentNoPlayDateRequired": true,
+    "historicalBackfillIntoProspectiveCohortAllowed": false,
+    "lateRetroactiveCaptureAfterOutcomeKnownAllowed": false,
+    "outcomeFieldsAllowedInPregameSnapshot": false,
+    "pricesRequired": false,
+    "historicalPricesUsed": false
+  },
+  "frozenPolicies": {
+    "CONTROL_FULL_MODULAR": {
+      "candidateUniverse": "EXACT_PARENT_FULL_MODULAR_ELIGIBLE_CANDIDATES_ON_PARENT_NO_PLAY_DATES",
+      "ranking": [
+        "DESC_qualityPercentile",
+        "DESC_modelProbability",
+        "ASC_market",
+        "ASC_gamePk"
+      ],
+      "candidateCreationAllowed": false,
+      "candidateDeletionAllowed": false,
+      "marketIdentityChangeAllowed": false,
+      "sideChangeAllowed": false
+    },
+    "CHALLENGER_PP_HORIZON": {
+      "candidateUniverse": "EXACT_SAME_CANDIDATE_ROWS_AS_CONTROL_FULL_MODULAR",
+      "ranking": [
+        "DESC_partialPoolProbability",
+        "DESC_qualityPercentile",
+        "DESC_modelProbability",
+        "ASC_market",
+        "ASC_gamePk"
+      ],
+      "deviationAxes": [
+        "horizon"
+      ],
+      "groupLevels": [
+        "F3",
+        "F5",
+        "FG"
+      ],
+      "candidateCreationAllowed": false,
+      "candidateDeletionAllowed": false,
+      "marketIdentityChangeAllowedOutsideRanking": false,
+      "sideChangeAllowedOutsideRanking": false
+    }
+  },
+  "frozenModel": {
+    "policy": "CHALLENGER_PP_HORIZON",
+    "family": "L2_REGULARIZED_LOGISTIC_REGRESSION_WITH_SCALED_HORIZON_DEVIATION_FEATURES",
+    "solver": "lbfgs",
+    "regularizationC": 0.25,
+    "maxIterations": 5000,
+    "classWeight": null,
+    "globalTrainingSeasonsExactly": [
+      "2023",
+      "2024",
+      "2025"
+    ],
+    "prospective2026OutcomesMayEnterTraining": false,
+    "futureProspectiveOutcomesMayEnterTrainingBeforeFinalRead": false,
+    "refitDuringProspectiveCohortAllowed": false,
+    "recalibrationDuringProspectiveCohortAllowed": false,
+    "preprocessingRefitDuringProspectiveCohortAllowed": false,
+    "globalNumericFeaturesExactly": [
+      "modelProbability",
+      "qualityPercentile",
+      "structureScore",
+      "structureObservedFeatureFraction",
+      "premium_core_support_count_0_to_3",
+      "premium_core_weakest_margin",
+      "frozen_c4_selected_side_probability",
+      "frozen_full13_selected_side_probability",
+      "sel_starter_kbb_adv",
+      "sel_team_win10_diff",
+      "sel_lineup_exposure_rate_adv",
+      "sel_team_ra10_adv",
+      "sel_starter_runrisk_adv"
+    ],
+    "globalCategoricalFeaturesExactly": [
+      "lineGeometry",
+      "matchupStructure",
+      "side"
+    ],
+    "partialPoolingSignalsExactly": [
+      "premium_core_support_count_0_to_3",
+      "premium_core_weakest_margin",
+      "frozen_full13_selected_side_probability",
+      "sel_starter_kbb_adv",
+      "sel_team_win10_diff",
+      "sel_lineup_exposure_rate_adv",
+      "sel_team_ra10_adv",
+      "sel_starter_runrisk_adv"
+    ],
+    "horizonDeviationLevelsExactly": [
+      "F3",
+      "F5",
+      "FG"
+    ],
+    "signalDeviationFeatureScale": 0.35,
+    "groupInterceptFeatureScale": 0.2,
+    "postFreezeFeatureAdditionAllowed": false,
+    "postFreezeFeatureRemovalAllowed": false,
+    "postFreezePenaltySearchAllowed": false,
+    "postFreezeThresholdSearchAllowed": false,
+    "postFreezeHorizonRuleSearchAllowed": false,
+    "modelSnapshotMustBeMaterializedBeforeFirstCapture": true,
+    "modelSnapshotSourceRule": "Reconstruct the exact 2026_YTD PP_HORIZON fit using only 2023-2025 decisive training candidates under the parent contract, then freeze every preprocessing statistic, feature name/order, intercept, and coefficient. The snapshot may be accepted only after exact historical parity to the immutable parent result is proven."
+  },
+  "historicalParityGateBeforeProspectiveCapture": {
+    "required": true,
+    "mustReproduceCandidateUniverseCounts": true,
+    "mustReproduceParentNoPlayDates": true,
+    "mustReproduceControlDailyIdentity": true,
+    "mustReproducePpHorizonDailyIdentity": true,
+    "mustReproduce2026YtdPpHorizonSeasonResult": {
+      "wins": 53,
+      "losses": 18,
+      "pushes": 0,
+      "hitRate": 0.7464788732394366
+    },
+    "maximumProbabilityAbsoluteDifference": 1e-12,
+    "maximumPreprocessingAbsoluteDifference": 1e-12,
+    "candidateIdentityMismatchesAllowed": 0,
+    "dailySelectionIdentityMismatchesAllowed": 0,
+    "featureOrderMismatchesAllowed": 0,
+    "outcomesMayBeUsedToRepairParity": false,
+    "retuningToRepairParityAllowed": false
+  },
+  "prospectiveCaptureSemantics": {
+    "captureEveryEligibleGamePregameBeforeDailyShadowMaterialization": true,
+    "eachGameSnapshotMustBeStrictlyBeforeItsScheduledStart": true,
+    "requiresPregameProbableStarterSemantics": true,
+    "requiresPregameLineupSemanticsWhenTheFrozenSourceFeatureRequiresIt": true,
+    "firstCanonicalGameSnapshotImmutable": true,
+    "duplicateGameCaptureReturnsExistingCanonicalSnapshot": true,
+    "sameDateCompletedGamesMayNotUpdateFeaturesForLaterGames": true,
+    "wholeOfficialDateStateMayUseOnlyInformationAvailableStrictlyBeforeEachGameSnapshot": true,
+    "dailyShadowMayUseOnlyImmutableOutcomeFreePregameSnapshots": true,
+    "dailyShadowMaterializationMayNotReadOutcomes": true,
+    "dailyShadowMaterializationMayOccurAfterSomeSlateGamesStart": true,
+    "liveActionabilityClaimed": false,
+    "reasonLiveActionabilityNotClaimed": "The purpose of this stage is unbiased prospective ranking confirmation. Per-game pregame snapshots can be immutable while slate-wide daily ranking is finalized later. A separate frozen operational timing rule is required before any production recommendation claim."
+  },
+  "outcomeEmbargo": {
+    "allMinimumsRequiredSimultaneously": true,
+    "minimumCommonShadowDecisions": 50,
+    "minimumDistinctOfficialDatesWithCommonShadowDecision": 50,
+    "minimumPregameIdentityDiscordantDates": 12,
+    "minimumPpHorizonSelectionsByHorizon": {
+      "F3": 8,
+      "F5": 5,
+      "FG": 25
+    },
+    "interimOutcomePeekingAllowed": false,
+    "interimWinLossCountsAllowed": false,
+    "interimHitRateAllowed": false,
+    "interimBrierAllowed": false,
+    "interimLogLossAllowed": false,
+    "interimCalibrationAllowed": false,
+    "outcomesMayBeQueriedBeforeEmbargoMaturity": false,
+    "singlePrimaryEvaluationAfterEmbargo": true,
+    "postCaptureStoppingRuleChangeAllowed": false,
+    "reason": "PP_HORIZON was selected after retrospective outcome inspection. A sufficiently large, outcome-blind and pregame-identifiable fresh cohort is required before any inferential read."
+  },
+  "formalHypothesis": {
+    "primaryStatement": "On future common shadow dates, CHALLENGER_PP_HORIZON has higher daily selected-side correctness than CONTROL_FULL_MODULAR.",
+    "primaryEffect": "deltaHitRate = hitRate(CHALLENGER_PP_HORIZON) - hitRate(CONTROL_FULL_MODULAR)",
+    "expectedPrimaryEffectDirection": "POSITIVE",
+    "pairedDiscordanceStatement": "Among dates where only one policy is correct, PP_HORIZON is correct more often than CONTROL_FULL_MODULAR.",
+    "probabilityQualityGuard": "Prospective PP_HORIZON Brier score and log loss must not exceed the corresponding Full Modular control values at the final read."
+  },
+  "statistics": {
+    "evaluationUnit": "OFFICIAL_DATE_COMMON_SHADOW_DECISION",
+    "clusterUnit": "OFFICIAL_DATE",
+    "primaryPairedTest": "ONE_SIDED_EXACT_BINOMIAL_ON_DISCORDANT_DAILY_CORRECTNESS_WITH_PP_HORIZON_EXPECTED_BETTER",
+    "alpha": 0.05,
+    "bootstrapResamples": 10000,
+    "bootstrapSeed": 20260819,
+    "confidenceLevel": 0.95,
+    "pairedBootstrap": "Resample common official dates with replacement and recompute deltaHitRate.",
+    "primaryConfirmationChecksExactly": [
+      "deltaHitRate_point_estimate_gt_0",
+      "deltaHitRate_cluster_bootstrap_95CI_lower_gt_0",
+      "pp_horizon_only_correct_gt_control_only_correct",
+      "one_sided_exact_discordant_p_lt_0_05",
+      "pp_horizon_brier_lte_control_brier",
+      "pp_horizon_log_loss_lte_control_log_loss",
+      "no_capture_chronology_violations",
+      "no_candidate_universe_drift",
+      "no_model_snapshot_drift",
+      "no_interim_outcome_access"
+    ],
+    "classificationRules": {
+      "PP_HORIZON_PROSPECTIVELY_CONFIRMED_FOR_NEXT_RESEARCH_STAGE": "All exact primary confirmation checks pass.",
+      "PP_HORIZON_DIRECTIONALLY_SUPPORTED_BUT_NOT_CONFIRMED": "The PP_HORIZON point-estimate hit-rate delta is positive and PP_HORIZON wins more discordant dates, but at least one inferential or probability-quality guard fails, with no integrity violation.",
+      "PP_HORIZON_PROSPECTIVE_HYPOTHESIS_FAILED": "The hit-rate delta is nonpositive, PP_HORIZON does not win more discordant dates, or any integrity/freeze/chronology rule is violated.",
+      "PP_HORIZON_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE": "Any embargo minimum is not satisfied; outcomes remain unread."
+    },
+    "secondaryDescriptivesExactly": [
+      "W_L_push_hit_rate_Wilson95_by_policy",
+      "Brier_logLoss_AUC_calibration_gap_by_policy",
+      "W_L_hit_rate_by_selected_horizon",
+      "pregame_selection_identity_agreement_rate",
+      "market_identity_transition_matrix_control_to_pp_horizon",
+      "selected_game_identity_transition_rate"
+    ],
+    "secondaryDescriptivesCanOverridePrimaryClassification": false,
+    "subgroupMiningAllowed": false,
+    "newFeatureSearchAllowed": false,
+    "newHorizonInteractionSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "penaltySearchAllowed": false,
+    "excludeDatesAfterOutcomeInspectionAllowed": false,
+    "excludeGamesAfterOutcomeInspectionAllowed": false,
+    "multipleInterimLooksAllowed": false
+  },
+  "target": {
+    "productObjective": "PREDICT_THE_GAME_WINNER",
+    "marketConcept": "DAILY_BEST_WINNER_SELECTION_FROM_FROZEN_FULL_MODULAR_MARKET_CANDIDATES",
+    "selectedSide": "Exact selected side attached to the top-ranked frozen policy candidate for the official date.",
+    "outcome": "SELECTED_SIDE_SETTLEMENT_WIN_ON_DECISIVE_ROWS",
+    "pushHandling": "Preserve in settlement reporting; exclude from binary Brier/log-loss and paired correctness tests requiring decisive outcomes."
+  },
+  "promotionBoundary": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "fullModularProductionPromoted": false,
+    "ppHorizonProductionPromoted": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "generalV68FallbackChanged": false,
+    "liveRecommendationChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectivePassMayOnlyAdvanceToNextFrozenOperationalAndEconomicValidationStage": true,
+    "prospectivePassMayDirectlyPromoteToProduction": false
+  }
+}
