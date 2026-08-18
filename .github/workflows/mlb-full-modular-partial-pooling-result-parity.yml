@@ -1,0 +1,138 @@
+name: MLB Full Modular Partial Pooling Result Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-full-modular-partial-pooling-v1
+    paths:
+      - "research/mlb-full-modular-partial-pooling-v1-result-summary.json"
+      - ".github/workflows/mlb-full-modular-partial-pooling-result-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-aplus-premium-cross-anatomy-v1
+    paths:
+      - "research/mlb-full-modular-partial-pooling-v1-result-summary.json"
+      - ".github/workflows/mlb-full-modular-partial-pooling-result-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-parity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+
+      - name: Download immutable successful partial-pooling artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-full-modular-partial-pooling-v1
+          path: inputs/immutable-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32164873526
+
+      - name: Verify summary parity and scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary=json.load(open('research/mlb-full-modular-partial-pooling-v1-result-summary.json'))
+          files=list(Path('inputs/immutable-result').rglob('*.json'))
+          assert len(files)==1,files
+          source=json.load(open(files[0]))
+
+          assert summary['schemaVersion']=='courtedge-mlb-full-modular-partial-pooling-result-summary.v1'
+          assert source['schemaVersion']=='courtedge-mlb-full-modular-partial-pooling.v1'
+          a=summary['sourceArtifact']
+          assert a['workflowRunId']==32164873526
+          assert a['artifactId']==9335023982
+          assert a['artifactDigest']=='sha256:3696e05880faed143e69c459b518bcce0254c12303418743efd9ef8222e0df1a'
+          assert a['sourceHeadSha']=='42a06fe3ecb7c5cab81da7ce525d5940116d0c59'
+
+          s=summary['sample']; q=source['sample']
+          assert s['trainingRows2022']==q['trainingRows2022']==2398
+          assert s['calibrationRows2023']==q['calibrationRows2023']==2399
+          assert s['evaluationRows2024To2026Ytd']==q['evaluationRows']==6610
+          assert s['eligibleSlateDates']==q['eligibleSlateDates']==505
+          assert s['parentActiveDates']==q['parentActiveDates']==200
+          assert s['parentNoPlayDates']==q['parentNoPlayDates']==305
+          assert s['fullModularShadowDates']==q['fullModularControlShadowDates']==236
+          assert s['candidateRowsBySeason']==q['allCandidateRowsBySeason']
+          assert s['evaluationNoPlayCandidateRowsBySeason']==q['evaluationNoPlayCandidateRowsBySeason']
+
+          for name,dst in summary['aggregate'].items():
+              src=source['policyResults'][name]
+              assert dst['wins']==src['wins']
+              assert dst['losses']==src['losses']
+              assert dst['pushes']==src['pushes']
+              assert dst['decisive']==src['decisive']
+              assert dst['hitRate']==src['hitRate']
+              assert dst['wilson95Lower']==src['wilson95']['lower']
+              assert dst['brier']==src['decisiveBrierScore']
+              assert dst['logLoss']==src['logLoss']
+              assert dst['rocAuc']==src['rocAuc']
+              assert dst['calibrationGap']==src['absoluteCalibrationGap']
+              assert src['sameDateCoverageParity'] is True
+
+          h=source['policyResults']['CHALLENGER_PP_HORIZON']
+          c=source['policyResults']['CONTROL_FULL_MODULAR']
+          for season,block in summary['horizonCandidateSeasonResults'].items():
+              for label,src in (('control',c['bySeason'][season]),('partialPoolingHorizon',h['bySeason'][season])):
+                  dst=block[label]
+                  for metric in ('wins','losses','pushes','hitRate'):
+                      assert dst[metric]==src[metric],(season,label,metric)
+          for horizon,dst in summary['horizonCandidateByHorizon'].items():
+              src=h['byHorizon'][horizon]
+              for metric in ('picks','wins','losses','pushes','hitRate'):
+                  assert dst[metric]==src[metric],(horizon,metric)
+
+          assert summary['pairedVsControl']==source['pairedComparisonsVsControl']
+
+          diagnostics=summary['stableHorizonDiagnostics']
+          mapping={
+              'globalPremiumSupportCount':'GLOBAL::premium_core_support_count_0_to_3',
+              'fgPremiumSupportDeviation':'DEV::horizon=FG::premium_core_support_count_0_to_3',
+              'f5PremiumSupportDeviation':'DEV::horizon=F5::premium_core_support_count_0_to_3',
+              'globalFrozenFull13SelectedProbability':'GLOBAL::frozen_full13_selected_side_probability',
+              'f3FrozenFull13Deviation':'DEV::horizon=F3::frozen_full13_selected_side_probability',
+          }
+          for label,feature in mapping.items():
+              for season in ('2024','2025','2026_YTD'):
+                  coeff={x['feature']:x['effectivePredictionCoefficient'] for x in source['modelDiagnostics']['CHALLENGER_PP_HORIZON'][season]['topAbsoluteCoefficients']}
+                  assert feature in coeff,(season,feature)
+                  assert diagnostics[label][season]==coeff[feature],(label,season)
+
+          assert all(diagnostics['globalPremiumSupportCount'][s]>0 for s in ('2024','2025','2026_YTD'))
+          assert all(diagnostics['fgPremiumSupportDeviation'][s]>0 for s in ('2024','2025','2026_YTD'))
+          assert all(diagnostics['f5PremiumSupportDeviation'][s]<0 for s in ('2024','2025','2026_YTD'))
+          assert all(diagnostics['globalFrozenFull13SelectedProbability'][s]>0 for s in ('2024','2025','2026_YTD'))
+          assert all(diagnostics['f3FrozenFull13Deviation'][s]>0 for s in ('2024','2025','2026_YTD'))
+
+          d=summary['scientificDecision']
+          assert d['staticRulesSupported'] is False
+          assert d['contextDependentSignalSupported'] is True
+          assert d['partialPoolingHorizonImprovesAggregateHitRateDescriptively'] is True
+          assert h['hitRate']>c['hitRate']
+          assert h['absoluteCalibrationGap']<c['absoluteCalibrationGap']
+          assert h['decisiveBrierScore']>c['decisiveBrierScore']
+          assert h['logLoss']>c['logLoss']
+          assert d['partialPoolingHorizonStatisticallySuperior'] is False
+          assert source['pairedComparisonsVsControl']['CHALLENGER_PP_HORIZON']['holmRejectAt005'] is False
+          assert d['recommendedProspectiveCandidate']=='CHALLENGER_PP_HORIZON'
+
+          g=summary['governance']
+          assert all(g[k] is False for k in (
+              'productionChanged','fullModularProductionPromoted','currentAPlusPremiumHierarchyChanged',
+              'generalV68Fallback','v80Dependency','historicalPricesUsed','positiveEvEstablished',
+              'betEliteProduced','stakeCalculated','automaticBetPlacement'
+          ))
+          assert g['realFinancialExposure']==0
+          print('FULL_MODULAR_PARTIAL_POOLING_RESULT_PARITY_VERIFIED')
+          PY
