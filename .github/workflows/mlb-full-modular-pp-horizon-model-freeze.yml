@@ -1,0 +1,320 @@
+name: MLB Full Modular PP Horizon Model Freeze
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py"
+      - ".github/workflows/mlb-full-modular-pp-horizon-model-freeze.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-partial-pooling-v1
+    paths:
+      - "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json"
+      - "scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py"
+      - ".github/workflows/mlb-full-modular-pp-horizon-model-freeze.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  freeze-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout prospective branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3' 'scikit-learn==1.8.0'
+
+      - name: Prove prospective contract predates model snapshot builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-full-modular-pp-horizon-prospective-v1-contract.json'
+          SCORER='scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- "$SCORER" | tail -1)"
+          test -n "$CONTRACT_ADD" && test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-full-modular-pp-horizon-prospective-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-prospective-contract.v1'
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_PP_HORIZON_PROSPECTIVE_CAPTURE_OR_OUTCOME_SCORER_EXISTS'
+          assert c['prospectiveBoundary']['firstEligibleOfficialDate']=='2026-08-19'
+          assert c['prospectiveBoundary']['officialDatesOnOrBefore2026_08_18Eligible'] is False
+          assert c['frozenModel']['policy']=='CHALLENGER_PP_HORIZON'
+          assert c['frozenModel']['globalTrainingSeasonsExactly']==['2023','2024','2025']
+          assert c['frozenModel']['prospective2026OutcomesMayEnterTraining'] is False
+          assert c['frozenModel']['refitDuringProspectiveCohortAllowed'] is False
+          assert c['frozenModel']['preprocessingRefitDuringProspectiveCohortAllowed'] is False
+          assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
+          print('PP_HORIZON_PROSPECTIVE_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check model snapshot builder
+        run: python -m py_compile scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py
+
+      - name: Materialize exact parent partial-pooling source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='37b6b0e63e58ff4a1a10bb5d8acc495724c269fc'
+          mkdir -p inputs/pp-parent/scripts inputs/pp-parent/research
+          for FILE in \
+            scripts/mlb-full-modular-partial-pooling-v1.py \
+            research/mlb-full-modular-partial-pooling-v1-contract.json \
+            research/mlb-full-modular-partial-pooling-v1-feature-freeze.json \
+            research/mlb-full-modular-partial-pooling-v1-shrinkage-freeze.json \
+            research/mlb-full-modular-partial-pooling-v1-parent-custody.json
+          do
+            git show "${PIN}:${FILE}" > "inputs/pp-parent/${FILE}"
+            test -s "inputs/pp-parent/${FILE}"
+          done
+          test "$(git rev-parse ${PIN}:research/mlb-full-modular-partial-pooling-v1-contract.json)" = '72fdcddc51afd7d83e082f7b7fa5da5668ba90cf'
+          test "$(git rev-parse ${PIN}:research/mlb-full-modular-partial-pooling-v1-feature-freeze.json)" = '24a1293b4be9f9fe31789f0a8a0d3c2b05ad0131'
+          test "$(git rev-parse ${PIN}:research/mlb-full-modular-partial-pooling-v1-shrinkage-freeze.json)" = '34aad4b0de8106707c1ab8e98d63214b389d3155'
+
+      - name: Materialize exact Full Modular parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='e352e25c131a53536745323bcd3268dcec75a66d'
+          mkdir -p inputs/full-modular-parent/scripts inputs/full-modular-parent/research
+          for FILE in \
+            scripts/mlb-market-state-matchup-modular-router-v1.py \
+            research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            scripts/mlb-multi-market-coverage-expansion-v1.py \
+            research/mlb-multi-market-coverage-expansion-v1-contract.json
+          do
+            git show "${PIN}:${FILE}" > "inputs/full-modular-parent/${FILE}"
+            test -s "inputs/full-modular-parent/${FILE}"
+          done
+
+      - name: Materialize exact team-state parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='b2cd717f49d3063c6b7ed679674661961679d2a2'
+          mkdir -p inputs/modular-parent/scripts inputs/modular-parent/research
+          git show "${PIN}:scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py" > inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          git show "${PIN}:research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json" > inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+          test -s inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          test -s inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+
+      - name: Materialize exact cross-anatomy parent code and freezes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='c678c49c60a70a7280444cfce8f8d5795747a92d'
+          mkdir -p inputs/cross-parent/scripts inputs/cross-parent/research
+          for FILE in \
+            scripts/mlb-full-modular-aplus-premium-cross-anatomy-v1.py \
+            research/mlb-full-modular-aplus-premium-cross-anatomy-v1-contract.json \
+            research/mlb-full-modular-aplus-premium-cross-anatomy-v1-source-count-freeze.json
+          do
+            git show "${PIN}:${FILE}" > "inputs/cross-parent/${FILE}"
+            test -s "inputs/cross-parent/${FILE}"
+          done
+
+      - name: Materialize and verify exact V69 source blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          REF="refs/remotes/origin/${BRANCH}"
+          git fetch origin "refs/heads/${BRANCH}:${REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          python - <<'PY'
+          import json, subprocess
+          c=json.load(open('inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-parent-custody.json'))
+          ref='refs/remotes/origin/research/p0-step12v69-confluence-frequency-quality-frontier'
+          for path,expected in c['v69RequiredBlobShas'].items():
+              actual=subprocess.check_output(['git','rev-parse',f'{ref}:{path}'],text=True).strip()
+              assert actual==expected,(path,actual,expected)
+          print('V69_PARENT_BLOB_CUSTODY_VERIFIED')
+          PY
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Materialize frozen A+ Premium heritage source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='51dccf751fd325bc6a7a18675c4eaaf2e50a8e6e'
+          mkdir -p inputs/aplus
+          git show "${PIN}:research/p0-step12v2-a-plus-consensus-frozen.json" > inputs/aplus/p0-step12v2-a-plus-consensus-frozen.json
+          test -s inputs/aplus/p0-step12v2-a-plus-consensus-frozen.json
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pregame custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Download immutable cross-anatomy result
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-full-modular-aplus-premium-cross-anatomy-v1
+          path: inputs/cross-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32162411625
+
+      - name: Download immutable partial-pooling parent result
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-full-modular-partial-pooling-v1
+          path: inputs/pp-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32164873526
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          CROSS_RESULT="$(find inputs/cross-result -type f -name '*.json' -print -quit)"
+          PP_RESULT="$(find inputs/pp-result -type f -name '*.json' -print -quit)"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          test -n "$V16" && test -s "$V16"
+          test -n "$CROSS_RESULT" && test -s "$CROSS_RESULT"
+          test -n "$PP_RESULT" && test -s "$PP_RESULT"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "cross_result=$CROSS_RESULT" >> "$GITHUB_OUTPUT"
+          echo "pp_result=$PP_RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Materialize frozen 2023-2025 PP_HORIZON model snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-full-modular-pp-horizon-model-freeze-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --multi-market-scorer inputs/full-modular-parent/scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            --multi-market-contract inputs/full-modular-parent/research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --parent-router-scorer inputs/full-modular-parent/scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --parent-router-contract inputs/full-modular-parent/research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            --cross-scorer inputs/cross-parent/scripts/mlb-full-modular-aplus-premium-cross-anatomy-v1.py \
+            --cross-contract inputs/cross-parent/research/mlb-full-modular-aplus-premium-cross-anatomy-v1-contract.json \
+            --source-count-freeze inputs/cross-parent/research/mlb-full-modular-aplus-premium-cross-anatomy-v1-source-count-freeze.json \
+            --aplus-frozen inputs/aplus/p0-step12v2-a-plus-consensus-frozen.json \
+            --parent-result '${{ steps.inputs.outputs.cross_result }}' \
+            --partial-pooling-scorer inputs/pp-parent/scripts/mlb-full-modular-partial-pooling-v1.py \
+            --parent-contract inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-contract.json \
+            --feature-freeze inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-feature-freeze.json \
+            --shrinkage-freeze inputs/pp-parent/research/mlb-full-modular-partial-pooling-v1-shrinkage-freeze.json \
+            --prospective-contract research/mlb-full-modular-pp-horizon-prospective-v1-contract.json \
+            --immutable-parent-artifact '${{ steps.inputs.outputs.pp_result }}' \
+            --out work/mlb-full-modular-pp-horizon-model-snapshot-v1.json
+
+      - name: Validate frozen snapshot and parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          s=json.load(open('work/mlb-full-modular-pp-horizon-model-snapshot-v1.json'))
+          assert s['schemaVersion']=='courtedge-mlb-full-modular-pp-horizon-model-snapshot.v1'
+          assert s['scientificStatus']=='FROZEN_2023_2025_PP_HORIZON_MODEL_SNAPSHOT_PROSPECTIVE_CAPTURE_NOT_YET_STARTED'
+          assert s['policy']=='CHALLENGER_PP_HORIZON'
+          assert s['training']['seasons']==['2023','2024','2025']
+          assert s['training']['candidateRows']==2780
+          assert s['training']['prospectiveOutcomesUsed'] is False
+          assert len(s['model']['featureNames'])==49
+          assert len(s['model']['rawCoefficients'])==49
+          assert s['model']['signalDeviationFeatureScale']==0.35
+          assert s['model']['groupInterceptFeatureScale']==0.2
+          p=s['historicalParity']
+          assert p['evaluationSeason']=='2026_YTD'
+          assert p['scoreCandidateRows']==311
+          assert p['ppHorizonDailySelections']==71
+          assert p['controlDailySelections']==71
+          assert p['ppHorizonIdentityMismatches']==0
+          assert p['controlIdentityMismatches']==0
+          assert p['maximumPartialPoolProbabilityAbsoluteDifference']<=1e-12
+          assert p['ppHorizonSeasonResult']=={'wins':53,'losses':18,'pushes':0,'hitRate':0.7464788732394366}
+          assert p['passed'] is True
+          b=s['prospectiveBoundary']
+          assert b['firstEligibleOfficialDate']=='2026-08-19'
+          assert b['modelRefitAllowed'] is False
+          assert b['preprocessingRefitAllowed'] is False
+          assert b['outcomeReadBeforeEmbargoMaturityAllowed'] is False
+          assert b['productionChanged'] is False
+          assert b['realFinancialExposure']==0
+          print('PP_HORIZON_FROZEN_MODEL_SNAPSHOT_PARITY_PASSED')
+          print('PP_HORIZON_PARAMETER_DIGEST',s['model']['parameterPayloadDigest'])
+          PY
+
+      - name: Print exact snapshot for immutable review
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo PP_HORIZON_MODEL_SNAPSHOT_FILE_BEGIN
+          cat work/mlb-full-modular-pp-horizon-model-snapshot-v1.json
+          echo PP_HORIZON_MODEL_SNAPSHOT_FILE_END
+
+      - name: Upload frozen model snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-full-modular-pp-horizon-model-snapshot-v1
+          path: work/mlb-full-modular-pp-horizon-model-snapshot-v1.json
+          if-no-files-found: error
+          retention-days: 90
