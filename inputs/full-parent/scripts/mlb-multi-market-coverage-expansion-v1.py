@@ -3,29 +3,36 @@
 
 The Full Modular reporting-compat module resolves its parent by sibling path.
 This shim verifies that the checkout's authoritative parent source has the exact
-Git blob used by #641, then re-exports that source without changing any rule.
+Git blob used by #641, then re-exports only public symbols. All shim internals
+use double-underscore names so the reporting-compat adapter ignores them.
 """
-import importlib.util
-import pathlib
-import subprocess
+import importlib.util as __importlib_util
+import pathlib as __pathlib
+import subprocess as __subprocess
 
-_EXPECTED_BLOB = "5c67ba71975eb2c851f1c48feeb93605ed39b209"
-_REPO = pathlib.Path(__file__).resolve().parents[3]
-_REAL_REL = pathlib.Path("scripts/mlb-multi-market-coverage-expansion-v1.py")
-_REAL = _REPO / _REAL_REL
+__EXPECTED_BLOB = "5c67ba71975eb2c851f1c48feeb93605ed39b209"
+__REPO = __pathlib.Path(__file__).resolve().parents[3]
+__REAL_REL = __pathlib.Path("scripts/mlb-multi-market-coverage-expansion-v1.py")
+__REAL = __REPO / __REAL_REL
 
-_actual_blob = subprocess.check_output(
-    ["git", "-C", str(_REPO), "rev-parse", f"HEAD:{_REAL_REL.as_posix()}"],
+__actual_blob = __subprocess.check_output(
+    ["git", "-C", str(__REPO), "rev-parse", f"HEAD:{__REAL_REL.as_posix()}"],
     text=True,
 ).strip()
-if _actual_blob != _EXPECTED_BLOB:
-    raise RuntimeError(f"FULL_MODULAR_PARENT_MULTI_MARKET_BLOB_DRIFT:{_actual_blob}:{_EXPECTED_BLOB}")
+if __actual_blob != __EXPECTED_BLOB:
+    raise RuntimeError(
+        f"FULL_MODULAR_PARENT_MULTI_MARKET_BLOB_DRIFT:{__actual_blob}:{__EXPECTED_BLOB}"
+    )
 
-_spec = importlib.util.spec_from_file_location("mlb_multi_market_exact_parent_pinned", _REAL)
-if _spec is None or _spec.loader is None:
-    raise RuntimeError(f"FULL_MODULAR_PARENT_MULTI_MARKET_IMPORT_FAILED:{_REAL}")
-_parent = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_parent)
-for _name in dir(_parent):
-    if not _name.startswith("__"):
-        globals()[_name] = getattr(_parent, _name)
+__spec = __importlib_util.spec_from_file_location("mlb_multi_market_exact_parent_pinned", __REAL)
+if __spec is None or __spec.loader is None:
+    raise RuntimeError(f"FULL_MODULAR_PARENT_MULTI_MARKET_IMPORT_FAILED:{__REAL}")
+__source_module = __importlib_util.module_from_spec(__spec)
+__spec.loader.exec_module(__source_module)
+
+__public_exports = {
+    __name: getattr(__source_module, __name)
+    for __name in dir(__source_module)
+    if not __name.startswith("_")
+}
+globals().update(__public_exports)
