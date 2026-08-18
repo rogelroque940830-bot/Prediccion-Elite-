@@ -98,7 +98,8 @@ jobs:
           frozen_cross=summary['controlHeritageCrossTables']
           for label in ('premiumSupportCount','premiumLike3Of3','aPlusConsensusLike'):
               for key,dst in frozen_cross[label].items():
-                  q=control_cross[label][key.capitalize() if label!='premiumSupportCount' else key] if False else control_cross[label][key]
+                  source_key=key if label=='premiumSupportCount' else ('True' if key=='true' else 'False')
+                  q=control_cross[label][source_key]
                   for metric in ('picks','wins','losses','pushes','hitRate'):
                       assert dst[metric]==q[metric], (label,key,metric,dst[metric],q[metric])
 
