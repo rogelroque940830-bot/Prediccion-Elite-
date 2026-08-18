@@ -1,0 +1,174 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-partial-pooling-result-summary.v1",
+  "classification": "RETROSPECTIVE_PARTIAL_POOLING_COMPLETE_HORIZON_PROMISING_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "sourceArtifact": {
+    "workflowRunId": 32164873526,
+    "artifactId": 9335023982,
+    "artifactName": "mlb-full-modular-partial-pooling-v1",
+    "artifactDigest": "sha256:3696e05880faed143e69c459b518bcce0254c12303418743efd9ef8222e0df1a",
+    "sourceHeadSha": "42a06fe3ecb7c5cab81da7ce525d5940116d0c59"
+  },
+  "sample": {
+    "trainingRows2022": 2398,
+    "calibrationRows2023": 2399,
+    "evaluationRows2024To2026Ytd": 6610,
+    "eligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305,
+    "fullModularShadowDates": 236,
+    "combinedCoveragePct": 86.33663366336634,
+    "candidateRowsBySeason": {"2023": 1046, "2024": 890, "2025": 844, "2026_YTD": 531},
+    "evaluationNoPlayCandidateRowsBySeason": {"2024": 439, "2025": 345, "2026_YTD": 311}
+  },
+  "aggregate": {
+    "CONTROL_FULL_MODULAR": {
+      "wins": 177, "losses": 58, "pushes": 1, "decisive": 235,
+      "hitRate": 0.7531914893617021,
+      "wilson95Lower": 0.694288113258763,
+      "brier": 0.18563005623613243,
+      "logLoss": 0.5596297326660968,
+      "rocAuc": 0.5672121566335477,
+      "calibrationGap": 0.026494385947364973
+    },
+    "CHALLENGER_PP_HORIZON": {
+      "wins": 181, "losses": 55, "pushes": 0, "decisive": 236,
+      "hitRate": 0.7669491525423728,
+      "wilson95Lower": 0.7089979285843053,
+      "brier": 0.18698696176299026,
+      "logLoss": 0.5668211490356927,
+      "rocAuc": 0.48277247614264196,
+      "calibrationGap": 0.011797699945470086
+    },
+    "CHALLENGER_PP_STRENGTH": {
+      "wins": 178, "losses": 58, "pushes": 0, "decisive": 236,
+      "hitRate": 0.7542372881355932,
+      "wilson95Lower": 0.6955256753042971,
+      "brier": 0.1961510018143973,
+      "logLoss": 0.5875772284511261,
+      "rocAuc": 0.42212320805889186,
+      "calibrationGap": 0.018421398599653305
+    },
+    "CHALLENGER_PP_ADDITIVE": {
+      "wins": 176, "losses": 60, "pushes": 0, "decisive": 236,
+      "hitRate": 0.7457627118644068,
+      "wilson95Lower": 0.6865791158115195,
+      "brier": 0.2016583120381764,
+      "logLoss": 0.6011296339257604,
+      "rocAuc": 0.45123106060606066,
+      "calibrationGap": 0.03437657964608731
+    }
+  },
+  "horizonCandidateSeasonResults": {
+    "2024": {
+      "control": {"wins": 68, "losses": 16, "pushes": 0, "hitRate": 0.8095238095238095},
+      "partialPoolingHorizon": {"wins": 68, "losses": 16, "pushes": 0, "hitRate": 0.8095238095238095}
+    },
+    "2025": {
+      "control": {"wins": 54, "losses": 26, "pushes": 1, "hitRate": 0.675},
+      "partialPoolingHorizon": {"wins": 60, "losses": 21, "pushes": 0, "hitRate": 0.7407407407407407}
+    },
+    "2026_YTD": {
+      "control": {"wins": 55, "losses": 16, "pushes": 0, "hitRate": 0.7746478873239436},
+      "partialPoolingHorizon": {"wins": 53, "losses": 18, "pushes": 0, "hitRate": 0.7464788732394366}
+    }
+  },
+  "horizonCandidateByHorizon": {
+    "F3": {"picks": 60, "wins": 45, "losses": 15, "pushes": 0, "hitRate": 0.75},
+    "F5": {"picks": 25, "wins": 17, "losses": 8, "pushes": 0, "hitRate": 0.68},
+    "FG": {"picks": 151, "wins": 119, "losses": 32, "pushes": 0, "hitRate": 0.7880794701986755}
+  },
+  "pairedVsControl": {
+    "CHALLENGER_PP_HORIZON": {
+      "overlapDecisiveDates": 235,
+      "bothCorrect": 158,
+      "bothWrong": 36,
+      "challengerOnlyCorrect": 22,
+      "controlOnlyCorrect": 19,
+      "discordantDates": 41,
+      "unadjustedPValue": 0.755228657504631,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    },
+    "CHALLENGER_PP_STRENGTH": {
+      "overlapDecisiveDates": 235,
+      "bothCorrect": 155,
+      "bothWrong": 36,
+      "challengerOnlyCorrect": 22,
+      "controlOnlyCorrect": 22,
+      "discordantDates": 44,
+      "unadjustedPValue": 1.0,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    },
+    "CHALLENGER_PP_ADDITIVE": {
+      "overlapDecisiveDates": 235,
+      "bothCorrect": 155,
+      "bothWrong": 38,
+      "challengerOnlyCorrect": 20,
+      "controlOnlyCorrect": 22,
+      "discordantDates": 42,
+      "unadjustedPValue": 0.8776143287523154,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    }
+  },
+  "stableHorizonDiagnostics": {
+    "globalPremiumSupportCount": {
+      "2024": 0.24015770193485303,
+      "2025": 0.05953552315840257,
+      "2026_YTD": 0.09170916874878234,
+      "direction": "POSITIVE_ALL_TEMPORAL_FITS"
+    },
+    "fgPremiumSupportDeviation": {
+      "2024": 0.1329941571973027,
+      "2025": 0.14400773991084215,
+      "2026_YTD": 0.0857094310724799,
+      "direction": "POSITIVE_ALL_TEMPORAL_FITS"
+    },
+    "f5PremiumSupportDeviation": {
+      "2024": -0.10589801812643147,
+      "2025": -0.09785454424815107,
+      "2026_YTD": -0.050117985306200506,
+      "direction": "NEGATIVE_ALL_TEMPORAL_FITS"
+    },
+    "globalFrozenFull13SelectedProbability": {
+      "2024": 0.2751052619707923,
+      "2025": 0.1791011704156271,
+      "2026_YTD": 0.20491017579284215,
+      "direction": "POSITIVE_ALL_TEMPORAL_FITS"
+    },
+    "f3FrozenFull13Deviation": {
+      "2024": 0.05367503790290349,
+      "2025": 0.029860706958594604,
+      "2026_YTD": 0.06259156560575334,
+      "direction": "POSITIVE_ALL_TEMPORAL_FITS"
+    }
+  },
+  "scientificDecision": {
+    "staticRulesSupported": false,
+    "contextDependentSignalSupported": true,
+    "partialPoolingHorizonImprovesAggregateHitRateDescriptively": true,
+    "partialPoolingHorizonImprovesCalibrationGapDescriptively": true,
+    "partialPoolingHorizonImprovesProperScoresVsControl": false,
+    "partialPoolingHorizonStatisticallySuperior": false,
+    "partialPoolingHorizonStableAcrossAllSeasons": false,
+    "partialPoolingStrengthPreferred": false,
+    "partialPoolingAdditivePreferred": false,
+    "retrospectiveWinnerDeclared": false,
+    "recommendedProspectiveCandidate": "CHALLENGER_PP_HORIZON",
+    "recommendedNextStep": "Freeze CHALLENGER_PP_HORIZON exactly as tested and run it prospectively in read-only shadow alongside exact Full Modular. Do not retune its shrinkage or features. Require prospective evidence before any production promotion."
+  },
+  "governance": {
+    "productionChanged": false,
+    "fullModularProductionPromoted": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "generalV68Fallback": false,
+    "v80Dependency": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

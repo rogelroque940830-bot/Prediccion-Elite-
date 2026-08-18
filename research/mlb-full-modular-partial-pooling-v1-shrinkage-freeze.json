@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-partial-pooling-shrinkage-freeze.v1",
+  "status": "FROZEN_BEFORE_SCORER",
+  "baseRegularization": {
+    "family": "L2_LOGISTIC",
+    "C": 0.25,
+    "solver": "lbfgs",
+    "maxIterations": 5000
+  },
+  "deviationGeometry": {
+    "signalDeviationFeatureScale": 0.35,
+    "signalDeviationEffectivePenaltyMultiplier": 8.16326530612245,
+    "groupInterceptDeviationIncluded": true,
+    "groupInterceptFeatureScale": 0.20,
+    "groupInterceptEffectivePenaltyMultiplier": 25.0,
+    "explanation": "Under one common L2 penalty, scaling a deviation feature by s below 1 requires a coefficient approximately 1/s larger to create the same prediction movement, imposing an effective penalty multiplier of 1/s^2 relative to an unscaled global feature."
+  },
+  "axisRules": {
+    "CHALLENGER_PP_HORIZON": {
+      "groupAxes": ["horizon"],
+      "signalDeviationFeatureScale": 0.35,
+      "groupInterceptFeatureScale": 0.20
+    },
+    "CHALLENGER_PP_STRENGTH": {
+      "groupAxes": ["strengthTier"],
+      "signalDeviationFeatureScale": 0.35,
+      "groupInterceptFeatureScale": 0.20
+    },
+    "CHALLENGER_PP_ADDITIVE": {
+      "groupAxes": ["horizon", "strengthTier"],
+      "signalDeviationFeatureScale": 0.35,
+      "groupInterceptFeatureScale": 0.20,
+      "horizonByStrengthInteractionAllowed": false
+    }
+  },
+  "noRetuning": {
+    "penaltyGridSearchAllowed": false,
+    "crossValidatedShrinkageSelectionAllowed": false,
+    "seasonSpecificCAllowed": false,
+    "seasonSpecificDeviationScaleAllowed": false,
+    "postResultScaleChangeAllowed": false
+  },
+  "interpretation": {
+    "globalCoefficients": "Shared evidence learned across every eligible candidate in prior seasons.",
+    "groupDeviationCoefficients": "Context-specific corrections that are deliberately harder to move than global evidence and therefore collapse toward zero when support is weak.",
+    "notAStaticRuleTree": true,
+    "notAnUnrestrictedInteractionModel": true
+  }
+}

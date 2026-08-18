@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-partial-pooling-parent-custody.v1",
+  "status": "FROZEN_BEFORE_REPLAY",
+  "fullModularParent": {
+    "commit": "e352e25c131a53536745323bcd3268dcec75a66d",
+    "branch": "research/mlb-market-state-matchup-modular-router-v1"
+  },
+  "teamStateParent": {
+    "commit": "b2cd717f49d3063c6b7ed679674661961679d2a2",
+    "branch": "research/mlb-modular-team-structure-nrfi-yrfi-v1"
+  },
+  "crossAnatomyParent": {
+    "commit": "c678c49c60a70a7280444cfce8f8d5795747a92d",
+    "successfulRunId": 32162411625,
+    "artifactId": 9334135765,
+    "artifactDigest": "sha256:0777f86b7d80a7492a59c93f8e11767c81dad5aacc2e71226566c5e0494c6c73"
+  },
+  "v69RequiredBlobShas": {
+    "scripts/p0-step12v69-confluence-frequency-quality-frontier.py": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83",
+    "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json": "d58e159951bf26da54830a2e8f1eba225679dee0",
+    "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+    "server/mlb-frozen-a-plus-classifier.ts": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2",
+    "server/mlb-frozen-research-route-assessor.ts": "7f98543b34332a0f40bf2c40bf0154e4c3045540"
+  },
+  "immutableArtifacts": {
+    "step12v3": {"runId": 31659518059, "artifactId": 9166442982, "digest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"},
+    "v66Custody": {"runId": 31962659793, "artifactId": 9267784926, "digest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"},
+    "v16PureSettlement": {"runId": 31704085189, "artifactId": 9182440949, "digest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063"},
+    "crossAnatomyResult": {"runId": 32162411625, "artifactId": 9334135765, "digest": "sha256:0777f86b7d80a7492a59c93f8e11767c81dad5aacc2e71226566c5e0494c6c73"}
+  },
+  "failClosed": true
+}

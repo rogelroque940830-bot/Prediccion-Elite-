@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-partial-pooling-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_CONTEXT_CONDITIONED_PARTIAL_POOLING_DISCOVERY_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "purpose": "Test whether compact A+/Premium heritage signals can improve ranking among already-eligible Full Modular candidates when their coefficients are allowed to move by broad baseball context while being shrunk toward one global model.",
+  "parentResearch": {
+    "branch": "research/mlb-full-modular-aplus-premium-cross-anatomy-v1",
+    "headCommit": "c678c49c60a70a7280444cfce8f8d5795747a92d",
+    "sourceStudyRunId": 32162411625,
+    "sourceStudyArtifactId": 9334135765,
+    "sourceStudyArtifactDigest": "sha256:0777f86b7d80a7492a59c93f8e11767c81dad5aacc2e71226566c5e0494c6c73",
+    "sourceFinding": "A+/Premium heritage contains repeatable signal, but one unrestricted global context re-ranker was non-stationary across seasons.",
+    "controlPolicy": "CONTROL_FULL_MODULAR",
+    "expectedShadowDates": 236,
+    "expectedCombinedCoveragePct": 86.33663366336634
+  },
+  "scientificChronology": {
+    "protocolMustPrecedeScorer": true,
+    "featureSetMustPrecedeScorer": true,
+    "shrinkageGeometryMustPrecedeScorer": true,
+    "2024To2026HaveAlreadyBeenInspectedElsewhere": true,
+    "retrospectiveEvaluationIsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultGroupingAxisAdditionAllowed": false,
+    "postResultShrinkageRetuningAllowed": false,
+    "postResultThresholdSearchAllowed": false,
+    "sameDateOutcomeLeakageAllowed": false,
+    "sameSeasonOutcomeMayTrainSameSeason": false,
+    "futureSeasonTrainingAllowed": false,
+    "historicalPricesUsed": false
+  },
+  "candidateUniverse": {
+    "exactParentFullModularEligibility": true,
+    "existingAPlusPremiumProductionDatesTouched": false,
+    "challengerMayCreateCandidate": false,
+    "challengerMayDeleteCandidate": false,
+    "challengerMayChangeMarketIdentity": false,
+    "challengerMayChangeSide": false,
+    "challengerChangesRankingOnly": true,
+    "maximumDailyShadowPicks": 1,
+    "expectedShadowDates": 236
+  },
+  "compactGlobalFeatureSet": [
+    "modelProbability",
+    "qualityPercentile",
+    "structureScore",
+    "structureObservedFeatureFraction",
+    "premium_core_support_count_0_to_3",
+    "premium_core_weakest_margin",
+    "frozen_c4_selected_side_probability",
+    "frozen_full13_selected_side_probability",
+    "sel_starter_kbb_adv",
+    "sel_team_win10_diff",
+    "sel_lineup_exposure_rate_adv",
+    "sel_team_ra10_adv",
+    "sel_starter_runrisk_adv"
+  ],
+  "globalCategoricalContext": [
+    "lineGeometry",
+    "matchupStructure",
+    "side"
+  ],
+  "partialPoolingDeviationSignals": [
+    "premium_core_support_count_0_to_3",
+    "premium_core_weakest_margin",
+    "frozen_full13_selected_side_probability",
+    "sel_starter_kbb_adv",
+    "sel_team_win10_diff",
+    "sel_lineup_exposure_rate_adv",
+    "sel_team_ra10_adv",
+    "sel_starter_runrisk_adv"
+  ],
+  "groupingAxes": {
+    "horizon": ["F3", "F5", "FG"],
+    "strengthTier": ["STRONG", "MIDDLE", "WEAK", "UNSTABLE"]
+  },
+  "policies": {
+    "CONTROL_FULL_MODULAR": {
+      "ranking": ["DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    },
+    "CHALLENGER_PP_HORIZON": {
+      "globalModel": true,
+      "deviationAxes": ["horizon"],
+      "fullCrossBetweenAxes": false,
+      "ranking": ["DESC_partialPoolProbability", "DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    },
+    "CHALLENGER_PP_STRENGTH": {
+      "globalModel": true,
+      "deviationAxes": ["strengthTier"],
+      "fullCrossBetweenAxes": false,
+      "ranking": ["DESC_partialPoolProbability", "DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    },
+    "CHALLENGER_PP_ADDITIVE": {
+      "globalModel": true,
+      "deviationAxes": ["horizon", "strengthTier"],
+      "fullCrossBetweenAxes": false,
+      "ranking": ["DESC_partialPoolProbability", "DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    }
+  },
+  "model": {
+    "family": "L2_REGULARIZED_LOGISTIC_REGRESSION_WITH_SCALED_GROUP_DEVIATION_FEATURES",
+    "solver": "lbfgs",
+    "regularizationC": 0.25,
+    "maxIterations": 5000,
+    "classWeight": null,
+    "partialPoolingMechanism": "Global coefficients are estimated on every row. Group-specific deviations are represented as group-indicator times standardized signal and multiplied by a frozen scale below 1 before fitting under the same L2 penalty. This imposes stronger effective shrinkage on deviations than on global coefficients.",
+    "outcome": "SELECTED_MARKET_SIDE_SETTLEMENT_WIN_ON_DECISIVE_ROWS",
+    "pushHandling": "EXCLUDE_FROM_MODEL_FIT_AND_BINARY_SCORING_BUT_PRESERVE_IN_DAILY_SETTLEMENT_REPORTING"
+  },
+  "temporalProtocol": {
+    "2024": ["2023"],
+    "2025": ["2023", "2024"],
+    "2026_YTD": ["2023", "2024", "2025"]
+  },
+  "correlationProtection": {
+    "perGameTotalTrainingWeight": 1.0,
+    "candidateWeight": "1 / decisive_candidate_count_for_same_season_gamePk"
+  },
+  "reporting": {
+    "primaryMetrics": [
+      "wins", "losses", "pushes", "decisiveHitRate", "wilson95", "decisiveBrierScore",
+      "logLoss", "rocAuc", "absoluteCalibrationGap", "sameDateCoverageParity",
+      "bySeason", "byHorizon", "byStrengthTier", "byLineGeometry", "byMatchupStructure"
+    ],
+    "pairedPrimaryComparator": "CONTROL_FULL_MODULAR",
+    "pairedTest": "TWO_SIDED_EXACT_BINOMIAL_ON_DISCORDANT_DAILY_CORRECTNESS",
+    "multipleComparisonCorrection": "HOLM_BONFERRONI",
+    "familyWiseAlpha": 0.05,
+    "singleWeightedUtilityScoreAllowed": false,
+    "winnerMayBeDeclaredFromThisRetrospectiveStudy": false
+  },
+  "promotionBoundary": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "fullModularProductionPromoted": false,
+    "generalV68Fallback": false,
+    "v80Dependency": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "prospectiveLiveShadowRequiredBeforeAnyPromotion": true
+  }
+}
