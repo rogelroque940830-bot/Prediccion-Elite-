@@ -1,0 +1,31 @@
+name: MLB Daily BEST PICK Selector
+
+on:
+  push:
+    branches:
+      - "production/mlb-daily-best-pick-router-v2"
+    paths:
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-selector.test.ts"
+      - "tsconfig.mlb-daily-best-pick-selector.json"
+      - ".github/workflows/mlb-daily-best-pick-selector.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck selector
+        run: npx tsc -p tsconfig.mlb-daily-best-pick-selector.json
+      - name: Test selector
+        run: npx tsx --test server/mlb-daily-best-pick-selector.test.ts
