@@ -16,6 +16,8 @@ on:
       - "server/mlb-daily-best-pick-ui-view.ts"
       - "server/mlb-daily-best-pick-price-view.ts"
       - "server/mlb-daily-best-pick-price-view.test.ts"
+      - "server/mlb-daily-best-pick-price-safe-view.ts"
+      - "server/mlb-daily-best-pick-price-safe-view.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
@@ -39,6 +41,8 @@ on:
       - "server/mlb-daily-best-pick-ui-view.ts"
       - "server/mlb-daily-best-pick-price-view.ts"
       - "server/mlb-daily-best-pick-price-view.test.ts"
+      - "server/mlb-daily-best-pick-price-safe-view.ts"
+      - "server/mlb-daily-best-pick-price-safe-view.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
@@ -75,6 +79,7 @@ jobs:
           server/mlb-daily-best-pick-runtime-adapter.test.ts
           server/mlb-daily-best-pick-runtime-adapter.integration.test.ts
           server/mlb-daily-best-pick-price-view.test.ts
+          server/mlb-daily-best-pick-price-safe-view.test.ts
           server/mlb-unified-v16-ui-routes.test.ts
           server/mlb-unified-v16-ui-orchestration.test.ts
       - name: Install frontend dependencies
