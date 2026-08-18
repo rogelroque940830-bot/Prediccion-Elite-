@@ -162,8 +162,6 @@ function persistManualPriceContext(
   const ownedStore = deps.manualPriceStore ? null : new MlbDailyBestPickManualPriceStore();
   const store = deps.manualPriceStore ?? ownedStore!;
   try {
-    // Same runId can never retain an older manual fallback once a newer automatic
-    // result has become executable or the exact model/pick trust boundary fails.
     store.delete(runId);
     if (context) store.put(context);
   } finally {
@@ -268,13 +266,19 @@ export async function executeMlbUnifiedV16UiCommand(
     dailyBestPick,
     onRejected: (error) => console.error("Daily BEST PICK price visibility rejected:", error),
   });
-  const manualPrice = buildMlbDailyBestPickManualPriceContext({
-    priced: result,
-    dailyBestPick,
-    automaticPrice: dailyBestPickPrice,
-    now,
-  });
-  persistManualPriceContext(deps, result.runId, manualPrice.context);
+
+  let manualPrice: ReturnType<typeof buildMlbDailyBestPickManualPriceContext> | null = null;
+  try {
+    manualPrice = buildMlbDailyBestPickManualPriceContext({
+      priced: result,
+      dailyBestPick,
+      automaticPrice: dailyBestPickPrice,
+      now,
+    });
+  } catch (error) {
+    console.error("Daily BEST PICK manual price continuity rejected:", error);
+  }
+  persistManualPriceContext(deps, result.runId, manualPrice?.context ?? null);
 
   return {
     httpStatus: 200,
@@ -289,7 +293,7 @@ export async function executeMlbUnifiedV16UiCommand(
         prepriceSummary: result.preprice.summary,
         dailyBestPick,
         dailyBestPickPrice,
-        manualPriceContinuity: manualPrice.availability,
+        manualPriceContinuity: manualPrice?.availability ?? null,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
