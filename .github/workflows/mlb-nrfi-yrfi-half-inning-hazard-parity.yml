@@ -1,0 +1,113 @@
+name: MLB NRFI YRFI Half Inning Result Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-nrfi-yrfi-half-inning-hazard-v1
+    paths:
+      - "research/mlb-nrfi-yrfi-half-inning-hazard-v1-result-summary.json"
+      - ".github/workflows/mlb-nrfi-yrfi-half-inning-hazard-parity.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-nrfi-yrfi-half-inning-hazard-v1-result-summary.json"
+      - ".github/workflows/mlb-nrfi-yrfi-half-inning-hazard-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+
+      - name: Download immutable successful half-inning artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-nrfi-yrfi-half-inning-hazard-v1
+          path: inputs/result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32144338154
+
+      - name: Verify frozen summary field parity and governance
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT="$(find inputs/result -type f -name mlb-nrfi-yrfi-half-inning-hazard-v1.json -print -quit)"
+          test -n "$RESULT"
+          test -s "$RESULT"
+          python - "$RESULT" <<'PY'
+          import json, sys
+          result=json.load(open(sys.argv[1]))
+          summary=json.load(open('research/mlb-nrfi-yrfi-half-inning-hazard-v1-result-summary.json'))
+
+          assert summary['schemaVersion']=='courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v1'
+          assert summary['classification']==result['classification']
+          assert summary['validationGatePassed']==result['validationGatePassed'] is True
+          assert summary['data']==result['data']
+          assert summary['validationGateChecks']==result['validationGateChecks']
+          assert summary['halfInningValidation2023']==result['halfInningValidation2023']
+          assert summary['gameLevelValidation2023']==result['gameLevelValidation2023']
+          assert summary['candidateFrontiers']==result['candidateFrontiers']
+          assert summary['scientificBoundary']==result['scientificBoundary']
+
+          robust=summary['retrospectiveRobustness']
+          assert robust['halfInningCombined2024_2026Ytd']==result['halfInningEvaluation2024_2026Ytd']
+          assert robust['gameLevelCombined2024_2026Ytd']==result['gameLevelEvaluation2024_2026Ytd']
+          for season in ('2024','2025','2026_YTD'):
+              assert robust['halfInningBySeason'][season]==result['halfInningBySeason'][season]
+              assert robust['gameLevelBySeason'][season]==result['gameLevelBySeason'][season]
+          for season in ('2023','2024','2025','2026_YTD'):
+              assert robust['topHalfBySeason'][season]==result['topBottomDescriptive']['TOP'][season]
+              assert robust['bottomHalfBySeason'][season]==result['topBottomDescriptive']['BOTTOM'][season]
+
+          assert all(result['validationGateChecks'].values())
+          assert result['gameLevelEvaluation2024_2026Ytd']['brierImprovement'] < 0
+          assert result['gameLevelEvaluation2024_2026Ytd']['logLossImprovement'] < 0
+          assert all(result['topBottomDescriptive']['TOP'][s]['brierImprovement'] > 0 for s in ('2024','2025','2026_YTD'))
+          assert result['topBottomDescriptive']['BOTTOM']['2024']['brierImprovement'] < 0
+          assert result['topBottomDescriptive']['BOTTOM']['2025']['brierImprovement'] < 0
+          assert result['topBottomDescriptive']['BOTTOM']['2026_YTD']['brierImprovement'] > 0
+
+          assert result['candidateFrontiers']['status']=='EVALUATED_AFTER_VALIDATION_GATE_PASS'
+          assert set(result['candidateFrontiers']['frontiers'])=={'Q80','Q85','Q90','Q95'}
+          for frontier in result['candidateFrontiers']['frontiers'].values():
+              assert frontier['hitRate'] < 0.55
+              assert frontier['absoluteCalibrationGap'] > 0.10
+
+          interpretation=summary['interpretation']
+          assert interpretation['validationDecision']=='PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES'
+          assert interpretation['retrospectiveRobustnessDecision']=='NOT_STABLE_ENOUGH_FOR_ELITE_ROUTE_OR_PRODUCTION_PROMOTION'
+          assert interpretation['postHocTopOnlyPromotionAllowed'] is False
+          assert interpretation['nrfiYrfiProductionPromotionAllowed'] is False
+          assert interpretation['nrfiYrfiCoverageContributionToEliteRouter']==0
+
+          boundary=result['scientificBoundary']
+          assert boundary['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert boundary['prospectiveConfirmationRequired'] is True
+          assert boundary['historicalPricesUsed'] is False
+          assert boundary['positiveEvEstablished'] is False
+          assert boundary['betEliteProduced'] is False
+          assert boundary['stakeCalculated'] is False
+          assert boundary['automaticBetPlacement'] is False
+          assert boundary['realFinancialExposure']==0
+          assert boundary['productionChanged'] is False
+          assert boundary['currentAPlusPremiumHierarchyChanged'] is False
+          assert boundary['forcedDailyPlayAllowed'] is False
+
+          print('NRFI_YRFI_HALF_INNING_RESULT_SUMMARY_PARITY_VERIFIED')
+          print(json.dumps({
+              'classification':result['classification'],
+              'validationGatePassed':result['validationGatePassed'],
+              'game2023':result['gameLevelValidation2023'],
+              'game2024_2026':result['gameLevelEvaluation2024_2026Ytd'],
+              'frontiers':result['candidateFrontiers']['frontiers'],
+          },indent=2))
+          PY
