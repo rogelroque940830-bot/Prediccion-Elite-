@@ -12,6 +12,17 @@ on:
       - "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts"
       - "tsconfig.mlb-daily-best-pick-selector.json"
       - ".github/workflows/mlb-daily-best-pick-selector.yml"
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-selector.test.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.test.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts"
+      - "tsconfig.mlb-daily-best-pick-selector.json"
+      - ".github/workflows/mlb-daily-best-pick-selector.yml"
   workflow_dispatch:
 
 permissions:
