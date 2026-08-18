@@ -33,6 +33,8 @@ on:
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price-safe.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price-safe.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
@@ -67,6 +69,8 @@ on:
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price-safe.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-price-safe.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
@@ -111,6 +115,7 @@ jobs:
           npx tsx --test
           client/src/lib/mlb-daily-best-pick.test.ts
           client/src/lib/mlb-daily-best-pick-price.test.ts
+          client/src/lib/mlb-daily-best-pick-price-safe.test.ts
           client/src/lib/mlb-daily-best-pick-manual-price.test.ts
       - name: Verify frontend exactly through production pipeline
         working-directory: frontend
