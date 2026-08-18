@@ -1,5 +1,6 @@
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
+buildCommand = "npm run build:backend"
 
 [deploy]
 startCommand = "node scripts/storage-retention-guard.cjs"
