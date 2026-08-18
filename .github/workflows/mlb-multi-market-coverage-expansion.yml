@@ -1,0 +1,260 @@
+name: MLB Multi-Market Coverage Expansion
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-multi-market-coverage-expansion-v1
+    paths:
+      - "research/mlb-multi-market-coverage-expansion-v1-contract.json"
+      - "research/mlb-multi-market-coverage-expansion-v1-result-summary.json"
+      - "scripts/mlb-multi-market-coverage-expansion-v1.py"
+      - ".github/workflows/mlb-multi-market-coverage-expansion.yml"
+      - "server/mlb-market-universe-registry.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-multi-market-coverage-expansion-v1-contract.json"
+      - "research/mlb-multi-market-coverage-expansion-v1-result-summary.json"
+      - "scripts/mlb-multi-market-coverage-expansion-v1.py"
+      - ".github/workflows/mlb-multi-market-coverage-expansion.yml"
+      - "server/mlb-market-universe-registry.ts"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  multi-market-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Prove protocol contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-multi-market-coverage-expansion-v1-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-multi-market-coverage-expansion-v1.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-multi-market-coverage-expansion-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-multi-market-coverage-expansion-contract.v1'
+          assert c['scientificStatus']=='RETROSPECTIVE_MULTI_MARKET_DISCOVERY_WITH_PREDECLARED_MODELS_AND_FRONTIERS_NOT_PRICE_VALIDATION'
+          assert c['requestedMarketFamiliesExactly']==[
+            'FG_ML','F5_ML','FG_RUN_LINE','F5_RUN_LINE','FG_TOTAL','F5_TOTAL','F3_RUN_LINE','F3_TOTAL'
+          ]
+          assert c['qualityVolumeFrontier']['quantilesExactly']==[0.80,0.85,0.90,0.95]
+          assert c['qualityVolumeFrontier']['minimumSelectedSideModelProbability']==0.60
+          assert c['statistics']['featureSearchAllowed'] is False
+          assert c['statistics']['lineSearchAllowed'] is False
+          assert c['statistics']['postResultRuleChangeAllowed'] is False
+          assert c['dailyBestPickComplementBoundary']['newMarketsMayNotReplaceAPlusOrPremiumInThisStudy'] is True
+          assert c['priceAndPromotionBoundary']['historicalPricesUsed'] is False
+          assert c['priceAndPromotionBoundary']['positiveEvEstablished'] is False
+          assert c['productionPolicy']['productionBehaviorChanged'] is False
+          print('MULTI_MARKET_PROTOCOL_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/mlb-multi-market-coverage-expansion-v1.py
+
+      - name: Materialize immutable V69 parent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          PARENT_REF="refs/remotes/origin/${PARENT_BRANCH}"
+          git fetch origin "refs/heads/${PARENT_BRANCH}:${PARENT_REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${PARENT_REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen multi-market coverage study
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-multi-market-coverage-expansion-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --market-registry server/mlb-market-universe-registry.ts \
+            --out work/mlb-multi-market-coverage-expansion-v1.json
+
+      - name: Validate immutable sample and fail-closed research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-multi-market-coverage-expansion-v1.json'))
+          assert r['schemaVersion']=='courtedge-mlb-multi-market-coverage-expansion.v1'
+          assert r['classification']=='MULTI_MARKET_NO_PLAY_RESCUE_DISCOVERY_COMPLETE_NOT_PRICE_VALIDATED_NOT_PRODUCTION_PROMOTED'
+          s=r['sample']
+          assert s['trainingRows2022']==2398, s
+          assert s['validationRows2023']==2399, s
+          assert s['evaluationRows']==6610, s
+          assert s['eligibleSlateDates']==505, s
+          assert s['parentRouteActiveDates']==200, s
+          assert s['parentRouteNoPlayDates']==305, s
+          expected_families={'FG_ML','F5_ML','FG_RUN_LINE','F5_RUN_LINE','FG_TOTAL','F5_TOTAL','F3_RUN_LINE','F3_TOTAL'}
+          assert set(r['familyResults'])==expected_families
+          assert set(r['overallNoPlayRescueFrontier'])=={'Q80','Q85','Q90','Q95'}
+          b=r['scientificBoundary']
+          assert b['allEightRequestedMarketFamiliesStudied'] is True
+          assert b['frontiersReportedWithoutPostOutcomeSelection'] is True
+          assert b['currentAPlusPremiumHierarchyChanged'] is False
+          assert b['currentAPlusPremiumDatesReplacedByNewMarkets'] is False
+          assert b['unionCoverageIsOpportunityCeilingNotOnePickDailyRecommendationRate'] is True
+          assert b['exactHistoricalHardRockLineAvailabilityKnown'] is False
+          assert b['historicalPricesUsed'] is False
+          assert b['positiveEvEstablished'] is False
+          assert b['highHitRateAloneEstablishesBettingEdge'] is False
+          assert b['independentProspectiveConfirmationStillRequired'] is True
+          assert b['betEliteProduced'] is False
+          assert b['stakeCalculated'] is False
+          assert b['automaticBetPlacement'] is False
+          assert b['realFinancialExposure']==0
+          assert b['productionChanged'] is False
+          print('MULTI_MARKET_RESEARCH_BOUNDARIES_VALID')
+          PY
+
+      - name: Verify frozen result summary parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-multi-market-coverage-expansion-v1.json'))
+          s=json.load(open('research/mlb-multi-market-coverage-expansion-v1-result-summary.json'))
+          assert s['schemaVersion']=='courtedge-mlb-multi-market-coverage-expansion-result-summary.v1'
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          expected_qualified={v for v,g in r['validationGates']['variants'].items() if g['validationQualified']}
+          assert set(s['validation']['qualifiedVariants'])==expected_qualified
+          for variant, compact in s['validation']['qualifiedVariants'].items():
+            raw=r['variantResults'][variant]
+            assert compact['family']==raw['family']
+            assert compact['validationBrierImprovement']==raw['validation']['brierImprovement']
+            assert compact['combinedOosBrierImprovement']==raw['outOfSampleBrier']['combinedBrierImprovement']
+            assert compact['positiveEvaluationSeasons']==raw['outOfSampleBrier']['positiveEvaluationSeasons']==3
+            assert raw['outOfSampleBrier']['stableAcrossEvaluation'] is True
+          assert s['validation']['failedDirectionalVariants']['F3_RL_HOME_MINUS_0_5']==r['validationGates']['variants']['F3_RL_HOME_MINUS_0_5']['brierImprovement']
+          for family, compact in s['validation']['totalFamilyGates'].items():
+            raw=r['validationGates']['totalFamilies'][family]
+            assert compact==[raw['averageFixedLineBrierImprovement'],raw['validationQualified']]
+          order=s['qualifiedVariantFrontierMetricOrder']
+          assert order==['rescuedNoPlayDates','decisive','pushes','hitRate','wilson95Lower','meanPredictedProbability','absoluteCalibrationGap']
+          for variant, frontiers in s['qualifiedVariantFrontiers'].items():
+            for q, compact in frontiers.items():
+              raw=r['variantResults'][variant]['frontiers'][q]
+              expected=[raw['rescuedParentNoPlayDates'],raw['decisive'],raw['pushes'],raw['hitRate'],raw['wilson95']['lower'],raw['meanPredictedProbabilityOnDecisive'],raw['absoluteCalibrationGap']]
+              assert compact==expected,(variant,q,compact,expected)
+          for family, compact in s['familyRescueDates'].items():
+            expected={q:raw['rescuedParentNoPlayDates'] for q,raw in r['familyResults'][family]['frontiers'].items()}
+            assert compact==expected,(family,compact,expected)
+          for q, compact in s['overallNoPlayRescueFrontier'].items():
+            raw=r['overallNoPlayRescueFrontier'][q]
+            assert compact['rescuedParentNoPlayDates']==raw['rescuedParentNoPlayDates']
+            assert compact['combinedOpportunityDates']==raw['combinedOpportunityDates']
+            assert compact['combinedOpportunityCoveragePct']==raw['combinedOpportunityCoveragePct']
+            assert compact['remainingNoPlayDates']==raw['remainingNoPlayDates']
+            assert compact['maximumRemainingNoPlayStreak']==raw['remainingNoPlayStreaksAcrossCombinedEligibleSequence']['maximumNoPlayEligibleDateStreak']
+            for season, values in compact['bySeason'].items():
+              rr=raw['bySeason'][season]
+              expected=[rr['combinedOpportunityDates'],rr['combinedOpportunityCoveragePct'],rr['remainingNoPlayDates'],rr['remainingNoPlayStreaks']['maximumNoPlayEligibleDateStreak']]
+              assert values==expected,(q,season,values,expected)
+          assert s['interpretation']['baselineParentRouteCoveragePct']==100.0*r['sample']['parentRouteActiveDates']/r['sample']['eligibleSlateDates']
+          assert s['interpretation']['highestVolumeCombinedOpportunityCoveragePct']==r['overallNoPlayRescueFrontier']['Q80']['combinedOpportunityCoveragePct']
+          assert s['interpretation']['highestVolume2026YtdCoveragePct']==r['overallNoPlayRescueFrontier']['Q80']['bySeason']['2026_YTD']['combinedOpportunityCoveragePct']
+          assert s['interpretation']['totalsPassFrozenFamilyValidationGate'] is False
+          assert s['interpretation']['opportunityCoverageIsNotExecutableOnePickDailyRate'] is True
+          assert s['interpretation']['historicalPricesUsed'] is False
+          assert s['interpretation']['positiveEvEstablished'] is False
+          assert s['interpretation']['prospectiveIndependentConfirmationRequired'] is True
+          assert s['interpretation']['productionPromotionAuthorized'] is False
+          assert s['policy']==r['scientificBoundary']
+          print('MULTI_MARKET_FROZEN_RESULT_SUMMARY_PARITY_VERIFIED')
+          PY
+
+      - name: Upload multi-market research artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-multi-market-coverage-expansion-v1
+          path: work/mlb-multi-market-coverage-expansion-v1.json
+          if-no-files-found: error
+          retention-days: 90
