@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "courtedge-mlb-router-input-v66-derived-parity-custody.v1",
+  "scientificStatus": "IMMUTABLE_V66_DERIVED_RUNTIME_PARITY_EVIDENCE",
+  "contractCommitSha": "624da74a251ed9443a2d56a731e5c57db92aa27d",
+  "builderCommitSha": "8880cc961d0444d5d4a995536972ddf0d8c5bad2",
+  "parityDriverCommitSha": "22e8090768b1cdbd62392104d19670269fbdda23",
+  "workflowRunId": 32179913313,
+  "workflowJobId": 95850251138,
+  "conclusion": "SUCCESS",
+  "artifactId": 9340385212,
+  "artifactName": "mlb-router-input-v66-derived-parity-v1",
+  "artifactZipSha256": "sha256:e529c7dbff2374af0ef2be6c0f7bdf055cd179dede46a8537ab38887b6758ab4",
+  "authority": {
+    "v66WorkflowRunId": 31962659793,
+    "v66WorkflowHeadSha": "1e5b68801181f900ee0531eee9e392da02599006",
+    "v66ArtifactId": 9267784926,
+    "v66PregameCustodyRawSha256": "sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2"
+  },
+  "result": {
+    "classification": "V66_DERIVED_RUNTIME_PARITY_PASS",
+    "rows": 11407,
+    "uniqueIdentityRows": 11407,
+    "rowsBySeason": {
+      "2022": 2398,
+      "2023": 2399,
+      "2024": 2406,
+      "2025": 2423,
+      "2026_YTD": 1781
+    },
+    "derivedFeatureCount": 68,
+    "comparisons": 775676,
+    "numericMismatches": 0,
+    "missingnessMismatches": 0,
+    "totalMismatches": 0,
+    "maximumAbsoluteDifference": 0,
+    "requiredTolerance": 1e-12,
+    "sameDateOutcomeInputsUsed": false,
+    "targetGameOutcomeInputsUsed": false
+  },
+  "scope": {
+    "certifies": [
+      "F3_F5_FG_STARTER_SHARE_DERIVATIONS",
+      "F3_F5_FG_EXPOSURE_ADVANTAGES",
+      "F5_FG_EXPECTED_BULLPEN_SHARES",
+      "FIVE_STARTER_QUALITY_BY_THREE_HORIZON_INTERACTIONS",
+      "V66_BULLPEN_D1_D3_CORE3_B2B_GEOMETRY",
+      "V66_AWAY_MINUS_HOME_BULLPEN_ADVANTAGE_ORIENTATION",
+      "F5_FG_WEIGHTED_BULLPEN_FEATURES",
+      "DERIVED_MISSINGNESS_PATTERN"
+    ],
+    "doesNotYetCertify": [
+      "V39_RAW_TWELVE_FEATURE_CONSTRUCTION_FROM_SOURCE_PACKS",
+      "V62_RAW_STARTER_QUALITY_CONSTRUCTION_FROM_SOURCE_PACKS_ACROSS_ALL_ROWS",
+      "EXACT_FULL_MODULAR_236_DAILY_SELECTION_IDENTITY"
+    ]
+  },
+  "productionChanged": false,
+  "realFinancialExposure": 0
+}
