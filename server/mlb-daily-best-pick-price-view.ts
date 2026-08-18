@@ -1,4 +1,7 @@
-import type { MlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
+import {
+  MLB_DAILY_BEST_PICK_UI_SCHEMA,
+  type MlbDailyBestPickUiView,
+} from "./mlb-daily-best-pick-ui-view";
 import type { MlbMarketEdgeMarketResult } from "./mlb-market-edge";
 import type { MlbOperatingEnvelopeClassification, MlbOperatingEnvelopeMarketResult } from "./mlb-operating-envelope";
 import {
@@ -75,6 +78,47 @@ function sameLine(left: number | null, right: number | null): boolean {
   return Object.is(left, right) || left === right;
 }
 
+function assertTrustedDailyBestPick(view: MlbDailyBestPickUiView): void {
+  if (view.schemaVersion !== MLB_DAILY_BEST_PICK_UI_SCHEMA) {
+    throw new Error("MLB_DAILY_BEST_PICK_PRICE_UNTRUSTED_DAILY_SCHEMA");
+  }
+  const policy = view.policy;
+  if (policy.trustedUnifiedPrepriceRuntimeOnly !== true
+    || policy.finalFrozenInputsOnly !== true
+    || policy.aPlusAlwaysPrecedesPremium !== true
+    || policy.existingPrepriceRankPreservedWithinTier !== true
+    || policy.generalV68FallbackAllowed !== false
+    || policy.v80Read !== false
+    || policy.v80Changed !== false
+    || policy.automaticBetPlacement !== false
+    || policy.realFinancialExposure !== 0) {
+    throw new Error("MLB_DAILY_BEST_PICK_PRICE_DAILY_POLICY_VIOLATION");
+  }
+
+  if (view.decision === "NO_PLAY") {
+    if (view.pick !== null) throw new Error("MLB_DAILY_BEST_PICK_PRICE_NO_PLAY_WITH_PICK");
+    return;
+  }
+  if (view.decision !== "BEST_PICK" || !view.pick) {
+    throw new Error("MLB_DAILY_BEST_PICK_PRICE_BEST_PICK_MISSING");
+  }
+  const pick = view.pick;
+  if (pick.side !== "HOME") {
+    throw new Error(`MLB_DAILY_BEST_PICK_PRICE_NON_FROZEN_SIDE:${pick.side}`);
+  }
+  if (pick.route === "PREMIUM_A_HOME_ML") {
+    if (pick.tier !== "PREMIUM" || pick.market !== "FULL_GAME_ML") {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_PREMIUM_IDENTITY_MISMATCH");
+    }
+  } else if (pick.route === "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1") {
+    if (pick.tier !== "A_PLUS") {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_A_PLUS_IDENTITY_MISMATCH");
+    }
+  } else {
+    throw new Error("MLB_DAILY_BEST_PICK_PRICE_UNKNOWN_DAILY_ROUTE");
+  }
+}
+
 function assertTrustedPricedRuntime(result: MlbUnifiedPricedV16RunnerResult): void {
   if (result.schemaVersion !== MLB_UNIFIED_PRICED_V16_RUNNER_SCHEMA) {
     throw new Error("MLB_DAILY_BEST_PICK_PRICE_UNTRUSTED_RUNNER_SCHEMA");
@@ -97,6 +141,19 @@ function assertTrustedPricedRuntime(result: MlbUnifiedPricedV16RunnerResult): vo
     || policy.automaticBetPlacement !== false
     || policy.realFinancialExposure !== 0) {
     throw new Error("MLB_DAILY_BEST_PICK_PRICE_RUNNER_POLICY_VIOLATION");
+  }
+
+  const edgePolicy = result.marketEdge.policy;
+  if (edgePolicy.fixedEdgeFloorApplied !== false
+    || edgePolicy.legacyM4aBetLeanThresholdsApplied !== false
+    || edgePolicy.priceCanCreateIntrinsicThesis !== false
+    || edgePolicy.marketRankingProduced !== false
+    || edgePolicy.eliteLabelProduced !== false
+    || edgePolicy.recommendsBet !== false
+    || edgePolicy.stakeCalculated !== false
+    || edgePolicy.automaticBetPlacement !== false
+    || edgePolicy.realFinancialExposure !== 0) {
+    throw new Error("MLB_DAILY_BEST_PICK_PRICE_MARKET_EDGE_POLICY_VIOLATION");
   }
 
   const envelopePolicy = result.operatingEnvelope.policy;
@@ -159,16 +216,33 @@ function exactEdgeMarkets(
   );
 }
 
+function visibilityPolicy(): MlbDailyBestPickPriceView["policy"] {
+  return Object.freeze({
+    trustedPricedV16RuntimeOnly: true as const,
+    exactDailyBestPickIdentityOnly: true as const,
+    sportingSelectionChangedByPrice: false as const,
+    fallbackToAnotherGameAllowed: false as const,
+    fallbackToAnotherMarketAllowed: false as const,
+    newThresholdAdded: false as const,
+    fixedEvThresholdAdded: false as const,
+    fixedProbabilityThresholdAdded: false as const,
+    betEliteLabelProduced: false as const,
+    finalBetRecommendationProduced: false as const,
+    stakeCalculated: false as const,
+    automaticBetPlacement: false as const,
+    realFinancialExposure: 0 as const,
+  });
+}
+
 export function buildMlbDailyBestPickPriceView(input: {
   priced: MlbUnifiedPricedV16RunnerResult;
   dailyBestPick: MlbDailyBestPickUiView;
 }): MlbDailyBestPickPriceView {
+  assertTrustedDailyBestPick(input.dailyBestPick);
   assertTrustedPricedRuntime(input.priced);
+  const policy = visibilityPolicy();
 
   if (input.dailyBestPick.decision === "NO_PLAY") {
-    if (input.dailyBestPick.pick !== null) {
-      throw new Error("MLB_DAILY_BEST_PICK_PRICE_NO_PLAY_WITH_PICK");
-    }
     return Object.freeze({
       schemaVersion: MLB_DAILY_BEST_PICK_PRICE_VIEW_SCHEMA,
       decision: "NOT_APPLICABLE",
@@ -183,28 +257,13 @@ export function buildMlbDailyBestPickPriceView(input: {
         otherGameMarketsIgnored: input.priced.operatingEnvelope.games.reduce((sum, game) => sum + game.markets.length, 0),
         otherSelectedGameMarketsIgnored: 0,
       }),
-      policy: Object.freeze({
-        trustedPricedV16RuntimeOnly: true as const,
-        exactDailyBestPickIdentityOnly: true as const,
-        sportingSelectionChangedByPrice: false as const,
-        fallbackToAnotherGameAllowed: false as const,
-        fallbackToAnotherMarketAllowed: false as const,
-        newThresholdAdded: false as const,
-        fixedEvThresholdAdded: false as const,
-        fixedProbabilityThresholdAdded: false as const,
-        betEliteLabelProduced: false as const,
-        finalBetRecommendationProduced: false as const,
-        stakeCalculated: false as const,
-        automaticBetPlacement: false as const,
-        realFinancialExposure: 0 as const,
-      }),
+      policy,
     });
   }
 
   const pick = input.dailyBestPick.pick;
   if (!pick) throw new Error("MLB_DAILY_BEST_PICK_PRICE_BEST_PICK_MISSING");
   const targetMarket = canonicalMarketType(pick.market);
-  const allEnvelopeMarkets = input.priced.operatingEnvelope.games.flatMap((game) => game.markets);
   const selectedEnvelopeGame = input.priced.operatingEnvelope.games.find((game) => game.gamePk === pick.gamePk);
   const otherGameMarketsIgnored = input.priced.operatingEnvelope.games
     .filter((game) => game.gamePk !== pick.gamePk)
@@ -221,22 +280,6 @@ export function buildMlbDailyBestPickPriceView(input: {
   if (envelopeMatches.length > 1) {
     throw new Error(`MLB_DAILY_BEST_PICK_PRICE_AMBIGUOUS_ENVELOPE_MARKET:${pick.gamePk}:${targetMarket}:${pick.side}`);
   }
-
-  const policy = Object.freeze({
-    trustedPricedV16RuntimeOnly: true as const,
-    exactDailyBestPickIdentityOnly: true as const,
-    sportingSelectionChangedByPrice: false as const,
-    fallbackToAnotherGameAllowed: false as const,
-    fallbackToAnotherMarketAllowed: false as const,
-    newThresholdAdded: false as const,
-    fixedEvThresholdAdded: false as const,
-    fixedProbabilityThresholdAdded: false as const,
-    betEliteLabelProduced: false as const,
-    finalBetRecommendationProduced: false as const,
-    stakeCalculated: false as const,
-    automaticBetPlacement: false as const,
-    realFinancialExposure: 0 as const,
-  });
 
   if (envelopeMatches.length === 0) {
     return Object.freeze({
