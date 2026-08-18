@@ -1,8 +1,8 @@
 import { BadgeDollarSign, CircleOff, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { presentMlbDailyBestPickPrice } from "@/lib/mlb-daily-best-pick-price";
+import { presentMlbDailyBestPickPriceFailClosed } from "@/lib/mlb-daily-best-pick-price-safe";
 
-function badgeVariant(state: ReturnType<typeof presentMlbDailyBestPickPrice>["state"]): "default" | "secondary" | "destructive" | "outline" {
+function badgeVariant(state: ReturnType<typeof presentMlbDailyBestPickPriceFailClosed>["state"]): "default" | "secondary" | "destructive" | "outline" {
   if (state === "ELITE_EVIDENCE_CANDIDATE") return "default";
   if (state === "UNAVAILABLE" || state === "PRICE_EVIDENCE_UNAVAILABLE" || state === "UPSTREAM_BLOCKED") return "destructive";
   if (state === "NOT_APPLICABLE") return "secondary";
@@ -10,7 +10,7 @@ function badgeVariant(state: ReturnType<typeof presentMlbDailyBestPickPrice>["st
 }
 
 export function MlbDailyBestPickPriceCard({ value }: { value: unknown }) {
-  const display = presentMlbDailyBestPickPrice(value);
+  const display = presentMlbDailyBestPickPriceFailClosed(value);
   const elite = display.state === "ELITE_EVIDENCE_CANDIDATE";
   const unavailable = display.state === "UNAVAILABLE" || display.state === "PRICE_EVIDENCE_UNAVAILABLE";
   const Icon = elite ? ShieldCheck : unavailable ? ShieldAlert : display.state === "NOT_APPLICABLE" ? CircleOff : BadgeDollarSign;

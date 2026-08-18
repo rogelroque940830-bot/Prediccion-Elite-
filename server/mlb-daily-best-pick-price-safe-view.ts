@@ -41,6 +41,35 @@ function failClosedView(): MlbDailyBestPickPriceView {
   });
 }
 
+function assertSemanticPriceView(view: MlbDailyBestPickPriceView): void {
+  if (view.decision === "ELITE_EVIDENCE_CANDIDATE") {
+    if (!view.pick || !view.execution || !view.economics) {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_ELITE_EXECUTION_REQUIRED");
+    }
+    if (!Number.isFinite(view.economics.expectedValuePerUnit)
+      || (view.economics.expectedValuePerUnit ?? 0) <= 0
+      || view.blockers.length !== 0) {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_ELITE_ECONOMICS_INVALID");
+    }
+  }
+
+  if (view.decision === "NO_POSITIVE_EV") {
+    if (!view.pick || !view.execution || !view.economics
+      || !Number.isFinite(view.economics.expectedValuePerUnit)
+      || (view.economics.expectedValuePerUnit ?? 1) > 0) {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_NO_POSITIVE_EV_INVARIANT_INVALID");
+    }
+  }
+
+  if (view.decision === "POSITIVE_EV_ENVELOPE_BLOCKED") {
+    if (!view.pick || !view.execution || !view.economics
+      || !Number.isFinite(view.economics.expectedValuePerUnit)
+      || (view.economics.expectedValuePerUnit ?? 0) <= 0) {
+      throw new Error("MLB_DAILY_BEST_PICK_PRICE_POSITIVE_EV_BLOCK_INVARIANT_INVALID");
+    }
+  }
+}
+
 /**
  * Browser-facing safety wrapper. A rejected or corrupted priced runtime may hide price
  * visibility, but it can never mutate the already-frozen sporting BEST PICK.
@@ -51,10 +80,12 @@ export function buildMlbDailyBestPickPriceViewFailClosed(input: {
   onRejected?: (error: unknown) => void;
 }): MlbDailyBestPickPriceView {
   try {
-    return buildMlbDailyBestPickPriceView({
+    const view = buildMlbDailyBestPickPriceView({
       priced: input.priced,
       dailyBestPick: input.dailyBestPick,
     });
+    assertSemanticPriceView(view);
+    return view;
   } catch (error) {
     input.onRejected?.(error);
     return failClosedView();

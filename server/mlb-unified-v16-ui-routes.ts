@@ -22,9 +22,18 @@ import { createMlbUnifiedV16DefaultLiveEvidenceProviders } from "./mlb-unified-v
 import { auditMlbV16NoPlayFunnel } from "./mlb-v16-no-play-funnel-audit";
 import { buildMlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
 import { buildMlbDailyBestPickPriceViewFailClosed } from "./mlb-daily-best-pick-price-safe-view";
+import {
+  buildMlbDailyBestPickManualPriceContext,
+  evaluateMlbDailyBestPickManualPrice,
+  MlbDailyBestPickManualPriceError,
+  type MlbDailyBestPickManualPriceRequest,
+} from "./mlb-daily-best-pick-manual-price";
+import { MlbDailyBestPickManualPriceStore } from "./mlb-daily-best-pick-manual-price-store";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
+export const MLB_UNIFIED_V16_MANUAL_PRICE_ROUTE = "/api/mlb/unified-v16/manual-price" as const;
 export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v2" as const;
+export const MLB_UNIFIED_V16_MANUAL_PRICE_SCHEMA = "courtedge-p0-mlb-unified-v16-manual-price-command.v1" as const;
 
 function floridaDate(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -107,6 +116,27 @@ function publicEliteCandidates(result: MlbUnifiedPricedV16RunnerResult, slate: M
   });
 }
 
+function manualRequestFromBody(req: Request): MlbDailyBestPickManualPriceRequest {
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    throw new MlbDailyBestPickManualPriceError("REQUEST_BODY_INVALID", "manual price request body must be an object");
+  }
+  const body = req.body as Record<string, unknown>;
+  const runId = String(body.runId ?? "").trim();
+  const date = String(body.date ?? "").trim();
+  const gamePk = Number(body.gamePk);
+  const market = body.market;
+  const side = body.side;
+  const oddsAmerican = Number(body.oddsAmerican);
+  if (!runId) throw new MlbDailyBestPickManualPriceError("RUN_ID_REQUIRED", "runId is required");
+  if (!isValidMlbP1Date(date)) throw new MlbDailyBestPickManualPriceError("DATE_INVALID", "date must use YYYY-MM-DD");
+  if (!Number.isInteger(gamePk) || gamePk <= 0) throw new MlbDailyBestPickManualPriceError("GAME_PK_INVALID", "gamePk must be a positive integer");
+  if (market !== "FIRST_5_ML" && market !== "FULL_GAME_ML") {
+    throw new MlbDailyBestPickManualPriceError("MARKET_INVALID", "manual price market must be the frozen Daily BEST PICK ML market");
+  }
+  if (side !== "HOME") throw new MlbDailyBestPickManualPriceError("SIDE_INVALID", "manual price side must match the frozen HOME selection");
+  return { runId, date, gamePk, market, side, oddsAmerican };
+}
+
 export interface MlbUnifiedV16UiCommandDependencies {
   buildSlate?: typeof buildMlbP1DailySlate;
   assembleLiveInput?: typeof assembleMlbUnifiedV16LiveInput;
@@ -116,11 +146,27 @@ export interface MlbUnifiedV16UiCommandDependencies {
   runPriced?: typeof runMlbUnifiedPricedV16Step11c;
   runIdFactory?: () => string;
   now?: () => Date;
+  manualPriceStore?: MlbDailyBestPickManualPriceStore;
 }
 
 export interface MlbUnifiedV16UiCommandResponse {
   httpStatus: number;
   body: Record<string, unknown>;
+}
+
+function persistManualPriceContext(
+  deps: MlbUnifiedV16UiCommandDependencies,
+  runId: string,
+  context: Parameters<MlbDailyBestPickManualPriceStore["put"]>[0] | null,
+): void {
+  const ownedStore = deps.manualPriceStore ? null : new MlbDailyBestPickManualPriceStore();
+  const store = deps.manualPriceStore ?? ownedStore!;
+  try {
+    store.delete(runId);
+    if (context) store.put(context);
+  } finally {
+    ownedStore?.close();
+  }
 }
 
 export async function executeMlbUnifiedV16UiCommand(
@@ -221,6 +267,19 @@ export async function executeMlbUnifiedV16UiCommand(
     onRejected: (error) => console.error("Daily BEST PICK price visibility rejected:", error),
   });
 
+  let manualPrice: ReturnType<typeof buildMlbDailyBestPickManualPriceContext> | null = null;
+  try {
+    manualPrice = buildMlbDailyBestPickManualPriceContext({
+      priced: result,
+      dailyBestPick,
+      automaticPrice: dailyBestPickPrice,
+      now,
+    });
+  } catch (error) {
+    console.error("Daily BEST PICK manual price continuity rejected:", error);
+  }
+  persistManualPriceContext(deps, result.runId, manualPrice?.context ?? null);
+
   return {
     httpStatus: 200,
     body: {
@@ -234,10 +293,11 @@ export async function executeMlbUnifiedV16UiCommand(
         prepriceSummary: result.preprice.summary,
         dailyBestPick,
         dailyBestPickPrice,
+        manualPriceContinuity: manualPrice?.availability ?? null,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. Daily BEST PICK remains frozen pre-price; price visibility evaluates only the exact selected game/market/side through the existing operating envelope and cannot create BET_ELITE, fallback, stake, or an automatic wager.",
+      nextBoundary: "Priced V16 evidence run completed. Daily BEST PICK remains frozen pre-price. A trusted provider/cache price has priority; only when no automatic execution price exists may the exact same pick accept a short-lived user-reported Hard Rock price for visibility-only EV math. Manual price cannot create BET_ELITE, fallback, stake, or an automatic wager.",
       policy: {
         explicitInvocationRequired: true,
         certifiedServerAssemblyComplete: true,
@@ -252,6 +312,11 @@ export async function executeMlbUnifiedV16UiCommand(
         dailyBestPickPriceFallbackAllowed: false,
         dailyBestPickPriceAddsThreshold: false,
         dailyBestPickPriceProducesBetElite: false,
+        providerOrFreshCachePricePrecedesManual: true,
+        manualPriceExactFrozenPickOnly: true,
+        manualPriceMayChangeSportingSelection: false,
+        manualPriceCallsTheOddsApi: false,
+        manualPriceTheOddsApiCreditsConsumed: 0,
         browserReceivesProviderSecret: false,
         browserMayForgeCertifiedInputs: false,
         automaticPolling: false,
@@ -264,12 +329,24 @@ export async function executeMlbUnifiedV16UiCommand(
   };
 }
 
+function manualPriceHttpError(error: unknown): { status: number; code: string; message: string } {
+  if (error instanceof MlbDailyBestPickManualPriceError) {
+    if (error.code === "CONTEXT_NOT_FOUND_OR_EXPIRED" || error.code === "CONTEXT_EXPIRED") {
+      return { status: 409, code: error.code, message: "The trusted automatic-run context is unavailable or expired. Run V16 again before entering a manual price." };
+    }
+    return { status: 400, code: error.code, message: "The manual Hard Rock price was rejected by the exact-pick safety contract." };
+  }
+  return { status: 500, code: "MLB_UNIFIED_V16_MANUAL_PRICE_FAILED", message: "Manual price evaluation is unavailable." };
+}
+
 export function registerMlbUnifiedV16UiRoutes(
   app: Express,
   deps: MlbUnifiedV16UiCommandDependencies = {},
 ): void {
+  const manualPriceStore = deps.manualPriceStore ?? new MlbDailyBestPickManualPriceStore();
   const registeredDeps: MlbUnifiedV16UiCommandDependencies = {
     ...deps,
+    manualPriceStore,
     liveEvidenceProviders: deps.liveEvidenceProviders ?? createMlbUnifiedV16DefaultLiveEvidenceProviders(),
   };
 
@@ -303,6 +380,47 @@ export function registerMlbUnifiedV16UiRoutes(
         error: "MLB_UNIFIED_V16_UI_COMMAND_FAILED",
         message: "MLB unified V16 command is unavailable.",
       });
+    }
+  });
+
+  app.post(MLB_UNIFIED_V16_MANUAL_PRICE_ROUTE, async (req: Request, res: Response) => {
+    try {
+      const request = manualRequestFromBody(req);
+      const now = registeredDeps.now?.() ?? new Date();
+      if (!Number.isFinite(now.getTime())) throw new MlbDailyBestPickManualPriceError("NOW_INVALID", "manual quote time is invalid");
+      const context = manualPriceStore.get(request.runId, now.getTime());
+      if (!context) {
+        throw new MlbDailyBestPickManualPriceError(
+          "CONTEXT_NOT_FOUND_OR_EXPIRED",
+          "trusted manual-price context is missing or expired",
+        );
+      }
+      const result = evaluateMlbDailyBestPickManualPrice({ context, request, now });
+      return res.status(200).json({
+        schemaVersion: MLB_UNIFIED_V16_MANUAL_PRICE_SCHEMA,
+        status: "MANUAL_PRICE_EVALUATED",
+        runId: request.runId,
+        date: request.date,
+        result,
+        policy: {
+          providerOrFreshCachePricePrecedesManual: true,
+          exactFrozenDailyBestPickOnly: true,
+          browserCannotSupplyModelProbability: true,
+          manualPriceMayChangeSportingSelection: false,
+          callsTheOddsApi: false,
+          theOddsApiCreditsConsumed: 0,
+          operatingEnvelopeClassificationProduced: false,
+          betEliteProduced: false,
+          finalBetRecommendationProduced: false,
+          stakeCalculated: false,
+          automaticBetPlacement: false,
+          realFinancialExposure: 0,
+        },
+      });
+    } catch (error) {
+      const mapped = manualPriceHttpError(error);
+      if (mapped.status >= 500) console.error("MLB manual price evaluation failed:", error);
+      return res.status(mapped.status).json({ error: mapped.code, message: mapped.message });
     }
   });
 }

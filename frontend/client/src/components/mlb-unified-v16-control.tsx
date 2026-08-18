@@ -5,8 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MlbDailyBestPickCard } from "@/components/mlb-daily-best-pick-card";
 import { MlbDailyBestPickPriceCard } from "@/components/mlb-daily-best-pick-price-card";
+import { MlbDailyBestPickManualPriceCard } from "@/components/mlb-daily-best-pick-manual-price-card";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { parseMlbDailyBestPickUiView } from "@/lib/mlb-daily-best-pick";
+import {
+  parseMlbDailyBestPickManualPriceAvailability,
+  parseMlbDailyBestPickManualPriceView,
+} from "@/lib/mlb-daily-best-pick-manual-price";
 
 interface V16UiGame {
   gamePk: number;
@@ -126,6 +132,7 @@ interface V16UiResponse {
     prepriceSummary: Record<string, number>;
     dailyBestPick?: unknown;
     dailyBestPickPrice?: unknown;
+    manualPriceContinuity?: unknown;
     noPlayAudit?: V16NoPlayAudit;
     eliteCandidates: V16EliteCandidate[];
   };
@@ -205,10 +212,20 @@ export function MlbUnifiedV16Control() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<V16UiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manualPriceResult, setManualPriceResult] = useState<unknown>(null);
+  const [manualPriceLoading, setManualPriceLoading] = useState(false);
+  const [manualPriceError, setManualPriceError] = useState<string | null>(null);
+
+  const resetManualPrice = () => {
+    setManualPriceResult(null);
+    setManualPriceError(null);
+    setManualPriceLoading(false);
+  };
 
   const execute = async () => {
     setLoading(true);
     setError(null);
+    resetManualPrice();
     try {
       const response = await apiRequest("POST", "/api/mlb/unified-v16/ui-run", { date });
       setResult((await response.json()) as V16UiResponse);
@@ -221,12 +238,49 @@ export function MlbUnifiedV16Control() {
     }
   };
 
+  const evaluateManualPrice = async (oddsAmerican: number) => {
+    const daily = parseMlbDailyBestPickUiView(result?.result?.dailyBestPick);
+    const continuity = parseMlbDailyBestPickManualPriceAvailability(result?.result?.manualPriceContinuity);
+    if (!result || !daily || daily.decision !== "BEST_PICK" || !daily.pick
+      || !continuity || continuity.status !== "AVAILABLE" || !continuity.runId) {
+      setManualPriceError("El contexto certificado de precio manual ya no está disponible. Ejecuta V16 nuevamente.");
+      setManualPriceResult(null);
+      return;
+    }
+
+    setManualPriceLoading(true);
+    setManualPriceError(null);
+    try {
+      const response = await apiRequest("POST", "/api/mlb/unified-v16/manual-price", {
+        runId: continuity.runId,
+        date: result.date,
+        gamePk: daily.pick.gamePk,
+        market: daily.pick.market,
+        side: daily.pick.side,
+        oddsAmerican,
+      });
+      const body = (await response.json()) as { result?: unknown };
+      const parsed = parseMlbDailyBestPickManualPriceView(body.result);
+      if (!parsed) throw new Error("MLB_MANUAL_PRICE_RESPONSE_TRUST_REJECTED");
+      setManualPriceResult(parsed);
+    } catch (caught) {
+      const message = caught instanceof ApiError
+        ? caught.message
+        : "La cuota manual fue rechazada o el contexto expiró. Ejecuta V16 nuevamente si es necesario.";
+      setManualPriceError(message);
+      setManualPriceResult(null);
+    } finally {
+      setManualPriceLoading(false);
+    }
+  };
+
   const completed = result?.status === "RUN_COMPLETED";
   const blocked = result?.status === "CERTIFIED_INPUT_ASSEMBLY_BLOCKED";
   const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
   const runSummary = result?.result?.summary;
   const dailyBestPick = result?.result?.dailyBestPick;
   const dailyBestPickPrice = result?.result?.dailyBestPickPrice;
+  const manualPriceContinuity = result?.result?.manualPriceContinuity;
   const noPlayAudit = result?.result?.noPlayAudit;
   const auditedGames = noPlayAudit?.gameAudits ?? [];
   const eliteCandidates = result?.result?.eliteCandidates ?? [];
@@ -244,7 +298,7 @@ export function MlbUnifiedV16Control() {
   return (
     <Card className="mx-4 mt-4 border-primary/30 bg-card/95" data-testid="mlb-v16-control">
       <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
               <Brain className="h-5 w-5 text-primary" />
@@ -259,7 +313,12 @@ export function MlbUnifiedV16Control() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <DatePickerFL value={date} onChange={(next) => { setDate(next); setResult(null); setError(null); }} />
+          <DatePickerFL value={date} onChange={(next) => {
+            setDate(next);
+            setResult(null);
+            setError(null);
+            resetManualPrice();
+          }} />
           <Button onClick={execute} disabled={loading} data-testid="button-mlb-v16-prepare">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
             {loading ? "Ejecutando V16" : "Ejecutar V16"}
@@ -322,6 +381,13 @@ export function MlbUnifiedV16Control() {
 
                 <MlbDailyBestPickCard value={dailyBestPick} />
                 <MlbDailyBestPickPriceCard value={dailyBestPickPrice} />
+                <MlbDailyBestPickManualPriceCard
+                  continuity={manualPriceContinuity}
+                  value={manualPriceResult}
+                  loading={manualPriceLoading}
+                  error={manualPriceError}
+                  onSubmit={evaluateManualPrice}
+                />
 
                 {auditedGames.length > 0 && (
                   <div className="space-y-2" data-testid="mlb-v16-sports-predictions">
