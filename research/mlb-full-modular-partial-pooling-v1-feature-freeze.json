@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-partial-pooling-feature-freeze.v1",
+  "status": "FROZEN_BEFORE_SCORER",
+  "inheritsExactFeatureEngineeringFrom": {
+    "branch": "research/mlb-full-modular-aplus-premium-cross-anatomy-v1",
+    "commit": "c678c49c60a70a7280444cfce8f8d5795747a92d",
+    "path": "research/mlb-full-modular-aplus-premium-cross-anatomy-v1-feature-engineering-freeze.json",
+    "selectedSideOrientationUnchanged": true,
+    "premiumCoreThresholdsUnchanged": true,
+    "frozenC4Full13ProbabilityConstructionUnchanged": true
+  },
+  "noNewRawFeatureFamilyAdded": true,
+  "numericGlobalFeatures": [
+    "modelProbability",
+    "qualityPercentile",
+    "structureScore",
+    "structureObservedFeatureFraction",
+    "premium_core_support_count_0_to_3",
+    "premium_core_weakest_margin",
+    "frozen_c4_selected_side_probability",
+    "frozen_full13_selected_side_probability",
+    "sel_starter_kbb_adv",
+    "sel_team_win10_diff",
+    "sel_lineup_exposure_rate_adv",
+    "sel_team_ra10_adv",
+    "sel_starter_runrisk_adv"
+  ],
+  "categoricalGlobalFeatures": {
+    "lineGeometry": ["PROTECTED", "NEUTRAL_ML", "AGGRESSIVE"],
+    "matchupStructure": ["SUPPORTIVE", "MIXED", "CONFLICTING", "UNKNOWN"],
+    "side": ["HOME", "AWAY"]
+  },
+  "partialPoolingSignals": [
+    "premium_core_support_count_0_to_3",
+    "premium_core_weakest_margin",
+    "frozen_full13_selected_side_probability",
+    "sel_starter_kbb_adv",
+    "sel_team_win10_diff",
+    "sel_lineup_exposure_rate_adv",
+    "sel_team_ra10_adv",
+    "sel_starter_runrisk_adv"
+  ],
+  "groupLevels": {
+    "horizon": ["F3", "F5", "FG"],
+    "strengthTier": ["STRONG", "MIDDLE", "WEAK", "UNSTABLE"]
+  },
+  "preprocessing": {
+    "medianImputation": "FIT_STRICTLY_PRIOR_TRAINING_ROWS_ONLY",
+    "meanStdStandardization": "FIT_STRICTLY_PRIOR_TRAINING_ROWS_ONLY",
+    "standardizedClip": 6.0,
+    "categoricalEncoding": "FULL_ONE_HOT_WITH_L2_REGULARIZATION",
+    "unseenCategoryAction": "FAIL_CLOSED",
+    "futureRowsMayAffectPreprocessing": false
+  },
+  "forbidden": {
+    "teamNameSpecificRules": true,
+    "playerNameSpecificRules": true,
+    "sameDateOutcomeFeatures": true,
+    "marketOdds": true,
+    "closingLine": true,
+    "postgameVariables": true,
+    "newAPlusThreshold": true,
+    "newPremiumThreshold": true,
+    "fullHorizonByStrengthCrossCellDeviation": true,
+    "unlistedInteraction": true
+  }
+}
