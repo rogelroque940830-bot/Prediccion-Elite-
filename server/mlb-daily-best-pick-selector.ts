@@ -104,8 +104,13 @@ function finiteOrNull(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function descendingNullable(value: number | null): number {
-  return finiteOrNull(value) ?? Number.NEGATIVE_INFINITY;
+function compareFiniteNullableDescending(left: number | null, right: number | null): number {
+  const leftValue = finiteOrNull(left);
+  const rightValue = finiteOrNull(right);
+  if (leftValue == null && rightValue == null) return 0;
+  if (leftValue == null) return 1;
+  if (rightValue == null) return -1;
+  return rightValue - leftValue;
 }
 
 function frozenPriority(value: number | null): number {
@@ -126,11 +131,11 @@ function compareReadyExecutable(
   const priorityDelta = frozenPriority(left.frozenPriority) - frozenPriority(right.frozenPriority);
   if (priorityDelta !== 0) return priorityDelta;
 
-  const consensusDelta = descendingNullable(right.consensusScore) - descendingNullable(left.consensusScore);
-  if (Number.isFinite(consensusDelta) && consensusDelta !== 0) return consensusDelta;
+  const consensusDelta = compareFiniteNullableDescending(left.consensusScore, right.consensusScore);
+  if (consensusDelta !== 0) return consensusDelta;
 
-  const classifierDelta = descendingNullable(right.classifierScore) - descendingNullable(left.classifierScore);
-  if (Number.isFinite(classifierDelta) && classifierDelta !== 0) return classifierDelta;
+  const classifierDelta = compareFiniteNullableDescending(left.classifierScore, right.classifierScore);
+  if (classifierDelta !== 0) return classifierDelta;
 
   if (left.gamePk !== right.gamePk) return left.gamePk - right.gamePk;
   if (left.market !== right.market) return left.market.localeCompare(right.market);
