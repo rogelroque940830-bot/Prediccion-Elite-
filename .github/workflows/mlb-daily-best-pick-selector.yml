@@ -6,6 +6,7 @@ on:
       - "production/mlb-daily-best-pick-router-v2"
       - "production/mlb-daily-best-pick-ui-v1"
       - "production/mlb-daily-best-pick-price-visibility-v1"
+      - "production/mlb-daily-best-pick-manual-price-continuity"
       - "fix/frontend-static-verifier-tests-v1"
     paths:
       - "server/mlb-daily-best-pick-selector.ts"
@@ -18,16 +19,22 @@ on:
       - "server/mlb-daily-best-pick-price-view.test.ts"
       - "server/mlb-daily-best-pick-price-safe-view.ts"
       - "server/mlb-daily-best-pick-price-safe-view.test.ts"
+      - "server/mlb-daily-best-pick-manual-price.ts"
+      - "server/mlb-daily-best-pick-manual-price-store.ts"
+      - "server/mlb-daily-best-pick-manual-price.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
       - "frontend/client/src/components/mlb-unified-v16-control.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-price-card.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-manual-price-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
       - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
@@ -46,16 +53,22 @@ on:
       - "server/mlb-daily-best-pick-price-view.test.ts"
       - "server/mlb-daily-best-pick-price-safe-view.ts"
       - "server/mlb-daily-best-pick-price-safe-view.test.ts"
+      - "server/mlb-daily-best-pick-manual-price.ts"
+      - "server/mlb-daily-best-pick-manual-price-store.ts"
+      - "server/mlb-daily-best-pick-manual-price.test.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-ui-routes.test.ts"
       - "server/mlb-unified-v16-ui-orchestration.test.ts"
       - "frontend/client/src/components/mlb-unified-v16-control.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-card.tsx"
       - "frontend/client/src/components/mlb-daily-best-pick-price-card.tsx"
+      - "frontend/client/src/components/mlb-daily-best-pick-manual-price-card.tsx"
       - "frontend/client/src/lib/mlb-daily-best-pick.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick.test.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.ts"
       - "frontend/client/src/lib/mlb-daily-best-pick-price.test.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.ts"
+      - "frontend/client/src/lib/mlb-daily-best-pick-manual-price.test.ts"
       - "frontend/scripts/verify-frontend.mjs"
       - "frontend/Dockerfile"
       - "tsconfig.mlb-daily-best-pick-selector.json"
@@ -78,7 +91,7 @@ jobs:
       - run: npm ci
       - name: Typecheck Daily BEST PICK backend block
         run: npx tsc -p tsconfig.mlb-daily-best-pick-selector.json
-      - name: Test selector, frozen runtime adapter, price visibility and server UI exposure
+      - name: Test selector, frozen runtime adapter, price visibility, manual continuity and server UI exposure
         run: >-
           npx tsx --test
           server/mlb-daily-best-pick-selector.test.ts
@@ -86,6 +99,7 @@ jobs:
           server/mlb-daily-best-pick-runtime-adapter.integration.test.ts
           server/mlb-daily-best-pick-price-view.test.ts
           server/mlb-daily-best-pick-price-safe-view.test.ts
+          server/mlb-daily-best-pick-manual-price.test.ts
           server/mlb-unified-v16-ui-routes.test.ts
           server/mlb-unified-v16-ui-orchestration.test.ts
       - name: Install frontend dependencies
@@ -97,6 +111,7 @@ jobs:
           npx tsx --test
           client/src/lib/mlb-daily-best-pick.test.ts
           client/src/lib/mlb-daily-best-pick-price.test.ts
+          client/src/lib/mlb-daily-best-pick-manual-price.test.ts
       - name: Verify frontend exactly through production pipeline
         working-directory: frontend
         run: COURTEDGE_STANDALONE_DOCKER_BUILD=true npm run verify
