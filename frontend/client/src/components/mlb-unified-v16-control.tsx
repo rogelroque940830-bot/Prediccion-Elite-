@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MlbDailyBestPickCard } from "@/components/mlb-daily-best-pick-card";
+import { MlbDailyBestPickPriceCard } from "@/components/mlb-daily-best-pick-price-card";
 import { DatePickerFL, todayFL } from "@/components/date-picker-fl";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 
@@ -124,6 +125,7 @@ interface V16UiResponse {
     summary: V16RunnerSummary;
     prepriceSummary: Record<string, number>;
     dailyBestPick?: unknown;
+    dailyBestPickPrice?: unknown;
     noPlayAudit?: V16NoPlayAudit;
     eliteCandidates: V16EliteCandidate[];
   };
@@ -224,6 +226,7 @@ export function MlbUnifiedV16Control() {
   const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
   const runSummary = result?.result?.summary;
   const dailyBestPick = result?.result?.dailyBestPick;
+  const dailyBestPickPrice = result?.result?.dailyBestPickPrice;
   const noPlayAudit = result?.result?.noPlayAudit;
   const auditedGames = noPlayAudit?.gameAudits ?? [];
   const eliteCandidates = result?.result?.eliteCandidates ?? [];
@@ -318,6 +321,7 @@ export function MlbUnifiedV16Control() {
                 </div>
 
                 <MlbDailyBestPickCard value={dailyBestPick} />
+                <MlbDailyBestPickPriceCard value={dailyBestPickPrice} />
 
                 {auditedGames.length > 0 && (
                   <div className="space-y-2" data-testid="mlb-v16-sports-predictions">
