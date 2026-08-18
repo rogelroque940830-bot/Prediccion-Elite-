@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-aplus-premium-source-count-freeze.v1",
+  "status": "FROZEN_BEFORE_SCORER_SUPERSEDES_CONTRACT_EXPECTEDROWS_PLACEHOLDER",
+  "rawStep12V3Rows": {
+    "2022": 2429,
+    "2023": 2430,
+    "2024": 2429,
+    "2025": 2430,
+    "2026_YTD": 1786
+  },
+  "certifiedJoinedRows": {
+    "2022": 2398,
+    "2023": 2399,
+    "2024_2026_YTD_combined": 6610
+  },
+  "reason": "The parent Full Modular study operates on the certified Step12V3 plus V66 joined universe. Raw Step12V3 row counts must not be asserted as joined counts.",
+  "parentSampleParityRequired": {
+    "trainingRows2022": 2398,
+    "calibrationRows2023": 2399,
+    "evaluationRows": 6610,
+    "eligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305
+  }
+}
