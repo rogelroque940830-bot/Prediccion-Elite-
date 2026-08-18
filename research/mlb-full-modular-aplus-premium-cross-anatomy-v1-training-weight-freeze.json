@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-aplus-premium-training-weight-freeze.v1",
+  "status": "FROZEN_BEFORE_SCORER",
+  "fitPopulation": "ALL_DECISIVE_FULL_MODULAR_ELIGIBLE_CANDIDATE_ROWS_FROM_STRICTLY_PRIOR_TRAINING_SEASONS",
+  "correlationProtection": {
+    "identity": ["season", "gamePk"],
+    "perGameTotalWeight": 1.0,
+    "candidateWeightFormula": "1 / decisive_full_modular_candidate_count_for_same_season_gamePk",
+    "reason": "Prevent one baseball game from receiving multiple times the training influence merely because several market variants are Full Modular eligible."
+  },
+  "targetSeasonScoring": {
+    "usesOutcome": false,
+    "usesPrice": false,
+    "usesOnlyPregameCandidateFeatures": true
+  },
+  "evaluation": {
+    "dailyUnit": "parent_NO_PLAY_date",
+    "maximumPickPerDate": 1,
+    "challengerCandidateUniverseExactlyEqualsControl": true,
+    "coverageMustMatchControlExactly": true
+  }
+}

@@ -1,0 +1,135 @@
+name: MLB Full Modular A+ Premium Result Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-full-modular-aplus-premium-cross-anatomy-v1
+    paths:
+      - "research/mlb-full-modular-aplus-premium-cross-anatomy-v1-result-summary.json"
+      - ".github/workflows/mlb-full-modular-aplus-premium-cross-anatomy-result-parity.yml"
+      - ".github/workflows/mlb-full-modular-aplus-premium-cross-anatomy.yml"
+  pull_request:
+    branches:
+      - research/mlb-market-state-matchup-modular-router-v1
+    paths:
+      - "research/mlb-full-modular-aplus-premium-cross-anatomy-v1-result-summary.json"
+      - ".github/workflows/mlb-full-modular-aplus-premium-cross-anatomy-result-parity.yml"
+      - ".github/workflows/mlb-full-modular-aplus-premium-cross-anatomy.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-parity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+
+      - name: Download immutable successful cross-anatomy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-full-modular-aplus-premium-cross-anatomy-v1
+          path: inputs/immutable-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32162411625
+
+      - name: Verify frozen summary metric parity and scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary=json.load(open('research/mlb-full-modular-aplus-premium-cross-anatomy-v1-result-summary.json'))
+          files=list(Path('inputs/immutable-result').rglob('*.json'))
+          assert len(files)==1, files
+          source=json.load(open(files[0]))
+
+          assert summary['schemaVersion']=='courtedge-mlb-full-modular-aplus-premium-cross-anatomy-result-summary.v1'
+          assert summary['classification']=='RETROSPECTIVE_DYNAMIC_CROSS_ANATOMY_COMPLETE_NO_PRODUCTION_WINNER_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert source['schemaVersion']=='courtedge-mlb-full-modular-aplus-premium-cross-anatomy.v1'
+          assert source['classification']=='FULL_MODULAR_APLUS_PREMIUM_DYNAMIC_CROSS_ANATOMY_RETROSPECTIVE_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED'
+
+          a=summary['sourceArtifact']
+          assert a['workflowRunId']==32162411625
+          assert a['artifactId']==9334135765
+          assert a['artifactDigest']=='sha256:0777f86b7d80a7492a59c93f8e11767c81dad5aacc2e71226566c5e0494c6c73'
+          assert a['sourceHeadSha']=='be8a3bbb58dfa5aa159a4fc68872eb4b67fbd122'
+
+          s=summary['sample']
+          src=source['sample']
+          assert s['trainingRows2022']==src['trainingRows2022']==2398
+          assert s['calibrationRows2023']==src['calibrationRows2023']==2399
+          assert s['evaluationRows2024To2026Ytd']==src['evaluationRows']==6610
+          assert s['eligibleSlateDates']==src['eligibleSlateDates']==505
+          assert s['parentActiveDates']==src['parentActiveDates']==200
+          assert s['parentNoPlayDates']==src['parentNoPlayDates']==305
+          assert s['fullModularShadowDates']==src['fullModularControlShadowDates']==236
+          assert s['candidateRowsBySeason']==src['allCandidateRowsBySeason']
+          assert s['evaluationNoPlayCandidateRowsBySeason']==src['evaluationNoPlayCandidateRowsBySeason']
+
+          for name,dst in summary['policyResults'].items():
+              p=source['policyResults'][name]
+              for key in ('picks','wins','losses','pushes','decisive','hitRate','sameDateCoverageParity'):
+                  assert dst[key]==p[key], (name,key,dst[key],p[key])
+              assert dst['wilson95Lower']==p['wilson95']['lower']
+              assert dst['brier']==p['decisiveBrierScore']
+              assert dst['logLoss']==p['logLoss']
+              assert dst['rocAuc']==p['rocAuc']
+              assert dst['absoluteCalibrationGap']==p['absoluteCalibrationGap']
+              for season,season_dst in dst['bySeason'].items():
+                  q=p['bySeason'][season]
+                  assert season_dst['picks']==q['picks']
+                  assert season_dst['wins']==q['wins']
+                  assert season_dst['losses']==q['losses']
+                  assert season_dst['pushes']==q['pushes']
+                  assert season_dst['hitRate']==q['hitRate']
+                  assert season_dst['brier']==q['decisiveBrierScore']
+                  assert season_dst['calibrationGap']==q['absoluteCalibrationGap']
+
+          assert summary['pairedComparisonsVsControl']==source['pairedComparisonsVsControl']
+
+          control_cross=source['policyResults']['CONTROL_FULL_MODULAR']['heritageCrossTables']
+          frozen_cross=summary['controlHeritageCrossTables']
+          for label in ('premiumSupportCount','premiumLike3Of3','aPlusConsensusLike'):
+              for key,dst in frozen_cross[label].items():
+                  source_key=key if label=='premiumSupportCount' else ('True' if key=='true' else 'False')
+                  q=control_cross[label][source_key]
+                  for metric in ('picks','wins','losses','pushes','hitRate'):
+                      assert dst[metric]==q[metric], (label,key,metric,dst[metric],q[metric])
+
+          diag=summary['stableModelSignalDiagnostics']
+          for season,value in diag['corePremiumSupportCountCoefficient'].items():
+              if season=='directionAcrossAllTemporalFits':
+                  continue
+              coeff={x['feature']:x['coefficient'] for x in source['modelDiagnostics']['CORE'][season]['topAbsoluteCoefficients']}
+              assert coeff['premium_core_support_count_0_to_3']==value
+              assert value>0
+          for season,value in diag['contextFrozenFull13SelectedSideProbabilityCoefficient'].items():
+              if season=='directionAcrossAllTemporalFits':
+                  continue
+              coeff={x['feature']:x['coefficient'] for x in source['modelDiagnostics']['CONTEXT'][season]['topAbsoluteCoefficients']}
+              assert coeff['frozen_full13_selected_side_probability']==value
+              assert value>0
+
+          decision=summary['scientificDecision']
+          assert decision['coreDynamicRerankBeatsControlAggregate'] is False
+          assert decision['contextDynamicRerankBeatsControlAggregate'] is False
+          assert decision['contextDynamicRerankRepairs2025Descriptively'] is True
+          assert source['policyResults']['CHALLENGER_AP_CONTEXT_DYNAMIC_RERANK']['bySeason']['2025']['hitRate'] > source['policyResults']['CONTROL_FULL_MODULAR']['bySeason']['2025']['hitRate']
+          assert source['policyResults']['CHALLENGER_AP_CONTEXT_DYNAMIC_RERANK']['bySeason']['2026_YTD']['hitRate'] < source['policyResults']['CONTROL_FULL_MODULAR']['bySeason']['2026_YTD']['hitRate']
+
+          g=summary['governance']
+          assert all(g[k] is False for k in (
+              'productionChanged','currentAPlusPremiumHierarchyChanged','fullModularProductionPromoted',
+              'challengersChangedCoverage','generalV68Fallback','v80Dependency','historicalPricesUsed',
+              'positiveEvEstablished','betEliteProduced','stakeCalculated','automaticBetPlacement'
+          ))
+          assert g['realFinancialExposure']==0
+          print('FULL_MODULAR_APLUS_PREMIUM_RESULT_PARITY_VERIFIED')
+          PY

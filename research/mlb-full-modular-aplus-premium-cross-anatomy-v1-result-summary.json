@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-aplus-premium-cross-anatomy-result-summary.v1",
+  "classification": "RETROSPECTIVE_DYNAMIC_CROSS_ANATOMY_COMPLETE_NO_PRODUCTION_WINNER_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "sourceArtifact": {
+    "workflowRunId": 32162411625,
+    "artifactId": 9334135765,
+    "artifactName": "mlb-full-modular-aplus-premium-cross-anatomy-v1",
+    "artifactDigest": "sha256:0777f86b7d80a7492a59c93f8e11767c81dad5aacc2e71226566c5e0494c6c73",
+    "sourceHeadSha": "be8a3bbb58dfa5aa159a4fc68872eb4b67fbd122"
+  },
+  "sample": {
+    "trainingRows2022": 2398,
+    "calibrationRows2023": 2399,
+    "evaluationRows2024To2026Ytd": 6610,
+    "eligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305,
+    "fullModularShadowDates": 236,
+    "fullModularCombinedCoveragePct": 86.33663366336634,
+    "candidateRowsBySeason": {
+      "2023": 1046,
+      "2024": 890,
+      "2025": 844,
+      "2026_YTD": 531
+    },
+    "evaluationNoPlayCandidateRowsBySeason": {
+      "2024": 439,
+      "2025": 345,
+      "2026_YTD": 311
+    }
+  },
+  "policyResults": {
+    "CONTROL_FULL_MODULAR": {
+      "picks": 236,
+      "wins": 177,
+      "losses": 58,
+      "pushes": 1,
+      "decisive": 235,
+      "hitRate": 0.7531914893617021,
+      "wilson95Lower": 0.694288113258763,
+      "brier": 0.18563005105638622,
+      "logLoss": 0.5596297115543765,
+      "rocAuc": 0.5672121566335477,
+      "absoluteCalibrationGap": 0.02649436830452323,
+      "sameDateCoverageParity": true,
+      "bySeason": {
+        "2024": {"picks": 84, "wins": 68, "losses": 16, "pushes": 0, "hitRate": 0.8095238095238095, "brier": 0.15069537315787024, "calibrationGap": 0.03241667142238058},
+        "2025": {"picks": 81, "wins": 54, "losses": 26, "pushes": 1, "hitRate": 0.675, "brier": 0.23075131368519558, "calibrationGap": 0.10296123307714078},
+        "2026_YTD": {"picks": 71, "wins": 55, "losses": 16, "pushes": 0, "hitRate": 0.7746478873239436, "brier": 0.17612035997428194, "calibrationGap": 0.010032088801009476}
+      }
+    },
+    "CHALLENGER_AP_CORE_DYNAMIC_RERANK": {
+      "picks": 236,
+      "wins": 176,
+      "losses": 60,
+      "pushes": 0,
+      "decisive": 236,
+      "hitRate": 0.7457627118644068,
+      "wilson95Lower": 0.6865791158115195,
+      "brier": 0.19230824341347286,
+      "logLoss": 0.5736183557967026,
+      "rocAuc": 0.5127840909090909,
+      "absoluteCalibrationGap": 0.020104804944065968,
+      "sameDateCoverageParity": true,
+      "bySeason": {
+        "2024": {"picks": 84, "wins": 66, "losses": 18, "pushes": 0, "hitRate": 0.7857142857142857, "brier": 0.17226947691767844, "calibrationGap": 0.01975525393789279},
+        "2025": {"picks": 81, "wins": 56, "losses": 25, "pushes": 0, "hitRate": 0.691358024691358, "brier": 0.22117565698694763, "calibrationGap": 0.08062447505947468},
+        "2026_YTD": {"picks": 71, "wins": 54, "losses": 17, "pushes": 0, "hitRate": 0.7605633802816901, "brier": 0.1830828333598851, "calibrationGap": 0.001780382848378892}
+      }
+    },
+    "CHALLENGER_AP_CONTEXT_DYNAMIC_RERANK": {
+      "picks": 236,
+      "wins": 175,
+      "losses": 61,
+      "pushes": 0,
+      "decisive": 236,
+      "hitRate": 0.7415254237288136,
+      "wilson95Lower": 0.6821159708134357,
+      "brier": 0.20573766175172858,
+      "logLoss": 0.6184286554660631,
+      "rocAuc": 0.47437939110070254,
+      "absoluteCalibrationGap": 0.0651473786434591,
+      "sameDateCoverageParity": true,
+      "bySeason": {
+        "2024": {"picks": 84, "wins": 65, "losses": 19, "pushes": 0, "hitRate": 0.7738095238095238, "brier": 0.19361534831015728, "calibrationGap": 0.044077727864365146},
+        "2025": {"picks": 81, "wins": 61, "losses": 20, "pushes": 0, "hitRate": 0.7530864197530864, "brier": 0.1962145575699905, "calibrationGap": 0.05016623732523784},
+        "2026_YTD": {"picks": 71, "wins": 49, "losses": 22, "pushes": 0, "hitRate": 0.6901408450704225, "brier": 0.23094394017162692, "calibrationGap": 0.10716601402683645}
+      }
+    }
+  },
+  "pairedComparisonsVsControl": {
+    "CHALLENGER_AP_CORE_DYNAMIC_RERANK": {
+      "overlapDecisiveDates": 235,
+      "bothCorrect": 160,
+      "bothWrong": 43,
+      "challengerOnlyCorrect": 15,
+      "controlOnlyCorrect": 17,
+      "discordantDates": 32,
+      "unadjustedPValue": 0.860050065908581,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    },
+    "CHALLENGER_AP_CONTEXT_DYNAMIC_RERANK": {
+      "overlapDecisiveDates": 235,
+      "bothCorrect": 152,
+      "bothWrong": 36,
+      "challengerOnlyCorrect": 22,
+      "controlOnlyCorrect": 25,
+      "discordantDates": 47,
+      "unadjustedPValue": 0.7708669945730263,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    }
+  },
+  "controlHeritageCrossTables": {
+    "premiumSupportCount": {
+      "0": {"picks": 5, "wins": 3, "losses": 2, "pushes": 0, "hitRate": 0.6},
+      "1": {"picks": 62, "wins": 46, "losses": 16, "pushes": 0, "hitRate": 0.7419354838709677},
+      "2": {"picks": 114, "wins": 86, "losses": 27, "pushes": 1, "hitRate": 0.7610619469026548},
+      "3": {"picks": 55, "wins": 42, "losses": 13, "pushes": 0, "hitRate": 0.7636363636363637}
+    },
+    "premiumLike3Of3": {
+      "false": {"picks": 181, "wins": 135, "losses": 45, "pushes": 1, "hitRate": 0.75},
+      "true": {"picks": 55, "wins": 42, "losses": 13, "pushes": 0, "hitRate": 0.7636363636363637}
+    },
+    "aPlusConsensusLike": {
+      "false": {"picks": 225, "wins": 169, "losses": 55, "pushes": 1, "hitRate": 0.7544642857142857},
+      "true": {"picks": 11, "wins": 8, "losses": 3, "pushes": 0, "hitRate": 0.7272727272727273}
+    }
+  },
+  "stableModelSignalDiagnostics": {
+    "corePremiumSupportCountCoefficient": {
+      "2024": 0.2329677090517619,
+      "2025": 0.0890594178494834,
+      "2026_YTD": 0.10167735261477803,
+      "directionAcrossAllTemporalFits": "POSITIVE"
+    },
+    "contextFrozenFull13SelectedSideProbabilityCoefficient": {
+      "2024": 0.4696042111507224,
+      "2025": 0.41404862816211707,
+      "2026_YTD": 0.37882102677021784,
+      "directionAcrossAllTemporalFits": "POSITIVE"
+    },
+    "premiumWeakestMarginByTeamStateIsNonUniform": {
+      "unstableInteractionCoefficient": {
+        "2024": -0.24007982639487874,
+        "2025": -0.2851273835306625,
+        "2026_YTD": -0.2638052473324634
+      },
+      "weakInteractionCoefficient": {
+        "2025": 0.24069926795970326,
+        "2026_YTD": 0.312855747443378
+      },
+      "interpretationBoundary": "DESCRIPTIVE_MODEL_DIAGNOSTIC_ONLY_NOT_A_NEW_ROUTING_RULE"
+    }
+  },
+  "scientificDecision": {
+    "aplusPremiumHeritageContainsRepeatableSignal": true,
+    "staticAplusOrPremiumOverlapAloneEstablishesImprovement": false,
+    "coreDynamicRerankBeatsControlAggregate": false,
+    "contextDynamicRerankBeatsControlAggregate": false,
+    "contextDynamicRerankRepairs2025Descriptively": true,
+    "contextDynamicRerankIsStableAcrossSeasons": false,
+    "retrospectiveWinnerDeclared": false,
+    "productionPromotionAllowed": false,
+    "recommendedInterpretation": "Keep exact Full Modular as control. The study supports the user's non-static premise because repeatable heritage signals change meaning by context, especially team state, but the current global dynamic meta-ranker is not stable enough for promotion. The next scientific design should preserve the same candidate universe and isolate context-conditioned calibration/ranking by broad market-horizon or team-state regime using a preregistered partial-pooling approach rather than adding more hard thresholds or unrestricted interactions."
+  },
+  "governance": {
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "fullModularProductionPromoted": false,
+    "challengersChangedCoverage": false,
+    "generalV68Fallback": false,
+    "v80Dependency": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}
