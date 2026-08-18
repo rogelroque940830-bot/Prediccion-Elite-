@@ -26,19 +26,26 @@
     },
     "v39ExpectedStarterOuts": {
       "snapshot": "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json",
-      "predictionClip": [3, 27],
+      "family": "POISSON_REGRESSION_LOG_LINK",
+      "runtimeFitAllowed": false,
+      "runtimePreprocessingFitAllowed": false,
       "requiredRawFeatureOrder": [
-        "priorStarts",
-        "priorOutsPerStart",
-        "seasonStrikePct",
-        "seasonWhiffPerPitch",
-        "seasonCalledPlusWhiffPct",
-        "seasonBallsInPlayPerPitch",
-        "seasonEffectiveSpeedAvg",
-        "seasonPlateXStd",
-        "seasonPlateZStd",
-        "teamRowBaseline"
+        "pitcher_outs_per_start_shrunk",
+        "pitcher_bf_per_start_shrunk",
+        "pitcher_pitches_per_start_shrunk",
+        "pitcher_kbf_shrunk",
+        "pitcher_bbbf_shrunk",
+        "pitcher_erbf_shrunk",
+        "pitcher_recent5_outs_per_start",
+        "pitcher_recent5_pitches_per_start",
+        "opponent_vs_starters_outs_per_game_shrunk",
+        "opponent_rs10",
+        "opponent_lineup_continuity",
+        "pitcher_prior_starts"
       ],
+      "imputation": "NONFINITE_FEATURE_REPLACED_BY_FROZEN_2022_MEDIAN_BY_INDEX",
+      "standardization": "z_i=(x_i-median_if_missing_then_value_i-mean_i)/scale_i",
+      "prediction": "exp(intercept + sum(coefficient_i * z_i))",
       "priorDateOnly": true
     },
     "v62StarterPhysicalQuality": {
