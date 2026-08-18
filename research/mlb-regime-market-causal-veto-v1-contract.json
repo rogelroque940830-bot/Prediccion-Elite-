@@ -1,0 +1,233 @@
+{
+  "schemaVersion": "courtedge-mlb-regime-market-causal-veto-contract.v1",
+  "scientificStatus": "FROZEN_BEFORE_SCORER_RETROSPECTIVE_REGIME_MARKET_CAUSAL_VETO_STUDY_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "purpose": "Diagnose the 2025 robustness failure observed in the frozen market-state-matchup modular router and test whether predeclared market admissibility plus a causal weak-link veto can improve retrospective quality without silently changing the current A+/Premium production hierarchy.",
+  "parentStudy": {
+    "branch": "research/mlb-market-state-matchup-modular-router-v1",
+    "commit": "e352e25c131a53536745323bcd3268dcec75a66d",
+    "pr": 641,
+    "contract": "research/mlb-market-state-matchup-modular-router-v1-contract.json",
+    "scorer": "scripts/mlb-market-state-matchup-modular-router-v1.py",
+    "controlPolicyExactly": "CHALLENGER_FULL_MODULAR",
+    "observedRetrospectiveFactsThatMotivatedThisStudy": {
+      "fullModular2024HitRate": 0.8095238095238095,
+      "fullModular2025HitRate": 0.675,
+      "fullModular2026YtdHitRate": 0.7746478873239436,
+      "fullModular2025AbsoluteCalibrationGap": 0.10296126335322064,
+      "f5RunLineHomeMinus0_5HitRate": 0.5,
+      "protectedGeometryHitRate": 0.7704081632653061,
+      "aggressiveGeometryHitRate": 0.6190476190476191
+    }
+  },
+  "adaptiveSelectionDisclosure": {
+    "parentRetrospectiveResultsWereInspectedBeforeThisProtocol": true,
+    "marketGuardHypothesisWasMotivatedByParentObservedF5Minus0_5Weakness": true,
+    "causalVetoHypothesisWasMotivatedByNonMonotonicParentStructureStates": true,
+    "regimeDiagnosticWasMotivatedByParent2025Deterioration": true,
+    "thereforeEvaluation2024To2026CanCertifyProductionWinner": false,
+    "postProtocolRuleEditingAfterOutcomeInspectionAllowed": false,
+    "postProtocolThresholdSearchAllowed": false
+  },
+  "productionBoundary": {
+    "productionChanged": false,
+    "currentHierarchy": ["A_PLUS", "PREMIUM", "NO_PLAY"],
+    "currentAPlusPremiumDatesMayBeReplaced": false,
+    "maximumDailyPicks": 1,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "scientificChronology": {
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "retrospectiveEvaluationIsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsPredictiveFeatures": false,
+    "standingsCutoff": "PREVIOUS_CALENDAR_DATE_ONLY",
+    "regimeFeatureCutoff": "STRICTLY_BEFORE_OFFICIAL_DATE",
+    "doubleheaderGameOneMayAffectGameTwo": false
+  },
+  "parentControl": {
+    "policy": "CHALLENGER_FULL_MODULAR",
+    "mustBeBitwiseEquivalentInEligibilityAndRankingLogic": true,
+    "parentNoPlayDatesExpected": 305,
+    "parentActiveDatesExpected": 200,
+    "eligibleSlateDatesExpected": 505,
+    "parentControlShadowPickDatesExpected": 236,
+    "parentControlHitRateExpected": 0.7531914893617021,
+    "parentControlCoveragePctExpected": 86.33663366336634,
+    "parentControlBrierExpected": 0.18563005623613243,
+    "parentControlCalibrationGapExpected": 0.026494385947364973
+  },
+  "marketScope": {
+    "variantsExactly": [
+      "F3_RL_HOME_PLUS_0_5",
+      "F5_ML",
+      "F5_RL_HOME_MINUS_0_5",
+      "F5_RL_HOME_PLUS_0_5",
+      "FG_ML",
+      "FG_RL_HOME_MINUS_1_5",
+      "FG_RL_HOME_PLUS_1_5"
+    ],
+    "marketGuardBlockedVariantsExactly": ["F5_RL_HOME_MINUS_0_5"],
+    "marketGuardReason": "Adaptive transport hypothesis from the already-inspected parent study; blocked exactly as preregistered here and never represented as independent evidence.",
+    "alternateLineSearchAllowed": false,
+    "newMarketSearchAllowed": false,
+    "nrfiYrfiIncluded": false,
+    "totalsIncluded": false
+  },
+  "causalWeakLinkVeto": {
+    "enabledPolicies": ["CHALLENGER_CAUSAL_VETO", "CHALLENGER_MARKET_X_CAUSAL_VETO"],
+    "rolesSource": "EXACT_PARENT_MATCHUP_STRUCTURE_REQUIRED_ROLES_BY_HORIZON",
+    "roleScoreDefinition": "EXACT_PARENT_SELECTED_SIDE_ORIENTED_MEAN_OF_2022_STANDARDIZED_FEATURES_WITHIN_ROLE",
+    "vetoBoundarySource": "2023_ROLE_SCORE_DISTRIBUTION_WITHIN_HORIZON_X_SELECTED_TEAM_STRENGTH_TIER",
+    "lowerQuantileExactly": 0.2,
+    "vetoRule": "VETO_CANDIDATE_IF_ANY_REQUIRED_CAUSAL_ROLE_SCORE_IS_AT_OR_BELOW_ITS_2023_HORIZON_X_TEAM_STATE_20TH_PERCENTILE",
+    "unknownOrUnobservableRequiredRole": "VETO",
+    "outcomesMayDefineRoleThresholds": false,
+    "postResultRoleSelectionAllowed": false,
+    "postResultQuantileSearchAllowed": false,
+    "requiredRolesByHorizonMustEqualParent": true
+  },
+  "leagueRegimeDiagnostic": {
+    "policyEffect": "DIAGNOSTIC_ONLY_NO_ROUTING_EFFECT_IN_V1",
+    "featuresExactly": [
+      "TRAILING_28D_TOTAL_RUNS_PER_GAME",
+      "TRAILING_28D_HOME_WIN_RATE",
+      "TRAILING_28D_MEAN_ABSOLUTE_RUN_MARGIN",
+      "TRAILING_28D_ONE_RUN_GAME_RATE"
+    ],
+    "windowCalendarDays": 28,
+    "minimumPriorCompletedGames": 100,
+    "sameDateGamesIncluded": false,
+    "featureStandardizationFitSeason": "2022",
+    "stressScore": "MAHALANOBIS_DISTANCE_USING_2022_FEATURE_MEAN_AND_RIDGE_STABILIZED_COVARIANCE",
+    "covarianceRidgeExactly": 0.000001,
+    "stressBoundarySource": "2023_VALID_REGIME_SCORE_80TH_PERCENTILE",
+    "stressQuantileExactly": 0.8,
+    "statesExactly": ["NORMAL", "STRESS", "UNKNOWN"],
+    "unknownRule": "FEWER_THAN_100_PRIOR_COMPLETED_GAMES_IN_TRAILING_28_CALENDAR_DAYS",
+    "outcomesAfterCandidateDateMayDefineRegime": false,
+    "regimeStateMayAlterCandidateEligibilityInThisStudy": false
+  },
+  "policies": {
+    "CONTROL_FULL_MODULAR": {
+      "base": "EXACT_PARENT_CHALLENGER_FULL_MODULAR",
+      "marketGuard": false,
+      "causalWeakLinkVeto": false
+    },
+    "CHALLENGER_MARKET_GUARD": {
+      "base": "EXACT_PARENT_CHALLENGER_FULL_MODULAR",
+      "marketGuard": true,
+      "causalWeakLinkVeto": false
+    },
+    "CHALLENGER_CAUSAL_VETO": {
+      "base": "EXACT_PARENT_CHALLENGER_FULL_MODULAR",
+      "marketGuard": false,
+      "causalWeakLinkVeto": true
+    },
+    "CHALLENGER_MARKET_X_CAUSAL_VETO": {
+      "base": "EXACT_PARENT_CHALLENGER_FULL_MODULAR",
+      "marketGuard": true,
+      "causalWeakLinkVeto": true
+    }
+  },
+  "dailyShadowRouter": {
+    "appliesOnlyToParentNoPlayDates": true,
+    "parentAPlusPremiumDatesAlwaysPreserved": true,
+    "maximumShadowSelectionsPerDate": 1,
+    "guardsApplyAtCandidateLevelBeforeDailyRanking": true,
+    "nextEligibleCandidateMayBeSelectedIfHigherRankedCandidateIsVetoed": true,
+    "candidateRankingExactly": [
+      "DESC_2023_EMPIRICAL_QUALITY_PERCENTILE_WITHIN_EXACT_MARKET_VARIANT_AND_SELECTED_TEAM_STRENGTH_TIER",
+      "DESC_MODEL_SETTLEMENT_PROBABILITY",
+      "ASC_MARKET_VARIANT_LEXICAL",
+      "ASC_GAME_PK"
+    ],
+    "outcomeMaySelectDailyCandidate": false,
+    "forcedDailyCandidateAllowed": false
+  },
+  "primaryReporting": {
+    "metrics": [
+      "shadow_pick_dates",
+      "combined_daily_opportunity_coverage_pct",
+      "remaining_no_play_dates",
+      "maximum_remaining_no_play_streak",
+      "wins",
+      "losses",
+      "pushes",
+      "decisive_hit_rate",
+      "wilson95_lower_and_upper",
+      "mean_model_probability_on_decisive",
+      "decisive_brier_score",
+      "absolute_calibration_gap",
+      "by_season",
+      "by_market",
+      "by_team_state",
+      "by_matchup_structure",
+      "by_selected_side_line_geometry",
+      "by_league_regime",
+      "veto_reason_counts"
+    ],
+    "paretoMetrics": [
+      "MAXIMIZE_COVERAGE",
+      "MAXIMIZE_WILSON95_LOWER",
+      "MINIMIZE_ABSOLUTE_CALIBRATION_GAP",
+      "MINIMIZE_MAX_NO_PLAY_STREAK"
+    ],
+    "singleWeightedUtilityScoreAllowed": false,
+    "winnerMayBeDeclaredFromRetrospectiveSeasons": false
+  },
+  "removalDiagnostics": {
+    "comparator": "CONTROL_FULL_MODULAR",
+    "reportForEveryChallenger": true,
+    "metrics": [
+      "control_dates_removed_without_replacement",
+      "control_dates_replaced_by_different_candidate",
+      "wins_removed",
+      "losses_removed",
+      "win_removal_rate",
+      "loss_removal_rate",
+      "loss_to_win_removal_lift",
+      "by_season",
+      "by_market",
+      "by_geometry",
+      "by_regime"
+    ],
+    "retrospectiveRemovalDiagnosticsMayPromotePolicy": false
+  },
+  "pairedStatistics": {
+    "primaryComparator": "CONTROL_FULL_MODULAR",
+    "challengersExactly": [
+      "CHALLENGER_MARKET_GUARD",
+      "CHALLENGER_CAUSAL_VETO",
+      "CHALLENGER_MARKET_X_CAUSAL_VETO"
+    ],
+    "pairedUnit": "DATE_WHERE_BOTH_POLICIES_HAVE_DECISIVE_SHADOW_SELECTION",
+    "test": "TWO_SIDED_EXACT_BINOMIAL_TEST_ON_DISCORDANT_DAILY_CORRECTNESS",
+    "multipleComparisonCorrection": "HOLM_BONFERRONI",
+    "familyWiseAlpha": 0.05,
+    "smallSubgroupPValuesAllowed": false
+  },
+  "decisionBoundary": {
+    "retrospectiveParetoChallengerMayBeIdentified": true,
+    "productionWinnerMayBeDeclared": false,
+    "marketMayBePermanentlyExcludedFromProduction": false,
+    "vetoMayBeAddedToProduction": false,
+    "regimeDiagnosticMayBeAddedToProduction": false,
+    "prospectiveConfirmationRequired": true,
+    "exactLiveLineAndPriceRequiredBeforeAnyFutureExecution": true,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBettingAllowed": false,
+    "realFinancialExposure": 0
+  }
+}

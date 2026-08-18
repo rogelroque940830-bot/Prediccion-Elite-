@@ -1,0 +1,195 @@
+name: MLB Regime Market Causal Veto Result Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-regime-market-causal-veto-v1
+    paths:
+      - "research/mlb-regime-market-causal-veto-v1-result-summary.json"
+      - ".github/workflows/mlb-regime-market-causal-veto-result-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-market-state-matchup-modular-router-v1
+    paths:
+      - "research/mlb-regime-market-causal-veto-v1-result-summary.json"
+      - ".github/workflows/mlb-regime-market-causal-veto-result-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+
+      - name: Download immutable successful regime veto artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-regime-market-causal-veto-v1
+          path: inputs/immutable-result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32152952393
+
+      - name: Verify frozen summary metric parity and interpretation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary=json.load(open('research/mlb-regime-market-causal-veto-v1-result-summary.json'))
+          candidates=list(Path('inputs/immutable-result').rglob('*.json'))
+          assert len(candidates)==1, candidates
+          source=json.load(open(candidates[0]))
+
+          assert summary['schemaVersion']=='courtedge-mlb-regime-market-causal-veto-result-summary.v1'
+          assert summary['classification']=='RETROSPECTIVE_DIAGNOSTIC_COMPLETE_NO_PRODUCTION_WINNER_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          artifact=summary['sourceArtifact']
+          assert artifact['workflowRunId']==32152952393
+          assert artifact['jobId']==95763137733
+          assert artifact['artifactId']==9330525886
+          assert artifact['artifactDigest']=='sha256:4e901e1cfa989a427b017695b48cc8bc61684b2a3234356e6e8b576946301c5c'
+          assert artifact['sourceHeadSha']=='4c055811806702abd5de330c770c9a2e48de8bd7'
+          assert source['schemaVersion']=='courtedge-mlb-regime-market-causal-veto.v1'
+          assert source['classification']=='REGIME_MARKET_CAUSAL_VETO_RETROSPECTIVE_STUDY_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED'
+
+          expected_sample={
+            'trainingRows2022':source['sample']['trainingRows2022'],
+            'calibrationRows2023':source['sample']['calibrationRows2023'],
+            'evaluationRows2024To2026Ytd':source['sample']['evaluationRows'],
+            'eligibleSlateDates':source['sample']['eligibleSlateDates'],
+            'parentActiveDates':source['sample']['parentActiveDates'],
+            'parentNoPlayDates':source['sample']['parentNoPlayDates'],
+            'controlCandidatePoolRows':source['sample']['controlCandidatePoolRows'],
+          }
+          assert summary['sample']==expected_sample
+
+          for name,s in summary['policyResults'].items():
+            p=source['policyResults'][name]
+            assert s['shadowPickDates']==p['shadowPickDates']
+            assert s['combinedCoveragePct']==p['combinedDailyOpportunityCoveragePct']
+            for key in ('wins','losses','pushes','decisive','hitRate'):
+              assert s[key]==p[key]
+            assert s['wilson95']==p['wilson95']
+            assert s['brier']==p['decisiveBrierScore']
+            assert s['absoluteCalibrationGap']==p['absoluteCalibrationGap']
+            assert s['maxNoPlayStreak']==p['remainingNoPlayStreaks']['maximum']
+
+          assert summary['paretoPolicies']==source['paretoPolicies']==[
+            'CONTROL_FULL_MODULAR','CHALLENGER_MARKET_GUARD'
+          ]
+
+          guard=summary['marketGuardDiagnostics']
+          src_guard=source['removalDiagnosticsVsControl']['CHALLENGER_MARKET_GUARD']
+          assert guard['candidateLevelVetoCount']==source['vetoReasonCounts']['CHALLENGER_MARKET_GUARD']['MARKET_GUARD:F5_RL_HOME_MINUS_0_5']==114
+          assert guard['controlDatesRemovedWithoutReplacement']==src_guard['controlDatesRemovedWithoutReplacement']==2
+          assert guard['controlDatesReplacedByDifferentCandidate']==src_guard['controlDatesReplacedByDifferentCandidate']==8
+          assert guard['winsRemovedWithoutReplacement']==src_guard['winsRemoved']==2
+          assert guard['lossesRemovedWithoutReplacement']==src_guard['lossesRemoved']==0
+          assert guard['pairedVsControl']==source['pairedComparisonsVsControl']['CHALLENGER_MARKET_GUARD']
+          assert guard['interpretation']=='DESCRIPTIVE_PARETO_TRADEOFF_ONLY_NOT_ESTABLISHED_SUPERIORITY'
+
+          causal=summary['causalVetoDiagnostics']
+          src_causal=source['removalDiagnosticsVsControl']['CHALLENGER_CAUSAL_VETO']
+          assert causal['controlDatesRemovedWithoutReplacement']==src_causal['controlDatesRemovedWithoutReplacement']==31
+          assert causal['controlDatesReplacedByDifferentCandidate']==src_causal['controlDatesReplacedByDifferentCandidate']==46
+          assert causal['winsRemovedWithoutReplacement']==src_causal['winsRemoved']==26
+          assert causal['lossesRemovedWithoutReplacement']==src_causal['lossesRemoved']==5
+          assert causal['winRemovalRate']==src_causal['winRemovalRate']
+          assert causal['lossRemovalRate']==src_causal['lossRemovalRate']
+          assert causal['lossToWinRemovalLift']==src_causal['lossToWinRemovalLift']
+          protected=src_causal['removedByGeometry']['PROTECTED']
+          assert causal['removedProtectedGeometry']=={
+            'picks':protected['picks'],'wins':protected['wins'],'losses':protected['losses'],'hitRate':protected['hitRate']
+          }
+          assert causal['pairedVsControl']==source['pairedComparisonsVsControl']['CHALLENGER_CAUSAL_VETO']
+          assert causal['decision']=='REJECT_CURRENT_BROAD_Q20_CAUSAL_VETO_AS_ROUTER_CHALLENGER'
+
+          combined=summary['combinedGuardDiagnostics']
+          src_combined=source['removalDiagnosticsVsControl']['CHALLENGER_MARKET_X_CAUSAL_VETO']
+          assert combined['controlDatesRemovedWithoutReplacement']==src_combined['controlDatesRemovedWithoutReplacement']==31
+          assert combined['controlDatesReplacedByDifferentCandidate']==src_combined['controlDatesReplacedByDifferentCandidate']==51
+          assert combined['winsRemovedWithoutReplacement']==src_combined['winsRemoved']==26
+          assert combined['lossesRemovedWithoutReplacement']==src_combined['lossesRemoved']==5
+          assert combined['pairedVsControl']==source['pairedComparisonsVsControl']['CHALLENGER_MARKET_X_CAUSAL_VETO']
+          assert combined['decision']=='REJECT_CURRENT_COMBINED_GUARD_AS_ROUTER_CHALLENGER'
+
+          regime=summary['leagueRegimeDiagnostic']
+          assert regime['validationStressThreshold']==source['leagueRegime']['validationStressThreshold']
+          for season in ('2024','2025','2026_YTD'):
+            src=source['leagueRegime']['byEvaluationSeason'][season]
+            dst=regime[season]
+            assert dst['eligibleDateStates']==src['eligibleDateStates']
+            normal=src['controlPerformanceByRegime']['NORMAL']
+            assert dst['controlNormal']['picks']==normal['picks']
+            assert dst['controlNormal']['wins']==normal['wins']
+            assert dst['controlNormal']['losses']==normal['losses']
+            assert dst['controlNormal']['hitRate']==normal['hitRate']
+            assert dst['controlNormal']['brier']==normal['decisiveBrierScore']
+            assert dst['controlNormal']['absoluteCalibrationGap']==normal['absoluteCalibrationGap']
+            stress=src['controlPerformanceByRegime']['STRESS']
+            assert dst['controlStress']['picks']==stress['picks']
+            assert dst['controlStress']['wins']==stress['wins']
+            assert dst['controlStress']['losses']==stress['losses']
+            assert dst['controlStress']['hitRate']==stress['hitRate']
+            if 'brier' in dst['controlStress']:
+              assert dst['controlStress']['brier']==stress['decisiveBrierScore']
+              assert dst['controlStress']['absoluteCalibrationGap']==stress['absoluteCalibrationGap']
+
+          # The preregistered global regime proxy does not isolate the 2025 failure:
+          # both NORMAL and STRESS 2025 control cohorts are weak and similarly miscalibrated.
+          n25=source['leagueRegime']['byEvaluationSeason']['2025']['controlPerformanceByRegime']['NORMAL']
+          s25=source['leagueRegime']['byEvaluationSeason']['2025']['controlPerformanceByRegime']['STRESS']
+          assert n25['hitRate']==0.6833333333333333
+          assert s25['hitRate']==0.6666666666666666
+          assert n25['absoluteCalibrationGap']>0.09
+          assert s25['absoluteCalibrationGap']>0.09
+          assert regime['diagnosis']=='2025_HAS_MORE_STRESS_DATES_BUT_GLOBAL_STRESS_STATE_DOES_NOT_EXPLAIN_THE_FAILURE_BECAUSE_2025_NORMAL_AND_STRESS_CONTROL_PERFORMANCE_ARE_BOTH_WEAK_AND_SIMILARLY_MISCALIBRATED'
+
+          for season in ('2024','2025','2026_YTD'):
+            d=summary['marketGuardBySeason'][season]
+            c=source['policyResults']['CONTROL_FULL_MODULAR']['bySeason'][season]
+            g=source['policyResults']['CHALLENGER_MARKET_GUARD']['bySeason'][season]
+            assert d['controlHitRate']==c['hitRate']
+            assert d['guardHitRate']==g['hitRate']
+            assert d['controlShadowPicks']==c['picks']
+            assert d['guardShadowPicks']==g['picks']
+          assert summary['marketGuardBySeason']['2025']['conclusion']=='NO_EFFECT_ON_2025_FAILURE'
+
+          counts=summary['vetoReasonCounts']
+          c=source['vetoReasonCounts']['CHALLENGER_CAUSAL_VETO']
+          assert counts=={
+            'marketGuardF5RunLineMinus0_5':114,
+            'causalRequiredRoleUnobservable':c['REQUIRED_ROLE_UNOBSERVABLE'],
+            'causalF3HorizonQ20':c['ROLE_Q20_VETO:F3_HORIZON'],
+            'causalF5BullpenQ20':c['ROLE_Q20_VETO:F5_BULLPEN'],
+            'causalF5HorizonQ20':c['ROLE_Q20_VETO:F5_HORIZON'],
+            'causalFgBullpenQ20':c['ROLE_Q20_VETO:FG_BULLPEN'],
+            'causalFgHorizonQ20':c['ROLE_Q20_VETO:FG_HORIZON'],
+            'causalOffenseFormQ20':c['ROLE_Q20_VETO:OFFENSE_FORM'],
+            'causalStarterSkillQ20':c['ROLE_Q20_VETO:STARTER_SKILL'],
+          }
+
+          decision=summary['scientificDecision']
+          assert decision['globalLeagueRegimeHypothesisExplains2025'] is False
+          assert decision['marketGuardEstablishedSuperior'] is False
+          assert decision['marketGuardRetrospectiveParetoCandidate'] is True
+          assert decision['broadCausalVetoSupported'] is False
+          assert decision['combinedGuardSupported'] is False
+          assert decision['recommendedNextStep']=='FREEZE_CONTROL_FULL_MODULAR_VS_F5_MINUS_0_5_MARKET_GUARD_AS_A_PROSPECTIVE_LIVE_SHADOW_PAIR_WITH_NO_RETROSPECTIVE_RETUNING'
+
+          governance=summary['governance']
+          assert all(governance[k] is False for k in (
+            'productionChanged','currentAPlusPremiumHierarchyChanged','generalV68Fallback','v80Dependency',
+            'historicalPricesUsed','positiveEvEstablished','betEliteProduced','stakeCalculated','automaticBetPlacement'
+          ))
+          assert governance['realFinancialExposure']==0
+          print('REGIME_MARKET_CAUSAL_VETO_RESULT_PARITY_VERIFIED')
+          PY
