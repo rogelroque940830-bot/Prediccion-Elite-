@@ -1,0 +1,69 @@
+name: MLB Router Input Mechanistic Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.test.ts"
+      - "server/mlb-full-modular-v39-snapshot-parity.test.ts"
+      - ".github/workflows/mlb-router-input-mechanistic-parity.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "research/mlb-router-input-parity-v1-contract.json"
+      - "research/mlb-full-modular-v39-expected-outs-snapshot-v1.json"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.test.ts"
+      - "server/mlb-full-modular-v39-snapshot-parity.test.ts"
+      - ".github/workflows/mlb-router-input-mechanistic-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  mechanistic-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove frozen chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT='research/mlb-router-input-parity-v1-contract.json'
+          V39='research/mlb-full-modular-v39-expected-outs-snapshot-v1.json'
+          BUILDER='server/mlb-full-modular-mechanistic-feature-builder.ts'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          V39_ADD="$(git log --diff-filter=A --format=%H -- "$V39" | tail -1)"
+          BUILDER_ADD="$(git log --diff-filter=A --format=%H -- "$BUILDER" | tail -1)"
+          test "$CONTRACT_ADD" = '624da74a251ed9443a2d56a731e5c57db92aa27d'
+          test "$V39_ADD" = '0970e5c35a4610ca8d5a43a737ad6a35173402bd'
+          test "$BUILDER_ADD" = '8880cc961d0444d5d4a995536972ddf0d8c5bad2'
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$V39_ADD"
+          git merge-base --is-ancestor "$V39_ADD" "$BUILDER_ADD"
+          echo MLB_ROUTER_INPUT_FROZEN_CHRONOLOGY_PROVED
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run frozen mechanistic parity tests
+        run: npx tsx --test server/mlb-full-modular-mechanistic-feature-builder.test.ts server/mlb-full-modular-v39-snapshot-parity.test.ts
+
+      - name: Typecheck mechanistic builder
+        run: npx tsc --noEmit --skipLibCheck --module ESNext --moduleResolution bundler --target ES2022 --types node server/mlb-full-modular-mechanistic-feature-builder.ts server/mlb-full-modular-mechanistic-feature-builder.test.ts server/mlb-full-modular-v39-snapshot-parity.test.ts
