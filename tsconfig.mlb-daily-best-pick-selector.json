@@ -6,7 +6,9 @@
     "server/mlb-daily-best-pick-runtime-adapter.ts",
     "server/mlb-daily-best-pick-runtime-adapter.test.ts",
     "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts",
-    "server/mlb-daily-best-pick-ui-view.ts"
+    "server/mlb-daily-best-pick-ui-view.ts",
+    "server/mlb-daily-best-pick-price-view.ts",
+    "server/mlb-daily-best-pick-price-view.test.ts"
   ],
   "exclude": [
     "node_modules",
