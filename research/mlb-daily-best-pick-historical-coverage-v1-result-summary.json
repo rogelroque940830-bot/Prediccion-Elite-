@@ -98,7 +98,9 @@
       "losses": 14,
       "pushes": 5,
       "hitRate": 0.8444444444444444,
-      "pctDaysWithAtLeast1": 16.237623762376238
+      "eligibleSlateDays": 505,
+      "pctDaysWithAtLeast1": 16.237623762376238,
+      "maximumNoPlaySlateDayStreak": 39
     },
     "premiumAFullGameHome": {
       "opportunities": 268,
@@ -107,15 +109,17 @@
       "losses": 72,
       "pushes": 0,
       "hitRate": 0.7313432835820896,
-      "pctDaysWithAtLeast1": 39.603960396039604
+      "eligibleSlateDays": 505,
+      "pctDaysWithAtLeast1": 39.603960396039604,
+      "maximumNoPlaySlateDayStreak": 13
     }
   },
   "productionCoverageBoundary": {
     "exactCurrentStep11cCoverageCertified": false,
+    "reason": "The historical V69 route rows do not preserve the current certified shortlist payloads or current intrinsic rankedGames membership. The current runtime only adapts frozen route evaluations for games in runtime.intrinsic.rankedGames, capped at eight.",
     "certifiedQuantity": "PARENT_ROUTE_AVAILABILITY_CEILING",
     "currentProductionCoverageRelation": "LESS_THAN_OR_EQUAL_TO_PARENT_ROUTE_AVAILABILITY_CEILING",
-    "parentRouteAvailabilityPctUpperBound": 39.603960396039604,
-    "reason": "Historical V69 route rows do not preserve the current certified shortlist payloads or current intrinsic rankedGames membership. Production only adapts frozen route evaluations inside runtime.intrinsic.rankedGames, capped at eight."
+    "parentRouteAvailabilityPctUpperBound": 39.603960396039604
   },
   "interpretation": {
     "dailyPlayExpectationSupported": false,
