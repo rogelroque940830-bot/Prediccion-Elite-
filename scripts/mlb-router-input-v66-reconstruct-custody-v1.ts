@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+// Replay trigger only: no scientific formula, threshold, feature, or output rule changed.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { gzipSync, gunzipSync } from "node:zlib";
