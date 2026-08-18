@@ -1,0 +1,223 @@
+name: MLB Router Input Full Modular Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-router-input-parity-v1
+    paths:
+      - "scripts/mlb-router-input-full-modular-result-diagnostic-v1.py"
+      - "scripts/mlb-router-input-v66-reconstruct-custody-v1.ts"
+      - ".github/workflows/mlb-router-input-full-modular-diagnostic.yml"
+  pull_request:
+    branches:
+      - research/mlb-full-modular-pp-horizon-prospective-v1
+    paths:
+      - "scripts/mlb-router-input-full-modular-result-diagnostic-v1.py"
+      - "scripts/mlb-router-input-v66-reconstruct-custody-v1.ts"
+      - ".github/workflows/mlb-router-input-full-modular-diagnostic.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose-full-modular:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact root Full Modular chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:scripts/mlb-market-state-matchup-modular-router-v1.py)" = '791d7f5a1d499d78a4606e5c77e22a7da5ae2ca6'
+          test "$(git rev-parse HEAD:research/mlb-market-state-matchup-modular-router-v1-contract.json)" = '265f785af088af397a01795cedd5d2a5381390bf'
+          test "$(git rev-parse HEAD:scripts/mlb-multi-market-coverage-report-compat-v1.py)" = 'ef42dbc90692168c65d36d8222c89dc4ad454af2'
+          test "$(git rev-parse HEAD:scripts/mlb-multi-market-coverage-expansion-v1.py)" = '5c67ba71975eb2c851f1c48feeb93605ed39b209'
+          test "$(git rev-parse HEAD:scripts/p0-step12v69-confluence-frequency-quality-frontier.py)" = '4525311f2ea8dab4c3e252f39fbab7de2e7d9a83'
+          test "$(git rev-parse HEAD:research/p0-step12v69-confluence-frequency-quality-frontier-contract.json)" = 'd58e159951bf26da54830a2e8f1eba225679dee0'
+          test "$(git rev-parse HEAD:research/p0-step12v68-fg-winner-prospective-confirmation-contract.json)" = 'e8e3e9dec96ef06c339507c63882378b968e8b8e'
+          test "$(git rev-parse HEAD:server/mlb-frozen-a-plus-classifier.ts)" = 'b5b23d69aab6f9d8f3cef87af86d88a314b1cca2'
+          test "$(git rev-parse HEAD:server/mlb-frozen-research-route-assessor.ts)" = '7f98543b34332a0f40bf2c40bf0154e4c3045540'
+          echo MLB_FULL_MODULAR_DIAGNOSTIC_ROOT_CHAIN_PINNED
+
+      - name: Materialize exact team-state parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN='b2cd717f49d3063c6b7ed679674661961679d2a2'
+          mkdir -p inputs/modular-parent/scripts inputs/modular-parent/research
+          git show "${PIN}:scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py" > inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          git show "${PIN}:research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json" > inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+          test -s inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          test -s inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+
+      - name: Download immutable Step12V3 universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Download original Full Modular result
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-market-state-matchup-modular-router-v1
+          path: inputs/original
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32149000672
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CUSTODY="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          ORIGINAL="$(find inputs/original -type f -name mlb-market-state-matchup-modular-router-v1.json -print -quit)"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          test -n "$V16" && test -s "$V16"
+          test -n "$ORIGINAL" && test -s "$ORIGINAL"
+          test "sha256:$(sha256sum "$CUSTODY" | awk '{print $1}')" = 'sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "original=$ORIGINAL" >> "$GITHUB_OUTPUT"
+          echo "original_sha=sha256:$(sha256sum "$ORIGINAL" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Reconstruct certified V66 runtime custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          npx tsx scripts/mlb-router-input-v66-reconstruct-custody-v1.ts \
+            --input '${{ steps.inputs.outputs.custody }}' \
+            --output work/v66-runtime-reconstructed.jsonl.gz \
+            --report work/v66-runtime-reconstructed-report.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install exact scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Execute exact root Full Modular scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --root inputs/step12v3 \
+            --custody work/v66-runtime-reconstructed.jsonl.gz \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source server/mlb-frozen-a-plus-classifier.ts \
+            --router-source server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --multi-market-scorer scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            --multi-market-contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --contract research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            --out work/full-modular-generated.json
+
+      - name: Diagnose scientific and transport parity
+        id: diagnostic
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          python scripts/mlb-router-input-full-modular-result-diagnostic-v1.py \
+            --original '${{ steps.inputs.outputs.original }}' \
+            --generated work/full-modular-generated.json \
+            --out work/full-modular-diagnostic.json
+
+      - name: Print compact diagnostic regardless of comparator outcome
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -s work/full-modular-diagnostic.json; then
+            python - <<'PY'
+          import json
+          r=json.load(open('work/full-modular-diagnostic.json'))
+          print('FULL_MODULAR_DIAGNOSTIC_CLASSIFICATION',r['classification'])
+          print('FULL_MODULAR_SCIENTIFIC_PARITY',r['scientificParity'])
+          print('FULL_MODULAR_BYTE_IDENTICAL',r['byteIdentical'])
+          print('FULL_MODULAR_JSON_EQUAL',r['fullJsonEqual'])
+          print('FULL_MODULAR_SELECTION_COUNTS',r['selectionCountOriginal'],r['selectionCountGenerated'])
+          print('FULL_MODULAR_IDENTITY_MISMATCHES',r['identityMismatchCount'])
+          print('FULL_MODULAR_OBJECT_MISMATCHES',r['objectMismatchCount'])
+          print('FULL_MODULAR_RECORD',json.dumps(r['generatedFullModularRecord'],sort_keys=True))
+          print('FULL_MODULAR_METRIC_DIFFS',json.dumps(r['metricDiffs'],sort_keys=True))
+          print('FULL_MODULAR_RECURSIVE_DIFF_EXAMPLES',json.dumps(r['recursiveDiffExamples'][:20],sort_keys=True))
+          PY
+          else
+            echo FULL_MODULAR_DIAGNOSTIC_FILE_NOT_CREATED
+          fi
+
+      - name: Upload diagnostic evidence regardless of parity result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-router-input-full-modular-diagnostic-v1
+          path: |
+            work/v66-runtime-reconstructed-report.json
+            work/full-modular-generated.json
+            work/full-modular-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce scientific parity only after diagnostic is persisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s work/full-modular-diagnostic.json
+          python - <<'PY'
+          import json
+          r=json.load(open('work/full-modular-diagnostic.json'))
+          assert r['scientificParity'] is True, r
+          assert r['selectionCountOriginal']==236 and r['selectionCountGenerated']==236
+          assert r['identityMismatchCount']==0
+          assert r['objectMismatchCount']==0
+          assert r['generatedFullModularRecord']['wins']==177
+          assert r['generatedFullModularRecord']['losses']==58
+          assert r['generatedFullModularRecord']['pushes']==1
+          print('MLB_FULL_MODULAR_DIAGNOSTIC_SCIENTIFIC_PARITY_GATE_PASSED')
+          PY
