@@ -13,6 +13,17 @@ on:
       - "server/mlb-daily-best-pick-runtime-adapter.ts"
       - "server/mlb-intrinsic-edge.ts"
       - "server/mlb-shortlist.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-daily-best-pick-historical-coverage-v1-contract.json"
+      - "scripts/mlb-daily-best-pick-historical-coverage-v1.py"
+      - ".github/workflows/mlb-daily-best-pick-historical-coverage.yml"
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-intrinsic-edge.ts"
+      - "server/mlb-shortlist.ts"
 
 permissions:
   contents: read
