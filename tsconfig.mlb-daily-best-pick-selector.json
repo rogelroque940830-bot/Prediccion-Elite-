@@ -5,7 +5,11 @@
     "server/mlb-daily-best-pick-selector.test.ts",
     "server/mlb-daily-best-pick-runtime-adapter.ts",
     "server/mlb-daily-best-pick-runtime-adapter.test.ts",
-    "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts"
+    "server/mlb-daily-best-pick-runtime-adapter.integration.test.ts",
+    "server/mlb-daily-best-pick-ui-view.ts",
+    "server/mlb-unified-v16-ui-routes.ts",
+    "server/mlb-unified-v16-ui-routes.test.ts",
+    "server/mlb-unified-v16-ui-orchestration.test.ts"
   ],
   "exclude": [
     "node_modules",
