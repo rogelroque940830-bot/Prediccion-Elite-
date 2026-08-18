@@ -1,0 +1,307 @@
+{
+  "schemaVersion": "courtedge-mlb-regime-market-causal-veto-result-summary.v1",
+  "classification": "RETROSPECTIVE_DIAGNOSTIC_COMPLETE_NO_PRODUCTION_WINNER_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "sourceArtifact": {
+    "workflowRunId": 32152952393,
+    "jobId": 95763137733,
+    "artifactId": 9330525886,
+    "artifactName": "mlb-regime-market-causal-veto-v1",
+    "artifactDigest": "sha256:4e901e1cfa989a427b017695b48cc8bc61684b2a3234356e6e8b576946301c5c",
+    "sourceHeadSha": "4c055811806702abd5de330c770c9a2e48de8bd7"
+  },
+  "scientificChronology": {
+    "protocolCommitBeforeScorer": "2d78aadfeafc0c2f8596a537d37fa25b2b1a7476",
+    "firstScorerCommit": "9dad59fe6afcbc555906bb820589e0bbc80c2c5a",
+    "retrospectiveEvaluationIsIndependentConfirmation": false,
+    "adaptiveMarketGuardHypothesisDisclosed": true,
+    "prospectiveConfirmationRequired": true
+  },
+  "sample": {
+    "trainingRows2022": 2398,
+    "calibrationRows2023": 2399,
+    "evaluationRows2024To2026Ytd": 6610,
+    "eligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305,
+    "controlCandidatePoolRows": 576
+  },
+  "policyResults": {
+    "CONTROL_FULL_MODULAR": {
+      "shadowPickDates": 236,
+      "combinedCoveragePct": 86.33663366336634,
+      "wins": 177,
+      "losses": 58,
+      "pushes": 1,
+      "decisive": 235,
+      "hitRate": 0.7531914893617021,
+      "wilson95": {
+        "lower": 0.694288113258763,
+        "upper": 0.8039503441161648
+      },
+      "brier": 0.18563005105638622,
+      "absoluteCalibrationGap": 0.02649436830452323,
+      "maxNoPlayStreak": 6
+    },
+    "CHALLENGER_MARKET_GUARD": {
+      "shadowPickDates": 234,
+      "combinedCoveragePct": 85.94059405940594,
+      "wins": 176,
+      "losses": 57,
+      "pushes": 1,
+      "decisive": 233,
+      "hitRate": 0.7553648068669528,
+      "wilson95": {
+        "lower": 0.6966749662406198,
+        "upper": 0.8059313109627978
+      },
+      "brier": 0.18569199510073764,
+      "absoluteCalibrationGap": 0.025777114786385003,
+      "maxNoPlayStreak": 6
+    },
+    "CHALLENGER_CAUSAL_VETO": {
+      "shadowPickDates": 205,
+      "combinedCoveragePct": 80.1980198019802,
+      "wins": 147,
+      "losses": 58,
+      "pushes": 0,
+      "decisive": 205,
+      "hitRate": 0.7170731707317073,
+      "wilson95": {
+        "lower": 0.6509425758778981,
+        "upper": 0.7743270168072851
+      },
+      "brier": 0.20632018193092228,
+      "absoluteCalibrationGap": 0.05714839594624155,
+      "maxNoPlayStreak": 8
+    },
+    "CHALLENGER_MARKET_X_CAUSAL_VETO": {
+      "shadowPickDates": 205,
+      "combinedCoveragePct": 80.1980198019802,
+      "wins": 148,
+      "losses": 57,
+      "pushes": 0,
+      "decisive": 205,
+      "hitRate": 0.7219512195121951,
+      "wilson95": {
+        "lower": 0.6561197687486989,
+        "upper": 0.7788153754246368
+      },
+      "brier": 0.20421617751177545,
+      "absoluteCalibrationGap": 0.05355444920972918,
+      "maxNoPlayStreak": 8
+    }
+  },
+  "paretoPolicies": [
+    "CONTROL_FULL_MODULAR",
+    "CHALLENGER_MARKET_GUARD"
+  ],
+  "marketGuardDiagnostics": {
+    "blockedMarket": "F5_RL_HOME_MINUS_0_5",
+    "candidateLevelVetoCount": 114,
+    "controlDatesRemovedWithoutReplacement": 2,
+    "controlDatesReplacedByDifferentCandidate": 8,
+    "winsRemovedWithoutReplacement": 2,
+    "lossesRemovedWithoutReplacement": 0,
+    "removedDatesBySeason": {
+      "2024": {
+        "picks": 1,
+        "wins": 1,
+        "losses": 0
+      },
+      "2025": {
+        "picks": 0,
+        "wins": 0,
+        "losses": 0
+      },
+      "2026_YTD": {
+        "picks": 1,
+        "wins": 1,
+        "losses": 0
+      }
+    },
+    "pairedVsControl": {
+      "overlapDecisiveDates": 233,
+      "bothCorrect": 175,
+      "bothWrong": 57,
+      "challengerOnlyCorrect": 1,
+      "controlOnlyCorrect": 0,
+      "discordantDates": 1,
+      "unadjustedPValue": 1.0,
+      "holmAdjustedPValue": 1.0,
+      "holmRejectAt005": false
+    },
+    "interpretation": "DESCRIPTIVE_PARETO_TRADEOFF_ONLY_NOT_ESTABLISHED_SUPERIORITY"
+  },
+  "causalVetoDiagnostics": {
+    "controlDatesRemovedWithoutReplacement": 31,
+    "controlDatesReplacedByDifferentCandidate": 46,
+    "winsRemovedWithoutReplacement": 26,
+    "lossesRemovedWithoutReplacement": 5,
+    "winRemovalRate": 0.14689265536723164,
+    "lossRemovalRate": 0.08620689655172414,
+    "lossToWinRemovalLift": 0.5868700265251989,
+    "removedProtectedGeometry": {
+      "picks": 29,
+      "wins": 25,
+      "losses": 4,
+      "hitRate": 0.8620689655172413
+    },
+    "pairedVsControl": {
+      "overlapDecisiveDates": 204,
+      "bothCorrect": 141,
+      "bothWrong": 48,
+      "challengerOnlyCorrect": 5,
+      "controlOnlyCorrect": 10,
+      "discordantDates": 15,
+      "unadjustedPValue": 0.30175781249999994,
+      "holmAdjustedPValue": 0.9052734374999998,
+      "holmRejectAt005": false
+    },
+    "decision": "REJECT_CURRENT_BROAD_Q20_CAUSAL_VETO_AS_ROUTER_CHALLENGER"
+  },
+  "combinedGuardDiagnostics": {
+    "controlDatesRemovedWithoutReplacement": 31,
+    "controlDatesReplacedByDifferentCandidate": 51,
+    "winsRemovedWithoutReplacement": 26,
+    "lossesRemovedWithoutReplacement": 5,
+    "pairedVsControl": {
+      "overlapDecisiveDates": 204,
+      "bothCorrect": 141,
+      "bothWrong": 47,
+      "challengerOnlyCorrect": 6,
+      "controlOnlyCorrect": 10,
+      "discordantDates": 16,
+      "unadjustedPValue": 0.454498291015625,
+      "holmAdjustedPValue": 0.90899658203125,
+      "holmRejectAt005": false
+    },
+    "decision": "REJECT_CURRENT_COMBINED_GUARD_AS_ROUTER_CHALLENGER"
+  },
+  "leagueRegimeDiagnostic": {
+    "definition": "TRAILING_28D_STRICTLY_PRIOR_MAHALANOBIS_STRESS_DIAGNOSTIC_ONLY",
+    "validationStressThreshold": 4.20215388289404,
+    "2024": {
+      "eligibleDateStates": {
+        "NORMAL": 170,
+        "STRESS": 5,
+        "UNKNOWN": 10
+      },
+      "controlNormal": {
+        "picks": 81,
+        "wins": 65,
+        "losses": 16,
+        "hitRate": 0.8024691358024691,
+        "brier": 0.15486613701810636,
+        "absoluteCalibrationGap": 0.026449067862035824
+      },
+      "controlStress": {
+        "picks": 1,
+        "wins": 1,
+        "losses": 0,
+        "hitRate": 1.0
+      }
+    },
+    "2025": {
+      "eligibleDateStates": {
+        "NORMAL": 127,
+        "STRESS": 47,
+        "UNKNOWN": 10
+      },
+      "controlNormal": {
+        "picks": 61,
+        "wins": 41,
+        "losses": 19,
+        "pushes": 1,
+        "decisive": 60,
+        "hitRate": 0.6833333333333333,
+        "brier": 0.22715150234636355,
+        "absoluteCalibrationGap": 0.09686309239189661
+      },
+      "controlStress": {
+        "picks": 18,
+        "wins": 12,
+        "losses": 6,
+        "hitRate": 0.6666666666666666,
+        "brier": 0.23262890830768923,
+        "absoluteCalibrationGap": 0.09951751955678012
+      }
+    },
+    "2026_YTD": {
+      "eligibleDateStates": {
+        "NORMAL": 108,
+        "STRESS": 18,
+        "UNKNOWN": 10
+      },
+      "controlNormal": {
+        "picks": 58,
+        "wins": 45,
+        "losses": 13,
+        "hitRate": 0.7758620689655172,
+        "brier": 0.17210170136461847,
+        "absoluteCalibrationGap": 0.007582898923815695
+      },
+      "controlStress": {
+        "picks": 12,
+        "wins": 9,
+        "losses": 3,
+        "hitRate": 0.75,
+        "brier": 0.20579965437902895,
+        "absoluteCalibrationGap": 0.041899854310140316
+      }
+    },
+    "diagnosis": "2025_HAS_MORE_STRESS_DATES_BUT_GLOBAL_STRESS_STATE_DOES_NOT_EXPLAIN_THE_FAILURE_BECAUSE_2025_NORMAL_AND_STRESS_CONTROL_PERFORMANCE_ARE_BOTH_WEAK_AND_SIMILARLY_MISCALIBRATED"
+  },
+  "marketGuardBySeason": {
+    "2024": {
+      "controlHitRate": 0.8095238095238095,
+      "guardHitRate": 0.8072289156626506,
+      "controlShadowPicks": 84,
+      "guardShadowPicks": 83
+    },
+    "2025": {
+      "controlHitRate": 0.675,
+      "guardHitRate": 0.675,
+      "controlShadowPicks": 81,
+      "guardShadowPicks": 81,
+      "conclusion": "NO_EFFECT_ON_2025_FAILURE"
+    },
+    "2026_YTD": {
+      "controlHitRate": 0.7746478873239436,
+      "guardHitRate": 0.7857142857142857,
+      "controlShadowPicks": 71,
+      "guardShadowPicks": 70
+    }
+  },
+  "vetoReasonCounts": {
+    "marketGuardF5RunLineMinus0_5": 114,
+    "causalRequiredRoleUnobservable": 12,
+    "causalF3HorizonQ20": 5,
+    "causalF5BullpenQ20": 185,
+    "causalF5HorizonQ20": 20,
+    "causalFgBullpenQ20": 96,
+    "causalFgHorizonQ20": 13,
+    "causalOffenseFormQ20": 112,
+    "causalStarterSkillQ20": 29
+  },
+  "scientificDecision": {
+    "globalLeagueRegimeHypothesisExplains2025": false,
+    "marketGuardEstablishedSuperior": false,
+    "marketGuardRetrospectiveParetoCandidate": true,
+    "broadCausalVetoSupported": false,
+    "combinedGuardSupported": false,
+    "recommendedNextStep": "FREEZE_CONTROL_FULL_MODULAR_VS_F5_MINUS_0_5_MARKET_GUARD_AS_A_PROSPECTIVE_LIVE_SHADOW_PAIR_WITH_NO_RETROSPECTIVE_RETUNING",
+    "reason": "The only non-dominated new challenger is the simple market guard, but its evidence is adaptive, its aggregate gain is tiny, it costs two shadow dates, it does not repair 2025, and it is not statistically superior. Future unseen prospective dates are therefore the correct discriminator rather than another retrospective threshold search."
+  },
+  "governance": {
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "generalV68Fallback": false,
+    "v80Dependency": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}
