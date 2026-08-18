@@ -21,6 +21,7 @@ import {
 import { createMlbUnifiedV16DefaultLiveEvidenceProviders } from "./mlb-unified-v16-live-providers";
 import { auditMlbV16NoPlayFunnel } from "./mlb-v16-no-play-funnel-audit";
 import { buildMlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
+import { buildMlbDailyBestPickPriceViewFailClosed } from "./mlb-daily-best-pick-price-safe-view";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
 export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v2" as const;
@@ -214,6 +215,11 @@ export async function executeMlbUnifiedV16UiCommand(
   });
   const noPlayAudit = auditMlbV16NoPlayFunnel(result);
   const dailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
+  const dailyBestPickPrice = buildMlbDailyBestPickPriceViewFailClosed({
+    priced: result,
+    dailyBestPick,
+    onRejected: (error) => console.error("Daily BEST PICK price visibility rejected:", error),
+  });
 
   return {
     httpStatus: 200,
@@ -227,10 +233,11 @@ export async function executeMlbUnifiedV16UiCommand(
         summary: result.summary,
         prepriceSummary: result.preprice.summary,
         dailyBestPick,
+        dailyBestPickPrice,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. Daily BEST PICK is exposed only from the trusted FINAL frozen preprice runtime; it adds no threshold, General/V68/V80 fallback, stake, or automatic wager.",
+      nextBoundary: "Priced V16 evidence run completed. Daily BEST PICK remains frozen pre-price; price visibility evaluates only the exact selected game/market/side through the existing operating envelope and cannot create BET_ELITE, fallback, stake, or an automatic wager.",
       policy: {
         explicitInvocationRequired: true,
         certifiedServerAssemblyComplete: true,
@@ -240,6 +247,11 @@ export async function executeMlbUnifiedV16UiCommand(
         dailyBestPickChangesFrozenRouting: false,
         dailyBestPickGeneralV68FallbackAllowed: false,
         dailyBestPickV80DependencyAllowed: false,
+        dailyBestPickPriceExactIdentityOnly: true,
+        dailyBestPickPriceMayChangeSportingSelection: false,
+        dailyBestPickPriceFallbackAllowed: false,
+        dailyBestPickPriceAddsThreshold: false,
+        dailyBestPickPriceProducesBetElite: false,
         browserReceivesProviderSecret: false,
         browserMayForgeCertifiedInputs: false,
         automaticPolling: false,
