@@ -1,0 +1,178 @@
+{
+  "schemaVersion": "courtedge-mlb-full-modular-aplus-premium-cross-anatomy-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_DYNAMIC_CROSS_ANATOMY_DISCOVERY_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "purpose": "Test whether characteristics already frozen in Premium A and A+ can improve which already-eligible Full Modular candidate is selected on a parent NO_PLAY date, using dynamic context interactions rather than new universal hard thresholds.",
+  "scientificChronology": {
+    "protocolMustPrecedeScorer": true,
+    "2024To2026HaveAlreadyBeenInspectedElsewhere": true,
+    "retrospectiveEvaluationIsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "postResultFeatureAdditionAllowed": false,
+    "postResultInteractionAdditionAllowed": false,
+    "postResultThresholdSearchAllowed": false,
+    "postResultRankingRuleEditingAllowed": false,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureSeasonTrainingAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsPredictiveFeatures": false
+  },
+  "parent": {
+    "branch": "research/mlb-market-state-matchup-modular-router-v1",
+    "commit": "e352e25c131a53536745323bcd3268dcec75a66d",
+    "artifactRunId": 32149000672,
+    "artifactId": 9328974424,
+    "artifactDigest": "sha256:bcaa835da7b61077a1bb5de734852906f5781074e8480ab9d97b9c62a7c5765b",
+    "controlPolicy": "CHALLENGER_FULL_MODULAR",
+    "expectedShadowPickDates": 236,
+    "expectedCombinedCoveragePct": 86.33663366336634,
+    "currentAPlusPremiumDatesMayBeReplaced": false,
+    "maximumDailyShadowPicks": 1
+  },
+  "canonicalPregameSource": {
+    "step12v3RunId": 31659518059,
+    "artifactId": 9166442982,
+    "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "seasons": ["2022", "2023", "2024", "2025", "2026_YTD"],
+    "expectedRows": {"2022": 2398, "2023": 2399, "2024": 2430, "2025": 2430, "2026_YTD": 1750},
+    "sameDateUpdatesForbidden": true
+  },
+  "frozenPremiumAHeritage": {
+    "source": "research/p0-step12v2-a-plus-consensus-frozen.json",
+    "selectedSideSymmetricDiagnosticOnly": true,
+    "exactPillars": [
+      {"feature": "team_win10_diff", "selectedSideThreshold": 0.09999999999999998},
+      {"feature": "starter_kbb_adv", "selectedSideThreshold": 0.02481042579422841},
+      {"feature": "lineup_exposure_rate_adv", "selectedSideThreshold": 0.09876543209876554}
+    ],
+    "importantBoundary": "An away-side symmetric analogue is a research representation of Premium-like support, not a redefinition of production Premium A."
+  },
+  "frozenAPlusHeritage": {
+    "source": "research/p0-step12v2-a-plus-consensus-frozen.json",
+    "c4SelectedSideProbabilityReference": 0.69,
+    "full13SelectedSideProbabilityReference": 0.64,
+    "exactC4Features": ["lineup_exposure_rate_adv", "starter_kbb_adv", "combined_team_rs10", "team_rd10_diff"],
+    "exactFull13Features": [
+      "team_rd10_diff", "team_win10_diff", "starter_kbb_adv", "team_ra10_adv",
+      "lineup_exposure_rate_adv", "starter_runrisk_adv", "team_rs10_diff", "starter_hr_adv",
+      "min_probable_prior_bf", "lineup_continuity_rate_adv", "combined_starter_kbb",
+      "combined_team_rs10", "combined_team_ra10"
+    ],
+    "selectedSideProbabilityForAway": "ONE_MINUS_FROZEN_HOME_PROBABILITY",
+    "productionAPlusDefinitionChanged": false
+  },
+  "heritageFeatureSet": {
+    "directionalSelectedSideFeatures": [
+      "team_win10_diff", "starter_kbb_adv", "lineup_exposure_rate_adv", "team_rd10_diff",
+      "team_ra10_adv", "starter_runrisk_adv", "team_rs10_diff", "starter_hr_adv",
+      "lineup_continuity_rate_adv"
+    ],
+    "nonDirectionalContextFeatures": [
+      "min_probable_prior_bf", "combined_starter_kbb", "combined_team_rs10", "combined_team_ra10"
+    ],
+    "derivedFrozenSignals": [
+      "premium_core_support_count_0_to_3", "premium_core_weakest_margin",
+      "frozen_c4_selected_side_probability", "frozen_full13_selected_side_probability",
+      "frozen_consensus_weakest_probability_margin"
+    ],
+    "missingValuePolicy": "2022_TRAINING_MEDIAN",
+    "standardizationPolicy": "FIT_ON_STRICTLY_PRIOR_TRAINING_ROWS_ONLY"
+  },
+  "fullModularContextSet": {
+    "continuous": ["modelProbability", "qualityPercentile", "qualityScore", "structureScore", "structureObservedFeatureFraction"],
+    "categorical": ["market", "horizon", "lineGeometry", "strengthTier", "matchupStructure", "frontier", "side"],
+    "teamNameSpecificInputsAllowed": false,
+    "playerNameSpecificRulesAllowed": false
+  },
+  "dynamicInteractionSet": {
+    "principle": "The same heritage signal may carry different weight according to the actual game context; interactions are learned rather than converted into one global acceptance cutoff.",
+    "exactInteractions": [
+      "premium_core_weakest_margin_X_strengthTier",
+      "premium_core_weakest_margin_X_lineGeometry",
+      "frozen_consensus_weakest_probability_margin_X_horizon",
+      "frozen_consensus_weakest_probability_margin_X_lineGeometry",
+      "frozen_c4_selected_side_probability_X_market",
+      "frozen_full13_selected_side_probability_X_market",
+      "starter_kbb_selected_adv_X_horizon",
+      "team_win10_selected_diff_X_strengthTier",
+      "lineup_exposure_selected_adv_X_matchupStructure",
+      "team_ra10_selected_adv_X_horizon",
+      "starter_runrisk_selected_adv_X_horizon",
+      "structureScore_X_frozen_consensus_weakest_probability_margin"
+    ],
+    "unlistedInteractionsAllowed": false
+  },
+  "trainingAndEvaluation": {
+    "unit": "ALREADY_FULL_MODULAR_ELIGIBLE_CANDIDATE_ROW",
+    "target": "SELECTED_MARKET_SIDE_SETTLEMENT_WIN_AMONG_DECISIVE_ROWS",
+    "pushHandling": "EXCLUDE_FROM_MODEL_FIT_AND_BINARY_SCORING_BUT_PRESERVE_FOR_DAILY_SELECTION_SETTLEMENT_REPORTING",
+    "modelFamily": "L2_REGULARIZED_LOGISTIC_REGRESSION",
+    "regularizationC": 0.25,
+    "classWeight": null,
+    "solver": "lbfgs",
+    "maxIterations": 5000,
+    "temporalProtocol": {
+      "2024": "TRAIN_ON_2023_ONLY",
+      "2025": "TRAIN_ON_2023_AND_2024_ONLY",
+      "2026_YTD": "TRAIN_ON_2023_2024_2025_ONLY"
+    },
+    "sameSeasonOutcomeMayTrainSameSeason": false,
+    "futureSeasonOutcomeMayTrainPriorSeason": false
+  },
+  "policies": {
+    "CONTROL_FULL_MODULAR": {
+      "candidateEligibility": "EXACT_PARENT_FULL_MODULAR",
+      "dailyRanking": ["DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    },
+    "CHALLENGER_AP_CORE_DYNAMIC_RERANK": {
+      "candidateEligibility": "EXACT_PARENT_FULL_MODULAR",
+      "modelInputs": [
+        "modelProbability", "qualityPercentile", "premium_core_support_count_0_to_3",
+        "premium_core_weakest_margin", "frozen_c4_selected_side_probability",
+        "frozen_full13_selected_side_probability"
+      ],
+      "dailyRanking": ["DESC_dynamicMetaProbability", "DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    },
+    "CHALLENGER_AP_CONTEXT_DYNAMIC_RERANK": {
+      "candidateEligibility": "EXACT_PARENT_FULL_MODULAR",
+      "modelInputs": "heritageFeatureSet_PLUS_fullModularContextSet_PLUS_exact_dynamicInteractionSet",
+      "dailyRanking": ["DESC_dynamicMetaProbability", "DESC_qualityPercentile", "DESC_modelProbability", "ASC_market", "ASC_gamePk"]
+    }
+  },
+  "coverageLock": {
+    "challengersMayDeleteCandidate": false,
+    "challengersMayCreateCandidateOutsideParentFullModular": false,
+    "challengersMustHaveSameShadowPickDatesAsControl": true,
+    "expectedShadowPickDates": 236,
+    "expectedCombinedCoveragePct": 86.33663366336634,
+    "forcedDailyPlayAllowed": false
+  },
+  "reporting": {
+    "primaryMetrics": [
+      "wins", "losses", "pushes", "decisiveHitRate", "wilson95", "decisiveBrierScore",
+      "logLoss", "rocAuc", "absoluteCalibrationGap", "sameDateCoverageParity",
+      "bySeason", "byMarket", "byStrengthTier", "byLineGeometry", "byMatchupStructure",
+      "premiumHeritageCrossTables", "aPlusHeritageCrossTables"
+    ],
+    "pairedPrimaryComparator": "CONTROL_FULL_MODULAR",
+    "pairedTest": "TWO_SIDED_EXACT_BINOMIAL_ON_DISCORDANT_DAILY_CORRECTNESS",
+    "multipleComparisonCorrection": "HOLM_BONFERRONI",
+    "familyWiseAlpha": 0.05,
+    "winnerMayBeDeclaredFromThisRetrospectiveStudy": false,
+    "singleWeightedUtilityScoreAllowed": false
+  },
+  "promotionBoundary": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "fullModularProductionPromoted": false,
+    "generalV68Fallback": false,
+    "v80Dependency": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "prospectiveLiveShadowRequiredBeforeAnyPromotion": true
+  }
+}
