@@ -21,6 +21,7 @@ import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
 import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe-odds-routes";
 import { registerMlbUnifiedPricedV16Routes } from "./mlb-unified-priced-v16-routes";
 import { registerMlbUnifiedV16UiRoutes } from "./mlb-unified-v16-ui-routes";
+import { createMlbUnifiedEliteLowerTierLiveProvider } from "./mlb-unified-elite-lower-tier-live-provider";
 import { registerMlbTeamTotalShadowRoutes } from "./mlb-team-total-shadow-routes";
 import { registerMlbBatterProspectiveCustodyRoutes } from "./mlb-batter-prospective-custody-routes";
 import { registerWnbaS6bRoutes } from "./wnba-s6b-routes";
@@ -68,7 +69,10 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbBatterProspectiveCustodyRoutes(app);
   // Browser-facing explicit preflight: verifies the official slate and server custody without
   // crossing the paid odds boundary or accepting forged certified sporting inputs from the UI.
-  registerMlbUnifiedV16UiRoutes(app);
+  // Lower-tier PP_HORIZON / Full Modular evidence is injected server-side and remains shadow-only.
+  registerMlbUnifiedV16UiRoutes(app, {
+    unifiedEliteLowerTierShadowProvider: createMlbUnifiedEliteLowerTierLiveProvider(),
+  });
   // Explicit command route for the full V16 priced runner. It is auth-protected by the global
   // private-read/write middleware registered before domain routes and never polls or self-triggers.
   registerMlbUnifiedPricedV16Routes(app);
