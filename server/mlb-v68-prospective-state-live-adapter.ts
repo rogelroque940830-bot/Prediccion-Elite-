@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import type { MlbFull13LivePregameInput } from "./mlb-full13-live-feature-builder";
 import type {
   FrozenV39LiveSideInput,
@@ -19,6 +21,13 @@ const DEFAULT_STATE_BRANCH = "data/p0-step12v68-prospective";
 const DEFAULT_REPOSITORY = "rogelroque940830-bot/Prediccion-Elite-";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+type CanonicalJsonNode =
+  | { kind: "object"; entries: Array<[string, CanonicalJsonNode]> }
+  | { kind: "array"; values: CanonicalJsonNode[] }
+  | { kind: "string"; value: string }
+  | { kind: "number"; raw: string }
+  | { kind: "literal"; raw: "true" | "false" | "null" };
 
 interface V39Aggregate {
   starts?: number;
@@ -113,6 +122,146 @@ function validIsoDate(value: unknown): value is string {
 
 function validDigest(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+class CanonicalJsonParser {
+  private index = 0;
+
+  constructor(private readonly text: string) {}
+
+  parse(): CanonicalJsonNode {
+    const value = this.parseValue();
+    this.skipWhitespace();
+    if (this.index !== this.text.length) throw new Error("V68_LIVE_STATE_JSON_TRAILING_CONTENT");
+    return value;
+  }
+
+  private parseValue(): CanonicalJsonNode {
+    this.skipWhitespace();
+    const char = this.text[this.index];
+    if (char === "{") return this.parseObject();
+    if (char === "[") return this.parseArray();
+    if (char === "\"") return { kind: "string", value: this.parseString() };
+    if (char === "-" || (char >= "0" && char <= "9")) return this.parseNumber();
+    for (const literal of ["true", "false", "null"] as const) {
+      if (this.text.startsWith(literal, this.index)) {
+        this.index += literal.length;
+        return { kind: "literal", raw: literal };
+      }
+    }
+    throw new Error(`V68_LIVE_STATE_JSON_TOKEN_INVALID:${this.index}`);
+  }
+
+  private parseObject(): CanonicalJsonNode {
+    this.index += 1;
+    this.skipWhitespace();
+    const entries: Array<[string, CanonicalJsonNode]> = [];
+    if (this.text[this.index] === "}") {
+      this.index += 1;
+      return { kind: "object", entries };
+    }
+    while (this.index < this.text.length) {
+      this.skipWhitespace();
+      if (this.text[this.index] !== "\"") throw new Error("V68_LIVE_STATE_JSON_OBJECT_KEY_INVALID");
+      const key = this.parseString();
+      this.skipWhitespace();
+      if (this.text[this.index] !== ":") throw new Error("V68_LIVE_STATE_JSON_OBJECT_COLON_MISSING");
+      this.index += 1;
+      entries.push([key, this.parseValue()]);
+      this.skipWhitespace();
+      const next = this.text[this.index];
+      if (next === "}") {
+        this.index += 1;
+        return { kind: "object", entries };
+      }
+      if (next !== ",") throw new Error("V68_LIVE_STATE_JSON_OBJECT_SEPARATOR_INVALID");
+      this.index += 1;
+    }
+    throw new Error("V68_LIVE_STATE_JSON_OBJECT_UNTERMINATED");
+  }
+
+  private parseArray(): CanonicalJsonNode {
+    this.index += 1;
+    this.skipWhitespace();
+    const values: CanonicalJsonNode[] = [];
+    if (this.text[this.index] === "]") {
+      this.index += 1;
+      return { kind: "array", values };
+    }
+    while (this.index < this.text.length) {
+      values.push(this.parseValue());
+      this.skipWhitespace();
+      const next = this.text[this.index];
+      if (next === "]") {
+        this.index += 1;
+        return { kind: "array", values };
+      }
+      if (next !== ",") throw new Error("V68_LIVE_STATE_JSON_ARRAY_SEPARATOR_INVALID");
+      this.index += 1;
+    }
+    throw new Error("V68_LIVE_STATE_JSON_ARRAY_UNTERMINATED");
+  }
+
+  private parseString(): string {
+    const start = this.index;
+    this.index += 1;
+    let escaped = false;
+    while (this.index < this.text.length) {
+      const char = this.text[this.index++];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        return JSON.parse(this.text.slice(start, this.index));
+      }
+    }
+    throw new Error("V68_LIVE_STATE_JSON_STRING_UNTERMINATED");
+  }
+
+  private parseNumber(): CanonicalJsonNode {
+    const rest = this.text.slice(this.index);
+    const match = rest.match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+    if (!match) throw new Error(`V68_LIVE_STATE_JSON_NUMBER_INVALID:${this.index}`);
+    this.index += match[0].length;
+    return { kind: "number", raw: match[0] };
+  }
+
+  private skipWhitespace(): void {
+    while (this.index < this.text.length && /\s/.test(this.text[this.index])) this.index += 1;
+  }
+}
+
+function canonicalJson(node: CanonicalJsonNode): string {
+  if (node.kind === "string") return JSON.stringify(node.value);
+  if (node.kind === "number" || node.kind === "literal") return node.raw;
+  if (node.kind === "array") return `[${node.values.map(canonicalJson).join(",")}]`;
+  const sorted = [...node.entries].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+  return `{${sorted.map(([key, value]) => `${JSON.stringify(key)}:${canonicalJson(value)}`).join(",")}}`;
+}
+
+function verifyEmbeddedStateDigest(sourceText: string, claimedDigest: string): void {
+  if (!validDigest(claimedDigest)) throw new Error("V68_LIVE_STATE_DIGEST_MISSING");
+  const root = new CanonicalJsonParser(sourceText).parse();
+  if (root.kind !== "object") throw new Error("V68_LIVE_STATE_SHAPE_INVALID");
+  const digestEntries = root.entries.filter(([key]) => key === "stateDigest");
+  if (digestEntries.length !== 1) throw new Error("V68_LIVE_STATE_DIGEST_FIELD_INVALID");
+  const digestNode = digestEntries[0][1];
+  if (digestNode.kind !== "string" || digestNode.value.toLowerCase() !== claimedDigest.toLowerCase()) {
+    throw new Error("V68_LIVE_STATE_DIGEST_FIELD_INVALID");
+  }
+  const unsigned: CanonicalJsonNode = {
+    kind: "object",
+    entries: root.entries.filter(([key]) => key !== "stateDigest"),
+  };
+  const actualDigest = createHash("sha256").update(canonicalJson(unsigned), "utf8").digest("hex");
+  if (actualDigest.toLowerCase() !== claimedDigest.toLowerCase()) {
+    throw new Error(`V68_LIVE_STATE_DIGEST_MISMATCH:${claimedDigest}:${actualDigest}`);
+  }
 }
 
 function assertStateShape(raw: unknown, targetDate: string): V68ProspectiveState {
@@ -265,11 +414,13 @@ function pitcherPitchTypeTotals(state: V68ProspectiveState): PitcherPitchTypeTot
   return rows;
 }
 
-function decodeGitHubContent(payload: any): unknown {
-  if (payload?.schemaVersion) return payload;
+function decodeGitHubContent(payload: any): { raw: unknown; sourceText: string } {
   if (typeof payload?.content === "string") {
-    const text = Buffer.from(payload.content.replace(/\s+/g, ""), "base64").toString("utf8");
-    return JSON.parse(text);
+    const sourceText = Buffer.from(payload.content.replace(/\s+/g, ""), "base64").toString("utf8");
+    return { raw: JSON.parse(sourceText), sourceText };
+  }
+  if (payload?.schemaVersion) {
+    return { raw: payload, sourceText: JSON.stringify(payload) };
   }
   throw new Error("V68_LIVE_STATE_GITHUB_PAYLOAD_INVALID");
 }
@@ -366,7 +517,10 @@ export class MlbV68ProspectiveStateLiveAdapter {
       });
       if (!response.ok) throw new Error(`V68_LIVE_STATE_HTTP_${response.status}`);
       const payload = await response.json();
-      return assertStateShape(decodeGitHubContent(payload), targetOfficialDate);
+      const decoded = decodeGitHubContent(payload);
+      const state = assertStateShape(decoded.raw, targetOfficialDate);
+      verifyEmbeddedStateDigest(decoded.sourceText, state.stateDigest);
+      return state;
     } finally {
       clearTimeout(timer);
     }
