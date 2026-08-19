@@ -317,9 +317,23 @@ export class MlbC4CertifiedMaterializer {
     const unique = identities.filter((entry, index) => index === 0 || entry.gamePk !== identities[index - 1].gamePk);
     if (unique.length === 0) throw new Error(`C4_CERTIFIED_NO_PRIOR_FINAL_GAMES:${cutoffDate}`);
 
-    const parsed = await mapConcurrent(unique, this.maxConcurrency, async (identity) =>
-      parseHistoricalGame(await this.fetchGameFeed(identity.gamePk), identity),
-    );
+    // MLB's schedule endpoint can occasionally mark a historical row FINAL while the
+    // corresponding live-feed status remains stale/non-final. Such a row is not safe to
+    // admit into the certified historical feature set, but it also must not poison every
+    // current game on the slate. Quarantine only that source-inconsistent prior row; all
+    // other historical integrity failures still fail closed.
+    const parsedRows = await mapConcurrent(unique, this.maxConcurrency, async (identity): Promise<ParsedHistoricalGame | null> => {
+      try {
+        return parseHistoricalGame(await this.fetchGameFeed(identity.gamePk), identity);
+      } catch (error) {
+        if (error instanceof Error && error.message === `C4_CERTIFIED_GAME_NOT_FINAL:${identity.gamePk}`) {
+          return null;
+        }
+        throw error;
+      }
+    });
+    const parsed = parsedRows.filter((game): game is ParsedHistoricalGame => game !== null);
+    if (parsed.length === 0) throw new Error(`C4_CERTIFIED_NO_FEED_VERIFIED_PRIOR_FINAL_GAMES:${cutoffDate}`);
 
     const teamHistoryByTeam = new Map<number, C4PriorTeamGame[]>();
     const lineupHistoryByTeam = new Map<number, C4PriorLineupSnapshot[]>();
