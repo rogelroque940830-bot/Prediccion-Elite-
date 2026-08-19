@@ -36,6 +36,7 @@ export interface MlbUnifiedEliteLowerTierLiveProviderDependencies {
   assessOperational?: typeof assessFullModularLiveOperationalParity;
   scoreFullModular?: typeof scoreMlbFullModularFrozenLiveSlate;
   scorePpHorizon?: typeof scoreMlbPpHorizonFrozenLiveSlate;
+  clock?: () => Date;
 }
 
 function selectionFromCandidate(candidate: {
@@ -134,6 +135,7 @@ export function createMlbUnifiedEliteLowerTierLiveProvider(
   const assessOperational = deps.assessOperational ?? assessFullModularLiveOperationalParity;
   const scoreFullModular = deps.scoreFullModular ?? scoreMlbFullModularFrozenLiveSlate;
   const scorePpHorizon = deps.scorePpHorizon ?? scoreMlbPpHorizonFrozenLiveSlate;
+  const clock = deps.clock ?? (() => new Date());
 
   return async (context): Promise<MlbUnifiedEliteLowerTierShadowDecisions> => {
     if (context.officialDate < MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE) {
@@ -170,8 +172,16 @@ export function createMlbUnifiedEliteLowerTierLiveProvider(
             awayTeamId: target.awayTeamId,
           }),
         ]);
+
+        // The request timestamp may be several network calls old at this point. Re-sample
+        // the clock immediately before the prospective cutoff is evaluated so a run that
+        // crossed T-5 during materialization cannot be admitted with a stale timestamp.
+        const observedAt = clock();
+        if (!(observedAt instanceof Date) || !Number.isFinite(observedAt.getTime())) {
+          throw new Error("LOWER_TIER_CURRENT_TIME_INVALID");
+        }
         const assessment = assessOperational({
-          observedAtUtc: context.now.toISOString(),
+          observedAtUtc: observedAt.toISOString(),
           scheduledFirstPitchUtc: target.startTime,
           full13,
           v39: state.v39,
