@@ -29,6 +29,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preserve committed frozen authority for regeneration parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -s research/mlb-unified-elite-live-authority-v1.json; then
+            cp research/mlb-unified-elite-live-authority-v1.json /tmp/mlb-unified-elite-live-authority-v1.before.json
+            sha256sum /tmp/mlb-unified-elite-live-authority-v1.before.json
+          fi
+
       - name: Fetch immutable research authorities
         shell: bash
         run: |
@@ -110,6 +119,19 @@ jobs:
             assert len(m['weights'])==m['classCount']-1
           print('MLB_UNIFIED_ELITE_LIVE_AUTHORITY_VALIDATED')
           PY
+
+      - name: Enforce deterministic regeneration parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -s /tmp/mlb-unified-elite-live-authority-v1.before.json; then
+            if ! cmp -s /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json; then
+              echo AUTHORITY_REGENERATION_DRIFT >&2
+              sha256sum /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json >&2
+              exit 1
+            fi
+            echo MLB_UNIFIED_ELITE_LIVE_AUTHORITY_REGENERATION_EXACT
+          fi
 
       - name: Persist frozen authority on branch
         if: github.event_name != 'pull_request'
