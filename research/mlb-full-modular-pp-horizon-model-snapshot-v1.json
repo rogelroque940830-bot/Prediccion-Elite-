@@ -1,0 +1,255 @@
+{
+  "historicalParity": {
+    "controlDailySelections": 71,
+    "controlIdentityMismatches": 0,
+    "evaluationSeason": "2026_YTD",
+    "historicalProbabilityBitParityCertified": false,
+    "historicalProbabilityDifferenceRole": "DIAGNOSTIC_ONLY_PER_FROZEN_REPRODUCIBILITY_AMENDMENT",
+    "historicalProbabilityExactnessClaimed": false,
+    "maximumPartialPoolProbabilityAbsoluteDifference": 3.163180227749862e-07,
+    "originalContractProbabilityTolerance": 1e-12,
+    "passedUnderReproducibilityAmendment": true,
+    "ppHorizonDailySelections": 71,
+    "ppHorizonIdentityMismatches": 0,
+    "ppHorizonSeasonResult": {
+      "hitRate": 0.7464788732394366,
+      "losses": 18,
+      "pushes": 0,
+      "wins": 53
+    },
+    "scoreCandidateRows": 311,
+    "semanticSelectionParityPassed": true
+  },
+  "model": {
+    "classWeight": null,
+    "family": "L2_REGULARIZED_LOGISTIC_REGRESSION_WITH_SCALED_HORIZON_DEVIATION_FEATURES",
+    "featureNames": [
+      "GLOBAL::modelProbability",
+      "GLOBAL::qualityPercentile",
+      "GLOBAL::structureScore",
+      "GLOBAL::structureObservedFeatureFraction",
+      "GLOBAL::premium_core_support_count_0_to_3",
+      "GLOBAL::premium_core_weakest_margin",
+      "GLOBAL::frozen_c4_selected_side_probability",
+      "GLOBAL::frozen_full13_selected_side_probability",
+      "GLOBAL::sel_starter_kbb_adv",
+      "GLOBAL::sel_team_win10_diff",
+      "GLOBAL::sel_lineup_exposure_rate_adv",
+      "GLOBAL::sel_team_ra10_adv",
+      "GLOBAL::sel_starter_runrisk_adv",
+      "GLOBAL::lineGeometry=PROTECTED",
+      "GLOBAL::lineGeometry=NEUTRAL_ML",
+      "GLOBAL::lineGeometry=AGGRESSIVE",
+      "GLOBAL::matchupStructure=SUPPORTIVE",
+      "GLOBAL::matchupStructure=MIXED",
+      "GLOBAL::matchupStructure=CONFLICTING",
+      "GLOBAL::matchupStructure=UNKNOWN",
+      "GLOBAL::side=HOME",
+      "GLOBAL::side=AWAY",
+      "DEV::horizon=F3::INTERCEPT",
+      "DEV::horizon=F3::premium_core_support_count_0_to_3",
+      "DEV::horizon=F3::premium_core_weakest_margin",
+      "DEV::horizon=F3::frozen_full13_selected_side_probability",
+      "DEV::horizon=F3::sel_starter_kbb_adv",
+      "DEV::horizon=F3::sel_team_win10_diff",
+      "DEV::horizon=F3::sel_lineup_exposure_rate_adv",
+      "DEV::horizon=F3::sel_team_ra10_adv",
+      "DEV::horizon=F3::sel_starter_runrisk_adv",
+      "DEV::horizon=F5::INTERCEPT",
+      "DEV::horizon=F5::premium_core_support_count_0_to_3",
+      "DEV::horizon=F5::premium_core_weakest_margin",
+      "DEV::horizon=F5::frozen_full13_selected_side_probability",
+      "DEV::horizon=F5::sel_starter_kbb_adv",
+      "DEV::horizon=F5::sel_team_win10_diff",
+      "DEV::horizon=F5::sel_lineup_exposure_rate_adv",
+      "DEV::horizon=F5::sel_team_ra10_adv",
+      "DEV::horizon=F5::sel_starter_runrisk_adv",
+      "DEV::horizon=FG::INTERCEPT",
+      "DEV::horizon=FG::premium_core_support_count_0_to_3",
+      "DEV::horizon=FG::premium_core_weakest_margin",
+      "DEV::horizon=FG::frozen_full13_selected_side_probability",
+      "DEV::horizon=FG::sel_starter_kbb_adv",
+      "DEV::horizon=FG::sel_team_win10_diff",
+      "DEV::horizon=FG::sel_lineup_exposure_rate_adv",
+      "DEV::horizon=FG::sel_team_ra10_adv",
+      "DEV::horizon=FG::sel_starter_runrisk_adv"
+    ],
+    "groupInterceptFeatureScale": 0.2,
+    "intercept": 0.9391896088390713,
+    "maxIterations": 5000,
+    "parameterPayloadDigest": "sha256:02f64630d94f5951fa684294e879937d1ad531acc6ecdedf56fc3b225526b275",
+    "preprocessing": {
+      "frozen_c4_selected_side_probability": {
+        "clip": 6.0,
+        "mean": 0.6597386944292121,
+        "median": 0.6661081074835439,
+        "std": 0.06823426920939549
+      },
+      "frozen_full13_selected_side_probability": {
+        "clip": 6.0,
+        "mean": 0.6605260428297582,
+        "median": 0.6658635302793483,
+        "std": 0.07741990740697997
+      },
+      "modelProbability": {
+        "clip": 6.0,
+        "mean": 0.7635913176025625,
+        "median": 0.7736610744003662,
+        "std": 0.056536373288939276
+      },
+      "premium_core_support_count_0_to_3": {
+        "clip": 6.0,
+        "mean": 2.2114682249817386,
+        "median": 2.0,
+        "std": 0.7496188215028633
+      },
+      "premium_core_weakest_margin": {
+        "clip": 6.0,
+        "mean": -0.294803835745419,
+        "median": -0.24138227782441357,
+        "std": 0.7066354283186499
+      },
+      "qualityPercentile": {
+        "clip": 6.0,
+        "mean": 0.9169397862383143,
+        "median": 0.919831223628692,
+        "std": 0.051831356954489816
+      },
+      "sel_lineup_exposure_rate_adv": {
+        "clip": 6.0,
+        "mean": 0.13748370648822225,
+        "median": 0.1376811594202898,
+        "std": 0.12310920508606794
+      },
+      "sel_starter_kbb_adv": {
+        "clip": 6.0,
+        "mean": 0.08769740483514972,
+        "median": 0.08669748514355016,
+        "std": 0.04742564405603039
+      },
+      "sel_starter_runrisk_adv": {
+        "clip": 6.0,
+        "mean": 0.023446703198638546,
+        "median": 0.023269891812652474,
+        "std": 0.02754812069746189
+      },
+      "sel_team_ra10_adv": {
+        "clip": 6.0,
+        "mean": 1.0800195948844595,
+        "median": 1.1,
+        "std": 1.5209801977375856
+      },
+      "sel_team_win10_diff": {
+        "clip": 6.0,
+        "mean": 0.17851113661924473,
+        "median": 0.2,
+        "std": 0.26165302136311935
+      },
+      "structureObservedFeatureFraction": {
+        "clip": 6.0,
+        "mean": 0.996988301042355,
+        "median": 1.0,
+        "std": 0.03992376460476316
+      },
+      "structureScore": {
+        "clip": 6.0,
+        "mean": 0.5699484314040488,
+        "median": 0.591132810697281,
+        "std": 0.3130984443868119
+      }
+    },
+    "rawCoefficients": [
+      0.08368042965052729,
+      0.0010848291687837405,
+      0.06922106767130566,
+      0.013311693008554015,
+      0.09170916819809079,
+      -0.03365654736471971,
+      -0.16347030607205468,
+      0.2049101961797448,
+      0.07174192140083066,
+      0.1685493058197726,
+      0.01545343667574479,
+      -0.17763123034887265,
+      -0.08525478246266151,
+      0.18673783710104794,
+      0.03678359439690037,
+      -0.2197680814554531,
+      -0.15816178492040395,
+      -0.03647432521984839,
+      0.1956873700385622,
+      0.002702090144185395,
+      0.1696310556641838,
+      -0.1658777056216885,
+      -0.033321822878892515,
+      -0.06959162101383232,
+      -0.1009721983068825,
+      0.1788330364970376,
+      0.07098090527002414,
+      0.11538296789662167,
+      -0.05958858856726521,
+      0.003885296334069242,
+      -0.019327484965889846,
+      -0.32404077922042984,
+      -0.143194199072243,
+      0.010977048087627625,
+      -0.03161811174696445,
+      0.16568083921490112,
+      -0.014313692111427575,
+      -0.04728401307821447,
+      -0.13919598438478323,
+      0.08595442270466952,
+      0.35811327210782085,
+      0.2448840289554069,
+      0.07821535864160244,
+      -0.07549635608716265,
+      -0.21155207199463455,
+      -0.04207701874827419,
+      0.1122813044819901,
+      0.07313975742860848,
+      -0.09646611160071124
+    ],
+    "regularizationC": 0.25,
+    "signalDeviationFeatureScale": 0.35,
+    "solver": "lbfgs"
+  },
+  "policy": "CHALLENGER_PP_HORIZON",
+  "postSnapshotAuthority": {
+    "futureRuntimeMustScoreFromPersistedSnapshotNotFreshOptimizerFit": true,
+    "maximumRuntimeProbabilityAbsoluteDifferenceVsPersistedSnapshot": 1e-12,
+    "modelRefitAllowed": false,
+    "preprocessingRefitAllowed": false
+  },
+  "prospectiveBoundary": {
+    "firstEligibleOfficialDate": "2026-08-19",
+    "modelRefitAllowed": false,
+    "outcomeReadBeforeEmbargoMaturityAllowed": false,
+    "preprocessingRefitAllowed": false,
+    "productionChanged": false,
+    "realFinancialExposure": 0
+  },
+  "schemaVersion": "courtedge-mlb-full-modular-pp-horizon-model-snapshot.v1",
+  "scientificStatus": "FROZEN_2023_2025_PP_HORIZON_RECONSTRUCTED_PROSPECTIVE_IMPLEMENTATION_SNAPSHOT_CAPTURE_NOT_YET_STARTED",
+  "source": {
+    "firstFailedFreezeJobId": 95830057083,
+    "firstFailedFreezeRunId": 32173532902,
+    "parentArtifactDigest": "sha256:3696e05880faed143e69c459b518bcce0254c12303418743efd9ef8222e0df1a",
+    "parentArtifactId": 9335023982,
+    "parentPartialPoolingHeadSha": "37b6b0e63e58ff4a1a10bb5d8acc495724c269fc",
+    "parentWorkflowRunId": 32164873526,
+    "prospectiveContractPath": "research/mlb-full-modular-pp-horizon-prospective-v1-contract.json",
+    "reproducibilityAmendmentPath": "research/mlb-full-modular-pp-horizon-prospective-v1-reproducibility-amendment.json"
+  },
+  "training": {
+    "candidateRows": 2780,
+    "decisiveRows": 2738,
+    "prospectiveOutcomesUsed": false,
+    "seasons": [
+      "2023",
+      "2024",
+      "2025"
+    ],
+    "uniqueGames": 1249,
+    "weightedPositiveRate": 0.7364196118799802
+  }
+}
