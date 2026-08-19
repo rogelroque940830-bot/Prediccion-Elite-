@@ -69,11 +69,12 @@ jobs:
           startup=Path('server/s6e-staging-entry.ts').read_text()
           shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
           combined=(custody+'\n'+capture).lower()
+          compact=custody.replace(' ', '').lower()
           assert 'insert or ignore' in custody.lower()
           assert 'capture_not_strictly_pregame_t5' in custody.lower()
           assert 'railway_volume_mount_path' in custody.lower()
-          assert 'outcomereadunlocked: false' in custody.replace(' ', '').lower()
-          assert 'promotionallowed: false' in custody.replace(' ', '').lower()
+          assert 'outcomereadunlocked:false' in compact
+          assert 'promotionallowed:false' in compact
           assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'startMlbUnifiedEliteProspectiveCaptureWorker' in startup
           assert 'registerMlbUnifiedEliteProspectiveStatusRoute' in startup
