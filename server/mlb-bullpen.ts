@@ -39,9 +39,12 @@ export interface BullpenEvidenceProvenance {
     cacheMaxAgeSeconds: 1800;
   };
   seasonStats: {
-    source: "MLB_STATS_SEASON";
+    source: "MLB_STATS_SEASON_WITH_PRIOR_AND_CAREER_FALLBACK";
     pitchersRequested: number;
     pitchersVerified: number;
+    currentSeasonLines: number;
+    previousSeasonFallbacks: number;
+    careerFallbacks: number;
     cacheMaxAgeSeconds: 86400;
   };
   recentUsage: {
@@ -82,8 +85,11 @@ type SourceResult<T> = {
   cacheAgeSeconds: number;
 };
 
+type PitcherStatsSource = "CURRENT_SEASON" | "PREVIOUS_SEASON" | "CAREER";
+type PitcherStatsResult = SourceResult<any> & { source: PitcherStatsSource };
+
 const teamRosterCache: Record<number, { ts: number; data: any[] }> = {};
-const seasonStatsCache: Record<number, { ts: number; data: any }> = {};
+const seasonStatsCache: Record<number, { ts: number; data: any; source: PitcherStatsSource }> = {};
 
 function runtimeNow(runtime: BullpenRuntime): Date {
   return runtime.now ? runtime.now() : new Date();
@@ -140,13 +146,14 @@ async function getBullpenRoster(teamId: number, runtime: BullpenRuntime): Promis
   return { data: pitchers, cacheHit: false, cacheAgeSeconds: 0 };
 }
 
-async function getPitcherSeasonStats(pitcherId: number, runtime: BullpenRuntime): Promise<SourceResult<any>> {
+async function getPitcherSeasonStats(pitcherId: number, runtime: BullpenRuntime): Promise<PitcherStatsResult> {
   const now = runtimeNow(runtime);
   const nowMs = now.getTime();
   const cached = seasonStatsCache[pitcherId];
   if (cached && nowMs - cached.ts <= BULLPEN_SEASON_STATS_TTL_MS) {
     return {
       data: cached.data,
+      source: cached.source,
       cacheHit: true,
       cacheAgeSeconds: Math.max(0, Math.round((nowMs - cached.ts) / 1000)),
     };
@@ -158,12 +165,24 @@ async function getPitcherSeasonStats(pitcherId: number, runtime: BullpenRuntime)
     const payload = await fetchJson(`${MLB_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=${season}`, runtime);
     return payload?.stats?.[0]?.splits?.[0]?.stat ?? null;
   };
+  const loadCareer = async () => {
+    const payload = await fetchJson(`${MLB_BASE}/people/${pitcherId}/stats?stats=career&group=pitching`, runtime);
+    return payload?.stats?.[0]?.splits?.[0]?.stat ?? null;
+  };
 
   let stats = await loadSeason(currentSeason);
-  if (!stats || !stats.era) stats = await loadSeason(previousSeason);
+  let source: PitcherStatsSource = "CURRENT_SEASON";
+  if (!stats) {
+    stats = await loadSeason(previousSeason);
+    source = "PREVIOUS_SEASON";
+  }
+  if (!stats) {
+    stats = await loadCareer();
+    source = "CAREER";
+  }
   if (!stats) throw new Error(`BULLPEN_SEASON_STATS_UNAVAILABLE:${pitcherId}`);
-  seasonStatsCache[pitcherId] = { ts: nowMs, data: stats };
-  return { data: stats, cacheHit: false, cacheAgeSeconds: 0 };
+  seasonStatsCache[pitcherId] = { ts: nowMs, data: stats, source };
+  return { data: stats, source, cacheHit: false, cacheAgeSeconds: 0 };
 }
 
 async function getRecentGamePks(
@@ -331,8 +350,7 @@ export async function getBullpenStatus(
     const gamesStarted = parseInt(stats?.gamesStarted ?? "0") || 0;
     const inningsPitched = parseIP(stats?.inningsPitched);
     const isStarter = gamesStarted >= 5 && inningsPitched >= 30 && (inningsPitched / Math.max(gamesStarted, 1)) >= 4.5;
-    if (isStarter) return null;
-    return {
+    const pitcher = isStarter ? null : {
       id: pitcherId,
       name: item.person?.fullName ?? "?",
       saves: parseInt(stats?.saves ?? "0") || 0,
@@ -348,8 +366,11 @@ export async function getBullpenStatus(
       totalPitchesLast3Days: 0,
       consecutiveDays: 0,
     } as BullpenPitcher;
+    return { pitcher, statsSource: statsResult.source };
   }));
-  const allPitchers = pitcherEntries.filter((value): value is BullpenPitcher => value != null);
+  const allPitchers = pitcherEntries
+    .map((entry) => entry.pitcher)
+    .filter((value): value is BullpenPitcher => value != null);
   if (!allPitchers.length) throw new Error(`BULLPEN_RELIEVERS_EMPTY:${teamId}`);
 
   const recentGames = await getRecentGamePks(teamId, 3, runtime);
@@ -425,6 +446,9 @@ export async function getBullpenStatus(
   }
 
   const generatedAt = runtimeNow(runtime).toISOString();
+  const currentSeasonLines = pitcherEntries.filter((entry) => entry.statsSource === "CURRENT_SEASON").length;
+  const previousSeasonFallbacks = pitcherEntries.filter((entry) => entry.statsSource === "PREVIOUS_SEASON").length;
+  const careerFallbacks = pitcherEntries.filter((entry) => entry.statsSource === "CAREER").length;
   return {
     teamId,
     teamName,
@@ -449,9 +473,12 @@ export async function getBullpenStatus(
         cacheMaxAgeSeconds: 1800,
       },
       seasonStats: {
-        source: "MLB_STATS_SEASON",
+        source: "MLB_STATS_SEASON_WITH_PRIOR_AND_CAREER_FALLBACK",
         pitchersRequested: roster.length,
-        pitchersVerified: roster.length,
+        pitchersVerified: pitcherEntries.length,
+        currentSeasonLines,
+        previousSeasonFallbacks,
+        careerFallbacks,
         cacheMaxAgeSeconds: 86400,
       },
       recentUsage: {
