@@ -10,6 +10,7 @@ on:
       - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/s6e-staging-entry.ts"
       - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
+      - "scripts/mlb-unified-elite-prospective-capture-retry-v1.test.ts"
       - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
   push:
     branches:
@@ -20,6 +21,7 @@ on:
       - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/s6e-staging-entry.ts"
       - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
+      - "scripts/mlb-unified-elite-prospective-capture-retry-v1.test.ts"
       - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
 
 permissions:
@@ -55,13 +57,17 @@ jobs:
             --types node \
             server/mlb-unified-elite-prospective-custody-v1.ts \
             server/mlb-unified-elite-prospective-capture-service-v1.ts \
-            scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+            scripts/mlb-unified-elite-prospective-custody-v1.test.ts \
+            scripts/mlb-unified-elite-prospective-capture-retry-v1.test.ts
           npx esbuild server/mlb-unified-elite-shared-live-provider-bundle.ts \
             --bundle --platform=node --format=esm --external:better-sqlite3 \
             --outfile=/tmp/mlb-prospective-bundle.mjs
 
       - name: Execute immutable custody regression suite
-        run: npx tsx --test scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+        run: >-
+          npx tsx --test
+          scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+          scripts/mlb-unified-elite-prospective-capture-retry-v1.test.ts
 
       - name: Prove prospective safety boundary
         shell: bash
@@ -88,6 +94,8 @@ jobs:
           assert 'RAILWAY_VOLUME_MOUNT_PATH' in startup
           assert 'markParentNoPlayObserved' in bundle
           assert 'V16 invokes this provider only when the visible frozen A+/Premium parent is NO_PLAY' in bundle
+          assert 'SLATE_EMPTY_RETRY' in capture
+          assert 'SCHEDULE_IDENTITY_RETRY' in capture
           forbidden=[
             'theoddsapi',
             'selective-odds',
