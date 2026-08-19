@@ -11,9 +11,16 @@ on:
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
+      - "server/mlb-c4-certified-materializer.ts"
+      - "server/mlb-v68-prospective-state-live-adapter.ts"
+      - "server/mlb-full-modular-bullpen-live-materializer.ts"
+      - "server/mlb-full-modular-team-strength-live-materializer.ts"
+      - "server/mlb-unified-elite-lower-tier-live-provider.ts"
+      - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
+      - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
       - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
       - "research/mlb-unified-elite-live-authority-v1.json"
       - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
@@ -26,9 +33,16 @@ on:
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
+      - "server/mlb-c4-certified-materializer.ts"
+      - "server/mlb-v68-prospective-state-live-adapter.ts"
+      - "server/mlb-full-modular-bullpen-live-materializer.ts"
+      - "server/mlb-full-modular-team-strength-live-materializer.ts"
+      - "server/mlb-unified-elite-lower-tier-live-provider.ts"
+      - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
+      - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
       - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
       - "research/mlb-unified-elite-live-authority-v1.json"
       - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
@@ -64,6 +78,8 @@ jobs:
           from pathlib import Path
           shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
           ui=Path('server/mlb-unified-v16-ui-routes.ts').read_text()
+          routes=Path('server/routes.ts').read_text()
+          provider=Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text()
           assert 'PROSPECTIVE_EMBARGO_SHADOW_ONLY' in shadow
           assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'outcomesRead: false' in shadow
@@ -75,6 +91,10 @@ jobs:
           assert 'finalBetRecommendationProduced: false' in ui
           assert 'stakeCalculated: false' in ui
           assert 'automaticBetPlacement: false' in ui
+          assert 'createMlbUnifiedEliteLowerTierLiveProvider' in routes
+          assert 'unifiedEliteLowerTierShadowProvider: createMlbUnifiedEliteLowerTierLiveProvider()' in routes
+          assert 'MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE' in provider
+          assert 'DECISION_TIMESTAMP_MISSING_OR_LATE' in provider
           print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_INTACT')
           PY
 
@@ -101,9 +121,16 @@ jobs:
             server/mlb-unified-elite-router-v1.ts \
             server/mlb-full-modular-live-operational-bridge.ts \
             server/mlb-unified-elite-shadow-v1.ts \
+            server/mlb-c4-certified-materializer.ts \
+            server/mlb-v68-prospective-state-live-adapter.ts \
+            server/mlb-full-modular-bullpen-live-materializer.ts \
+            server/mlb-full-modular-team-strength-live-materializer.ts \
+            server/mlb-unified-elite-lower-tier-live-provider.ts \
+            server/routes.ts \
             scripts/mlb-unified-elite-router-v1.test.ts \
             scripts/mlb-full-modular-live-operational-parity-v1.test.ts \
-            scripts/mlb-unified-elite-shadow-v1.test.ts
+            scripts/mlb-unified-elite-shadow-v1.test.ts \
+            scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts
 
       - name: Execute certified hierarchy suite
         run: npx tsx scripts/mlb-unified-elite-router-v1.test.ts
@@ -114,6 +141,9 @@ jobs:
       - name: Execute production shadow integration suite
         run: npx tsx scripts/mlb-unified-elite-shadow-v1.test.ts
 
+      - name: Execute certified lower-tier live provider suite
+        run: npx tsx scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts
+
       - name: Build production backend including V16 UI route
         run: npm run build:backend
 
@@ -123,9 +153,12 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text().lower()
+          text='\n'.join([
+              Path('server/mlb-unified-elite-shadow-v1.ts').read_text().lower(),
+              Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text().lower(),
+          ])
           forbidden=['theoddsapi','hard rock','stakeamount','bet_elite','placebet','settlementworker']
-          found=[x for x in forbidden if x in shadow]
+          found=[x for x in forbidden if x in text]
           assert not found, found
           print('MLB_UNIFIED_ELITE_SHADOW_HAS_NO_PRICE_OR_WAGER_SURFACE')
           PY
