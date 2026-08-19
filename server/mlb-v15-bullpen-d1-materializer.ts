@@ -81,6 +81,14 @@ function nonNegativeInt(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function firstNonNegativeInt(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed = nonNegativeInt(value);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
 function validIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = Date.parse(`${value}T12:00:00.000Z`);
@@ -125,6 +133,7 @@ export class MlbV15BullpenD1Materializer {
   private readonly timeoutMs: number;
   private readonly maxConcurrency: number;
   private readonly boxscoreCache = new Map<number, Promise<any>>();
+  private readonly feedCache = new Map<number, Promise<any>>();
 
   constructor(options: MlbV15BullpenD1MaterializerOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -252,12 +261,12 @@ export class MlbV15BullpenD1Materializer {
 
     const operationalStarterId = pitcherIds[0];
     const players = teamBlob.players ?? {};
-    const relievers = pitcherIds.slice(1).map((pitcherId) => {
+    const relievers = await Promise.all(pitcherIds.slice(1).map(async (pitcherId) => {
       const pitching = players[`ID${pitcherId}`]?.stats?.pitching;
-      const pitches = nonNegativeInt(pitching?.pitchesThrown);
+      const pitches = await this.resolvePitchCount(identity.gamePk, pitcherId, pitching);
       if (pitches === null) throw new Error(`MLB_V15_D1_PITCH_COUNT_MISSING:${identity.gamePk}:${pitcherId}`);
       return { pitcherId, pitches };
-    });
+    }));
     if (!positiveInt(operationalStarterId)) throw new Error(`MLB_V15_D1_STARTER_INVALID:${identity.gamePk}:${teamId}`);
     return {
       gamePk: identity.gamePk,
@@ -265,6 +274,45 @@ export class MlbV15BullpenD1Materializer {
       relievers: Object.freeze(relievers),
       bullpenPitches: relievers.reduce((sum, reliever) => sum + reliever.pitches, 0),
     };
+  }
+
+  private async resolvePitchCount(gamePk: number, pitcherId: number, pitching: any): Promise<number | null> {
+    const direct = firstNonNegativeInt(
+      pitching?.pitchesThrown,
+      pitching?.numberOfPitches,
+      pitching?.pitches,
+    );
+    if (direct !== null) return direct;
+
+    const feed = await this.fetchGameFeed(gamePk);
+    for (const side of ["home", "away"] as const) {
+      const feedPitching = feed?.liveData?.boxscore?.teams?.[side]?.players?.[`ID${pitcherId}`]?.stats?.pitching;
+      const feedCount = firstNonNegativeInt(
+        feedPitching?.pitchesThrown,
+        feedPitching?.numberOfPitches,
+        feedPitching?.pitches,
+      );
+      if (feedCount !== null) return feedCount;
+    }
+
+    const plays = feed?.liveData?.plays?.allPlays;
+    if (Array.isArray(plays)) {
+      let sawPitcherMatchup = false;
+      let pitchEvents = 0;
+      for (const play of plays) {
+        if (positiveInt(play?.matchup?.pitcher?.id) !== pitcherId) continue;
+        sawPitcherMatchup = true;
+        for (const event of Array.isArray(play?.playEvents) ? play.playEvents : []) {
+          if (event?.isPitch === true || event?.details?.isPitch === true) pitchEvents += 1;
+        }
+      }
+      if (sawPitcherMatchup) return pitchEvents;
+    }
+
+    const battersFaced = nonNegativeInt(pitching?.battersFaced);
+    const innings = Number(pitching?.inningsPitched);
+    if (battersFaced === 0 && Number.isFinite(innings) && innings === 0) return 0;
+    return null;
   }
 
   private fetchBoxscore(gamePk: number): Promise<any> {
@@ -276,6 +324,21 @@ export class MlbV15BullpenD1Materializer {
         throw error;
       });
     this.boxscoreCache.set(gamePk, promise);
+    return promise;
+  }
+
+  private fetchGameFeed(gamePk: number): Promise<any> {
+    const cached = this.feedCache.get(gamePk);
+    if (cached) return cached;
+    const liveBase = /\/v1\/?$/.test(this.apiBaseUrl)
+      ? this.apiBaseUrl.replace(/\/v1\/?$/, "/v1.1")
+      : `${this.apiBaseUrl.replace(/\/$/, "")}/v1.1`;
+    const promise = this.fetchJson(`${liveBase}/game/${gamePk}/feed/live`, `MLB V15 D1 live feed ${gamePk}`)
+      .catch((error) => {
+        this.feedCache.delete(gamePk);
+        throw error;
+      });
+    this.feedCache.set(gamePk, promise);
     return promise;
   }
 
