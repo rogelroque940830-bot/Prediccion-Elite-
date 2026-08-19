@@ -104,6 +104,26 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function requireTargetIdentity(game: {
+  gamePk: number;
+  startTime: string | null;
+  homeTeam: { id: number | null };
+  awayTeam: { id: number | null };
+}): { homeTeamId: number; awayTeamId: number; startTime: string } {
+  const homeTeamId = game.homeTeam.id;
+  const awayTeamId = game.awayTeam.id;
+  const startTime = game.startTime;
+  if (
+    typeof homeTeamId !== "number" || !Number.isInteger(homeTeamId) || homeTeamId <= 0
+    || typeof awayTeamId !== "number" || !Number.isInteger(awayTeamId) || awayTeamId <= 0
+    || homeTeamId === awayTeamId
+    || typeof startTime !== "string" || !Number.isFinite(Date.parse(startTime))
+  ) {
+    throw new Error(`LOWER_TIER_TARGET_IDENTITY_INCOMPLETE:${game.gamePk}`);
+  }
+  return { homeTeamId, awayTeamId, startTime };
+}
+
 export function createMlbUnifiedEliteLowerTierLiveProvider(
   deps: MlbUnifiedEliteLowerTierLiveProviderDependencies = {},
 ): MlbUnifiedEliteLowerTierShadowProvider {
@@ -140,18 +160,19 @@ export function createMlbUnifiedEliteLowerTierLiveProvider(
     const games: MlbFullModularFrozenLiveGame[] = [];
     for (const game of finalReady) {
       try {
+        const target = requireTargetIdentity(game);
         const full13 = await full13Materializer.materializeFull13PregameInput(game);
         const [state, bullpen] = await Promise.all([
           stateAdapter.buildFullModularEvidence(context.officialDate, full13),
           bullpenMaterializer.materializeGame({
             officialDate: context.officialDate,
-            homeTeamId: game.homeTeam.id,
-            awayTeamId: game.awayTeam.id,
+            homeTeamId: target.homeTeamId,
+            awayTeamId: target.awayTeamId,
           }),
         ]);
         const assessment = assessOperational({
           observedAtUtc: context.now.toISOString(),
-          scheduledFirstPitchUtc: game.startTime,
+          scheduledFirstPitchUtc: target.startTime,
           full13,
           v39: state.v39,
           pitchQualityHistory: state.pitchQualityHistory,
@@ -173,8 +194,8 @@ export function createMlbUnifiedEliteLowerTierLiveProvider(
 
         games.push(Object.freeze({
           assessment,
-          homeStrengthTier: strength.tiers[game.homeTeam.id] ?? "UNSTABLE",
-          awayStrengthTier: strength.tiers[game.awayTeam.id] ?? "UNSTABLE",
+          homeStrengthTier: strength.tiers[target.homeTeamId] ?? "UNSTABLE",
+          awayStrengthTier: strength.tiers[target.awayTeamId] ?? "UNSTABLE",
         }));
       } catch (error) {
         console.error(`Unified Elite lower-tier source failed closed for ${game.gamePk}:`, error);
