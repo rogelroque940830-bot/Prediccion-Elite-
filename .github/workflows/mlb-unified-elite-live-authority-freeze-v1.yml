@@ -8,6 +8,12 @@ on:
     paths:
       - "scripts/mlb-unified-elite-live-authority-extract-v1.py"
       - ".github/workflows/mlb-unified-elite-live-authority-freeze-v1.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/mlb-unified-elite-live-authority-extract-v1.py"
+      - ".github/workflows/mlb-unified-elite-live-authority-freeze-v1.yml"
 
 permissions:
   contents: write
@@ -27,9 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin \
-            research/mlb-market-state-matchup-modular-router-v1 \
-            research/mlb-modular-team-structure-nrfi-yrfi-v1
+          git fetch origin research/mlb-market-state-matchup-modular-router-v1 research/mlb-modular-team-structure-nrfi-yrfi-v1
           mkdir -p inputs/authority/scripts inputs/authority/research
           git show e352e25c131a53536745323bcd3268dcec75a66d:scripts/mlb-market-state-matchup-modular-router-v1.py > inputs/authority/scripts/full.py
           git show e352e25c131a53536745323bcd3268dcec75a66d:research/mlb-market-state-matchup-modular-router-v1-contract.json > inputs/authority/research/full-contract.json
@@ -95,11 +99,9 @@ jobs:
             --out research/mlb-unified-elite-live-authority-v1.json
           python - <<'PY'
           import json
-          p='research/mlb-unified-elite-live-authority-v1.json'
-          a=json.load(open(p))
+          a=json.load(open('research/mlb-unified-elite-live-authority-v1.json'))
           assert a['schemaVersion']=='courtedge-mlb-unified-elite-live-authority.v1'
-          assert len(a['directionalModels'])==3
-          assert len(a['variants'])==7
+          assert len(a['directionalModels'])==3 and len(a['variants'])==7
           assert a['runtimePolicy']['runtimeRefitAllowed'] is False
           assert a['runtimePolicy']['outcomeInputAllowed'] is False
           assert a['minimumSelectedSideModelProbability']==0.60
@@ -110,15 +112,13 @@ jobs:
           PY
 
       - name: Persist frozen authority on branch
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research/mlb-unified-elite-live-authority-v1.json
-          if git diff --cached --quiet; then
-            echo AUTHORITY_ALREADY_CURRENT
-            exit 0
-          fi
+          if git diff --cached --quiet; then echo AUTHORITY_ALREADY_CURRENT; exit 0; fi
           git commit -m "Freeze exact Full Modular live scoring authority"
           git push origin HEAD:production/mlb-unified-elite-live-v1
