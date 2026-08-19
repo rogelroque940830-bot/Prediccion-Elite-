@@ -1,0 +1,62 @@
+name: MLB V16 Certified Evidence Hotfix V1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "server/mlb-c4-certified-materializer.ts"
+      - "server/mlb-v15-bullpen-d1-materializer.ts"
+      - "server/mlb-bullpen.ts"
+      - "scripts/mlb-v16-certified-evidence-hotfix-v1.test.ts"
+      - "scripts/mlb-v16-certified-evidence-live-smoke.ts"
+      - ".github/workflows/mlb-v16-certified-evidence-hotfix-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  certified-evidence-hotfix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check hotfix surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-c4-certified-materializer.ts \
+            server/mlb-v15-bullpen-d1-materializer.ts \
+            server/mlb-bullpen.ts \
+            scripts/mlb-v16-certified-evidence-hotfix-v1.test.ts \
+            scripts/mlb-v16-certified-evidence-live-smoke.ts
+
+      - name: Execute deterministic regression suite
+        run: npx tsx --test scripts/mlb-v16-certified-evidence-hotfix-v1.test.ts
+
+      - name: Build production backend
+        run: npm run build:backend
+
+      - name: Probe real MLB certified evidence for incident date
+        env:
+          MLB_V16_LIVE_SMOKE_DATE: "2026-08-19"
+        run: npx tsx scripts/mlb-v16-certified-evidence-live-smoke.ts
