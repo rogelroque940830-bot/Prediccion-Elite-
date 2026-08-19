@@ -7,6 +7,7 @@ on:
     paths:
       - "server/mlb-unified-elite-prospective-custody-v1.ts"
       - "server/mlb-unified-elite-prospective-capture-service-v1.ts"
+      - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/s6e-staging-entry.ts"
       - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
       - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
@@ -16,6 +17,7 @@ on:
     paths:
       - "server/mlb-unified-elite-prospective-custody-v1.ts"
       - "server/mlb-unified-elite-prospective-capture-service-v1.ts"
+      - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/s6e-staging-entry.ts"
       - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
       - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
@@ -54,6 +56,9 @@ jobs:
             server/mlb-unified-elite-prospective-custody-v1.ts \
             server/mlb-unified-elite-prospective-capture-service-v1.ts \
             scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+          npx esbuild server/mlb-unified-elite-shared-live-provider-bundle.ts \
+            --bundle --platform=node --format=esm --external:better-sqlite3 \
+            --outfile=/tmp/mlb-prospective-bundle.mjs
 
       - name: Execute immutable custody regression suite
         run: npx tsx --test scripts/mlb-unified-elite-prospective-custody-v1.test.ts
@@ -67,8 +72,9 @@ jobs:
           custody=Path('server/mlb-unified-elite-prospective-custody-v1.ts').read_text()
           capture=Path('server/mlb-unified-elite-prospective-capture-service-v1.ts').read_text()
           startup=Path('server/s6e-staging-entry.ts').read_text()
+          bundle=Path('server/mlb-unified-elite-shared-live-provider-bundle.ts').read_text()
           shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
-          combined=(custody+'\n'+capture).lower()
+          combined=(custody+'\n'+capture+'\n'+bundle).lower()
           compact=custody.replace(' ', '').lower()
           assert 'insert or ignore' in custody.lower()
           assert 'capture_not_strictly_pregame_t5' in custody.lower()
@@ -78,6 +84,10 @@ jobs:
           assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'startMlbUnifiedEliteProspectiveCaptureWorker' in startup
           assert 'registerMlbUnifiedEliteProspectiveStatusRoute' in startup
+          assert 'capture disabled fail-closed: persistent Railway custody is not configured' in startup
+          assert 'RAILWAY_VOLUME_MOUNT_PATH' in startup
+          assert 'markParentNoPlayObserved' in bundle
+          assert 'V16 invokes this provider only when the visible frozen A+/Premium parent is NO_PLAY' in bundle
           forbidden=[
             'theoddsapi',
             'selective-odds',
