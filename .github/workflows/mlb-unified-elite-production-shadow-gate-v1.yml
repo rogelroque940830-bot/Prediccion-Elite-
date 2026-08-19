@@ -23,6 +23,7 @@ on:
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
       - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
+      - "scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts"
       - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
       - "research/mlb-unified-elite-live-authority-v1.json"
       - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
@@ -47,6 +48,7 @@ on:
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
       - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
+      - "scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts"
       - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
       - "research/mlb-unified-elite-live-authority-v1.json"
       - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
@@ -139,7 +141,8 @@ jobs:
             server/mlb-full-modular-team-strength-live-materializer.ts \
             scripts/mlb-unified-elite-router-v1.test.ts \
             scripts/mlb-full-modular-live-operational-parity-v1.test.ts \
-            scripts/mlb-unified-elite-shadow-v1.test.ts
+            scripts/mlb-unified-elite-shadow-v1.test.ts \
+            scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts
 
       - name: Bundle-check shared lower-tier provider integration
         run: npx esbuild server/mlb-unified-elite-shared-live-provider-bundle.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-lower-tier-provider.mjs
@@ -155,6 +158,9 @@ jobs:
 
       - name: Execute certified lower-tier live provider suite
         run: npx tsx scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts
+
+      - name: Execute immutable V68 state digest suite
+        run: npx tsx scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts
 
       - name: Build production backend including V16 UI route
         run: npm run build:backend
