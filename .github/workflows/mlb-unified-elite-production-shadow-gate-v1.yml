@@ -85,6 +85,7 @@ jobs:
           routes=Path('server/routes.ts').read_text()
           provider=Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text()
           bundle=Path('server/mlb-unified-elite-shared-live-provider-bundle.ts').read_text()
+          test=Path('scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts').read_text()
           assert 'PROSPECTIVE_EMBARGO_SHADOW_ONLY' in shadow
           assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'outcomesRead: false' in shadow
@@ -102,6 +103,8 @@ jobs:
           assert bundle.count('full13Materializer: sharedClassifierMaterializer') == 2
           assert 'MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE' in provider
           assert 'DECISION_TIMESTAMP_MISSING_OR_LATE' in provider
+          assert 'CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1' in provider
+          assert 'CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1:1' in test
           print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_INTACT')
           PY
 
