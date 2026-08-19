@@ -1,0 +1,100 @@
+name: MLB Full Modular Frozen Live Scorer V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - production/mlb-unified-elite-live-v1
+    paths:
+      - "server/mlb-unified-elite-frozen-authority-v1.ts"
+      - "server/mlb-full-modular-frozen-live-scorer-v1.ts"
+      - "scripts/mlb-full-modular-frozen-live-reference-v1.py"
+      - "scripts/mlb-full-modular-frozen-live-scorer-v1.test.ts"
+      - "research/mlb-unified-elite-live-authority-v1.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - ".github/workflows/mlb-full-modular-frozen-live-scorer-v1.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/mlb-unified-elite-frozen-authority-v1.ts"
+      - "server/mlb-full-modular-frozen-live-scorer-v1.ts"
+      - "scripts/mlb-full-modular-frozen-live-reference-v1.py"
+      - "scripts/mlb-full-modular-frozen-live-scorer-v1.test.ts"
+      - "research/mlb-unified-elite-live-authority-v1.json"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - ".github/workflows/mlb-full-modular-frozen-live-scorer-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  differential-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove immutable authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum research/mlb-full-modular-pp-horizon-model-snapshot-v1.json | awk '{print $1}')" = 'sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
+          test "$(git rev-parse e352e25c131a53536745323bcd3268dcec75a66d:scripts/mlb-market-state-matchup-modular-router-v1.py)" = '791d7f5a1d499d78a4606e5c77e22a7da5ae2ca6'
+          echo MLB_FULL_MODULAR_FROZEN_AUTHORITIES_PINNED
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scientific reference dependencies
+        run: python -m pip install --disable-pip-version-check numpy scipy
+
+      - name: Generate exact historical Python reference cases
+        run: |
+          python scripts/mlb-full-modular-frozen-live-reference-v1.py \
+            --authority research/mlb-unified-elite-live-authority-v1.json \
+            --multi scripts/mlb-multi-market-coverage-expansion-v1.py \
+            --modular scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --full scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --out /tmp/mlb-full-modular-reference-v1.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Type-check frozen scorer surface
+        run: |
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-unified-elite-frozen-authority-v1.ts \
+            server/mlb-full-modular-frozen-live-scorer-v1.ts \
+            scripts/mlb-full-modular-frozen-live-scorer-v1.test.ts
+
+      - name: Differential parity versus historical Python implementation
+        env:
+          MLB_FULL_MODULAR_REFERENCE_JSON: /tmp/mlb-full-modular-reference-v1.json
+        run: npx tsx scripts/mlb-full-modular-frozen-live-scorer-v1.test.ts
+
+      - name: Prove frozen scorer bundles its authority
+        run: npx esbuild server/mlb-full-modular-frozen-live-scorer-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-full-modular-frozen-live-scorer-v1.mjs
+
+      - name: Prove no runtime fit or outcome/price use
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('server/mlb-full-modular-frozen-live-scorer-v1.ts').read_text().lower()
+          forbidden=['scipy','sklearn','minimize(','fit_multinomial','targetoutcome','sportsbookprice']
+          found=[x for x in forbidden if x in text]
+          assert not found, found
+          print('MLB_FULL_MODULAR_FROZEN_LIVE_SCORER_NO_REFIT_OR_OUTCOME_PRICE_INPUT')
+          PY
