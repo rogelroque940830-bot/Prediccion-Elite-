@@ -1,0 +1,132 @@
+name: MLB Unified Elite Production Shadow Gate V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - production/mlb-unified-elite-live-v1
+    paths:
+      - "server/mlb-unified-elite-router-v1.ts"
+      - "server/mlb-full-modular-live-operational-bridge.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-unified-elite-shadow-v1.ts"
+      - "server/mlb-unified-v16-ui-routes.ts"
+      - "scripts/mlb-unified-elite-router-v1.test.ts"
+      - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - "scripts/mlb-unified-elite-shadow-v1.test.ts"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "research/mlb-unified-elite-live-authority-v1.json"
+      - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "server/mlb-unified-elite-router-v1.ts"
+      - "server/mlb-full-modular-live-operational-bridge.ts"
+      - "server/mlb-full-modular-mechanistic-feature-builder.ts"
+      - "server/mlb-unified-elite-shadow-v1.ts"
+      - "server/mlb-unified-v16-ui-routes.ts"
+      - "scripts/mlb-unified-elite-router-v1.test.ts"
+      - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - "scripts/mlb-unified-elite-shadow-v1.test.ts"
+      - "research/mlb-full-modular-pp-horizon-model-snapshot-v1.json"
+      - "research/mlb-unified-elite-live-authority-v1.json"
+      - ".github/workflows/mlb-unified-elite-production-shadow-gate-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  production-shadow-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove certified lower-tier authorities are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:server/mlb-unified-elite-router-v1.ts)" = 'b99c6fec3196cdcb75fd2843e44f5ad72bc6d677'
+          test "$(git rev-parse HEAD:server/mlb-full-modular-live-operational-bridge.ts)" = '291ca194ba1cf6f360adf0f9467676e550691c1c'
+          test "$(git rev-parse HEAD:server/mlb-full-modular-mechanistic-feature-builder.ts)" = '2661986ebc830e7b8274b01e015d8f98bc4b2c96'
+          test "sha256:$(sha256sum research/mlb-full-modular-pp-horizon-model-snapshot-v1.json | awk '{print $1}')" = 'sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
+          echo MLB_UNIFIED_ELITE_CERTIFIED_AUTHORITIES_UNCHANGED
+
+      - name: Prove prospective embargo remains intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
+          ui=Path('server/mlb-unified-v16-ui-routes.ts').read_text()
+          assert 'PROSPECTIVE_EMBARGO_SHADOW_ONLY' in shadow
+          assert 'lowerTierRecommendationVisible: false' in shadow
+          assert 'outcomesRead: false' in shadow
+          assert 'performanceMetricsRead: false' in shadow
+          assert 'visibleRecommendationChanged: false' in shadow
+          assert 'dailyBestPick.decision === "NO_PLAY"' in ui
+          assert 'unifiedEliteChangesVisibleDailyBestPick: false' in ui
+          assert 'ppHorizonInterimOutcomesRead: false' in ui
+          assert 'finalBetRecommendationProduced: false' in ui
+          assert 'stakeCalculated: false' in ui
+          assert 'automaticBetPlacement: false' in ui
+          print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_INTACT')
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check activation surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-unified-elite-router-v1.ts \
+            server/mlb-full-modular-live-operational-bridge.ts \
+            server/mlb-unified-elite-shadow-v1.ts \
+            server/mlb-unified-v16-ui-routes.ts \
+            scripts/mlb-unified-elite-router-v1.test.ts \
+            scripts/mlb-full-modular-live-operational-parity-v1.test.ts \
+            scripts/mlb-unified-elite-shadow-v1.test.ts
+
+      - name: Execute certified hierarchy suite
+        run: npx tsx scripts/mlb-unified-elite-router-v1.test.ts
+
+      - name: Execute certified live bridge suite
+        run: npx tsx scripts/mlb-full-modular-live-operational-parity-v1.test.ts
+
+      - name: Execute production shadow integration suite
+        run: npx tsx scripts/mlb-unified-elite-shadow-v1.test.ts
+
+      - name: Build production backend
+        run: npm run build:backend
+
+      - name: Prove no lower-tier price or wager promotion surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text().lower()
+          forbidden=['theoddsapi','hard rock','stakeamount','bet_elite','placebet','settlementworker']
+          found=[x for x in forbidden if x in shadow]
+          assert not found, found
+          print('MLB_UNIFIED_ELITE_SHADOW_HAS_NO_PRICE_OR_WAGER_SURFACE')
+          PY
