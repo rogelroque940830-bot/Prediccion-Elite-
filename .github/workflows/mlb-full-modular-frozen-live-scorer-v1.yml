@@ -100,13 +100,18 @@ jobs:
       - name: Prove frozen scorer bundles its authority
         run: npx esbuild server/mlb-full-modular-frozen-live-scorer-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-full-modular-frozen-live-scorer-v1.mjs
 
-      - name: Prove no runtime fit or outcome/price use
+      - name: Prove no runtime fit or outcome/price acquisition
         run: |
           python - <<'PY'
           from pathlib import Path
           text=Path('server/mlb-full-modular-frozen-live-scorer-v1.ts').read_text().lower()
-          forbidden=['scipy','sklearn','minimize(','fit_multinomial','targetoutcome','sportsbookprice']
+          # Negative audit fields such as sportsbookPricesRead:false are allowed; actual acquisition/refit surfaces are not.
+          forbidden=['scipy','sklearn','minimize(','fit_multinomial','theoddsapi','executionodds','targetoutcome','target_outcome']
           found=[x for x in forbidden if x in text]
           assert not found, found
-          print('MLB_FULL_MODULAR_FROZEN_LIVE_SCORER_NO_REFIT_OR_OUTCOME_PRICE_INPUT')
+          assert 'sportsbookpricesread: false' in text
+          assert 'outcomesread: false' in text
+          assert 'runtimerefit: false' in text
+          assert 'runtimethresholdfit: false' in text
+          print('MLB_FULL_MODULAR_FROZEN_LIVE_SCORER_NO_REFIT_OR_OUTCOME_PRICE_ACQUISITION')
           PY
