@@ -120,17 +120,69 @@ jobs:
           print('MLB_UNIFIED_ELITE_LIVE_AUTHORITY_VALIDATED')
           PY
 
-      - name: Enforce deterministic regeneration parity
+      - name: Enforce deterministic scientific regeneration parity
         shell: bash
         run: |
           set -euo pipefail
           if test -s /tmp/mlb-unified-elite-live-authority-v1.before.json; then
-            if ! cmp -s /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json; then
-              echo AUTHORITY_REGENERATION_DRIFT >&2
-              sha256sum /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json >&2
-              exit 1
-            fi
-            echo MLB_UNIFIED_ELITE_LIVE_AUTHORITY_REGENERATION_EXACT
+            python - <<'PY'
+          import json, math
+
+          BEFORE='/tmp/mlb-unified-elite-live-authority-v1.before.json'
+          AFTER='research/mlb-unified-elite-live-authority-v1.json'
+          ABS_TOL=1e-12
+          REL_TOL=1e-12
+          before=json.load(open(BEFORE, encoding='utf-8'))
+          after=json.load(open(AFTER, encoding='utf-8'))
+          max_diff=0.0
+          max_path='$'
+          comparisons=0
+
+          def fail(path, message):
+              raise SystemExit(f'AUTHORITY_REGENERATION_DRIFT:{path}:{message}')
+
+          def compare(a, b, path='$'):
+              global max_diff, max_path, comparisons
+              if isinstance(a, bool) or isinstance(b, bool):
+                  if type(a) is not type(b) or a != b:
+                      fail(path, f'{a!r}!={b!r}')
+                  return
+              if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                  x=float(a); y=float(b); comparisons += 1
+                  if not (math.isfinite(x) and math.isfinite(y)):
+                      if x != y: fail(path, 'NONFINITE_MISMATCH')
+                      return
+                  diff=abs(x-y)
+                  if diff > max_diff:
+                      max_diff=diff; max_path=path
+                  limit=ABS_TOL + REL_TOL * max(abs(x), abs(y))
+                  if diff > limit:
+                      fail(path, f'NUMERIC_DIFF={diff:.17g}:LIMIT={limit:.17g}:BEFORE={x:.17g}:AFTER={y:.17g}')
+                  return
+              if type(a) is not type(b):
+                  fail(path, f'TYPE:{type(a).__name__}!={type(b).__name__}')
+              if isinstance(a, dict):
+                  if set(a) != set(b):
+                      fail(path, f'KEYS:{sorted(set(a)^set(b))}')
+                  for key in sorted(a):
+                      compare(a[key], b[key], f'{path}.{key}')
+                  return
+              if isinstance(a, list):
+                  if len(a) != len(b):
+                      fail(path, f'LENGTH:{len(a)}!={len(b)}')
+                  for index, (x, y) in enumerate(zip(a, b)):
+                      compare(x, y, f'{path}[{index}]')
+                  return
+              if a != b:
+                  fail(path, f'{a!r}!={b!r}')
+
+          compare(before, after)
+          print(f'MLB_UNIFIED_ELITE_LIVE_AUTHORITY_REGENERATION_NUMERIC_PARITY comparisons={comparisons} maxAbsDiff={max_diff:.17g} path={max_path} absTol={ABS_TOL} relTol={REL_TOL}')
+          PY
+            # The committed JSON is the immutable runtime authority. Regeneration is a
+            # scientific parity check only; do not churn the frozen blob for sub-tolerance
+            # optimizer/BLAS floating-point jitter.
+            cp /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json
           fi
 
       - name: Persist frozen authority on branch
