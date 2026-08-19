@@ -187,7 +187,7 @@ async function runProvider(overrides: Record<string, unknown> = {}, games = [gam
   if (result.fullModular.status === "SELECTION") {
     assert.equal(result.fullModular.selection.market, "FG_RL_HOME_PLUS_1_5");
   }
-  assert.equal(result.sourceStatus, "CERTIFIED_LOWER_TIER_LIVE_V1:1");
+  assert.equal(result.sourceStatus, "CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1:1");
 }
 
 {
