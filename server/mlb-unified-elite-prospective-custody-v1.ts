@@ -162,7 +162,7 @@ function snapshotDigestPayload(snapshot: Omit<MlbUnifiedEliteProspectiveGameSnap
 function validateCandidateRows(
   officialDate: string,
   gamePk: number,
-  rows: readonly Array<{ officialDate: string; gamePk: number }>,
+  rows: ReadonlyArray<{ officialDate: string; gamePk: number }>,
   label: string,
 ): void {
   for (const row of rows) {
