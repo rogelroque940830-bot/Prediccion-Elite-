@@ -37,8 +37,8 @@ jobs:
           node-version: "20"
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+      - name: Install dependencies including SQLite native binding
+        run: npm ci
 
       - name: Type-check prospective custody surface
         shell: bash
