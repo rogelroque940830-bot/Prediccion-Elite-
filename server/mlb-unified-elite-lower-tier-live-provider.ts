@@ -237,7 +237,7 @@ export function createMlbUnifiedEliteLowerTierLiveProvider(
     return Object.freeze({
       ppHorizon,
       fullModular: fullModularDecision(fullScore),
-      sourceStatus: `CERTIFIED_LOWER_TIER_LIVE_V1:${games.length}`,
+      sourceStatus: `CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1:${games.length}`,
     });
   };
 }
