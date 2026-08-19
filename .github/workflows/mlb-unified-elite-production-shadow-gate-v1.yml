@@ -11,11 +11,13 @@ on:
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
+      - "server/mlb-unified-v16-live-providers.ts"
       - "server/mlb-c4-certified-materializer.ts"
       - "server/mlb-v68-prospective-state-live-adapter.ts"
       - "server/mlb-full-modular-bullpen-live-materializer.ts"
       - "server/mlb-full-modular-team-strength-live-materializer.ts"
       - "server/mlb-unified-elite-lower-tier-live-provider.ts"
+      - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
@@ -33,11 +35,13 @@ on:
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
+      - "server/mlb-unified-v16-live-providers.ts"
       - "server/mlb-c4-certified-materializer.ts"
       - "server/mlb-v68-prospective-state-live-adapter.ts"
       - "server/mlb-full-modular-bullpen-live-materializer.ts"
       - "server/mlb-full-modular-team-strength-live-materializer.ts"
       - "server/mlb-unified-elite-lower-tier-live-provider.ts"
+      - "server/mlb-unified-elite-shared-live-provider-bundle.ts"
       - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
@@ -80,6 +84,7 @@ jobs:
           ui=Path('server/mlb-unified-v16-ui-routes.ts').read_text()
           routes=Path('server/routes.ts').read_text()
           provider=Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text()
+          bundle=Path('server/mlb-unified-elite-shared-live-provider-bundle.ts').read_text()
           assert 'PROSPECTIVE_EMBARGO_SHADOW_ONLY' in shadow
           assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'outcomesRead: false' in shadow
@@ -91,8 +96,10 @@ jobs:
           assert 'finalBetRecommendationProduced: false' in ui
           assert 'stakeCalculated: false' in ui
           assert 'automaticBetPlacement: false' in ui
-          assert 'createMlbUnifiedEliteLowerTierLiveProvider' in routes
-          assert 'unifiedEliteLowerTierShadowProvider: createMlbUnifiedEliteLowerTierLiveProvider()' in routes
+          assert 'createMlbUnifiedEliteSharedLiveProviderBundle' in routes
+          assert 'registerMlbUnifiedV16UiRoutes(app, createMlbUnifiedEliteSharedLiveProviderBundle())' in routes
+          assert 'sharedClassifierMaterializer = new MlbC4CertifiedMaterializer()' in bundle
+          assert bundle.count('full13Materializer: sharedClassifierMaterializer') == 2
           assert 'MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE' in provider
           assert 'DECISION_TIMESTAMP_MISSING_OR_LATE' in provider
           print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_INTACT')
@@ -131,8 +138,8 @@ jobs:
             scripts/mlb-full-modular-live-operational-parity-v1.test.ts \
             scripts/mlb-unified-elite-shadow-v1.test.ts
 
-      - name: Bundle-check lower-tier provider integration
-        run: npx esbuild server/mlb-unified-elite-lower-tier-live-provider.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-lower-tier-provider.mjs
+      - name: Bundle-check shared lower-tier provider integration
+        run: npx esbuild server/mlb-unified-elite-shared-live-provider-bundle.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-lower-tier-provider.mjs
 
       - name: Execute certified hierarchy suite
         run: npx tsx scripts/mlb-unified-elite-router-v1.test.ts
@@ -158,6 +165,7 @@ jobs:
           text='\n'.join([
               Path('server/mlb-unified-elite-shadow-v1.ts').read_text().lower(),
               Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text().lower(),
+              Path('server/mlb-unified-elite-shared-live-provider-bundle.ts').read_text().lower(),
           ])
           forbidden=['theoddsapi','hard rock','stakeamount','bet_elite','placebet','settlementworker']
           found=[x for x in forbidden if x in text]
