@@ -168,6 +168,7 @@ function baseDeps(overrides: Record<string, unknown> = {}) {
     assessOperational: () => readyAssessment(),
     scoreFullModular: () => fullScore(),
     scorePpHorizon: () => ppScore(),
+    clock: () => NOW,
     ...overrides,
   } as any;
 }
@@ -229,6 +230,32 @@ async function runProvider(overrides: Record<string, unknown> = {}, games = [gam
       },
     }),
   });
+  assert.equal(result.ppHorizon.status, "NO_PLAY");
+  assert.equal(result.fullModular.status, "NO_PLAY");
+  assert.equal(result.sourceStatus, "LOWER_TIER_NO_T5_READY_GAMES");
+}
+
+{
+  let observedAtUtc = "";
+  const crossedDeadline = new Date("2026-08-19T19:56:00.000Z");
+  const result = await runProvider({
+    clock: () => crossedDeadline,
+    assessOperational: (input: any) => {
+      observedAtUtc = input.observedAtUtc;
+      return {
+        status: "NO_PLAY",
+        reason: "DECISION_TIMESTAMP_MISSING_OR_LATE",
+        diagnostics: {
+          failClosed: true,
+          sameDateHistoryAllowed: false,
+          outcomeFieldsUsed: [],
+          sportsbookPriceFieldsUsed: [],
+        },
+      };
+    },
+  });
+  assert.equal(NOW.toISOString(), "2026-08-19T19:50:00.000Z");
+  assert.equal(observedAtUtc, crossedDeadline.toISOString());
   assert.equal(result.ppHorizon.status, "NO_PLAY");
   assert.equal(result.fullModular.status, "NO_PLAY");
   assert.equal(result.sourceStatus, "LOWER_TIER_NO_T5_READY_GAMES");
