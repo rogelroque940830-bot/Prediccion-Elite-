@@ -196,7 +196,7 @@ export class MlbC4CertifiedMaterializer {
   }
 
   async assessGame(game: MlbP1SlateGame): Promise<C4LiveFeatureAssessment> {
-    const materialized = await this.materializePregameInput(game);
+    const materialized = await this.materializeFull13PregameInput(game);
     const assessment = buildC4LiveFeatures(materialized);
     if (Object.values(assessment.featureVector).some((value) => value === null || !Number.isFinite(value))) {
       throw new Error(`C4_CERTIFIED_FEATURE_VECTOR_INCOMPLETE:${game.gamePk}`);
@@ -205,7 +205,7 @@ export class MlbC4CertifiedMaterializer {
   }
 
   async assessFull13Game(game: MlbP1SlateGame): Promise<MlbFull13LiveFeatureAssessment> {
-    const materialized = await this.materializePregameInput(game);
+    const materialized = await this.materializeFull13PregameInput(game);
     const assessment = buildMlbFull13LiveFeatures(materialized);
     if (Object.values(assessment.featureVector).some((value) => value === null || !Number.isFinite(value))) {
       throw new Error(`FULL13_CERTIFIED_FEATURE_VECTOR_INCOMPLETE:${game.gamePk}`);
@@ -213,7 +213,7 @@ export class MlbC4CertifiedMaterializer {
     return assessment;
   }
 
-  private async materializePregameInput(game: MlbP1SlateGame): Promise<MlbFull13LivePregameInput> {
+  async materializeFull13PregameInput(game: MlbP1SlateGame): Promise<MlbFull13LivePregameInput> {
     if (!positiveInt(game.gamePk)) throw new Error("C4_CERTIFIED_TARGET_GAME_PK_INVALID");
     if (!validIsoDate(game.officialDate)) throw new Error(`C4_CERTIFIED_TARGET_DATE_INVALID:${game.officialDate}`);
     const homeTeamId = positiveInt(game.homeTeam.id);
