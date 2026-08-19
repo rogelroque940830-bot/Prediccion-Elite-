@@ -1,0 +1,201 @@
+name: MLB Unified Elite Live Authority Freeze V1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - production/mlb-unified-elite-live-v1
+    paths:
+      - "scripts/mlb-unified-elite-live-authority-extract-v1.py"
+      - ".github/workflows/mlb-unified-elite-live-authority-freeze-v1.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/mlb-unified-elite-live-authority-extract-v1.py"
+      - ".github/workflows/mlb-unified-elite-live-authority-freeze-v1.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  freeze-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout production integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve committed frozen authority for regeneration parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -s research/mlb-unified-elite-live-authority-v1.json; then
+            cp research/mlb-unified-elite-live-authority-v1.json /tmp/mlb-unified-elite-live-authority-v1.before.json
+            sha256sum /tmp/mlb-unified-elite-live-authority-v1.before.json
+          fi
+
+      - name: Fetch immutable research authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin research/mlb-market-state-matchup-modular-router-v1 research/mlb-modular-team-structure-nrfi-yrfi-v1
+          mkdir -p inputs/authority/scripts inputs/authority/research
+          git show e352e25c131a53536745323bcd3268dcec75a66d:scripts/mlb-market-state-matchup-modular-router-v1.py > inputs/authority/scripts/full.py
+          git show e352e25c131a53536745323bcd3268dcec75a66d:research/mlb-market-state-matchup-modular-router-v1-contract.json > inputs/authority/research/full-contract.json
+          git show 236a6af9db8b5d03699abb402333a6fff8b44484:scripts/mlb-multi-market-coverage-expansion-v1.py > inputs/authority/scripts/multi.py
+          git show 236a6af9db8b5d03699abb402333a6fff8b44484:research/mlb-multi-market-coverage-expansion-v1-contract.json > inputs/authority/research/multi-contract.json
+          git show b2cd717f49d3063c6b7ed679674661961679d2a2:scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py > inputs/authority/scripts/modular.py
+          git show b2cd717f49d3063c6b7ed679674661961679d2a2:research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json > inputs/authority/research/modular-contract.json
+          test "$(git rev-parse e352e25c131a53536745323bcd3268dcec75a66d:scripts/mlb-market-state-matchup-modular-router-v1.py)" = "791d7f5a1d499d78a4606e5c77e22a7da5ae2ca6"
+          test "$(git rev-parse e352e25c131a53536745323bcd3268dcec75a66d:research/mlb-market-state-matchup-modular-router-v1-contract.json)" = "265f785af088af397a01795cedd5d2a5381390bf"
+          test "$(git rev-parse 236a6af9db8b5d03699abb402333a6fff8b44484:research/mlb-multi-market-coverage-expansion-v1-contract.json)" = "ec8370779b9785f5283c5a062aa59e15b71585f3"
+          echo MLB_UNIFIED_ELITE_PINNED_AUTHORITIES_VERIFIED
+
+      - name: Download immutable Step12V3 universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pre-outcome custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Resolve immutable custody
+        id: custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find inputs/v66 -type f -name 'v66-pregame-custody.jsonl.gz' -print -quit)"
+          test -n "$FILE" && test -s "$FILE"
+          test "sha256:$(sha256sum "$FILE" | awk '{print $1}')" = 'sha256:1d7a7f35226186b0043606db3762c0e612ea90d6bca71fb4f1616a0dc493add2'
+          for S in 2022 2023 2024 2025 2026_YTD; do test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"; done
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install exact scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Extract frozen production authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/mlb-unified-elite-live-authority-extract-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.custody.outputs.file }}' \
+            --multi-scorer inputs/authority/scripts/multi.py \
+            --multi-contract inputs/authority/research/multi-contract.json \
+            --modular-scorer inputs/authority/scripts/modular.py \
+            --modular-contract inputs/authority/research/modular-contract.json \
+            --full-scorer inputs/authority/scripts/full.py \
+            --full-contract inputs/authority/research/full-contract.json \
+            --out research/mlb-unified-elite-live-authority-v1.json
+          python - <<'PY'
+          import json
+          a=json.load(open('research/mlb-unified-elite-live-authority-v1.json'))
+          assert a['schemaVersion']=='courtedge-mlb-unified-elite-live-authority.v1'
+          assert len(a['directionalModels'])==3 and len(a['variants'])==7
+          assert a['runtimePolicy']['runtimeRefitAllowed'] is False
+          assert a['runtimePolicy']['outcomeInputAllowed'] is False
+          assert a['minimumSelectedSideModelProbability']==0.60
+          for h in ('F3','F5','FG'):
+            m=a['directionalModels'][h]
+            assert len(m['weights'])==m['classCount']-1
+          print('MLB_UNIFIED_ELITE_LIVE_AUTHORITY_VALIDATED')
+          PY
+
+      - name: Enforce deterministic scientific regeneration parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -s /tmp/mlb-unified-elite-live-authority-v1.before.json; then
+            python - <<'PY'
+          import json, math
+
+          BEFORE='/tmp/mlb-unified-elite-live-authority-v1.before.json'
+          AFTER='research/mlb-unified-elite-live-authority-v1.json'
+          # SciPy L-BFGS-B/BLAS can move converged coefficients by a few 1e-11
+          # across runner images while preserving the same frozen optimum. Keep
+          # structure exact and allow only a 1e-10 numeric reproducibility envelope.
+          ABS_TOL=1e-10
+          REL_TOL=1e-10
+          before=json.load(open(BEFORE, encoding='utf-8'))
+          after=json.load(open(AFTER, encoding='utf-8'))
+          max_diff=0.0
+          max_path='$'
+          comparisons=0
+
+          def fail(path, message):
+              raise SystemExit(f'AUTHORITY_REGENERATION_DRIFT:{path}:{message}')
+
+          def compare(a, b, path='$'):
+              global max_diff, max_path, comparisons
+              if isinstance(a, bool) or isinstance(b, bool):
+                  if type(a) is not type(b) or a != b:
+                      fail(path, f'{a!r}!={b!r}')
+                  return
+              if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                  x=float(a); y=float(b); comparisons += 1
+                  if not (math.isfinite(x) and math.isfinite(y)):
+                      if x != y: fail(path, 'NONFINITE_MISMATCH')
+                      return
+                  diff=abs(x-y)
+                  if diff > max_diff:
+                      max_diff=diff; max_path=path
+                  limit=ABS_TOL + REL_TOL * max(abs(x), abs(y))
+                  if diff > limit:
+                      fail(path, f'NUMERIC_DIFF={diff:.17g}:LIMIT={limit:.17g}:BEFORE={x:.17g}:AFTER={y:.17g}')
+                  return
+              if type(a) is not type(b):
+                  fail(path, f'TYPE:{type(a).__name__}!={type(b).__name__}')
+              if isinstance(a, dict):
+                  if set(a) != set(b):
+                      fail(path, f'KEYS:{sorted(set(a)^set(b))}')
+                  for key in sorted(a):
+                      compare(a[key], b[key], f'{path}.{key}')
+                  return
+              if isinstance(a, list):
+                  if len(a) != len(b):
+                      fail(path, f'LENGTH:{len(a)}!={len(b)}')
+                  for index, (x, y) in enumerate(zip(a, b)):
+                      compare(x, y, f'{path}[{index}]')
+                  return
+              if a != b:
+                  fail(path, f'{a!r}!={b!r}')
+
+          compare(before, after)
+          print(f'MLB_UNIFIED_ELITE_LIVE_AUTHORITY_REGENERATION_NUMERIC_PARITY comparisons={comparisons} maxAbsDiff={max_diff:.17g} path={max_path} absTol={ABS_TOL} relTol={REL_TOL}')
+          PY
+            # The committed JSON is the immutable runtime authority. Regeneration is a
+            # scientific parity check only; do not churn the frozen blob for sub-tolerance
+            # optimizer/BLAS floating-point jitter.
+            cp /tmp/mlb-unified-elite-live-authority-v1.before.json research/mlb-unified-elite-live-authority-v1.json
+          fi
+
+      - name: Persist frozen authority on branch
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/mlb-unified-elite-live-authority-v1.json
+          if git diff --cached --quiet; then echo AUTHORITY_ALREADY_CURRENT; exit 0; fi
+          git commit -m "Freeze exact Full Modular live scoring authority"
+          git push origin HEAD:production/mlb-unified-elite-live-v1
