@@ -1,0 +1,94 @@
+name: MLB Unified Elite Prospective Custody V1
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "server/mlb-unified-elite-prospective-custody-v1.ts"
+      - "server/mlb-unified-elite-prospective-capture-service-v1.ts"
+      - "server/s6e-staging-entry.ts"
+      - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
+      - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
+  push:
+    branches:
+      - production/mlb-lower-tier-prospective-custody-v1
+    paths:
+      - "server/mlb-unified-elite-prospective-custody-v1.ts"
+      - "server/mlb-unified-elite-prospective-capture-service-v1.ts"
+      - "server/s6e-staging-entry.ts"
+      - "scripts/mlb-unified-elite-prospective-custody-v1.test.ts"
+      - ".github/workflows/mlb-unified-elite-prospective-custody-v1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  prospective-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check prospective custody surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-unified-elite-prospective-custody-v1.ts \
+            server/mlb-unified-elite-prospective-capture-service-v1.ts \
+            scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+
+      - name: Execute immutable custody regression suite
+        run: npx tsx --test scripts/mlb-unified-elite-prospective-custody-v1.test.ts
+
+      - name: Prove prospective safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          custody=Path('server/mlb-unified-elite-prospective-custody-v1.ts').read_text()
+          capture=Path('server/mlb-unified-elite-prospective-capture-service-v1.ts').read_text()
+          startup=Path('server/s6e-staging-entry.ts').read_text()
+          shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
+          combined=(custody+'\n'+capture).lower()
+          assert 'insert or ignore' in custody.lower()
+          assert 'capture_not_strictly_pregame_t5' in custody.lower()
+          assert 'railway_volume_mount_path' in custody.lower()
+          assert 'outcomereadunlocked: false' in custody.replace(' ', '').lower()
+          assert 'promotionallowed: false' in custody.replace(' ', '').lower()
+          assert 'lowerTierRecommendationVisible: false' in shadow
+          assert 'startMlbUnifiedEliteProspectiveCaptureWorker' in startup
+          assert 'registerMlbUnifiedEliteProspectiveStatusRoute' in startup
+          forbidden=[
+            'theoddsapi',
+            'selective-odds',
+            'settlement-worker',
+            'placebet',
+            'bet_elite',
+            'stakeamount',
+          ]
+          found=[term for term in forbidden if term in combined]
+          assert not found, found
+          print('MLB_LOWER_TIER_PROSPECTIVE_CUSTODY_SAFETY_BOUNDARY_INTACT')
+          PY
+
+      - name: Build production backend with capture worker
+        run: npm run build:backend
