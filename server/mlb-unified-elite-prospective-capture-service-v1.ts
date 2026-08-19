@@ -181,16 +181,33 @@ export class MlbUnifiedEliteProspectiveCaptureService {
       throw new Error("MLB_UNIFIED_ELITE_PROSPECTIVE_CAPTURE_BEFORE_BOUNDARY");
     }
 
-    const gameDeadlines = slate.games.flatMap((game) => {
+    // Do not freeze the date's eligibility from a transiently empty or structurally
+    // incomplete schedule response. A later healthy poll may still arrive well before
+    // the first T-5 boundary, so these conditions are retryable rather than evidence.
+    const scheduledGames = slate.games.filter((game) =>
+      game.officialDate === officialDate && !isCancelled(game),
+    );
+    if (scheduledGames.length === 0) {
+      throw new Error(`MLB_UNIFIED_ELITE_PROSPECTIVE_SLATE_EMPTY_RETRY:${officialDate}`);
+    }
+
+    const gameDeadlines: Array<{ game: MlbP1SlateGame; deadline: string }> = [];
+    const unresolvedScheduledGamePks: number[] = [];
+    for (const game of scheduledGames) {
       try {
-        return [{ game, deadline: targetIdentity(game).decisionDeadlineUtc }];
+        gameDeadlines.push({ game, deadline: targetIdentity(game).decisionDeadlineUtc });
       } catch {
-        return [];
+        unresolvedScheduledGamePks.push(game.gamePk);
       }
-    });
-    const earliestDecisionDeadlineUtc = gameDeadlines.length
-      ? [...gameDeadlines].sort((left, right) => Date.parse(left.deadline) - Date.parse(right.deadline))[0].deadline
-      : null;
+    }
+    if (unresolvedScheduledGamePks.length > 0) {
+      throw new Error(
+        `MLB_UNIFIED_ELITE_PROSPECTIVE_SCHEDULE_IDENTITY_RETRY:${unresolvedScheduledGamePks.sort((a, b) => a - b).join(",")}`,
+      );
+    }
+
+    const earliestDecisionDeadlineUtc = [...gameDeadlines]
+      .sort((left, right) => Date.parse(left.deadline) - Date.parse(right.deadline))[0].deadline;
     this.custody.observeDate({ officialDate, observedAtUtc: ranAtUtc, earliestDecisionDeadlineUtc });
 
     const finalReady = slate.games.filter((game) =>
@@ -297,8 +314,7 @@ export class MlbUnifiedEliteProspectiveCaptureService {
     const snapshotPks = new Set(this.custody.listDate(officialDate).map((snapshot) => snapshot.gamePk));
     const pastDeadlineUncaptured = gameDeadlines
       .filter(({ game, deadline }) =>
-        !isCancelled(game)
-        && Date.parse(deadline) <= now.getTime()
+        Date.parse(deadline) <= now.getTime()
         && !snapshotPks.has(game.gamePk))
       .map(({ game }) => game.gamePk);
     for (const gamePk of [...tooLateUncapturedGames, ...pastDeadlineUncaptured]) {
@@ -312,11 +328,8 @@ export class MlbUnifiedEliteProspectiveCaptureService {
       this.custody.markDatePartial(officialDate, `CAPTURE_SOURCE_FAILURE:${failures[0]}`);
     }
 
-    const allDeadlinesPassed = gameDeadlines.length > 0
-      && gameDeadlines.every(({ deadline }) => Date.parse(deadline) <= now.getTime());
-    const allRequiredCaptured = gameDeadlines
-      .filter(({ game }) => !isCancelled(game))
-      .every(({ game }) => snapshotPks.has(game.gamePk));
+    const allDeadlinesPassed = gameDeadlines.every(({ deadline }) => Date.parse(deadline) <= now.getTime());
+    const allRequiredCaptured = gameDeadlines.every(({ game }) => snapshotPks.has(game.gamePk));
     if (allDeadlinesPassed && allRequiredCaptured && failures.length === 0 && tooLateUncapturedGames.length === 0) {
       this.custody.markDateComplete(officialDate);
     }
