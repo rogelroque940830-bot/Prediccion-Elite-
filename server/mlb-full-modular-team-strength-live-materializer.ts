@@ -59,6 +59,7 @@ function positiveInt(value: unknown): number | null {
 }
 
 function nonNegativeInt(value: unknown): number | null {
+  if (value === null || value === undefined || clean(value) === "") return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
