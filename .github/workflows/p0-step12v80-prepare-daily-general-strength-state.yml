@@ -80,6 +80,46 @@ jobs:
           test -s "$ROOT/t5-audit/t5-starter-identity-audit.json"
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
 
+      - name: Diagnose frozen-versus-gap audit overlap
+        shell: bash
+        env:
+          BASE_ROOT: ${{ steps.base.outputs.root }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          base=json.load(open(os.path.join(os.environ['BASE_ROOT'],'t5-audit','t5-starter-identity-audit.json')))['rows']
+          gap=json.load(open('v68-ledger/v68/gap/t5-starter-identity-audit.json'))['rows']
+          bm={int(r['gamePk']):r for r in base}
+          gm={int(r['gamePk']):r for r in gap}
+          overlap=sorted(set(bm)&set(gm))
+          print('AUDIT_OVERLAP_COUNT',len(overlap))
+          strict=[]; upgrade=[]; other=[]
+          for gp in overlap:
+            b,g=bm[gp],gm[gp]
+            if b==g:
+              strict.append(gp); continue
+            differing=sorted(k for k in set(b)|set(g) if b.get(k)!=g.get(k))
+            if (b.get('officialDate')==g.get('officialDate') and
+                b.get('sourceHistorical') is False and b.get('pregame') is False and b.get('probableBothKnown') is False and
+                b.get('homeProbablePitcherId') is None and b.get('awayProbablePitcherId') is None and
+                g.get('sourceHistorical') is True and g.get('pregame') is True and g.get('probableBothKnown') is True and
+                isinstance(g.get('homeProbablePitcherId'),int) and isinstance(g.get('awayProbablePitcherId'),int)):
+              upgrade.append((gp,differing))
+            else:
+              other.append((gp,differing,b,g))
+          print('AUDIT_STRICT_IDENTICAL',len(strict))
+          print('AUDIT_PLACEHOLDER_TO_HISTORICAL_UPGRADE',len(upgrade),[x[0] for x in upgrade])
+          print('AUDIT_OTHER_CONFLICTS',len(other),[x[0] for x in other])
+          for gp,diff in upgrade:
+            print('UPGRADE',gp,'DIFF_FIELDS',','.join(diff))
+          for gp,diff,b,g in other:
+            print('OTHER',gp,'DIFF_FIELDS',','.join(diff))
+            print('BASE',json.dumps(b,sort_keys=True))
+            print('GAP',json.dumps(g,sort_keys=True))
+          assert not other, 'unexpected model/identity conflict exists; do not relax fail-closed merge'
+          PY
+
       - name: Reproduce exact V80 prepare build for 2026-08-20
         working-directory: code
         shell: bash
