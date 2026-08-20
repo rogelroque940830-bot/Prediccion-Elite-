@@ -372,3 +372,44 @@ test("half results contribute only to their corresponding weighted side", () => 
     assert.equal(report.overall.hitRate, 0.5);
   });
 });
+
+test("settled filtering happens in SQL before limit is applied", () => {
+  withStore((store) => {
+    const settled = store.appendPrediction(predictionPayload({
+      clientRequestId: "req-filter-settled",
+      game: {
+        gamePk: 778001,
+        gameDate: "2026-07-20",
+        commenceTime: "2026-07-20T23:10:00.000Z",
+        homeTeam: "Settled Home",
+        awayTeam: "Settled Away",
+      },
+    })).data;
+    store.appendSettlement(settled.id, {
+      clientRequestId: "req-filter-settled-event",
+      result: "WIN",
+      source: "official",
+    });
+
+    const pending = store.appendPrediction(predictionPayload({
+      clientRequestId: "req-filter-pending",
+      game: {
+        gamePk: 778002,
+        gameDate: "2026-07-21",
+        commenceTime: "2026-07-21T23:10:00.000Z",
+        homeTeam: "Pending Home",
+        awayTeam: "Pending Away",
+      },
+    })).data;
+
+    const pendingRows = store.listRecords({ settled: false, limit: 1 });
+    assert.equal(pendingRows.length, 1);
+    assert.equal(pendingRows[0].prediction.id, pending.id);
+    assert.equal(pendingRows[0].settlement, null);
+
+    const settledRows = store.listRecords({ settled: true, limit: 1 });
+    assert.equal(settledRows.length, 1);
+    assert.equal(settledRows[0].prediction.id, settled.id);
+    assert.ok(settledRows[0].settlement);
+  });
+});
