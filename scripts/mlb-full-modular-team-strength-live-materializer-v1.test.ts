@@ -68,6 +68,7 @@ test("valid schedule rows remain schedule-only and do not trigger fallback", asy
   const snapshot = await materializer.materializeDate("2026-08-19");
   assert.equal(snapshot.priorGames[10], 1);
   assert.equal(snapshot.priorGames[20], 1);
+  assert.deepEqual(snapshot.quarantinedGamePks, []);
   assert.equal(urls.length, 1);
   assert.match(urls[0], /\/schedule\?/);
   assert.equal(snapshot.provenance.sameDateOutcomesUsed, false);
@@ -99,8 +100,34 @@ test("structurally invalid final schedule row is recovered only from official li
   const snapshot = await materializer.materializeDate("2026-08-19");
   assert.equal(snapshot.priorGames[145], 1);
   assert.equal(snapshot.priorGames[141], 1);
+  assert.deepEqual(snapshot.quarantinedGamePks, []);
   assert.equal(snapshot.provenance.structuralRecovery, "MLB_OFFICIAL_LIVE_FEED_FOR_INVALID_FINAL_SCHEDULE_ROWS");
   assert.equal(urls.filter((url) => url.endsWith("/game/824621/feed/live")).length, 1);
+});
+
+test("stale schedule FINAL contradicted by official non-final live feed is quarantined, not scored", async () => {
+  const materializer = new MlbFullModularTeamStrengthLiveMaterializer({
+    fetchImpl: async (url) => {
+      if (url.includes("/schedule?")) {
+        return jsonResponse(schedulePayload({
+          gamePk: 823543,
+          officialDate: "2026-04-03",
+          status: finalStatus(),
+          teams: {
+            home: { team: { id: 145 }, score: null },
+            away: { team: { id: 141 }, score: null },
+          },
+        }));
+      }
+      return jsonResponse(liveFeed({ gamePk: 823543, final: false }));
+    },
+  });
+
+  const snapshot = await materializer.materializeDate("2026-08-19");
+  assert.deepEqual(snapshot.quarantinedGamePks, [823543]);
+  assert.equal(snapshot.priorGames[145], undefined);
+  assert.equal(snapshot.priorGames[141], undefined);
+  assert.equal(snapshot.provenance.historicalQuarantine, "OFFICIAL_LIVE_FEED_NON_FINAL_ROWS_EXCLUDED");
 });
 
 test("official live-feed recovery fails closed on schedule/live team conflict", async () => {
