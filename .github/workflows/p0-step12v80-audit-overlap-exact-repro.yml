@@ -1,0 +1,89 @@
+name: P0 Step 12V80 Audit Overlap Exact Repro
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v80-history-merge.ts'
+      - 'scripts/p0-step12v80-history-merge.test.ts'
+      - 'scripts/p0-step12v80-general-strength-live-context.ts'
+      - '.github/workflows/p0-step12v80-audit-overlap-exact-repro.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  exact-read-only-repro:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout fix branch PR head
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused immutable-history regression tests
+        run: npx tsx scripts/p0-step12v80-history-merge.test.ts
+
+      - name: Checkout V68 immutable prospective source ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: v68-ledger
+          fetch-depth: 1
+
+      - name: Download frozen V68 source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Expand frozen 2026 source base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          ROOT="$(dirname "$TABLE")"
+          test -s "$ROOT/cohort/official-acquisition.json"
+          test -s "$ROOT/cohort/starting-pitcher-history.json"
+          test -s "$ROOT/cohort/pregame-lineup-history.json"
+          test -s "$ROOT/t5-audit/t5-starter-identity-audit.json"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Reproduce exact 2026-08-20 V80 prepare path without ledger write
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
+            --mode prepare \
+            --base-root '${{ steps.base.outputs.root }}' \
+            --gap-root v68-ledger/v68/gap \
+            --target-date '2026-08-20' \
+            --out work/v80-state.json
+          python - <<'PY'
+          import json
+          x=json.load(open('work/v80-state.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v80-general-strength-live-state.v1'
+          assert x['targetOfficialDate']=='2026-08-20'
+          assert x['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert x['chronology']['sameDateCompletedGamesUsed'] is False
+          assert x['diagnostics']['rankedTeams'] >= 24
+          assert x['policy']['containsCurrentGameOutcome'] is False
+          assert x['policy']['containsMarketPrice'] is False
+          assert x['policy']['realFinancialExposure']==0
+          print('V80_2026_08_20_EXACT_READ_ONLY_REPRO_OK')
+          PY
