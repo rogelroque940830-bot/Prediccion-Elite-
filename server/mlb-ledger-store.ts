@@ -527,6 +527,11 @@ export class MlbLedgerStore {
     if (filters.confidence) { clauses.push("p.confidence_label = @confidence"); params.confidence = filters.confidence; }
     if (filters.signal) { clauses.push("p.signal = @signal"); params.signal = filters.signal; }
     if (filters.stage) { clauses.push("p.analysis_stage = @stage"); params.stage = filters.stage; }
+    if (filters.settled === true) {
+      clauses.push("EXISTS (SELECT 1 FROM mlb_settlement_events_v1 sx WHERE sx.prediction_id = p.id)");
+    } else if (filters.settled === false) {
+      clauses.push("NOT EXISTS (SELECT 1 FROM mlb_settlement_events_v1 sx WHERE sx.prediction_id = p.id)");
+    }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = Math.min(10000, Math.max(1, filters.limit ?? 1000));
 
@@ -578,7 +583,7 @@ export class MlbLedgerStore {
       }) : null;
       return { prediction, settlement };
     });
-    return filters.settled == null ? records : records.filter((record) => Boolean(record.settlement) === filters.settled);
+    return records;
   }
 }
 
