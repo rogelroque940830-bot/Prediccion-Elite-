@@ -5,8 +5,5 @@ builder = "NIXPACKS"
 startCommand = "node scripts/storage-retention-guard.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-
-[deploy.healthcheck]
-path = "/health"
-timeout = 60
-interval = 30
+healthcheckPath = "/health"
+healthcheckTimeout = 60
