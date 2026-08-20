@@ -1,0 +1,140 @@
+{
+  "policy": {
+    "betEliteAllowed": false,
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "realFinancialExposure": 0,
+    "recalibrationPerformed": false,
+    "refitPerformed": false,
+    "researchOnly": true,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "v68Changed": false
+  },
+  "rows": [
+    {
+      "awayBattingOrder": [
+        663757,
+        700250,
+        671218,
+        671277,
+        665862,
+        806146,
+        682987,
+        669224,
+        676609
+      ],
+      "awayBullpenPitches1d": 80.0,
+      "awayPitcherId": 543037,
+      "awayStrength": {
+        "games": 126,
+        "primaryTier": "TOP",
+        "runDifferentialPerGame": 0.7063492063492064,
+        "runDifferentialPercentile": 0.8275862068965517,
+        "strengthScore": 0.8275862068965517,
+        "winPct": 0.5634920634920635,
+        "winPctPercentile": 0.8275862068965517,
+        "wins": 71
+      },
+      "awayTeamId": 147,
+      "bullpenPitches1dAdv": 23.0,
+      "canonicalFirstCaptureImmutable": true,
+      "canonicalSourceRecordDigest": "4fa76f9f53726a21ab956e0d0b8448c6d847867752dbc0acaf71fdac388322aa",
+      "capturedAt": "2026-08-20T22:25:19.632Z",
+      "classifierScore": 0.45807167365914947,
+      "consensusScore": 0.5196945323721183,
+      "containsMarketPrice": false,
+      "containsOutcome": false,
+      "contextSourceEvidenceDigest": "359d7d47fa5e9d252198fd7b0986ab5b044644c4824afeda6881b39fa93a595b",
+      "contextStateDigest": "a410a8f50711ec14f54fd8df54d3f84cc305309fb7b0c503ea4a28f7357fc7d4",
+      "frozenClassifier": {
+        "aPlus": false,
+        "f5Consensus": false,
+        "policy": {
+          "acquiresLiveEvidence": false,
+          "changesLiveRecommendation": false,
+          "changesRanking": false,
+          "changesStake": false,
+          "medianImputation": true,
+          "noFeatureSearch": true,
+          "noThresholdSearch": true,
+          "standardScalerFrozen": true
+        },
+        "premiumA": false,
+        "probabilities": {
+          "aPlusC4PHome": 0.48759148933504604,
+          "aPlusFull13PHome": 0.45807167365914947,
+          "f5C4PHome": 0.4462033328692729,
+          "f5Full13PHome": 0.4333041801088846
+        },
+        "version": "mlb-frozen-a-plus-classifier.v1"
+      },
+      "full13FeatureDigest": "701c684d3dd07431fc4e51b8be13006d93102bd2214003443e629c2eac2bba83",
+      "gamePk": 824802,
+      "homeBattingOrder": [
+        702616,
+        624413,
+        683002,
+        694212,
+        687952,
+        687637,
+        665750,
+        681297,
+        665966
+      ],
+      "homeBullpenPitches1d": 57.0,
+      "homePitcherId": 680694,
+      "homeStrength": {
+        "games": 127,
+        "primaryTier": "MID",
+        "runDifferentialPerGame": -0.2440944881889764,
+        "runDifferentialPercentile": 0.39655172413793105,
+        "strengthScore": 0.3620689655172414,
+        "winPct": 0.48031496062992124,
+        "winPctPercentile": 0.3275862068965517,
+        "wins": 61
+      },
+      "homeTeamId": 110,
+      "officialDate": "2026-08-20",
+      "p16Home": 0.48011828328325973,
+      "p16Selected": 0.5198817167167402,
+      "p68Home": 0.4803054676278818,
+      "p68Selected": 0.5196945323721183,
+      "selectedSide": "AWAY",
+      "sourceCutoffAt": "2026-08-20T22:25:19.632Z",
+      "startTime": "2026-08-20T22:35:00Z",
+      "v16": {
+        "awayWinProbability": 0.5198817167167402,
+        "homeWinProbability": 0.48011828328325973,
+        "rawLogit": -0.048919092532114405
+      },
+      "v16V68Agree": true,
+      "v68": {
+        "awayWinProbability": 0.5196945323721183,
+        "homeWinProbability": 0.4803054676278818,
+        "rawLogit": -0.043512313280063525
+      },
+      "v68FeatureDigest": "b948243a3d36b3063d4362d63d753c89d2568561e413a6f7e4649c36f6627845",
+      "v68MechanismDiagnostics": {
+        "awayExpectedStarterOuts": 17.233964881766653,
+        "awayFgStarterShare": 0.6382949956209871,
+        "homeExpectedStarterOuts": 16.51952271990352,
+        "homeFgStarterShare": 0.6118341748112415,
+        "meanFgStarterShare": 0.6250645852161143
+      }
+    }
+  ],
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-prospective-capture.v1",
+  "scientificStatus": "V80_OUTCOME_FREE_PREGAME_GAME_SNAPSHOTS_CAPTURED",
+  "summary": {
+    "canonicalGames": 1,
+    "distinctOfficialDates": 1,
+    "duplicateCapturesReturnedExisting": 0,
+    "maximumC4LiveParityAbsoluteDifferenceThisRun": 0.0,
+    "newCaptures": 1
+  },
+  "targetRoute": "V16_V68_CONSENSUS_T0.550"
+}

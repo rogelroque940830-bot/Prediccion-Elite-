@@ -1,0 +1,112 @@
+{
+  "awayBattingOrder": [
+    663757,
+    700250,
+    671218,
+    671277,
+    665862,
+    806146,
+    682987,
+    669224,
+    676609
+  ],
+  "awayBullpenPitches1d": 80,
+  "awayPitcherId": 543037,
+  "awayStrength": {
+    "games": 126,
+    "primaryTier": "TOP",
+    "runDifferentialPerGame": 0.7063492063492064,
+    "runDifferentialPercentile": 0.8275862068965517,
+    "strengthScore": 0.8275862068965517,
+    "winPct": 0.5634920634920635,
+    "winPctPercentile": 0.8275862068965517,
+    "wins": 71
+  },
+  "awayTeamId": 147,
+  "bullpenPitches1dAdv": 23,
+  "capturedAt": "2026-08-20T22:25:19.632Z",
+  "containsMarketPrice": false,
+  "containsOutcome": false,
+  "exactPregameLineupSemantics": true,
+  "exactPregameProbableStarterSemantics": true,
+  "frozenClassifier": {
+    "aPlus": false,
+    "f5Consensus": false,
+    "policy": {
+      "acquiresLiveEvidence": false,
+      "changesLiveRecommendation": false,
+      "changesRanking": false,
+      "changesStake": false,
+      "medianImputation": true,
+      "noFeatureSearch": true,
+      "noThresholdSearch": true,
+      "standardScalerFrozen": true
+    },
+    "premiumA": false,
+    "probabilities": {
+      "aPlusC4PHome": 0.48759148933504604,
+      "aPlusFull13PHome": 0.45807167365914947,
+      "f5C4PHome": 0.4462033328692729,
+      "f5Full13PHome": 0.4333041801088846
+    },
+    "version": "mlb-frozen-a-plus-classifier.v1"
+  },
+  "full13BuilderVersion": "mlb-full13-live-canonical-v1",
+  "full13Diagnostics": {
+    "awayPriorCompleteLineups": 125,
+    "awayPriorGames": 126,
+    "awayStarterPriorBattersFaced": 353,
+    "canonicalStep12VFormulaContractFrozen": true,
+    "homePriorCompleteLineups": 126,
+    "homePriorGames": 127,
+    "homeStarterPriorBattersFaced": 562,
+    "leaguePriorStarterBattersFaced": 82442,
+    "starterShrinkagePriorBattersFaced": 72
+  },
+  "full13Features": {
+    "combined_starter_kbb": 0.31451481943800935,
+    "combined_team_ra10": 7.5,
+    "combined_team_rs10": 8.9,
+    "lineup_continuity_rate_adv": 0,
+    "lineup_exposure_rate_adv": 0.05638878473524145,
+    "min_probable_prior_bf": 353,
+    "starter_hr_adv": 0.007176146585309011,
+    "starter_kbb_adv": -0.07529140440277993,
+    "starter_runrisk_adv": -0.0060543391900806515,
+    "team_ra10_adv": -2.0999999999999996,
+    "team_rd10_diff": 0,
+    "team_rs10_diff": 2.1,
+    "team_win10_diff": -0.09999999999999998
+  },
+  "gamePk": 824802,
+  "homeBattingOrder": [
+    702616,
+    624413,
+    683002,
+    694212,
+    687952,
+    687637,
+    665750,
+    681297,
+    665966
+  ],
+  "homeBullpenPitches1d": 57,
+  "homePitcherId": 680694,
+  "homeStrength": {
+    "games": 127,
+    "primaryTier": "MID",
+    "runDifferentialPerGame": -0.2440944881889764,
+    "runDifferentialPercentile": 0.39655172413793105,
+    "strengthScore": 0.3620689655172414,
+    "winPct": 0.48031496062992124,
+    "winPctPercentile": 0.3275862068965517,
+    "wins": 61
+  },
+  "homeTeamId": 110,
+  "leadMinutes": 9.6728,
+  "officialDate": "2026-08-20",
+  "sourceCutoffAt": "2026-08-20T22:25:19.632Z",
+  "sourceEvidenceDigest": "359d7d47fa5e9d252198fd7b0986ab5b044644c4824afeda6881b39fa93a595b",
+  "startTime": "2026-08-20T22:35:00Z",
+  "wholeOfficialDatePriorStateOnly": true
+}
