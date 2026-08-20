@@ -11,6 +11,7 @@ import { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 import { buildMlbInjuryDecisionReport } from "./mlb-injury-decision-report";
 import { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
 import { runMlbAutoSettlement } from "./mlb-settlement-worker";
+import { createMlbSettlementStoreView } from "./mlb-settlement-lightweight-store";
 import { MlbClosingLineStore } from "./mlb-closing-line-store";
 import { buildMlbClosingLineReport, enrichRecordsForMlbReports } from "./mlb-closing-line-report";
 import { runMlbClosingLineCapture } from "./mlb-closing-line-worker";
@@ -55,6 +56,7 @@ function queryFilters(query: Record<string, unknown>) {
 
 export function registerMlbLedgerRoutes(app: Express): void {
   const store = getMlbLedgerStore();
+  const settlementStore = createMlbSettlementStoreView(store);
   const closingStore = getMlbClosingLineStore();
 
   app.get("/api/mlb/ledger/v1/status", (_req, res) => {
@@ -63,7 +65,7 @@ export function registerMlbLedgerRoutes(app: Express): void {
 
   app.post("/api/mlb/ledger/v1/settle-pending", async (_req, res) => {
     try {
-      const data = await runMlbAutoSettlement(store, closingStore);
+      const data = await runMlbAutoSettlement(settlementStore, closingStore);
       res.json({ success: true, data });
     } catch (error: any) {
       res.status(500).json({
