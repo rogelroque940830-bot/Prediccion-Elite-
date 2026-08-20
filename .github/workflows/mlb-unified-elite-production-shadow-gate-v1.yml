@@ -21,6 +21,8 @@ on:
       - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - "scripts/mlb-full-modular-team-strength-live-materializer-v1.test.ts"
+      - "scripts/mlb-full-modular-team-strength-live-smoke.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
       - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
       - "scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts"
@@ -46,6 +48,8 @@ on:
       - "server/routes.ts"
       - "scripts/mlb-unified-elite-router-v1.test.ts"
       - "scripts/mlb-full-modular-live-operational-parity-v1.test.ts"
+      - "scripts/mlb-full-modular-team-strength-live-materializer-v1.test.ts"
+      - "scripts/mlb-full-modular-team-strength-live-smoke.ts"
       - "scripts/mlb-unified-elite-shadow-v1.test.ts"
       - "scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts"
       - "scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts"
@@ -141,6 +145,8 @@ jobs:
             server/mlb-full-modular-team-strength-live-materializer.ts \
             scripts/mlb-unified-elite-router-v1.test.ts \
             scripts/mlb-full-modular-live-operational-parity-v1.test.ts \
+            scripts/mlb-full-modular-team-strength-live-materializer-v1.test.ts \
+            scripts/mlb-full-modular-team-strength-live-smoke.ts \
             scripts/mlb-unified-elite-shadow-v1.test.ts \
             scripts/mlb-v68-prospective-state-live-adapter-v1.test.ts
 
@@ -152,6 +158,12 @@ jobs:
 
       - name: Execute certified live bridge suite
         run: npx tsx scripts/mlb-full-modular-live-operational-parity-v1.test.ts
+
+      - name: Execute official team-strength recovery regression suite
+        run: npx tsx --test scripts/mlb-full-modular-team-strength-live-materializer-v1.test.ts
+
+      - name: Execute real MLB Aug 19 team-strength smoke
+        run: npx tsx scripts/mlb-full-modular-team-strength-live-smoke.ts
 
       - name: Execute production shadow integration suite
         run: npx tsx scripts/mlb-unified-elite-shadow-v1.test.ts
