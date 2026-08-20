@@ -1,0 +1,112 @@
+name: Diagnostic P0 Step 12V80 Run18 Repro
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnostic-p0-step12v80-run18-repro.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reproduce-run18-read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact default-branch V80 code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout V68 immutable prospective source ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: v68-ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prove run18 upstream prerequisites are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s v68-ledger/v68/gap/ledger-manifest.json
+          test -s v68-ledger/v68/states/2026-08-20.json
+          python - <<'PY'
+          import json
+          m=json.load(open('v68-ledger/v68/gap/ledger-manifest.json'))
+          print('V68_LAST_OFFICIAL_DATE', m.get('lastOfficialDate'))
+          assert m.get('lastOfficialDate') == '2026-08-19'
+          PY
+
+      - name: Install Node dependencies
+        working-directory: code
+        run: npm ci --ignore-scripts
+
+      - name: Download exact frozen V68 source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Expand frozen 2026 source base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          ROOT="$(dirname "$TABLE")"
+          test -s "$ROOT/cohort/official-acquisition.json"
+          test -s "$ROOT/cohort/starting-pitcher-history.json"
+          test -s "$ROOT/cohort/pregame-lineup-history.json"
+          test -s "$ROOT/t5-audit/t5-starter-identity-audit.json"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Reproduce exact V80 prepare build for 2026-08-20
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
+            --mode prepare \
+            --base-root '../${{ steps.base.outputs.root }}' \
+            --gap-root ../v68-ledger/v68/gap \
+            --target-date '2026-08-20' \
+            --out ../work/v80-state.json
+
+      - name: Verify output without writing prospective custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          x=json.load(open('work/v80-state.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v80-general-strength-live-state.v1'
+          assert x['targetOfficialDate']=='2026-08-20'
+          assert x['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert x['chronology']['sameDateCompletedGamesUsed'] is False
+          assert x['diagnostics']['rankedTeams'] >= 24
+          assert x['policy']['containsCurrentGameOutcome'] is False
+          assert x['policy']['containsMarketPrice'] is False
+          assert x['policy']['realFinancialExposure']==0
+          print('V80_RUN18_READ_ONLY_REPRO_SUCCESS')
+          PY
