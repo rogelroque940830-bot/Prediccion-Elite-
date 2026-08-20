@@ -24,6 +24,7 @@ import { registerMlbOwnedExportRoute } from "./mlb-ledger-owned-export";
 import { getMlbLedgerOwnershipStore } from "./mlb-ledger-ownership-store";
 import { resolveSystemOwnerUserId } from "./user-data-context";
 import { startMlbSettlementWorker } from "./mlb-settlement-worker";
+import { createMlbSettlementStoreView } from "./mlb-settlement-lightweight-store";
 import { startMlbClosingLineWorker } from "./mlb-closing-line-worker";
 import { isMlbClosingLineCaptureEnabled } from "./odds-demand-policy";
 import { getOperationalBackupService } from "./operational-backup";
@@ -213,7 +214,7 @@ app.get("/health", (_req, res) => {
   } else {
     log("MLB closing-line provider worker disabled; explicit MLB_CLOSING_LINE_CAPTURE=true is required", "odds");
   }
-  startMlbSettlementWorker(mlbLedgerStore, mlbClosingLineStore);
+  startMlbSettlementWorker(createMlbSettlementStoreView(mlbLedgerStore), mlbClosingLineStore);
   startOperationalBackupWorker(operationalBackupService);
   startOperationalAlertWorker(operationalAlerts);
   startOperationalSlaAlertWorker(operationalSlaAlerts, systemOwnerUserId);
