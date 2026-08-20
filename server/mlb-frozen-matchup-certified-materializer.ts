@@ -161,7 +161,6 @@ function addHandPlateAppearance(row: MlbFrozenHandSplitTeamTotal, eventType: str
   row.pa += 1;
   if (!NON_AB.has(eventType)) row.ab += 1;
   if (HIT_TB[eventType]) row.tb += HIT_TB[eventType];
-  // Deliberately recognized for exact V9 event taxonomy even though frozen SLG retains PA/AB/TB only.
   void WALKS.has(eventType);
   void HBP.has(eventType);
 }
@@ -279,7 +278,6 @@ export class MlbFrozenMatchupCertifiedMaterializer {
   private readonly apiBaseUrl: string;
   private readonly seed: Readonly<MlbFrozenMatchupCanonicalSeed>;
   private readonly incrementalCache = new Map<string, Promise<IncrementalHistory>>();
-  private readonly playByPlayCache = new Map<number, Promise<any>>();
 
   constructor(options: MlbFrozenMatchupCertifiedMaterializerOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -383,27 +381,23 @@ export class MlbFrozenMatchupCertifiedMaterializer {
     }
     identities.sort((a, b) => a.officialDate.localeCompare(b.officialDate) || a.gamePk - b.gamePk);
     const deduped = identities.filter((entry, index) => index === 0 || entry.gamePk !== identities[index - 1].gamePk);
-    const parsed = await mapConcurrent(deduped, this.maxConcurrency, async (identity) =>
-      parseHistoricalPlayByPlay(await this.fetchPlayByPlay(identity.gamePk), identity),
-    );
+
+    // Keep only the compact pitchmix/hand aggregates in incrementalCache. Full
+    // play-by-play responses are intentionally transient so V16 cannot pin raw
+    // historical pitch-by-pitch JSON for every game in the process heap.
+    const parsed = await mapConcurrent(deduped, this.maxConcurrency, async (identity) => {
+      const payload = await this.fetchJson(
+        `${this.apiBaseUrl}/v1/game/${identity.gamePk}/playByPlay`,
+        `MLB frozen matchup game ${identity.gamePk}`,
+      );
+      return parseHistoricalPlayByPlay(payload, identity);
+    });
     return {
       startDate,
       endDate,
       pitchmixGames: parsed.map((row) => row.pitchmix),
       handSplitGames: parsed.map((row) => row.hand),
     };
-  }
-
-  private fetchPlayByPlay(gamePk: number): Promise<any> {
-    const cached = this.playByPlayCache.get(gamePk);
-    if (cached) return cached;
-    const url = `${this.apiBaseUrl}/v1/game/${gamePk}/playByPlay`;
-    const promise = this.fetchJson(url, `MLB frozen matchup game ${gamePk}`).catch((error) => {
-      this.playByPlayCache.delete(gamePk);
-      throw error;
-    });
-    this.playByPlayCache.set(gamePk, promise);
-    return promise;
   }
 
   private async fetchJson(url: string, label: string): Promise<any> {

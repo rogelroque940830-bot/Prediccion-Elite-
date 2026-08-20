@@ -317,14 +317,16 @@ export class MlbC4CertifiedMaterializer {
     const unique = identities.filter((entry, index) => index === 0 || entry.gamePk !== identities[index - 1].gamePk);
     if (unique.length === 0) throw new Error(`C4_CERTIFIED_NO_PRIOR_FINAL_GAMES:${cutoffDate}`);
 
-    // MLB's schedule endpoint can occasionally mark a historical row FINAL while the
-    // corresponding live-feed status remains stale/non-final. Such a row is not safe to
-    // admit into the certified historical feature set, but it also must not poison every
-    // current game on the slate. Quarantine only that source-inconsistent prior row; all
-    // other historical integrity failures still fail closed.
+    // Historical feeds are intentionally not retained in feedCache. V16 only needs the
+    // compact parsed history below; retaining every full MLB live-feed JSON for the season
+    // caused a single UI run to pin roughly the full Node heap in production.
     const parsedRows = await mapConcurrent(unique, this.maxConcurrency, async (identity): Promise<ParsedHistoricalGame | null> => {
       try {
-        return parseHistoricalGame(await this.fetchGameFeed(identity.gamePk), identity);
+        const feed = await this.fetchJson(
+          `${this.apiBaseUrl}/v1.1/game/${identity.gamePk}/feed/live`,
+          `C4 historical game ${identity.gamePk}`,
+        );
+        return parseHistoricalGame(feed, identity);
       } catch (error) {
         if (error instanceof Error && error.message === `C4_CERTIFIED_GAME_NOT_FINAL:${identity.gamePk}`) {
           return null;

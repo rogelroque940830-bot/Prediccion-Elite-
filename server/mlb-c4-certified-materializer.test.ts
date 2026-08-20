@@ -244,6 +244,11 @@ test("certified materializer uses strict prior official evidence and hands a com
     assert.ok(Number.isFinite(value));
   }
   assert.equal(fixture.calls.some((url) => url.includes(`/game/${fixture.sameDatePk}/`)), false);
+  assert.equal(
+    (materializer as any).feedCache.size,
+    1,
+    "raw historical live feeds must not remain pinned after compact history is materialized",
+  );
 
   const evidence = scoreMlbV16SettlementEvidence(
     TARGET_GAME_PK,
@@ -262,7 +267,8 @@ test("certified materializer uses strict prior official evidence and hands a com
 
   const callsAfterFirstAssessment = fixture.calls.length;
   await materializer.assessGame(targetGame());
-  assert.equal(fixture.calls.length, callsAfterFirstAssessment, "immutable prior evidence and target feed should be cached");
+  assert.equal(fixture.calls.length, callsAfterFirstAssessment, "compact prior evidence and the current target feed should be cached");
+  assert.equal((materializer as any).feedCache.size, 1);
 });
 
 test("certified materializer fails closed instead of imputing a missing historical official lineup", async () => {
