@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import type { LedgerPrediction } from "./mlb-ledger-store";
+import { MlbLedgerStore, type LedgerPrediction } from "./mlb-ledger-store";
+import { listPendingMlbSettlementRecords } from "./mlb-settlement-lightweight-store";
 import { gradeMlbPrediction, type OfficialMlbGame } from "./mlb-settlement-worker";
 
 const officialGame: OfficialMlbGame = {
@@ -141,4 +145,59 @@ test("does not grade unsupported or incomplete markets", () => {
   assert.equal(gradeMlbPrediction(prediction("F3_ML", "Home Club F3 ML"), incompleteF3), null);
   assert.equal(gradeMlbPrediction(prediction("F3_RUN_LINE", "Home Club -0.5 F3", -0.5), incompleteF3), null);
   assert.equal(gradeMlbPrediction(prediction("F3_TOTAL", "Over 2.5 F3", 2.5), incompleteF3), null);
+});
+
+test("settlement pending scan never deserializes the immutable prediction payload", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "courtedge-settlement-light-"));
+  const dbPath = path.join(root, "ledger.sqlite");
+  const store = new MlbLedgerStore(dbPath);
+
+  try {
+    store.appendPrediction({
+      clientRequestId: "settlement-no-payload-test",
+      model: { name: "CourtEdge MLB", version: "test" },
+      game: {
+        gamePk: 999001,
+        gameDate: "2026-08-20",
+        commenceTime: "2026-08-20T22:35:00.000Z",
+        homeTeam: "Baltimore Orioles",
+        awayTeam: "New York Yankees",
+      },
+      market: {
+        type: "ML",
+        selection: "New York Yankees ML",
+        oddsAmerican: -110,
+        book: "test",
+      },
+      probabilities: { model: 0.6 },
+      decision: { signal: "BET", stakeUnits: 1 },
+      analysis: {
+        stage: "FINAL",
+        rawOutput: { marker: "SETTLEMENT_PAYLOAD_MUST_NOT_BE_PARSED" },
+      },
+    });
+
+    const originalParse = JSON.parse;
+    JSON.parse = ((text: string, ...args: any[]) => {
+      if (typeof text === "string" && text.includes("SETTLEMENT_PAYLOAD_MUST_NOT_BE_PARSED")) {
+        throw new Error("heavy prediction payload was deserialized by settlement scan");
+      }
+      return originalParse(text, ...args);
+    }) as typeof JSON.parse;
+
+    try {
+      const pending = listPendingMlbSettlementRecords(dbPath, 10);
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0].prediction.id.length > 0, true);
+      assert.equal(pending[0].prediction.game.gamePk, 999001);
+      assert.equal(pending[0].prediction.market.selection, "New York Yankees ML");
+      assert.equal(pending[0].prediction.payload, null);
+      assert.equal(pending[0].settlement, null);
+    } finally {
+      JSON.parse = originalParse;
+    }
+  } finally {
+    store.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
