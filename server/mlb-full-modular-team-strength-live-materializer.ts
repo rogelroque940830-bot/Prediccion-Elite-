@@ -38,9 +38,11 @@ export interface MlbFullModularTeamStrengthSnapshot {
   officialDate: string;
   tiers: Readonly<Record<number, MlbFullModularStrengthTier>>;
   priorGames: Readonly<Record<number, number>>;
+  quarantinedGamePks: readonly number[];
   provenance: {
     source: "MLB_STATS_PRIOR_FINAL_REGULAR_SEASON_SCHEDULE";
     structuralRecovery: "MLB_OFFICIAL_LIVE_FEED_FOR_INVALID_FINAL_SCHEDULE_ROWS";
+    historicalQuarantine: "OFFICIAL_LIVE_FEED_NON_FINAL_ROWS_EXCLUDED";
     cutoff: "PREVIOUS_CALENDAR_DATE_ONLY";
     minimumPriorGamesForStableTier: 20;
     ranking: "WIN_PCT_DESC_RUN_DIFF_PER_GAME_DESC_TEAM_ID_ASC";
@@ -167,6 +169,7 @@ export class MlbFullModularTeamStrengthLiveMaterializer {
     if (!Array.isArray(payload?.dates)) throw new Error("FULL_MODULAR_STRENGTH_SCHEDULE_SHAPE_INVALID");
     const records = new Map<number, TeamRecord>();
     const seen = new Set<number>();
+    const quarantined = new Set<number>();
     for (const dateEntry of payload.dates) {
       for (const raw of Array.isArray(dateEntry?.games) ? dateEntry.games : []) {
         if (!isFinalStatus(raw?.status)) continue;
@@ -185,6 +188,10 @@ export class MlbFullModularTeamStrengthLiveMaterializer {
           });
         }
         seen.add(gamePk);
+        if (!game) {
+          quarantined.add(gamePk);
+          continue;
+        }
         const home = getRecord(records, game.homeTeamId);
         const away = getRecord(records, game.awayTeamId);
         home.games += 1;
@@ -236,9 +243,11 @@ export class MlbFullModularTeamStrengthLiveMaterializer {
       officialDate,
       tiers: Object.freeze(tiers),
       priorGames: Object.freeze(priorGames),
+      quarantinedGamePks: Object.freeze([...quarantined].sort((a, b) => a - b)),
       provenance: Object.freeze({
         source: "MLB_STATS_PRIOR_FINAL_REGULAR_SEASON_SCHEDULE" as const,
         structuralRecovery: "MLB_OFFICIAL_LIVE_FEED_FOR_INVALID_FINAL_SCHEDULE_ROWS" as const,
+        historicalQuarantine: "OFFICIAL_LIVE_FEED_NON_FINAL_ROWS_EXCLUDED" as const,
         cutoff: "PREVIOUS_CALENDAR_DATE_ONLY" as const,
         minimumPriorGamesForStableTier: MINIMUM_PRIOR_GAMES_FOR_STABLE_TIER as 20,
         ranking: "WIN_PCT_DESC_RUN_DIFF_PER_GAME_DESC_TEAM_ID_ASC" as const,
@@ -254,7 +263,7 @@ export class MlbFullModularTeamStrengthLiveMaterializer {
     dateEntryDate: unknown;
     targetOfficialDate: string;
     season: string;
-  }): Promise<FinalRegularSeasonGame> {
+  }): Promise<FinalRegularSeasonGame | null> {
     const feed = await this.fetchLiveFeed(input.gamePk);
     const feedPk = positiveInt(feed?.gamePk ?? feed?.gameData?.game?.pk);
     const feedType = clean(feed?.gameData?.game?.type).toUpperCase();
@@ -266,24 +275,27 @@ export class MlbFullModularTeamStrengthLiveMaterializer {
     if (feedPk !== input.gamePk) {
       throw new Error(`FULL_MODULAR_STRENGTH_LIVE_FEED_GAME_ID_MISMATCH:${input.gamePk}:${String(feedPk ?? "missing")}`);
     }
-    if (!isFinalStatus(feed?.gameData?.status)) {
-      throw new Error(`FULL_MODULAR_STRENGTH_LIVE_FEED_NOT_FINAL:${input.gamePk}`);
+
+    const scheduleHome = positiveInt(input.raw?.teams?.home?.team?.id);
+    const scheduleAway = positiveInt(input.raw?.teams?.away?.team?.id);
+    if ((scheduleHome && homeTeamId && scheduleHome !== homeTeamId)
+      || (scheduleAway && awayTeamId && scheduleAway !== awayTeamId)) {
+      throw new Error(`FULL_MODULAR_STRENGTH_SOURCE_TEAM_CONFLICT:${input.gamePk}`);
     }
+    const scheduleDate = clean(input.raw?.officialDate ?? input.dateEntryDate);
+    if (validIsoDate(scheduleDate) && validIsoDate(officialDate) && scheduleDate !== officialDate) {
+      throw new Error(`FULL_MODULAR_STRENGTH_SOURCE_DATE_CONFLICT:${input.gamePk}:${scheduleDate}:${officialDate}`);
+    }
+
+    // A schedule row that claims FINAL but whose game-specific official live feed is
+    // explicitly non-final is stale/contradictory evidence. Exclude that one historical
+    // row rather than fabricating a score or poisoning every team's strength snapshot.
+    if (!isFinalStatus(feed?.gameData?.status)) return null;
     if (feedType && feedType !== "R") {
       throw new Error(`FULL_MODULAR_STRENGTH_LIVE_FEED_NOT_REGULAR_SEASON:${input.gamePk}:${feedType}`);
     }
     if (!homeTeamId || !awayTeamId || homeRuns === null || awayRuns === null) {
       throw new Error(`FULL_MODULAR_STRENGTH_LIVE_FEED_RESULT_INCOMPLETE:${input.gamePk}`);
-    }
-
-    const scheduleHome = positiveInt(input.raw?.teams?.home?.team?.id);
-    const scheduleAway = positiveInt(input.raw?.teams?.away?.team?.id);
-    if ((scheduleHome && scheduleHome !== homeTeamId) || (scheduleAway && scheduleAway !== awayTeamId)) {
-      throw new Error(`FULL_MODULAR_STRENGTH_SOURCE_TEAM_CONFLICT:${input.gamePk}`);
-    }
-    const scheduleDate = clean(input.raw?.officialDate ?? input.dateEntryDate);
-    if (validIsoDate(scheduleDate) && scheduleDate !== officialDate) {
-      throw new Error(`FULL_MODULAR_STRENGTH_SOURCE_DATE_CONFLICT:${input.gamePk}:${scheduleDate}:${officialDate}`);
     }
 
     const recovered: FinalRegularSeasonGame = {
