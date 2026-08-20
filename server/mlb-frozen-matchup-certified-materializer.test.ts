@@ -140,6 +140,11 @@ test("combines frozen V9/V12 custody with only prior-date official incremental p
   assert.ok(result.featureAssessment.slg.homePriorPaRequiredHand > 60);
   assert.equal(fake.calls.filter((url) => url.includes("/v1/schedule")).length, 1);
   assert.equal(fake.calls.filter((url) => url.includes("777001/playByPlay")).length, 1);
+  assert.equal(
+    (materializer as any).playByPlayCache,
+    undefined,
+    "raw incremental play-by-play payloads must not be retained after aggregate materialization",
+  );
 });
 
 test("reuses target-date incremental custody across multiple games", async () => {
