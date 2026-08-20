@@ -15,6 +15,7 @@ import {
   updateReplayStateForGame,
   type Json,
 } from "./p0-full13-live-parity-state";
+import { mergeV80AuditHistoryRows } from "./p0-step12v80-history-merge";
 
 const STATE_SCHEMA = "courtedge-p0-step12v80-general-strength-live-state.v1";
 const SOURCE_SCHEMA = "courtedge-p0-step12v80-general-strength-live-context.v1";
@@ -114,7 +115,7 @@ function readHistory(baseRoot: string, gapRoot: string): { official: Json[]; sta
     official: mergeUnique(baseOfficial, gapOfficial, "OFFICIAL"),
     starters: mergeUnique(baseStarters, gapStarters, "STARTER"),
     lineups: mergeUnique(baseLineups, gapLineups, "LINEUP"),
-    audits: mergeUnique(baseAudits, gapAudits, "AUDIT"),
+    audits: mergeV80AuditHistoryRows(baseAudits, gapAudits),
   };
 }
 
