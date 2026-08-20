@@ -1,0 +1,57 @@
+{
+  "candidateSnapshotDigest": "969d3858efb00ee5e373dc6db8dae4f088ec356822c045d88b380c8fbbfeb04e",
+  "contractSha256": "3da92a3cfb7ece394076c989d1c8fdeae9cc53c1f1a127db57ec5c0bdd88bd9e",
+  "policy": {
+    "automaticBetPlacementAllowed": false,
+    "betEliteAllowed": false,
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "productionV16Changed": false,
+    "rankingChanged": false,
+    "realFinancialExposure": 0,
+    "recalibrationPerformed": false,
+    "refitPerformed": false,
+    "researchOnly": true,
+    "stakeChanged": false
+  },
+  "rows": [
+    {
+      "awayTeamId": 147,
+      "canonicalFirstCaptureImmutable": true,
+      "canonicalSourceRecordDigest": "b9e90743d08a7b625cde8d29655ff10d6ee28023f7df0605704ec3833d154ccf",
+      "capturedAt": "2026-08-20T22:18:19.718856Z",
+      "containsMarketPrice": false,
+      "containsOutcome": false,
+      "featureDigest": "b948243a3d36b3063d4362d63d753c89d2568561e413a6f7e4649c36f6627845",
+      "featureSource": "V68_FROZEN_PROSPECTIVE_ADAPTER_V1",
+      "gamePk": 824802,
+      "homeTeamId": 110,
+      "officialDate": "2026-08-20",
+      "sourceCutoffAt": "2026-08-20T22:18:19.718856Z",
+      "sourceEvidenceDigest": "a1b12316f61ec3cc4b12db0fe9a7bbf7674a101c66d7c27e48d990a7e8076cb2",
+      "startTime": "2026-08-20T22:35:00Z",
+      "v16": {
+        "awayWinProbability": 0.5198817167167402,
+        "homeWinProbability": 0.48011828328325973,
+        "rawLogit": -0.048919092532114405
+      },
+      "v68": {
+        "awayWinProbability": 0.5196945323721183,
+        "homeWinProbability": 0.4803054676278818,
+        "rawLogit": -0.043512313280063525
+      }
+    }
+  ],
+  "schemaVersion": "courtedge-p0-step12v68-fg-winner-prospective-capture.v1",
+  "scientificStatus": "PROSPECTIVE_PREGAME_PROBABILITIES_CAPTURED_WITHOUT_OUTCOMES",
+  "summary": {
+    "canonicalGames": 1,
+    "distinctOfficialDates": 1,
+    "duplicateCapturesReturnedExisting": 0,
+    "firstOfficialDate": "2026-08-20",
+    "lastOfficialDate": "2026-08-20",
+    "newCaptures": 1
+  },
+  "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+}
