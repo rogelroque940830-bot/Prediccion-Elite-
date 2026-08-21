@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       scheduled_start:
-        description: Planner-observed official scheduled start in UTC
+        description: Planner-observed scheduled start in UTC
         required: true
         type: string
   pull_request:
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate outcome-free capture implementation and retry order
+      - name: Validate outcome-free capture implementation retry order and postponement semantics
         shell: bash
         run: |
           set -euo pipefail
@@ -57,15 +57,19 @@ jobs:
           assert c['marketBoundary']['oddsMayBeModelFeatures'] is False
           assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
           p=json.load(open('research/p0-step12v80-capture-clock-operational-protocol.json'))
+          assert p['protocolRevision']==2
           assert p['captureClock']['primaryAttempt']['leadMinutes']==10
           assert [x['leadMinutes'] for x in p['captureClock']['conditionalRetries']]==[7,4]
           assert p['captureClock']['stopImmediatelyAfterFirstValidCapture'] is True
+          assert p['captureClock']['captureCutoffEasternTime']=='23:00'
+          assert p['gameSpecificRevalidation']['delayedWithoutResolvedNewStartIsNonterminal'] is True
+          assert p['gameSpecificRevalidation']['postponedSameDateUnresolvedIsNonterminal'] is True
           text=open('.github/workflows/p0-step12v80-capture-general-strength-prospective.yml').read()
           assert 'for spec in T10:10 T7:7 T4:4' in text
           assert 'if [[ "$rows" -gt 0 ]]; then' in text
           assert 'break' in text
           assert 'schedule:' not in text.split('pull_request:',1)[0]
-          print('V80_OUTCOME_FREE_T10_CAPTURE_BOUNDARY_VERIFIED')
+          print('V80_OUTCOME_FREE_T10_POSTPONEMENT_BOUNDARY_VERIFIED')
           PY
 
   capture-game-evidence:
@@ -79,6 +83,7 @@ jobs:
       already_captured: ${{ steps.existing.outputs.already }}
       artifact_ready: ${{ steps.attempt.outputs.artifact_ready }}
       persist_attempt: ${{ steps.attempt.outputs.persist_attempt }}
+      retry_eligible: ${{ steps.attempt.outputs.retry_eligible }}
       has_rows: ${{ steps.attempt.outputs.has_rows }}
       capture_stage: ${{ steps.attempt.outputs.capture_stage }}
       artifact_name: ${{ steps.attempt.outputs.artifact_name }}
@@ -164,7 +169,7 @@ jobs:
           python - <<'PY'
           import json
           payload={
-            'schemaVersion':'courtedge-p0-step12v80-per-game-attempts.v1',
+            'schemaVersion':'courtedge-p0-step12v80-per-game-attempts.v2',
             'officialDate':'${{ inputs.target_date }}',
             'gamePk':int('${{ inputs.game_pk }}'),
             'scheduledStartFromPlanner':'${{ inputs.scheduled_start }}',
@@ -174,6 +179,9 @@ jobs:
             'captureStage':None,
             'terminal':False,
             'terminalReason':None,
+            'retryEligible':False,
+            'retryStartTime':None,
+            'updatedAt':None,
             'policy':{
               'outcomesRead':False,
               'pricesRead':False,
@@ -200,6 +208,7 @@ jobs:
               --target-date '${{ inputs.target_date }}' \
               --game-pk '${{ inputs.game_pk }}' \
               --lead-minutes "$lead" \
+              --scheduled-start-from-planner '${{ inputs.scheduled_start }}' \
               --late-tolerance-minutes 0.75 \
               --max-wait-minutes 45 \
               --poll-seconds 20 \
@@ -219,9 +228,15 @@ jobs:
             'stage':stage,
             'targetLeadMinutes':c['targetLeadMinutes'],
             'clockStatus':c['status'],
+            'terminal':c.get('terminal',False),
+            'retryEligible':c.get('retryEligible',False),
+            'retryStartTime':c.get('retryStartTime'),
             'observedAt':c.get('observedAt'),
             'startTime':c.get('startTime'),
             'leadMinutes':c.get('leadMinutes'),
+            'detailedState':c.get('detailedState'),
+            'disposition':c.get('disposition'),
+            'scheduledStartChanged':c.get('scheduledStartChanged'),
             'contextRows':None,
           })
           with open(attempts_path,'w') as f: json.dump(x,f,indent=2,sort_keys=True);f.write('\n')
@@ -230,20 +245,26 @@ jobs:
             if [[ "$status" == "MISSED_STAGE" ]]; then
               continue
             fi
-            if [[ "$status" == "GAME_NO_LONGER_PREGAME" ]]; then
-              terminal_reason="GAME_NO_LONGER_PREGAME"
-              break
-            fi
-            if [[ "$status" == "GAME_NOT_FOUND" || "$status" == "TIMEOUT" ]]; then
-              terminal_reason="$status"
-              retryable=true
-              break
-            fi
-            if [[ "$status" != "READY" ]]; then
-              terminal_reason="$status"
-              retryable=true
-              break
-            fi
+
+            case "$status" in
+              GAME_CANCELLED|GAME_SUSPENDED|GAME_STARTED_OR_FINAL|POSTPONED_TO_ANOTHER_DATE|OPERATIONAL_CUTOFF_REACHED)
+                terminal_reason="$status"
+                retryable=false
+                break
+                ;;
+              GAME_NOT_FOUND|TIMEOUT|WAITING_FOR_RESCHEDULE|START_TIME_UNAVAILABLE|START_TIME_PASSED_WITHOUT_RESCHEDULE)
+                terminal_reason="$status"
+                retryable=true
+                break
+                ;;
+              READY)
+                ;;
+              *)
+                terminal_reason="$status"
+                retryable=true
+                break
+                ;;
+            esac
 
             npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
               --mode live \
@@ -277,6 +298,7 @@ jobs:
               captured=true
               capture_stage="$stage"
               terminal_reason="CAPTURED"
+              retryable=false
               break
             fi
           done
@@ -313,19 +335,24 @@ jobs:
             persist_attempt=false
           fi
 
-          python - '../work/attempts.json' "$captured" "$capture_stage" "$terminal_reason" "$persist_attempt" <<'PY'
-          import json,sys
-          path,captured,stage,reason,persist=sys.argv[1:]
+          python - '../work/attempts.json' "$captured" "$capture_stage" "$terminal_reason" "$persist_attempt" "$retryable" <<'PY'
+          import datetime as dt,json,sys
+          path,captured,stage,reason,persist,retryable=sys.argv[1:]
           x=json.load(open(path))
           x['captureSucceeded']=captured=='true'
           x['captureStage']=stage or None
           x['terminal']=persist=='true'
           x['terminalReason']=reason
+          x['retryEligible']=retryable=='true'
+          x['updatedAt']=dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z')
+          x['lastObservedAt']=next((a.get('observedAt') for a in reversed(x['attempts']) if a.get('observedAt')),None)
+          x['retryStartTime']=next((a.get('retryStartTime') for a in reversed(x['attempts']) if a.get('retryStartTime')),None)
           with open(path,'w') as f: json.dump(x,f,indent=2,sort_keys=True);f.write('\n')
           PY
 
           echo "artifact_ready=true" >> "$GITHUB_OUTPUT"
           echo "persist_attempt=$persist_attempt" >> "$GITHUB_OUTPUT"
+          echo "retry_eligible=$retryable" >> "$GITHUB_OUTPUT"
           echo "has_rows=$captured" >> "$GITHUB_OUTPUT"
           echo "capture_stage=$capture_stage" >> "$GITHUB_OUTPUT"
 
@@ -343,7 +370,7 @@ jobs:
           retention-days: 7
 
   commit-game-capture:
-    if: needs.capture-game-evidence.result == 'success' && needs.capture-game-evidence.outputs.already_captured != 'true' && needs.capture-game-evidence.outputs.artifact_ready == 'true' && (needs.capture-game-evidence.outputs.has_rows == 'true' || needs.capture-game-evidence.outputs.persist_attempt == 'true')
+    if: needs.capture-game-evidence.result == 'success' && needs.capture-game-evidence.outputs.already_captured != 'true' && needs.capture-game-evidence.outputs.artifact_ready == 'true'
     needs: capture-game-evidence
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -427,17 +454,15 @@ jobs:
           print(f'total={x["summary"]["canonicalGames"]}')
           PY
 
-      - name: Preserve capture or terminal no-capture audit
+      - name: Preserve attempt state and immutable capture evidence
         shell: bash
         run: |
           set -euo pipefail
           target='${{ inputs.target_date }}'
           gp='${{ inputs.game_pk }}'
-          mkdir -p "v80-ledger/v80/attempts/$target"
-          attempt_path="v80-ledger/v80/attempts/$target/$gp.json"
-          if ! test -e "$attempt_path"; then
-            cp evidence/attempts.json "$attempt_path"
-          fi
+          mkdir -p "v80-ledger/v80/attempt-state/$target" "v80-ledger/v80/attempt-history/$target"
+          cp evidence/attempts.json "v80-ledger/v80/attempt-state/$target/$gp.json"
+          cp evidence/attempts.json "v80-ledger/v80/attempt-history/$target/$gp-${{ github.run_id }}-${{ github.run_attempt }}.json"
 
           if [[ '${{ needs.capture-game-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
             mkdir -p "v80-ledger/v80/source-records/$target" v80-ledger/v80/captures v80-ledger/v80/receipts
@@ -457,7 +482,7 @@ jobs:
           with open('v80-ledger/v80/captures/canonical.json','w') as f: json.dump(cap,f,indent=2,sort_keys=True);f.write('\n')
           attempts=json.load(open('evidence/attempts.json'))
           receipt={
-            'schemaVersion':'courtedge-p0-step12v80-capture-receipt.v2',
+            'schemaVersion':'courtedge-p0-step12v80-capture-receipt.v3',
             'officialDate':target,
             'gamePk':gp,
             'githubRunId':'${{ github.run_id }}',
@@ -476,19 +501,21 @@ jobs:
           PY
           fi
 
-      - name: Commit serialized immutable V80 evidence
+      - name: Commit serialized V80 evidence or retry state
         working-directory: v80-ledger
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'court-edge-v80-research-bot'
           git config user.email 'v80-research-bot@users.noreply.github.com'
-          git add v80/attempts v80/captures v80/source-records v80/receipts 2>/dev/null || true
+          git add v80/attempt-state v80/attempt-history v80/captures v80/source-records v80/receipts 2>/dev/null || true
           git diff --cached --quiet && exit 0
           if [[ '${{ needs.capture-game-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
             msg="V80 capture ${{ inputs.target_date }} game ${{ inputs.game_pk }} at ${{ needs.capture-game-evidence.outputs.capture_stage }}"
+          elif [[ '${{ needs.capture-game-evidence.outputs.retry_eligible }}' == 'true' ]]; then
+            msg="V80 retry-state ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
           else
-            msg="V80 no-capture audit ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
+            msg="V80 terminal no-capture ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
           fi
           git commit -m "$msg"
           git pull --rebase origin data/p0-step12v80-general-strength-prospective
