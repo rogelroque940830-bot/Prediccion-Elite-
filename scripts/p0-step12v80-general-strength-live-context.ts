@@ -23,6 +23,7 @@ const FIRST_ELIGIBLE_DATE = "2026-08-18";
 const MIN_STRENGTH_GAMES = 20;
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_ATTEMPTS = 3;
+const CAPTURE_ATTEMPT_STAGES = new Set(["T10", "T7", "T4"]);
 
 function arg(name: string, required = true): string | null {
   const i = process.argv.indexOf(name);
@@ -110,7 +111,7 @@ function readHistory(baseRoot: string, gapRoot: string): { official: Json[]; sta
   const gapOfficial = load(path.join(gapRoot, "official-acquisition.json")).games ?? [];
   const gapStarters = load(path.join(gapRoot, "starting-pitcher-history.json")).games ?? [];
   const gapLineups = load(path.join(gapRoot, "pregame-lineup-history.json")).snapshots ?? [];
-  const gapAudits = load(path.join(gapRoot, "t5-starter-identity-audit.json")).rows ?? [];
+  const gapAudits = load(path.join(gapRoot, "t5-audit", "t5-starter-identity-audit.json")).rows ?? [];
   return {
     official: mergeUnique(baseOfficial, gapOfficial, "OFFICIAL"),
     starters: mergeUnique(baseStarters, gapStarters, "STARTER"),
@@ -328,13 +329,23 @@ async function live(): Promise<void> {
   const out = arg("--out") as string;
   const maxLead = Number(arg("--max-lead-minutes", false) ?? "20");
   const nowArg = arg("--now", false);
+  const gamePkArg = arg("--game-pk", false);
+  const attemptStage = arg("--attempt-stage", false);
   const fixedNow = nowArg ? parseTime(nowArg) : null;
+  const targetGamePk = gamePkArg === null ? null : Number(gamePkArg);
+  if (targetGamePk !== null && (!Number.isInteger(targetGamePk) || targetGamePk <= 0)) {
+    throw new Error(`V80_LIVE_CONTEXT_INVALID_TARGET_GAME_PK:${String(gamePkArg)}`);
+  }
+  if (attemptStage !== null && !CAPTURE_ATTEMPT_STAGES.has(attemptStage)) {
+    throw new Error(`V80_LIVE_CONTEXT_INVALID_ATTEMPT_STAGE:${attemptStage}`);
+  }
   const state = load(stateFile);
   if (state.schemaVersion !== STATE_SCHEMA || state.targetOfficialDate !== targetDate) throw new Error("V80_LIVE_CONTEXT_STATE_DATE_OR_SCHEMA_INVALID");
   if (state?.chronology?.wholeOfficialDatePriorStateOnly !== true || state?.chronology?.sameDateCompletedGamesUsed !== false) throw new Error("V80_LIVE_CONTEXT_STATE_CHRONOLOGY_INVALID");
   if (!(maxLead > 0 && maxLead <= 60)) throw new Error("V80_LIVE_CONTEXT_CAPTURE_WINDOW_INVALID");
   const schedule = await fetchJson(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R&date=${targetDate}`, "schedule");
-  const games = (schedule.dates ?? []).flatMap((d: Json) => d.games ?? []);
+  const allGames = (schedule.dates ?? []).flatMap((d: Json) => d.games ?? []);
+  const games = targetGamePk === null ? allGames : allGames.filter((game: Json) => Number(game.gamePk) === targetGamePk);
   const rows: Json[] = [];
   for (const game of games) {
     const gp = Number(game.gamePk);
@@ -370,6 +381,7 @@ async function live(): Promise<void> {
     const evidence = {
       stateDigest: state.stateDigest,
       capturedAt,
+      attemptStage,
       identity,
       full13FeatureVector: full13.featureVector,
       classifier,
@@ -382,6 +394,7 @@ async function live(): Promise<void> {
       ...identity,
       capturedAt,
       sourceCutoffAt: capturedAt,
+      captureAttemptStage: attemptStage,
       exactPregameLineupSemantics: true,
       exactPregameProbableStarterSemantics: true,
       wholeOfficialDatePriorStateOnly: true,
@@ -406,7 +419,15 @@ async function live(): Promise<void> {
     capturedAt,
     stateDigest: state.stateDigest,
     rows,
-    diagnostics: { scheduleGames: games.length, exactReadyGamesInCaptureWindow: rows.length, maxLeadMinutes: maxLead },
+    diagnostics: {
+      scheduleGames: allGames.length,
+      inspectedGames: games.length,
+      requestedGameFound: targetGamePk === null ? null : games.length === 1,
+      targetGamePk,
+      attemptStage,
+      exactReadyGamesInCaptureWindow: rows.length,
+      maxLeadMinutes: maxLead,
+    },
     policy: { researchOnly: true, outcomesRead: false, pricesRead: false, oddsUsedAsFeatures: false, realFinancialExposure: 0 },
   };
   writeJson(out, payload);
