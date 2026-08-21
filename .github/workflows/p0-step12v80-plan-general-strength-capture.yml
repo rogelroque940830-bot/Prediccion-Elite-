@@ -1,0 +1,161 @@
+name: P0 Step 12V80 Plan Per-Game Capture Clock
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '1,6,11,16,21,26,31,36,41,46,51,56 * * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v80-capture-clock.py'
+      - 'scripts/p0-step12v80-capture-clock.test.py'
+      - 'scripts/p0-step12v80-general-strength-live-context.ts'
+      - 'research/p0-step12v80-capture-clock-operational-protocol.json'
+      - '.github/workflows/p0-step12v80-plan-general-strength-capture.yml'
+      - '.github/workflows/p0-step12v80-capture-general-strength-prospective.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p0-step12v80-plan-per-game-capture-clock
+  cancel-in-progress: false
+
+jobs:
+  validate-clock:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate T-10/T-7/T-4 operational clock
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v80-capture-clock.test.py
+          python -m py_compile scripts/p0-step12v80-capture-clock.py
+          python - <<'PY'
+          import json
+          p=json.load(open('research/p0-step12v80-capture-clock-operational-protocol.json'))
+          assert p['effectiveOfficialDate']=='2026-08-21'
+          assert p['captureClock']['primaryAttempt']['leadMinutes']==10
+          retries=p['captureClock']['conditionalRetries']
+          assert [x['leadMinutes'] for x in retries]==[7,4]
+          assert retries[0]['allowedOnlyWhen']=='NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10'
+          assert retries[1]['allowedOnlyWhen']=='NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10_OR_T7'
+          assert p['captureClock']['stopImmediatelyAfterFirstValidCapture'] is True
+          assert p['researchBoundary']['outcomesRead'] is False
+          assert p['researchBoundary']['pricesRead'] is False
+          print('V80_T10_CAPTURE_CLOCK_PROTOCOL_VERIFIED')
+          PY
+
+  plan-and-dispatch:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout V80 clock code from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout V80 immutable prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v80-general-strength-prospective
+          path: v80-ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve MLB official date in Eastern time
+        id: date
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          d=dt.datetime.now(ZoneInfo('America/New_York')).date()
+          print(f'target={d.isoformat()}')
+          print(f'eligible={str(d>=dt.date(2026,8,21)).lower()}')
+          PY
+
+      - name: Plan only games approaching their per-game capture clock
+        if: steps.date.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          EXISTING=()
+          if test -s v80-ledger/v80/captures/canonical.json; then
+            EXISTING=(--existing-captures v80-ledger/v80/captures/canonical.json)
+          fi
+          ATTEMPTS=()
+          if test -d "v80-ledger/v80/attempts/${{ steps.date.outputs.target }}"; then
+            ATTEMPTS=(--terminal-attempt-dir "v80-ledger/v80/attempts/${{ steps.date.outputs.target }}")
+          fi
+          python code/scripts/p0-step12v80-capture-clock.py plan \
+            --target-date '${{ steps.date.outputs.target }}' \
+            "${EXISTING[@]}" \
+            "${ATTEMPTS[@]}" \
+            --min-lead-minutes 4 \
+            --max-lead-minutes 35 \
+            --out work/plan.json
+
+      - name: Dispatch one active child per gamePk
+        if: steps.date.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+
+          plan=json.load(open('work/plan.json'))
+          repo=os.environ['REPO']
+          workflow='p0-step12v80-capture-general-strength-prospective.yml'
+          raw=subprocess.check_output([
+              'gh','run','list','--repo',repo,'--workflow',workflow,'--limit','100',
+              '--json','displayTitle,status'
+          ], text=True)
+          active=set()
+          for run in json.loads(raw):
+              if run.get('status') == 'completed':
+                  continue
+              m=re.match(r'^V80 game (\d+) ', str(run.get('displayTitle') or ''))
+              if m:
+                  active.add(int(m.group(1)))
+
+          dispatched=0
+          skipped_active=0
+          for game in plan.get('games', []):
+              gp=int(game['gamePk'])
+              if gp in active:
+                  skipped_active += 1
+                  print(f'V80_CAPTURE_CHILD_ALREADY_ACTIVE:{gp}')
+                  continue
+              subprocess.check_call([
+                  'gh','workflow','run',workflow,
+                  '--repo',repo,
+                  '--ref','main',
+                  '-f',f"target_date={game['officialDate']}",
+                  '-f',f"game_pk={gp}",
+                  '-f',f"scheduled_start={game['startTime']}",
+              ])
+              dispatched += 1
+              active.add(gp)
+              print(f"V80_CAPTURE_CHILD_DISPATCHED:{gp}:{game['startTime']}")
+          print(json.dumps({
+              'plannerCandidates': len(plan.get('games', [])),
+              'dispatched': dispatched,
+              'skippedAlreadyActive': skipped_active,
+          }, indent=2))
+          PY

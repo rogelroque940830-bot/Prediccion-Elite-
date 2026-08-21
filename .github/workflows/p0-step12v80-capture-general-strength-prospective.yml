@@ -1,23 +1,35 @@
 name: P0 Step 12V80 Capture General Strength Prospective
+run-name: V80 game ${{ inputs.game_pk || 'validation' }} ${{ inputs.target_date || github.ref_name }}
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '7,17,27,37,47,57 * * * *'
+    inputs:
+      target_date:
+        description: MLB official date in Eastern time
+        required: true
+        type: string
+      game_pk:
+        description: MLB gamePk to capture
+        required: true
+        type: string
+      scheduled_start:
+        description: Planner-observed official scheduled start in UTC
+        required: true
+        type: string
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p0-step12v80-capture-clock.py'
+      - 'scripts/p0-step12v80-capture-clock.test.py'
       - 'scripts/p0-step12v80-general-strength-live-context.ts'
       - 'scripts/p0-step12v80-general-strength-prospective.py'
+      - 'research/p0-step12v80-capture-clock-operational-protocol.json'
       - '.github/workflows/p0-step12v80-capture-general-strength-prospective.yml'
+      - '.github/workflows/p0-step12v80-plan-general-strength-capture.yml'
 
 permissions:
   contents: write
   actions: read
-
-concurrency:
-  group: p0-step12v80-capture-general-strength-prospective
-  cancel-in-progress: false
 
 jobs:
   validate-capture-boundary:
@@ -28,11 +40,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate outcome-free capture implementation
+      - name: Validate outcome-free capture implementation and retry order
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile scripts/p0-step12v80-general-strength-prospective.py
+          python -m py_compile scripts/p0-step12v80-capture-clock.py
+          python scripts/p0-step12v80-capture-clock.test.py
           python - <<'PY'
           import json
           c=json.load(open('research/p0-step12v80-general-strength-prospective-confirmation-contract.json'))
@@ -42,30 +56,38 @@ jobs:
           assert c['prospectiveCohort']['sameDateCompletedGamesMayNotUpdateAnyFeatureForLaterGames'] is True
           assert c['marketBoundary']['oddsMayBeModelFeatures'] is False
           assert c['outcomeEmbargo']['outcomesMayBeQueriedBeforeEmbargoMaturity'] is False
-          text=open('scripts/p0-step12v80-general-strength-prospective.py').read()
-          assert 'outcome-query' in text or 'no outcome-query' in text.lower()
-          assert 'CONFLUENCE_LEDGER_TOP1_T0.550' in text
-          assert 'V16_V68_CONSENSUS_T0.550' in text
-          print('V80_OUTCOME_FREE_CAPTURE_BOUNDARY_VERIFIED')
+          p=json.load(open('research/p0-step12v80-capture-clock-operational-protocol.json'))
+          assert p['captureClock']['primaryAttempt']['leadMinutes']==10
+          assert [x['leadMinutes'] for x in p['captureClock']['conditionalRetries']]==[7,4]
+          assert p['captureClock']['stopImmediatelyAfterFirstValidCapture'] is True
+          text=open('.github/workflows/p0-step12v80-capture-general-strength-prospective.yml').read()
+          assert 'for spec in T10:10 T7:7 T4:4' in text
+          assert 'if [[ "$rows" -gt 0 ]]; then' in text
+          assert 'break' in text
+          assert 'schedule:' not in text.split('pull_request:',1)[0]
+          print('V80_OUTCOME_FREE_T10_CAPTURE_BOUNDARY_VERIFIED')
           PY
 
-  capture-live-pregame:
-    if: github.event_name != 'pull_request'
+  capture-game-evidence:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 50
+    concurrency:
+      group: p0-step12v80-capture-${{ inputs.target_date }}-${{ inputs.game_pk }}
+      cancel-in-progress: false
+    outputs:
+      already_captured: ${{ steps.existing.outputs.already }}
+      artifact_ready: ${{ steps.attempt.outputs.artifact_ready }}
+      persist_attempt: ${{ steps.attempt.outputs.persist_attempt }}
+      has_rows: ${{ steps.attempt.outputs.has_rows }}
+      capture_stage: ${{ steps.attempt.outputs.capture_stage }}
+      artifact_name: ${{ steps.attempt.outputs.artifact_name }}
     steps:
-      - name: Checkout V80 code from default branch
+      - name: Checkout V80 code from main
         uses: actions/checkout@v4
         with:
           ref: main
           path: code
-
-      - name: Checkout V68 immutable source ledger
-        uses: actions/checkout@v4
-        with:
-          ref: data/p0-step12v68-prospective
-          path: v68-ledger
-          fetch-depth: 1
 
       - name: Checkout V80 immutable prospective ledger
         uses: actions/checkout@v4
@@ -84,59 +106,284 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Resolve MLB official date in Eastern time
-        id: date
+      - name: Skip gamePk that already has an immutable canonical snapshot
+        id: existing
         shell: bash
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          import datetime as dt
-          from zoneinfo import ZoneInfo
-          d=dt.datetime.now(ZoneInfo('America/New_York')).date()
-          print(f'target={d.isoformat()}')
-          print(f'eligible={str(d>=dt.date(2026,8,18)).lower()}')
+          import json, os
+          gp=int('${{ inputs.game_pk }}')
+          path='v80-ledger/v80/captures/canonical.json'
+          exists=False
+          if os.path.exists(path):
+              x=json.load(open(path))
+              exists=any(int(r['gamePk'])==gp for r in x.get('rows',[]))
+          print(f"already={str(exists).lower()}")
           PY
 
-      - name: Stop before first V80 eligible official date
-        if: steps.date.outputs.eligible != 'true'
-        run: echo 'V80 prospective capture is not eligible before 2026-08-18.'
-
-      - name: Check immutable prior-date state readiness
-        if: steps.date.outputs.eligible == 'true'
+      - name: Check immutable prior-date V80 state readiness
+        if: steps.existing.outputs.already != 'true'
         id: states
         shell: bash
         run: |
           set -euo pipefail
-          V68="v68-ledger/v68/states/${{ steps.date.outputs.target }}.json"
-          V80="v80-ledger/v80/states/${{ steps.date.outputs.target }}.json"
-          if test -s "$V68" && test -s "$V80"; then
+          V80="v80-ledger/v80/states/${{ inputs.target_date }}.json"
+          if test -s "$V80"; then
             python - <<'PY'
           import json
-          target='${{ steps.date.outputs.target }}'
-          v68=json.load(open(f'v68-ledger/v68/states/{target}.json'))
+          target='${{ inputs.target_date }}'
           v80=json.load(open(f'v80-ledger/v80/states/{target}.json'))
-          assert v68['schemaVersion']=='courtedge-p0-step12v68-prospective-state.v1'
-          assert v68['targetOfficialDate']==target
-          assert v68['chronology']['wholeOfficialDatePriorStateOnly'] is True
-          assert v68['chronology']['sameDateOutcomesUsed'] is False
           assert v80['schemaVersion']=='courtedge-p0-step12v80-general-strength-live-state.v1'
           assert v80['targetOfficialDate']==target
           assert v80['chronology']['wholeOfficialDatePriorStateOnly'] is True
           assert v80['chronology']['sameDateCompletedGamesUsed'] is False
-          print('V80_CAPTURE_STATES_READY')
+          print('V80_CAPTURE_STATE_READY')
           PY
             echo 'ready=true' >> "$GITHUB_OUTPUT"
           else
             echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'V80_CAPTURE_WAITING_FOR_IMMUTABLE_DAILY_STATES'
+            echo 'V80_CAPTURE_WAITING_FOR_IMMUTABLE_DAILY_STATE'
           fi
 
-      - name: Install Node dependencies
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
+      - name: Install Node dependencies only for an uncaptured ready game
+        if: steps.existing.outputs.already != 'true' && steps.states.outputs.ready == 'true'
         working-directory: code
         run: npm ci --ignore-scripts
 
-      - name: Download immutable V16 control manifest
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
+      - name: Run T-10 then conditional T-7/T-4 evidence attempts
+        if: steps.existing.outputs.already != 'true' && steps.states.outputs.ready == 'true'
+        id: attempt
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../work
+          artifact_name="v80-game-clock-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+          python - <<'PY'
+          import json
+          payload={
+            'schemaVersion':'courtedge-p0-step12v80-per-game-attempts.v1',
+            'officialDate':'${{ inputs.target_date }}',
+            'gamePk':int('${{ inputs.game_pk }}'),
+            'scheduledStartFromPlanner':'${{ inputs.scheduled_start }}',
+            'attemptOrder':['T10','T7','T4'],
+            'attempts':[],
+            'captureSucceeded':False,
+            'captureStage':None,
+            'terminal':False,
+            'terminalReason':None,
+            'policy':{
+              'outcomesRead':False,
+              'pricesRead':False,
+              'oddsUsedAsFeatures':False,
+              'sameDateCompletedGameOutcomesUsed':False,
+              'realFinancialExposure':0,
+            },
+          }
+          with open('../work/attempts.json','w') as f: json.dump(payload,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+
+          captured=false
+          capture_stage=""
+          terminal_reason="ATTEMPTS_EXHAUSTED"
+          retryable=false
+
+          for spec in T10:10 T7:7 T4:4; do
+            stage="${spec%%:*}"
+            lead="${spec##*:}"
+            clock_file="../work/clock-${stage}.json"
+            context_file="../work/context-${stage}.json"
+
+            python scripts/p0-step12v80-capture-clock.py wait-stage \
+              --target-date '${{ inputs.target_date }}' \
+              --game-pk '${{ inputs.game_pk }}' \
+              --lead-minutes "$lead" \
+              --late-tolerance-minutes 0.75 \
+              --max-wait-minutes 45 \
+              --poll-seconds 20 \
+              --out "$clock_file"
+
+            status="$(python - "$clock_file" <<'PY'
+          import json,sys
+          print(json.load(open(sys.argv[1]))['status'])
+          PY
+          )"
+
+            python - '../work/attempts.json' "$clock_file" "$stage" <<'PY'
+          import json,sys
+          attempts_path,clock_path,stage=sys.argv[1:]
+          x=json.load(open(attempts_path)); c=json.load(open(clock_path))
+          x['attempts'].append({
+            'stage':stage,
+            'targetLeadMinutes':c['targetLeadMinutes'],
+            'clockStatus':c['status'],
+            'observedAt':c.get('observedAt'),
+            'startTime':c.get('startTime'),
+            'leadMinutes':c.get('leadMinutes'),
+            'contextRows':None,
+          })
+          with open(attempts_path,'w') as f: json.dump(x,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+
+            if [[ "$status" == "MISSED_STAGE" ]]; then
+              continue
+            fi
+            if [[ "$status" == "GAME_NO_LONGER_PREGAME" ]]; then
+              terminal_reason="GAME_NO_LONGER_PREGAME"
+              break
+            fi
+            if [[ "$status" == "GAME_NOT_FOUND" || "$status" == "TIMEOUT" ]]; then
+              terminal_reason="$status"
+              retryable=true
+              break
+            fi
+            if [[ "$status" != "READY" ]]; then
+              terminal_reason="$status"
+              retryable=true
+              break
+            fi
+
+            npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
+              --mode live \
+              --state '../v80-ledger/v80/states/${{ inputs.target_date }}.json' \
+              --target-date '${{ inputs.target_date }}' \
+              --game-pk '${{ inputs.game_pk }}' \
+              --attempt-stage "$stage" \
+              --max-lead-minutes "$lead" \
+              --out "$context_file"
+
+            rows="$(python - "$context_file" <<'PY'
+          import json,sys
+          print(len(json.load(open(sys.argv[1])).get('rows',[])))
+          PY
+          )"
+
+            python - '../work/attempts.json' "$context_file" "$stage" <<'PY'
+          import json,sys
+          attempts_path,context_path,stage=sys.argv[1:]
+          x=json.load(open(attempts_path)); c=json.load(open(context_path))
+          for a in reversed(x['attempts']):
+              if a['stage']==stage:
+                  a['contextRows']=len(c.get('rows',[]))
+                  a['contextDiagnostics']=c.get('diagnostics')
+                  break
+          with open(attempts_path,'w') as f: json.dump(x,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+
+            if [[ "$rows" -gt 0 ]]; then
+              cp "$context_file" ../work/context.json
+              captured=true
+              capture_stage="$stage"
+              terminal_reason="CAPTURED"
+              break
+            fi
+          done
+
+          if [[ "$captured" != "true" ]]; then
+            python - <<'PY'
+          import datetime as dt,json
+          state=json.load(open('../v80-ledger/v80/states/${{ inputs.target_date }}.json'))
+          payload={
+            'schemaVersion':'courtedge-p0-step12v80-general-strength-live-context.v1',
+            'targetOfficialDate':'${{ inputs.target_date }}',
+            'capturedAt':dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z'),
+            'stateDigest':state.get('stateDigest'),
+            'rows':[],
+            'diagnostics':{
+              'targetGamePk':int('${{ inputs.game_pk }}'),
+              'exactReadyGamesInCaptureWindow':0,
+              'attemptSequence':['T10','T7','T4'],
+            },
+            'policy':{
+              'researchOnly':True,
+              'outcomesRead':False,
+              'pricesRead':False,
+              'oddsUsedAsFeatures':False,
+              'realFinancialExposure':0,
+            },
+          }
+          with open('../work/context.json','w') as f: json.dump(payload,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+          fi
+
+          persist_attempt=true
+          if [[ "$retryable" == "true" ]]; then
+            persist_attempt=false
+          fi
+
+          python - '../work/attempts.json' "$captured" "$capture_stage" "$terminal_reason" "$persist_attempt" <<'PY'
+          import json,sys
+          path,captured,stage,reason,persist=sys.argv[1:]
+          x=json.load(open(path))
+          x['captureSucceeded']=captured=='true'
+          x['captureStage']=stage or None
+          x['terminal']=persist=='true'
+          x['terminalReason']=reason
+          with open(path,'w') as f: json.dump(x,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+
+          echo "artifact_ready=true" >> "$GITHUB_OUTPUT"
+          echo "persist_attempt=$persist_attempt" >> "$GITHUB_OUTPUT"
+          echo "has_rows=$captured" >> "$GITHUB_OUTPUT"
+          echo "capture_stage=$capture_stage" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact pregame evidence before canonical merge
+        if: steps.attempt.outputs.artifact_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.attempt.outputs.artifact_name }}
+          path: |
+            work/context.json
+            work/attempts.json
+            work/clock-*.json
+            work/context-T*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  commit-game-capture:
+    if: needs.capture-game-evidence.result == 'success' && needs.capture-game-evidence.outputs.already_captured != 'true' && needs.capture-game-evidence.outputs.artifact_ready == 'true' && (needs.capture-game-evidence.outputs.has_rows == 'true' || needs.capture-game-evidence.outputs.persist_attempt == 'true')
+    needs: capture-game-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    concurrency:
+      group: p0-step12v80-canonical-merge
+      cancel-in-progress: false
+    steps:
+      - name: Checkout V80 code from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout V68 immutable source ledger only when scoring a capture
+        if: needs.capture-game-evidence.outputs.has_rows == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: v68-ledger
+          fetch-depth: 1
+
+      - name: Checkout fresh V80 immutable prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v80-general-strength-prospective
+          path: v80-ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download exact pregame evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.capture-game-evidence.outputs.artifact_name }}
+          path: evidence
+
+      - name: Download immutable V16 control manifest only when scoring a capture
+        if: needs.capture-game-evidence.outputs.has_rows == 'true'
         uses: actions/download-artifact@v4
         with:
           name: p0-step12v16-pure-ml-f5-settlement-probability
@@ -145,33 +392,8 @@ jobs:
           repository: rogelroque940830-bot/Prediccion-Elite-
           run-id: 31704085189
 
-      - name: Poll exact pregame identity and build Full13 classifier context
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true'
-        id: source
-        working-directory: code
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ../work
-          npx tsx scripts/p0-step12v80-general-strength-live-context.ts \
-            --mode live \
-            --state '../v80-ledger/v80/states/${{ steps.date.outputs.target }}.json' \
-            --target-date '${{ steps.date.outputs.target }}' \
-            --max-lead-minutes 20 \
-            --out ../work/context.json
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          x=json.load(open('../work/context.json'))
-          assert x['policy']['outcomesRead'] is False
-          assert x['policy']['pricesRead'] is False
-          assert x['policy']['realFinancialExposure']==0
-          n=len(x.get('rows',[]))
-          print(f'rows={n}')
-          print(f'has_rows={str(n>0).lower()}')
-          PY
-
-      - name: Score frozen V16/V68 and preserve V80 first captures
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true'
+      - name: Score frozen V16/V68 against the freshest canonical ledger
+        if: needs.capture-game-evidence.outputs.has_rows == 'true'
         id: score
         working-directory: code
         shell: bash
@@ -182,9 +404,9 @@ jobs:
             EXISTING=(--existing ../v80-ledger/v80/captures/canonical.json)
           fi
           python scripts/p0-step12v80-general-strength-prospective.py capture \
-            --context ../work/context.json \
+            --context ../evidence/context.json \
             --contract research/p0-step12v80-general-strength-prospective-confirmation-contract.json \
-            --v68-state '../v68-ledger/v68/states/${{ steps.date.outputs.target }}.json' \
+            --v68-state '../v68-ledger/v68/states/${{ inputs.target_date }}.json' \
             --v68-source-script scripts/p0-step12v68-prospective-source.py \
             --v68-capture-script scripts/p0-step12v68-fg-winner-prospective-capture.py \
             --v68-source-manifest research/p0-step12v68-prospective-source-manifests.json \
@@ -192,44 +414,57 @@ jobs:
             --v68-contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
             --v16-manifest ../v16/pure-settlement-model-manifest.json \
             "${EXISTING[@]}" \
-            --out ../work/canonical.json
+            --out ../work-canonical.json
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
-          x=json.load(open('../work/canonical.json'))
+          x=json.load(open('../work-canonical.json'))
           assert x['policy']['outcomesRead'] is False
           assert x['policy']['pricesRead'] is False
           assert x['policy']['oddsUsedAsFeatures'] is False
-          assert x['policy']['realFinancialExposure']==0
           n=int(x['summary']['newCaptures'])
           print(f'new={n}')
           print(f'has_new={str(n>0).lower()}')
           print(f'total={x["summary"]["canonicalGames"]}')
           PY
 
-      - name: Preserve immutable context evidence canonical capture and receipt
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+      - name: Preserve capture or terminal no-capture audit
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "v80-ledger/v80/source-records/${{ steps.date.outputs.target }}" v80-ledger/v80/captures v80-ledger/v80/receipts
-          python - <<'PY'
+          target='${{ inputs.target_date }}'
+          gp='${{ inputs.game_pk }}'
+          mkdir -p "v80-ledger/v80/attempts/$target"
+          attempt_path="v80-ledger/v80/attempts/$target/$gp.json"
+          if ! test -e "$attempt_path"; then
+            cp evidence/attempts.json "$attempt_path"
+          fi
+
+          if [[ '${{ needs.capture-game-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
+            mkdir -p "v80-ledger/v80/source-records/$target" v80-ledger/v80/captures v80-ledger/v80/receipts
+            python - <<'PY'
           import json,os
-          ctx=json.load(open('work/context.json'))
-          for row in ctx.get('rows',[]):
-              gp=int(row['gamePk'])
-              p=f'v80-ledger/v80/source-records/${{ steps.date.outputs.target }}/{gp}.json'
-              if os.path.exists(p):
-                  continue
-              with open(p,'w') as f: json.dump(row,f,indent=2,sort_keys=True);f.write('\n')
-          cap=json.load(open('work/canonical.json'))
+          target='${{ inputs.target_date }}'
+          gp=int('${{ inputs.game_pk }}')
+          ctx=json.load(open('evidence/context.json'))
+          assert len(ctx.get('rows',[]))==1 and int(ctx['rows'][0]['gamePk'])==gp
+          row=ctx['rows'][0]
+          assert row['containsOutcome'] is False and row['containsMarketPrice'] is False
+          source=f'v80-ledger/v80/source-records/{target}/{gp}.json'
+          if not os.path.exists(source):
+              with open(source,'w') as f: json.dump(row,f,indent=2,sort_keys=True);f.write('\n')
+          cap=json.load(open('work-canonical.json'))
           assert cap['policy']['outcomesRead'] is False and cap['policy']['pricesRead'] is False
           with open('v80-ledger/v80/captures/canonical.json','w') as f: json.dump(cap,f,indent=2,sort_keys=True);f.write('\n')
+          attempts=json.load(open('evidence/attempts.json'))
           receipt={
-            'schemaVersion':'courtedge-p0-step12v80-capture-receipt.v1',
-            'officialDate':'${{ steps.date.outputs.target }}',
+            'schemaVersion':'courtedge-p0-step12v80-capture-receipt.v2',
+            'officialDate':target,
+            'gamePk':gp,
             'githubRunId':'${{ github.run_id }}',
             'githubRunAttempt':'${{ github.run_attempt }}',
-            'contextRows':len(ctx.get('rows',[])),
+            'captureAttemptStage':attempts.get('captureStage'),
+            'capturedLeadMinutes':row.get('leadMinutes'),
+            'contextRows':1,
             'captureSummary':cap['summary'],
             'outcomesRead':False,
             'pricesRead':False,
@@ -237,19 +472,24 @@ jobs:
             'researchOnly':True,
             'realFinancialExposure':0,
           }
-          with open('v80-ledger/v80/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w') as f: json.dump(receipt,f,indent=2,sort_keys=True);f.write('\n')
+          with open(f'v80-ledger/v80/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w') as f: json.dump(receipt,f,indent=2,sort_keys=True);f.write('\n')
           PY
+          fi
 
-      - name: Commit only newly captured immutable games
-        if: steps.date.outputs.eligible == 'true' && steps.states.outputs.ready == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+      - name: Commit serialized immutable V80 evidence
         working-directory: v80-ledger
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'court-edge-v80-research-bot'
           git config user.email 'v80-research-bot@users.noreply.github.com'
-          git add v80/captures v80/source-records v80/receipts
+          git add v80/attempts v80/captures v80/source-records v80/receipts 2>/dev/null || true
           git diff --cached --quiet && exit 0
-          git commit -m "V80 capture ${{ steps.date.outputs.target }}: add ${{ steps.score.outputs.new }} immutable pregame game(s)"
+          if [[ '${{ needs.capture-game-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
+            msg="V80 capture ${{ inputs.target_date }} game ${{ inputs.game_pk }} at ${{ needs.capture-game-evidence.outputs.capture_stage }}"
+          else
+            msg="V80 no-capture audit ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
+          fi
+          git commit -m "$msg"
           git pull --rebase origin data/p0-step12v80-general-strength-prospective
           git push origin HEAD:data/p0-step12v80-general-strength-prospective
