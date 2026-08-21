@@ -34,7 +34,7 @@ def schedule(cache,seasons):
     x=x[SCHED].copy(); x=x[x.season.isin(seasons)&x.game_type.eq('REG')&x.home_score.notna()&x.away_score.notna()]
     x['season']=x.season.astype(int); x['week']=pd.to_numeric(x.week,errors='coerce'); x=x[x.week.notna()]; x['week']=x.week.astype(int)
     x['gameday']=pd.to_datetime(x.gameday,errors='coerce'); x=x[x.gameday.notna()]
-    x['home_win']=(x.home_score>x.away_score).astype(int); x['margin']=x.home_score-x.away_score; x['game_total']=x.home_score+x.away_score
+    x['margin']=x.home_score-x.away_score; x['game_total']=x.home_score+x.away_score; x['home_win']=np.where(x['margin']>0,1,np.where(x['margin']<0,0,np.nan))
     return x.sort_values(['gameday','game_id']).reset_index(drop=True)
 
 def pbp_games(cache,seasons):
@@ -94,9 +94,14 @@ def dataset(games,tg,alpha=.22):
 
 def fsets():
     b1=['home_points_for','home_points_against','away_points_for','away_points_against','home_uncertainty','away_uncertainty']
-    b2=b1+[f'{s}_{k}' for s in ['home','away'] for k in EPA]
-    b3=b2+['home_sos_opp_off','home_sos_opp_def','away_sos_opp_off','away_sos_opp_def']; b5=b3+[f'{s}_{k}' for s in ['home','away'] for k in ['plays','drives']]
-    return {'B0':[],'B1':b1,'B2':b2,'B3':b3,'B5':b5}
+    pair=lambda ks:[f'{s}_{k}' for s in ['home','away'] for k in ks]
+    core=pair(['off_epa','def_epa','off_success','def_success'])
+    pas=pair(['pass_epa','def_pass_epa','pass_success','def_pass_success'])
+    rush=pair(['rush_epa','def_rush_epa','rush_success','def_rush_success'])
+    disrupt=pair(['sack_rate','def_sack_rate','explosive_pass','def_explosive_pass','explosive_rush','def_explosive_rush'])
+    sos=['home_sos_opp_off','home_sos_opp_def','away_sos_opp_off','away_sos_opp_def']
+    pace=pair(['plays','drives'])
+    return {'B0':[],'B1':b1,'B2_CORE':b1+core,'B2_PASS':b1+pas,'B2_RUSH':b1+rush,'B2_DISRUPTION':b1+disrupt,'B2_FULL':b1+core+pas+rush+disrupt,'B3_PASS_SOS':b1+pas+sos,'B5_PASS_SOS_PACE':b1+pas+sos+pace}
 def pipe(kind):
     m=LogisticRegression(C=.7,max_iter=2000) if kind=='logit' else Ridge(alpha=8.0)
     return Pipeline([('i',SimpleImputer(strategy='median')),('s',StandardScaler()),('m',m)])
@@ -108,6 +113,7 @@ def ece(y,p):
     return float(z)
 
 def run(x,test0,end):
+    x=x[x.margin.ne(0)].copy()
     fs=fsets(); bad=[c for vv in fs.values() for c in vv if any(t in c.lower() for t in FORBIDDEN)]
     if bad:raise RuntimeError('market feature leak '+str(bad))
     if any(any(t in c.lower() for t in FORBIDDEN) for c in x.columns):raise RuntimeError('market column in frame')
@@ -117,7 +123,7 @@ def run(x,test0,end):
             tr=x[x.season<y];te=x[x.season==y]
             if tr.empty or te.empty:continue
             Xtr=tr[cols] if cols else pd.DataFrame({'c':np.ones(len(tr))});Xte=te[cols] if cols else pd.DataFrame({'c':np.ones(len(te))})
-            lm=pipe('logit');lm.fit(Xtr,tr.home_win);p=np.clip(lm.predict_proba(Xte)[:,1],1e-6,1-1e-6)
+            lm=pipe('logit');lm.fit(Xtr,tr.home_win.astype(int));p=np.clip(lm.predict_proba(Xte)[:,1],1e-6,1-1e-6)
             pr={}
             for t in ['margin','game_total','home_score','away_score']:
                 m=pipe('ridge');m.fit(Xtr,tr[t]);pr[t]=m.predict(Xte)
@@ -129,8 +135,10 @@ def run(x,test0,end):
     return pd.DataFrame(sm),pd.DataFrame(seasons),p
 
 def boot(p,reps=400):
-    rng=np.random.default_rng(940830);order=[n for n in ['B0','B1','B2','B3','B5'] if n in set(p.model)];out=[]
-    for a,b in zip(order[:-1],order[1:]):
+    rng=np.random.default_rng(940830); out=[]; names=[n for n in fsets() if n!='B0']
+    comps=[('B0','B1')]+[('B1',n) for n in names if n not in ['B1','B3_PASS_SOS','B5_PASS_SOS_PACE']]+[('B2_PASS','B3_PASS_SOS'),('B3_PASS_SOS','B5_PASS_SOS_PACE')]
+    for a,b in comps:
+        if a not in set(p.model) or b not in set(p.model):continue
         x=p[p.model==a][['game_id','season','week','lli']].rename(columns={'lli':'a'}).merge(p[p.model==b][['game_id','lli']].rename(columns={'lli':'b'}),on='game_id');x['d']=x.b-x.a;cl=list(x.groupby(['season','week']).groups)
         vals=[]
         for _ in range(reps):
@@ -143,7 +151,7 @@ def main():
     seasons=list(range(a.start_season,a.end_season+1));cache=Path(a.cache_dir);out=Path(a.out_dir);out.mkdir(parents=True,exist_ok=True)
     g=schedule(cache,seasons);tg,prov=pbp_games(cache,seasons);x=dataset(g,tg);x.to_parquet(out/'nfl_r5_leakage_safe_dataset.parquet',index=False)
     s,bs,p=run(x,a.test_start,a.end_season);bd=boot(p);s.to_csv(out/'nfl_r5_model_summary.csv',index=False);bs.to_csv(out/'nfl_r5_by_season.csv',index=False);p.to_parquet(out/'nfl_r5_oos_predictions.parquet',index=False);bd.to_csv(out/'nfl_r5_bootstrap_deltas.csv',index=False)
-    m={'schemaVersion':'courtedge-nfl-r5-leakage-safe.v1','researchOnly':True,'marketDataUsedAsFeatures':False,'marketOptimizationPerformed':False,'regularSeasonOnly':True,'seasons':[a.start_season,a.end_season],'testSeasons':[a.test_start,a.end_season],'featureSets':fsets(),'sameGameRule':'pregame row emitted before target-game score/PBP state update','deferredForTimestampProof':{'B4_QB':'historical as-of starter source required','B6_personnel':'historical injury/inactive timestamps required','B7_weather':'archived pregame forecast required; observed weather forbidden','B8_NGS':'prior-publication timing audit required'},'rows':len(x),'pbpProvenance':prov}
+    m={'schemaVersion':'courtedge-nfl-r5-leakage-safe.v1','researchOnly':True,'marketDataUsedAsFeatures':False,'marketOptimizationPerformed':False,'regularSeasonOnly':True,'seasons':[a.start_season,a.end_season],'testSeasons':[a.test_start,a.end_season],'featureSets':fsets(),'sameGameRule':'pregame row emitted before target-game score/PBP state update','deferredForTimestampProof':{'B4_QB':'historical as-of starter source required','B6_personnel':'historical injury/inactive timestamps required','B7_weather':'archived pregame forecast required; observed weather forbidden','B8_NGS':'prior-publication timing audit required'},'rows':len(x),'tieHandling':'target ties excluded from binary signal-screen; ties remain in prior state updates and will be modeled explicitly by final score-distribution engine','featureFamilyPass':'diagnostic only; no family accepted without replicated OOS support','pbpProvenance':prov}
     (out/'nfl_r5_manifest.json').write_text(json.dumps(m,indent=2));(out/'nfl_r5_audit.json').write_text(json.dumps({'marketLeakageCheck':'PASS','sameGameFeatureLeakageCheck':'PASS_BY_CONSTRUCTION','validation':'EXPANDING_SEASON_WALK_FORWARD'},indent=2))
     print('NFL_R5_MODEL_SUMMARY');print(s.to_string(index=False));print('NFL_R5_BOOTSTRAP');print(bd.to_string(index=False));print('NFL_R5_COMPLETE')
 if __name__=='__main__':main()
