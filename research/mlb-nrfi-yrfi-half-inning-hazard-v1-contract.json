@@ -1,0 +1,193 @@
+{
+  "schemaVersion": "courtedge-mlb-nrfi-yrfi-half-inning-hazard-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_HALF_INNING_HAZARD_DISCOVERY_AFTER_THREE_GLOBAL_NRFI_YRFI_REJECTIONS_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "objective": "Test a structurally different NRFI/YRFI architecture: model each offensive first-inning half as a pregame scoring hazard using batting-team, defending-team, opposing-starter and top-of-order context, then combine the two half-inning probabilities into one game-level NRFI/YRFI probability without post-result model or threshold search.",
+  "productionBase": {
+    "mainCommit": "236a6af9db8b5d03699abb402333a6fff8b44484",
+    "productionBehaviorChanged": false,
+    "dailyBestPickHierarchyChanged": false,
+    "maximumDailyPicks": 1,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "forcedDailyPlayAllowed": false
+  },
+  "parentEvidence": {
+    "v26": {
+      "workflowRunId": 31896273442,
+      "artifactId": 9249905718,
+      "artifactName": "p0-step12v26-nrfi-yrfi-baseline",
+      "artifactDigest": "sha256:bfbacf7c49b500bd5c1c35cd18e2d5767fd440ff439d71368a0e7336620475fa",
+      "requiredClassification": "NRFI_YRFI_FULL13_BASELINE_REJECTED"
+    },
+    "v27": {
+      "workflowRunId": 31896654032,
+      "artifactId": 9249997314,
+      "artifactName": "p0-step12v27-nrfi-yrfi-i1-causal-core",
+      "artifactDigest": "sha256:b80ea911caa59d43da8457c338385ea8e5bff27bd3b0e27ebe295eb89636879e",
+      "requiredClassification": "NRFI_YRFI_I1_CAUSAL_CORE_REJECTED"
+    },
+    "modularGlobalRetry": {
+      "pullRequest": 639,
+      "workflowRunId": 32142874224,
+      "artifactId": 9326595426,
+      "artifactName": "mlb-modular-team-structure-nrfi-yrfi-v1",
+      "artifactDigest": "sha256:9922675946de00065993573a4290f14f2f03b935fb7443e56a5d6a5f90b889ee",
+      "requiredFirstInningValidationQualified": false,
+      "requiredValidationBrierImprovement": -0.0003625972053902804
+    },
+    "reasonForNewArchitecture": "Three game-level/global NRFI/YRFI probability designs failed their frozen validation gates. This contract changes the unit of modeling to the causal half-inning matchup rather than mining another global feature subset."
+  },
+  "immutableData": {
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "officialFirstInningOutcomes": "V26 first-inning-outcomes.json",
+    "canonicalFeatureTable": "game-anatomy-feature-table.json",
+    "starterHistory": "cohort/starting-pitcher-history.json",
+    "pregameLineupHistory": "cohort/pregame-lineup-history.json",
+    "starterIdentityAudit": "t5-audit/t5-starter-identity-audit.json"
+  },
+  "chronology": {
+    "trainingSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveRobustnessSeasons": ["2024", "2025", "2026_YTD"],
+    "retrospective2024To2026IsIndependentConfirmation": false,
+    "reason": "This half-inning architecture was designed after 2024-2026 results from prior NRFI/YRFI studies had already been inspected. Those seasons may test retrospective robustness but cannot be called untouched confirmation.",
+    "prospectiveConfirmationRequiredAfterFreeze": true,
+    "sameDateHistoryAllowed": false,
+    "scoreWholeDateBeforeAnySameDateStateUpdate": true,
+    "futureGameDataAllowed": false,
+    "currentMetadataFallbackAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "unitOfAnalysis": {
+    "trainingRowsPerGame": 2,
+    "topHalfTarget": "AWAY_TEAM_SCORES_AT_LEAST_ONE_RUN_IN_TOP_FIRST",
+    "bottomHalfTarget": "HOME_TEAM_SCORES_AT_LEAST_ONE_RUN_IN_BOTTOM_FIRST",
+    "sharedModelAcrossHalves": true,
+    "homeBattingIndicatorIncluded": true,
+    "reasonSharedModel": "The causal feature roles are the same for each offensive half; sharing coefficients doubles the training observations while the home-batting indicator permits a systematic home-half intercept shift."
+  },
+  "historicalState": {
+    "teamI1PriorStrengthHalfInnings": 20,
+    "starterI1PriorStrengthGames": 20,
+    "leaguePriorMean": "CURRENT_SEASON_STRICTLY_PRIOR_DATE_HALF_INNING_SCORING_RATE",
+    "openingDayFallbackPriorMean": 0.5,
+    "starterI1Metric": "OPPONENT_SCORED_AT_LEAST_ONE_RUN_IN_FIRST_INNING_WHILE_PITCHER_WAS_RECORDED_STARTER",
+    "starterI1MetricDoesNotClaimPitcherChargedRunAttribution": true,
+    "top3Continuity": "INTERSECTION_CURRENT_TOP3_WITH_PREVIOUS_COMPLETE_TOP3_DIVIDED_BY_3",
+    "previousLineupMustBeStrictlyPriorDate": true
+  },
+  "halfInningFeatures": {
+    "genericRolesExactly": [
+      "batting_offense_i1_score_rate_shrunk",
+      "defending_team_i1_allow_rate_shrunk",
+      "opposing_starter_i1_allow_rate_shrunk",
+      "batting_team_rs10",
+      "defending_team_ra10",
+      "batting_top3_continuity",
+      "batting_lineup_exposure_rate",
+      "opposing_starter_erbf",
+      "opposing_starter_hrbf",
+      "opposing_starter_kbb",
+      "opposing_probable_prior_bf",
+      "batting_is_home"
+    ],
+    "featureCount": 12,
+    "topHalfMapping": {
+      "battingTeam": "AWAY",
+      "defendingTeam": "HOME",
+      "opposingStarter": "HOME_PROBABLE_STARTER"
+    },
+    "bottomHalfMapping": {
+      "battingTeam": "HOME",
+      "defendingTeam": "AWAY",
+      "opposingStarter": "AWAY_PROBABLE_STARTER"
+    },
+    "bullpenFeaturesUsed": false,
+    "fullGameOutcomeFeaturesUsed": false,
+    "featureSearchAllowed": false,
+    "derivedFeatureSearchAllowed": false,
+    "postResultFeatureEditingAllowed": false
+  },
+  "halfInningModel": {
+    "family": "L2_BINARY_LOGISTIC_REGRESSION",
+    "regularizationC": 1.0,
+    "solver": "lbfgs",
+    "maxIter": 4000,
+    "randomState": 2801,
+    "classWeight": null,
+    "medianImputationFitOn2022Only": true,
+    "standardScalerFitOn2022Only": true,
+    "baseline": "2022_HALF_INNING_SCORE_CLIMATOLOGY",
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false
+  },
+  "gameCombination": {
+    "rawTopScoreProbability": "P_AWAY_SCORES_TOP_FIRST",
+    "rawBottomScoreProbability": "P_HOME_SCORES_BOTTOM_FIRST",
+    "nrfiProbability": "(1 - P_TOP_SCORE) * (1 - P_BOTTOM_SCORE)",
+    "yrfiProbability": "1 - NRFI_PROBABILITY",
+    "conditionalIndependenceApproximation": true,
+    "postHocGameLevelCalibrationAllowed": false,
+    "gameLevelBaseline": "2022_EMPIRICAL_YRFI_RATE"
+  },
+  "validationGate": {
+    "allMustPass2023": [
+      "HALF_INNING_LOG_LOSS_BEATS_2022_HALF_INNING_CLIMATOLOGY",
+      "HALF_INNING_BRIER_BEATS_2022_HALF_INNING_CLIMATOLOGY",
+      "HALF_INNING_ROC_AUC_ABOVE_0_5",
+      "GAME_LEVEL_LOG_LOSS_BEATS_2022_YRFI_CLIMATOLOGY",
+      "GAME_LEVEL_BRIER_BEATS_2022_YRFI_CLIMATOLOGY",
+      "GAME_LEVEL_ROC_AUC_ABOVE_0_5"
+    ],
+    "failureAction": "REJECT_ARCHITECTURE_AND_CONTRIBUTE_ZERO_NRFI_YRFI_RESCUE_COVERAGE",
+    "passingDoesNotEstablishPositiveEv": true,
+    "passingDoesNotAuthorizeProduction": true
+  },
+  "candidateFrontiers": {
+    "onlyIfValidationGatePasses": true,
+    "selectedSide": "NRFI_OR_YRFI_BY_LARGEST_POSITIVE_PROBABILITY_EXCESS_OVER_2022_MATCHING_SIDE_CLIMATOLOGY",
+    "minimumSelectedSideProbability": 0.60,
+    "qualityScore": "SELECTED_SIDE_MODEL_PROBABILITY_MINUS_SELECTED_SIDE_2022_CLIMATOLOGY",
+    "quantilesFrom2023PositiveEligibleScoresExactly": [0.80, 0.85, 0.90, 0.95],
+    "postResultThresholdSearchAllowed": false,
+    "reportParentNoPlayRescue": true,
+    "opportunityCoverageIsNotExecutableBetRate": true
+  },
+  "reporting": {
+    "reportHalfInningMetrics": true,
+    "reportGameLevelMetrics": true,
+    "reportTopHalfAndBottomHalfDescriptiveCalibrationSeparately": true,
+    "reportEachRetrospectiveSeason": true,
+    "reportCandidateFrontiersOnlyAfterGate": true,
+    "reportNoPlayRescueOnlyAfterGate": true,
+    "reportFeatureCoefficientsDescriptiveOnly": true,
+    "winnerMayNotBeDeclaredFrom2024To2026RetrospectiveRobustness": true
+  },
+  "marketBoundary": {
+    "providerMarketKey": "totals_1st_1_innings",
+    "canonicalSides": ["NRFI", "YRFI"],
+    "requiredExactLine": 0.5,
+    "underMapsTo": "NRFI",
+    "overMapsTo": "YRFI",
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false
+  },
+  "governance": {
+    "researchOnly": true,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "productionRankingChanged": false,
+    "liveLookupAuthorizationChanged": false,
+    "stakeChanged": false,
+    "betEliteProduced": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "prospectiveConfirmationRequiredBeforeAnyPromotion": true,
+    "exactLivePriceEconomicsRequiredBeforeAnyFutureExecution": true
+  }
+}
