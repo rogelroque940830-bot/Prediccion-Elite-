@@ -49,8 +49,11 @@ jobs:
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
+          assert p['B4_QB']['targetActualStarterUsedAsFeature'] is False
           assert a['marketLeakageCheck'] == 'PASS'
           assert a['sameGameFeatureLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert a['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
+          assert a['validation'] == 'NESTED_EXPANDING_SEASON_WALK_FORWARD'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
