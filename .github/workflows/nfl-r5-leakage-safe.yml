@@ -27,9 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pandas numpy pyarrow scikit-learn requests
 
-      - name: Validate research script
+      - name: Validate research scripts
         run: |
           python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5_postcheck.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -39,6 +40,10 @@ jobs:
             --test-start 2018 \
             --out-dir nfl-r5-output \
             --cache-dir .cache/nflverse
+
+      - name: Run cumulative significance and stability post-check
+        run: |
+          python research/nfl/nfl_r5_postcheck.py --out-dir nfl-r5-output
 
       - name: Enforce market-free research boundary
         run: |
@@ -62,6 +67,8 @@ jobs:
           cat nfl-r5-output/nfl_r5_model_summary.csv
           echo
           cat nfl-r5-output/nfl_r5_bootstrap_deltas.csv
+          echo
+          cat nfl-r5-output/nfl_r5_cumulative_bootstrap.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
