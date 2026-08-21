@@ -1,17 +1,19 @@
 {
   "schemaVersion": "courtedge-p0-step12v80-capture-clock-operational-protocol.v1",
-  "protocolRevision": 1,
+  "protocolRevision": 2,
   "effectiveOfficialDate": "2026-08-21",
-  "scientificStatus": "FROZEN_V80_OPERATIONAL_CAPTURE_TIMING_BEFORE_2026_08_21_PREGAME_CAPTURES",
-  "purpose": "Improve prospective capture completeness by scheduling each MLB game from the official daily slate and using a deterministic per-game pregame clock. This protocol changes capture orchestration only; it does not change V16, V68, Full13, team-strength construction, route priority, probability thresholds, ranking, staking, or V80 outcome embargo rules.",
+  "scientificStatus": "FROZEN_V80_OPERATIONAL_CAPTURE_TIMING_REV2_BEFORE_2026_08_21_PREGAME_CAPTURES",
+  "purpose": "Improve prospective capture completeness with one sanitized daily MLB slate snapshot, deterministic per-game T-10/T-7/T-4 clocks, and explicit delayed/postponed handling. Orchestration only; no model, threshold, route, ranking, staking, or outcome-embargo changes.",
   "parentHypothesisContract": "research/p0-step12v80-general-strength-prospective-confirmation-contract.json",
   "parentHypothesisContractModified": false,
   "dailySlate": {
-    "source": "MLB StatsAPI regular-season schedule for the target official date",
-    "readBeforeGameWindows": true,
+    "fullSlateSnapshotAtOrAfterEasternTime": "10:30",
+    "routineFullSlateReadsPerOfficialDate": 1,
+    "snapshotSanitizedNoScores": true,
+    "snapshotPath": "v80/slates/<officialDate>.json",
+    "subsequentDispatchersUseFrozenSnapshot": true,
     "eachGameHandledByGamePk": true,
-    "scheduledStartRevalidatedBeforeEveryAttemptStage": true,
-    "gameStartChangesFollowLatestOfficialSchedule": true
+    "newGamesAddedAfterSnapshotAreNotSilentlyBackfilled": true
   },
   "captureClock": {
     "primaryAttempt": {
@@ -36,7 +38,45 @@
     "noPostStartCapture": true,
     "noPostgameReconstruction": true,
     "stageLateToleranceMinutes": 0.75,
-    "lateStageMustNotBeRelabeledAsEarlierStage": true
+    "lateStageMustNotBeRelabeledAsEarlierStage": true,
+    "captureCutoffEasternTime": "23:00"
+  },
+  "gameSpecificRevalidation": {
+    "beforeEveryAttemptStage": true,
+    "routineRevalidationScope": "TARGET_GAME_PK_ONLY",
+    "latestOfficialStartTimeWins": true,
+    "sameDayLaterStartRearmsClock": true,
+    "delayedWithoutResolvedNewStartIsNonterminal": true,
+    "postponedSameDateUnresolvedIsNonterminal": true,
+    "postponedToAnotherDateIsTerminalForOriginalOfficialDate": true,
+    "cancelledIsTerminal": true,
+    "suspendedIsTerminal": true,
+    "startedOrFinalIsTerminal": true,
+    "nonterminalDelayRetryStatePersisted": true
+  },
+  "planner": {
+    "dispatchCadenceMinutes": 10,
+    "operatingWindowEasternTime": {
+      "start": "10:30",
+      "lastScheduledDispatcher": "22:50",
+      "captureCutoff": "23:00"
+    },
+    "fullSlateRefetchedByRoutineDispatchers": false,
+    "dispatchWindowLeadMinutes": {
+      "exclusiveMinimum": 4,
+      "inclusiveMaximum": 35
+    },
+    "activeDuplicateChildRunsSuppressedByGamePk": true,
+    "reasonForDispatchBuffer": "A lightweight dispatcher reads the frozen 10:30 ET slate and wakes only gamePks approaching their clocks. Scientific timestamps still come from game-specific T10/T7/T4 revalidation, not dispatcher time."
+  },
+  "postponementPolicy": {
+    "delayed": "HOLD_NONTERMINAL_AND_RETRY",
+    "postponedSameDateUnresolved": "HOLD_NONTERMINAL_AND_RETRY",
+    "postponedToAnotherDate": "TERMINAL_NO_CAPTURE_FOR_ORIGINAL_DATE",
+    "cancelled": "TERMINAL_NO_CAPTURE",
+    "suspended": "TERMINAL_NO_NEW_PREGAME_CAPTURE",
+    "sameDayRescheduledLater": "FOLLOW_NEW_OFFICIAL_START_AND_REARM_T10",
+    "after2300Eastern": "TERMINAL_NO_CAPTURE_FOR_THAT_DATE"
   },
   "exactIdentityRequirements": {
     "bothProbablePitchersRequired": true,
@@ -50,15 +90,6 @@
     "firstCanonicalGameSnapshotImmutable": true,
     "duplicateGameCaptureReturnsExistingCanonicalSnapshot": true,
     "captureEvidenceTimestampComesFromPregameAttemptNotLaterMergeTime": true
-  },
-  "planner": {
-    "pollCadenceMinutes": 5,
-    "dispatchWindowLeadMinutes": {
-      "exclusiveMinimum": 4,
-      "inclusiveMaximum": 35
-    },
-    "reasonForDispatchBuffer": "The planner is intentionally dispatched well before T10 so GitHub schedule queue delay does not define the scientific capture timestamp. The per-game child remains alive and waits for the exact T10/T7/T4 stages.",
-    "activeDuplicateChildRunsSuppressedByGamePk": true
   },
   "researchBoundary": {
     "researchOnly": true,
