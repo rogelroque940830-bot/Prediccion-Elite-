@@ -1,0 +1,31 @@
+{
+  "allMinimumsRequiredSimultaneously": true,
+  "counts": {
+    "distinctOfficialDatesWithGeneralTop1Decision": 0,
+    "generalTop1Decisions": 0,
+    "peerOrWeakerDecisions": 0,
+    "selectedStrongerDecisions": 0
+  },
+  "embargoMature": false,
+  "groupHitRatesRead": false,
+  "minimumChecks": {
+    "distinctOfficialDatesWithGeneralTop1Decision": false,
+    "generalTop1Decisions": false,
+    "peerOrWeakerDecisions": false,
+    "selectedStrongerDecisions": false
+  },
+  "minimums": {
+    "distinctOfficialDatesWithGeneralTop1Decision": 40,
+    "generalTop1Decisions": 50,
+    "peerOrWeakerDecisions": 15,
+    "selectedStrongerDecisions": 15
+  },
+  "outcomesRead": false,
+  "pricesRead": false,
+  "realFinancialExposure": 0,
+  "researchOnly": true,
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-embargo-maturity.v1",
+  "scientificStatus": "V80_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE",
+  "strengthGapOutcomeAssociationRead": false,
+  "winLossCountsRead": false
+}
