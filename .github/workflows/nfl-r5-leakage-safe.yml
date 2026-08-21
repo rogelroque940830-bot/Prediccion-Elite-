@@ -1,0 +1,69 @@
+name: NFL R5 Leakage-Safe Historical Experiment
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5-leakage-safe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install NFL-R5 research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy pyarrow scikit-learn requests
+
+      - name: Validate research script
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+
+      - name: Run leakage-safe walk-forward experiment
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Enforce market-free research boundary
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('nfl-r5-output/nfl_r5_manifest.json'))
+          a=json.load(open('nfl-r5-output/nfl_r5_audit.json'))
+          assert p['researchOnly'] is True
+          assert p['marketDataUsedAsFeatures'] is False
+          assert p['marketOptimizationPerformed'] is False
+          assert a['marketLeakageCheck'] == 'PASS'
+          assert a['sameGameFeatureLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show model ladder result
+        run: |
+          cat nfl-r5-output/nfl_r5_model_summary.csv
+          echo
+          cat nfl-r5-output/nfl_r5_bootstrap_deltas.csv
+
+      - name: Upload NFL-R5 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5-leakage-safe-evidence
+          path: nfl-r5-output/
+          if-no-files-found: error
+          retention-days: 30
