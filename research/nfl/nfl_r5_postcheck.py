@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score, mean_absolute_error
 
 
-def clustered_bootstrap(p, a, b, reps=1200, seed=940830):
+def clustered_bootstrap(p, a, b, reps=5000, seed=940830):
     x = (
         p[p.model.eq(a)][['game_id','season','week','lli']]
         .rename(columns={'lli':'a'})
@@ -16,14 +16,15 @@ def clustered_bootstrap(p, a, b, reps=1200, seed=940830):
         )
     )
     x['d'] = x.b - x.a
-    clusters = list(x.groupby(['season','week']).groups)
+    g = x.groupby(['season','week']).d.agg(['sum','count']).reset_index(drop=True)
+    sums = g['sum'].to_numpy(dtype=float)
+    counts = g['count'].to_numpy(dtype=float)
+    k = len(g)
     rng = np.random.default_rng(seed)
-    vals=[]
-    for _ in range(reps):
-        ss=[clusters[i] for i in rng.integers(0,len(clusters),len(clusters))]
-        vals.append(np.mean(np.concatenate([
-            x[(x.season.eq(s)) & (x.week.eq(w))].d.to_numpy() for s,w in ss
-        ])))
+    vals = np.empty(reps, dtype=float)
+    for i in range(reps):
+        idx = rng.integers(0, k, k)
+        vals[i] = sums[idx].sum() / counts[idx].sum()
     lo,hi=np.quantile(vals,[.025,.975])
     return {
         'comparison': f'{b}-{a}',
@@ -31,8 +32,9 @@ def clustered_bootstrap(p, a, b, reps=1200, seed=940830):
         'ci95_low': float(lo),
         'ci95_high': float(hi),
         'improvement_supported_95': bool(hi < 0),
-        'clusters': len(clusters),
+        'clusters': k,
         'games': len(x),
+        'bootstrap_reps': reps,
     }
 
 
