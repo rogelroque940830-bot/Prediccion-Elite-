@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "courtedge-p0-step12v80-capture-clock-operational-protocol.v1",
+  "protocolRevision": 1,
+  "effectiveOfficialDate": "2026-08-21",
+  "scientificStatus": "FROZEN_V80_OPERATIONAL_CAPTURE_TIMING_BEFORE_2026_08_21_PREGAME_CAPTURES",
+  "purpose": "Improve prospective capture completeness by scheduling each MLB game from the official daily slate and using a deterministic per-game pregame clock. This protocol changes capture orchestration only; it does not change V16, V68, Full13, team-strength construction, route priority, probability thresholds, ranking, staking, or V80 outcome embargo rules.",
+  "parentHypothesisContract": "research/p0-step12v80-general-strength-prospective-confirmation-contract.json",
+  "parentHypothesisContractModified": false,
+  "dailySlate": {
+    "source": "MLB StatsAPI regular-season schedule for the target official date",
+    "readBeforeGameWindows": true,
+    "eachGameHandledByGamePk": true,
+    "scheduledStartRevalidatedBeforeEveryAttemptStage": true,
+    "gameStartChangesFollowLatestOfficialSchedule": true
+  },
+  "captureClock": {
+    "primaryAttempt": {
+      "label": "T10",
+      "leadMinutes": 10,
+      "required": true
+    },
+    "conditionalRetries": [
+      {
+        "label": "T7",
+        "leadMinutes": 7,
+        "allowedOnlyWhen": "NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10"
+      },
+      {
+        "label": "T4",
+        "leadMinutes": 4,
+        "allowedOnlyWhen": "NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10_OR_T7"
+      }
+    ],
+    "stopImmediatelyAfterFirstValidCapture": true,
+    "noFurtherAttemptAfterValidCapture": true,
+    "noPostStartCapture": true,
+    "noPostgameReconstruction": true,
+    "stageLateToleranceMinutes": 0.75,
+    "lateStageMustNotBeRelabeledAsEarlierStage": true
+  },
+  "exactIdentityRequirements": {
+    "bothProbablePitchersRequired": true,
+    "homeBattingOrderExactlyNineRequired": true,
+    "awayBattingOrderExactlyNineRequired": true,
+    "pregameStatusRequired": true
+  },
+  "parallelismAndCustody": {
+    "differentGamesMayCaptureEvidenceInParallel": true,
+    "sharedCanonicalMergeSerializedAfterEvidenceCapture": true,
+    "firstCanonicalGameSnapshotImmutable": true,
+    "duplicateGameCaptureReturnsExistingCanonicalSnapshot": true,
+    "captureEvidenceTimestampComesFromPregameAttemptNotLaterMergeTime": true
+  },
+  "planner": {
+    "pollCadenceMinutes": 5,
+    "dispatchWindowLeadMinutes": {
+      "exclusiveMinimum": 4,
+      "inclusiveMaximum": 35
+    },
+    "reasonForDispatchBuffer": "The planner is intentionally dispatched well before T10 so GitHub schedule queue delay does not define the scientific capture timestamp. The per-game child remains alive and waits for the exact T10/T7/T4 stages.",
+    "activeDuplicateChildRunsSuppressedByGamePk": true
+  },
+  "researchBoundary": {
+    "researchOnly": true,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "oddsUsedAsFeatures": false,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "modelChanged": false,
+    "thresholdChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
