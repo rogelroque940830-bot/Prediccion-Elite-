@@ -3,7 +3,11 @@ name: P0 Step 12V80 Plan Per-Game Capture Clock
 on:
   workflow_dispatch:
   schedule:
-    - cron: '1,6,11,16,21,26,31,36,41,46,51,56 * * * *'
+    # MLB regular-season V80 window in Eastern Daylight Time:
+    # 10:30 AM through 10:50 PM ET, every 10 minutes.
+    - cron: '30,40,50 14 * * *'
+    - cron: '0,10,20,30,40,50 15-23 * * *'
+    - cron: '0,10,20,30,40,50 0-2 * * *'
   pull_request:
     branches: [main]
     paths:
@@ -15,7 +19,7 @@ on:
       - '.github/workflows/p0-step12v80-capture-general-strength-prospective.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 concurrency:
@@ -31,7 +35,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate T-10/T-7/T-4 operational clock
+      - name: Validate daily slate and T-10/T-7/T-4 clock
         shell: bash
         run: |
           set -euo pipefail
@@ -40,22 +44,25 @@ jobs:
           python - <<'PY'
           import json
           p=json.load(open('research/p0-step12v80-capture-clock-operational-protocol.json'))
-          assert p['effectiveOfficialDate']=='2026-08-21'
+          assert p['protocolRevision']==2
+          assert p['dailySlate']['fullSlateSnapshotAtOrAfterEasternTime']=='10:30'
+          assert p['dailySlate']['routineFullSlateReadsPerOfficialDate']==1
+          assert p['planner']['dispatchCadenceMinutes']==10
+          assert p['planner']['operatingWindowEasternTime']['captureCutoff']=='23:00'
           assert p['captureClock']['primaryAttempt']['leadMinutes']==10
-          retries=p['captureClock']['conditionalRetries']
-          assert [x['leadMinutes'] for x in retries]==[7,4]
-          assert retries[0]['allowedOnlyWhen']=='NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10'
-          assert retries[1]['allowedOnlyWhen']=='NO_CANONICAL_CAPTURE_WAS_CREATED_AT_T10_OR_T7'
-          assert p['captureClock']['stopImmediatelyAfterFirstValidCapture'] is True
+          assert [x['leadMinutes'] for x in p['captureClock']['conditionalRetries']]==[7,4]
+          assert p['gameSpecificRevalidation']['delayedWithoutResolvedNewStartIsNonterminal'] is True
+          assert p['gameSpecificRevalidation']['postponedSameDateUnresolvedIsNonterminal'] is True
+          assert p['gameSpecificRevalidation']['postponedToAnotherDateIsTerminalForOriginalOfficialDate'] is True
           assert p['researchBoundary']['outcomesRead'] is False
           assert p['researchBoundary']['pricesRead'] is False
-          print('V80_T10_CAPTURE_CLOCK_PROTOCOL_VERIFIED')
+          print('V80_DAILY_SLATE_POSTPONEMENT_PROTOCOL_VERIFIED')
           PY
 
   plan-and-dispatch:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - name: Checkout V80 clock code from main
         uses: actions/checkout@v4
@@ -74,42 +81,97 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Resolve MLB official date in Eastern time
-        id: date
+      - name: Resolve Eastern operating window
+        id: clock
         shell: bash
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import datetime as dt
           from zoneinfo import ZoneInfo
-          d=dt.datetime.now(ZoneInfo('America/New_York')).date()
-          print(f'target={d.isoformat()}')
-          print(f'eligible={str(d>=dt.date(2026,8,21)).lower()}')
+          now=dt.datetime.now(ZoneInfo('America/New_York'))
+          start=now.replace(hour=10,minute=30,second=0,microsecond=0)
+          cutoff=now.replace(hour=23,minute=0,second=0,microsecond=0)
+          active=start <= now < cutoff
+          print(f'target={now.date().isoformat()}')
+          print(f'active={str(active).lower()}')
+          print(f'local_time={now.isoformat()}')
           PY
 
-      - name: Plan only games approaching their per-game capture clock
-        if: steps.date.outputs.eligible == 'true'
+      - name: Stop outside 10:30 AM-11:00 PM ET
+        if: steps.clock.outputs.active != 'true'
+        run: echo "V80 planner outside Eastern operating window; no MLB request and no child dispatch."
+
+      - name: Create one sanitized full-slate snapshot for the day
+        if: steps.clock.outputs.active == 'true'
+        id: slate
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p work
+          target='${{ steps.clock.outputs.target }}'
+          path="v80-ledger/v80/slates/$target.json"
+          if test -s "$path"; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "path=$path" >> "$GITHUB_OUTPUT"
+            echo "V80_DAILY_SLATE_ALREADY_FROZEN:$target"
+            exit 0
+          fi
+
+          mkdir -p "v80-ledger/v80/slates"
+          python code/scripts/p0-step12v80-capture-clock.py snapshot \
+            --target-date "$target" \
+            --out "$path"
+
+          python - "$path" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['policy']['sanitizedScheduleOnly'] is True
+          assert x['policy']['scoresStored'] is False
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          PY
+
+          (
+            cd v80-ledger
+            git config user.name 'court-edge-v80-research-bot'
+            git config user.email 'v80-research-bot@users.noreply.github.com'
+            git add "v80/slates/$target.json"
+            git commit -m "V80 slate $target: freeze sanitized 10:30 ET schedule" || true
+            git pull --rebase origin data/p0-step12v80-general-strength-prospective
+            git push origin HEAD:data/p0-step12v80-general-strength-prospective
+          )
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Plan only games approaching their per-game clock from frozen slate
+        if: steps.clock.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ steps.clock.outputs.target }}'
+          slate="v80-ledger/v80/slates/$target.json"
+          test -s "$slate"
+
           EXISTING=()
           if test -s v80-ledger/v80/captures/canonical.json; then
             EXISTING=(--existing-captures v80-ledger/v80/captures/canonical.json)
           fi
-          ATTEMPTS=()
-          if test -d "v80-ledger/v80/attempts/${{ steps.date.outputs.target }}"; then
-            ATTEMPTS=(--terminal-attempt-dir "v80-ledger/v80/attempts/${{ steps.date.outputs.target }}")
+          STATES=()
+          if test -d "v80-ledger/v80/attempt-state/$target"; then
+            STATES=(--attempt-state-dir "v80-ledger/v80/attempt-state/$target")
           fi
+
+          mkdir -p work
           python code/scripts/p0-step12v80-capture-clock.py plan \
-            --target-date '${{ steps.date.outputs.target }}' \
+            --target-date "$target" \
+            --slate-snapshot "$slate" \
             "${EXISTING[@]}" \
-            "${ATTEMPTS[@]}" \
+            "${STATES[@]}" \
             --min-lead-minutes 4 \
             --max-lead-minutes 35 \
             --out work/plan.json
 
       - name: Dispatch one active child per gamePk
-        if: steps.date.outputs.eligible == 'true'
+        if: steps.clock.outputs.active == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -148,14 +210,16 @@ jobs:
                   '--ref','main',
                   '-f',f"target_date={game['officialDate']}",
                   '-f',f"game_pk={gp}",
-                  '-f',f"scheduled_start={game['startTime']}",
+                  '-f',f"scheduled_start={game.get('startTime') or ''}",
               ])
               dispatched += 1
               active.add(gp)
-              print(f"V80_CAPTURE_CHILD_DISPATCHED:{gp}:{game['startTime']}")
+              print(f"V80_CAPTURE_CHILD_DISPATCHED:{gp}:{game.get('startTime')}:{game.get('dispatchReason')}")
+
           print(json.dumps({
               'plannerCandidates': len(plan.get('games', [])),
               'dispatched': dispatched,
               'skippedAlreadyActive': skipped_active,
+              'fullSlateRefetched': False,
           }, indent=2))
           PY
