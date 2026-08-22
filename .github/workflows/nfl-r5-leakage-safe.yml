@@ -14,7 +14,7 @@ permissions:
 jobs:
   nfl-r5:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +33,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5_postcheck.py
           python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
           python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5b_certify.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -64,6 +65,14 @@ jobs:
             --test-start 2018 \
             --end-season 2025
 
+      - name: Certify NFL-R5B2 stability
+        run: |
+          python research/nfl/nfl_r5b_certify.py \
+            --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5b-cert-output \
+            --test-start 2018 \
+            --end-season 2025
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
@@ -72,6 +81,7 @@ jobs:
           a=json.load(open('nfl-r5-output/nfl_r5_audit.json'))
           b=json.load(open('nfl-r5b-output/nfl_r5b_manifest.json'))
           ba=json.load(open('nfl-r5b-output/nfl_r5b_audit.json'))
+          c=json.load(open('nfl-r5b-cert-output/nfl_r5b_cert_verdict.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -87,24 +97,28 @@ jobs:
           assert ba['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
           assert ba['sameWeekUntimestampedDepth'] == 'FORBIDDEN'
           assert ba['injuryTimestampFilter'] == 'STRICT_LT_CUTOFF'
+          assert c['researchOnly'] is True
+          assert c['modelChangedDuringCertification'] is False
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
-      - name: Show model ladder result
+      - name: Show model ladder and certification result
         run: |
           cat nfl-r5-output/nfl_r5_model_summary.csv
-          echo
-          cat nfl-r5-output/nfl_r5_cumulative_bootstrap.csv
-          echo
-          cat nfl-r5b-output/nfl_r5b_model_summary.csv
-          echo
-          cat nfl-r5b-output/nfl_r5b_bootstrap.csv
           echo
           cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_summary.csv
           echo
           cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_bootstrap.csv
           echo
-          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_subsets.csv
+          cat nfl-r5b-cert-output/nfl_r5b_cert_by_season.csv
+          echo
+          cat nfl-r5b-cert-output/nfl_r5b_cert_week_bands.csv
+          echo
+          cat nfl-r5b-cert-output/nfl_r5b_cert_sensitivity.csv
+          echo
+          cat nfl-r5b-cert-output/nfl_r5b_cert_bootstrap.csv
+          echo
+          cat nfl-r5b-cert-output/nfl_r5b_cert_verdict.json
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -127,5 +141,13 @@ jobs:
         with:
           name: nfl-r5b-gated-hybrid-evidence
           path: nfl-r5b-hybrid-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B certification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-final-certification-evidence
+          path: nfl-r5b-cert-output/
           if-no-files-found: error
           retention-days: 30
