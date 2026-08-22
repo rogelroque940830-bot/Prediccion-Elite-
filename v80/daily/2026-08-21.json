@@ -1,0 +1,72 @@
+{
+  "candidateRowsBeforeDedupe": 1,
+  "captureDigest": "d1fe22d287d8f9d1d3bd9f50bf2063dc9f6838a05b3a8545fc41b517bedf3f25",
+  "capturedEligibleGames": 1,
+  "generalTop1Decision": {
+    "classifierScore": 0.6276378123579707,
+    "consensusScore": 0.5865801284251767,
+    "gamePk": 824800,
+    "market": "FULL_GAME_ML",
+    "officialDate": "2026-08-21",
+    "opponentStrength": {
+      "games": 127,
+      "primaryTier": "TOP",
+      "runDifferentialPerGame": 0.3543307086614173,
+      "runDifferentialPercentile": 0.7413793103448276,
+      "strengthScore": 0.8362068965517242,
+      "winPct": 0.5984251968503937,
+      "winPctPercentile": 0.9310344827586207,
+      "wins": 76
+    },
+    "opponentTeamId": 139,
+    "p16Selected": 0.5865801284251767,
+    "p68Selected": 0.6053719800598081,
+    "priority": 4,
+    "route": "V16_V68_CONSENSUS_T0.550",
+    "selectedStrength": {
+      "games": 128,
+      "primaryTier": "MID",
+      "runDifferentialPerGame": -0.28125,
+      "runDifferentialPercentile": 0.41379310344827586,
+      "strengthScore": 0.35344827586206895,
+      "winPct": 0.4765625,
+      "winPctPercentile": 0.29310344827586204,
+      "wins": 61
+    },
+    "selectedTeamId": 110,
+    "side": "HOME",
+    "strengthGap": 0.48275862068965525,
+    "tierRelation": "SELECTED_WEAKER"
+  },
+  "generalTop1DecisionExists": true,
+  "ledgerGamesAfterDedupe": 1,
+  "officialDate": "2026-08-21",
+  "parentPortfolio": "CONFLUENCE_LEDGER_TOP1_T0.550",
+  "policy": {
+    "betEliteAllowed": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "realFinancialExposure": 0,
+    "researchOnly": true,
+    "routingChanged": false,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "stakingChanged": false,
+    "v68Changed": false
+  },
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-daily-top1.v1",
+  "scientificStatus": "V80_DAILY_PORTFOLIO_MATERIALIZED_WITHOUT_OUTCOMES",
+  "top1": {
+    "classifierScore": 0.6276378123579707,
+    "consensusScore": 0.5865801284251767,
+    "gamePk": 824800,
+    "market": "FULL_GAME_ML",
+    "officialDate": "2026-08-21",
+    "p16Selected": 0.5865801284251767,
+    "p68Selected": 0.6053719800598081,
+    "priority": 4,
+    "route": "V16_V68_CONSENSUS_T0.550",
+    "side": "HOME"
+  }
+}
