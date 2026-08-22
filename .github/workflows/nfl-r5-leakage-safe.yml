@@ -14,7 +14,7 @@ permissions:
 jobs:
   nfl-r5:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
           python -m py_compile research/nfl/nfl_r5b_hybrid.py
           python -m py_compile research/nfl/nfl_r5b_certify.py
+          python -m py_compile research/nfl/nfl_r5c_personnel_availability.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -73,6 +74,16 @@ jobs:
             --test-start 2018 \
             --end-season 2025
 
+      - name: Run NFL-R5C personnel availability experiment
+        run: |
+          python research/nfl/nfl_r5c_personnel_availability.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5c-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --end-season 2024 \
+            --test-start 2018
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
@@ -82,6 +93,8 @@ jobs:
           b=json.load(open('nfl-r5b-output/nfl_r5b_manifest.json'))
           ba=json.load(open('nfl-r5b-output/nfl_r5b_audit.json'))
           c=json.load(open('nfl-r5b-cert-output/nfl_r5b_cert_verdict.json'))
+          d=json.load(open('nfl-r5c-output/nfl_r5c_manifest.json'))
+          da=json.load(open('nfl-r5c-output/nfl_r5c_audit.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -99,26 +112,29 @@ jobs:
           assert ba['injuryTimestampFilter'] == 'STRICT_LT_CUTOFF'
           assert c['researchOnly'] is True
           assert c['modelChangedDuringCertification'] is False
+          assert d['researchOnly'] is True
+          assert d['marketDataUsedAsFeatures'] is False
+          assert d['targetGameSnapUsedAsFeature'] is False
+          assert d['qbExcludedFromR5C'] is True
+          assert da['marketLeakageCheck'] == 'PASS'
+          assert da['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert da['2025MissingInjuryHandled'] == 'EXCLUDED_FROM_PRIMARY_R5C_EVALUATION'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
-      - name: Show model ladder and certification result
+      - name: Show model ladder and personnel result
         run: |
           cat nfl-r5-output/nfl_r5_model_summary.csv
           echo
           cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_summary.csv
           echo
-          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_bootstrap.csv
-          echo
-          cat nfl-r5b-cert-output/nfl_r5b_cert_by_season.csv
-          echo
-          cat nfl-r5b-cert-output/nfl_r5b_cert_week_bands.csv
-          echo
-          cat nfl-r5b-cert-output/nfl_r5b_cert_sensitivity.csv
-          echo
-          cat nfl-r5b-cert-output/nfl_r5b_cert_bootstrap.csv
-          echo
           cat nfl-r5b-cert-output/nfl_r5b_cert_verdict.json
+          echo
+          cat nfl-r5c-output/nfl_r5c_model_summary.csv
+          echo
+          cat nfl-r5c-output/nfl_r5c_bootstrap.csv
+          echo
+          cat nfl-r5c-output/nfl_r5c_subsets.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -149,5 +165,13 @@ jobs:
         with:
           name: nfl-r5b-final-certification-evidence
           path: nfl-r5b-cert-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5C personnel evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5c-personnel-availability-evidence
+          path: nfl-r5c-output/
           if-no-files-found: error
           retention-days: 30
