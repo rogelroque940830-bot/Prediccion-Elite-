@@ -32,6 +32,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5_leakage_safe.py
           python -m py_compile research/nfl/nfl_r5_postcheck.py
           python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -54,6 +55,14 @@ jobs:
             --test-start 2018 \
             --out-dir nfl-r5b-output \
             --cache-dir .cache/nflverse
+
+      - name: Run gated NFL-R5B hybrid experiment
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
 
       - name: Enforce market-free research boundary
         run: |
@@ -90,6 +99,12 @@ jobs:
           cat nfl-r5b-output/nfl_r5b_model_summary.csv
           echo
           cat nfl-r5b-output/nfl_r5b_bootstrap.csv
+          echo
+          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_summary.csv
+          echo
+          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_bootstrap.csv
+          echo
+          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_subsets.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -104,5 +119,13 @@ jobs:
         with:
           name: nfl-r5b-qb-identity-availability-evidence
           path: nfl-r5b-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B hybrid evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-gated-hybrid-evidence
+          path: nfl-r5b-hybrid-output/
           if-no-files-found: error
           retention-days: 30
