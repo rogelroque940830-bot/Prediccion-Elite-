@@ -1,0 +1,323 @@
+name: NFL R5 Leakage-Safe Historical Experiment
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5-leakage-safe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install NFL-R5 research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate research scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5_postcheck.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5b_certify.py
+          python -m py_compile research/nfl/nfl_r5c_personnel_availability.py
+          python -m py_compile research/nfl/nfl_r5c_run.py
+          python -m py_compile research/nfl/nfl_r5c2_personnel_shocks.py
+          python -m py_compile research/nfl/nfl_r5d_weather_venue.py
+          python -m py_compile research/nfl/nfl_r5e_nextgen_stats.py
+          python -m py_compile research/nfl/nfl_r5f_model_class_tournament.py
+
+      - name: Run leakage-safe walk-forward experiment
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Run cumulative significance and stability post-check
+        run: |
+          python research/nfl/nfl_r5_postcheck.py --out-dir nfl-r5-output
+
+      - name: Run NFL-R5B QB identity and availability experiment
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Run gated NFL-R5B hybrid experiment
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Certify NFL-R5B2 stability
+        run: |
+          python research/nfl/nfl_r5b_certify.py \
+            --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5b-cert-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Run NFL-R5C personnel availability experiment
+        run: |
+          python research/nfl/nfl_r5c_run.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5c-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --end-season 2024 \
+            --test-start 2018
+
+      - name: Run NFL-R5C2 high-confidence personnel shock experiment
+        run: |
+          python research/nfl/nfl_r5c2_personnel_shocks.py \
+            --input-dir nfl-r5c-output \
+            --out-dir nfl-r5c2-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --end-season 2024 \
+            --test-start 2018
+
+      - name: Run NFL-R5D weather and venue experiment
+        run: |
+          python research/nfl/nfl_r5d_weather_venue.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5d-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018
+
+      - name: Run NFL-R5E Next Gen Stats incremental experiment
+        run: |
+          python research/nfl/nfl_r5e_nextgen_stats.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5e-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2016 \
+            --end-season 2025 \
+            --test-start 2018
+
+      - name: Run NFL-R5F Model Class Tournament
+        run: |
+          python research/nfl/nfl_r5f_model_class_tournament.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5f-tournament-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Enforce market-free research boundary
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('nfl-r5-output/nfl_r5_manifest.json'))
+          a=json.load(open('nfl-r5-output/nfl_r5_audit.json'))
+          b=json.load(open('nfl-r5b-output/nfl_r5b_manifest.json'))
+          ba=json.load(open('nfl-r5b-output/nfl_r5b_audit.json'))
+          c=json.load(open('nfl-r5b-cert-output/nfl_r5b_cert_verdict.json'))
+          d=json.load(open('nfl-r5c-output/nfl_r5c_manifest.json'))
+          da=json.load(open('nfl-r5c-output/nfl_r5c_audit.json'))
+          e=json.load(open('nfl-r5c2-output/nfl_r5c2_manifest.json'))
+          ea=json.load(open('nfl-r5c2-output/nfl_r5c2_audit.json'))
+          f=json.load(open('nfl-r5d-output/nfl_r5d_manifest.json'))
+          fa=json.load(open('nfl-r5d-output/nfl_r5d_audit.json'))
+          g=json.load(open('nfl-r5e-output/nfl_r5e_manifest.json'))
+          ga=json.load(open('nfl-r5e-output/nfl_r5e_audit.json'))
+          h=json.load(open('nfl-r5f-tournament-output/nfl_r5f_manifest.json'))
+          ha=json.load(open('nfl-r5f-tournament-output/nfl_r5f_audit.json'))
+          hv=json.load(open('nfl-r5f-tournament-output/nfl_r5f_verdict.json'))
+          assert p['researchOnly'] is True
+          assert p['marketDataUsedAsFeatures'] is False
+          assert p['marketOptimizationPerformed'] is False
+          assert p['B4_QB']['targetActualStarterUsedAsFeature'] is False
+          assert a['marketLeakageCheck'] == 'PASS'
+          assert a['sameGameFeatureLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert a['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
+          assert a['validation'] == 'NESTED_EXPANDING_SEASON_WALK_FORWARD'
+          assert b['researchOnly'] is True
+          assert b['marketDataUsedAsFeatures'] is False
+          assert b['targetActualStarterUsedAsFeature'] is False
+          assert ba['marketLeakageCheck'] == 'PASS'
+          assert ba['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
+          assert ba['sameWeekUntimestampedDepth'] == 'FORBIDDEN'
+          assert ba['injuryTimestampFilter'] == 'STRICT_LT_CUTOFF'
+          assert c['researchOnly'] is True
+          assert c['modelChangedDuringCertification'] is False
+          assert d['researchOnly'] is True
+          assert d['marketDataUsedAsFeatures'] is False
+          assert d['targetGameSnapUsedAsFeature'] is False
+          assert d['qbExcludedFromR5C'] is True
+          assert da['marketLeakageCheck'] == 'PASS'
+          assert da['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert da['gamedayReattachmentCheck'] == 'GAME_ID_ONLY_FROM_BASE_SCHEDULE'
+          assert da['2025MissingInjuryHandled'] == 'EXCLUDED_FROM_PRIMARY_R5C_EVALUATION'
+          assert e['researchOnly'] is True
+          assert e['marketDataUsedAsFeatures'] is False
+          assert e['targetGameSnapUsedAsFeature'] is False
+          assert e['thresholdTunedOnTest'] is False
+          assert ea['marketLeakageCheck'] == 'PASS'
+          assert ea['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert ea['postHocThresholdSelection'] == 'NONE'
+          assert f['researchOnly'] is True
+          assert f['marketDataUsedAsFeatures'] is False
+          assert f['observedWeatherPromotionEligible'] is False
+          assert f['weatherPromotionRequiresArchivedOrProspectivePregameForecast'] is True
+          assert fa['marketLeakageCheck'] == 'PASS'
+          assert fa['observedWeatherEligibilityCheck'] == 'PASS_DIAGNOSTIC_ONLY'
+          assert fa['postHocWeatherPromotion'] == 'FORBIDDEN'
+          assert g['researchOnly'] is True
+          assert g['marketDataUsedAsFeatures'] is False
+          assert g['targetWeekNGSUsedAsFeature'] is False
+          assert g['weekZeroSeasonSummaryUsed'] is False
+          assert ga['marketLeakageCheck'] == 'PASS'
+          assert ga['sameTargetWeekNGSLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert ga['weekZeroSummaryCheck'] == 'FORBIDDEN'
+          assert ga['postHocFeatureBlockSelection'] == 'NONE'
+          assert h['researchOnly'] is True
+          assert h['marketDataUsedAsFeatures'] is False
+          assert h['marketOptimizationPerformed'] is False
+          assert h['featureSetFrozen'] is True
+          assert h['referenceSourceModel'] == 'R5B2_HICONF_SWITCH'
+          assert h['featuresAddedByR5F'] == []
+          assert h['multiplicity']['challengerFamilySize'] == 3
+          assert h['multiplicity']['method'] == 'BONFERRONI_CLUSTER_BOOTSTRAP'
+          assert h['productionPromotionAutomatic'] is False
+          assert ha['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert ha['frozenFeatureVector'] == 'PASS_EXACT_R5B2_HICONF_SWITCH_VECTOR'
+          assert ha['referenceCoverage'] == 'PASS_EXACT_GAME_SET'
+          assert ha['postHocFeatureSelection'] == 'NONE_FEATURES_FROZEN_BEFORE_TOURNAMENT'
+          assert ha['postHocModelGateMutation'] == 'NONE_PREDECLARED_GATE'
+          assert ha['productionCodeTouched'] is False
+          assert hv['researchOnly'] is True
+          assert hv['marketDataUsedAsFeatures'] is False
+          assert hv['featureSetFrozen'] is True
+          assert hv['reference'] == 'REGULARIZED_LINEAR_REFERENCE'
+          assert len(hv['challengers']) == 3
+          assert hv['multiplicityControl']['familySize'] == 3
+          assert hv['promotionGate']['automaticProductionPromotion'] is False
+          assert hv['promotionGate']['independentCertificationRequiredForChallengerWinner'] is True
+          print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show model ladder and context results
+        run: |
+          cat nfl-r5-output/nfl_r5_model_summary.csv
+          echo
+          cat nfl-r5b-hybrid-output/nfl_r5b_hybrid_summary.csv
+          echo
+          cat nfl-r5b-cert-output/nfl_r5b_cert_verdict.json
+          echo
+          cat nfl-r5c-output/nfl_r5c_model_summary.csv
+          echo
+          cat nfl-r5c2-output/nfl_r5c2_model_summary.csv
+          echo
+          cat nfl-r5d-output/nfl_r5d_model_summary.csv
+          echo
+          cat nfl-r5d-output/nfl_r5d_bootstrap.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_model_summary.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_bootstrap.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_coverage.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_week_bands.csv
+          echo
+          cat nfl-r5f-tournament-output/nfl_r5f_model_summary.csv
+          echo
+          cat nfl-r5f-tournament-output/nfl_r5f_primary_bootstrap.csv
+          echo
+          cat nfl-r5f-tournament-output/nfl_r5f_verdict.json
+
+      - name: Upload NFL-R5 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5-leakage-safe-evidence
+          path: nfl-r5-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-qb-identity-availability-evidence
+          path: nfl-r5b-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B hybrid evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-gated-hybrid-evidence
+          path: nfl-r5b-hybrid-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B certification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-final-certification-evidence
+          path: nfl-r5b-cert-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5C personnel evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5c-personnel-availability-evidence
+          path: nfl-r5c-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5C2 personnel shock evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5c2-personnel-shock-evidence
+          path: nfl-r5c2-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5D weather venue evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5d-weather-venue-evidence
+          path: nfl-r5d-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5E Next Gen Stats evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5e-nextgen-stats-evidence
+          path: nfl-r5e-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5F model class tournament evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5f-model-class-tournament-evidence
+          path: nfl-r5f-tournament-output/
+          if-no-files-found: error
+          retention-days: 30
