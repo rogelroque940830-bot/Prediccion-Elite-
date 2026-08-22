@@ -35,6 +35,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5b_hybrid.py
           python -m py_compile research/nfl/nfl_r5b_certify.py
           python -m py_compile research/nfl/nfl_r5c_personnel_availability.py
+          python -m py_compile research/nfl/nfl_r5c_run.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -76,7 +77,7 @@ jobs:
 
       - name: Run NFL-R5C personnel availability experiment
         run: |
-          python research/nfl/nfl_r5c_personnel_availability.py \
+          python research/nfl/nfl_r5c_run.py \
             --input-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5c-output \
             --cache-dir .cache/nflverse \
@@ -118,6 +119,7 @@ jobs:
           assert d['qbExcludedFromR5C'] is True
           assert da['marketLeakageCheck'] == 'PASS'
           assert da['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert da['gamedayReattachmentCheck'] == 'GAME_ID_ONLY_FROM_BASE_SCHEDULE'
           assert da['2025MissingInjuryHandled'] == 'EXCLUDED_FROM_PRIMARY_R5C_EVALUATION'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
