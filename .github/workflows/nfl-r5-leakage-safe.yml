@@ -25,7 +25,7 @@ jobs:
       - name: Install NFL-R5 research dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pandas numpy pyarrow scikit-learn requests
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
 
       - name: Validate research scripts
         run: |
@@ -39,7 +39,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5c2_personnel_shocks.py
           python -m py_compile research/nfl/nfl_r5d_weather_venue.py
           python -m py_compile research/nfl/nfl_r5e_nextgen_stats.py
-          python -m py_compile research/nfl/nfl_r5f_final_freeze.py
+          python -m py_compile research/nfl/nfl_r5f_model_class_tournament.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -119,15 +119,13 @@ jobs:
             --end-season 2025 \
             --test-start 2018
 
-      - name: Freeze NFL-R5F final historical candidate
+      - name: Run NFL-R5F Model Class Tournament
         run: |
-          python research/nfl/nfl_r5f_final_freeze.py \
-            --r5b-cert-dir nfl-r5b-cert-output \
-            --r5c-dir nfl-r5c-output \
-            --r5c2-dir nfl-r5c2-output \
-            --r5d-dir nfl-r5d-output \
-            --r5e-dir nfl-r5e-output \
-            --out-dir nfl-r5f-output
+          python research/nfl/nfl_r5f_model_class_tournament.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5f-tournament-output \
+            --test-start 2018 \
+            --end-season 2025
 
       - name: Enforce market-free research boundary
         run: |
@@ -146,8 +144,9 @@ jobs:
           fa=json.load(open('nfl-r5d-output/nfl_r5d_audit.json'))
           g=json.load(open('nfl-r5e-output/nfl_r5e_manifest.json'))
           ga=json.load(open('nfl-r5e-output/nfl_r5e_audit.json'))
-          h=json.load(open('nfl-r5f-output/nfl_r5f_final_freeze.json'))
-          ha=json.load(open('nfl-r5f-output/nfl_r5f_audit.json'))
+          h=json.load(open('nfl-r5f-tournament-output/nfl_r5f_manifest.json'))
+          ha=json.load(open('nfl-r5f-tournament-output/nfl_r5f_audit.json'))
+          hv=json.load(open('nfl-r5f-tournament-output/nfl_r5f_verdict.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -198,16 +197,26 @@ jobs:
           assert h['researchOnly'] is True
           assert h['marketDataUsedAsFeatures'] is False
           assert h['marketOptimizationPerformed'] is False
-          assert h['modelChangedDuringR5F'] is False
-          assert h['historicalSearchEnded'] is True
-          assert h['frozenHistoricalCandidate'] == 'R5B2_HICONF_SWITCH'
-          assert h['retrospectiveBlocksAddedByR5F'] == []
-          assert h['prospective2026']['marketInputsAllowed'] is False
-          assert h['prospective2026']['modelRefitDuringShadow'] is False
-          assert h['prospective2026']['productionPromotionAutomatic'] is False
+          assert h['featureSetFrozen'] is True
+          assert h['referenceSourceModel'] == 'R5B2_HICONF_SWITCH'
+          assert h['featuresAddedByR5F'] == []
+          assert h['multiplicity']['challengerFamilySize'] == 3
+          assert h['multiplicity']['method'] == 'BONFERRONI_CLUSTER_BOOTSTRAP'
+          assert h['productionPromotionAutomatic'] is False
           assert ha['marketBoundary'] == 'PASS_MARKET_FREE'
-          assert ha['postHocModelMutation'] == 'PASS_NONE'
-          assert ha['prospectiveHandoff'] == 'READY_FOR_2026_SHADOW'
+          assert ha['frozenFeatureVector'] == 'PASS_EXACT_R5B2_HICONF_SWITCH_VECTOR'
+          assert ha['referenceCoverage'] == 'PASS_EXACT_GAME_SET'
+          assert ha['postHocFeatureSelection'] == 'NONE_FEATURES_FROZEN_BEFORE_TOURNAMENT'
+          assert ha['postHocModelGateMutation'] == 'NONE_PREDECLARED_GATE'
+          assert ha['productionCodeTouched'] is False
+          assert hv['researchOnly'] is True
+          assert hv['marketDataUsedAsFeatures'] is False
+          assert hv['featureSetFrozen'] is True
+          assert hv['reference'] == 'REGULARIZED_LINEAR_REFERENCE'
+          assert len(hv['challengers']) == 3
+          assert hv['multiplicityControl']['familySize'] == 3
+          assert hv['promotionGate']['automaticProductionPromotion'] is False
+          assert hv['promotionGate']['independentCertificationRequiredForChallengerWinner'] is True
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
@@ -235,9 +244,11 @@ jobs:
           echo
           cat nfl-r5e-output/nfl_r5e_week_bands.csv
           echo
-          cat nfl-r5f-output/nfl_r5f_final_freeze.json
+          cat nfl-r5f-tournament-output/nfl_r5f_model_summary.csv
           echo
-          cat nfl-r5f-output/nfl_r5f_evidence_matrix.csv
+          cat nfl-r5f-tournament-output/nfl_r5f_primary_bootstrap.csv
+          echo
+          cat nfl-r5f-tournament-output/nfl_r5f_verdict.json
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -303,10 +314,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload NFL-R5F final freeze evidence
+      - name: Upload NFL-R5F model class tournament evidence
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-r5f-final-freeze-evidence
-          path: nfl-r5f-output/
+          name: nfl-r5f-model-class-tournament-evidence
+          path: nfl-r5f-tournament-output/
           if-no-files-found: error
           retention-days: 30
