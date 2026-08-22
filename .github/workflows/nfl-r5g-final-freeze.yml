@@ -35,6 +35,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5b_certify.py
           python -m py_compile research/nfl/nfl_r5f_model_class_tournament.py
           python -m py_compile research/nfl/nfl_r5g_final_research_freeze.py
+          python -m py_compile research/nfl/nfl_r5g_shadow_capture.py
 
       - name: Rebuild leakage-safe historical foundation
         run: |
@@ -86,6 +87,16 @@ jobs:
             --hybrid-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5g-output
 
+      - name: Mechanical dry-run of locked shadow capture
+        run: |
+          python research/nfl/nfl_r5g_shadow_capture.py \
+            --target-date 2025-09-07 \
+            --model-lock research/nfl/locks/nfl_r5g_2026_model_lock.json \
+            --cache-dir .cache/nflverse \
+            --out-dir nfl-r5g-shadow-dryrun \
+            --dry-run \
+            --code-commit "$GITHUB_SHA"
+
       - name: Enforce R5G freeze boundary
         run: |
           python - <<'PY'
@@ -95,6 +106,7 @@ jobs:
           p=json.load(open('nfl-r5g-output/nfl_r5g_prospective_protocol.json'))
           a=json.load(open('nfl-r5g-output/nfl_r5g_audit.json'))
           s=json.load(open('nfl-r5g-output/nfl_r5g_summary.json'))
+          d=json.load(open('nfl-r5g-shadow-dryrun/nfl_r5g_shadow_batch.json'))
           assert f['decision'] == 'RETAIN_R5B2_REGULARIZED_LINEAR_REFERENCE'
           assert f['eligibleChallengers'] == []
           assert l['researchOnly'] is True
@@ -121,11 +133,22 @@ jobs:
           assert a['r5fPrerequisites'] == 'PASS'
           assert a['marketBoundary'] == 'PASS_MARKET_FREE'
           assert a['frozenFeatureVector'] == 'PASS_EXACT_R5B2_HICONF_SWITCH_VECTOR'
+          assert a['modelLockStatus'] == 'PASS_EXACT_COMMITTED_MODEL_LOCK'
+          assert a['readyForLiveActivation'] is True
           assert a['productionCodeTouched'] is False
           assert s['decision'] == 'FREEZE_R5B2_REGULARIZED_LINEAR_FOR_2026_PROSPECTIVE_SHADOW'
+          assert s['modelLockStatus'] == 'PASS_EXACT_COMMITTED_MODEL_LOCK'
+          assert s['liveActivationReady'] is True
           assert s['productionChanged'] is False
           assert s['marketUsed'] is False
-          print('NFL_R5G_FREEZE_BOUNDARY_VERIFIED')
+          assert d['researchOnly'] is True
+          assert d['marketDataUsed'] is False
+          assert d['productionUsed'] is False
+          assert d['canonicalEligible'] is False
+          assert d['mode'] == 'MECHANICAL_DRY_RUN_NOT_PROSPECTIVE'
+          assert d['predictionCount'] > 0
+          assert d['modelLockSha256'] == l['payloadSha256']
+          print('NFL_R5G_FREEZE_AND_DRYRUN_BOUNDARY_VERIFIED')
           PY
 
       - name: Show R5G freeze result
@@ -135,11 +158,21 @@ jobs:
           cat nfl-r5g-output/nfl_r5g_audit.json
           echo
           cat nfl-r5g-output/nfl_r5g_prospective_protocol.json
+          echo
+          cat nfl-r5g-shadow-dryrun/nfl_r5g_shadow_batch.json
 
       - name: Upload NFL-R5G final freeze evidence
         uses: actions/upload-artifact@v4
         with:
           name: nfl-r5g-final-research-freeze-evidence
           path: nfl-r5g-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5G shadow dry-run evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5g-shadow-capture-dryrun-evidence
+          path: nfl-r5g-shadow-dryrun/
           if-no-files-found: error
           retention-days: 30
