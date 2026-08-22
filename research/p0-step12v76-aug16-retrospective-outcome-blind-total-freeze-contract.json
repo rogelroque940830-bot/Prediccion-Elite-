@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "courtedge-p0-step12v76-aug16-retrospective-outcome-blind-total-freeze-contract.v1",
+  "contractRevision": 1,
+  "scientificStatus": "FROZEN_BEFORE_ANY_V76_SCORER_AND_BEFORE_READING_AUG16_RUN_OUTCOMES",
+  "objective": "Reconstruct a retrospective pseudo-pregame F5 and Full Game total-run forecast for the 2026-08-16 MLB slate using only the already-frozen V66 mean engines, V67 NB2 dispersions, chronology strictly prior to Aug16, and archived T-minus-5 pregame probable-pitcher identity. The user will disclose Aug16 F5/FG run results only after the prediction artifact is immutable.",
+  "targetOfficialDate": "2026-08-16",
+  "baseMainCommit": "c9eb72510e8d93080718e8c1160d238bf748828d",
+  "retrospectiveStatus": {
+    "notProspective": true,
+    "targetDateAlreadyCompletedInRealWorld": true,
+    "claimAllowed": "RETROSPECTIVE_PSEUDO_PREGAME_RECONSTRUCTION_ONLY",
+    "independentProspectiveConfirmationClaimAllowed": false
+  },
+  "outcomeEmbargo": {
+    "assistantMayReadTargetFinalRunsBeforePredictionArtifactFreeze": false,
+    "assistantMayReadTargetF5RunsBeforePredictionArtifactFreeze": false,
+    "targetScoreFieldsMayBeUsedByScorer": false,
+    "targetFinalStarterIdentityMayBeUsedByScorer": false,
+    "userDisclosedTargetResultsMayBeReadBeforePredictionArtifactFreeze": false,
+    "releaseCondition": "ONLY_AFTER_V76_PREDICTION_ARTIFACT_IS_IMMUTABLY_GENERATED_AND_IDENTIFIED_BY_DIGEST"
+  },
+  "marketEmbargo": {
+    "sportsbookLinesRequiredForThisFreeze": false,
+    "sportsbookLinesMayBeReadBeforePredictionArtifactFreeze": false,
+    "sportsbookPricesMayBeReadBeforePredictionArtifactFreeze": false,
+    "marketOddsUsedAsPredictiveFeatures": false
+  },
+  "targetIdentitySemantics": {
+    "source": "server/mlb-market-pregame-lineup-history.ts historical T-minus-5 timecode feed",
+    "cutoffSecondsBeforeScheduledStart": 300,
+    "requiresHistoricalSourceMetadataAtOrBeforeRequestedTimecode": true,
+    "requiresStrictPregameStateAtCutoff": true,
+    "bothHistoricalProbablePitchersRequired": true,
+    "currentMetadataFallbackAllowed": false,
+    "finalStarterSubstitutionAllowed": false,
+    "targetBattingLineupValuesUsedByTotalModel": false,
+    "scheduleStatusMayBeUsedOnlyToResolvePlayedGameIdentity": true,
+    "targetRunScoresMayNotBeParsedOrSerialized": true
+  },
+  "priorStateSemantics": {
+    "historyStartGap": "2026-08-11",
+    "historyEndGap": "2026-08-15",
+    "stateTargetDate": "2026-08-16",
+    "latestHistoricalOfficialDateRequired": "2026-08-15",
+    "sameDateAug16HistoryAllowed": false,
+    "futureDataAllowed": false,
+    "pitchQualityLookbackDays": 365,
+    "bullpenHistoryEnds": "2026-08-15"
+  },
+  "frozenParents": {
+    "v74SharedScoringImplementationPath": "scripts/p0-step12v74-aug17-totals-blind-line-freeze.py",
+    "v74SharedScoringImplementationGitBlobSha": "682ed519f1ba2576d04ac1c431ac91862dffaaba",
+    "v66TotalsWorkflowRunId": 31965267742,
+    "v66TotalsArtifactId": 9268313420,
+    "v66TotalsArtifactDigest": "sha256:ac69d321fbb5e6560832df221998825ce25c46340f8f76f571539e940180e0b1",
+    "v66CustodyWorkflowRunId": 31962659793,
+    "v66CustodyArtifactId": 9267784926,
+    "v66CustodyArtifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+    "v67WorkflowRunId": 31965619576,
+    "v67ArtifactId": 9268405221,
+    "v67ArtifactDigest": "sha256:fec5bb47bf2befc83d2b00e5be793dd37a9c980f784d06d6aab8a801581a50ac",
+    "v67F5Classification": "V67_F5_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+    "v67FullGameClassification": "V67_FULL_GAME_TOTAL_NB2_CERTIFIED_FOR_NEXT_RESEARCH_STAGE",
+    "v68FrozenSourceBaseWorkflowRunId": 31967561655
+  },
+  "predictionRoutes": {
+    "F5_TOTAL": {
+      "meanEngine": "EXACT_FROZEN_V66_D_F5_TOTAL_PRIMARY_CANDIDATE_MODEL",
+      "distribution": "EXACT_V67_NB2_WITH_2022_ONLY_ALPHA"
+    },
+    "FULL_GAME_TOTAL": {
+      "meanEngine": "EXACT_FROZEN_V66_E_FULL_GAME_TOTAL_PRIMARY_CANDIDATE_MODEL",
+      "distribution": "EXACT_V67_NB2_WITH_2022_ONLY_ALPHA"
+    }
+  },
+  "output": {
+    "oneRowPerHistoricalPregameGameWithBothProbableStarters": true,
+    "includeExpectedRunsF5AndFullGame": true,
+    "includeNb2CountDistributions": true,
+    "includeTargetOutcomeFields": false,
+    "includeSportsbookLineOrPriceFields": false,
+    "predictionRankingByExpectedRunsOnlyAllowed": true,
+    "overUnderSidePredictionWithoutMarketLineAllowed": false
+  },
+  "statistics": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "featureSearchAllowed": false,
+    "distributionChangeAllowed": false,
+    "targetOutcomePeekAllowed": false,
+    "postOutcomePredictionChangeAllowed": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "prospectiveV68Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
