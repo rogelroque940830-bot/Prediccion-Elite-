@@ -36,6 +36,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5b_certify.py
           python -m py_compile research/nfl/nfl_r5c_personnel_availability.py
           python -m py_compile research/nfl/nfl_r5c_run.py
+          python -m py_compile research/nfl/nfl_r5c2_personnel_shocks.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -85,6 +86,16 @@ jobs:
             --end-season 2024 \
             --test-start 2018
 
+      - name: Run NFL-R5C2 high-confidence personnel shock experiment
+        run: |
+          python research/nfl/nfl_r5c2_personnel_shocks.py \
+            --input-dir nfl-r5c-output \
+            --out-dir nfl-r5c2-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --end-season 2024 \
+            --test-start 2018
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
@@ -96,6 +107,8 @@ jobs:
           c=json.load(open('nfl-r5b-cert-output/nfl_r5b_cert_verdict.json'))
           d=json.load(open('nfl-r5c-output/nfl_r5c_manifest.json'))
           da=json.load(open('nfl-r5c-output/nfl_r5c_audit.json'))
+          e=json.load(open('nfl-r5c2-output/nfl_r5c2_manifest.json'))
+          ea=json.load(open('nfl-r5c2-output/nfl_r5c2_audit.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -121,10 +134,17 @@ jobs:
           assert da['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
           assert da['gamedayReattachmentCheck'] == 'GAME_ID_ONLY_FROM_BASE_SCHEDULE'
           assert da['2025MissingInjuryHandled'] == 'EXCLUDED_FROM_PRIMARY_R5C_EVALUATION'
+          assert e['researchOnly'] is True
+          assert e['marketDataUsedAsFeatures'] is False
+          assert e['targetGameSnapUsedAsFeature'] is False
+          assert e['thresholdTunedOnTest'] is False
+          assert ea['marketLeakageCheck'] == 'PASS'
+          assert ea['sameGameSnapLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert ea['postHocThresholdSelection'] == 'NONE'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
-      - name: Show model ladder and personnel result
+      - name: Show model ladder and personnel results
         run: |
           cat nfl-r5-output/nfl_r5_model_summary.csv
           echo
@@ -136,7 +156,13 @@ jobs:
           echo
           cat nfl-r5c-output/nfl_r5c_bootstrap.csv
           echo
-          cat nfl-r5c-output/nfl_r5c_subsets.csv
+          cat nfl-r5c2-output/nfl_r5c2_model_summary.csv
+          echo
+          cat nfl-r5c2-output/nfl_r5c2_bootstrap.csv
+          echo
+          cat nfl-r5c2-output/nfl_r5c2_subsets.csv
+          echo
+          cat nfl-r5c2-output/nfl_r5c2_week_bands.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -175,5 +201,13 @@ jobs:
         with:
           name: nfl-r5c-personnel-availability-evidence
           path: nfl-r5c-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5C2 personnel shock evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5c2-personnel-shock-evidence
+          path: nfl-r5c2-output/
           if-no-files-found: error
           retention-days: 30
