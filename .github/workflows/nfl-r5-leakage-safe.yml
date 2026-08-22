@@ -14,7 +14,7 @@ permissions:
 jobs:
   nfl-r5:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +31,7 @@ jobs:
         run: |
           python -m py_compile research/nfl/nfl_r5_leakage_safe.py
           python -m py_compile research/nfl/nfl_r5_postcheck.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -45,12 +46,23 @@ jobs:
         run: |
           python research/nfl/nfl_r5_postcheck.py --out-dir nfl-r5-output
 
+      - name: Run NFL-R5B QB identity and availability experiment
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
           import json
           p=json.load(open('nfl-r5-output/nfl_r5_manifest.json'))
           a=json.load(open('nfl-r5-output/nfl_r5_audit.json'))
+          b=json.load(open('nfl-r5b-output/nfl_r5b_manifest.json'))
+          ba=json.load(open('nfl-r5b-output/nfl_r5b_audit.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -59,6 +71,13 @@ jobs:
           assert a['sameGameFeatureLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
           assert a['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
           assert a['validation'] == 'NESTED_EXPANDING_SEASON_WALK_FORWARD'
+          assert b['researchOnly'] is True
+          assert b['marketDataUsedAsFeatures'] is False
+          assert b['targetActualStarterUsedAsFeature'] is False
+          assert ba['marketLeakageCheck'] == 'PASS'
+          assert ba['targetActualQBFeatureCheck'] == 'PASS_NOT_USED'
+          assert ba['sameWeekUntimestampedDepth'] == 'FORBIDDEN'
+          assert ba['injuryTimestampFilter'] == 'STRICT_LT_CUTOFF'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
@@ -66,14 +85,24 @@ jobs:
         run: |
           cat nfl-r5-output/nfl_r5_model_summary.csv
           echo
-          cat nfl-r5-output/nfl_r5_bootstrap_deltas.csv
-          echo
           cat nfl-r5-output/nfl_r5_cumulative_bootstrap.csv
+          echo
+          cat nfl-r5b-output/nfl_r5b_model_summary.csv
+          echo
+          cat nfl-r5b-output/nfl_r5b_bootstrap.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
         with:
           name: nfl-r5-leakage-safe-evidence
           path: nfl-r5-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5B evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5b-qb-identity-availability-evidence
+          path: nfl-r5b-output/
           if-no-files-found: error
           retention-days: 30
