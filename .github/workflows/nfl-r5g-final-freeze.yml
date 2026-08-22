@@ -1,0 +1,145 @@
+name: NFL R5G Final Research Freeze
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5g-final-freeze.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5g-freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install NFL-R5G research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate R5G research scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5b_certify.py
+          python -m py_compile research/nfl/nfl_r5f_model_class_tournament.py
+          python -m py_compile research/nfl/nfl_r5g_final_research_freeze.py
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild R5B2 frozen feature dataset
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Re-certify R5B2 foundation
+        run: |
+          python research/nfl/nfl_r5b_certify.py \
+            --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5b-cert-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Reproduce R5F Model Class Tournament
+        run: |
+          python research/nfl/nfl_r5f_model_class_tournament.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5f-tournament-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Freeze NFL-R5G 2026 shadow model and protocol
+        run: |
+          python research/nfl/nfl_r5g_final_research_freeze.py \
+            --r5f-dir nfl-r5f-tournament-output \
+            --r5b-cert-dir nfl-r5b-cert-output \
+            --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5g-output
+
+      - name: Enforce R5G freeze boundary
+        run: |
+          python - <<'PY'
+          import json
+          f=json.load(open('nfl-r5f-tournament-output/nfl_r5f_verdict.json'))
+          l=json.load(open('nfl-r5g-output/nfl_r5g_2026_model_lock.json'))
+          p=json.load(open('nfl-r5g-output/nfl_r5g_prospective_protocol.json'))
+          a=json.load(open('nfl-r5g-output/nfl_r5g_audit.json'))
+          s=json.load(open('nfl-r5g-output/nfl_r5g_summary.json'))
+          assert f['decision'] == 'RETAIN_R5B2_REGULARIZED_LINEAR_REFERENCE'
+          assert f['eligibleChallengers'] == []
+          assert l['researchOnly'] is True
+          assert l['targetSeason'] == 2026
+          assert l['shadowOnly'] is True
+          assert l['sourceModel'] == 'R5B2_HICONF_SWITCH'
+          assert l['featureSetFrozen'] is True
+          assert l['featureCount'] == 32
+          assert l['featuresAddedByR5G'] == []
+          assert l['marketDataUsedAsFeatures'] is False
+          assert l['marketOptimizationPerformed'] is False
+          assert l['oddsAllowed'] is False
+          assert l['modelRefitDuring2026Shadow'] is False
+          assert l['featureSearchDuring2026Shadow'] is False
+          assert l['thresholdTuningDuring2026Shadow'] is False
+          assert l['productionPromotionAutomatic'] is False
+          assert p['mode'] == 'PROSPECTIVE_SHADOW_ONLY'
+          assert p['marketInputsAllowed'] is False
+          assert p['productionIntegrationAllowed'] is False
+          assert p['pregameCutoff']['targetGamedayUpdates'] == 'FORBIDDEN'
+          assert p['custody']['rawSourceSnapshotRequired'] is True
+          assert p['custody']['writeOncePerGame'] is True
+          assert p['custody']['artifactOnlyCustodySufficient'] is False
+          assert a['r5fPrerequisites'] == 'PASS'
+          assert a['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert a['frozenFeatureVector'] == 'PASS_EXACT_R5B2_HICONF_SWITCH_VECTOR'
+          assert a['productionCodeTouched'] is False
+          assert s['decision'] == 'FREEZE_R5B2_REGULARIZED_LINEAR_FOR_2026_PROSPECTIVE_SHADOW'
+          assert s['productionChanged'] is False
+          assert s['marketUsed'] is False
+          print('NFL_R5G_FREEZE_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5G freeze result
+        run: |
+          cat nfl-r5g-output/nfl_r5g_summary.json
+          echo
+          cat nfl-r5g-output/nfl_r5g_audit.json
+          echo
+          cat nfl-r5g-output/nfl_r5g_prospective_protocol.json
+
+      - name: Upload NFL-R5G final freeze evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5g-final-research-freeze-evidence
+          path: nfl-r5g-output/
+          if-no-files-found: error
+          retention-days: 30
