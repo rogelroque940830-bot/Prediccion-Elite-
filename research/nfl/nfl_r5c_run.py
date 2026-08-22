@@ -22,14 +22,17 @@ def main():
     out.mkdir(parents=True,exist_ok=True); cache.mkdir(parents=True,exist_ok=True)
     x=pd.read_parquet(src/'nfl_r5b_hybrid_dataset.parquet')
 
-    # R5B hybrid intentionally does not preserve gameday. Reattach it from the same
-    # leakage-safe schedule source used by base R5, keyed only by game_id.
-    if 'gameday' not in x.columns:
+    # R5B hybrid intentionally drops schedule identity columns that are not model
+    # features. Reattach only date/team identity from the exact base-R5 schedule,
+    # keyed solely by game_id. No score/market/result columns are reintroduced.
+    need=[c for c in ['gameday','home_team','away_team'] if c not in x.columns]
+    if need:
         max_season=int(pd.to_numeric(x.season,errors='coerce').max())
-        sched=base.schedule(cache,range(a.start_season,max_season+1))[['game_id','gameday']].drop_duplicates('game_id')
-        x=x.merge(sched,on='game_id',how='left',validate='one_to_one')
-    if x.gameday.isna().any():
-        raise RuntimeError(f"R5C missing gameday for {int(x.gameday.isna().sum())} games after schedule reattachment")
+        sched=base.schedule(cache,range(a.start_season,max_season+1))[['game_id','gameday','home_team','away_team']].drop_duplicates('game_id')
+        x=x.merge(sched[['game_id']+need],on='game_id',how='left',validate='one_to_one')
+    for c in ['gameday','home_team','away_team']:
+        if x[c].isna().any():
+            raise RuntimeError(f"R5C missing {c} for {int(x[c].isna().sum())} games after schedule reattachment")
 
     pfr_to_gsis,gsis_pos,player_prov=r5c.load_players(cache)
     seasons=range(a.start_season,a.end_season+1)
@@ -57,7 +60,7 @@ def main():
       'targetGameSnapUsedAsFeature':False,
       'snapUpdateOrder':'PREGAME_FEATURE_ROW_THEN_TARGET_GAME_SNAP_UPDATE',
       'injuryTimestampFilter':'STRICT_LT_TARGET_GAMEDAY_00UTC',
-      'gamedaySource':'BASE_R5_SCHEDULE_REATTACHED_BY_GAME_ID_ONLY',
+      'scheduleIdentitySource':'BASE_R5_SCHEDULE_REATTACHED_BY_GAME_ID_ONLY_DATE_AND_TEAMS',
       'qbExcludedFromR5C':True,
       'playerCrosswalkUse':'IDENTIFIER_ONLY',
       'snapImportance':'MEAN_LAST_UP_TO_3_PRIOR_GAMES_WITH_GLOBAL_PLAYER_FALLBACK',
@@ -72,6 +75,7 @@ def main():
       'targetGameOutcomeFeatureCheck':'PASS_NOT_USED',
       'injuryTimestampCheck':'STRICT_LT_CUTOFF',
       'gamedayReattachmentCheck':'GAME_ID_ONLY_FROM_BASE_SCHEDULE',
+      'teamIdentityReattachmentCheck':'GAME_ID_ONLY_FROM_BASE_SCHEDULE',
       '2025MissingInjuryHandled':'EXCLUDED_FROM_PRIMARY_R5C_EVALUATION',
       'qbDoubleCountCheck':'PASS_QB_EXCLUDED',
     }
