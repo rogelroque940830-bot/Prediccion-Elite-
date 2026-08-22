@@ -38,6 +38,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5c_run.py
           python -m py_compile research/nfl/nfl_r5c2_personnel_shocks.py
           python -m py_compile research/nfl/nfl_r5d_weather_venue.py
+          python -m py_compile research/nfl/nfl_r5e_nextgen_stats.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -107,6 +108,16 @@ jobs:
             --end-season 2025 \
             --test-start 2018
 
+      - name: Run NFL-R5E Next Gen Stats incremental experiment
+        run: |
+          python research/nfl/nfl_r5e_nextgen_stats.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5e-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2016 \
+            --end-season 2025 \
+            --test-start 2018
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
@@ -122,6 +133,8 @@ jobs:
           ea=json.load(open('nfl-r5c2-output/nfl_r5c2_audit.json'))
           f=json.load(open('nfl-r5d-output/nfl_r5d_manifest.json'))
           fa=json.load(open('nfl-r5d-output/nfl_r5d_audit.json'))
+          g=json.load(open('nfl-r5e-output/nfl_r5e_manifest.json'))
+          ga=json.load(open('nfl-r5e-output/nfl_r5e_audit.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -161,6 +174,14 @@ jobs:
           assert fa['marketLeakageCheck'] == 'PASS'
           assert fa['observedWeatherEligibilityCheck'] == 'PASS_DIAGNOSTIC_ONLY'
           assert fa['postHocWeatherPromotion'] == 'FORBIDDEN'
+          assert g['researchOnly'] is True
+          assert g['marketDataUsedAsFeatures'] is False
+          assert g['targetWeekNGSUsedAsFeature'] is False
+          assert g['weekZeroSeasonSummaryUsed'] is False
+          assert ga['marketLeakageCheck'] == 'PASS'
+          assert ga['sameTargetWeekNGSLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
+          assert ga['weekZeroSummaryCheck'] == 'FORBIDDEN'
+          assert ga['postHocFeatureBlockSelection'] == 'NONE'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
@@ -180,9 +201,13 @@ jobs:
           echo
           cat nfl-r5d-output/nfl_r5d_bootstrap.csv
           echo
-          cat nfl-r5d-output/nfl_r5d_subsets.csv
+          cat nfl-r5e-output/nfl_r5e_model_summary.csv
           echo
-          cat nfl-r5d-output/nfl_r5d_week_bands.csv
+          cat nfl-r5e-output/nfl_r5e_bootstrap.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_coverage.csv
+          echo
+          cat nfl-r5e-output/nfl_r5e_week_bands.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -237,5 +262,13 @@ jobs:
         with:
           name: nfl-r5d-weather-venue-evidence
           path: nfl-r5d-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5E Next Gen Stats evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5e-nextgen-stats-evidence
+          path: nfl-r5e-output/
           if-no-files-found: error
           retention-days: 30
