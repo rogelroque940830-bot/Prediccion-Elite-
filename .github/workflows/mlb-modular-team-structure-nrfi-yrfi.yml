@@ -1,0 +1,309 @@
+name: MLB Modular Team Structure and NRFI YRFI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-modular-team-structure-nrfi-yrfi-v1
+    paths:
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json"
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json"
+      - "scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py"
+      - ".github/workflows/mlb-modular-team-structure-nrfi-yrfi.yml"
+      - "server/mlb-market-universe-registry.ts"
+      - "server/mlb-market-contract.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json"
+      - "research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json"
+      - "scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py"
+      - ".github/workflows/mlb-modular-team-structure-nrfi-yrfi.yml"
+      - "server/mlb-market-universe-registry.ts"
+      - "server/mlb-market-contract.ts"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  modular-team-structure-nrfi-yrfi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Prove protocol contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-modular-team-structure-nrfi-yrfi-contract.v1'
+          assert c['scientificStatus']=='RETROSPECTIVE_MODULAR_TEAM_STRUCTURE_AND_FIRST_INNING_DISCOVERY_WITH_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert c['chronology']['standingsUseGamesCompletedThroughPreviousCalendarDateOnly'] is True
+          assert c['chronology']['doubleheaderGameOneOutcomeMayAffectGameTwoModule'] is False
+          assert c['teamStrengthModule']['strengthTierDefinition']['minimumPriorGamesForStableTier']==20
+          assert c['marketScope']['newCanonicalSidesExactly']==['NRFI','YRFI']
+          assert c['marketScope']['providerMarketKey']=='totals_1st_1_innings'
+          assert c['matchupStructureModule']['nrfiYrfiUsesBullpenFeatures'] is False
+          assert set(c['modularAcceptancePolicies']['uniformControls'])=={'UNIFORM_Q85','UNIFORM_Q90'}
+          assert set(c['modularAcceptancePolicies']['modularTemplates'])=={'MODULAR_BALANCED','MODULAR_CONSERVATIVE'}
+          assert c['modularAcceptancePolicies']['nrfiYrfiFrontierByPolicy']=={
+            'UNIFORM_Q85':'Q85','UNIFORM_Q90':'Q90','MODULAR_BALANCED':'Q85','MODULAR_CONSERVATIVE':'Q90'
+          }
+          assert c['validationAndReporting']['winnerMayNotBeDeclaredFrom2024_2026RetrospectiveEvaluation'] is True
+          assert c['priceAndPromotionBoundary']['historicalPricesUsed'] is False
+          assert c['productionPolicy']['productionBehaviorChanged'] is False
+          print('MODULAR_NRFI_PROTOCOL_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Prove canonical NRFI YRFI support already exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"NRFI"' server/mlb-market-contract.ts
+          grep -q '"YRFI"' server/mlb-market-contract.ts
+          grep -q 'totals_1st_1_innings' server/mlb-market-universe-registry.ts
+          grep -q 'HARD_ROCK_NRFI_YRFI' server/mlb-market-universe-registry.ts
+
+      - name: Syntax check scorer
+        run: python -m py_compile scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+
+      - name: Materialize immutable V69 parent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          PARENT_REF="refs/remotes/origin/${PARENT_BRANCH}"
+          git fetch origin "refs/heads/${PARENT_BRANCH}:${PARENT_REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${PARENT_REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pregame custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Download prior V27 NRFI YRFI causal-core evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v27-nrfi-yrfi-i1-causal-core
+          path: inputs/v27-nrfi
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31896654032
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          V27="$(find inputs/v27-nrfi -type f -name nrfi-yrfi-i1-causal-core-report.json -print -quit)"
+          test -n "$CUSTODY"
+          test -n "$V16"
+          test -n "$V27"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+          echo "v27=$V27" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen modular and NRFI YRFI study
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --parent-multi-market-scorer scripts/mlb-multi-market-coverage-expansion-v1.py \
+            --parent-multi-market-contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --contract research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --market-registry server/mlb-market-universe-registry.ts \
+            --market-contract server/mlb-market-contract.ts \
+            --out work/mlb-modular-team-structure-nrfi-yrfi-v1.json
+
+      - name: Validate frozen research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-modular-team-structure-nrfi-yrfi-v1.json'))
+          assert r['schemaVersion']=='courtedge-mlb-modular-team-structure-nrfi-yrfi.v1'
+          assert r['classification']=='MODULAR_TEAM_STRUCTURE_AND_NRFI_YRFI_RETROSPECTIVE_DISCOVERY_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert r['sample']=={
+            'trainingRows2022':2398,'validationRows2023':2399,'evaluationRows':6610,
+            'eligibleSlateDates':505,'parentActiveDates':200,'parentNoPlayDates':305
+          }
+          assert set(r['policyResults'])=={'UNIFORM_Q85','UNIFORM_Q90','MODULAR_BALANCED','MODULAR_CONSERVATIVE'}
+          assert r['standingsModule']['minimumPriorGamesForStableTier']==20
+          assert r['standingsModule']['cutoff']=='PREVIOUS_CALENDAR_DATE_ONLY'
+          assert r['firstInningRuns']['features']
+          b=r['scientificBoundary']
+          assert b['rulesAreStateModularNotTeamNameSpecific'] is True
+          assert b['standingsArePregameAndPreviousDateOnly'] is True
+          assert b['sameDayDoubleheaderLeakageAllowed'] is False
+          assert b['nrfiYrfiStudied'] is True
+          assert b['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert b['prospectiveConfirmationRequired'] is True
+          assert b['historicalPricesUsed'] is False
+          assert b['positiveEvEstablished'] is False
+          assert b['betEliteProduced'] is False
+          assert b['stakeCalculated'] is False
+          assert b['automaticBetPlacement'] is False
+          assert b['realFinancialExposure']==0
+          assert b['productionChanged'] is False
+          assert b['currentAPlusPremiumHierarchyChanged'] is False
+          assert b['forcedDailyPlayAllowed'] is False
+          print(json.dumps({
+            'sample':r['sample'],
+            'firstInningRunsValidation':r['firstInningRuns']['validation'],
+            'firstInningRunsOos':r['firstInningRuns']['outOfSampleRobustness'],
+            'policyCoverage':{k:v['coverage']['combinedOpportunityCoveragePct'] for k,v in r['policyResults'].items()},
+          },indent=2))
+          PY
+
+      - name: Verify frozen result summary parity and prior NRFI evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math, os
+          r=json.load(open('work/mlb-modular-team-structure-nrfi-yrfi-v1.json'))
+          s=json.load(open('research/mlb-modular-team-structure-nrfi-yrfi-v1-result-summary.json'))
+          v27_path=os.environ['V27_PATH']
+          v27=json.load(open(v27_path))
+          assert s['schemaVersion']=='courtedge-mlb-modular-team-structure-nrfi-yrfi-result-summary.v1'
+          assert s['classification']==r['classification']
+          assert s['sample']==r['sample']
+          policy_key={
+            'uniformQ85':'UNIFORM_Q85',
+            'uniformQ90':'UNIFORM_Q90',
+            'modularBalanced':'MODULAR_BALANCED',
+            'modularConservative':'MODULAR_CONSERVATIVE',
+          }
+          for sk,rk in policy_key.items():
+            a=s['teamStrengthFinding'][sk]
+            b=r['policyResults'][rk]
+            assert math.isclose(a['coveragePct'], b['coverage']['combinedOpportunityCoveragePct'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['allSignalHitRate'], b['allSignalStats']['hitRate'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['wilson95Lower'], b['allSignalStats']['wilson95']['lower'], rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(a['calibrationGap'], b['allSignalStats']['absoluteCalibrationGap'], rel_tol=0, abs_tol=1e-12)
+            assert a['rescuedParentNoPlayDates']==b['coverage']['rescuedParentNoPlayDates']
+          tiers=s['teamStrengthFinding']['tierDiagnostics']
+          checks=[
+            ('STRONG','uniformQ85','UNIFORM_Q85'),
+            ('STRONG','balancedQ80','MODULAR_BALANCED'),
+            ('MIDDLE','q85','UNIFORM_Q85'),
+            ('MIDDLE','q90','UNIFORM_Q90'),
+            ('WEAK','q85','UNIFORM_Q85'),
+            ('WEAK','q90','UNIFORM_Q90'),
+            ('WEAK','q95','MODULAR_CONSERVATIVE'),
+            ('UNSTABLE','q85','UNIFORM_Q85'),
+            ('UNSTABLE','q95','MODULAR_BALANCED'),
+          ]
+          for tier,sk,pk in checks:
+            a=tiers[tier][sk]
+            b=r['policyResults'][pk]['byStrengthTier'][tier]
+            assert a['decisive']==b['decisive']
+            assert math.isclose(a['hitRate'],b['hitRate'],rel_tol=0,abs_tol=1e-12)
+            assert math.isclose(a['wilson95Lower'],b['wilson95']['lower'],rel_tol=0,abs_tol=1e-12)
+            if 'calibrationGap' in a:
+              assert math.isclose(a['calibrationGap'],b['absoluteCalibrationGap'],rel_tol=0,abs_tol=1e-12)
+          fi=s['nrfiYrfiFinding']
+          assert fi['validation2023']==r['firstInningRuns']['validation']
+          oos=r['firstInningRuns']['outOfSampleRobustness']
+          assert math.isclose(fi['outOfSampleRobustness']['combinedModelBrier'],oos['combinedModelBrier'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['outOfSampleRobustness']['combinedBaselineBrier'],oos['combinedBaselineBrier'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['outOfSampleRobustness']['combinedBrierImprovement'],oos['combinedBrierImprovement'],rel_tol=0,abs_tol=1e-12)
+          assert fi['coverageContribution']==0
+          assert r['firstInningRuns']['validation']['validationQualified'] is False
+          assert all(v['brierImprovement'] < 0 for v in oos['bySeason'].values())
+          assert v27['classification']=='NRFI_YRFI_I1_CAUSAL_CORE_REJECTED'
+          assert v27['parent']['v26Classification']=='NRFI_YRFI_FULL13_BASELINE_REJECTED'
+          assert math.isclose(fi['priorRepositoryEvidence']['v27ValidationBrierImprovement'],v27['validation2023']['brierImprovement'],rel_tol=0,abs_tol=1e-12)
+          assert math.isclose(fi['priorRepositoryEvidence']['v27CombinedEvaluationBrierImprovement'],v27['evaluation2024_2026Ytd']['brierImprovement'],rel_tol=0,abs_tol=1e-12)
+          boundary=s['scientificBoundary']
+          assert boundary['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert boundary['prospectiveConfirmationRequired'] is True
+          assert boundary['winnerDeclaredFromRetrospectiveEvaluation'] is False
+          assert boundary['historicalPricesUsed'] is False
+          assert boundary['positiveEvEstablished'] is False
+          assert boundary['betEliteProduced'] is False
+          assert boundary['stakeCalculated'] is False
+          assert boundary['automaticBetPlacement'] is False
+          assert boundary['realFinancialExposure']==0
+          assert boundary['productionChanged'] is False
+          print('MODULAR_NRFI_RESULT_SUMMARY_PARITY_VERIFIED')
+          PY
+        env:
+          V27_PATH: ${{ steps.inputs.outputs.v27 }}
+
+      - name: Upload modular research artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-modular-team-structure-nrfi-yrfi-v1
+          path: work/mlb-modular-team-structure-nrfi-yrfi-v1.json
+          if-no-files-found: error
+          retention-days: 90
