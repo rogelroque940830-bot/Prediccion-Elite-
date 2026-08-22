@@ -39,6 +39,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5c2_personnel_shocks.py
           python -m py_compile research/nfl/nfl_r5d_weather_venue.py
           python -m py_compile research/nfl/nfl_r5e_nextgen_stats.py
+          python -m py_compile research/nfl/nfl_r5f_final_freeze.py
 
       - name: Run leakage-safe walk-forward experiment
         run: |
@@ -118,6 +119,16 @@ jobs:
             --end-season 2025 \
             --test-start 2018
 
+      - name: Freeze NFL-R5F final historical candidate
+        run: |
+          python research/nfl/nfl_r5f_final_freeze.py \
+            --r5b-cert-dir nfl-r5b-cert-output \
+            --r5c-dir nfl-r5c-output \
+            --r5c2-dir nfl-r5c2-output \
+            --r5d-dir nfl-r5d-output \
+            --r5e-dir nfl-r5e-output \
+            --out-dir nfl-r5f-output
+
       - name: Enforce market-free research boundary
         run: |
           python - <<'PY'
@@ -135,6 +146,8 @@ jobs:
           fa=json.load(open('nfl-r5d-output/nfl_r5d_audit.json'))
           g=json.load(open('nfl-r5e-output/nfl_r5e_manifest.json'))
           ga=json.load(open('nfl-r5e-output/nfl_r5e_audit.json'))
+          h=json.load(open('nfl-r5f-output/nfl_r5f_final_freeze.json'))
+          ha=json.load(open('nfl-r5f-output/nfl_r5f_audit.json'))
           assert p['researchOnly'] is True
           assert p['marketDataUsedAsFeatures'] is False
           assert p['marketOptimizationPerformed'] is False
@@ -182,6 +195,19 @@ jobs:
           assert ga['sameTargetWeekNGSLeakageCheck'] == 'PASS_BY_CONSTRUCTION'
           assert ga['weekZeroSummaryCheck'] == 'FORBIDDEN'
           assert ga['postHocFeatureBlockSelection'] == 'NONE'
+          assert h['researchOnly'] is True
+          assert h['marketDataUsedAsFeatures'] is False
+          assert h['marketOptimizationPerformed'] is False
+          assert h['modelChangedDuringR5F'] is False
+          assert h['historicalSearchEnded'] is True
+          assert h['frozenHistoricalCandidate'] == 'R5B2_HICONF_SWITCH'
+          assert h['retrospectiveBlocksAddedByR5F'] == []
+          assert h['prospective2026']['marketInputsAllowed'] is False
+          assert h['prospective2026']['modelRefitDuringShadow'] is False
+          assert h['prospective2026']['productionPromotionAutomatic'] is False
+          assert ha['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert ha['postHocModelMutation'] == 'PASS_NONE'
+          assert ha['prospectiveHandoff'] == 'READY_FOR_2026_SHADOW'
           print('NFL_R5_RESEARCH_BOUNDARY_VERIFIED')
           PY
 
@@ -208,6 +234,10 @@ jobs:
           cat nfl-r5e-output/nfl_r5e_coverage.csv
           echo
           cat nfl-r5e-output/nfl_r5e_week_bands.csv
+          echo
+          cat nfl-r5f-output/nfl_r5f_final_freeze.json
+          echo
+          cat nfl-r5f-output/nfl_r5f_evidence_matrix.csv
 
       - name: Upload NFL-R5 evidence
         uses: actions/upload-artifact@v4
@@ -270,5 +300,13 @@ jobs:
         with:
           name: nfl-r5e-nextgen-stats-evidence
           path: nfl-r5e-output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NFL-R5F final freeze evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5f-final-freeze-evidence
+          path: nfl-r5f-output/
           if-no-files-found: error
           retention-days: 30
