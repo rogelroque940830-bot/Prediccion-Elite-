@@ -1,0 +1,118 @@
+name: NFL R5H14 Marginal Replication Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5h14-marginal-replication-certification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h14:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+      - name: Validate scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h11_local_multi_prototype_expansion.py
+          python -m py_compile research/nfl/nfl_r5h12_prototype_specific_acceptance.py
+          python -m py_compile research/nfl/nfl_r5h12_bounded_search.py
+          python -m py_compile research/nfl/nfl_r5h14_marginal_replication_certification.py
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B2 hybrid dataset
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Reproduce frozen R5H12 research leader
+        run: |
+          python research/nfl/nfl_r5h12_bounded_search.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h12-output \
+            --expert-oos-start 2013 \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Run NFL-R5H14 marginal replication certification
+        run: |
+          python research/nfl/nfl_r5h14_marginal_replication_certification.py \
+            --h12-dir nfl-r5h12-output \
+            --out-dir nfl-r5h14-output
+      - name: Enforce R5H14 research boundary
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('nfl-r5h14-output/nfl_r5h14_audit.json'))
+          m=json.load(open('nfl-r5h14-output/nfl_r5h14_manifest.json'))
+          s=json.load(open('nfl-r5h14-output/nfl_r5h14_summary.json'))
+          assert a['marketBoundary']=='PASS_MARKET_FREE'
+          assert a['r5h12BenchmarkExactReproduction']=='PASS'
+          assert a['newModelFittingPerformedByR5H14'] is False
+          assert a['newThresholdSearchPerformedByR5H14'] is False
+          assert a['targetSeasonOutcomesUsedForModelSelection']=='NO'
+          assert a['targetSeasonOutcomesUsedForThresholdSelection']=='NO'
+          assert a['certificationUsesFrozenOutOfSamplePredictionsOnly'] is True
+          assert a['productionCodeTouched'] is False
+          assert m['researchOnly'] is True
+          assert m['marketDataUsedAsFeatures'] is False
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['r5h12BenchmarkReproducedExactly'] is True
+          assert s['targetSeasonOutcomesUsedForModelOrThresholdSelection'] is False
+          assert s['automaticProductionPromotion'] is False
+          print('NFL_R5H14_BOUNDARY_VERIFIED')
+          PY
+      - name: Show R5H14 results
+        run: |
+          cat nfl-r5h14-output/nfl_r5h14_summary.json
+          echo
+          cat nfl-r5h14-output/nfl_r5h14_marginal_by_season.csv
+          echo
+          cat nfl-r5h14-output/nfl_r5h14_replication_gates.csv
+          echo
+          cat nfl-r5h14-output/nfl_r5h14_leave_one_season_out.csv
+      - name: Upload NFL-R5H14 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h14-marginal-replication-certification-evidence
+          path: nfl-r5h14-output/
+          if-no-files-found: error
+          retention-days: 30
