@@ -1,0 +1,119 @@
+name: NFL R5H6 Confidence Stratified Residual Rules
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5h6-confidence-stratified-residual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+      - name: Validate scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h5_stability_rule_value_certification.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B2 hybrid dataset
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Run NFL-R5H6 confidence-stratified residual rule engine
+        run: |
+          python research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h6-output \
+            --expert-oos-start 2013 \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Enforce R5H6 sports-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('nfl-r5h6-output/nfl_r5h6_audit.json'))
+          m=json.load(open('nfl-r5h6-output/nfl_r5h6_manifest.json'))
+          s=json.load(open('nfl-r5h6-output/nfl_r5h6_summary.json'))
+          assert a['marketBoundary']=='PASS_MARKET_FREE'
+          assert a['targetSeasonUsedForRuleExpertFit']=='NO'
+          assert a['targetSeasonUsedForReliabilityWeights']=='NO'
+          assert a['targetSeasonUsedForConfigurationSelection']=='NO'
+          assert a['targetSeasonUsedForSelectionThreshold']=='NO'
+          assert a['targetSeasonUsedForConfidenceBinEdges']=='NO'
+          assert a['targetSeasonUsedForConfidenceFloor']=='NO'
+          assert a['referenceConfidenceMagnitudeInRuleScore']=='REMOVED'
+          assert a['confidenceStratifiedResidualTest']=='PASS'
+          assert a['gameSpecificRuleWeighting']=='PASS_DYNAMIC_RELIABILITY_X_CONVICTION_SHARES'
+          assert a['rivalSpecificMatchups']=='PASS_17_SPORTS_RULE_BLOCKS'
+          assert a['productionCodeTouched'] is False
+          assert m['researchOnly'] is True
+          assert m['marketDataUsedAsFeatures'] is False
+          assert m['marketOptimizationPerformed'] is False
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['ruleScoreUsesReferenceConfidenceMagnitude'] is False
+          assert s['confidenceStratificationPriorOnly'] is True
+          assert s['ruleWeightsGameSpecific'] is True
+          assert s['rivalSpecificRuleLibrary'] is True
+          assert s['ruleBlockCount']==17
+          assert s['targetSeasonUsedForConfigurationSelection'] is False
+          assert s['targetSeasonUsedForThresholdSelection'] is False
+          assert s['targetSeasonUsedForReliabilityWeights'] is False
+          assert s['automaticProductionPromotion'] is False
+          print('NFL_R5H6_BOUNDARY_VERIFIED')
+          PY
+      - name: Show R5H6 results
+        run: |
+          cat nfl-r5h6-output/nfl_r5h6_summary.json
+          echo
+          cat nfl-r5h6-output/nfl_r5h6_by_season.csv
+          echo
+          cat nfl-r5h6-output/nfl_r5h6_by_confidence_stratum.csv
+          echo
+          cat nfl-r5h6-output/nfl_r5h6_rule_value_table.csv
+      - name: Upload NFL-R5H6 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h6-confidence-stratified-residual-evidence
+          path: nfl-r5h6-output/
+          if-no-files-found: error
+          retention-days: 30
