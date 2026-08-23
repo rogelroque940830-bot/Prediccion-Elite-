@@ -1,0 +1,142 @@
+name: NFL Workflow Trigger Fanout Fix
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nfl-trigger-fanout-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-nfl-workflow-triggers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Narrow legacy NFL workflow triggers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          mapping = {
+              '.github/workflows/nfl-r5-leakage-safe.yml': [
+                  'research/nfl/nfl_r5_leakage_safe.py',
+                  'research/nfl/nfl_r5_postcheck.py',
+                  'research/nfl/nfl_r5b_qb_identity_availability.py',
+                  'research/nfl/nfl_r5b_hybrid.py',
+                  'research/nfl/nfl_r5b_certify.py',
+                  'research/nfl/nfl_r5c_personnel_availability.py',
+                  'research/nfl/nfl_r5c_run.py',
+                  'research/nfl/nfl_r5c2_personnel_shocks.py',
+                  'research/nfl/nfl_r5d_weather_venue.py',
+                  'research/nfl/nfl_r5e_nextgen_stats.py',
+                  'research/nfl/nfl_r5f_model_class_tournament.py',
+                  '.github/workflows/nfl-r5-leakage-safe.yml',
+              ],
+              '.github/workflows/nfl-r5g-final-freeze.yml': [
+                  'research/nfl/nfl_r5g_final_research_freeze.py',
+                  'research/nfl/nfl_r5g_shadow_capture.py',
+                  'research/nfl/locks/nfl_r5g_2026_model_lock.json',
+                  '.github/workflows/nfl-r5g-final-freeze.yml',
+              ],
+              '.github/workflows/nfl-r5h-contextual-rules.yml': [
+                  'research/nfl/nfl_r5h_contextual_rule_weighting.py',
+                  '.github/workflows/nfl-r5h-contextual-rules.yml',
+              ],
+              '.github/workflows/nfl-r5h2-contextual-override.yml': [
+                  'research/nfl/nfl_r5h2_contextual_override_gate.py',
+                  '.github/workflows/nfl-r5h2-contextual-override.yml',
+              ],
+              '.github/workflows/nfl-r5h3-rival-matchup-rules.yml': [
+                  'research/nfl/nfl_r5h3_rival_matchup_rule_engine.py',
+                  '.github/workflows/nfl-r5h3-rival-matchup-rules.yml',
+              ],
+              '.github/workflows/nfl-r5h4-elite-selection.yml': [
+                  'research/nfl/nfl_r5h4_elite_selection_gate.py',
+                  '.github/workflows/nfl-r5h4-elite-selection.yml',
+              ],
+              '.github/workflows/nfl-r5h5-stability-rule-value.yml': [
+                  'research/nfl/nfl_r5h5_stability_rule_value_certification.py',
+                  '.github/workflows/nfl-r5h5-stability-rule-value.yml',
+              ],
+              '.github/workflows/nfl-r5h6-confidence-stratified-residual.yml': [
+                  'research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py',
+                  '.github/workflows/nfl-r5h6-confidence-stratified-residual.yml',
+              ],
+              '.github/workflows/nfl-r5h7-failure-regime-stability.yml': [
+                  'research/nfl/nfl_r5h7_failure_regime_stability_gate.py',
+                  '.github/workflows/nfl-r5h7-failure-regime-stability.yml',
+              ],
+              '.github/workflows/nfl-r5h8-interaction-contradiction.yml': [
+                  'research/nfl/nfl_r5h8_interaction_contradiction_engine.py',
+                  '.github/workflows/nfl-r5h8-interaction-contradiction.yml',
+              ],
+              '.github/workflows/nfl-r5h9-complementarity-coverage.yml': [
+                  'research/nfl/nfl_r5h9_complementarity_coverage_frontier.py',
+                  '.github/workflows/nfl-r5h9-complementarity-coverage.yml',
+              ],
+              '.github/workflows/nfl-r5h10-marginal-geometry.yml': [
+                  'research/nfl/nfl_r5h10_marginal_geometry_expansion.py',
+                  '.github/workflows/nfl-r5h10-marginal-geometry.yml',
+              ],
+              '.github/workflows/nfl-r5h11-local-multi-prototype.yml': [
+                  'research/nfl/nfl_r5h11_local_multi_prototype_expansion.py',
+                  '.github/workflows/nfl-r5h11-local-multi-prototype.yml',
+              ],
+              '.github/workflows/nfl-r5h12-prototype-specific-acceptance.yml': [
+                  'research/nfl/nfl_r5h12_prototype_specific_acceptance.py',
+                  'research/nfl/nfl_r5h12_bounded_search.py',
+                  '.github/workflows/nfl-r5h12-prototype-specific-acceptance.yml',
+              ],
+              '.github/workflows/nfl-r5h13-core-pruning-expansion.yml': [
+                  'research/nfl/nfl_r5h13_prototype_core_pruning_elite_expansion.py',
+                  '.github/workflows/nfl-r5h13-core-pruning-expansion.yml',
+              ],
+              '.github/workflows/nfl-r5h14-marginal-replication-certification.yml': [
+                  'research/nfl/nfl_r5h14_marginal_replication_certification.py',
+                  '.github/workflows/nfl-r5h14-marginal-replication-certification.yml',
+              ],
+          }
+
+          pat = re.compile(
+              r"(?ms)^on:\n  pull_request:\n    branches: \[main\]\n    paths:\n(?:      - .*\n)+  workflow_dispatch:"
+          )
+
+          changed = []
+          for filename, paths in mapping.items():
+              p = Path(filename)
+              text = p.read_text()
+              repl = (
+                  "on:\n  pull_request:\n    branches: [main]\n    paths:\n"
+                  + ''.join(f"      - '{x}'\n" for x in paths)
+                  + "  workflow_dispatch:"
+              )
+              new, n = pat.subn(repl, text, count=1)
+              if n != 1:
+                  raise SystemExit(f'Could not rewrite trigger block in {filename}; matches={n}')
+              if "'research/nfl/**'" in new:
+                  raise SystemExit(f'Broad NFL trigger still present in {filename}')
+              p.write_text(new)
+              changed.append(filename)
+
+          # The fixer removes itself in the same commit. The push is made by GITHUB_TOKEN,
+          # so it does not recursively create another Actions cascade.
+          Path('.github/workflows/nfl-trigger-fanout-fix.yml').unlink()
+          print(f'Narrowed {len(changed)} NFL workflows and removed one-shot fixer')
+          PY
+
+      - name: Commit trigger correction atomically
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows
+          git diff --cached --check
+          git diff --cached --name-only
+          git commit -m "Narrow NFL research workflow triggers"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
