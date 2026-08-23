@@ -1,0 +1,128 @@
+name: NFL R5H15 Independent Signal Family Discovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/nfl_r5h15_independent_signal_family_discovery.py'
+      - '.github/workflows/nfl-r5h15-independent-signal-families.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h15:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate R5H15 research scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild gated R5B hybrid
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Run R5H15 independent sports-signal discovery
+        run: |
+          python research/nfl/nfl_r5h15_independent_signal_family_discovery.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h15-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --expert-oos-start 2013 \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Enforce R5H15 research boundary
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h15-output/nfl_r5h15_summary.json'))
+          a=json.load(open('nfl-r5h15-output/nfl_r5h15_audit.json'))
+          m=json.load(open('nfl-r5h15-output/nfl_r5h15_manifest.json'))
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['sameGamePbpUsedAsFeature'] is False
+          assert s['pregameStateUpdatedOnlyAfterEachCompletedGame'] is True
+          assert s['targetSeasonUsedForExpertFit'] is False
+          assert s['targetSeasonUsedForThresholdCalibration'] is False
+          assert s['targetSeasonOutcomesUsedForSelection'] is False
+          assert s['r5h8CoreProtected'] is True
+          assert s['referenceConfidenceMagnitudeUsedInFamilySupportScore'] is False
+          assert s['r5h8CoreGames'] == 158
+          assert s['r5h8CoreWins'] == 125
+          assert a['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert a['sameGameFeatureLeakage'] == 'PASS_PREGAME_SNAPSHOT_BEFORE_POSTGAME_STATE_UPDATE'
+          assert a['targetSeasonUsedForSignalExpertFit'] == 'NO'
+          assert a['targetSeasonUsedForFamilyThresholdCalibration'] == 'NO'
+          assert a['targetSeasonOutcomeUsedForTargetSelection'] == 'NO'
+          assert a['protectedCore'] == 'PASS_R5H8_CORE_NOT_REMOVED_OR_RETUNED_BY_R5H15'
+          assert a['productionCodeTouched'] is False
+          assert m['researchOnly'] is True
+          assert m['marketDataUsedAsFeatures'] is False
+          assert m['marketOptimizationPerformed'] is False
+          assert m['automaticProductionPromotion'] is False
+          assert len(m['newRuleBlocks']) == 6
+          print('NFL_R5H15_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5H15 evidence
+        run: |
+          cat nfl-r5h15-output/nfl_r5h15_summary.json
+          echo
+          cat nfl-r5h15-output/nfl_r5h15_family_summary.csv
+          echo
+          cat nfl-r5h15-output/nfl_r5h15_by_season.csv
+          echo
+          cat nfl-r5h15-output/nfl_r5h15_config_by_season.csv
+
+      - name: Upload R5H15 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h15-independent-signal-family-evidence
+          path: nfl-r5h15-output/
+          if-no-files-found: error
+          retention-days: 30
