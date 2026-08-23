@@ -1,0 +1,111 @@
+name: NFL R5H4 Elite Selection Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/**'
+      - '.github/workflows/nfl-r5h4-elite-selection.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+      - name: Validate scripts
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+      - name: Rebuild R5B2 hybrid dataset
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Run NFL-R5H4 elite selection search
+        run: |
+          python research/nfl/nfl_r5h4_elite_selection_gate.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h4-output \
+            --expert-oos-start 2013 \
+            --test-start 2018 \
+            --end-season 2025
+      - name: Enforce R5H4 sports-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('nfl-r5h4-output/nfl_r5h4_audit.json'))
+          m=json.load(open('nfl-r5h4-output/nfl_r5h4_manifest.json'))
+          s=json.load(open('nfl-r5h4-output/nfl_r5h4_summary.json'))
+          assert a['marketBoundary']=='PASS_MARKET_FREE'
+          assert a['targetSeasonUsedForRuleExpertFit']=='NO'
+          assert a['targetSeasonUsedForReliabilityWeights']=='NO'
+          assert a['targetSeasonUsedForConfigurationSelection']=='NO'
+          assert a['targetSeasonUsedForSelectionThreshold']=='NO'
+          assert a['gameSpecificRuleWeighting']=='PASS_DYNAMIC_RELIABILITY_X_CONVICTION_SHARES'
+          assert a['rivalSpecificMatchups']=='PASS_17_SPORTS_RULE_BLOCKS'
+          assert a['referenceDirectionDefault']=='PASS_R5B2_DIRECTION_RETAINED'
+          assert a['productionCodeTouched'] is False
+          assert m['researchOnly'] is True
+          assert m['marketDataUsedAsFeatures'] is False
+          assert m['marketOptimizationPerformed'] is False
+          assert m['targetSeasonDistributionUsedForThreshold'] is False
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['ruleWeightsGameSpecific'] is True
+          assert s['rivalSpecificRuleLibrary'] is True
+          assert s['ruleBlockCount']==17
+          assert s['targetSeasonUsedForThresholdSelection'] is False
+          assert s['targetSeasonUsedForReliabilityWeights'] is False
+          assert s['automaticProductionPromotion'] is False
+          assert s['selectedGames'] > 0
+          print('NFL_R5H4_BOUNDARY_VERIFIED')
+          PY
+      - name: Show R5H4 results
+        run: |
+          cat nfl-r5h4-output/nfl_r5h4_summary.json
+          echo
+          cat nfl-r5h4-output/nfl_r5h4_by_season.csv
+          echo
+          cat nfl-r5h4-output/nfl_r5h4_config_by_season.csv
+      - name: Upload NFL-R5H4 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h4-elite-selection-evidence
+          path: nfl-r5h4-output/
+          if-no-files-found: error
+          retention-days: 30
