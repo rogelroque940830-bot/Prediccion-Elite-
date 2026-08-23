@@ -37,6 +37,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
           python -m py_compile research/nfl/nfl_r5h11_local_multi_prototype_expansion.py
           python -m py_compile research/nfl/nfl_r5h12_prototype_specific_acceptance.py
+          python -m py_compile research/nfl/nfl_r5h12_bounded_search.py
       - name: Rebuild leakage-safe historical foundation
         run: |
           python research/nfl/nfl_r5_leakage_safe.py \
@@ -62,7 +63,7 @@ jobs:
             --end-season 2025
       - name: Run NFL-R5H12 prototype-specific acceptance calibration
         run: |
-          python research/nfl/nfl_r5h12_prototype_specific_acceptance.py \
+          python research/nfl/nfl_r5h12_bounded_search.py \
             --input-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5h12-output \
             --expert-oos-start 2013 \
