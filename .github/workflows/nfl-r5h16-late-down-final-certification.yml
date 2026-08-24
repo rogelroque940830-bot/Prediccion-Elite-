@@ -1,0 +1,128 @@
+name: NFL R5H16 Late Down Final Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/nfl_r5h16_late_down_final_certification.py'
+      - '.github/workflows/nfl-r5h16-late-down-final-certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate R5H16 chain
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+          python -m py_compile research/nfl/nfl_r5h15_runner.py
+          python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild gated R5B hybrid
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Reproduce frozen R5H15 discovery evidence
+        run: |
+          python research/nfl/nfl_r5h15_runner.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h15-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 \
+            --expert-oos-start 2013 \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Run R5H16 final robustness certification
+        run: |
+          python research/nfl/nfl_r5h16_late_down_final_certification.py \
+            --h15-dir nfl-r5h15-output \
+            --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h16-output
+
+      - name: Enforce R5H16 boundary and custody
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h16-output/nfl_r5h16_summary.json'))
+          a=json.load(open('nfl-r5h16-output/nfl_r5h16_audit.json'))
+          m=json.load(open('nfl-r5h16-output/nfl_r5h16_manifest.json'))
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['family'] == 'LATE_DOWN_CONVERSION'
+          assert s['frozenFromR5H15'] is True
+          assert s['r5h8CoreGames'] == 158
+          assert s['r5h8CoreWins'] == 125
+          assert a['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert a['targetSeasonRetuning'] == 'NONE_R5H15_SELECTIONS_AND_THRESHOLDS_FROZEN'
+          assert a['outcomesUsedToAlterFrozenSelections'] == 'NO'
+          assert a['protectedCore'] == 'PASS_R5H8_CORE_UNCHANGED'
+          assert a['productionCodeTouched'] is False
+          assert m['marketDataUsedAsFeatures'] is False
+          assert m['automaticProductionPromotion'] is False
+          print('NFL_R5H16_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5H16 evidence
+        run: |
+          cat nfl-r5h16-output/nfl_r5h16_summary.json
+          echo
+          cat nfl-r5h16-output/nfl_r5h16_by_season.csv
+          echo
+          cat nfl-r5h16-output/nfl_r5h16_threshold_sensitivity.csv
+          echo
+          head -25 nfl-r5h16-output/nfl_r5h16_team_concentration.csv || true
+
+      - name: Upload R5H16 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h16-late-down-final-certification-evidence
+          path: nfl-r5h16-output/
+          if-no-files-found: error
+          retention-days: 30
