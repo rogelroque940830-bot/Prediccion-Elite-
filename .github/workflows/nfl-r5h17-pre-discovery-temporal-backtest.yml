@@ -7,6 +7,7 @@ on:
       - 'research/nfl/nfl_r5h17_legacy_r5b_runner.py'
       - 'research/nfl/nfl_r5h17_h15_legacy_runner.py'
       - 'research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py'
+      - 'research/nfl/nfl_r5h17_cert_runner.py'
       - '.github/workflows/nfl-r5h17-pre-discovery-temporal-backtest.yml'
 
 permissions:
@@ -43,6 +44,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5h17_legacy_r5b_runner.py
           python -m py_compile research/nfl/nfl_r5h17_h15_legacy_runner.py
           python -m py_compile research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py
+          python -m py_compile research/nfl/nfl_r5h17_cert_runner.py
 
       - name: Rebuild untouched 2001-2011 leakage-safe foundation
         run: |
@@ -83,7 +85,7 @@ jobs:
 
       - name: Certify H17 untouched temporal backtest
         run: |
-          python research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py \
+          python research/nfl/nfl_r5h17_cert_runner.py \
             --h15-dir nfl-r5h17-h15-output \
             --hybrid-dir nfl-r5h17-hybrid-output \
             --out-dir nfl-r5h17-output
