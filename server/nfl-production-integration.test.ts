@@ -141,14 +141,15 @@ test("NFL R5H8 runtime feature contract is exactly 68 sports-only pregame fields
   }
 });
 
-test("NFL embedded H19 artifact is the certified 2026 frozen inference object", () => {
+test("NFL embedded H19 runtime projection is tied to the certified 2026 artifact", () => {
   const artifact = getNflR5H19Artifact();
-  assert.equal(artifact.semanticDigest, NFL_R5H19_ARTIFACT_DIGEST);
+  assert.equal(artifact.sourceArtifactDigest, NFL_R5H19_ARTIFACT_DIGEST);
   assert.equal(artifact.targetSeason, 2026);
   assert.equal(artifact.trainedThroughSeason, 2025);
-  assert.equal(artifact.ruleOrder.length, 17);
-  assert.equal(artifact.reliability.length, 17);
-  assert.equal(artifact.pairStructure.length, 136);
+  assert.equal(artifact.activeRules.length, 8);
+  assert.equal(artifact.reliability.length, 8);
+  assert.equal(artifact.pairStructure.length, 28);
+  assert.deepEqual(artifact.activeRules, artifact.reliability.map((row) => row.rule));
   assert.equal(artifact.marketDataUsedAsFeatures, false);
   assert.equal(artifact.sameGameOutcomeAllowed, false);
   assert.equal(artifact.postKickoffEvidenceAllowed, false);
@@ -171,7 +172,7 @@ test("NFL frozen runtime scorer consumes only a verified 2026 pregame materializ
   assert.ok(Number.isFinite(score.referenceHomeWinProbability));
   assert.ok(score.referenceHomeWinProbability > 0 && score.referenceHomeWinProbability < 1);
   assert.ok(score.predictedSideProbability >= 0.5 && score.predictedSideProbability < 1);
-  assert.equal(Object.keys(score.expertProbabilities).length, 17);
+  assert.equal(Object.keys(score.expertProbabilities).length, 8);
   assert.equal(score.safety.marketDataUsedAsModelFeature, false);
   assert.equal(score.safety.sameGameOutcomeUsed, false);
   assert.equal(score.safety.historicalAccuracyExposedAsGameProbability, false);
