@@ -44,8 +44,9 @@ function assertPregameCustody(materialization: NflPregameMaterialization): void 
 }
 
 /**
- * Scores one already-materialized NFL pregame card with the exact frozen 2026 R5H8 artifact.
- * This function does not accept odds, final scores, same-game PBP, or post-kickoff evidence.
+ * Scores one already-materialized NFL pregame card with the exact active R5H8 subset
+ * of the certified 2026 H19 artifact. This function does not accept odds, final scores,
+ * same-game PBP, or post-kickoff evidence.
  */
 export function scoreNflR5H8Pregame(materialization: NflPregameMaterialization): NflR5H8Score {
   assertPregameCustody(materialization);
@@ -59,9 +60,9 @@ export function scoreNflR5H8Pregame(materialization: NflPregameMaterialization):
     materialization.features,
   );
   const expertProbabilities: Record<string, number> = {};
-  for (const rule of artifact.ruleOrder) {
+  for (const rule of artifact.activeRules) {
     const spec = artifact.models.experts[rule];
-    if (!spec) throw new Error(`NFL R5H8 frozen artifact missing expert ${rule}`);
+    if (!spec) throw new Error(`NFL R5H8 frozen artifact missing active expert ${rule}`);
     expertProbabilities[rule] = predictFrozenLogit(spec, materialization.features);
   }
 
