@@ -13,10 +13,15 @@ import nfl_r5h15_independent_signal_family_discovery as h15
 def expert_oos_source_available(x: pd.DataFrame, start: int, end: int):
     """R5H expert OOS with explicit source-availability custody.
 
-    If an entire rule block has no observed training value in an early historical
-    season, the block is unavailable rather than negative/positive evidence. It
-    therefore contributes a neutral probability of 0.50 until actual observations
-    exist. No values are synthesized and no target outcome is consulted.
+    The normal expert path tunes C on an inner chronological split. For early
+    historical eras, a block such as QB_CPOE can exist in the outer training
+    frame but still have zero observations in the *inner fit* portion used by
+    tune_logit. In that state the source was not yet usable for a leakage-safe
+    tuned expert. We therefore emit neutral p=0.50 for that block/target season.
+
+    Neutralization is based only on feature availability in prior data. It never
+    consults target outcomes, does not synthesize missing values, and disappears
+    automatically once the inner historical fit contains real observations.
     """
     blocks = r5h.rule_blocks()
     rows = []
@@ -32,19 +37,29 @@ def expert_oos_source_available(x: pd.DataFrame, start: int, end: int):
             "home_r5b2_hi_switch", "away_r5b2_hi_switch",
         ]].copy().rename(columns={"home_win": "y"})
 
+        inner_fit, _ = base.inner_split(tr)
         for name, cols in blocks.items():
-            observed = bool(tr[cols].notna().any(axis=0).any())
-            if not observed:
+            outer_observed = bool(tr[cols].notna().any(axis=0).any())
+            inner_fit_observed = bool(inner_fit[cols].notna().any(axis=0).any())
+            usable = outer_observed and inner_fit_observed
+            if not usable:
                 q[f"p__{name}"] = 0.5
                 tuning.append({
                     "expert": name,
                     "test_season": int(y),
                     "C": np.nan,
                     "training_through": int(tr.season.max()),
-                    "source_available": False,
+                    "source_available_outer_train": outer_observed,
+                    "source_available_inner_fit": inner_fit_observed,
                     "neutralized_unavailable_block": True,
                 })
-                print("R5H17_NEUTRAL_UNAVAILABLE", y, name)
+                print(
+                    "R5H17_NEUTRAL_UNAVAILABLE",
+                    y,
+                    name,
+                    "outer=", int(outer_observed),
+                    "inner_fit=", int(inner_fit_observed),
+                )
                 continue
 
             c = base.tune_logit(tr, cols)
@@ -57,7 +72,8 @@ def expert_oos_source_available(x: pd.DataFrame, start: int, end: int):
                 "test_season": int(y),
                 "C": float(c),
                 "training_through": int(tr.season.max()),
-                "source_available": True,
+                "source_available_outer_train": True,
+                "source_available_inner_fit": True,
                 "neutralized_unavailable_block": False,
             })
         rows.append(q)
