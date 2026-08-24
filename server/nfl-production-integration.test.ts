@@ -103,6 +103,8 @@ test("NFL Elite gate fails closed by default and never turns historical accuracy
   }, () => {
     const status = getNflEliteIntegrationStatus();
     assert.equal(status.state, "BLOCKED");
+    assert.equal(status.coreReady, false);
+    assert.equal(status.lateDownEnabled, false);
     assert.equal(status.historicalAccuracyExposedAsGameProbability, false);
     assert.equal(status.marketDataUsedAsModelFeature, false);
     assert.equal(status.automaticBetPlacement, false);
@@ -111,7 +113,21 @@ test("NFL Elite gate fails closed by default and never turns historical accuracy
   });
 });
 
-test("NFL Elite gate becomes READY only when every explicit custody gate passes", () => {
+test("NFL R5H8 core can become ready while late-down remains disabled", () => {
+  withEnv({
+    NFL_R5H18_PROSPECTIVE_GATE: "FAIL",
+    NFL_ELITE_2026_ARTIFACT_VERIFIED: "true",
+    NFL_ELITE_MATERIALIZER_VERIFIED: "true",
+    NFL_ELITE_PARITY_GATE: "PASS",
+  }, () => {
+    const status = getNflEliteIntegrationStatus();
+    assert.equal(status.state, "CORE_READY");
+    assert.equal(status.coreReady, true);
+    assert.equal(status.lateDownEnabled, false);
+  });
+});
+
+test("NFL Elite gate becomes FULL_READY only when core custody and late-down deployability pass", () => {
   withEnv({
     NFL_R5H18_PROSPECTIVE_GATE: "PASS",
     NFL_ELITE_2026_ARTIFACT_VERIFIED: "true",
@@ -119,7 +135,8 @@ test("NFL Elite gate becomes READY only when every explicit custody gate passes"
     NFL_ELITE_PARITY_GATE: "PASS",
   }, () => {
     const status = getNflEliteIntegrationStatus();
-    assert.equal(status.state, "READY");
-    assert.equal(status.reasons.length, 1);
+    assert.equal(status.state, "FULL_READY");
+    assert.equal(status.coreReady, true);
+    assert.equal(status.lateDownEnabled, true);
   });
 });
