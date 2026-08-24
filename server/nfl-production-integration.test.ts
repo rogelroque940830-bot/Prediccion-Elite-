@@ -4,7 +4,9 @@ import { normalizeNflScoreboard, normalizeNflTeams } from "./nfl-data-routes";
 import { getNflEliteIntegrationStatus, NFL_R5H16_EVIDENCE } from "./nfl-elite-integration-gate";
 import { predictFrozenLogit, type FrozenLogitSpec } from "./nfl-frozen-logit";
 import { evaluateNflR5H8 } from "./nfl-r5h8-engine";
+import { getNflR5H19Artifact, NFL_R5H19_ARTIFACT_DIGEST } from "./nfl-r5h19-artifact";
 import { NFL_R5H8_RUNTIME_FEATURES, NflPregameMaterializer } from "./nfl-pregame-materializer";
+import { scoreNflR5H8Pregame } from "./nfl-r5h8-scorer";
 
 function withEnv(values: Record<string, string | undefined>, fn: () => void): void {
   const before = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
@@ -137,6 +139,56 @@ test("NFL R5H8 runtime feature contract is exactly 68 sports-only pregame fields
   for (const feature of NFL_R5H8_RUNTIME_FEATURES) {
     assert.doesNotMatch(feature, /moneyline|spread|total_line|odds|price|vig|book|over_under/i);
   }
+});
+
+test("NFL embedded H19 artifact is the certified 2026 frozen inference object", () => {
+  const artifact = getNflR5H19Artifact();
+  assert.equal(artifact.semanticDigest, NFL_R5H19_ARTIFACT_DIGEST);
+  assert.equal(artifact.targetSeason, 2026);
+  assert.equal(artifact.trainedThroughSeason, 2025);
+  assert.equal(artifact.ruleOrder.length, 17);
+  assert.equal(artifact.reliability.length, 17);
+  assert.equal(artifact.pairStructure.length, 136);
+  assert.equal(artifact.marketDataUsedAsFeatures, false);
+  assert.equal(artifact.sameGameOutcomeAllowed, false);
+  assert.equal(artifact.postKickoffEvidenceAllowed, false);
+  assert.equal(artifact.historicalAccuracyExposedAsGameProbability, false);
+});
+
+test("NFL frozen runtime scorer consumes only a verified 2026 pregame materialization", () => {
+  const materializer = new NflPregameMaterializer();
+  const card = materializer.materializePregame({
+    gameId: "2026_01_A_B",
+    season: 2026,
+    week: 1,
+    gameday: "2026-09-10",
+    homeTeam: "B",
+    awayTeam: "A",
+  });
+  const score = scoreNflR5H8Pregame(card);
+  assert.equal(score.artifactDigest, NFL_R5H19_ARTIFACT_DIGEST);
+  assert.equal(score.season, 2026);
+  assert.ok(Number.isFinite(score.referenceHomeWinProbability));
+  assert.ok(score.referenceHomeWinProbability > 0 && score.referenceHomeWinProbability < 1);
+  assert.ok(score.predictedSideProbability >= 0.5 && score.predictedSideProbability < 1);
+  assert.equal(Object.keys(score.expertProbabilities).length, 17);
+  assert.equal(score.safety.marketDataUsedAsModelFeature, false);
+  assert.equal(score.safety.sameGameOutcomeUsed, false);
+  assert.equal(score.safety.historicalAccuracyExposedAsGameProbability, false);
+  assert.equal(score.safety.automaticBetPlacement, false);
+});
+
+test("NFL frozen 2026 scorer rejects a card from another season", () => {
+  const materializer = new NflPregameMaterializer();
+  const card = materializer.materializePregame({
+    gameId: "2025_01_A_B",
+    season: 2025,
+    week: 1,
+    gameday: "2025-09-04",
+    homeTeam: "B",
+    awayTeam: "A",
+  });
+  assert.throws(() => scoreNflR5H8Pregame(card), /targets 2026/);
 });
 
 test("NFL Elite gate fails closed by default and never turns historical accuracy into game probability", () => {
