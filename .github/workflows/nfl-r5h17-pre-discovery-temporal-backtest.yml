@@ -1,0 +1,131 @@
+name: NFL R5H17 Pre-Discovery Temporal Backtest
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/nfl_r5h17_legacy_r5b_runner.py'
+      - 'research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py'
+      - '.github/workflows/nfl-r5h17-pre-discovery-temporal-backtest.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h17:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate H17 chain
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+          python -m py_compile research/nfl/nfl_r5h15_runner.py
+          python -m py_compile research/nfl/nfl_r5h17_legacy_r5b_runner.py
+          python -m py_compile research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py
+
+      - name: Rebuild untouched 2001-2011 leakage-safe foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2001 \
+            --end-season 2011 \
+            --test-start 2009 \
+            --out-dir nfl-r5h17-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild legacy-era R5B with source-availability custody
+        run: |
+          python research/nfl/nfl_r5h17_legacy_r5b_runner.py \
+            --start-season 2001 \
+            --end-season 2011 \
+            --test-start 2009 \
+            --out-dir nfl-r5h17-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild legacy-era gated R5B hybrid
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5h17-r5b-output \
+            --out-dir nfl-r5h17-hybrid-output \
+            --test-start 2009 \
+            --end-season 2011
+
+      - name: Reconstruct H15 algorithm on pre-discovery era
+        run: |
+          python research/nfl/nfl_r5h15_runner.py \
+            --input-dir nfl-r5h17-hybrid-output \
+            --out-dir nfl-r5h17-h15-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2001 \
+            --expert-oos-start 2004 \
+            --test-start 2009 \
+            --end-season 2011
+
+      - name: Certify H17 untouched temporal backtest
+        run: |
+          python research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py \
+            --h15-dir nfl-r5h17-h15-output \
+            --hybrid-dir nfl-r5h17-hybrid-output \
+            --out-dir nfl-r5h17-output
+
+      - name: Enforce H17 research boundary
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h17-output/nfl_r5h17_summary.json'))
+          a=json.load(open('nfl-r5h17-output/nfl_r5h17_audit.json'))
+          m=json.load(open('nfl-r5h17-output/nfl_r5h17_manifest.json'))
+          assert s['researchOnly'] is True
+          assert s['marketDataUsed'] is False
+          assert s['productionChanged'] is False
+          assert s['family'] == 'LATE_DOWN_CONVERSION'
+          assert s['preDiscoveryHoldout'] is True
+          assert s['holdoutSeasons'] == [2009, 2010, 2011]
+          assert s['originalR5UniverseStartSeason'] == 2012
+          assert s['holdoutOutcomesUsedByR5H15Discovery'] is False
+          assert a['marketBoundary'] == 'PASS_MARKET_FREE'
+          assert a['holdoutBoundary'] == 'PASS_2009_2011_PRECEDES_ORIGINAL_R5_START_2012'
+          assert a['targetSeasonTraining'] == 'EXPANDING_PRIOR_SEASONS_ONLY'
+          assert a['targetSeasonThresholdCalibration'] == 'LATEST_TWO_PRIOR_OOS_SEASONS_ONLY'
+          assert a['productionCodeTouched'] is False
+          assert m['marketDataUsedAsFeatures'] is False
+          assert m['automaticProductionPromotion'] is False
+          print('NFL_R5H17_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show H17 evidence
+        run: |
+          cat nfl-r5h17-output/nfl_r5h17_summary.json
+          echo
+          cat nfl-r5h17-output/nfl_r5h17_by_season.csv
+          echo
+          cat nfl-r5h17-output/nfl_r5h17_threshold_sensitivity.csv
+          echo
+          head -25 nfl-r5h17-output/nfl_r5h17_team_concentration.csv || true
+
+      - name: Upload H17 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h17-pre-discovery-temporal-backtest-evidence
+          path: nfl-r5h17-output/
+          if-no-files-found: error
+          retention-days: 30
