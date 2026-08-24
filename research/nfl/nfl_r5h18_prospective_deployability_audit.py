@@ -62,28 +62,22 @@ def threshold_only_mask(df: pd.DataFrame, cfg: pd.DataFrame, multiplier: float =
     return out
 
 
-def online_season_quota_mask(df: pd.DataFrame, cfg: pd.DataFrame, source: pd.DataFrame) -> np.ndarray:
-    """Diagnostic only: first qualifying games chronologically until the known season quota is full.
+def online_season_quota_mask(df: pd.DataFrame, cfg: pd.DataFrame) -> np.ndarray:
+    """Diagnostic only: first qualifying games in known schedule order until the quota is full.
 
-    This is non-anticipative because no future game's support score participates in the choice.
-    It is *not* the primary deployment policy and cannot rescue a failing threshold-only audit.
+    Only the already-present target game's week/game_id ordering is used. No future support
+    score participates in the choice. This is not the primary deployment policy and cannot
+    rescue a failing threshold-only audit.
     """
     eligible = threshold_only_mask(df, cfg)
-    joined = (
-        df[["game_id", "season", "week"]]
-        .reset_index(names="_row")
-        .merge(source[["game_id", "gameday"]], on="game_id", how="left", validate="one_to_one")
-    )
-    if joined.gameday.isna().any():
-        raise RuntimeError("R5H18 missing gameday for chronological quota audit")
-    joined["gameday"] = pd.to_datetime(joined.gameday, errors="raise", utc=True)
+    joined = df[["game_id", "season", "week"]].reset_index(names="_row")
     out = np.zeros(len(df), dtype=bool)
 
     for y in sorted(int(v) for v in df.season.unique()):
         iy = df.season.to_numpy(dtype=int) == y
         cap = max(1, int(np.floor(0.10 * int(iy.sum()))))
         candidates = joined[eligible[joined._row.to_numpy(dtype=int)] & joined.season.eq(y)].copy()
-        candidates = candidates.sort_values(["gameday", "week", "game_id"], kind="stable")
+        candidates = candidates.sort_values(["week", "game_id"], kind="stable")
         keep = candidates.head(cap)._row.to_numpy(dtype=int)
         out[keep] = True
     return out
@@ -151,7 +145,7 @@ def main() -> None:
     core = df.core_selected.to_numpy(dtype=bool)
     historical_global_cap = df[historical_col].to_numpy(dtype=bool)
     deployable = threshold_only_mask(df, cfg)
-    online_quota = online_season_quota_mask(df, cfg, source)
+    online_quota = online_season_quota_mask(df, cfg)
 
     # Custody assertions: H18 must start from the already-certified frozen chain.
     if int(core.sum()) != 158:
@@ -267,7 +261,7 @@ def main() -> None:
         "targetOutcomeUsedForSelection": "NO",
         "futureTargetSeasonFeatureRanking": "REMOVED",
         "primaryDeploymentPolicy": POLICY,
-        "onlineQuotaPolicy": "DIAGNOSTIC_ONLY_NOT_USED_TO_RESCUE_PRIMARY_GATE",
+        "onlineQuotaPolicy": "DIAGNOSTIC_ONLY_WEEK_AND_GAME_ID_ORDER_NO_SCORE_RANKING",
         "productionCodeTouched": False,
     }
     manifest = {
