@@ -1,0 +1,125 @@
+name: NFL R5H19 Frozen 2026 Inference Export
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/nfl_r5h19_2026_frozen_inference_export.py'
+      - '.github/workflows/nfl-r5h19-frozen-inference-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h19:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate frozen export chain
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h19_2026_frozen_inference_export.py
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild R5B QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 \
+            --end-season 2025 \
+            --test-start 2018 \
+            --out-dir nfl-r5b-output \
+            --cache-dir .cache/nflverse
+
+      - name: Rebuild gated R5B hybrid
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output \
+            --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 \
+            --end-season 2025
+
+      - name: Export frozen 2026 artifact and 2025 parity fixture
+        run: |
+          python research/nfl/nfl_r5h19_2026_frozen_inference_export.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h19-output \
+            --expert-oos-start 2013 \
+            --end-season 2025
+
+      - name: Enforce frozen artifact custody
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h19-output/nfl_r5h19_summary.json'))
+          a=json.load(open('nfl-r5h19-output/nfl_r5h19_audit.json'))
+          artifact=json.load(open('nfl-r5h19-output/nfl_r5h19_2026_artifact.json'))
+          assert s['researchOnly'] is True
+          assert s['productionChanged'] is False
+          assert s['targetSeason'] == 2026
+          assert s['trainedThroughSeason'] == 2025
+          assert s['ruleCount'] == 17
+          assert s['parity']['pass'] is True
+          assert s['parity']['certifiedCoreSelections'] == 15
+          assert s['parity']['selectionMismatches'] == 0
+          assert s['parity']['confidenceBinMismatches'] == 0
+          assert s['parity']['maxProbabilityError'] <= 1e-10
+          assert s['parity']['maxInteractionScoreError'] <= 1e-10
+          assert artifact['marketDataUsedAsFeatures'] is False
+          assert artifact['sameGameOutcomeAllowed'] is False
+          assert artifact['postKickoffEvidenceAllowed'] is False
+          assert artifact['automaticProductionPromotion'] is False
+          assert artifact['historicalAccuracyExposedAsGameProbability'] is False
+          assert a['pythonSerializationParity2025'] == 'PASS'
+          assert a['typescriptParity'] == 'PENDING'
+          assert a['livePregameMaterializer'] == 'PENDING'
+          print('NFL_R5H19_CUSTODY_VERIFIED')
+          PY
+
+      - name: Show H19 evidence
+        run: |
+          cat nfl-r5h19-output/nfl_r5h19_summary.json
+          echo
+          cat nfl-r5h19-output/nfl_r5h19_audit.json
+          echo
+          python - <<'PY'
+          import json
+          a=json.load(open('nfl-r5h19-output/nfl_r5h19_2026_artifact.json'))
+          print('artifactDigest', a['semanticDigest'])
+          print('rules', len(a['ruleOrder']))
+          print('targetSeason', a['targetSeason'])
+          print('trainedThroughSeason', a['trainedThroughSeason'])
+          PY
+
+      - name: Upload H19 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h19-frozen-inference-evidence
+          path: nfl-r5h19-output/
+          if-no-files-found: error
+          retention-days: 30
