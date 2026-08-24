@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'research/nfl/nfl_r5h15_independent_signal_family_discovery.py'
+      - 'research/nfl/nfl_r5h15_runner.py'
       - '.github/workflows/nfl-r5h15-independent-signal-families.yml'
 
 permissions:
@@ -33,10 +34,12 @@ jobs:
           python -m py_compile research/nfl/nfl_r5b_hybrid.py
           python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
           python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
           python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
           python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
           python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
           python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+          python -m py_compile research/nfl/nfl_r5h15_runner.py
 
       - name: Rebuild leakage-safe historical foundation
         run: |
@@ -66,7 +69,7 @@ jobs:
 
       - name: Run R5H15 independent sports-signal discovery
         run: |
-          python research/nfl/nfl_r5h15_independent_signal_family_discovery.py \
+          python research/nfl/nfl_r5h15_runner.py \
             --input-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5h15-output \
             --cache-dir .cache/nflverse \
