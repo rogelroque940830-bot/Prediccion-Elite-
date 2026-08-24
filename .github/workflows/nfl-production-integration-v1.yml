@@ -1,0 +1,32 @@
+name: NFL Production Integration V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/nfl-*.ts'
+      - 'server/routes.ts'
+      - 'tsconfig.nfl-production.json'
+      - 'package.json'
+      - '.github/workflows/nfl-production-integration-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck NFL integration
+        run: npm run typecheck:nfl-production
+      - name: Test NFL integration
+        run: npm run test:nfl-production
+      - name: Build backend composition root
+        run: npm run build:backend

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/nfl-data-routes.ts",
+    "server/nfl-odds-routes.ts",
+    "server/nfl-elite-integration-gate.ts",
+    "server/nfl-elite-routes.ts",
+    "server/nfl-production-integration.test.ts",
+    "server/routes.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
