@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'research/nfl/nfl_r5h17_legacy_r5b_runner.py'
+      - 'research/nfl/nfl_r5h17_h15_legacy_runner.py'
       - 'research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py'
       - '.github/workflows/nfl-r5h17-pre-discovery-temporal-backtest.yml'
 
@@ -39,8 +40,8 @@ jobs:
           python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
           python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
           python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
-          python -m py_compile research/nfl/nfl_r5h15_runner.py
           python -m py_compile research/nfl/nfl_r5h17_legacy_r5b_runner.py
+          python -m py_compile research/nfl/nfl_r5h17_h15_legacy_runner.py
           python -m py_compile research/nfl/nfl_r5h17_pre_discovery_temporal_backtest.py
 
       - name: Rebuild untouched 2001-2011 leakage-safe foundation
@@ -71,7 +72,7 @@ jobs:
 
       - name: Reconstruct H15 algorithm on pre-discovery era
         run: |
-          python research/nfl/nfl_r5h15_runner.py \
+          python research/nfl/nfl_r5h17_h15_legacy_runner.py \
             --input-dir nfl-r5h17-hybrid-output \
             --out-dir nfl-r5h17-h15-output \
             --cache-dir .cache/nflverse \
