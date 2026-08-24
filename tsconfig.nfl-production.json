@@ -5,8 +5,7 @@
     "server/nfl-odds-routes.ts",
     "server/nfl-elite-integration-gate.ts",
     "server/nfl-elite-routes.ts",
-    "server/nfl-production-integration.test.ts",
-    "server/routes.ts"
+    "server/nfl-production-integration.test.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
