@@ -7,7 +7,10 @@
     "server/nfl-elite-routes.ts",
     "server/nfl-frozen-logit.ts",
     "server/nfl-r5h8-engine.ts",
-    "server/nfl-production-integration.test.ts"
+    "server/nfl-pregame-materializer.ts",
+    "server/nfl-production-integration.test.ts",
+    "scripts/nfl-r5h19-cross-language-parity.ts",
+    "scripts/nfl-r5h20-pregame-materializer-replay.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
