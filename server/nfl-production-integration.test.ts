@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeNflScoreboard, normalizeNflTeams } from "./nfl-data-routes";
 import { getNflEliteIntegrationStatus, NFL_R5H16_EVIDENCE } from "./nfl-elite-integration-gate";
+import { predictFrozenLogit, type FrozenLogitSpec } from "./nfl-frozen-logit";
+import { evaluateNflR5H8 } from "./nfl-r5h8-engine";
 
 function withEnv(values: Record<string, string | undefined>, fn: () => void): void {
   const before = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
@@ -46,6 +48,50 @@ test("NFL team directory adapter normalizes wrapped ESPN teams", () => {
     { team: { id: "2", displayName: "Beta", abbreviation: "BET", location: "B", name: "Betas" } },
   ] }] }] });
   assert.deepEqual(teams.map((team) => team.name), ["Alpha", "Beta"]);
+});
+
+test("NFL frozen logit reproduces imputation, scaling, and positive-class sigmoid", () => {
+  const spec: FrozenLogitSpec = {
+    kind: "STANDARDIZED_LOGISTIC_REGRESSION",
+    features: ["a", "b"],
+    imputer: { strategy: "median", statistics: [2, 10] },
+    scaler: { mean: [2, 8], scale: [2, 4] },
+    logistic: { C: 1, classes: [0, 1], coef: [0.5, -0.25], intercept: 0.1 },
+  };
+  const actual = predictFrozenLogit(spec, { a: null, b: 12 });
+  const expected = 1 / (1 + Math.exp(-(0.1 + 0 * 0.5 + 1 * -0.25)));
+  assert.ok(Math.abs(actual - expected) < 1e-12);
+});
+
+test("NFL R5H8 scalar port selects unanimous frozen-rule support without using market prices", () => {
+  const reliability = [
+    { rule: "A", fit_accuracy: 0.7, fit_log_loss: 0.6, reliability: 0.2 },
+    { rule: "B", fit_accuracy: 0.68, fit_log_loss: 0.61, reliability: 0.1 },
+  ];
+  const evaluation = evaluateNflR5H8(
+    0.70,
+    { A: 0.80, B: 0.60 },
+    reliability,
+    [],
+    {
+      top_k: 2,
+      reliability_power: 1,
+      conviction_power: 1,
+      redundancy_lambda: 0.5,
+      synergy_lambda: 0.5,
+      agreement_floor: 0.55,
+      diversity_power: 0,
+      confidence_bins: 1,
+      confidence_floor_quantile: 0.5,
+      confidence_floor: 0,
+      rule_selection_rate: 0.1,
+      bin_edges: [null, null],
+      rule_thresholds: { "0": 0.99 },
+    },
+  );
+  assert.ok(Math.abs(evaluation.interactionScore - 1) < 1e-12);
+  assert.equal(evaluation.agreement, 1);
+  assert.equal(evaluation.coreSelected, true);
 });
 
 test("NFL Elite gate fails closed by default and never turns historical accuracy into game probability", () => {
