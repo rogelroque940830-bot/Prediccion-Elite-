@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'research/nfl/nfl_r5h16_late_down_final_certification.py'
+      - 'research/nfl/nfl_r5h16_runner.py'
       - '.github/workflows/nfl-r5h16-late-down-final-certification.yml'
 
 permissions:
@@ -40,6 +41,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
           python -m py_compile research/nfl/nfl_r5h15_runner.py
           python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
+          python -m py_compile research/nfl/nfl_r5h16_runner.py
 
       - name: Rebuild leakage-safe historical foundation
         run: |
@@ -80,7 +82,7 @@ jobs:
 
       - name: Run R5H16 final robustness certification
         run: |
-          python research/nfl/nfl_r5h16_late_down_final_certification.py \
+          python research/nfl/nfl_r5h16_runner.py \
             --h15-dir nfl-r5h15-output \
             --hybrid-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5h16-output
