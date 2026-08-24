@@ -4,6 +4,7 @@ import { normalizeNflScoreboard, normalizeNflTeams } from "./nfl-data-routes";
 import { getNflEliteIntegrationStatus, NFL_R5H16_EVIDENCE } from "./nfl-elite-integration-gate";
 import { predictFrozenLogit, type FrozenLogitSpec } from "./nfl-frozen-logit";
 import { evaluateNflR5H8 } from "./nfl-r5h8-engine";
+import { NFL_R5H8_RUNTIME_FEATURES, NflPregameMaterializer } from "./nfl-pregame-materializer";
 
 function withEnv(values: Record<string, string | undefined>, fn: () => void): void {
   const before = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
@@ -92,6 +93,50 @@ test("NFL R5H8 scalar port selects unanimous frozen-rule support without using m
   assert.ok(Math.abs(evaluation.interactionScore - 1) < 1e-12);
   assert.equal(evaluation.agreement, 1);
   assert.equal(evaluation.coreSelected, true);
+});
+
+test("NFL pregame materializer snapshots before applying the same-game observation", () => {
+  const materializer = new NflPregameMaterializer();
+  const first = {
+    gameId: "2025_01_A_B",
+    season: 2025,
+    week: 1,
+    gameday: "2025-09-04",
+    homeTeam: "B",
+    awayTeam: "A",
+    observation: {
+      homeScore: 27,
+      awayScore: 20,
+      homeMetrics: { off_epa: 0.2, off_success: 0.5, pass_epa: 0.3, pass_success: 0.55, rush_epa: 0.1, rush_success: 0.45, sack_rate: 0.05, explosive_pass: 0.1, explosive_rush: 0.08, plays: 65, drives: 11 },
+      awayMetrics: { off_epa: -0.1, off_success: 0.4, pass_epa: -0.05, pass_success: 0.42, rush_epa: -0.15, rush_success: 0.38, sack_rate: 0.08, explosive_pass: 0.06, explosive_rush: 0.05, plays: 62, drives: 10 },
+      quarterbacks: [],
+    },
+  };
+  const before = materializer.replayCompletedGame(first);
+  assert.equal(before.features.home_points_for, null);
+  assert.equal(before.features.away_points_for, null);
+  assert.equal(before.processedCompletedGames, 0);
+  assert.equal(materializer.getProcessedCompletedGames(), 1);
+
+  const second = materializer.materializePregame({
+    gameId: "2025_02_C_B",
+    season: 2025,
+    week: 2,
+    gameday: "2025-09-11",
+    homeTeam: "B",
+    awayTeam: "C",
+  });
+  assert.equal(second.features.home_points_for, 27);
+  assert.equal(second.provenance.sameGameObservationUsed, false);
+  assert.equal(second.provenance.marketDataUsedAsFeature, false);
+});
+
+test("NFL R5H8 runtime feature contract is exactly 68 sports-only pregame fields", () => {
+  assert.equal(NFL_R5H8_RUNTIME_FEATURES.length, 68);
+  assert.equal(new Set(NFL_R5H8_RUNTIME_FEATURES).size, 68);
+  for (const feature of NFL_R5H8_RUNTIME_FEATURES) {
+    assert.doesNotMatch(feature, /moneyline|spread|total_line|odds|price|vig|book|over_under/i);
+  }
 });
 
 test("NFL Elite gate fails closed by default and never turns historical accuracy into game probability", () => {
