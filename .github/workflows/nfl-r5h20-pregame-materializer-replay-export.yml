@@ -1,0 +1,72 @@
+name: NFL R5H20 Pregame Materializer Replay Export
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/nfl_r5h20_pregame_materializer_replay_export.py'
+      - '.github/workflows/nfl-r5h20-pregame-materializer-replay-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h20-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+      - name: Validate frozen research/export code
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h20_pregame_materializer_replay_export.py
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5-output --cache-dir .cache/nflverse
+      - name: Rebuild QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5b-output --cache-dir .cache/nflverse
+      - name: Rebuild frozen hybrid feature matrix
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 --end-season 2025
+      - name: Export raw sequential replay plus frozen pregame oracle
+        run: |
+          python research/nfl/nfl_r5h20_pregame_materializer_replay_export.py \
+            --start-season 2012 --end-season 2025 --compare-seasons 2024,2025 \
+            --cache-dir .cache/nflverse --hybrid-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h20-output
+      - name: Enforce replay custody
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h20-output/nfl_r5h20_summary.json'))
+          assert s['runtimeFeatureCount'] == 68
+          assert s['expectedRows'] == 544
+          assert s['compareSeasons'] == [2024, 2025]
+          assert s['marketDataUsedAsFeature'] is False
+          assert s['sameGameObservationAppliedBeforePregameSnapshot'] is False
+          assert len(s['semanticDigest']) == 64
+          print('NFL_R5H20_CUSTODY_VERIFIED')
+          PY
+      - name: Upload H20 replay evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h20-pregame-materializer-replay-evidence
+          path: nfl-r5h20-output/
+          if-no-files-found: error
+          retention-days: 30
