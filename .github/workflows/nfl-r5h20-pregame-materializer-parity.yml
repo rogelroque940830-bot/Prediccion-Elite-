@@ -1,0 +1,59 @@
+name: NFL R5H20 Pregame Materializer Parity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/nfl-pregame-materializer.ts'
+      - 'scripts/nfl-r5h20-pregame-materializer-replay.ts'
+      - 'tsconfig.nfl-production.json'
+      - '.github/workflows/nfl-r5h20-pregame-materializer-parity.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nfl-r5h20-materializer-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+
+      - name: Download certified H20 replay fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H20_ARTIFACT_ID: '9540308569'
+          H20_REPLAY_DIGEST: 'd2873a557ed391b7bffaa6d12fb49ead7cc4554538554bdaa5bdf8248a06c5c5'
+        run: |
+          mkdir -p /tmp/nfl-r5h20
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${H20_ARTIFACT_ID}/zip" \
+            > /tmp/nfl-r5h20.zip
+          unzip -q /tmp/nfl-r5h20.zip -d /tmp/nfl-r5h20
+          test -s /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
+          test -s /tmp/nfl-r5h20/nfl_r5h20_summary.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const summary = JSON.parse(fs.readFileSync('/tmp/nfl-r5h20/nfl_r5h20_summary.json', 'utf8'));
+          if (summary.semanticDigest !== process.env.H20_REPLAY_DIGEST) throw new Error('H20 replay semantic digest mismatch');
+          if (summary.expectedRows !== 544 || summary.runtimeFeatureCount !== 68) throw new Error('H20 replay contract mismatch');
+          if (summary.marketDataUsedAsFeature !== false || summary.sameGameObservationAppliedBeforePregameSnapshot !== false) {
+            throw new Error('H20 replay custody boundary mismatch');
+          }
+          console.log('NFL_R5H20_REPLAY_CUSTODY_VERIFIED');
+          NODE
+
+      - name: Typecheck NFL materializer
+        run: npm run typecheck:nfl-production
+
+      - name: Run 2024-2025 all-game pregame feature parity
+        run: |
+          npx tsx scripts/nfl-r5h20-pregame-materializer-replay.ts \
+            /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
