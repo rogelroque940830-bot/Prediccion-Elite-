@@ -1,0 +1,44 @@
+name: NFL R5H19 Cross-Language Parity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/nfl-frozen-logit.ts'
+      - 'server/nfl-r5h8-engine.ts'
+      - 'scripts/nfl-r5h19-cross-language-parity.ts'
+      - '.github/workflows/nfl-r5h19-cross-language-parity.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nfl-r5h19-typescript-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+
+      - name: Download certified R5H19 research fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H19_ARTIFACT_ID: '9507836579'
+        run: |
+          mkdir -p /tmp/nfl-r5h19
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${H19_ARTIFACT_ID}/zip" \
+            > /tmp/nfl-r5h19.zip
+          unzip -q /tmp/nfl-r5h19.zip -d /tmp/nfl-r5h19
+          test -s /tmp/nfl-r5h19/nfl_r5h19_2025_parity_fixture.json
+
+      - name: Run all-game Python to TypeScript parity
+        run: |
+          npx tsx scripts/nfl-r5h19-cross-language-parity.ts \
+            /tmp/nfl-r5h19/nfl_r5h19_2025_parity_fixture.json
