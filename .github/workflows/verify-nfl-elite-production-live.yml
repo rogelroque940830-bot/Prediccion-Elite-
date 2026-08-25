@@ -1,0 +1,100 @@
+name: Verify NFL Elite Production Live
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-nfl-elite-production-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      API_BASE: https://web-production-7067b.up.railway.app
+      EXPECTED_COMMIT: 8a87b15c35c165dd2861c73d3e663898944369b7
+    steps:
+      - name: Wait for exact activated main deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/nfl-health.json
+          for attempt in $(seq 1 24); do
+            echo "Production health attempt ${attempt}/24"
+            if curl --fail --silent --show-error --max-time 10 "${API_BASE}/health" -o /tmp/nfl-health.json; then
+              status=$(node -e "const j=require('/tmp/nfl-health.json');process.stdout.write(String(j.status||''))")
+              commit=$(node -e "const j=require('/tmp/nfl-health.json');process.stdout.write(String(j.commit||''))")
+              environment=$(node -e "const j=require('/tmp/nfl-health.json');process.stdout.write(String(j.environment||''))")
+              echo "status=${status} commit=${commit} environment=${environment}"
+              if [[ "${status}" == "healthy" && "${commit}" == "${EXPECTED_COMMIT}" && "${environment}" == "production" ]]; then
+                echo "NFL_PRODUCTION_EXACT_MAIN_DEPLOYMENT_VERIFIED"
+                break
+              fi
+            fi
+            if [[ "${attempt}" == "24" ]]; then
+              echo "FAIL: production did not report exact activated main commit" >&2
+              test -f /tmp/nfl-health.json && cat /tmp/nfl-health.json || true
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Verify NFL Elite activation status is FULL_READY
+        shell: bash
+        run: |
+          set -euo pipefail
+          http=$(curl --silent --show-error --max-time 30 -o /tmp/nfl-status.json -w '%{http_code}' "${API_BASE}/api/nfl/elite/status")
+          cat /tmp/nfl-status.json
+          HTTP_STATUS="${http}" node - <<'NODE'
+          const fs = require('fs');
+          const j = JSON.parse(fs.readFileSync('/tmp/nfl-status.json','utf8'));
+          if (process.env.HTTP_STATUS !== '200') throw new Error(`NFL status HTTP ${process.env.HTTP_STATUS}`);
+          if (j.success !== true || j.code !== 'NFL_ELITE_FULL_READY') throw new Error(`NFL status envelope not FULL_READY: ${j.code}`);
+          if (j.data?.state !== 'FULL_READY' || j.data?.coreReady !== true || j.data?.lateDownEnabled !== true) {
+            throw new Error('NFL Elite deployment gates are not fully active');
+          }
+          if (j.data?.productionPolicy !== 'THRESHOLD_ONLY_NO_TARGET_SEASON_RANKING') throw new Error('NFL production policy drift');
+          console.log('NFL_ELITE_FULL_READY_LIVE_VERIFIED');
+          NODE
+
+      - name: Verify NFL Elite cards endpoint fails closed or serves a valid slate
+        shell: bash
+        run: |
+          set -euo pipefail
+          http=$(curl --silent --show-error --max-time 120 -o /tmp/nfl-cards.json -w '%{http_code}' "${API_BASE}/api/nfl/elite/cards")
+          cat /tmp/nfl-cards.json
+          HTTP_STATUS="${http}" node - <<'NODE'
+          const fs = require('fs');
+          const j = JSON.parse(fs.readFileSync('/tmp/nfl-cards.json','utf8'));
+          if (process.env.HTTP_STATUS === '200') {
+            if (j.success !== true || !['NFL_ELITE_CARDS_READY','NFL_ELITE_NO_GAMES'].includes(j.code)) throw new Error(`Unexpected successful cards code: ${j.code}`);
+            if (!j.data || !['READY','NO_GAMES'].includes(j.data.state)) throw new Error(`Unexpected cards state: ${j.data?.state}`);
+            const cards = Array.isArray(j.data.cards) ? j.data.cards : [];
+            for (const card of cards) {
+              if (!['NFL_ELITE','NO_ELITE','BLOCKED'].includes(card.state)) throw new Error(`Invalid card state ${card.state}`);
+              if (card.state === 'NFL_ELITE' && !['R5H8_CORE','LATE_DOWN'].includes(card.eliteRoute)) throw new Error('Elite card missing certified route');
+            }
+            console.log(`NFL_ELITE_CARDS_LIVE_VERIFIED code=${j.code} state=${j.data.state} cards=${cards.length}`);
+            process.exit(0);
+          }
+          if (process.env.HTTP_STATUS === '503' && ['NFL_ELITE_CARDS_BLOCKED','NFL_ELITE_CARDS_SOURCE_FAILURE'].includes(j.code)) {
+            console.log(`NFL_ELITE_CARDS_FAIL_CLOSED_VERIFIED code=${j.code}`);
+            process.exit(0);
+          }
+          throw new Error(`Unexpected NFL cards HTTP/code ${process.env.HTTP_STATUS}/${j.code}`);
+          NODE
+
+      - name: Upload sanitized verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-elite-production-live-verification
+          path: |
+            /tmp/nfl-health.json
+            /tmp/nfl-status.json
+            /tmp/nfl-cards.json
+          if-no-files-found: warn
+          retention-days: 30
