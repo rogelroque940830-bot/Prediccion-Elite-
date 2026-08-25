@@ -1,5 +1,6 @@
 name: NFL R5H21 Frozen 2026 Late Down Runtime Export
 
+# Dedicated R5H21 gate; deliberately isolated from production and market workflows.
 on:
   pull_request:
     branches: [main]
