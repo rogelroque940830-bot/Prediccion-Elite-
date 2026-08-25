@@ -9,10 +9,19 @@
     "server/nfl-r5h8-engine.ts",
     "server/nfl-r5h19-artifact.ts",
     "server/nfl-pregame-materializer.ts",
+    "server/nfl-pregame-checkpoint.ts",
+    "server/nfl-r5h20-checkpoint.ts",
+    "server/nfl-r5h20-checkpoint-data-01.ts",
+    "server/nfl-r5h20-checkpoint-data-02.ts",
+    "server/nfl-r5h20-checkpoint-data-03.ts",
+    "server/nfl-r5h20-checkpoint-data-04.ts",
     "server/nfl-r5h8-scorer.ts",
+    "server/nfl-operational-2026.ts",
     "server/nfl-production-integration.test.ts",
+    "server/nfl-operational-2026.test.ts",
     "scripts/nfl-r5h19-cross-language-parity.ts",
-    "scripts/nfl-r5h20-pregame-materializer-replay.ts"
+    "scripts/nfl-r5h20-pregame-materializer-replay.ts",
+    "scripts/nfl-r5h20-checkpoint-verify.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
