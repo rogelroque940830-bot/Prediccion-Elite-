@@ -26,11 +26,7 @@ def file_sha256(path: Path) -> str:
 
 def sigmoid(z: np.ndarray | float) -> np.ndarray | float:
     x = np.asarray(z, dtype=float)
-    out = np.empty_like(x)
-    pos = x >= 0
-    out[pos] = 1.0 / (1.0 + np.exp(-x[pos]))
-    ex = np.exp(x[~pos])
-    out[~pos] = ex / (1.0 + ex)
+    out = np.where(x >= 0, 1.0 / (1.0 + np.exp(-x)), np.exp(x) / (1.0 + np.exp(x)))
     if np.ndim(z) == 0:
         return float(out)
     return out
@@ -280,21 +276,28 @@ def main() -> None:
     for route in ROUTES:
         m = by_route[route]
         d = m["calibratedMinusRaw"]
+        enough = m["activeRows"] >= min_rows
         route_gates[route] = {
-            "minimumScoredRows": bool(m["activeRows"] >= min_rows),
-            "brierWithinTolerance": bool(d["brier"] <= float(rubric["perRouteBrierMaxDegradation"])),
-            "logLossWithinTolerance": bool(d["logLoss"] <= float(rubric["perRouteLogLossMaxDegradation"])),
+            "minimumScoredRows": bool(enough),
+            "brierWithinTolerance": bool(enough and d["brier"] is not None and d["brier"] <= float(rubric["perRouteBrierMaxDegradation"])),
+            "logLossWithinTolerance": bool(enough and d["logLoss"] is not None and d["logLoss"] <= float(rubric["perRouteLogLossMaxDegradation"])),
             "meanCalibrationGapWithinTolerance": bool(
-                d["absoluteMeanCalibrationGap"] <= float(rubric["perRouteAbsoluteMeanCalibrationGapMaxDegradation"])
+                enough
+                and d["absoluteMeanCalibrationGap"] is not None
+                and d["absoluteMeanCalibrationGap"] <= float(rubric["perRouteAbsoluteMeanCalibrationGapMaxDegradation"])
             ),
         }
 
     combined_gates = {
         "brierImproves": bool(
-            combined["calibrated"]["brier"] < combined["raw"]["brier"]
+            combined["calibrated"]["brier"] is not None
+            and combined["raw"]["brier"] is not None
+            and combined["calibrated"]["brier"] < combined["raw"]["brier"]
         ),
         "logLossImproves": bool(
-            combined["calibrated"]["logLoss"] < combined["raw"]["logLoss"]
+            combined["calibrated"]["logLoss"] is not None
+            and combined["raw"]["logLoss"] is not None
+            and combined["calibrated"]["logLoss"] < combined["raw"]["logLoss"]
         ),
     }
     passed = bool(
@@ -325,7 +328,7 @@ def main() -> None:
         "walkForwardClassification": classification,
         "walkForwardGatePassed": passed,
         "crossSportCandidateAuthorized": passed,
-        "target2026OutcomesUsed": false if False else False,
+        "target2026OutcomesUsed": False,
         "selectionRulesChanged": False,
         "productionCodeTouched": False,
     }
@@ -366,8 +369,6 @@ def main() -> None:
         "productionCodeTouched": False,
     }
 
-    # Correct a Python spelling issue explicitly rather than allowing JSON coercion.
-    candidate["target2026OutcomesUsed"] = False
     (out / "nfl_r5h24_2026_calibrator_candidate.json").write_text(
         json.dumps(candidate, indent=2, sort_keys=True) + "\n"
     )
