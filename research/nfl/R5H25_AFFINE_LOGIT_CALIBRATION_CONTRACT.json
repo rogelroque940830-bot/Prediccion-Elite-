@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "courtedge-nfl-r5h25-affine-logit-calibration-contract.v1",
+  "stage": "R5H25_ROUTE_SPECIFIC_REGULARIZED_AFFINE_LOGIT_CALIBRATION_CONTRACT",
+  "sport": "NFL",
+  "researchOnly": true,
+  "frozenBeforeR5H26Fit": true,
+  "sequentialResearchContext": {
+    "priorStage": "R5H24_WEEK_BLOCK_WALK_FORWARD_CALIBRATION",
+    "priorWorkflowRunId": 32874415099,
+    "priorArtifactId": 9573758925,
+    "priorArtifactDigest": "sha256:878cc716468749216f2476bd27277a235ac443fc478361d3f120c577fed2f417",
+    "priorClassification": "R5H23_CALIBRATION_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE",
+    "priorCombinedWalkForwardRows": 170,
+    "priorCombinedRawBrier": 0.15853469667397987,
+    "priorCombinedRawLogLoss": 0.49380384472279465,
+    "priorCombinedCalibratedBrier": 0.16143012376260296,
+    "priorCombinedCalibratedLogLoss": 0.5051879327672142,
+    "interpretation": "The one-parameter route offset changed probability level but could not independently control probability sharpness. R5H25 therefore freezes a two-parameter identity-centered affine-logit map before any R5H26 fit or score is observed."
+  },
+  "sourceCustody": {
+    "r5h22WorkflowRunId": 32872833335,
+    "r5h22ArtifactId": 9573053756,
+    "r5h22ArtifactDigest": "sha256:01fe856ab5849cff5e8f83bdd81fea2601e2fe390c6e2d8fb05e2ea5cfdf793e",
+    "r5h22CalibrationRowsetSha256": "dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2",
+    "requiredRows": 211,
+    "requiredWins": 171,
+    "requiredLosses": 40,
+    "requiredRoutes": {
+      "R5H8_CORE": {"rows": 158, "wins": 125, "losses": 33},
+      "R5H21_LATE_DOWN": {"rows": 53, "wins": 46, "losses": 7}
+    }
+  },
+  "predictionTarget": {
+    "column": "selected_win",
+    "meaning": "Probability that the already-selected NFL Elite side wins the completed game",
+    "selectionMustBeFrozenBeforeTargetRead": true
+  },
+  "routes": ["R5H8_CORE", "R5H21_LATE_DOWN"],
+  "crossRoutePolicy": {
+    "fitSeparateCalibrators": true,
+    "shareParametersAcrossRoutes": false,
+    "poolOutcomesAcrossRoutes": false,
+    "historicalRouteAccuracyMayNotBeUsedDirectlyAsPerGameProbability": true
+  },
+  "baseProbability": {
+    "column": "reference_confidence",
+    "definition": "max(ref_p, 1-ref_p) for the frozen selected side",
+    "allowedRange": [0.5, 1.0]
+  },
+  "walkForward": {
+    "unit": "NFL_WEEK_BLOCK",
+    "ordering": ["season", "week"],
+    "targetBlockFitData": "same route only; seasons before target season plus weeks strictly before target week",
+    "sameWeekOutcomesAllowed": false,
+    "futureWeekOutcomesAllowed": false,
+    "futureSeasonOutcomesAllowed": false,
+    "minimumPriorRowsPerRoute": 20,
+    "coldStartPolicy": "NO_CALIBRATED_WALK_FORWARD_SCORE_UNTIL_MINIMUM_PRIOR_ROWS",
+    "refitFrequency": "once at the start of every week block",
+    "expectedScoredRowsForExactComparability": {
+      "combined": 170,
+      "R5H8_CORE": 138,
+      "R5H21_LATE_DOWN": 32
+    }
+  },
+  "algorithm": {
+    "name": "ROUTE_SPECIFIC_REGULARIZED_AFFINE_LOGIT_MAP",
+    "formula": "logit(p_calibrated)=alpha_route+beta_route*logit(reference_confidence)",
+    "parameterization": "beta_route=exp(log_beta_route) to force monotonic positive slope",
+    "freeParametersPerRoute": 2,
+    "identityPoint": {"alpha": 0.0, "logBeta": 0.0, "beta": 1.0},
+    "alphaPrior": {"distribution": "Normal", "mean": 0.0, "std": 0.75},
+    "logBetaPrior": {"distribution": "Normal", "mean": 0.0, "std": 0.35},
+    "alphaBounds": [-2.0, 2.0],
+    "logBetaBounds": [-0.8, 0.8],
+    "impliedBetaBounds": [0.44932896411722156, 2.225540928492468],
+    "optimizer": "scipy.optimize.minimize L-BFGS-B",
+    "optimizerInitialPoint": [0.0, 0.0],
+    "probabilityClip": [0.000001, 0.999999],
+    "hyperparameterSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "routeStrengthFeatureAllowed": false,
+    "supportScoreFeatureAllowed": false,
+    "interactionScoreFeatureAllowed": false,
+    "isotonicCalibrationAllowed": false,
+    "splineCalibrationAllowed": false
+  },
+  "evaluation": {
+    "primaryProperScores": ["brier", "log_loss"],
+    "calibrationDiagnostics": ["absolute_mean_calibration_gap", "ece5_equal_width"],
+    "baseline": "uncalibrated reference_confidence on exactly the same scored walk-forward rows",
+    "requireExactR5H24RawBaselineReproduction": true,
+    "expectedRawBaseline": {
+      "combined": {"rows": 170, "brier": 0.15853469667397987, "logLoss": 0.49380384472279465},
+      "R5H8_CORE": {"rows": 138, "brier": 0.16220296462356057, "logLoss": 0.5027135549030086},
+      "R5H21_LATE_DOWN": {"rows": 32, "brier": 0.14271529114141313, "logLoss": 0.45538071957062143}
+    },
+    "rawBaselineTolerance": 1e-12,
+    "reportPerRoute": true,
+    "reportCombined": true,
+    "minimumWalkForwardScoredRowsPerRoute": 25
+  },
+  "acceptanceRubric": {
+    "combinedBrierMustImprove": true,
+    "combinedLogLossMustImprove": true,
+    "perRouteBrierMaxDegradation": 0.005,
+    "perRouteLogLossMaxDegradation": 0.01,
+    "perRouteAbsoluteMeanCalibrationGapMaxDegradation": 0.02,
+    "eachRouteMustMeetMinimumScoredRows": true,
+    "passClassification": "R5H25_AFFINE_LOGIT_ACCEPTED_FOR_NFL_CROSS_SPORT_CANDIDACY",
+    "failClassification": "R5H25_AFFINE_LOGIT_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE"
+  },
+  "final2026Fit": {
+    "fitOnlyAfterWalkForwardEvaluation": true,
+    "fitData": "all certified selected rows through 2025, separately by route",
+    "targetSeason": 2026,
+    "target2026OutcomesAllowed": false,
+    "weeklyRefitIn2026MayUseOnlySettledPriorWeeks": true,
+    "authorizationRequiresWalkForwardGatePass": true
+  },
+  "safety": {
+    "marketDataUsedAsCalibrationFeature": false,
+    "oddsUsedAsCalibrationFeature": false,
+    "sameGameOutcomeUsedForItsOwnCalibration": false,
+    "targetOutcomeUsedToSelectRows": false,
+    "selectionRulesChanged": false,
+    "productionCodeTouched": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "automaticBetPlacement": false,
+    "automaticProductionPromotion": false
+  },
+  "nextAction": "RUN_R5H26_FROZEN_AFFINE_LOGIT_WEEK_BLOCK_WALK_FORWARD_WITHOUT_RETUNING_R5H25"
+}
