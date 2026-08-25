@@ -1,0 +1,98 @@
+name: Verify NFL UI Production Live
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-nfl-ui-production-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      FRONTEND_BASE: https://fearless-illumination-production-d10.up.railway.app
+      BACKEND_BASE: https://web-production-7067b.up.railway.app
+      EXPECTED_COMMIT: 44d44520fbf9edc8af70a6f12c1519a48ca531e7
+    steps:
+      - name: Wait for exact backend main deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            echo "Backend deployment attempt ${attempt}/24"
+            if curl --fail --silent --show-error --max-time 10 "${BACKEND_BASE}/health" -o /tmp/nfl-ui-health.json; then
+              status=$(node -e "const j=require('/tmp/nfl-ui-health.json');process.stdout.write(String(j.status||''))")
+              commit=$(node -e "const j=require('/tmp/nfl-ui-health.json');process.stdout.write(String(j.commit||''))")
+              environment=$(node -e "const j=require('/tmp/nfl-ui-health.json');process.stdout.write(String(j.environment||''))")
+              echo "status=${status} commit=${commit} environment=${environment}"
+              if [[ "${status}" == "healthy" && "${commit}" == "${EXPECTED_COMMIT}" && "${environment}" == "production" ]]; then
+                echo "NFL_UI_BACKEND_EXACT_MAIN_VERIFIED"
+                break
+              fi
+            fi
+            if [[ "${attempt}" == "24" ]]; then
+              echo "FAIL: backend production did not report exact UI merge commit" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Wait for redesigned NFL frontend bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/nfl-ui-index.html /tmp/nfl-ui-bundle.js
+          for attempt in $(seq 1 30); do
+            echo "Frontend deployment attempt ${attempt}/30"
+            if curl --fail --silent --show-error --max-time 15 "${FRONTEND_BASE}/" -o /tmp/nfl-ui-index.html; then
+              asset=$(grep -oE 'src="[^"]+\.js"' /tmp/nfl-ui-index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/' || true)
+              echo "asset=${asset}"
+              if [[ -n "${asset}" ]]; then
+                if [[ "${asset}" == http* ]]; then bundle_url="${asset}"; else bundle_url="${FRONTEND_BASE}${asset}"; fi
+                if curl --fail --silent --show-error --max-time 30 "${bundle_url}" -o /tmp/nfl-ui-bundle.js; then
+                  if grep -Fq 'Mejores jugadas NFL' /tmp/nfl-ui-bundle.js \
+                    && grep -Fq 'Cartelera de la semana' /tmp/nfl-ui-bundle.js \
+                    && grep -Fq 'Detalles técnicos del motor NFL' /tmp/nfl-ui-bundle.js \
+                    && grep -Fq 'JUGADA ELITE' /tmp/nfl-ui-bundle.js \
+                    && grep -Fq 'NO BET' /tmp/nfl-ui-bundle.js; then
+                    echo "NFL_UI_REDESIGN_PRODUCTION_BUNDLE_VERIFIED"
+                    exit 0
+                  fi
+                fi
+              fi
+            fi
+            sleep 10
+          done
+          echo "FAIL: redesigned NFL UI markers were not found in production bundle" >&2
+          exit 1
+
+      - name: Verify NFL engine remains FULL_READY after UI deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${BACKEND_BASE}/api/nfl/elite/status" -o /tmp/nfl-ui-status.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const j = JSON.parse(fs.readFileSync('/tmp/nfl-ui-status.json','utf8'));
+          if (j.success !== true || j.code !== 'NFL_ELITE_FULL_READY' || j.data?.state !== 'FULL_READY') {
+            throw new Error(`NFL engine not FULL_READY after UI deployment: ${j.code}/${j.data?.state}`);
+          }
+          if (j.data?.coreReady !== true || j.data?.lateDownEnabled !== true) throw new Error('NFL certified routes changed');
+          console.log('NFL_UI_ENGINE_UNCHANGED_FULL_READY');
+          NODE
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-ui-production-live-verification
+          path: |
+            /tmp/nfl-ui-health.json
+            /tmp/nfl-ui-index.html
+            /tmp/nfl-ui-status.json
+          if-no-files-found: warn
+          retention-days: 30
