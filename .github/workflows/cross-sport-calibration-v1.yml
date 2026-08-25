@@ -1,0 +1,37 @@
+name: Cross-Sport Calibration V1
+
+on:
+  pull_request:
+    paths:
+      - "server/cross-sport-calibration.ts"
+      - "server/cross-sport-calibration-readiness.ts"
+      - "server/cross-sport-calibration-routes.ts"
+      - "server/cross-sport-calibration.test.ts"
+      - "server/s6a-staging-entry.ts"
+      - "tsconfig.cross-sport-calibration.json"
+      - ".github/workflows/cross-sport-calibration-v1.yml"
+  push:
+    branches:
+      - "feat/cross-sport-calibration-v1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck calibration contract and routes
+        run: npx tsc -p tsconfig.cross-sport-calibration.json
+      - name: Test calibration engine and fail-closed evidence gate
+        run: npx tsx --test server/cross-sport-calibration.test.ts
+      - name: Re-run NFL cross-sport readiness tests
+        run: npx tsx --test server/nfl-cross-sport-readiness.test.ts server/multisport-readiness-service.test.ts
+      - name: Re-run frozen NFL production typecheck
+        run: npm run typecheck:nfl-production
+      - name: Build backend composition root
+        run: npm run build:backend
