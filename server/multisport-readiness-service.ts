@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const MULTISPORT_READINESS_VERSION = "multisport-readiness.v1" as const;
 
-export type ReadinessSport = "NBA" | "WNBA" | "NHL";
+export type ReadinessSport = "NBA" | "WNBA" | "NHL" | "NFL";
 export type ReadinessProbeStatus = "HEALTHY" | "DEGRADED" | "EMPTY" | "FAILED";
 export type ReadinessState = "READY" | "NO_GAMES" | "DEGRADED" | "BLOCKED";
 
@@ -119,6 +119,9 @@ const PROBES: ProbeSpec[] = [
   { key: "wnba-odds", sport: "WNBA", path: "/api/odds/wnba", kind: "ODDS", required: true },
   { key: "nhl-context", sport: "NHL", path: "/api/nhl/all", kind: "COMBINED", required: true },
   { key: "nhl-odds", sport: "NHL", path: "/api/odds/nhl", kind: "ODDS", required: true },
+  { key: "nfl-schedule", sport: "NFL", path: "/api/nfl/games", kind: "SCHEDULE", required: true },
+  { key: "nfl-context", sport: "NFL", path: "/api/nfl/context", kind: "CONTEXT", required: true },
+  { key: "nfl-elite-cards", sport: "NFL", path: "/api/nfl/elite/cards", kind: "SUPPORT", required: true },
 ];
 
 function positiveInteger(value: unknown, fallback: number, minimum: number): number {
@@ -176,7 +179,13 @@ function firstArray(values: unknown[]): unknown[] | null {
 }
 
 function countsFor(payload: any, kind: ProbeKind): { itemCount: number | null; gameCount: number | null } {
-  const games = firstArray([payload?.games, payload?.data?.games, payload?.data?.schedule, payload?.data?.scoreboard?.games]);
+  const games = firstArray([
+    payload?.games,
+    payload?.data?.games,
+    payload?.data?.schedule,
+    payload?.data?.scoreboard?.games,
+    payload?.data?.cards,
+  ]);
   const items = firstArray([payload?.data, payload?.data?.teams, payload?.data?.players, payload?.data?.injuries, payload?.data?.items]);
   if (kind === "SCHEDULE" || kind === "ODDS") {
     const count = games?.length ?? items?.length ?? 0;
@@ -301,9 +310,12 @@ export class MultisportReadinessService {
     const degraded = probes.filter((probe) => probe.status === "DEGRADED");
     const schedule = probes.find((probe) => probe.kind === "SCHEDULE");
     const combined = probes.find((probe) => probe.kind === "COMBINED");
-    const odds = probes.find((probe) => probe.kind === "ODDS");
+    const requiredOdds = required.find((probe) => probe.kind === "ODDS");
     const gamesScheduled = schedule?.gameCount ?? combined?.gameCount ?? 0;
-    const coreFailures = required.filter((probe) => probe.status === "FAILED" && probe.kind !== "ODDS");
+    const coreFailures = required.filter((probe) =>
+      probe.status === "FAILED"
+      && probe.kind !== "ODDS"
+      && !(sport === "NFL" && gamesScheduled === 0 && probe.key === "nfl-elite-cards"));
     const optionalFailures = failed.filter((probe) => !probe.required);
     const reasons: string[] = [];
     let state: ReadinessState;
@@ -315,10 +327,10 @@ export class MultisportReadinessService {
       state = degraded.length ? "DEGRADED" : "NO_GAMES";
       reasons.push("No games scheduled for the audit date");
       degraded.forEach((probe) => reasons.push(`${probe.key}: fallback or degraded source`));
-    } else if (!odds || odds.status === "FAILED") {
+    } else if (requiredOdds?.status === "FAILED") {
       state = "BLOCKED";
-      reasons.push(`${odds?.key ?? `${sport.toLowerCase()}-odds`}: ${odds?.error ?? odds?.code ?? "required market source failed"}`);
-    } else if (odds.status === "EMPTY") {
+      reasons.push(`${requiredOdds.key}: ${requiredOdds.error ?? requiredOdds.code ?? "required market source failed"}`);
+    } else if (requiredOdds?.status === "EMPTY") {
       state = "DEGRADED";
       reasons.push("Games are scheduled but no market prices are currently available");
     } else if (degraded.length || optionalFailures.length) {
@@ -327,7 +339,9 @@ export class MultisportReadinessService {
       optionalFailures.forEach((probe) => reasons.push(`${probe.key}: optional source failed`));
     } else {
       state = "READY";
-      reasons.push("Required context and market sources are available for the scheduled slate");
+      reasons.push(requiredOdds
+        ? "Required context and market sources are available for the scheduled slate"
+        : "Required model and context sources are available for the scheduled slate");
     }
 
     return {
@@ -354,6 +368,7 @@ export class MultisportReadinessService {
         NBA: this.classify("NBA", probeResults.filter((probe) => probe.sport === "NBA")),
         WNBA: this.classify("WNBA", probeResults.filter((probe) => probe.sport === "WNBA")),
         NHL: this.classify("NHL", probeResults.filter((probe) => probe.sport === "NHL")),
+        NFL: this.classify("NFL", probeResults.filter((probe) => probe.sport === "NFL")),
       } satisfies Record<ReadinessSport, SportReadiness>;
       const all = Object.values(sports).flatMap((entry) => entry.probes);
       const base = {
