@@ -1,0 +1,138 @@
+{
+  "auditScope": {
+    "approximateCurrentRankUsed": false,
+    "mutableExternalApiRefetchUsed": false,
+    "outcomesUsedToChooseHistoricalSelections": false,
+    "reconstructabilityDecisionOnly": true,
+    "selectedPopulationProbabilityScoringPerformed": false
+  },
+  "authorityCustody": {
+    "dailyBestPickRuntimeAdapter": "f64656281d5a376ae91171c9a087d76a992f9287",
+    "dailyBestPickSelector": "c0ae657410f438623a3c9aa6621b8ac106d9dd78",
+    "intrinsicEdge": "81ba8d2037ecb60186434c3cce62009a97e06137",
+    "shortlist": "d1b382dac50445bacf76cc1f87759d0c1bde57af",
+    "unifiedRunner": "3e3b55e348e4a8492cf3e419f846650d8204d540"
+  },
+  "classification": "MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_IMPOSSIBLE_FROM_IMMUTABLE_AVAILABLE_SOURCES",
+  "corroboratingArtifactInspection": {
+    "priorCurrentPrepriceRankPresentInParentRows": false,
+    "priorExactCurrentStep11cCoverageCertified": false,
+    "priorHistoricalCoverageClassification": "DAILY_BEST_PICK_HISTORICAL_PARENT_ROUTE_COVERAGE_VERIFIED_PRODUCTION_RANK_POPULATION_NOT_RECONSTRUCTED",
+    "v66Classification": "V66_PREOUTCOME_CUSTODY_FROZEN_READY_FOR_SEPARATE_OUTCOME_SCORER",
+    "v69ContainsCurrentPrepriceRankField": false,
+    "v69ContainsCurrentRankedGamesField": false
+  },
+  "crossSportCalibration": "BLOCKED",
+  "decisionRuleSatisfied": false,
+  "globalEliteRanker": "BLOCKED",
+  "historicalIdentityCoverage": {
+    "bySeason": {
+      "2024": {
+        "distinctOfficialDates": 185,
+        "firstOfficialDate": "2024-03-20",
+        "lastOfficialDate": "2024-09-30",
+        "t5PregameValidRows": 2406
+      },
+      "2025": {
+        "distinctOfficialDates": 184,
+        "firstOfficialDate": "2025-03-18",
+        "lastOfficialDate": "2025-09-28",
+        "t5PregameValidRows": 2423
+      },
+      "2026_YTD": {
+        "distinctOfficialDates": 136,
+        "firstOfficialDate": "2026-03-25",
+        "lastOfficialDate": "2026-08-10",
+        "t5PregameValidRows": 1781
+      }
+    },
+    "combinedDistinctGamePks": 6610,
+    "combinedDistinctOfficialDates": 505,
+    "combinedT5PregameValidRows": 6610,
+    "firstOfficialDate": "2024-03-20",
+    "lastOfficialDate": "2026-08-10"
+  },
+  "immutableArtifactAudit": {
+    "step12v3": {
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "githubWorkflowCreatedAtUtc": "2026-08-13T02:01:04Z",
+      "sha256": "6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+      "workflowRunId": 31659518059
+    },
+    "v16": {
+      "artifactId": 9182440949,
+      "artifactName": "p0-step12v16-pure-ml-f5-settlement-probability",
+      "githubWorkflowCreatedAtUtc": "2026-08-13T13:16:24Z",
+      "sha256": "ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+      "workflowRunId": 31704085189
+    },
+    "v66": {
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "githubWorkflowCreatedAtUtc": "2026-08-16T17:47:34Z",
+      "sha256": "c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+      "workflowRunId": 31962659793
+    },
+    "v69": {
+      "artifactId": 9274431264,
+      "artifactName": "p0-step12v69-confluence-frequency-quality-frontier",
+      "githubWorkflowCreatedAtUtc": "2026-08-17T02:30:32Z",
+      "sha256": "b071c8a70ccd16118a13268510ebacf26cbd407aacb4ef4d1defea9ede04645e",
+      "workflowRunId": 31988197440
+    }
+  },
+  "nextAction": "FREEZE_EXACT_CURRENT_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_WITHOUT_CHANGING_SELECTIONS",
+  "requiredInputAudit": [
+    {
+      "finding": "Locked Step12V3 evidence preserves 6,610 unique T-5-valid gamePk identities across 505 official dates for 2024, 2025, and 2026_YTD.",
+      "id": "OFFICIAL_DATE_AND_GAME_IDENTITY",
+      "status": "PASS"
+    },
+    {
+      "finding": "The locked historical corpus does not preserve exact snapshots of the current certified shortlist membership/payloads. The prior frozen audit certifies only parent-route coverage, not current Step11c population coverage.",
+      "id": "CURRENT_SHORTLIST_MEMBERSHIP",
+      "status": "FAIL"
+    },
+    {
+      "finding": "The locked V69 parent evidence does not carry current runtime.intrinsic.rankedGames or current prepriceRank, and the prior frozen audit forbids rank substitution.",
+      "id": "CURRENT_INTRINSIC_RANKED_GAMES_MEMBERSHIP_AND_ORDER",
+      "status": "FAIL"
+    },
+    {
+      "finding": "Frozen parent-route evidence exists, but exact final route evaluations cannot be certified for the unknown current ranked Step11c population on every historical date. Parent-route rows may not substitute for current selected-population custody.",
+      "id": "FINAL_FROZEN_ROUTE_EVALUATIONS",
+      "status": "FAIL"
+    },
+    {
+      "finding": "The locked historical artifacts were materialized in August 2026 after the historical evaluation games they summarize; they are reproducible retrospective evidence, not immutable snapshots captured/versioned before each corresponding game outcome.",
+      "id": "PREGAME_ONLY_PROVENANCE",
+      "status": "FAIL"
+    }
+  ],
+  "safety": {
+    "calibrationChanged": false,
+    "crossSportPoolingPerformed": false,
+    "featuresChanged": false,
+    "globalEliteRankingPerformed": false,
+    "mlbModelChanged": false,
+    "productionRecommendationBehaviorChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "selectorHierarchyChanged": false,
+    "thresholdsChanged": false,
+    "v68ProspectiveContractChanged": false
+  },
+  "schemaVersion": "courtedge-mlb-current-selector-historical-reconstruction-audit.v1",
+  "scientificInterpretation": {
+    "currentSelectorHistoricalApproximationAllowed": false,
+    "exactHistoricalDailyBestPickPopulationAuthorized": false,
+    "historicalParentRouteEvidenceDiscarded": false,
+    "historicalParentRouteEvidenceMeaning": "VALID_AS_PARENT_ROUTE_AVAILABILITY_AND_OUTCOME_DIAGNOSTICS_ONLY",
+    "historicalParentRouteHitRateMayBeUsedAsPerGameProbability": false,
+    "productionSelectorValidityImpactedByThisCustodyFailure": false,
+    "reason": "This is a custody/reconstructability failure for the exact current selector population, not evidence that the current selector itself is invalid."
+  },
+  "sport": "MLB",
+  "stage": "MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_V1"
+}
