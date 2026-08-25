@@ -1,0 +1,151 @@
+name: NFL R5H24 Frozen Weekly Walk-Forward Calibration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/nfl/R5H23_CALIBRATION_CONTRACT.json'
+      - 'research/nfl/nfl_r5h24_week_block_walkforward_calibration.py'
+      - '.github/workflows/nfl-r5h24-week-block-calibration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h24-calibration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate frozen chain and calibration scorer
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+          python -m py_compile research/nfl/nfl_r5h15_runner.py
+          python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
+          python -m py_compile research/nfl/nfl_r5h18_prospective_deployability_audit.py
+          python -m py_compile research/nfl/nfl_r5h22_calibration_rowset_export.py
+          python -m py_compile research/nfl/nfl_r5h24_week_block_walkforward_calibration.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/nfl/R5H23_CALIBRATION_CONTRACT.json'))
+          assert c['schemaVersion']=='courtedge-nfl-r5h23-calibration-contract.v1'
+          assert c['frozenBeforeCalibrationFit'] is True
+          assert c['walkForward']['unit']=='NFL_WEEK_BLOCK'
+          assert c['walkForward']['sameWeekOutcomesAllowed'] is False
+          assert c['crossRoutePolicy']['fitSeparateCalibrators'] is True
+          assert c['crossRoutePolicy']['shareParametersAcrossRoutes'] is False
+          assert c['algorithm']['hyperparameterSearchAllowed'] is False
+          print('NFL_R5H23_CONTRACT_FROZEN')
+          PY
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5-output --cache-dir .cache/nflverse
+
+      - name: Rebuild QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5b-output --cache-dir .cache/nflverse
+
+      - name: Rebuild frozen hybrid feature matrix
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 --end-season 2025
+
+      - name: Reproduce frozen H15 signal chain
+        run: |
+          python research/nfl/nfl_r5h15_runner.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h15-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 --expert-oos-start 2013 \
+            --test-start 2018 --end-season 2025
+
+      - name: Reproduce certified R5H22 calibration rowset
+        run: |
+          python research/nfl/nfl_r5h22_calibration_rowset_export.py \
+            --h15-dir nfl-r5h15-output \
+            --out-dir nfl-r5h22-output
+
+      - name: Run frozen R5H24 weekly walk-forward calibration
+        run: |
+          python research/nfl/nfl_r5h24_week_block_walkforward_calibration.py \
+            --r5h22-dir nfl-r5h22-output \
+            --contract research/nfl/R5H23_CALIBRATION_CONTRACT.json \
+            --out-dir nfl-r5h24-output
+
+      - name: Enforce prospective calibration boundary
+        run: |
+          python - <<'PY'
+          import json
+          import pandas as pd
+
+          s=json.load(open('nfl-r5h24-output/nfl_r5h24_summary.json'))
+          a=json.load(open('nfl-r5h24-output/nfl_r5h24_audit.json'))
+          c=json.load(open('nfl-r5h24-output/nfl_r5h24_2026_calibrator_candidate.json'))
+          p=pd.read_csv('nfl-r5h24-output/nfl_r5h24_walk_forward_predictions.csv')
+
+          allowed={
+            'R5H23_CALIBRATION_ACCEPTED_FOR_NFL_CROSS_SPORT_CANDIDACY',
+            'R5H23_CALIBRATION_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE',
+          }
+          assert s['classification'] in allowed
+          assert s['rows']==211
+          assert s['contractFrozenBeforeFit'] is True
+          assert s['r5h22RowsetSha256']=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          assert set(s['byRoute'])=={'R5H8_CORE','R5H21_LATE_DOWN'}
+          assert s['byRoute']['R5H8_CORE']['activeRows'] >= 25
+          assert s['byRoute']['R5H21_LATE_DOWN']['activeRows'] >= 25
+          assert p['game_id'].nunique()==211
+          assert a['walkForwardBoundary']=='PASS_PRIOR_WEEKS_ONLY'
+          assert a['sameWeekOutcomeCalibration']=='NONE'
+          assert a['futureOutcomeCalibration']=='NONE'
+          assert a['marketCalibrationFeatures']=='NONE'
+          assert a['hyperparameterSearch']=='NONE'
+          assert a['featureSearch']=='NONE'
+          assert a['crossSportPooling']=='NONE'
+          assert c['target2026OutcomesUsed'] is False
+          assert c['selectionRulesChanged'] is False
+          assert c['productionCodeTouched'] is False
+          assert c['crossSportCandidateAuthorized'] is s['walkForwardGatePassed']
+          assert s['globalEliteRankerStillBlocked'] is True
+          print('NFL_R5H24_PROSPECTIVE_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5H24 evidence
+        run: |
+          cat nfl-r5h24-output/nfl_r5h24_summary.json
+          echo
+          cat nfl-r5h24-output/nfl_r5h24_audit.json
+          echo
+          tail -25 nfl-r5h24-output/nfl_r5h24_weekly_fit_history.csv
+
+      - name: Upload R5H24 calibration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h24-week-block-calibration-evidence
+          path: nfl-r5h24-output/
+          if-no-files-found: error
+          retention-days: 30
