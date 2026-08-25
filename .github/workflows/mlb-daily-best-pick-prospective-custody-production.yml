@@ -1,0 +1,116 @@
+name: MLB Daily BEST PICK Prospective Custody Production Candidate
+
+on:
+  push:
+    branches:
+      - production/mlb-daily-best-pick-prospective-custody-v1
+    paths:
+      - "research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json"
+      - "research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_IMPLEMENTATION_RESULT.json"
+      - "server/mlb-daily-best-pick-prospective-custody-v1.ts"
+      - "server/mlb-daily-best-pick-prospective-custody-v1.test.ts"
+      - "server/mlb-unified-priced-v16-runner.ts"
+      - ".github/workflows/mlb-daily-best-pick-prospective-custody-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prove certified blob identity and narrow production diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git hash-object research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json)" = "a3cbc52b4fb09b5830f2200b29bf1ce42b6ebf08"
+          test "$(git hash-object research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_IMPLEMENTATION_RESULT.json)" = "2ee617e8f889d804dc79282a6325bc932c9d0765"
+          test "$(git hash-object server/mlb-daily-best-pick-prospective-custody-v1.ts)" = "925ec66a6ace22ddb2e349b0fccffa2b42b1a2ad"
+          test "$(git hash-object server/mlb-daily-best-pick-prospective-custody-v1.test.ts)" = "048485abb3231c9ada394c15aba8d8094e387abd"
+          test "$(git hash-object server/mlb-unified-priced-v16-runner.ts)" = "4727401790a7f4ac696487d058d74c18d64727f0"
+          python - <<'PY'
+          import subprocess
+          allowed={
+            'research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json',
+            'research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_IMPLEMENTATION_RESULT.json',
+            'server/mlb-daily-best-pick-prospective-custody-v1.ts',
+            'server/mlb-daily-best-pick-prospective-custody-v1.test.ts',
+            'server/mlb-unified-priced-v16-runner.ts',
+            '.github/workflows/mlb-daily-best-pick-prospective-custody-production.yml',
+          }
+          changed=set(filter(None, subprocess.check_output(['git','diff','--name-only','origin/main...HEAD'], text=True).splitlines()))
+          assert changed==allowed, (changed,allowed)
+          print('MLB_DAILY_BEST_PICK_PRODUCTION_DIFF_EXACT_AND_CERTIFIED')
+          PY
+
+      - name: Type-check custody and priced runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-daily-best-pick-prospective-custody-v1.ts \
+            server/mlb-daily-best-pick-prospective-custody-v1.test.ts \
+            server/mlb-unified-priced-v16-runner.ts
+
+      - name: Run immutable custody tests
+        run: npx tsx --test server/mlb-daily-best-pick-prospective-custody-v1.test.ts
+
+      - name: Reprove price independence and unchanged selection boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          runner=Path('server/mlb-unified-priced-v16-runner.ts').read_text()
+          custody=Path('server/mlb-daily-best-pick-prospective-custody-v1.ts').read_text()
+          a=runner.index('const preprice = runMlbUnifiedPrepriceStep11c(input);')
+          b=runner.index('captureMlbDailyBestPickProspective({')
+          c=runner.index('const acquisition = await input.oddsService.acquire({')
+          assert a < b < c
+          block=runner[b:c]
+          assert 'capturedAtUtc: preprice.generatedAt' in block
+          assert 'capture failed closed' in block
+          assert 'return' not in block
+          assert './mlb-selective-odds-acquisition' not in custody
+          assert './mlb-market-edge' not in custody
+          assert './mlb-operating-envelope' not in custody
+          assert 'outcomesRead: false' in custody
+          assert 'sportsbookPricesReadForCustody: false' in custody
+          assert 'selectionRuleChanged: false' in custody
+          assert 'rankingChanged: false' in custody
+          print('MLB_DAILY_BEST_PICK_PRODUCTION_CUSTODY_BOUNDARY_INTACT')
+          PY
+
+      - name: Build production backend
+        run: npm run build:backend
+
+      - name: Upload production candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-daily-best-pick-prospective-custody-production-candidate
+          path: research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_IMPLEMENTATION_RESULT.json
+          if-no-files-found: error
+          retention-days: 90
