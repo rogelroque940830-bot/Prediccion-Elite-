@@ -44,6 +44,7 @@ function card(overrides: Record<string, unknown> = {}): any {
     predictedSide: "HOME",
     predictedSideProbability: 0.71,
     eliteRoute: "R5H8_CORE",
+    lateDownScore: null,
     score: { decision: "NFL_ELITE" },
     ...overrides,
   };
@@ -71,12 +72,18 @@ test("global ranker gate rejects an uncalibrated sport even after its Elite gate
   });
 });
 
-test("NFL Late Down combined Elite survives adaptation while core NO_ELITE is not mistaken for the final decision", () => {
+test("NFL Late Down combined Elite preserves its own route signal while core NO_ELITE is not mistaken for the final decision", () => {
   const snapshot = baseSnapshot({
     cards: [card({
       eliteRoute: "LATE_DOWN",
       modelDecision: "NFL_ELITE",
       score: { decision: "NO_ELITE" },
+      lateDownScore: {
+        thresholdOnlySelected: true,
+        predictedSide: "HOME",
+        lateDownProbability: 0.82,
+        supportScore: 1.12,
+      },
     })],
   });
 
@@ -84,14 +91,37 @@ test("NFL Late Down combined Elite survives adaptation while core NO_ELITE is no
   assert.equal(readiness.candidates.length, 1);
   assert.equal(readiness.candidates[0].sportEliteGate.route, "LATE_DOWN");
   assert.equal(readiness.candidates[0].sportEliteGate.decision, "NFL_ELITE");
+  assert.equal(readiness.candidates[0].routeModelProbability, 0.82);
+  assert.equal(readiness.candidates[0].routeSupportScore, 1.12);
   assert.equal(readiness.candidates[0].crossSportCalibration.status, "UNCALIBRATED");
   assert.equal(readiness.candidates[0].crossSportCalibration.calibratedProbability, null);
   assert.equal(readiness.candidates[0].globalRanker.eligible, false);
   assert.equal(readiness.globalRankerCandidates.length, 0);
   assert.equal(readiness.globalRankerEligible, false);
-  assert.equal(readiness.candidates[0].sportModelProbability, 0.71);
   assert.equal(readiness.candidates[0].safety.historicalAccuracyUsedAsGameProbability, false);
   assert.equal("historicalAccuracy" in readiness.candidates[0], false);
+});
+
+test("Late Down away-side readiness converts the home probability into the selected-side raw route probability", () => {
+  const snapshot = baseSnapshot({
+    cards: [card({
+      predictedTeam: "DAL",
+      predictedSide: "AWAY",
+      predictedSideProbability: 0.68,
+      eliteRoute: "LATE_DOWN",
+      score: { decision: "NO_ELITE" },
+      lateDownScore: {
+        thresholdOnlySelected: true,
+        predictedSide: "AWAY",
+        lateDownProbability: 0.21,
+        supportScore: 1.31,
+      },
+    })],
+  });
+  const readiness = buildNflCrossSportReadiness(snapshot);
+  assert.equal(readiness.candidates.length, 1);
+  assert.ok(Math.abs(readiness.candidates[0].routeModelProbability - 0.79) < 1e-12);
+  assert.equal(readiness.candidates[0].routeSupportScore, 1.31);
 });
 
 test("NFL NO_ELITE and malformed Elite cards do not become cross-sport candidates", () => {
