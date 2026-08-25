@@ -16,6 +16,10 @@ import {
   type MlbUnifiedRunnerInput,
   type MlbUnifiedRunnerResult,
 } from "./mlb-unified-runner";
+import {
+  captureMlbDailyBestPickProspective,
+  type MlbDailyBestPickProspectiveCustodyStore,
+} from "./mlb-daily-best-pick-prospective-custody-v1";
 
 export const MLB_UNIFIED_PRICED_V16_RUNNER_SCHEMA = "courtedge-p0-mlb-unified-priced-v16-runner.v1" as const;
 
@@ -26,6 +30,7 @@ export interface MlbUnifiedPricedV16RunnerInput extends MlbUnifiedRunnerInput {
   apiKey: string;
   maxRunCredits: number;
   reserveCredits: number;
+  dailyBestPickProspectiveCustody?: Pick<MlbDailyBestPickProspectiveCustodyStore, "putFirstCanonical">;
 }
 
 export interface MlbUnifiedPricedV16RunnerResult {
@@ -94,6 +99,21 @@ export async function runMlbUnifiedPricedV16Step11c(
   input: MlbUnifiedPricedV16RunnerInput,
 ): Promise<MlbUnifiedPricedV16RunnerResult> {
   const preprice = runMlbUnifiedPrepriceStep11c(input);
+
+  // Freeze the exact current Step11c population and Daily BEST PICK selector state
+  // immediately after the trusted preprice runtime is created and before any paid
+  // odds acquisition. Custody failure is logged but cannot change the sporting
+  // selection or downstream production behavior.
+  try {
+    captureMlbDailyBestPickProspective({
+      preprice,
+      capturedAtUtc: preprice.generatedAt,
+      custody: input.dailyBestPickProspectiveCustody,
+    });
+  } catch (error) {
+    console.error("[mlb-daily-best-pick-prospective] capture failed closed", error);
+  }
+
   const settlementEvidence = buildV16Evidence(input, preprice);
   const modelAssessments = settlementEvidence.flatMap((evidence) => adaptMlbV16SettlementEvidence(evidence));
 

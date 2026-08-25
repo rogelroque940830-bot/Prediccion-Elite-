@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-best-pick-prospective-custody-contract.v1",
+  "stage": "MLB_DAILY_BEST_PICK_EXACT_PROSPECTIVE_CUSTODY_V1",
+  "sport": "MLB",
+  "researchOnly": true,
+  "freezeDate": "2026-08-25",
+  "frozenBeforeImplementation": true,
+  "frozenBeforeAnyProspectiveOutcomeRead": true,
+  "objective": "Create immutable prospective custody of the exact current Daily BEST PICK trusted preprice runtime and selector output so future evaluation can use the real current shortlist membership, intrinsic rankedGames order, frozen route evaluations, and exact A+ -> Premium -> NO_PLAY decision without historical approximation or outcome-assisted reconstruction.",
+  "triggeringHistoricalAudit": {
+    "contractPath": "research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_CONTRACT.json",
+    "contractBlobSha": "e1d5b7af52f859acfd6cdf988290ce1e9b8f04ee",
+    "resultPath": "research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_RESULT.json",
+    "resultBlobSha": "f3df40c2035b68b0a9d4ad82b9a6305cfb81093f",
+    "classification": "MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_IMPOSSIBLE_FROM_IMMUTABLE_AVAILABLE_SOURCES",
+    "requiredResponse": "DO_NOT_APPROXIMATE_HISTORY_CAPTURE_EXACT_CURRENT_SELECTOR_PROSPECTIVELY"
+  },
+  "lockedCurrentSelectorAuthority": {
+    "shortlist": {
+      "path": "server/mlb-shortlist.ts",
+      "blobSha": "d1b382dac50445bacf76cc1f87759d0c1bde57af",
+      "schemaVersion": "courtedge-p0-mlb-shortlist.v1",
+      "hardMaximumCandidates": 8
+    },
+    "intrinsicEdge": {
+      "path": "server/mlb-intrinsic-edge.ts",
+      "blobSha": "81ba8d2037ecb60186434c3cce62009a97e06137",
+      "schemaVersion": "courtedge-p0-mlb-intrinsic-edge.v3"
+    },
+    "unifiedRunner": {
+      "path": "server/mlb-unified-runner.ts",
+      "blobSha": "3e3b55e348e4a8492cf3e419f846650d8204d540",
+      "schemaVersion": "courtedge-p0-mlb-unified-runner.preprice-step11c.v2"
+    },
+    "dailyBestPickSelector": {
+      "path": "server/mlb-daily-best-pick-selector.ts",
+      "blobSha": "c0ae657410f438623a3c9aa6621b8ac106d9dd78",
+      "schemaVersion": "courtedge-mlb-daily-best-pick-selector.v2"
+    },
+    "dailyBestPickRuntimeAdapter": {
+      "path": "server/mlb-daily-best-pick-runtime-adapter.ts",
+      "blobSha": "f64656281d5a376ae91171c9a087d76a992f9287",
+      "schemaVersion": "courtedge-mlb-daily-best-pick-runtime-adapter.v1"
+    },
+    "dailyBestPickUiView": {
+      "path": "server/mlb-daily-best-pick-ui-view.ts",
+      "blobSha": "7ed719904c4b65fa66c2797fefdb58c655a429f7",
+      "schemaVersion": "courtedge-mlb-daily-best-pick-ui.v1"
+    },
+    "trustedUiIntegration": {
+      "path": "server/mlb-unified-v16-ui-routes.ts",
+      "blobSha": "9f1b5f790d88251360c58d14c7c12d28cb1a8937"
+    }
+  },
+  "selectorSemanticsMustRemainExact": {
+    "trustedFunction": "selectMlbDailyBestPickFromUnifiedPreprice",
+    "trustedRuntimePopulation": "runtime.intrinsic.rankedGames",
+    "maximumRankedGames": 8,
+    "readyFinalFrozenInputsOnly": true,
+    "maximumDailyVisiblePicks": 1,
+    "tierOrder": [
+      "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1",
+      "PREMIUM_A_HOME_ML"
+    ],
+    "sameTierOrder": "EXISTING_PREPRICE_RANK_ASCENDING",
+    "emptyDecision": "NO_PLAY",
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "newRankingFormulaAllowed": false,
+    "newEligibilityThresholdAllowed": false,
+    "selectionRuleChangeAllowed": false
+  },
+  "eligibilityBoundary": {
+    "earliestPermittedOfficialDate": "2026-08-26",
+    "backfillAllowed": false,
+    "captureBeforeCorrespondingOutcomeRequired": true,
+    "captureAfterGameStartMayCountAsProspective": false,
+    "captureFromMutableHistoricalRefetchAllowed": false,
+    "firstEligibleOfficialDateRule": "FIRST_OFFICIAL_DATE_ON_OR_AFTER_2026_08_26_WITH_AT_LEAST_ONE_SUCCESSFUL_TRUSTED_RUNTIME_CAPTURE_STRICTLY_BEFORE_THE_RELEVANT_GAME_START_BOUNDARY",
+    "partialDateMayBePromotedToComplete": false
+  },
+  "captureProtocol": {
+    "captureEverySuccessfulTrustedPregameRuntimeObservation": true,
+    "singleCanonicalDailyObservationChosenInThisStage": false,
+    "reasonNoCanonicalObservationYet": "Custody must preserve the time-varying trusted runtime without retrospectively choosing the most favorable invocation. A separate canonicalization contract must be frozen while outcomes remain embargoed.",
+    "requiredSnapshotFields": [
+      "officialDate",
+      "sourceRunId",
+      "capturedAtUtc",
+      "prepriceRuntimeSchemaVersion",
+      "prepriceRuntimeGeneratedAt",
+      "orderedIntrinsicRankedGames",
+      "frozenRouteLedgerForCapturedRuntime",
+      "dailyBestPickAdapterEvaluations",
+      "dailyBestPickSelectorResult",
+      "snapshotDigest"
+    ],
+    "recommendedStrongCustodyPayload": "STORE_FULL_TRUSTED_PREPRICE_RUNTIME_PLUS_EXACT_DAILY_BEST_PICK_ADAPTER_RESULT_AND_CANONICAL_DIGEST",
+    "browserSuppliedRouteOrRankInputsAllowed": false,
+    "sportsbookPriceRequired": false,
+    "sportsbookPriceMayAffectCustody": false,
+    "outcomesMayAffectCustody": false,
+    "performanceMetricsMayAffectCustody": false
+  },
+  "immutability": {
+    "storageModel": "APPEND_ONLY_FIRST_CANONICAL_PER_SOURCE_RUN",
+    "primaryIdentity": [
+      "officialDate",
+      "sourceRunId"
+    ],
+    "overwriteExistingSnapshotAllowed": false,
+    "snapshotDigestRequired": true,
+    "digestAlgorithm": "SHA256_CANONICAL_JSON",
+    "durableProductionVolumeRequired": true,
+    "defaultPersistentFilename": "mlb-daily-best-pick-prospective-custody.sqlite",
+    "inMemoryProductionCustodyAllowed": false
+  },
+  "outcomeEmbargo": {
+    "outcomesReadableByCaptureWorker": false,
+    "outcomeStatusReadableForSelection": false,
+    "performanceMetricsReadableByCaptureWorker": false,
+    "minimumCompleteCapturedOfficialDatesBeforeAnyOutcomeEvaluationContractMayExecute": 30,
+    "minimumDateGateAloneUnlocksOutcomes": false,
+    "canonicalizationContractRequiredBeforeOutcomeRead": true,
+    "probabilityMappingContractRequiredBeforeProbabilityScoring": true,
+    "canonicalizationMayUseOutcomes": false,
+    "canonicalizationMayUsePerformanceMetrics": false,
+    "canonicalizationMustBeFrozenBeforeEmbargoRelease": true,
+    "outcomeReadUnlocked": false
+  },
+  "probabilityBoundary": {
+    "probabilityMappingFrozenInThisStage": false,
+    "selectedPopulationProbabilityScoringAllowed": false,
+    "historicalHitRateMayBeUsedAsPerEventProbability": false,
+    "v16SelectedSideMappingAuthorizedByThisContract": false,
+    "crossSportProbabilityAuthorizedByThisContract": false,
+    "requiredFutureStep": "FREEZE_SEPARATE_PROBABILITY_MAPPING_AND_QUALIFICATION_CONTRACT_BEFORE_READING_PROSPECTIVE_OUTCOMES_OR_SCORING_SELECTED_POPULATION_PROBABILITIES"
+  },
+  "canonicalizationBoundary": {
+    "canonicalDailyRunDefinedInThisStage": false,
+    "laterCanonicalizationMaySelectRunUsingOutcome": false,
+    "laterCanonicalizationMaySelectRunUsingPerformance": false,
+    "laterCanonicalizationMustUseOnly_PREDECLARED_TIMESTAMP_COMPLETENESS_AND_RUNTIME_STATE_RULES": true,
+    "allCapturedRunsMustRemainAvailableFor_AUDIT": true
+  },
+  "safety": {
+    "mlbModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "selectorHierarchyChanged": false,
+    "visibleDailyBestPickChanged": false,
+    "pricedV16EconomicsChanged": false,
+    "v68ProspectiveContractChanged": false,
+    "lowerTierProspectiveCustodyChanged": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "promotionAllowed": false
+  },
+  "crossSportCalibration": "BLOCKED",
+  "globalEliteRanker": "BLOCKED",
+  "nextAction": "IMPLEMENT_APPEND_ONLY_EXACT_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_AND_VALIDATE_IT_WITH_SYNTHETIC_OUTCOME_BLIND_TESTS"
+}
