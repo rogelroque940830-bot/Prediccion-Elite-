@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
-      FRONTEND_BASE: https://fearless-illumination-production-d10.up.railway.app
+      FRONTEND_BASE: https://fearless-illumination-production-6d1c.up.railway.app
       BACKEND_BASE: https://web-production-7067b.up.railway.app
       EXPECTED_COMMIT: 44d44520fbf9edc8af70a6f12c1519a48ca531e7
     steps:
