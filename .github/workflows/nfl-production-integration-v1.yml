@@ -6,17 +6,19 @@ on:
     paths:
       - 'server/nfl-*.ts'
       - 'server/routes.ts'
+      - 'scripts/nfl-*.ts'
       - 'tsconfig.nfl-production.json'
       - 'package.json'
       - '.github/workflows/nfl-production-integration-v1.yml'
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   nfl-production:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,9 +26,43 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
-      - name: Typecheck NFL integration
+
+      - name: Download certified H20 replay fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H20_ARTIFACT_ID: '9540308569'
+          H20_REPLAY_DIGEST: 'd2873a557ed391b7bffaa6d12fb49ead7cc4554538554bdaa5bdf8248a06c5c5'
+        run: |
+          mkdir -p /tmp/nfl-r5h20
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${H20_ARTIFACT_ID}/zip" \
+            > /tmp/nfl-r5h20.zip
+          unzip -q /tmp/nfl-r5h20.zip -d /tmp/nfl-r5h20
+          test -s /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
+          test -s /tmp/nfl-r5h20/nfl_r5h20_summary.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const summary = JSON.parse(fs.readFileSync('/tmp/nfl-r5h20/nfl_r5h20_summary.json', 'utf8'));
+          if (summary.semanticDigest !== process.env.H20_REPLAY_DIGEST) throw new Error('H20 replay semantic digest mismatch');
+          if (summary.expectedRows !== 544 || summary.runtimeFeatureCount !== 68) throw new Error('H20 replay contract mismatch');
+          if (summary.marketDataUsedAsFeature !== false || summary.sameGameObservationAppliedBeforePregameSnapshot !== false) {
+            throw new Error('H20 replay custody boundary mismatch');
+          }
+          console.log('NFL_R5H20_REPLAY_CUSTODY_VERIFIED');
+          NODE
+
+      - name: Typecheck NFL integration and operational path
         run: npm run typecheck:nfl-production
-      - name: Test NFL integration
+
+      - name: Test NFL frozen integration
         run: npm run test:nfl-production
+
+      - name: Test NFL 2026 operational fail-closed path
+        run: npx tsx --test server/nfl-operational-2026.test.ts
+
+      - name: Verify embedded end-2025 checkpoint against certified replay
+        run: npx tsx scripts/nfl-r5h20-checkpoint-verify.ts /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
+
       - name: Build backend composition root
         run: npm run build:backend
