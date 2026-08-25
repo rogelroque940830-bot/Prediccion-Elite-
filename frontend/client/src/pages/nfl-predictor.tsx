@@ -185,7 +185,12 @@ export default function NFLPredictor() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Cartelera NFL Elite</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Cartelera NFL Elite</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Estado generado {new Date(snapshot.generatedAt).toLocaleString()}. Puede cambiar con nueva información pregame válida antes del corte.
+              </p>
+            </CardHeader>
             <CardContent className="space-y-3">
               {snapshot.cards.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No hay partidos NFL elegibles en la ventana operacional actual.</p>
