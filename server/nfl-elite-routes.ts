@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { getNflEliteIntegrationStatus } from "./nfl-elite-integration-gate";
-import { getNflOperational2026Snapshot } from "./nfl-operational-2026";
+import { getNflFullElite2026Snapshot } from "./nfl-full-elite-operational-2026";
 
 export function registerNflEliteRoutes(app: Express): void {
   app.get("/api/nfl/elite/status", (_req, res) => {
@@ -16,7 +16,7 @@ export function registerNflEliteRoutes(app: Express): void {
 
   app.get("/api/nfl/elite/cards", async (_req, res) => {
     try {
-      const snapshot = await getNflOperational2026Snapshot();
+      const snapshot = await getNflFullElite2026Snapshot();
       const success = snapshot.state !== "BLOCKED";
       const code = snapshot.state === "READY"
         ? "NFL_ELITE_CARDS_READY"
