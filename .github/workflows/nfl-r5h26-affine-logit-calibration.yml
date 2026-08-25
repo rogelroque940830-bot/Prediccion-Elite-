@@ -6,6 +6,7 @@ on:
     paths:
       - 'research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json'
       - 'research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py'
+      - 'research/nfl/nfl_r5h26_stable_runner.py'
       - '.github/workflows/nfl-r5h26-affine-logit-calibration.yml'
 
 permissions:
@@ -31,6 +32,7 @@ jobs:
       - name: Validate frozen R5H25 contract and scorer
         run: |
           python -m py_compile research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py
+          python -m py_compile research/nfl/nfl_r5h26_stable_runner.py
           python - <<'PY'
           import json
           c=json.load(open('research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json'))
@@ -77,7 +79,7 @@ jobs:
 
       - name: Run frozen R5H26 affine-logit walk-forward
         run: |
-          python research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py \
+          python research/nfl/nfl_r5h26_stable_runner.py \
             --r5h22-dir nfl-r5h22-output \
             --contract research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json \
             --out-dir nfl-r5h26-output
