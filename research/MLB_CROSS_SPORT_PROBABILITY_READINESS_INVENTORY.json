@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "courtedge-mlb-cross-sport-probability-readiness-inventory.v1",
+  "stage": "MLB_FULL_GAME_WINNER_CROSS_SPORT_PROBABILITY_READINESS_INVENTORY",
+  "sport": "MLB",
+  "researchOnly": true,
+  "auditedBranch": "research/nfl-r5-leakage-safe-v1",
+  "auditedHeadSha": "c7a26129faedef6fd483175fba1bda21d590bc30",
+  "auditAsOfDate": "2026-08-25",
+  "objective": "Determine whether MLB already has a frozen, evidence-qualified per-event probability with the same binary meaning required by the certified NFL cross-sport interface, without changing any MLB model, feature, calibration, threshold, routing, ranking, or production behavior.",
+  "requiredCrossSportSemantic": {
+    "marketConcept": "FULL_GAME_WINNER_ONLY",
+    "outcome": "SELECTED_SIDE_WINS_OFFICIAL_FINAL_GAME",
+    "tiesAllowed": false,
+    "extraInningsIncluded": true,
+    "requiredInterface": "p_win_selected_side",
+    "excludedFromThisAudit": [
+      "F3",
+      "F5",
+      "FULL_GAME_TOTAL",
+      "F5_TOTAL",
+      "TEAM_TOTAL",
+      "RUN_LINE",
+      "PROPS",
+      "NRFI_YRFI"
+    ],
+    "reason": "NFL R5H29 certifies a binary probability that the already-selected side wins. Cross-sport comparison requires the same outcome semantics; other MLB market families are not interchangeable."
+  },
+  "currentLiveAuthorityInventory": {
+    "sourcePath": "research/mlb-unified-elite-live-authority-v1.json",
+    "sourceBlobSha": "fd390af9a3a90032bbeb0dae982fafc34bef9d89",
+    "observedDailyRankingIncludes": "DESC_MODEL_SETTLEMENT_PROBABILITY",
+    "observedDirectionalModelHorizons": ["F3", "F5", "FG"],
+    "classification": "MULTI_HORIZON_LIVE_AUTHORITY_NOT_YET_A_FROZEN_CROSS_SPORT_FULL_GAME_WINNER_INTERFACE",
+    "interpretation": "The live authority contains multiple baseball horizons. This inventory does not assume that a generic settlement-probability ranking field is semantically identical to a selected-side full-game winner probability."
+  },
+  "frozenClassifierInventory": {
+    "sourcePath": "research/mlb-frozen-classifier-authority-v1.json",
+    "sourceBlobSha": "6d769f4f4beddb0356cf4fd26fe3340a31f23c72",
+    "frozenModels": ["A_PLUS_C4_2022_FROZEN", "A_PLUS_FULL13_2022_FROZEN"],
+    "runtimeRefitAllowed": false,
+    "thresholdSearchAllowed": false,
+    "outcomeInputAllowed": false,
+    "sportsbookPriceInputAllowed": false,
+    "crossSportSelectedSideProbabilityInterfacePresent": false
+  },
+  "v16FrozenFullGameProbabilityEvidence": {
+    "workflowRunId": 31704085189,
+    "artifactId": 9182440949,
+    "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+    "manifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "fullGameFeatureSet": "C4",
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationRows2024Through2026Ytd": 6610,
+    "reportClassification": "PURE_SETTLEMENT_MODEL_ELIGIBLE_FOR_RUNTIME_RESEARCH_ADAPTER",
+    "model": {
+      "brier": 0.24534486846517414,
+      "logLoss": 0.6837094013428716,
+      "ece10": 0.013594012297387882,
+      "meanPredictedHome": 0.5172683175059403,
+      "observedHomeRate": 0.5308623298033283,
+      "accuracyAtHalf": 0.5532526475037821
+    },
+    "priorBaseline": {
+      "brier": 0.24913578359688676,
+      "logLoss": 0.6914179681147691,
+      "ece10": 0.009395051770814455,
+      "meanPredictedHome": 0.5214672780325138,
+      "observedHomeRate": 0.5308623298033283
+    },
+    "existingValidationChecks": {
+      "fullGameCombinedBrierBeatsPrior": true,
+      "fullGameCombinedLogLossBeatsPrior": true,
+      "fullGameCombinedEce10": true,
+      "fullGameEverySeasonNoCatastrophe": true
+    },
+    "manifestPolicy": {
+      "cohortHitRateAsProbability": false,
+      "evaluationSeasonsCanMutateModel": false,
+      "marketOddsInputs": false,
+      "sportsbookPriceInputs": false,
+      "priceIndependent": true
+    },
+    "readinessInterpretation": "V16 C4 is a strong frozen probability-engine candidate because it is price-independent, calibrated on 2023, frozen before 2024-2026 evaluation, and beats its frozen prior baseline on both proper scores. It is not automatically a cross-sport contract: the selected-side mapping and equivalent qualification/custody still must be frozen and certified."
+  },
+  "v66WinnerScoringSemantics": {
+    "sourcePath": "research/p0-step12v66-f5-fullgame-winner-scoring-spec.json",
+    "sourceBlobSha": "fde16b8b47870b5938df72115ec3645f0a08e4a1",
+    "fullGameControl": "FROZEN_V16_C4",
+    "targetClasses": ["HOME", "AWAY"],
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "properScores": ["LOG_LOSS", "BRIER"],
+    "calibrationDiagnostics": ["ECE10", "ABSOLUTE_MEAN_PROBABILITY_GAP"],
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "thresholdSearchAllowed": false,
+    "historicalPricesUsed": false,
+    "marketOddsUsedAsFeatures": false
+  },
+  "v68ProspectiveCandidate": {
+    "sourcePath": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+    "sourceBlobSha": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+    "marketConcept": "FULL_GAME_WINNER",
+    "outcome": "HOME_WIN_BINARY",
+    "firstEligibleOfficialDate": "2026-08-17",
+    "minimumCanonicalGamesBeforeOutcomeScoring": 500,
+    "minimumDistinctOfficialDatesBeforeOutcomeScoring": 30,
+    "bothMinimumsRequired": true,
+    "insufficientCohortClassification": "V68_PROSPECTIVE_COHORT_NOT_MATURE_ENOUGH_TO_SCORE",
+    "parentV66FullPrimaryClassification": "V66_C_FULL_GAME_WINNER_NOT_ROBUST_ENOUGH_TO_ADVANCE",
+    "calendarInferenceAtAuditDate": {
+      "eligibleCalendarDatesElapsedInclusiveMaximum": 9,
+      "minimumDistinctDatesRequired": 30,
+      "dateMinimumCanBeSatisfiedAsOfAuditDate": false,
+      "note": "This is a calendar-only inference from the frozen first eligible date and audit date; no V68 outcomes were inspected."
+    },
+    "mayBeUsedForCrossSportQualificationNow": false
+  },
+  "repositoryCustodyObservations": {
+    "lookupPath": "research/mlb-unified-elite-module-b-contract-v1.json",
+    "presentOnAuditedBranch": false,
+    "effectOnThisInventory": "Recorded as a custody gap only. This inventory does not infer missing probability semantics from a file that is absent."
+  },
+  "readinessAssessment": {
+    "classification": "MLB_FULL_GAME_WINNER_NOT_YET_CERTIFIED_FOR_CROSS_SPORT_PROBABILITY_COMPARISON",
+    "modelQualityFinding": "V16_C4_HAS_FROZEN_PROBABILITY_EVIDENCE_WORTH_QUALIFYING",
+    "primaryBlockers": [
+      "NO_FROZEN_MLB_P_WIN_SELECTED_SIDE_CROSS_SPORT_INTERFACE",
+      "NO_MLB_CROSS_SPORT_QUALIFICATION_CUSTODY_CERTIFICATION_EQUIVALENT_TO_NFL_R5H27_R5H30",
+      "V68_PROSPECTIVE_CANDIDATE_NOT_MATURE_UNDER_ITS_OWN_30_DATE_EMBARGO"
+    ],
+    "notABlocker": [
+      "V16_C4_PROPER_SCORE_SKILL_VS_FROZEN_PRIOR_BASELINE",
+      "V16_C4_COMBINED_ECE10"
+    ],
+    "globalEliteRanker": "BLOCKED",
+    "crossSportMlbInputAuthorized": false
+  },
+  "recommendedNextPath": {
+    "preferred": "QUALIFY_FROZEN_V16_C4_FULL_GAME_WINNER_PROBABILITY_NOW_WITHOUT_WAITING_FOR_V68",
+    "reason": "V16 C4 is already frozen and independently evaluated on 2024-2026_YTD with both proper scores better than its frozen prior baseline. V68 is a separate improvement hypothesis and is not required to determine whether V16 itself can supply a valid cross-sport probability.",
+    "requiredBeforeExecution": [
+      "FREEZE_EXACT_SELECTED_SIDE_MAPPING_FROM_V16_HOME_WIN_PROBABILITY",
+      "FREEZE_EXACT_SOURCE_ROW_CUSTODY_FOR_2024_2026_YTD",
+      "FREEZE_QUALIFICATION_GATES_BEFORE_NEW_ROW_LEVEL_TESTS_ARE_RUN",
+      "KEEP_V68_PROSPECTIVE_EMBARGO_UNTOUCHED"
+    ],
+    "candidateMappingToFreeze": "p_win_selected_side = p_home_win when selected_side=HOME; 1-p_home_win when selected_side=AWAY",
+    "mappingStatus": "PROPOSED_NOT_AUTHORIZED_UNTIL_NEXT_CONTRACT_IS_FROZEN"
+  },
+  "safety": {
+    "mlbModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "productionCodeTouched": false,
+    "v68ProspectiveContractChanged": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "automaticBetPlacementAllowed": false
+  },
+  "nextAction": "FREEZE_MLB_V16_C4_SELECTED_SIDE_PROBABILITY_QUALIFICATION_CONTRACT_AND_REBUILD_EXACT_HELD_OUT_ROWSET_WITHOUT_RETUNING"
+}
