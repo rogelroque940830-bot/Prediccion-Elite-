@@ -3,7 +3,9 @@
   "include": [
     "server/multisport-readiness-service.ts",
     "server/multisport-readiness-service.test.ts",
-    "server/multisport-readiness-routes.ts"
+    "server/multisport-readiness-routes.ts",
+    "server/nfl-cross-sport-readiness.ts",
+    "server/nfl-cross-sport-readiness.test.ts"
   ],
   "exclude": [
     "node_modules",
