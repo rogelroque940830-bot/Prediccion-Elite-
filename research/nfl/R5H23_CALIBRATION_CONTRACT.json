@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "courtedge-nfl-r5h23-calibration-contract.v1",
+  "stage": "R5H23_ROUTE_SPECIFIC_WEEKLY_WALK_FORWARD_CALIBRATION_CONTRACT",
+  "sport": "NFL",
+  "researchOnly": true,
+  "frozenBeforeCalibrationFit": true,
+  "sourceCustody": {
+    "r5h22WorkflowRunId": 32872833335,
+    "r5h22ArtifactId": 9573053756,
+    "r5h22ArtifactDigest": "sha256:01fe856ab5849cff5e8f83bdd81fea2601e2fe390c6e2d8fb05e2ea5cfdf793e",
+    "r5h22CalibrationRowsetSha256": "dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2",
+    "requiredRows": 211,
+    "requiredWins": 171,
+    "requiredLosses": 40,
+    "requiredRoutes": {
+      "R5H8_CORE": {
+        "rows": 158,
+        "wins": 125,
+        "losses": 33
+      },
+      "R5H21_LATE_DOWN": {
+        "rows": 53,
+        "wins": 46,
+        "losses": 7
+      }
+    }
+  },
+  "predictionTarget": {
+    "column": "selected_win",
+    "meaning": "Probability that the already-selected NFL Elite side wins the completed game",
+    "selectionMustBeFrozenBeforeTargetRead": true
+  },
+  "routes": [
+    "R5H8_CORE",
+    "R5H21_LATE_DOWN"
+  ],
+  "crossRoutePolicy": {
+    "fitSeparateCalibrators": true,
+    "shareParametersAcrossRoutes": false,
+    "poolOutcomesAcrossRoutes": false,
+    "historicalRouteAccuracyMayNotBeUsedDirectlyAsPerGameProbability": true
+  },
+  "baseProbability": {
+    "column": "reference_confidence",
+    "definition": "max(ref_p, 1-ref_p) for the frozen selected side",
+    "allowedRange": [
+      0.5,
+      1.0
+    ]
+  },
+  "walkForward": {
+    "unit": "NFL_WEEK_BLOCK",
+    "ordering": [
+      "season",
+      "week"
+    ],
+    "targetBlockFitData": "same route only; seasons before target season plus weeks strictly before target week",
+    "sameWeekOutcomesAllowed": false,
+    "futureWeekOutcomesAllowed": false,
+    "futureSeasonOutcomesAllowed": false,
+    "minimumPriorRowsPerRoute": 20,
+    "coldStartPolicy": "NO_CALIBRATED_WALK_FORWARD_SCORE_UNTIL_MINIMUM_PRIOR_ROWS",
+    "refitFrequency": "once at the start of every week block"
+  },
+  "algorithm": {
+    "name": "ROUTE_SPECIFIC_OFFSET_LOGIT_MAP",
+    "formula": "logit(p_calibrated)=logit(reference_confidence)+delta_route",
+    "freeParametersPerRoute": 1,
+    "slopeFrozenAt": 1.0,
+    "deltaFit": "MAP Bernoulli log-likelihood with Normal(0,1) prior",
+    "normalPriorMean": 0.0,
+    "normalPriorStd": 1.0,
+    "optimizer": "scipy.optimize.minimize_scalar bounded",
+    "deltaBounds": [
+      -3.0,
+      3.0
+    ],
+    "probabilityClip": [
+      1e-06,
+      0.999999
+    ],
+    "hyperparameterSearchAllowed": false,
+    "featureSearchAllowed": false,
+    "routeStrengthFeatureAllowedInR5H23": false,
+    "supportScoreFeatureAllowedInR5H23": false,
+    "interactionScoreFeatureAllowedInR5H23": false
+  },
+  "evaluation": {
+    "primaryProperScores": [
+      "brier",
+      "log_loss"
+    ],
+    "calibrationDiagnostics": [
+      "absolute_mean_calibration_gap",
+      "ece5_equal_width"
+    ],
+    "baseline": "uncalibrated reference_confidence on exactly the same scored walk-forward rows",
+    "reportPerRoute": true,
+    "reportCombined": true,
+    "minimumWalkForwardScoredRowsPerRoute": 25
+  },
+  "acceptanceRubric": {
+    "combinedBrierMustImprove": true,
+    "combinedLogLossMustImprove": true,
+    "perRouteBrierMaxDegradation": 0.005,
+    "perRouteLogLossMaxDegradation": 0.01,
+    "perRouteAbsoluteMeanCalibrationGapMaxDegradation": 0.02,
+    "eachRouteMustMeetMinimumScoredRows": true,
+    "passClassification": "R5H23_CALIBRATION_ACCEPTED_FOR_NFL_CROSS_SPORT_CANDIDACY",
+    "failClassification": "R5H23_CALIBRATION_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE"
+  },
+  "final2026Fit": {
+    "fitOnlyAfterWalkForwardEvaluation": true,
+    "fitData": "all certified selected rows through 2025, separately by route",
+    "targetSeason": 2026,
+    "target2026OutcomesAllowed": false,
+    "weeklyRefitIn2026MayUseOnlySettledPriorWeeks": true
+  },
+  "safety": {
+    "marketDataUsedAsCalibrationFeature": false,
+    "oddsUsedAsCalibrationFeature": false,
+    "sameGameOutcomeUsedForItsOwnCalibration": false,
+    "targetOutcomeUsedToSelectRows": false,
+    "selectionRulesChanged": false,
+    "productionCodeTouched": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "automaticBetPlacement": false,
+    "automaticProductionPromotion": false
+  },
+  "nextAction": "RUN_R5H24_FROZEN_WEEK_BLOCK_WALK_FORWARD_CALIBRATION_WITHOUT_RETUNING_CONTRACT"
+}
