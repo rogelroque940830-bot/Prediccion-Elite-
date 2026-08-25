@@ -14,10 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
+      FRONTEND_BASE: https://fearless-illumination-production-6d16.up.railway.app
       BACKEND_BASE: https://web-production-7067b.up.railway.app
       EXPECTED_COMMIT: 44d44520fbf9edc8af70a6f12c1519a48ca531e7
     steps:
-      - name: Wait for exact backend main deployment
+      - name: Verify exact backend main deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -29,34 +30,23 @@ jobs:
           [[ "${status}" == "healthy" && "${commit}" == "${EXPECTED_COMMIT}" && "${environment}" == "production" ]]
           echo "NFL_UI_BACKEND_EXACT_MAIN_VERIFIED"
 
-      - name: Resolve production frontend and verify redesigned bundle
+      - name: Verify redesigned NFL frontend bundle
         shell: bash
         run: |
           set -euo pipefail
-          candidates=(
-            "https://fearless-illumination-production-9d1c.up.railway.app"
-            "https://fearless-illumination-production-6d1c.up.railway.app"
-            "https://fearless-illumination-production-9d16.up.railway.app"
-            "https://fearless-illumination-production-6d16.up.railway.app"
-            "https://fearless-illumination-production-9d10.up.railway.app"
-            "https://fearless-illumination-production-6d10.up.railway.app"
-          )
-          FRONTEND_BASE=""
-          for candidate in "${candidates[@]}"; do
-            code=$(curl --silent --show-error --max-time 12 -o /tmp/candidate.html -w '%{http_code}' "${candidate}/" || true)
-            echo "candidate=${candidate} http=${code}"
-            if [[ "${code}" == "200" ]]; then
-              FRONTEND_BASE="${candidate}"
-              cp /tmp/candidate.html /tmp/nfl-ui-index.html
-              break
-            fi
-          done
-          [[ -n "${FRONTEND_BASE}" ]] || { echo "FAIL: exact production frontend domain not resolved" >&2; exit 1; }
-          echo "resolved_frontend=${FRONTEND_BASE}"
-
+          curl --fail --silent --show-error --max-time 15 "${FRONTEND_BASE}/" -o /tmp/nfl-ui-index.html
           asset=$(grep -oE 'src="[^"]+\.js"' /tmp/nfl-ui-index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/' || true)
+          echo "asset=${asset}"
           [[ -n "${asset}" ]] || { echo "FAIL: no JS asset found" >&2; exit 1; }
-          if [[ "${asset}" == http* ]]; then bundle_url="${asset}"; else bundle_url="${FRONTEND_BASE}${asset}"; fi
+          if [[ "${asset}" == http* ]]; then
+            bundle_url="${asset}"
+          elif [[ "${asset}" == /* ]]; then
+            bundle_url="${FRONTEND_BASE}${asset}"
+          else
+            clean_asset="${asset#./}"
+            bundle_url="${FRONTEND_BASE}/${clean_asset}"
+          fi
+          echo "bundle_url=${bundle_url}"
           curl --fail --silent --show-error --max-time 45 "${bundle_url}" -o /tmp/nfl-ui-bundle.js
           grep -Fq 'Mejores jugadas NFL' /tmp/nfl-ui-bundle.js
           grep -Fq 'Cartelera de la semana' /tmp/nfl-ui-bundle.js
