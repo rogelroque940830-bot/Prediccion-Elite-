@@ -1,0 +1,156 @@
+name: NFL R5H26 Affine-Logit Calibration
+
+on:
+  pull_request:
+    branches: ['research/nfl-r5-leakage-safe-v1']
+    paths:
+      - 'research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json'
+      - 'research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py'
+      - '.github/workflows/nfl-r5h26-affine-logit-calibration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nfl-r5h26-calibration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+
+      - name: Validate isolated H25-H26 chain
+        run: |
+          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
+          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
+          python -m py_compile research/nfl/nfl_r5b_hybrid.py
+          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
+          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
+          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
+          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
+          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
+          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
+          python -m py_compile research/nfl/nfl_r5h15_runner.py
+          python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
+          python -m py_compile research/nfl/nfl_r5h18_prospective_deployability_audit.py
+          python -m py_compile research/nfl/nfl_r5h22_calibration_rowset_export.py
+          python -m py_compile research/nfl/nfl_r5h24_week_block_walkforward_calibration.py
+          python -m py_compile research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json'))
+          assert c['schemaVersion']=='courtedge-nfl-r5h25-affine-logit-calibration-contract.v1'
+          assert c['frozenBeforeR5H26Fit'] is True
+          assert c['algorithm']['name']=='ROUTE_SPECIFIC_REGULARIZED_AFFINE_LOGIT_MAP'
+          assert c['algorithm']['freeParametersPerRoute']==2
+          assert c['algorithm']['hyperparameterSearchAllowed'] is False
+          assert c['algorithm']['featureSearchAllowed'] is False
+          assert c['walkForward']['sameWeekOutcomesAllowed'] is False
+          assert c['walkForward']['futureWeekOutcomesAllowed'] is False
+          assert c['crossRoutePolicy']['shareParametersAcrossRoutes'] is False
+          print('NFL_R5H25_CONTRACT_FROZEN')
+          PY
+
+      - name: Rebuild leakage-safe historical foundation
+        run: |
+          python research/nfl/nfl_r5_leakage_safe.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5-output --cache-dir .cache/nflverse
+
+      - name: Rebuild QB identity and availability
+        run: |
+          python research/nfl/nfl_r5b_qb_identity_availability.py \
+            --start-season 2012 --end-season 2025 --test-start 2018 \
+            --out-dir nfl-r5b-output --cache-dir .cache/nflverse
+
+      - name: Rebuild frozen hybrid feature matrix
+        run: |
+          python research/nfl/nfl_r5b_hybrid.py \
+            --input-dir nfl-r5b-output --out-dir nfl-r5b-hybrid-output \
+            --test-start 2018 --end-season 2025
+
+      - name: Reproduce frozen H15 signal chain
+        run: |
+          python research/nfl/nfl_r5h15_runner.py \
+            --input-dir nfl-r5b-hybrid-output \
+            --out-dir nfl-r5h15-output \
+            --cache-dir .cache/nflverse \
+            --start-season 2012 --expert-oos-start 2013 \
+            --test-start 2018 --end-season 2025
+
+      - name: Reproduce certified R5H22 calibration rowset
+        run: |
+          python research/nfl/nfl_r5h22_calibration_rowset_export.py \
+            --h15-dir nfl-r5h15-output \
+            --out-dir nfl-r5h22-output
+
+      - name: Run frozen R5H26 affine-logit walk-forward
+        run: |
+          python research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py \
+            --r5h22-dir nfl-r5h22-output \
+            --contract research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json \
+            --out-dir nfl-r5h26-output
+
+      - name: Enforce R5H26 research boundary and exact comparability
+        run: |
+          python - <<'PY'
+          import json
+          import pandas as pd
+          s=json.load(open('nfl-r5h26-output/nfl_r5h26_summary.json'))
+          a=json.load(open('nfl-r5h26-output/nfl_r5h26_audit.json'))
+          c=json.load(open('nfl-r5h26-output/nfl_r5h26_2026_calibrator_candidate.json'))
+          p=pd.read_csv('nfl-r5h26-output/nfl_r5h26_walk_forward_predictions.csv')
+          allowed={
+            'R5H25_AFFINE_LOGIT_ACCEPTED_FOR_NFL_CROSS_SPORT_CANDIDACY',
+            'R5H25_AFFINE_LOGIT_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE',
+          }
+          assert s['classification'] in allowed
+          assert s['rows']==211
+          assert s['contractFrozenBeforeFit'] is True
+          assert s['r5h22RowsetSha256']=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          assert s['combined']['activeRows']==170
+          assert s['byRoute']['R5H8_CORE']['activeRows']==138
+          assert s['byRoute']['R5H21_LATE_DOWN']['activeRows']==32
+          assert abs(s['combined']['raw']['brier']-0.15853469667397987) <= 1e-12
+          assert abs(s['combined']['raw']['logLoss']-0.49380384472279465) <= 1e-12
+          assert p['game_id'].nunique()==211
+          assert a['r5h25ContractFrozenBeforeFit'] is True
+          assert a['rawBaselineCustody']=='PASS_EXACT_R5H24_ACTIVE_ROWS_AND_RAW_PROPER_SCORES'
+          assert a['walkForwardBoundary']=='PASS_PRIOR_WEEKS_ONLY'
+          assert a['sameWeekOutcomeCalibration']=='NONE'
+          assert a['futureOutcomeCalibration']=='NONE'
+          assert a['marketCalibrationFeatures']=='NONE'
+          assert a['hyperparameterSearch']=='NONE'
+          assert a['featureSearch']=='NONE'
+          assert a['crossSportPooling']=='NONE'
+          assert c['target2026OutcomesUsed'] is False
+          assert c['selectionRulesChanged'] is False
+          assert c['productionCodeTouched'] is False
+          assert c['crossSportCandidateAuthorized'] is s['walkForwardGatePassed']
+          assert s['globalEliteRankerStillBlocked'] is True
+          print('NFL_R5H26_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5H26 evidence
+        run: |
+          cat nfl-r5h26-output/nfl_r5h26_summary.json
+          echo
+          cat nfl-r5h26-output/nfl_r5h26_audit.json
+          echo
+          tail -25 nfl-r5h26-output/nfl_r5h26_weekly_fit_history.csv
+
+      - name: Upload R5H26 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h26-affine-logit-calibration-evidence
+          path: nfl-r5h26-output/
+          if-no-files-found: error
+          retention-days: 30
