@@ -111,5 +111,8 @@ jobs:
       - name: Typecheck NFL Predictor frontend integration
         run: npm --prefix frontend run check
 
+      - name: Build Predictor frontend
+        run: npm --prefix frontend run build
+
       - name: Build backend composition root
         run: npm run build:backend
