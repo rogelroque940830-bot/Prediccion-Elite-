@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-best-pick-prospective-custody-implementation-result.v1",
+  "stage": "MLB_DAILY_BEST_PICK_EXACT_PROSPECTIVE_CUSTODY_V1",
+  "sport": "MLB",
+  "classification": "MLB_DAILY_BEST_PICK_EXACT_PROSPECTIVE_CUSTODY_IMPLEMENTED_AND_SYNTHETICALLY_VALIDATED",
+  "validatedHeadSha": "93687c5ea1f1822646f369adbfada4821c1017f9",
+  "validation": {
+    "workflowName": "MLB Daily BEST PICK Exact Prospective Custody V1",
+    "workflowRunId": 32893847075,
+    "jobId": 97951758848,
+    "conclusion": "success",
+    "artifactId": 9580450347,
+    "artifactName": "mlb-daily-best-pick-prospective-custody-v1-validation",
+    "artifactDigest": "sha256:37450df0cb6a71d631ecddf06727ad3f181e640ca582e1505dcce5b2da581841"
+  },
+  "frozenSourceIdentity": {
+    "contractPath": "research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json",
+    "contractBlobSha": "a3cbc52b4fb09b5830f2200b29bf1ce42b6ebf08",
+    "custodyImplementationPath": "server/mlb-daily-best-pick-prospective-custody-v1.ts",
+    "custodyImplementationBlobSha": "925ec66a6ace22ddb2e349b0fccffa2b42b1a2ad",
+    "custodyTestPath": "server/mlb-daily-best-pick-prospective-custody-v1.test.ts",
+    "custodyTestBlobSha": "048485abb3231c9ada394c15aba8d8094e387abd",
+    "pricedRunnerPath": "server/mlb-unified-priced-v16-runner.ts",
+    "pricedRunnerBlobSha": "4727401790a7f4ac696487d058d74c18d64727f0"
+  },
+  "prospectiveBoundary": {
+    "firstEligibleOfficialDate": "2026-08-26",
+    "historicalBackfillAllowed": false,
+    "captureMustBeStrictlyBeforeRelevantGameStart": true,
+    "captureTimestampSource": "TRUSTED_STEP11C_PREPRICE_GENERATED_AT"
+  },
+  "productionIntegration": {
+    "location": "runMlbUnifiedPricedV16Step11c",
+    "sequence": "EXACT_STEP11C_PREPRICE_CAPTURE_BEFORE_PAID_ODDS_ACQUISITION",
+    "capturedTrustedPopulation": "runtime.intrinsic.rankedGames",
+    "capturedFrozenRouteLedger": true,
+    "capturedExactDailyBestPickAdapterEvaluations": true,
+    "capturedExactDailyBestPickSelectorResult": true,
+    "capturedFullTrustedPrepriceRuntime": true,
+    "productionSelectionChanged": false,
+    "custodyFailureMayChangeSportingSelection": false
+  },
+  "immutability": {
+    "storageModel": "APPEND_ONLY_FIRST_CANONICAL_PER_SOURCE_RUN",
+    "primaryIdentity": [
+      "officialDate",
+      "sourceRunId"
+    ],
+    "overwriteAllowed": false,
+    "sameIdentityDifferentDigestRejected": true,
+    "snapshotDigest": "SHA256_CANONICAL_JSON",
+    "durableRailwayVolumeRequiredInProduction": true,
+    "defaultPersistentFilename": "mlb-daily-best-pick-prospective-custody.sqlite"
+  },
+  "validationChecks": {
+    "contractPredatesImplementation": true,
+    "targetedTypeCheckPassed": true,
+    "syntheticRegressionSuitePassed": true,
+    "appendOnlyIdempotencePassed": true,
+    "sameSourceRunImmutabilityConflictTestPassed": true,
+    "tamperDetectionPassed": true,
+    "pregameBoundaryTestPassed": true,
+    "historicalBackfillBlockPassed": true,
+    "captureBeforePaidOddsStaticProofPassed": true,
+    "outcomeBlindBoundaryStaticProofPassed": true,
+    "productionBackendBuildPassed": true
+  },
+  "outcomeEmbargo": {
+    "outcomesRead": false,
+    "outcomeStatusReadForSelection": false,
+    "performanceMetricsRead": false,
+    "sportsbookPricesAffectCustody": false,
+    "canonicalDailyRunDefined": false,
+    "selectedPopulationProbabilityScoringAllowed": false,
+    "crossSportProbabilityAuthorized": false,
+    "promotionAllowed": false
+  },
+  "scientificInterpretation": {
+    "historicalReconstructionProblemSolvedByBackfill": false,
+    "historicalApproximationIntroduced": false,
+    "futureExactCurrentSelectorEvidenceCanNowBeAccumulated": true,
+    "dailyCanonicalizationMustBeFrozenBeforeOutcomeRead": true,
+    "probabilityMappingMustBeFrozenBeforeSelectedPopulationProbabilityScoring": true
+  },
+  "crossSportCalibration": "BLOCKED",
+  "globalEliteRanker": "BLOCKED",
+  "nextAction": "BEGIN_EXACT_PROSPECTIVE_CAPTURE_ON_OR_AFTER_2026_08_26_AND_FREEZE_OUTCOME_BLIND_DAILY_CANONICALIZATION_RULE_BEFORE_ANY_OUTCOME_READ"
+}
