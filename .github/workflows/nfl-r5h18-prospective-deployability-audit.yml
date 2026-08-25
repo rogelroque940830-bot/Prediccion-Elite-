@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'research/nfl/nfl_r5h18_prospective_deployability_audit.py'
+      - 'research/nfl/nfl_r5h18_runner.py'
       - '.github/workflows/nfl-r5h18-prospective-deployability-audit.yml'
 
 permissions:
@@ -41,6 +42,7 @@ jobs:
           python -m py_compile research/nfl/nfl_r5h15_runner.py
           python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
           python -m py_compile research/nfl/nfl_r5h18_prospective_deployability_audit.py
+          python -m py_compile research/nfl/nfl_r5h18_runner.py
 
       - name: Rebuild leakage-safe historical foundation
         run: |
@@ -81,7 +83,7 @@ jobs:
 
       - name: Run H18 prospective deployability audit
         run: |
-          python research/nfl/nfl_r5h18_prospective_deployability_audit.py \
+          python research/nfl/nfl_r5h18_runner.py \
             --h15-dir nfl-r5h15-output \
             --hybrid-dir nfl-r5b-hybrid-output \
             --out-dir nfl-r5h18-output
