@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "courtedge-nfl-r5h27-identity-probability-qualification-contract.v1",
+  "stage": "R5H27_RAW_REFERENCE_CONFIDENCE_IDENTITY_PROBABILITY_QUALIFICATION_CONTRACT",
+  "sport": "NFL",
+  "researchOnly": true,
+  "frozenBeforeR5H28Evaluation": true,
+  "sequentialResearchContext": {
+    "r5h24Classification": "R5H23_CALIBRATION_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE",
+    "r5h25Classification": "R5H25_AFFINE_LOGIT_REJECTED_RETAIN_RAW_REFERENCE_CONFIDENCE",
+    "r5h26WorkflowRunId": 32878147070,
+    "r5h26ArtifactId": 9574715933,
+    "r5h26ArtifactDigest": "sha256:dd193042adf834212851d9f9e2c8d29e8aaa9cfd36abea55174ccd1753cdd9e7",
+    "interpretation": "Two frozen route-specific recalibration hypotheses failed to improve out-of-sample proper scores. R5H27 therefore tests whether the retained pregame reference_confidence can stand as an identity probability mapping without fitting a new calibration transform."
+  },
+  "sourceCustody": {
+    "r5h22WorkflowRunId": 32872833335,
+    "r5h22ArtifactId": 9573053756,
+    "r5h22ArtifactDigest": "sha256:01fe856ab5849cff5e8f83bdd81fea2601e2fe390c6e2d8fb05e2ea5cfdf793e",
+    "r5h22CalibrationRowsetSha256": "dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2",
+    "requiredRows": 211,
+    "requiredWins": 171,
+    "requiredLosses": 40,
+    "requiredRoutes": {
+      "R5H8_CORE": {"rows": 158, "wins": 125, "losses": 33},
+      "R5H21_LATE_DOWN": {"rows": 53, "wins": 46, "losses": 7}
+    }
+  },
+  "identityProbability": {
+    "inputColumn": "reference_confidence",
+    "formula": "p_identity = reference_confidence",
+    "freeParameters": 0,
+    "fitPerformed": false,
+    "allowedRange": [0.5, 1.0],
+    "historicalRouteAccuracyMayNotReplaceProbability": true
+  },
+  "evaluationDesign": {
+    "fullCustodyEvaluationRows": 211,
+    "prequentialComparisonUnit": "NFL_WEEK_BLOCK",
+    "prequentialMinimumPriorRowsPerRoute": 20,
+    "prequentialClimatologyPrior": {"distribution": "Beta", "alpha": 1.0, "beta": 1.0},
+    "sameWeekOutcomesAllowedInBaseline": false,
+    "futureOutcomesAllowedInBaseline": false,
+    "expectedPrequentialScoredRows": {
+      "combined": 170,
+      "R5H8_CORE": 138,
+      "R5H21_LATE_DOWN": 32
+    }
+  },
+  "statisticalQualification": {
+    "significanceAlpha": 0.05,
+    "calibrationInTheLarge": {
+      "test": "standardized Bernoulli residual z = sum(y-p)/sqrt(sum(p*(1-p)))",
+      "twoSidedCriticalAbsZ": 1.959963984540054,
+      "mustPassCombined": true,
+      "mustPassEachRoute": true
+    },
+    "identityAffineLikelihoodRatio": {
+      "null": "alpha=0 and beta=1 in logit(p)=alpha+beta*logit(reference_confidence)",
+      "alternativeFreeParameters": 2,
+      "degreesOfFreedom": 2,
+      "rejectIdentityIfPValueBelow": 0.05,
+      "mustNotRejectCombined": true,
+      "mustNotRejectEachRoute": true,
+      "alternativeFitUsedForPrediction": false
+    },
+    "properScoreSkillVsLeakageSafeClimatology": {
+      "requireRawBrierLower": true,
+      "requireRawLogLossLower": true,
+      "mustPassCombined": true,
+      "mustPassEachRoute": true
+    },
+    "minimumEvidence": {
+      "fullRows": {"R5H8_CORE": 100, "R5H21_LATE_DOWN": 50},
+      "prequentialRows": {"R5H8_CORE": 25, "R5H21_LATE_DOWN": 25}
+    },
+    "diagnosticsReportOnly": [
+      "absolute_mean_calibration_gap",
+      "ece5_equal_width",
+      "season_level_calibration_gap",
+      "brier",
+      "log_loss"
+    ]
+  },
+  "antiTuningDisclosure": {
+    "rawBaselineMetricsWereKnownBeforeThisRubricWasFrozen": true,
+    "rubricWasNotSelectedByGridSearch": true,
+    "fixedConventions": [
+      "two-sided alpha 0.05 for calibration-in-the-large",
+      "two-degree-of-freedom likelihood-ratio test of the identity affine map",
+      "Beta(1,1) prequential climatology baseline",
+      "strict positive proper-score skill required on combined and each route"
+    ],
+    "interpretationLimit": "A pass is historical identity qualification, not proof of perfect calibration and not permission to claim historical hit rate as per-game win probability."
+  },
+  "acceptanceRubric": {
+    "allStatisticalGatesMustPass": true,
+    "passClassification": "R5H27_IDENTITY_PROBABILITY_HISTORICALLY_QUALIFIED_FOR_NFL_CROSS_SPORT_CANDIDACY",
+    "failClassification": "R5H27_IDENTITY_PROBABILITY_NOT_QUALIFIED_RETAIN_AS_UNCALIBRATED_SCORE_ONLY"
+  },
+  "prospective2026Policy": {
+    "identityMappingUses2026Outcomes": false,
+    "formulaFor2026": "p_identity = reference_confidence",
+    "monitorSettled2026RowsOnly": true,
+    "monitoringIsRequired": true,
+    "monitoringDoesNotRetroactivelyAlterHistoricalQualification": true
+  },
+  "safety": {
+    "selectionRulesChanged": false,
+    "weightsChanged": false,
+    "thresholdsChanged": false,
+    "marketFeaturesAdded": false,
+    "productionCodeTouched": false,
+    "crossRouteOutcomePoolingForPrediction": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false
+  },
+  "nextAction": "RUN_R5H28_FROZEN_IDENTITY_PROBABILITY_QUALIFICATION"
+}
