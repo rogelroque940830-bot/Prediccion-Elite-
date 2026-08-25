@@ -55,7 +55,7 @@ const EMBEDDED_GZIP_BASE64 = [
   NFL_R5H20_CHECKPOINT_CHUNK_01,
   NFL_R5H20_CHECKPOINT_CHUNK_02,
   NFL_R5H20_CHECKPOINT_CHUNK_03,
-  NFL_R5H20_CHECKPOINT_CHUNK_04
+  NFL_R5H20_CHECKPOINT_CHUNK_04,
 ].join("");
 
 let cached: NflPregameCheckpoint | null = null;
@@ -73,7 +73,9 @@ export function getNflR5H20End2025Checkpoint(): NflPregameCheckpoint {
   const { semanticDigest, ...payload } = parsed;
   const actual = digestCheckpointPayload(payload);
   if (semanticDigest !== NFL_R5H20_END_2025_CHECKPOINT_DIGEST || actual !== NFL_R5H20_END_2025_CHECKPOINT_DIGEST) {
-    throw new Error("NFL checkpoint semantic digest mismatch");
+    throw new Error(
+      `NFL checkpoint semantic digest mismatch: embedded=${semanticDigest} recomputed=${actual} expected=${NFL_R5H20_END_2025_CHECKPOINT_DIGEST}`,
+    );
   }
   cached = parsed;
   return cached;
