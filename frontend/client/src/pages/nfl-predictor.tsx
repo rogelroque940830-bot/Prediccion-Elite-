@@ -65,6 +65,9 @@ async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
     throw new Error(body?.error || "Autenticación requerida para consultar NFL Elite.");
   }
   if (!body) throw new Error(`Respuesta NFL inválida (HTTP ${response.status}).`);
+  if (!response.ok && body.data === null) {
+    throw new Error(body.error || `NFL Elite no pudo completar la consulta (${body.code || `HTTP ${response.status}`}).`);
+  }
   return body;
 }
 
@@ -199,7 +202,7 @@ export default function NFLPredictor() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
                       <div><span className="text-muted-foreground">Selección: </span><span className="font-semibold text-green-400">{card.predictedTeam ?? "—"}</span></div>
                       <div><span className="text-muted-foreground">Ruta: </span><span className="font-semibold">{card.eliteRoute === "LATE_DOWN" ? "Late Down" : "R5H8 Core"}</span></div>
-                      <div><span className="text-muted-foreground">Prob. modelo: </span><span className="font-semibold">{card.predictedSideProbability === null ? "—" : `${(card.predictedSideProbability * 100).toFixed(1)}%`}</span></div>
+                      <div><span className="text-muted-foreground">Prob. referencia: </span><span className="font-semibold">{card.predictedSideProbability === null ? "—" : `${(card.predictedSideProbability * 100).toFixed(1)}%`}</span></div>
                     </div>
                   )}
                   {card.reasons.length > 0 && <p className="text-xs text-red-300">{card.reasons.join(" · ")}</p>}
