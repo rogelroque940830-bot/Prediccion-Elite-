@@ -10,45 +10,35 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   nfl-r5h26-calibration:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install research dependencies
+      - name: Install calibration dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pandas numpy scipy pyarrow scikit-learn requests
+          python -m pip install pandas numpy scipy
 
-      - name: Validate isolated H25-H26 chain
+      - name: Validate frozen R5H25 contract and scorer
         run: |
-          python -m py_compile research/nfl/nfl_r5_leakage_safe.py
-          python -m py_compile research/nfl/nfl_r5b_qb_identity_availability.py
-          python -m py_compile research/nfl/nfl_r5b_hybrid.py
-          python -m py_compile research/nfl/nfl_r5h_contextual_rule_weighting.py
-          python -m py_compile research/nfl/nfl_r5h3_rival_matchup_rule_engine.py
-          python -m py_compile research/nfl/nfl_r5h4_elite_selection_gate.py
-          python -m py_compile research/nfl/nfl_r5h6_confidence_stratified_residual_rule_engine.py
-          python -m py_compile research/nfl/nfl_r5h8_interaction_contradiction_engine.py
-          python -m py_compile research/nfl/nfl_r5h10_marginal_geometry_expansion.py
-          python -m py_compile research/nfl/nfl_r5h15_independent_signal_family_discovery.py
-          python -m py_compile research/nfl/nfl_r5h15_runner.py
-          python -m py_compile research/nfl/nfl_r5h16_late_down_final_certification.py
-          python -m py_compile research/nfl/nfl_r5h18_prospective_deployability_audit.py
-          python -m py_compile research/nfl/nfl_r5h22_calibration_rowset_export.py
-          python -m py_compile research/nfl/nfl_r5h24_week_block_walkforward_calibration.py
           python -m py_compile research/nfl/nfl_r5h26_affine_logit_walkforward_calibration.py
           python - <<'PY'
           import json
           c=json.load(open('research/nfl/R5H25_AFFINE_LOGIT_CALIBRATION_CONTRACT.json'))
           assert c['schemaVersion']=='courtedge-nfl-r5h25-affine-logit-calibration-contract.v1'
           assert c['frozenBeforeR5H26Fit'] is True
+          assert c['sourceCustody']['r5h22WorkflowRunId']==32872833335
+          assert c['sourceCustody']['r5h22ArtifactId']==9573053756
+          assert c['sourceCustody']['r5h22CalibrationRowsetSha256']=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
           assert c['algorithm']['name']=='ROUTE_SPECIFIC_REGULARIZED_AFFINE_LOGIT_MAP'
           assert c['algorithm']['freeParametersPerRoute']==2
           assert c['algorithm']['hyperparameterSearchAllowed'] is False
@@ -59,38 +49,31 @@ jobs:
           print('NFL_R5H25_CONTRACT_FROZEN')
           PY
 
-      - name: Rebuild leakage-safe historical foundation
-        run: |
-          python research/nfl/nfl_r5_leakage_safe.py \
-            --start-season 2012 --end-season 2025 --test-start 2018 \
-            --out-dir nfl-r5-output --cache-dir .cache/nflverse
+      - name: Download certified R5H22 custody artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nfl-r5h22-calibration-rowset-evidence
+          path: nfl-r5h22-output
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32872833335
 
-      - name: Rebuild QB identity and availability
+      - name: Verify exact certified R5H22 bytes
         run: |
-          python research/nfl/nfl_r5b_qb_identity_availability.py \
-            --start-season 2012 --end-season 2025 --test-start 2018 \
-            --out-dir nfl-r5b-output --cache-dir .cache/nflverse
-
-      - name: Rebuild frozen hybrid feature matrix
-        run: |
-          python research/nfl/nfl_r5b_hybrid.py \
-            --input-dir nfl-r5b-output --out-dir nfl-r5b-hybrid-output \
-            --test-start 2018 --end-season 2025
-
-      - name: Reproduce frozen H15 signal chain
-        run: |
-          python research/nfl/nfl_r5h15_runner.py \
-            --input-dir nfl-r5b-hybrid-output \
-            --out-dir nfl-r5h15-output \
-            --cache-dir .cache/nflverse \
-            --start-season 2012 --expert-oos-start 2013 \
-            --test-start 2018 --end-season 2025
-
-      - name: Reproduce certified R5H22 calibration rowset
-        run: |
-          python research/nfl/nfl_r5h22_calibration_rowset_export.py \
-            --h15-dir nfl-r5h15-output \
-            --out-dir nfl-r5h22-output
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, pandas as pd
+          p=Path('nfl-r5h22-output/nfl_r5h22_calibration_rowset.csv')
+          assert p.exists(), 'certified R5H22 rowset missing after artifact download'
+          actual=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          assert actual==expected, f'R5H22 certified artifact SHA drift: {actual} != {expected}'
+          df=pd.read_csv(p)
+          assert len(df)==211
+          assert int(df['selected_win'].sum())==171
+          assert int((1-df['selected_win']).sum())==40
+          print('NFL_R5H22_CERTIFIED_BYTES_VERIFIED')
+          PY
 
       - name: Run frozen R5H26 affine-logit walk-forward
         run: |
