@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "courtedge-nfl-r5h29-cross-sport-probability-contract.v1",
+  "stage": "R5H29_NFL_CROSS_SPORT_PROBABILITY_CONTRACT",
+  "sport": "NFL",
+  "researchOnly": true,
+  "frozenBeforeR5H30Certification": true,
+  "scientificStatus": "HISTORICALLY_QUALIFIED_CROSS_SPORT_PROBABILITY_CANDIDATE",
+  "evidenceCustody": {
+    "r5h27Contract": "research/nfl/R5H27_IDENTITY_PROBABILITY_QUALIFICATION_CONTRACT.json",
+    "r5h28WorkflowRunId": 32879218968,
+    "r5h28ArtifactId": 9575114564,
+    "r5h28ArtifactDigest": "sha256:c48a51915c929c3736a2601534410871bef36b760702c39044360ceff2e07a55",
+    "r5h28HeadSha": "631b8e69428b0468f2417967285323ee59a5d2f5",
+    "r5h22CalibrationRowsetSha256": "dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2",
+    "historicalQualificationClassification": "R5H27_IDENTITY_PROBABILITY_HISTORICALLY_QUALIFIED_FOR_NFL_CROSS_SPORT_CANDIDACY",
+    "historicalRows": 211,
+    "historicalWins": 171,
+    "historicalLosses": 40
+  },
+  "probabilitySemantics": {
+    "target": "selected_side_wins_completed_game",
+    "probabilityField": "reference_confidence",
+    "formula": "p_win_selected_side = reference_confidence",
+    "freeParameters": 0,
+    "postHocTransform": "NONE",
+    "historicalHitRateMayNotReplacePerGameProbability": true,
+    "historicalRouteAccuracyMayNotReplacePerGameProbability": true,
+    "probabilityRange": [0.5, 1.0],
+    "crossSportComparisonMeaning": "Compare only to other sport outputs that have an independently qualified probability for the same binary semantic: probability the already-selected side wins its settled event."
+  },
+  "routes": {
+    "R5H8_CORE": {
+      "routeStatus": "QUALIFIED_STANDARD_MONITORING",
+      "historicalRows": 158,
+      "wins": 125,
+      "losses": 33,
+      "accuracy": 0.7911392405063291,
+      "meanProbability": 0.780772719099388,
+      "brier": 0.16519809813694206,
+      "logLoss": 0.509063824966718,
+      "absoluteMeanCalibrationGap": 0.010366521406941165,
+      "ece5EqualWidth": 0.0413737362736249,
+      "calibrationInTheLargeTwoSidedPValue": 0.7494500424672175,
+      "identityAffineLikelihoodRatioPValue": 0.6616159198629816,
+      "prequentialRows": 138,
+      "prequentialRawBrier": 0.16220296462356057,
+      "prequentialClimatologyBrier": 0.16493727182617174,
+      "prequentialRawLogLoss": 0.5027135549030086,
+      "prequentialClimatologyLogLoss": 0.5138535488065268
+    },
+    "R5H21_LATE_DOWN": {
+      "routeStatus": "QUALIFIED_ELEVATED_MONITORING_REQUIRED",
+      "historicalRows": 53,
+      "wins": 46,
+      "losses": 7,
+      "accuracy": 0.8679245283018868,
+      "meanProbability": 0.7610571890244441,
+      "brier": 0.11551343129170183,
+      "logLoss": 0.3948790974039352,
+      "absoluteMeanCalibrationGap": 0.10686733927744274,
+      "ece5EqualWidth": 0.17732532729412995,
+      "calibrationInTheLargeTwoSidedPValue": 0.06014585774135602,
+      "identityAffineLikelihoodRatioPValue": 0.11349140398178559,
+      "prequentialRows": 32,
+      "prequentialRawBrier": 0.14271529114141313,
+      "prequentialClimatologyBrier": 0.16020064675934134,
+      "prequentialRawLogLoss": 0.45538071957062143,
+      "prequentialClimatologyLogLoss": 0.5194182692806738,
+      "uncertaintyReason": "Smaller historical sample and materially larger calibration gap/ECE, with calibration-in-the-large p-value close to the frozen 0.05 boundary."
+    }
+  },
+  "combinedHistoricalDiagnostics": {
+    "rows": 211,
+    "wins": 171,
+    "losses": 40,
+    "accuracy": 0.8104265402843602,
+    "meanProbability": 0.7758204769478616,
+    "brier": 0.15271806333695281,
+    "logLoss": 0.480382353114455,
+    "absoluteMeanCalibrationGap": 0.03460606333649863,
+    "ece5EqualWidth": 0.07039779668748987,
+    "calibrationInTheLargeTwoSidedPValue": 0.2196141466662218,
+    "identityAffineLikelihoodRatioPValue": 0.37185756689441923
+  },
+  "combinedPrequentialSkill": {
+    "rows": 170,
+    "rawBrier": 0.15853469667397987,
+    "climatologyBrier": 0.1640456718135919,
+    "rawMinusClimatologyBrier": -0.005510975139612018,
+    "rawLogLoss": 0.49380384472279465,
+    "climatologyLogLoss": 0.5149010256016604,
+    "rawMinusClimatologyLogLoss": -0.02109718087886575
+  },
+  "uncertaintyPolicy": {
+    "routeLabelMayChangeProbability": false,
+    "routeLabelMayShrinkProbability": false,
+    "routeLabelMayPenalizeGlobalRanking": false,
+    "routeLabelMayChangeSelectionRules": false,
+    "interpretation": "Uncertainty labels are metadata for monitoring and audit only. Any future probability shrinkage or ranking penalty requires its own frozen, leakage-safe validation contract."
+  },
+  "prospective2026Monitoring": {
+    "mapping": "p_win_selected_side = reference_confidence",
+    "usesCurrentGameOutcome": false,
+    "usesFutureOutcomes": false,
+    "settledRowsOnly": true,
+    "preserveRouteSeparation": true,
+    "requiredDiagnostics": [
+      "calibration_in_the_large",
+      "identity_affine_likelihood_ratio",
+      "brier",
+      "log_loss",
+      "absolute_mean_calibration_gap",
+      "ece5_equal_width",
+      "skill_vs_prior_week_route_climatology"
+    ],
+    "minimumRowsBeforeFormalProspectiveGatePerRoute": 25,
+    "failurePolicy": "DO_NOT_RETUNE_OR_CHANGE_PROBABILITY_POST_HOC; freeze a new prospective remediation contract before any change."
+  },
+  "crossSportInterface": {
+    "authorizedAsCandidate": true,
+    "fieldName": "p_win_selected_side",
+    "requiredCompanionFields": [
+      "sport",
+      "event_id",
+      "selected_side",
+      "route",
+      "probability_source",
+      "uncertainty_status",
+      "evidence_contract"
+    ],
+    "probabilitySourceValue": "NFL_R5H29_IDENTITY_REFERENCE_CONFIDENCE",
+    "evidenceContractValue": "courtedge-nfl-r5h29-cross-sport-probability-contract.v1"
+  },
+  "globalEliteRankerPolicy": {
+    "status": "BLOCKED_UNTIL_OTHER_SPORTS_HAVE_EQUIVALENTLY_QUALIFIED_PROBABILITY_CONTRACTS",
+    "nflMayEnterRankerNow": false,
+    "reason": "NFL is qualified as a cross-sport probability candidate, but ranking against a sport without equivalent probability semantics/evidence would be invalid."
+  },
+  "safety": {
+    "selectionRulesChanged": false,
+    "weightsChanged": false,
+    "thresholdsChanged": false,
+    "marketFeaturesAdded": false,
+    "productionCodeTouched": false,
+    "crossRouteOutcomePoolingForPrediction": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "automaticBetPlacementAllowed": false
+  },
+  "nextAction": "R5H30_CERTIFY_CONTRACT_CUSTODY_THEN_AUDIT_MLB_CROSS_SPORT_PROBABILITY_READINESS"
+}
