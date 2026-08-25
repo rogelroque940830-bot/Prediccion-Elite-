@@ -9,6 +9,7 @@ on:
       - 'scripts/nfl-*.ts'
       - 'tsconfig.nfl-production.json'
       - 'package.json'
+      - 'nixpacks.toml'
       - 'frontend/client/src/pages/nfl-predictor.tsx'
       - 'frontend/client/src/App.tsx'
       - 'frontend/client/src/components/app-sidebar.tsx'
@@ -31,6 +32,13 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+
+      - name: Verify certified NFL deployment activation defaults
+        run: |
+          grep -Fx 'NFL_R5H18_PROSPECTIVE_GATE = "PASS"' nixpacks.toml
+          grep -Fx 'NFL_ELITE_2026_ARTIFACT_VERIFIED = "true"' nixpacks.toml
+          grep -Fx 'NFL_ELITE_MATERIALIZER_VERIFIED = "true"' nixpacks.toml
+          grep -Fx 'NFL_ELITE_PARITY_GATE = "PASS"' nixpacks.toml
 
       - name: Download certified H20 replay fixture
         env:
