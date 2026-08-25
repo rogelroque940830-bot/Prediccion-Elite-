@@ -34,7 +34,18 @@ function supportPayload(url: string): Response {
   throw new Error(`Unexpected support URL ${url}`);
 }
 
-test("S6A classifies active NBA, degraded WNBA fallback, and naturally empty NHL", async () => {
+function nflEmptyPayload(url: string): Response {
+  if (url.includes("/api/nfl/games")) return json({ success: true, data: [], source: "ESPN NFL scoreboard" });
+  if (url.includes("/api/nfl/context")) {
+    return json({ success: true, data: Array.from({ length: 32 }, (_, id) => ({ id: String(id + 1) })), source: "ESPN NFL team directory" });
+  }
+  if (url.includes("/api/nfl/elite/cards")) {
+    return json({ success: true, data: { state: "NO_GAMES", cards: [] }, code: "NFL_ELITE_NO_GAMES" });
+  }
+  throw new Error(`Unexpected NFL URL ${url}`);
+}
+
+test("S6A classifies active NBA, degraded WNBA fallback, naturally empty NHL, and empty NFL", async () => {
   const { service } = fixture((url) => {
     if (url.includes("/api/nba/schedule")) return json({ success: true, data: [{ gameId: "nba-1" }] });
     if (url.includes("/api/nba/all")) return json({ success: true, data: [{ teamId: 1 }] });
@@ -45,6 +56,7 @@ test("S6A classifies active NBA, degraded WNBA fallback, and naturally empty NHL
     if (url.includes("/api/wnba/")) return supportPayload(url);
     if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
     if (url.includes("/api/odds/nhl")) return json({ success: true, games: [], source: "n/a" });
+    if (url.includes("/api/nfl/")) return nflEmptyPayload(url);
     throw new Error(`Unexpected URL ${url}`);
   });
 
@@ -54,8 +66,9 @@ test("S6A classifies active NBA, degraded WNBA fallback, and naturally empty NHL
   assert.equal(audit.sports.WNBA.state, "DEGRADED");
   assert.equal(audit.sports.WNBA.degradedSources, 1);
   assert.equal(audit.sports.NHL.state, "NO_GAMES");
+  assert.equal(audit.sports.NFL.state, "NO_GAMES");
   assert.equal(audit.summary.ready, 1);
-  assert.equal(audit.summary.noGames, 1);
+  assert.equal(audit.summary.noGames, 2);
   assert.equal(audit.summary.degraded, 1);
   assert.equal(audit.summary.blocked, 0);
   assert.equal(audit.safety.predictionsCreated, 0);
@@ -73,6 +86,7 @@ test("S6A does not call an empty schedule an outage when odds are unavailable", 
     if (url.includes("/api/wnba/")) return supportPayload(url);
     if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
     if (url.includes("/api/odds/nhl")) return json({ success: false, error: "quota unavailable" });
+    if (url.includes("/api/nfl/")) return nflEmptyPayload(url);
     throw new Error(`Unexpected URL ${url}`);
   });
 
@@ -80,6 +94,7 @@ test("S6A does not call an empty schedule an outage when odds are unavailable", 
   assert.equal(audit.sports.NBA.state, "NO_GAMES");
   assert.equal(audit.sports.WNBA.state, "NO_GAMES");
   assert.equal(audit.sports.NHL.state, "NO_GAMES");
+  assert.equal(audit.sports.NFL.state, "NO_GAMES");
   assert.equal(audit.summary.blocked, 0);
 });
 
@@ -94,6 +109,7 @@ test("S6A blocks an active slate when a required provider fails", async () => {
     if (url.includes("/api/wnba/")) return supportPayload(url);
     if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
     if (url.includes("/api/odds/nhl")) return json({ success: true, games: [] });
+    if (url.includes("/api/nfl/")) return nflEmptyPayload(url);
     throw new Error(`Unexpected URL ${url}`);
   });
 
@@ -114,6 +130,7 @@ test("S6A deduplicates unchanged material snapshots", async () => {
     if (url.includes("/api/wnba/")) return supportPayload(url);
     if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
     if (url.includes("/api/odds/nhl")) return json({ success: true, games: [] });
+    if (url.includes("/api/nfl/")) return nflEmptyPayload(url);
     throw new Error(`Unexpected URL ${url}`);
   });
 
@@ -122,4 +139,55 @@ test("S6A deduplicates unchanged material snapshots", async () => {
   assert.equal(first.snapshotCreated, true);
   assert.equal(second.snapshotCreated, false);
   assert.equal(service.status().snapshots, 1);
+});
+
+test("S6A marks an active NFL slate READY from schedule, context, and certified Elite cards without requiring NFL odds", async () => {
+  const urls: string[] = [];
+  const { service } = fixture((url) => {
+    urls.push(url);
+    if (url.includes("/api/nba/schedule")) return json({ success: true, data: [] });
+    if (url.includes("/api/nba/all")) return json({ success: true, data: [{ teamId: 1 }] });
+    if (url.includes("/api/odds/nba")) return json({ success: true, games: [] });
+    if (url.includes("/api/wnba/games")) return json({ success: true, data: [] });
+    if (url.includes("/api/wnba/all")) return json({ success: true, data: [{ teamId: 1 }] });
+    if (url.includes("/api/odds/wnba")) return json({ success: true, games: [] });
+    if (url.includes("/api/wnba/")) return supportPayload(url);
+    if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
+    if (url.includes("/api/odds/nhl")) return json({ success: true, games: [] });
+    if (url.includes("/api/nfl/games")) return json({ success: true, data: [{ gameId: "nfl-1" }], source: "ESPN NFL scoreboard" });
+    if (url.includes("/api/nfl/context")) return nflEmptyPayload(url);
+    if (url.includes("/api/nfl/elite/cards")) return json({ success: true, data: { state: "READY", cards: [{ gameId: "nfl-1" }] }, code: "NFL_ELITE_CARDS_READY" });
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const audit = await service.run("test-nfl-active");
+  assert.equal(audit.sports.NFL.state, "READY");
+  assert.equal(audit.sports.NFL.gamesScheduled, 1);
+  assert.equal(audit.sports.NFL.requiredTotal, 3);
+  assert.equal(audit.sports.NFL.requiredHealthy, 3);
+  assert.equal(urls.some((url) => url.includes("/api/odds/nfl")), false);
+  assert.match(audit.sports.NFL.reasons.join(" "), /model and context sources/i);
+});
+
+test("S6A blocks an active NFL slate when the certified Elite operational route fails closed", async () => {
+  const { service } = fixture((url) => {
+    if (url.includes("/api/nba/schedule")) return json({ success: true, data: [] });
+    if (url.includes("/api/nba/all")) return json({ success: true, data: [{ teamId: 1 }] });
+    if (url.includes("/api/odds/nba")) return json({ success: true, games: [] });
+    if (url.includes("/api/wnba/games")) return json({ success: true, data: [] });
+    if (url.includes("/api/wnba/all")) return json({ success: true, data: [{ teamId: 1 }] });
+    if (url.includes("/api/odds/wnba")) return json({ success: true, games: [] });
+    if (url.includes("/api/wnba/")) return supportPayload(url);
+    if (url.includes("/api/nhl/all")) return json({ success: true, data: { games: [], teams: [{ id: 1 }] } });
+    if (url.includes("/api/odds/nhl")) return json({ success: true, games: [] });
+    if (url.includes("/api/nfl/games")) return json({ success: true, data: [{ gameId: "nfl-1" }] });
+    if (url.includes("/api/nfl/context")) return nflEmptyPayload(url);
+    if (url.includes("/api/nfl/elite/cards")) return json({ success: false, error: "NFL Elite gate blocked", code: "NFL_ELITE_CARDS_BLOCKED" }, 503);
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const audit = await service.run("test-nfl-blocked");
+  assert.equal(audit.sports.NFL.state, "BLOCKED");
+  assert.equal(audit.sports.NFL.failedSources, 1);
+  assert.match(audit.sports.NFL.reasons.join(" "), /NFL Elite gate blocked/i);
 });
