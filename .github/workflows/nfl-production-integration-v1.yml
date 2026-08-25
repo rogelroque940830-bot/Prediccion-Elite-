@@ -9,6 +9,11 @@ on:
       - 'scripts/nfl-*.ts'
       - 'tsconfig.nfl-production.json'
       - 'package.json'
+      - 'frontend/client/src/pages/nfl-predictor.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
       - '.github/workflows/nfl-production-integration-v1.yml'
 
 permissions:
@@ -99,6 +104,12 @@ jobs:
 
       - name: Enforce Python-to-TypeScript R5H21 parity
         run: npx tsx scripts/nfl-r5h21-cross-language-parity.ts /tmp/nfl-r5h21/nfl_r5h21_2025_parity_fixture.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Typecheck NFL Predictor frontend integration
+        run: npm --prefix frontend run check
 
       - name: Build backend composition root
         run: npm run build:backend
