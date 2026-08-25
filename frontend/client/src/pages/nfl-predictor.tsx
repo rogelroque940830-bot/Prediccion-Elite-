@@ -208,7 +208,7 @@ export default function NFLPredictor() {
             </CardContent>
           </Card>
         </>
-      ) : integration && integration.state !== "BLOCKED" ? (
+      ) : integration ? (
         <Card><CardContent className="p-4 text-sm text-muted-foreground">Cargando cartelera NFL…</CardContent></Card>
       ) : null}
     </div>
