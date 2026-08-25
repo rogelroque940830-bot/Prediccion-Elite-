@@ -54,7 +54,8 @@ export type NflCrossSportReadinessCandidate = {
   awayTeam: string;
   predictedTeam: string;
   predictedSide: "HOME" | "AWAY";
-  sportModelProbability: number;
+  routeModelProbability: number;
+  routeSupportScore: number | null;
   sportEliteGate: {
     passed: true;
     decision: "NFL_ELITE";
@@ -120,17 +121,36 @@ type NflCrossSportCardInput = Pick<
   | "predictedSide"
   | "predictedSideProbability"
   | "eliteRoute"
+  | "lateDownScore"
 >;
+
+function finiteProbability(value: unknown): number | null {
+  const probability = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(probability) || probability <= 0 || probability >= 1) return null;
+  return probability;
+}
+
+function routeSignal(card: NflCrossSportCardInput): { probability: number; supportScore: number | null } | null {
+  if (card.eliteRoute === "R5H8_CORE") {
+    const probability = finiteProbability(card.predictedSideProbability);
+    return probability === null ? null : { probability, supportScore: null };
+  }
+  if (card.eliteRoute !== "LATE_DOWN") return null;
+  const late = card.lateDownScore;
+  if (!late?.thresholdOnlySelected || late.predictedSide !== card.predictedSide) return null;
+  const homeProbability = finiteProbability(late.lateDownProbability);
+  if (homeProbability === null || !Number.isFinite(late.supportScore)) return null;
+  return {
+    probability: card.predictedSide === "HOME" ? homeProbability : 1 - homeProbability,
+    supportScore: late.supportScore,
+  };
+}
 
 function candidateFromCard(card: NflCrossSportCardInput): NflCrossSportReadinessCandidate | null {
   if (card.state !== "NFL_ELITE" || card.modelDecision !== "NFL_ELITE" || !card.eliteRoute) return null;
   if (!card.predictedTeam || (card.predictedSide !== "HOME" && card.predictedSide !== "AWAY")) return null;
-  if (
-    card.predictedSideProbability === null
-    || !Number.isFinite(card.predictedSideProbability)
-    || card.predictedSideProbability <= 0
-    || card.predictedSideProbability >= 1
-  ) return null;
+  const signal = routeSignal(card);
+  if (!signal) return null;
 
   const globalRanker = evaluateGlobalRankerEligibility({
     sportEliteGatePassed: true,
@@ -153,7 +173,8 @@ function candidateFromCard(card: NflCrossSportCardInput): NflCrossSportReadiness
     awayTeam: card.awayTeam,
     predictedTeam: card.predictedTeam,
     predictedSide: card.predictedSide,
-    sportModelProbability: card.predictedSideProbability,
+    routeModelProbability: signal.probability,
+    routeSupportScore: signal.supportScore,
     sportEliteGate: {
       passed: true,
       decision: "NFL_ELITE",
