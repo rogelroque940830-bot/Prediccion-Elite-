@@ -56,7 +56,9 @@
     "test:s6q-fifty-settlement-human-review": "tsx --test server/mlb-s6q-fifty-settlement-human-review.test.ts",
     "typecheck:s6q-fifty-settlement-human-review": "tsc -p tsconfig.s6q-fifty-settlement-human-review.json",
     "test:s6r-human-review-dossier": "tsx --test server/mlb-s6r-human-review-dossier.test.ts",
-    "typecheck:s6r-human-review-dossier": "tsc -p tsconfig.s6r-human-review-dossier.json"
+    "typecheck:s6r-human-review-dossier": "tsc -p tsconfig.s6r-human-review-dossier.json",
+    "typecheck:nfl-production": "tsc -p tsconfig.nfl-production.json",
+    "test:nfl-production": "tsx --test server/nfl-production-integration.test.ts"
   },
   "engines": {
     "node": ">=20"

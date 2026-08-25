@@ -19,6 +19,7 @@ import WNBAPredictor from "@/pages/wnba-predictor";
 import WNBAHistory from "@/pages/wnba-history";
 import NHLPredictor from "@/pages/nhl-predictor";
 import NHLHistory from "@/pages/nhl-history";
+import NFLPredictor from "@/pages/nfl-predictor";
 import PicksPage from "@/pages/picks";
 import NotFound from "@/pages/not-found";
 
@@ -35,6 +36,7 @@ function AppRouter() {
       <Route path="/wnba-history" component={WNBAHistory} />
       <Route path="/nhl" component={NHLPredictor} />
       <Route path="/nhl-history" component={NHLHistory} />
+      <Route path="/nfl" component={NFLPredictor} />
       <Route path="/picks" component={PicksPage} />
       <Route component={NotFound} />
     </Switch>

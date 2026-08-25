@@ -29,6 +29,9 @@ import { registerWnbaNhlDataRoutes } from "./wnba-nhl-data-routes";
 import { registerLegacyPicksCompatibilityRoutes } from "./legacy-picks-routes";
 import { registerMarketSupportRoutes } from "./market-support-routes";
 import { registerActiveOperationalIncidentCenterRoutes } from "./operational-incident-center-active";
+import { registerNflDataRoutes } from "./nfl-data-routes";
+import { registerNflOddsRoutes } from "./nfl-odds-routes";
+import { registerNflEliteRoutes } from "./nfl-elite-routes";
 
 /**
  * Backend route composition root. Domain behavior lives in dedicated modules;
@@ -74,6 +77,11 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   // Explicit command route for the full V16 priced runner. It is auth-protected by the global
   // private-read/write middleware registered before domain routes and never polls or self-triggers.
   registerMlbUnifiedPricedV16Routes(app);
+  // NFL exact routes register before the generic market route. Data and odds transport are live,
+  // while Elite scoring itself remains fail-closed until frozen-artifact/materializer parity passes.
+  registerNflDataRoutes(app);
+  registerNflOddsRoutes(app);
+  registerNflEliteRoutes(app);
   // S6B registers the resilient versions first; legacy duplicates remain only
   // for source compatibility and are not reached once S6B sends a response.
   registerWnbaS6bRoutes(app);

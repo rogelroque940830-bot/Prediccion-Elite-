@@ -18,6 +18,7 @@ const navItems = [
   { title: "MLB Predictor", url: "/mlb", icon: Trophy },
   { title: "WNBA Predictor", url: "/wnba", icon: Heart },
   { title: "NHL Predictor", url: "/nhl", icon: Snowflake },
+  { title: "NFL Predictor", url: "/nfl", icon: Trophy },
   { title: "Calculadora", url: "/calculator", icon: Calculator },
   { title: "Historial NBA", url: "/history", icon: History },
   { title: "Historial MLB", url: "/mlb-history", icon: ClipboardList },

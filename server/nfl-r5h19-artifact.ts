@@ -1,0 +1,71 @@
+import { gunzipSync } from "node:zlib";
+import type { FrozenLogitSpec } from "./nfl-frozen-logit";
+import type { NflR5H8CoreConfig, NflR5H8Pair, NflR5H8Reliability } from "./nfl-r5h8-engine";
+
+export const NFL_R5H19_ARTIFACT_DIGEST = "2a5aa57c2811c6375bbbd691daadbe61c215398a4ac518cec9a2824808b3520b" as const;
+export const NFL_R5H19_RUNTIME_ARTIFACT_SCHEMA = "courtedge-nfl-r5h19-runtime-artifact.v1" as const;
+
+// Compact, lossless runtime projection of the certified H19 artifact.
+// R5H8 top_k=8, so only the eight active experts and their 28 pair interactions are needed at inference time.
+const EMBEDDED_RUNTIME_ARTIFACT_GZIP_BASE64 = "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";
+
+export type NflR5H19RuntimeArtifact = {
+  schemaVersion: typeof NFL_R5H19_RUNTIME_ARTIFACT_SCHEMA;
+  sourceArtifactDigest: typeof NFL_R5H19_ARTIFACT_DIGEST;
+  sport: "NFL";
+  targetSeason: 2026;
+  trainedThroughSeason: 2025;
+  model: "R5H8_INTERACTION_CONTRADICTION_ENGINE";
+  reference: "R5B2_HICONF_SWITCH";
+  activeRules: string[];
+  models: {
+    reference: { name: string; pipeline: FrozenLogitSpec };
+    experts: Record<string, FrozenLogitSpec>;
+  };
+  coreConfig: NflR5H8CoreConfig & Record<string, unknown>;
+  reliability: NflR5H8Reliability[];
+  pairStructure: NflR5H8Pair[];
+  marketDataUsedAsFeatures: false;
+  sameGameOutcomeAllowed: false;
+  postKickoffEvidenceAllowed: false;
+  historicalAccuracyExposedAsGameProbability: false;
+  automaticProductionPromotion: false;
+};
+
+let cached: NflR5H19RuntimeArtifact | null = null;
+
+export function getNflR5H19Artifact(): NflR5H19RuntimeArtifact {
+  if (cached) return cached;
+  const raw = gunzipSync(Buffer.from(EMBEDDED_RUNTIME_ARTIFACT_GZIP_BASE64, "base64")).toString("utf8");
+  const artifact = JSON.parse(raw) as NflR5H19RuntimeArtifact;
+  if (artifact.schemaVersion !== NFL_R5H19_RUNTIME_ARTIFACT_SCHEMA) throw new Error("NFL R5H19 runtime artifact schema mismatch");
+  if (artifact.sourceArtifactDigest !== NFL_R5H19_ARTIFACT_DIGEST) throw new Error("NFL R5H19 source artifact digest mismatch");
+  if (artifact.sport !== "NFL" || artifact.targetSeason !== 2026 || artifact.trainedThroughSeason !== 2025) {
+    throw new Error("NFL R5H19 runtime artifact season custody mismatch");
+  }
+  if (artifact.model !== "R5H8_INTERACTION_CONTRADICTION_ENGINE" || artifact.reference !== "R5B2_HICONF_SWITCH") {
+    throw new Error("NFL R5H19 runtime artifact model identity mismatch");
+  }
+  if (artifact.coreConfig.top_k !== 8 || artifact.activeRules.length !== 8 || artifact.reliability.length !== 8 || artifact.pairStructure.length !== 28) {
+    throw new Error("NFL R5H19 runtime artifact structural contract mismatch");
+  }
+  const reliabilityRules = artifact.reliability.map((row) => row.rule);
+  if (JSON.stringify(artifact.activeRules) !== JSON.stringify(reliabilityRules)) {
+    throw new Error("NFL R5H19 active-rule order does not match frozen reliability order");
+  }
+  if (
+    artifact.marketDataUsedAsFeatures !== false
+    || artifact.sameGameOutcomeAllowed !== false
+    || artifact.postKickoffEvidenceAllowed !== false
+    || artifact.automaticProductionPromotion !== false
+    || artifact.historicalAccuracyExposedAsGameProbability !== false
+  ) {
+    throw new Error("NFL R5H19 runtime artifact safety boundary mismatch");
+  }
+  if (artifact.models.reference.name !== artifact.reference) throw new Error("NFL R5H19 reference pipeline mismatch");
+  for (const rule of artifact.activeRules) {
+    if (!artifact.models.experts[rule]) throw new Error(`NFL R5H19 runtime artifact missing active expert ${rule}`);
+  }
+  cached = artifact;
+  return cached;
+}

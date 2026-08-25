@@ -1,0 +1,118 @@
+name: NFL Production Integration V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/nfl-*.ts'
+      - 'server/routes.ts'
+      - 'scripts/nfl-*.ts'
+      - 'tsconfig.nfl-production.json'
+      - 'package.json'
+      - 'frontend/client/src/pages/nfl-predictor.tsx'
+      - 'frontend/client/src/App.tsx'
+      - 'frontend/client/src/components/app-sidebar.tsx'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/workflows/nfl-production-integration-v1.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nfl-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+
+      - name: Download certified H20 replay fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H20_ARTIFACT_ID: '9540308569'
+          H20_REPLAY_DIGEST: 'd2873a557ed391b7bffaa6d12fb49ead7cc4554538554bdaa5bdf8248a06c5c5'
+        run: |
+          mkdir -p /tmp/nfl-r5h20
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${H20_ARTIFACT_ID}/zip" \
+            > /tmp/nfl-r5h20.zip
+          unzip -q /tmp/nfl-r5h20.zip -d /tmp/nfl-r5h20
+          test -s /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
+          test -s /tmp/nfl-r5h20/nfl_r5h20_summary.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const summary = JSON.parse(fs.readFileSync('/tmp/nfl-r5h20/nfl_r5h20_summary.json', 'utf8'));
+          if (summary.semanticDigest !== process.env.H20_REPLAY_DIGEST) throw new Error('H20 replay semantic digest mismatch');
+          if (summary.expectedRows !== 544 || summary.runtimeFeatureCount !== 68) throw new Error('H20 replay contract mismatch');
+          if (summary.marketDataUsedAsFeature !== false || summary.sameGameObservationAppliedBeforePregameSnapshot !== false) {
+            throw new Error('H20 replay custody boundary mismatch');
+          }
+          console.log('NFL_R5H20_REPLAY_CUSTODY_VERIFIED');
+          NODE
+
+      - name: Download certified R5H21 late-down runtime artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R5H21_ARTIFACT_ID: '9546281745'
+          R5H21_ARTIFACT_DIGEST: 'd49f01cc32e0b5cb828933d2a03ca5128280d0a0f0cd033cd947acd12d8e2a6e'
+        run: |
+          mkdir -p /tmp/nfl-r5h21
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${R5H21_ARTIFACT_ID}/zip" \
+            > /tmp/nfl-r5h21.zip
+          unzip -q /tmp/nfl-r5h21.zip -d /tmp/nfl-r5h21
+          test -s /tmp/nfl-r5h21/nfl_r5h21_2026_late_down_runtime_artifact.json
+          test -s /tmp/nfl-r5h21/nfl_r5h21_2025_parity_fixture.json
+          test -s /tmp/nfl-r5h21/nfl_r5h21_summary.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const summary = JSON.parse(fs.readFileSync('/tmp/nfl-r5h21/nfl_r5h21_summary.json', 'utf8'));
+          if (summary.artifactSemanticDigest !== process.env.R5H21_ARTIFACT_DIGEST) throw new Error('R5H21 semantic digest mismatch');
+          if (summary.frozen2026Threshold !== 0.8335487495672039 || summary.frozen2026ThresholdGate !== true) throw new Error('R5H21 threshold custody mismatch');
+          if (summary.productionPolicy !== 'THRESHOLD_ONLY_NO_TARGET_SEASON_RANKING') throw new Error('R5H21 prospective policy mismatch');
+          if (summary.r5h18Custody.games !== 53 || summary.r5h18Custody.wins !== 46 || summary.r5h18Custody.losses !== 7) throw new Error('R5H18 marginal custody mismatch');
+          if (summary.r5h18CombinedCustody.games !== 211 || summary.r5h18CombinedCustody.wins !== 171 || summary.r5h18CombinedCustody.losses !== 40) throw new Error('R5H18 combined custody mismatch');
+          if (summary.target2026OutcomesUsed !== false || summary.targetSeasonRankingOrCapUsed !== false || summary.marketDataUsedAsFeature !== false) throw new Error('R5H21 safety boundary mismatch');
+          console.log('NFL_R5H21_RUNTIME_CUSTODY_VERIFIED');
+          NODE
+
+      - name: Typecheck NFL integration and operational path
+        run: npm run typecheck:nfl-production
+
+      - name: Test NFL frozen integration
+        run: npm run test:nfl-production
+
+      - name: Test NFL 2026 operational fail-closed path
+        run: npx tsx --test server/nfl-operational-2026.test.ts
+
+      - name: Test NFL R5H21 threshold-only runtime
+        run: npx tsx --test server/nfl-r5h21-late-down-runtime.test.ts
+
+      - name: Verify embedded end-2025 checkpoint against certified replay
+        run: npx tsx scripts/nfl-r5h20-checkpoint-verify.ts /tmp/nfl-r5h20/nfl_r5h20_pregame_materializer_replay.json.gz
+
+      - name: Verify embedded R5H21 artifact against certified export
+        run: npx tsx scripts/nfl-r5h21-artifact-verify.ts /tmp/nfl-r5h21/nfl_r5h21_2026_late_down_runtime_artifact.json
+
+      - name: Enforce Python-to-TypeScript R5H21 parity
+        run: npx tsx scripts/nfl-r5h21-cross-language-parity.ts /tmp/nfl-r5h21/nfl_r5h21_2025_parity_fixture.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Typecheck NFL Predictor frontend integration
+        run: npm --prefix frontend run check
+
+      - name: Build Predictor frontend
+        run: npm --prefix frontend run build
+
+      - name: Build backend composition root
+        run: npm run build:backend

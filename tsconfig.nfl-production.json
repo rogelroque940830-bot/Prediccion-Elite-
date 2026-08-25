@@ -1,0 +1,37 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/nfl-data-routes.ts",
+    "server/nfl-odds-routes.ts",
+    "server/nfl-elite-integration-gate.ts",
+    "server/nfl-elite-routes.ts",
+    "server/nfl-frozen-logit.ts",
+    "server/nfl-r5h8-engine.ts",
+    "server/nfl-r5h19-artifact.ts",
+    "server/nfl-pregame-materializer.ts",
+    "server/nfl-pregame-checkpoint.ts",
+    "server/nfl-r5h20-checkpoint.ts",
+    "server/nfl-r5h20-checkpoint-data-01.ts",
+    "server/nfl-r5h20-checkpoint-data-02.ts",
+    "server/nfl-r5h20-checkpoint-data-03.ts",
+    "server/nfl-r5h20-checkpoint-data-04.ts",
+    "server/nfl-r5h8-scorer.ts",
+    "server/nfl-operational-2026.ts",
+    "server/nfl-r5h21-artifact.ts",
+    "server/nfl-r5h21-late-down-runtime.ts",
+    "server/nfl-full-elite-operational-2026.ts",
+    "server/nfl-production-integration.test.ts",
+    "server/nfl-operational-2026.test.ts",
+    "server/nfl-r5h21-late-down-runtime.test.ts",
+    "scripts/nfl-r5h19-cross-language-parity.ts",
+    "scripts/nfl-r5h20-pregame-materializer-replay.ts",
+    "scripts/nfl-r5h20-checkpoint-verify.ts",
+    "scripts/nfl-r5h21-artifact-verify.ts",
+    "scripts/nfl-r5h21-cross-language-parity.ts"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "target": "ES2020",
+    "noEmit": true
+  }
+}
