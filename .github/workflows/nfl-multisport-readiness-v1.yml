@@ -1,0 +1,61 @@
+name: NFL Multisport Readiness V1
+
+on:
+  pull_request:
+    paths:
+      - "server/multisport-readiness-service.ts"
+      - "server/multisport-readiness-service.test.ts"
+      - "server/multisport-readiness-routes.ts"
+      - "server/nfl-cross-sport-readiness.ts"
+      - "server/nfl-cross-sport-readiness.test.ts"
+      - "server/nfl-full-elite-operational-2026.ts"
+      - "tsconfig.s6a-readiness.json"
+      - "tsconfig.nfl-production.json"
+      - "package.json"
+      - ".github/workflows/nfl-multisport-readiness-v1.yml"
+  push:
+    branches:
+      - "feat/nfl-cross-sport-readiness-v1"
+    paths:
+      - "server/multisport-readiness-service.ts"
+      - "server/multisport-readiness-service.test.ts"
+      - "server/multisport-readiness-routes.ts"
+      - "server/nfl-cross-sport-readiness.ts"
+      - "server/nfl-cross-sport-readiness.test.ts"
+      - "server/nfl-full-elite-operational-2026.ts"
+      - "tsconfig.s6a-readiness.json"
+      - "tsconfig.nfl-production.json"
+      - "package.json"
+      - ".github/workflows/nfl-multisport-readiness-v1.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck multisport readiness
+        run: npm run typecheck:s6a-readiness
+
+      - name: Test multisport and NFL cross-sport fail-closed gates
+        run: npx tsx --test server/multisport-readiness-service.test.ts server/nfl-cross-sport-readiness.test.ts
+
+      - name: Re-run frozen NFL production typecheck
+        run: npm run typecheck:nfl-production
+
+      - name: Re-run frozen NFL production tests
+        run: npm run test:nfl-production
+
+      - name: Build backend composition root
+        run: npm run build:backend
