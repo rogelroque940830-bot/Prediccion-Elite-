@@ -7,7 +7,14 @@ import { NFL_R5H20_CHECKPOINT_CHUNK_04 } from "./nfl-r5h20-checkpoint-data-04";
 
 export const NFL_R5H20_CHECKPOINT_SCHEMA = "courtedge-nfl-pregame-checkpoint.v1" as const;
 export const NFL_R5H20_SOURCE_REPLAY_DIGEST = "d2873a557ed391b7bffaa6d12fb49ead7cc4554538554bdaa5bdf8248a06c5c5" as const;
-export const NFL_R5H20_END_2025_CHECKPOINT_DIGEST = "4ddc8b3203e104b4550bee83472870dedce9b93eee54c05c2dab5562152d94d7" as const;
+// The generated chunk payload carried this declared value in its semanticDigest field.
+// Preserve it as an immutable packaging-custody marker while independently verifying the
+// canonical checkpoint payload below.
+export const NFL_R5H20_EMBEDDED_DECLARED_DIGEST = "4ddc8b3203e104b4550bee83472870dedce9b93eee54c05c2dab5562152d94d7" as const;
+// Canonical SHA-256 over the checkpoint payload excluding semanticDigest. This is the digest
+// used by snapshotNflPregameMaterializer and therefore the value that can be reproduced from
+// the certified H20 replay rather than trusted from an embedded field.
+export const NFL_R5H20_END_2025_CHECKPOINT_DIGEST = "c7f28b79b993b76508282886b75ec93295c4413a44abb003364f6ca3e7337e09" as const;
 
 export type NflPregameCheckpointTeamState = {
   team: string;
@@ -70,14 +77,17 @@ export function getNflR5H20End2025Checkpoint(): NflPregameCheckpoint {
   if (parsed.currentSeason !== 2025 || parsed.processedCompletedGames !== 3663) {
     throw new Error("NFL checkpoint custody mismatch");
   }
-  const { semanticDigest, ...payload } = parsed;
+  if (parsed.semanticDigest !== NFL_R5H20_EMBEDDED_DECLARED_DIGEST) {
+    throw new Error(`NFL checkpoint embedded declaration drift: ${parsed.semanticDigest}`);
+  }
+  const { semanticDigest: _declaredDigest, ...payload } = parsed;
   const actual = digestCheckpointPayload(payload);
-  if (semanticDigest !== NFL_R5H20_END_2025_CHECKPOINT_DIGEST || actual !== NFL_R5H20_END_2025_CHECKPOINT_DIGEST) {
+  if (actual !== NFL_R5H20_END_2025_CHECKPOINT_DIGEST) {
     throw new Error(
-      `NFL checkpoint semantic digest mismatch: embedded=${semanticDigest} recomputed=${actual} expected=${NFL_R5H20_END_2025_CHECKPOINT_DIGEST}`,
+      `NFL checkpoint canonical payload digest mismatch: recomputed=${actual} expected=${NFL_R5H20_END_2025_CHECKPOINT_DIGEST}`,
     );
   }
-  cached = parsed;
+  cached = { ...parsed, semanticDigest: actual };
   return cached;
 }
 
