@@ -1,0 +1,150 @@
+name: MLB Current Selector Historical Reconstruction Audit V1
+
+on:
+  push:
+    branches:
+      - research/mlb-current-selector-historical-reconstruction-v1
+    paths:
+      - "research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_CONTRACT.json"
+      - "research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_RESULT.json"
+      - "research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json"
+      - "scripts/mlb-current-selector-historical-reconstruction-audit-v1.py"
+      - ".github/workflows/mlb-current-selector-historical-reconstruction-audit-v1.yml"
+      - "server/mlb-shortlist.ts"
+      - "server/mlb-intrinsic-edge.ts"
+      - "server/mlb-daily-best-pick-selector.ts"
+      - "server/mlb-daily-best-pick-runtime-adapter.ts"
+      - "server/mlb-unified-runner.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout frozen reconstruction branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prove freeze chronology
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_CONTRACT.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-current-selector-historical-reconstruction-audit-v1.py | tail -1)"
+          RESULT_ADD="$(git log --diff-filter=A --format=%H -- research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_RESULT.json | tail -1)"
+          PROSPECTIVE_ADD="$(git log --diff-filter=A --format=%H -- research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json | tail -1)"
+          test -n "$CONTRACT_ADD" -a -n "$SCORER_ADD" -a -n "$RESULT_ADD" -a -n "$PROSPECTIVE_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          git merge-base --is-ancestor "$SCORER_ADD" "$RESULT_ADD"
+          git merge-base --is-ancestor "$RESULT_ADD" "$PROSPECTIVE_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_CONTRACT.json'))
+          assert c['frozenBeforeReplay'] is True
+          assert c['frozenBeforeSelectedPopulationProbabilityScoring'] is True
+          assert c['decisionRule']['failClassification']=='MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_IMPOSSIBLE_FROM_IMMUTABLE_AVAILABLE_SOURCES'
+          p=json.load(open('research/MLB_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_CONTRACT.json'))
+          assert p['frozenBeforeImplementation'] is True
+          assert p['outcomeEmbargo']['outcomeReadUnlocked'] is False
+          assert p['probabilityBoundary']['selectedPopulationProbabilityScoringAllowed'] is False
+          print('MLB_CURRENT_SELECTOR_FREEZE_CHRONOLOGY_PROVED')
+          PY
+
+      - name: Syntax check audit
+        run: python -m py_compile scripts/mlb-current-selector-historical-reconstruction-audit-v1.py
+
+      - name: Download checksum-locked historical artifacts as original ZIPs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/9166442982/zip" > inputs/step12v3.zip
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/9267784926/zip" > inputs/v66.zip
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/9182440949/zip" > inputs/v16.zip
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/9274431264/zip" > inputs/v69.zip
+          test -s inputs/step12v3.zip
+          test -s inputs/v66.zip
+          test -s inputs/v16.zip
+          test -s inputs/v69.zip
+
+      - name: Execute frozen reconstructability audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-current-selector-historical-reconstruction-audit-v1.py \
+            --contract research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_CONTRACT.json \
+            --prior-audit-contract research/mlb-daily-best-pick-historical-coverage-v1-contract.json \
+            --prior-audit-result research/mlb-daily-best-pick-historical-coverage-v1-result-summary.json \
+            --step12v3-zip inputs/step12v3.zip \
+            --v66-zip inputs/v66.zip \
+            --v16-zip inputs/v16.zip \
+            --v69-zip inputs/v69.zip \
+            --shortlist server/mlb-shortlist.ts \
+            --intrinsic server/mlb-intrinsic-edge.ts \
+            --selector server/mlb-daily-best-pick-selector.ts \
+            --runtime-adapter server/mlb-daily-best-pick-runtime-adapter.ts \
+            --unified-runner server/mlb-unified-runner.ts \
+            --out work/mlb-current-selector-historical-reconstruction-audit-v1.json
+
+      - name: Validate frozen result parity and fail-closed transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-current-selector-historical-reconstruction-audit-v1.json'))
+          s=json.load(open('research/MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_RESULT.json'))
+          expected='MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_IMPOSSIBLE_FROM_IMMUTABLE_AVAILABLE_SOURCES'
+          assert r['classification']==expected
+          assert s['classification']==expected
+          assert r['decisionRuleSatisfied'] is False
+          assert s['decisionRuleSatisfied'] is False
+          assert r['historicalIdentityCoverage']['combinedT5PregameValidRows']==6610
+          assert r['historicalIdentityCoverage']['combinedDistinctOfficialDates']==505
+          assert r['historicalIdentityCoverage']['combinedDistinctGamePks']==6610
+          rs={x['id']:x['status'] for x in r['requiredInputAudit']}
+          ss={x['id']:x['status'] for x in s['requiredInputAudit']}
+          expected_status={
+            'OFFICIAL_DATE_AND_GAME_IDENTITY':'PASS',
+            'CURRENT_SHORTLIST_MEMBERSHIP':'FAIL',
+            'CURRENT_INTRINSIC_RANKED_GAMES_MEMBERSHIP_AND_ORDER':'FAIL',
+            'FINAL_FROZEN_ROUTE_EVALUATIONS':'FAIL',
+            'PREGAME_ONLY_PROVENANCE':'FAIL',
+          }
+          assert rs==expected_status, rs
+          assert ss==expected_status, ss
+          assert r['auditScope']['outcomesUsedToChooseHistoricalSelections'] is False
+          assert r['auditScope']['approximateCurrentRankUsed'] is False
+          assert r['auditScope']['mutableExternalApiRefetchUsed'] is False
+          assert r['scientificInterpretation']['historicalParentRouteHitRateMayBeUsedAsPerGameProbability'] is False
+          assert r['crossSportCalibration']=='BLOCKED'
+          assert r['globalEliteRanker']=='BLOCKED'
+          assert r['nextAction']=='FREEZE_EXACT_CURRENT_DAILY_BEST_PICK_PROSPECTIVE_CUSTODY_WITHOUT_CHANGING_SELECTIONS'
+          print('MLB_CURRENT_SELECTOR_HISTORICAL_RECONSTRUCTION_FAILURE_CERTIFIED')
+          PY
+
+      - name: Upload reconstructability audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-current-selector-historical-reconstruction-audit-v1
+          path: work/mlb-current-selector-historical-reconstruction-audit-v1.json
+          if-no-files-found: error
+          retention-days: 90
