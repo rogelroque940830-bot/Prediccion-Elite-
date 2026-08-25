@@ -4,9 +4,6 @@ import { NFL_R5H20_CHECKPOINT_CHUNK_01 } from "./nfl-r5h20-checkpoint-data-01";
 import { NFL_R5H20_CHECKPOINT_CHUNK_02 } from "./nfl-r5h20-checkpoint-data-02";
 import { NFL_R5H20_CHECKPOINT_CHUNK_03 } from "./nfl-r5h20-checkpoint-data-03";
 import { NFL_R5H20_CHECKPOINT_CHUNK_04 } from "./nfl-r5h20-checkpoint-data-04";
-import { NFL_R5H20_CHECKPOINT_CHUNK_05 } from "./nfl-r5h20-checkpoint-data-05";
-import { NFL_R5H20_CHECKPOINT_CHUNK_06 } from "./nfl-r5h20-checkpoint-data-06";
-import { NFL_R5H20_CHECKPOINT_CHUNK_07 } from "./nfl-r5h20-checkpoint-data-07";
 
 export const NFL_R5H20_CHECKPOINT_SCHEMA = "courtedge-nfl-pregame-checkpoint.v1" as const;
 export const NFL_R5H20_SOURCE_REPLAY_DIGEST = "d2873a557ed391b7bffaa6d12fb49ead7cc4554538554bdaa5bdf8248a06c5c5" as const;
@@ -58,10 +55,7 @@ const EMBEDDED_GZIP_BASE64 = [
   NFL_R5H20_CHECKPOINT_CHUNK_01,
   NFL_R5H20_CHECKPOINT_CHUNK_02,
   NFL_R5H20_CHECKPOINT_CHUNK_03,
-  NFL_R5H20_CHECKPOINT_CHUNK_04,
-  NFL_R5H20_CHECKPOINT_CHUNK_05,
-  NFL_R5H20_CHECKPOINT_CHUNK_06,
-  NFL_R5H20_CHECKPOINT_CHUNK_07
+  NFL_R5H20_CHECKPOINT_CHUNK_04
 ].join("");
 
 let cached: NflPregameCheckpoint | null = null;
