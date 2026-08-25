@@ -1,0 +1,132 @@
+name: NFL R5H28 Identity Probability Qualification
+
+on:
+  pull_request:
+    branches: ['research/nfl-r5-leakage-safe-v1']
+    paths:
+      - 'research/nfl/R5H27_IDENTITY_PROBABILITY_QUALIFICATION_CONTRACT.json'
+      - 'research/nfl/nfl_r5h28_identity_probability_qualification.py'
+      - '.github/workflows/nfl-r5h28-identity-probability-qualification.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nfl-r5h28-identity-probability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install qualification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy
+
+      - name: Validate frozen R5H27 contract and evaluator
+        run: |
+          python -m py_compile research/nfl/nfl_r5h28_identity_probability_qualification.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/nfl/R5H27_IDENTITY_PROBABILITY_QUALIFICATION_CONTRACT.json'))
+          assert c['schemaVersion']=='courtedge-nfl-r5h27-identity-probability-qualification-contract.v1'
+          assert c['frozenBeforeR5H28Evaluation'] is True
+          assert c['identityProbability']['freeParameters']==0
+          assert c['identityProbability']['fitPerformed'] is False
+          assert c['sourceCustody']['r5h22WorkflowRunId']==32872833335
+          assert c['sourceCustody']['r5h22ArtifactId']==9573053756
+          assert c['sourceCustody']['r5h22CalibrationRowsetSha256']=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          assert c['antiTuningDisclosure']['rawBaselineMetricsWereKnownBeforeThisRubricWasFrozen'] is True
+          assert c['antiTuningDisclosure']['rubricWasNotSelectedByGridSearch'] is True
+          print('NFL_R5H27_CONTRACT_FROZEN')
+          PY
+
+      - name: Download certified R5H22 custody artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nfl-r5h22-calibration-rowset-evidence
+          path: nfl-r5h22-output
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32872833335
+
+      - name: Verify exact certified R5H22 bytes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, pandas as pd
+          p=Path('nfl-r5h22-output/nfl_r5h22_calibration_rowset.csv')
+          assert p.exists()
+          actual=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert actual=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          df=pd.read_csv(p)
+          assert len(df)==211
+          assert int(df['selected_win'].sum())==171
+          assert int((1-df['selected_win']).sum())==40
+          print('NFL_R5H22_CERTIFIED_BYTES_VERIFIED')
+          PY
+
+      - name: Run frozen R5H28 identity probability qualification
+        run: |
+          python research/nfl/nfl_r5h28_identity_probability_qualification.py \
+            --r5h22-dir nfl-r5h22-output \
+            --contract research/nfl/R5H27_IDENTITY_PROBABILITY_QUALIFICATION_CONTRACT.json \
+            --out-dir nfl-r5h28-output
+
+      - name: Enforce R5H28 custody and research boundary
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open('nfl-r5h28-output/nfl_r5h28_summary.json'))
+          a=json.load(open('nfl-r5h28-output/nfl_r5h28_audit.json'))
+          c=json.load(open('nfl-r5h28-output/nfl_r5h28_identity_probability_candidate.json'))
+          allowed={
+            'R5H27_IDENTITY_PROBABILITY_HISTORICALLY_QUALIFIED_FOR_NFL_CROSS_SPORT_CANDIDACY',
+            'R5H27_IDENTITY_PROBABILITY_NOT_QUALIFIED_RETAIN_AS_UNCALIBRATED_SCORE_ONLY',
+          }
+          assert s['classification'] in allowed
+          assert s['rows']==211 and s['wins']==171 and s['losses']==40
+          assert s['r5h22RowsetSha256']=='dcfde16927b285a02406304bdd357de7cdde88f2fe8e5d9eb4bc8c6ba44b84d2'
+          assert s['prequentialSkillEvaluation']['combined']['raw']['rows']==170
+          assert s['prequentialSkillEvaluation']['R5H8_CORE']['raw']['rows']==138
+          assert s['prequentialSkillEvaluation']['R5H21_LATE_DOWN']['raw']['rows']==32
+          assert abs(s['prequentialSkillEvaluation']['combined']['raw']['brier']-0.15853469667397987)<=1e-12
+          assert abs(s['prequentialSkillEvaluation']['combined']['raw']['logLoss']-0.49380384472279465)<=1e-12
+          assert a['identityMapping']=='ZERO_PARAMETER_NO_FIT'
+          assert a['historicalHitRateSubstitutedForProbability'] is False
+          assert a['affineAlternativeUsedForPrediction'] is False
+          assert a['gridSearch']=='NONE'
+          assert a['featureSearch']=='NONE'
+          assert a['marketFeatures']=='NONE'
+          assert a['crossSportPooling']=='NONE'
+          assert c['mapping']=='p_identity = reference_confidence'
+          assert c['target2026OutcomesUsedToDefineMapping'] is False
+          assert c['selectionRulesChanged'] is False
+          assert c['weightsChanged'] is False
+          assert c['thresholdsChanged'] is False
+          assert c['productionCodeTouched'] is False
+          assert c['crossSportCandidateAuthorized'] is s['allStatisticalGatesPassed']
+          assert s['globalEliteRankerStillBlocked'] is True
+          print('NFL_R5H28_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Show R5H28 evidence
+        run: |
+          cat nfl-r5h28-output/nfl_r5h28_summary.json
+          echo
+          cat nfl-r5h28-output/nfl_r5h28_audit.json
+          echo
+          cat nfl-r5h28-output/nfl_r5h28_season_diagnostics.csv
+
+      - name: Upload R5H28 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h28-identity-probability-qualification-evidence
+          path: nfl-r5h28-output/
+          if-no-files-found: error
+          retention-days: 30
