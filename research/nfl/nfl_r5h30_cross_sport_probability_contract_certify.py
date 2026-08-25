@@ -125,17 +125,21 @@ def main() -> None:
     # Evidence-level safety checks from R5H28.
     if a.get("identityMapping") != "ZERO_PARAMETER_NO_FIT":
         raise RuntimeError("R5H30 R5H28 identity mapping audit drift")
-    if a.get("marketCalibrationFeatures") != "NONE":
-        raise RuntimeError("R5H30 market calibration features detected")
+    if a.get("marketFeatures") != "NONE":
+        raise RuntimeError("R5H30 market features detected")
     if a.get("crossSportPooling") != "NONE":
         raise RuntimeError("R5H30 cross-sport pooling detected")
-    if a.get("globalEliteRanker") != "BLOCKED":
+    if a.get("globalRanker") != "BLOCKED":
         raise RuntimeError("R5H30 source global ranker boundary drift")
+    if a.get("historicalHitRateSubstitutedForProbability") is not False:
+        raise RuntimeError("R5H30 historical hit rate was substituted for probability")
 
     if c28.get("crossSportCandidateAuthorized") is not True:
         raise RuntimeError("R5H30 R5H28 candidate authorization drift")
-    if c28.get("formula") != "p_identity = reference_confidence":
-        raise RuntimeError("R5H30 R5H28 candidate formula drift")
+    if c28.get("mapping") != "p_identity = reference_confidence":
+        raise RuntimeError("R5H30 R5H28 candidate mapping drift")
+    if int(c28.get("freeParameters")) != 0:
+        raise RuntimeError("R5H30 R5H28 candidate parameter-count drift")
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
