@@ -306,7 +306,7 @@ export default function NFLPredictor() {
         });
       }
     }
-    return [...games.values()].sort((a, b) => (a.kickoff ?? "").localeCompare(b.kickoff ?? "") || a.key.localeCompare(b.key));
+    return Array.from(games.values()).sort((a, b) => (a.kickoff ?? "").localeCompare(b.kickoff ?? "") || a.key.localeCompare(b.key));
   }, [scheduleQuery.data, selectedDate, snapshot]);
 
   const effectiveGameKey = selectedGameKey && manualGames.some((game) => game.key === selectedGameKey)
