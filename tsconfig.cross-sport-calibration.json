@@ -4,8 +4,7 @@
     "server/cross-sport-calibration.ts",
     "server/cross-sport-calibration-readiness.ts",
     "server/cross-sport-calibration-routes.ts",
-    "server/cross-sport-calibration.test.ts",
-    "server/s6a-staging-entry.ts"
+    "server/cross-sport-calibration.test.ts"
   ],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
