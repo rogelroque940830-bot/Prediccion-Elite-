@@ -1,3 +1,12 @@
+[variables]
+# Certified NFL Elite V1 production activation defaults.
+# Railway/runtime environment variables have higher precedence and may override
+# these values to fail closed without changing model code.
+NFL_R5H18_PROSPECTIVE_GATE = "PASS"
+NFL_ELITE_2026_ARTIFACT_VERIFIED = "true"
+NFL_ELITE_MATERIALIZER_VERIFIED = "true"
+NFL_ELITE_PARITY_GATE = "PASS"
+
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
