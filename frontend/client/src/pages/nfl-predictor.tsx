@@ -148,7 +148,7 @@ export default function NFLPredictor() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div><p className="text-muted-foreground text-xs">R5H8 Core</p><p className="font-semibold">{integration.coreReady ? "Verificado" : "Pendiente"}</p></div>
               <div><p className="text-muted-foreground text-xs">Late Down</p><p className="font-semibold">{integration.lateDownEnabled ? "Activo" : "Desactivado"}</p></div>
-              <div><p className="text-muted-foreground text-xs">Cobertura histórica certificada</p><p className="font-semibold">{integration.r5h18CertifiedEvidence.combined.games} selecciones</p></div>
+              <div><p className="text-muted-foreground text-xs">Evidencia histórica certificada</p><p className="font-semibold">{integration.r5h18CertifiedEvidence.combined.games} selecciones</p></div>
               <div><p className="text-muted-foreground text-xs">Política</p><p className="font-semibold">Threshold-only</p></div>
             </div>
             {integration.reasons.length > 0 && (
@@ -207,7 +207,7 @@ export default function NFLPredictor() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
                       <div><span className="text-muted-foreground">Selección: </span><span className="font-semibold text-green-400">{card.predictedTeam ?? "—"}</span></div>
                       <div><span className="text-muted-foreground">Ruta: </span><span className="font-semibold">{card.eliteRoute === "LATE_DOWN" ? "Late Down" : "R5H8 Core"}</span></div>
-                      <div><span className="text-muted-foreground">Prob. referencia: </span><span className="font-semibold">{card.predictedSideProbability === null ? "—" : `${(card.predictedSideProbability * 100).toFixed(1)}%`}</span></div>
+                      <div><span className="text-muted-foreground">Prob. referencia actual: </span><span className="font-semibold">{card.predictedSideProbability === null ? "—" : `${(card.predictedSideProbability * 100).toFixed(1)}%`}</span></div>
                     </div>
                   )}
                   {card.reasons.length > 0 && <p className="text-xs text-red-300">{card.reasons.join(" · ")}</p>}
