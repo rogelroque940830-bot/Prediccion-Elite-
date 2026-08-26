@@ -95,13 +95,13 @@ function v16(gamePk: number, home: number) {
 
 test("later provisional context-rank #1 forces WAIT instead of taking earlier final game", () => {
   const games = [
-    profile({ gamePk: 9, startTime: `${date}T01:00:00.000Z`, stage: "PROVISIONAL" }),
-    profile({ gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL" }),
+    profile({ gamePk: 9, startTime: `${date}T21:00:00.000Z`, stage: "PROVISIONAL", maxSignal: 0.50 }),
+    profile({ gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL", maxSignal: 0.30 }),
   ];
   const result = buildMlbDailyOpportunityContext({
     slate: slate([
       { gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL" },
-      { gamePk: 9, startTime: `${date}T01:00:00.000Z`, stage: "PROVISIONAL" },
+      { gamePk: 9, startTime: `${date}T21:00:00.000Z`, stage: "PROVISIONAL" },
     ]),
     intrinsic: intrinsic(games),
     finalV16ByGame: { 1: v16(1, 0.72) },
