@@ -234,8 +234,15 @@ def feature_row(state,identity,manifest,v62c):
     return feats,{'homeExpectedStarterOuts':hmu,'awayExpectedStarterOuts':amu,'homeFgStarterShare':hs,'awayFgStarterShare':aws,'meanFgStarterShare':mean}
 
 def pregame(feed):
-    st=(feed.get('gameData') or {}).get('status') or {};coded=str(st.get('codedGameState') or '').upper();abstract=str(st.get('abstractGameState') or '').lower();detailed=str(st.get('detailedState') or '').lower()
-    return coded not in ('I','F','O') and abstract not in ('live','final') and not any(x in detailed for x in ('in progress','final','game over','completed early'))
+    st=(feed.get('gameData') or {}).get('status') or {}
+    coded=str(st.get('codedGameState') or '').strip().upper()
+    abstract=str(st.get('abstractGameState') or '').strip().lower()
+    detailed=str(st.get('detailedState') or '').strip().lower()
+    if coded in ('I','F','O'):return False
+    if detailed in ('in progress','final','game over','completed early'):return False
+    if coded in ('S','P'):return True
+    if detailed in ('scheduled','pre-game','warmup','delayed start'):return True
+    return abstract=='preview'
 def target_identity(feed,game,target_date,now,max_lead):
     gd=feed.get('gameData') or {};gp=int(feed.get('gamePk') or game.get('gamePk') or 0);od=str((gd.get('datetime') or {}).get('officialDate') or game.get('officialDate') or '')
     if gp<=0 or od!=target_date or not pregame(feed):return None
@@ -299,7 +306,7 @@ def main():
         if not valid_date(a.target_date):raise SystemExit('V68_STATE_TARGET_DATE_INVALID')
         base=read_base(a.base_root);gap=read_gap(a.gap_root) if a.gap_root else None;gp=load(a.gap_pitch) if a.gap_pitch else None;s=build_state(base,gap,load(a.v62_2025),load(a.v62_2026),gp,a.target_date,manifest,v62c);dump(a.out,s);print(json.dumps({'targetOfficialDate':a.target_date,'stateDigest':s['stateDigest'],'custody':s['custody']},indent=2))
     elif a.mode=='live':
-        if not (0<a.max_lead_minutes<=60):raise SystemExit('V68_SOURCE_CAPTURE_WINDOW_INVALID')
+        if not (0<a.max_lead_minutes<=20):raise SystemExit('V68_SOURCE_CAPTURE_WINDOW_INVALID')
         now=parse_iso(a.now) if a.now else dt.datetime.now(dt.timezone.utc);x=live_source(load(a.state),manifest,v62c,a.target_date,now,a.max_lead_minutes);dump(a.out,x);print(json.dumps({'rows':len(x['rows']),'diagnostics':x['diagnostics']},indent=2))
     else:
         r=parity(load(a.state),read_base(a.base_root),a.v66_custody,a.target_date,manifest,v62c,a.tolerance);dump(a.out,r);print(json.dumps(r,indent=2))
