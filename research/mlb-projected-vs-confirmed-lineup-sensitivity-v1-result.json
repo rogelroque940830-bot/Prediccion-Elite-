@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "courtedge-mlb-projected-vs-confirmed-lineup-sensitivity-result.v1",
+  "classification": "PROJECTED_VS_CONFIRMED_LINEUP_SENSITIVITY_MEASURED_NO_PRODUCTION_CHANGE",
+  "source": {
+    "workflowRunId": 33004623697,
+    "jobId": 98294895796,
+    "artifactId": 9620002135,
+    "artifactName": "mlb-projected-vs-confirmed-lineup-sensitivity-v1",
+    "artifactDigest": "sha256:ece1e768f0a75f75621b70876a71a2038b0ad587cf63d4f6e610f89f0babd5b5",
+    "sourceHeadSha": "8478b89961dba8c35fe7ba2b56d8dc251411fa19",
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+  },
+  "coverage": {
+    "pairedRows": 6563,
+    "distinctOfficialDates": 499,
+    "bySeason": {
+      "2024": {"canonicalT5Rows": 2406, "pairedProjectedConfirmedRows": 2390},
+      "2025": {"canonicalT5Rows": 2423, "pairedProjectedConfirmedRows": 2407},
+      "2026_YTD": {"canonicalT5Rows": 1781, "pairedProjectedConfirmedRows": 1766}
+    }
+  },
+  "projectionQuality": {
+    "method": "LAST_VALID_PRIOR_OFFICIAL_DATE_LINEUP",
+    "meanCombinedPlayerIdentityOverlapRate": 0.7602214434455787,
+    "meanCombinedExactBattingSlotMatchRate": 0.4811823861039159,
+    "meanPlayersReplacedAcrossTwoTeams": 4.316014017979582,
+    "interpretationBoundary": "This is a conservative leakage-safe historical proxy, not a claim of third-party projected-lineup accuracy."
+  },
+  "v16ProbabilitySensitivity": {
+    "meanAbsoluteDelta": 0.020353523880891802,
+    "medianAbsoluteDelta": 0.01659461192551237,
+    "p75AbsoluteDelta": 0.028506531448335592,
+    "p90AbsoluteDelta": 0.04246273899208155,
+    "p95AbsoluteDelta": 0.05332033136128342,
+    "p99AbsoluteDelta": 0.07276383301855531,
+    "maxAbsoluteDelta": 0.12704749187009334,
+    "selectedSideFlips": 901,
+    "selectedSideFlipRate": 0.13728477830260552
+  },
+  "frozenC4ProbabilitySensitivity": {
+    "meanAbsoluteDelta": 0.026783136603799978,
+    "medianAbsoluteDelta": 0.021754600916856548,
+    "p95AbsoluteDelta": 0.06996453905331522,
+    "maxAbsoluteDelta": 0.1691667466122746
+  },
+  "frozenFull13ProbabilitySensitivity": {
+    "meanAbsoluteDelta": 0.035834057821988265,
+    "medianAbsoluteDelta": 0.029622683610318945,
+    "p95AbsoluteDelta": 0.09011245022649367,
+    "maxAbsoluteDelta": 0.1957552158823454
+  },
+  "routeSensitivity": {
+    "premiumFlips": 213,
+    "aPlusFlips": 82,
+    "parentRouteFlips": 237,
+    "parentRouteFlipRate": 0.03611153435928691
+  },
+  "projectionQualityMatchedSlices": {
+    "combinedReplacements1_overlap94_44pct": {
+      "n": 202,
+      "meanAbsoluteV16Delta": 0.010313905000818236,
+      "v16SideFlipRate": 0.06930693069306931,
+      "parentRouteFlipRate": 0.01485148514851485
+    },
+    "combinedReplacements2_overlap88_89pct": {
+      "n": 622,
+      "meanAbsoluteV16Delta": 0.014135265216524587,
+      "v16SideFlipRate": 0.08038585209003216,
+      "parentRouteFlipRate": 0.027331189710610933
+    },
+    "combinedReplacements3_overlap83_33pct": {
+      "n": 1173,
+      "meanAbsoluteV16Delta": 0.017302060727479543,
+      "v16SideFlipRate": 0.11764705882352941,
+      "parentRouteFlipRate": 0.03751065643648764
+    }
+  },
+  "dailyStrongestV16Sensitivity": {
+    "dates": 499,
+    "gameIdentityFlips": 207,
+    "gameIdentityFlipRate": 0.4148296593186373,
+    "sameGameSideFlips": 1,
+    "interpretationBoundary": "Strongest frozen V16 selected-side probability among paired games; not exact production Daily BEST PICK parity."
+  },
+  "custodyParity": {
+    "confirmedExposureParityRows": 6563,
+    "confirmedExposureParityMaxAbsDifference": 0.0,
+    "confirmedContinuityParityRows": 6563,
+    "confirmedContinuityParityMaxAbsDifference": 0.0
+  },
+  "scientificInterpretation": {
+    "lineupEffectIsZeroOrNegligible": false,
+    "lineupShouldRemainAHardGateForEnteringAnyDailyRanking": false,
+    "provisionalRankingSupported": true,
+    "treatProjectedAsEquivalentToConfirmedSupported": false,
+    "recommendedOperationalDirection": "ALLOW_PROVISIONAL_GAMES_TO_ENTER_DAILY_RANKING_WITH_EMPIRICAL_LINEUP_UNCERTAINTY; RECOMPUTE_ON_CONFIRMATION; PRESERVE FINAL DECISION/LOCK BOUNDARY."
+  },
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "recalibration": false,
+    "thresholdSearch": false,
+    "sameDateLineupLeakageAllowed": false,
+    "futureLineupLeakageAllowed": false,
+    "thirdPartyHistoricalProjectionClaimed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "productionRoutingChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

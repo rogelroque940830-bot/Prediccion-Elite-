@@ -1,0 +1,150 @@
+name: Validate MLB Projected vs Confirmed Lineup Sensitivity V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mlb-projected-vs-confirmed-lineup-sensitivity-v1.json'
+      - 'scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py'
+      - '.github/workflows/validate-mlb-projected-vs-confirmed-lineup-sensitivity-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Freeze exact sensitivity question before execution
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-projected-vs-confirmed-lineup-sensitivity-v1.json'))
+          assert c['schemaVersion']=='courtedge-mlb-projected-vs-confirmed-lineup-sensitivity-contract.v1'
+          assert c['projection']['method']=='LAST_VALID_PRIOR_OFFICIAL_DATE_LINEUP'
+          assert c['projection']['sameDateLineupAllowed'] is False
+          assert c['projection']['futureLineupAllowed'] is False
+          assert c['projection']['finalBoxscoreLineupBackfillAllowed'] is False
+          assert c['projection']['thirdPartyProjectionClaimed'] is False
+          assert c['projection']['confirmedTarget']=='EXACT_CANONICAL_T_MINUS_5_9X9'
+          assert c['evaluationSeasons']==['2024','2025','2026_YTD']
+          assert c['expectedCanonicalRows']=={'2024':2406,'2025':2423,'2026_YTD':1781}
+          assert c['frozenAPlusPremium']['premiumA']['lineup_exposure_rate_adv_gte']==0.09876543209876554
+          assert c['frozenAPlusPremium']['aPlus']['c4PHomeGte']==0.69
+          assert c['frozenAPlusPremium']['aPlus']['full13PHomeGte']==0.64
+          p=c['policy']
+          assert p['outcomesRead'] is False
+          assert p['marketPricesRead'] is False
+          assert p['modelRefit'] is False
+          assert p['recalibration'] is False
+          assert p['thresholdSearch'] is False
+          assert p['v68Changed'] is False and p['v80Changed'] is False
+          assert p['productionRoutingChanged'] is False
+          assert p['realFinancialExposure']==0
+          print('MLB_LINEUP_SENSITIVITY_CONTRACT_FROZEN')
+          PY
+
+      - name: Syntax check
+        run: python -m py_compile scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+
+      - name: Download immutable Step12V3 T-minus-5 lineage
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Download immutable V16 probability authority
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: artifacts/v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Verify parent custody
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          c=json.load(open('research/mlb-projected-vs-confirmed-lineup-sensitivity-v1.json'))
+          m=json.load(open('artifacts/v16/pure-settlement-model-manifest.json'))
+          raw=json.dumps(m,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
+          assert hashlib.sha256(raw).hexdigest()==c['parentEvidence']['v16ManifestSha256']
+          assert m['schemaVersion']=='courtedge-p0-step12v16-pure-settlement-model-manifest.v1'
+          assert m['fullGame']['featureSet']=='C4'
+          assert m['fullGame']['preprocessor']['features']==[
+            'lineup_exposure_rate_adv','starter_kbb_adv','combined_team_rs10','team_rd10_diff'
+          ]
+          for season,n in c['expectedCanonicalRows'].items():
+              t=json.load(open(f'artifacts/step12v3/{season}/game-anatomy-feature-table.json'))
+              assert t['schemaVersion']=='courtedge-p0-step12v-game-anatomy-feature-table.v1'
+              assert sum(r.get('t5PregameValid') is True for r in t['rows'])==n
+          print('MLB_LINEUP_SENSITIVITY_PARENT_CUSTODY_VERIFIED')
+          PY
+
+      - name: Run frozen projected-vs-confirmed lineup sensitivity test
+        run: |
+          mkdir -p artifacts/lineup-sensitivity
+          python scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py \
+            --step12-root artifacts/step12v3 \
+            --v16-manifest artifacts/v16/pure-settlement-model-manifest.json \
+            --contract research/mlb-projected-vs-confirmed-lineup-sensitivity-v1.json \
+            --out artifacts/lineup-sensitivity/report.json
+
+      - name: Validate result boundaries
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/lineup-sensitivity/report.json'))
+          assert r['schemaVersion']=='courtedge-mlb-projected-vs-confirmed-lineup-sensitivity.v1'
+          assert r['coverage']['pairedRows']>5000
+          assert r['coverage']['distinctOfficialDates']>400
+          assert r['custody']['confirmedExposureParityMaxAbsDifference']<=1e-12
+          assert r['custody']['confirmedContinuityParityMaxAbsDifference']<=1e-12
+          p=r['policy']
+          for k in ['outcomesRead','marketPricesRead','modelRefit','recalibration','thresholdSearch','sameDateLineupLeakageAllowed','futureLineupLeakageAllowed','thirdPartyHistoricalProjectionClaimed','v68Changed','v80Changed','productionRoutingChanged','automaticBetPlacement']:
+              assert p[k] is False,k
+          assert p['realFinancialExposure']==0
+          print('MLB_PROJECTED_VS_CONFIRMED_LINEUP_SENSITIVITY_RESULT_VALID')
+          print(json.dumps({
+            'coverage':r['coverage'],
+            'lineupIdentity':r['lineupIdentity'],
+            'probabilitySensitivity':r['probabilitySensitivity'],
+            'routeSensitivity':r['routeSensitivity'],
+            'dailyStrongestV16Sensitivity':r['dailyStrongestV16Sensitivity'],
+            'custody':r['custody']
+          },indent=2))
+          PY
+
+      - name: Prove outcome and price blindness statically
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -nE "\['outcomes'\]|\[\"outcomes\"\]|homeWin|awayWin|homeScore|awayScore|marketPrice|sportsbook|odds|TheOdds" scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+          grep -F '"outcomesRead": False' scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+          grep -F '"marketPricesRead": False' scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+          grep -F '"v68Changed": False' scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+          grep -F '"v80Changed": False' scripts/mlb-projected-vs-confirmed-lineup-sensitivity-v1.py
+          git diff --check
+
+      - name: Upload sensitivity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-projected-vs-confirmed-lineup-sensitivity-v1
+          path: artifacts/lineup-sensitivity/report.json
+          if-no-files-found: error
+          retention-days: 30

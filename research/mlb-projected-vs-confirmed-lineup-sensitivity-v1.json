@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "courtedge-mlb-projected-vs-confirmed-lineup-sensitivity-contract.v1",
+  "objective": "Measure how much frozen MLB winner probabilities and A+/Premium route identity move when a leakage-safe pre-confirmation lineup projection is replaced by the exact canonical T-minus-5 confirmed lineup, holding every non-lineup input fixed.",
+  "parentEvidence": {
+    "step12v3WorkflowRunId": 31659518059,
+    "step12v3Artifact": "p0-step12v3-expanded-regimes",
+    "step12v3ArtifactDigest": "sha256:6d834dfd699db9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "v16WorkflowRunId": 31704085189,
+    "v16Artifact": "p0-step12v16-pure-ml-f5-settlement-probability",
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "aPlusFreezePr": 517
+  },
+  "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+  "expectedCanonicalRows": {
+    "2024": 2406,
+    "2025": 2423,
+    "2026_YTD": 1781
+  },
+  "projection": {
+    "method": "LAST_VALID_PRIOR_OFFICIAL_DATE_LINEUP",
+    "description": "For each team, use its most recent exact canonical complete lineup from an official date strictly before the target date. Same-date games cannot update another same-date projection.",
+    "thirdPartyProjectionClaimed": false,
+    "whyThisProjection": "The repository intentionally preserved no historical projected-lineup fallback. This deterministic prior-date projection is reproducible, leakage-safe and conservative; a professional projection may be more accurate but cannot be reconstructed honestly after confirmation.",
+    "sameDateLineupAllowed": false,
+    "futureLineupAllowed": false,
+    "finalBoxscoreLineupBackfillAllowed": false,
+    "confirmedTarget": "EXACT_CANONICAL_T_MINUS_5_9X9"
+  },
+  "frozenAPlusPremium": {
+    "premiumA": {
+      "team_win10_diff_gte": 0.09999999999999998,
+      "starter_kbb_adv_gte": 0.02481042579422841,
+      "lineup_exposure_rate_adv_gte": 0.09876543209876554
+    },
+    "aPlus": {
+      "requiresPremiumA": true,
+      "c4PHomeGte": 0.69,
+      "full13PHomeGte": 0.64
+    },
+    "c4Model": {
+      "intercept": 0.13346732838304923,
+      "features": [
+        ["lineup_exposure_rate_adv", 0.18718356825590396, 0.0014746687094488085, 0.0, 0.13755882386676263],
+        ["starter_kbb_adv", 0.22693050925842057, 0.00027511303638506223, 0.0, 0.06102601114606269],
+        ["combined_team_rs10", 0.10094756294462916, 8.598868294362662, 8.5, 1.4990281969726007],
+        ["team_rd10_diff", 0.14240502027486293, -0.05057330260709487, 0.0, 2.495698473834091]
+      ]
+    },
+    "full13Model": {
+      "intercept": 0.1346743267263629,
+      "features": [
+        ["team_rd10_diff", 0.0469514416835648, -0.05057330260709487, 0.0, 2.495698473834091],
+        ["team_win10_diff", 0.0199400427127508, -0.006691399964241014, 0.0, 0.27436112618719666],
+        ["starter_kbb_adv", 0.16540832130511177, 0.00027511303638506223, 0.0, 0.06102601114606269],
+        ["team_ra10_adv", 0.08194226081992839, -0.03913406970353152, 0.0, 1.5960174523670227],
+        ["lineup_exposure_rate_adv", 0.22223301323120748, 0.0014746687094488085, 0.0, 0.13755882386676263],
+        ["starter_runrisk_adv", 0.14500677939327994, 0.0000929388447975137, 0.0, 0.029292588166369173],
+        ["team_rs10_diff", -0.008978746354314622, -0.011439232903563317, 0.0, 1.5152045134325847],
+        ["starter_hr_adv", -0.06350707350801672, 0.00006483154569761516, 0.0, 0.012709709463485909],
+        ["min_probable_prior_bf", 0.04225737996347226, 175.0892782644973, 130.0, 161.02465094549933],
+        ["lineup_continuity_rate_adv", -0.1003125744872183, -0.0011125017382839666, 0.0, 0.16897625165242633],
+        ["combined_starter_kbb", -0.07009043223475815, 0.28028306727454666, 0.27669490811376757, 0.061174323511824585],
+        ["combined_team_rs10", 0.10351059776752332, 8.598868294362662, 8.5, 1.4990281969726007],
+        ["combined_team_ra10", 0.03366602543099145, 8.594272768208938, 8.5, 1.5244708797348414]
+      ]
+    }
+  },
+  "measurements": [
+    "player_identity_overlap",
+    "exact_batting_slot_match",
+    "common_player_order_displacement",
+    "absolute_v16_home_probability_delta",
+    "absolute_frozen_c4_probability_delta",
+    "absolute_frozen_full13_probability_delta",
+    "v16_selected_side_flip",
+    "premium_route_flip",
+    "a_plus_route_flip",
+    "daily_v16_strongest_game_flip"
+  ],
+  "quantiles": [0.5, 0.75, 0.9, 0.95, 0.99],
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "recalibration": false,
+    "thresholdSearch": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "productionRoutingChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}
