@@ -1,4 +1,3 @@
-import { MlbC4CertifiedMaterializer } from "./mlb-c4-certified-materializer";
 import {
   buildMlbDailyOpportunityContext,
   type MlbDailyOpportunityContextResult,
@@ -7,10 +6,7 @@ import {
   buildMlbDailyOpportunityPriceShortlist,
   type MlbDailyOpportunityPriceShortlist,
 } from "./mlb-daily-opportunity-price-shortlist-v1";
-import {
-  assessMlbProvisionalV16LineupProxy,
-  type MlbProvisionalV16LineupProxyResult,
-} from "./mlb-provisional-v16-lineup-proxy-v1";
+import type { MlbProvisionalV16LineupProxyResult } from "./mlb-provisional-v16-lineup-proxy-v1";
 import { scoreMlbV16SettlementEvidence } from "./mlb-pure-settlement-scorer";
 import type { MlbV16SettlementEvidence } from "./mlb-pure-settlement-evidence-adapter";
 import {
@@ -44,6 +40,7 @@ export interface MlbDailyOpportunityLiveResult {
     provisionalGamesMayLead: true;
     provisionalProbabilityUsesPriorDateLineupProxy: true;
     provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true;
+    registeredSharedProvisionalProviderRequired: true;
     maximumPossiblePriceConsultations: 3;
     wholeSlateAnalysisDoesNotExpandPriceQuota: true;
     paidOddsBoundaryCrossed: false;
@@ -78,23 +75,12 @@ function finalV16Evidence(
   return Object.freeze(output);
 }
 
-function defaultProvisionalProvider(): MlbDailyOpportunityProvisionalV16Provider {
-  // One shared certified materializer means all same-date provisional games reuse the exact
-  // same prior-date historical snapshot and cache rather than independently rebuilding a season.
-  const materializer = new MlbC4CertifiedMaterializer();
-  return (game, generatedAt) => assessMlbProvisionalV16LineupProxy(game, {
-    certifiedMaterializer: materializer,
-    generatedAt,
-  });
-}
-
 export async function buildMlbDailyOpportunityLive(input: {
   assembled: MlbUnifiedV16AssembledRunnerInput;
   provisionalV16Provider?: MlbDailyOpportunityProvisionalV16Provider;
 }): Promise<MlbDailyOpportunityLiveResult> {
   const preprice = runMlbUnifiedPrepriceStep11c(input.assembled);
   const finalByGame = finalV16Evidence(input.assembled, preprice);
-  const provider = input.provisionalV16Provider ?? defaultProvisionalProvider();
   const slateByPk = new Map(input.assembled.slate.games.map((game) => [game.gamePk, game]));
 
   // Use the whole qualified intrinsic population, not only the top-8 paid market-discovery
@@ -102,6 +88,10 @@ export async function buildMlbDailyOpportunityLive(input: {
   const provisionalIntrinsicPks = preprice.intrinsic.games
     .filter((game) => game.inputStage === "PROVISIONAL")
     .map((game) => game.gamePk);
+  if (provisionalIntrinsicPks.length > 0 && !input.provisionalV16Provider) {
+    throw new Error("MLB_DAILY_OPPORTUNITY_PROVISIONAL_V16_PROVIDER_REQUIRED");
+  }
+  const provider = input.provisionalV16Provider;
   const provisionalByGame: Record<number, MlbV16SettlementEvidence> = {};
   const failures: Array<{ gamePk: number; code: string }> = [];
 
@@ -112,7 +102,7 @@ export async function buildMlbDailyOpportunityLive(input: {
       return;
     }
     try {
-      const result = await provider(game, preprice.generatedAt);
+      const result = await provider!(game, preprice.generatedAt);
       if (result.gamePk !== gamePk || result.officialDate !== preprice.date) {
         throw new Error(`MLB_DAILY_OPPORTUNITY_PROVISIONAL_IDENTITY_MISMATCH:${gamePk}`);
       }
@@ -151,6 +141,7 @@ export async function buildMlbDailyOpportunityLive(input: {
       provisionalGamesMayLead: true as const,
       provisionalProbabilityUsesPriorDateLineupProxy: true as const,
       provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true as const,
+      registeredSharedProvisionalProviderRequired: true as const,
       maximumPossiblePriceConsultations: 3 as const,
       wholeSlateAnalysisDoesNotExpandPriceQuota: true as const,
       paidOddsBoundaryCrossed: false as const,
