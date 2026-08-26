@@ -125,8 +125,13 @@ jobs:
           assert 'automaticBetPlacement: false' in visible
           assert 'realFinancialExposure: 0' in visible
 
-          assert 'createMlbUnifiedEliteSharedLiveProviderBundle' in routes
-          assert 'registerMlbUnifiedV16UiRoutes(app, createMlbUnifiedEliteSharedLiveProviderBundle())' in routes
+          # The same certified bundle still feeds the existing V16 route; the new pre-odds
+          # Daily Opportunity route only reuses its sporting evidence providers.
+          assert routes.count('createMlbUnifiedEliteSharedLiveProviderBundle()') == 1
+          assert 'const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();' in routes
+          assert 'registerMlbUnifiedV16UiRoutes(app, mlbUnifiedLive);' in routes
+          assert 'registerMlbDailyOpportunityUiRoutes(app, {' in routes
+          assert 'liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders' in routes
           assert 'sharedClassifierMaterializer = new MlbC4CertifiedMaterializer()' in bundle
           assert bundle.count('full13Materializer: sharedClassifierMaterializer') == 2
           assert 'MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE' in provider
