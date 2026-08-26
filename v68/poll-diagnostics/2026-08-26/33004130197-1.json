@@ -1,0 +1,157 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:15:08.239686Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 2,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:15:55.042600Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 3,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:16:41.852748Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 4,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:17:29.124011Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 5,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:18:16.353717Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 6,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T19:19:03.536815Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 0,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 0
+        },
+        "games": []
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    }
+  ],
+  "attemptsConfigured": 6,
+  "captureWindowMaximumMinutesBeforeScheduledStart": 20,
+  "endedAtUtc": "2026-08-26T19:19:05.735706Z",
+  "firstSeenCanonicalCandidates": 0,
+  "gamePks": [],
+  "githubRunAttempt": "1",
+  "githubRunId": "33004130197",
+  "intervalSeconds": 45,
+  "marketPricesRead": false,
+  "outcomesRead": false,
+  "preflight": {
+    "futureScheduledGames": 14,
+    "nearCaptureWindow": true,
+    "nearestPositiveLeadMinutes": 24.868452416666667,
+    "preflightError": null,
+    "scheduleGames": 15,
+    "upcomingGamePksWithinPreflightHorizon": [
+      823180,
+      825039
+    ]
+  },
+  "preflightHorizonMinutes": 45,
+  "schemaVersion": "courtedge-p0-step12v68-capture-supervisor.v1",
+  "scientificModelChanged": false,
+  "startedAtUtc": "2026-08-26T19:15:07.892855Z",
+  "successfulSourceAttempts": 6,
+  "targetOfficialDate": "2026-08-26"
+}
