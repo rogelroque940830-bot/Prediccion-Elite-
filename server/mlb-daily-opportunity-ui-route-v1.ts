@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { buildMlbDailyOpportunityLive } from "./mlb-daily-opportunity-live-v1";
+import {
+  buildMlbDailyOpportunityLive,
+  type MlbDailyOpportunityProvisionalV16Provider,
+} from "./mlb-daily-opportunity-live-v1";
 import { buildMlbP1DailySlate, isValidMlbP1Date } from "./mlb-p1-daily-slate";
 import {
   assembleMlbUnifiedV16LiveInput,
@@ -16,6 +19,7 @@ export interface MlbDailyOpportunityUiDependencies {
   assembleLiveInput?: typeof assembleMlbUnifiedV16LiveInput;
   buildOpportunityLive?: typeof buildMlbDailyOpportunityLive;
   liveEvidenceProviders?: MlbUnifiedV16LiveEvidenceProviders;
+  provisionalV16Provider?: MlbDailyOpportunityProvisionalV16Provider;
   runIdFactory?: () => string;
   now?: () => Date;
 }
@@ -47,7 +51,12 @@ export async function executeMlbDailyOpportunityUiCommand(
 
   const slate = await (deps.buildSlate ?? buildMlbP1DailySlate)({ date, now });
   const assembly = await (deps.assembleLiveInput ?? assembleMlbUnifiedV16LiveInput)(
-    { runId, slate, now },
+    {
+      runId,
+      slate,
+      now,
+      requireCompleteProvisionalBullpenEvidence: true,
+    },
     deps.liveEvidenceProviders ?? {},
   );
 
@@ -74,6 +83,7 @@ export async function executeMlbDailyOpportunityUiCommand(
         blockers: assembly.blockers,
         policy: {
           wholeSlateOpportunityEvaluated: false,
+          completeProvisionalBullpenEvidenceRequired: true,
           maximumPossiblePriceConsultations: 3,
           wholeSlateAnalysisDoesNotExpandPriceQuota: true,
           paidOddsCalled: false,
@@ -89,6 +99,7 @@ export async function executeMlbDailyOpportunityUiCommand(
 
   const live = await (deps.buildOpportunityLive ?? buildMlbDailyOpportunityLive)({
     assembled: assembly.input,
+    provisionalV16Provider: deps.provisionalV16Provider,
   });
 
   return {
@@ -102,6 +113,7 @@ export async function executeMlbDailyOpportunityUiCommand(
       provisionalV16: live.provisionalV16,
       policy: {
         wholeSlateOpportunityEvaluated: true,
+        completeProvisionalBullpenEvidenceRequired: true,
         wholeQualifiedSlateCompetes: live.policy.wholeQualifiedSlateCompetes,
         provisionalGamesMayLead: live.policy.provisionalGamesMayLead,
         provisionalProbabilityUsesPriorDateLineupProxy: live.policy.provisionalProbabilityUsesPriorDateLineupProxy,
