@@ -156,7 +156,7 @@ function restrictedGamePlan(game: MlbMarketDiscoveryGamePlan): MlbMarketDiscover
   });
 }
 
-function buildPriceDiscovery(input: {
+export function buildMlbDailyOpportunityPriceDiscovery(input: {
   live: MlbDailyOpportunityLiveResult;
 }): MlbMarketDiscoveryResult {
   const ready = [...readyEntries(input.live)].sort(
@@ -176,10 +176,6 @@ function buildPriceDiscovery(input: {
     return game;
   });
 
-  // Reuse the certified discovery planner, but replace its historical top-N market-discovery
-  // population with the already-capped Daily Opportunity finalists selected from intrinsic.games.
-  // This is the key boundary that allows a ninth-or-later whole-slate game to reach price without
-  // letting the old top-8 discovery cap erase it.
   const subsetIntrinsic = {
     ...input.live.preprice.intrinsic,
     rankedGames: Object.freeze(selectedProfiles),
@@ -382,7 +378,7 @@ export async function runMlbDailyOpportunityPricedBridge(input: {
     });
   }
 
-  const priceDiscovery = buildPriceDiscovery({ live: input.live });
+  const priceDiscovery = buildMlbDailyOpportunityPriceDiscovery({ live: input.live });
   if (priceDiscovery.games.length > MLB_DAILY_OPPORTUNITY_MAX_PRICE_CONSULTATIONS) {
     throw new Error(`MLB_DAILY_OPPORTUNITY_ODDS_EXPOSURE_CAP_EXCEEDED:${priceDiscovery.games.length}`);
   }
