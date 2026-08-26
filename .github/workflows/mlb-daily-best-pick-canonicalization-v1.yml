@@ -1,0 +1,168 @@
+name: MLB Daily BEST PICK Outcome-Blind Canonicalization V1
+
+on:
+  push:
+    branches:
+      - research/mlb-daily-best-pick-canonicalization-v1
+    paths:
+      - "research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json"
+      - "server/mlb-daily-best-pick-daily-canonicalization-v1.ts"
+      - "server/mlb-daily-best-pick-daily-canonicalization-v1.test.ts"
+      - ".github/workflows/mlb-daily-best-pick-canonicalization-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CONTRACT: research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json
+  IMPL: server/mlb-daily-best-pick-daily-canonicalization-v1.ts
+  TEST: server/mlb-daily-best-pick-daily-canonicalization-v1.test.ts
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout canonicalization branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prove contract freeze predates implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT" | tail -1)"
+          IMPL_ADD="$(git log --diff-filter=A --format=%H -- "$IMPL" | tail -1)"
+          TEST_ADD="$(git log --diff-filter=A --format=%H -- "$TEST" | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$IMPL_ADD"
+          test -n "$TEST_ADD"
+          test "$CONTRACT_ADD" = "aaf017bb545ea3f80a0b4a5c0599c60e3838bd74"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$IMPL_ADD"
+          git merge-base --is-ancestor "$IMPL_ADD" "$TEST_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json'))
+          assert c['schemaVersion']=='courtedge-mlb-daily-best-pick-daily-canonicalization-contract.v1'
+          assert c['frozenBeforeImplementation'] is True
+          assert c['frozenBeforeFirstEligibleOfficialDate'] is True
+          assert c['frozenBeforeAnyProspectiveOutcomeRead'] is True
+          assert c['eligibleOfficialDateBoundary']['firstOfficialDate']=='2026-08-26'
+          assert c['conservativePregameSeal']['candidateDatabaseCreatedAtMustBeStrictlyBeforeCutoff'] is True
+          assert c['canonicalSelectionRule']['sortKeysInOrder']==[
+            'capturedAtUtc_DESC','prepriceRuntimeGeneratedAt_DESC','createdAtMs_ASC','sourceRunId_ASC','snapshotDigest_ASC'
+          ]
+          assert c['outcomeEmbargo']['outcomesReadableByCanonicalizer'] is False
+          assert c['outcomeEmbargo']['sportsbookPricesReadableByCanonicalizer'] is False
+          assert c['probabilityBoundary']['selectedPopulationProbabilityScoringAllowed'] is False
+          print('MLB_CANONICALIZATION_PREIMPLEMENTATION_FREEZE_PROVED')
+          PY
+
+      - name: Type-check canonicalizer
+        run: npx tsc --noEmit --module ESNext --moduleResolution bundler --target ES2022 --esModuleInterop --skipLibCheck --types node "$IMPL" "$TEST"
+
+      - name: Run frozen synthetic canonicalization regression suite
+        run: npx tsx --test "$TEST"
+
+      - name: Prove read-only outcome-blind implementation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          t=Path('server/mlb-daily-best-pick-daily-canonicalization-v1.ts').read_text()
+          compact=t.replace(' ', '')
+          required=[
+            'readonly: true, fileMustExist: true',
+            'query_only = ON',
+            'createdAtMs < cutoffMs',
+            'captured < cutoffMs',
+            'generated < cutoffMs',
+            'Math.min(...scheduleRows.flatMap',
+            'capturedAtUtc_DESC',
+            'prepriceRuntimeGeneratedAt_DESC',
+            'createdAtMs_ASC',
+            'sourceRunId_ASC',
+            'snapshotDigest_ASC',
+            'decisionAffectsCanonicalSelection: false',
+            'pickIdentityAffectsCanonicalSelection: false',
+            'modelProbabilityAffectsCanonicalSelection: false',
+            'routeMatchAffectsCanonicalSelection: false',
+            'selectedPopulationProbabilityScoringAllowed: false',
+            'crossSportProbabilityAuthorized: false',
+          ]
+          for x in required: assert x in t, x
+          forbidden=[
+            './mlb-selective-odds-acquisition',
+            './mlb-market-edge',
+            './mlb-operating-envelope',
+            './mlb-pure-settlement',
+            './mlb-daily-best-pick-price',
+            './mlb-daily-best-pick-manual-price',
+            'winner',
+            'selected_win',
+            'finalScore',
+          ]
+          found=[x for x in forbidden if x in t]
+          assert not found, found
+          assert 'outcomesRead:false' in compact
+          assert 'sportsbookPricesRead:false' in compact
+          assert 'custodyRowsMutated:false' in compact
+          print('MLB_CANONICALIZATION_READ_ONLY_OUTCOME_BLIND_BOUNDARY_PROVED')
+          PY
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Materialize canonicalization validation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python - <<'PY'
+          import json, subprocess
+          def blob(path): return subprocess.check_output(['git','hash-object',path], text=True).strip()
+          out={
+            'schemaVersion':'courtedge-mlb-daily-best-pick-daily-canonicalization-validation.v1',
+            'classification':'MLB_DAILY_BEST_PICK_OUTCOME_BLIND_CANONICALIZATION_FROZEN_AND_VALIDATED',
+            'headSha':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+            'contractBlobSha':blob('research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json'),
+            'implementationBlobSha':blob('server/mlb-daily-best-pick-daily-canonicalization-v1.ts'),
+            'testBlobSha':blob('server/mlb-daily-best-pick-daily-canonicalization-v1.test.ts'),
+            'firstEligibleOfficialDate':'2026-08-26',
+            'canonicalRule':'LATEST_VERIFIABLY_INGESTED_OUTCOME_BLIND_TRUSTED_RUNTIME_BEFORE_CONSERVATIVE_FIRST_GAME_BOUNDARY',
+            'allSnapshotSchedulesContributeToConservativeCutoff':True,
+            'databaseCreatedAtMustPrecedeCutoff':True,
+            'noPlayEligible':True,
+            'outcomesRead':False,
+            'sportsbookPricesRead':False,
+            'performanceMetricsRead':False,
+            'modelOutputAffectsCanonicalSelection':False,
+            'probabilityScoringAuthorized':False,
+            'crossSportProbabilityAuthorized':False,
+            'globalEliteRanker':'BLOCKED',
+            'nextAction':'PROMOTE_VALIDATED_CANONICALIZATION_CODE_WITHOUT_UNLOCKING_OUTCOMES_THEN_FREEZE_MLB_SELECTED_SIDE_PROBABILITY_MAPPING_CONTRACT'
+          }
+          with open('work/mlb-daily-best-pick-canonicalization-v1-validation.json','w') as f:
+            json.dump(out,f,indent=2,sort_keys=True); f.write('\n')
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+
+      - name: Upload canonicalization validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-daily-best-pick-canonicalization-v1-validation
+          path: work/mlb-daily-best-pick-canonicalization-v1-validation.json
+          if-no-files-found: error
+          retention-days: 90
