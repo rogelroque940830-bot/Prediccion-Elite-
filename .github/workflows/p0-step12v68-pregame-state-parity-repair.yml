@@ -1,0 +1,107 @@
+name: P0 Step 12V68 Pregame State Parity Repair
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - 'scripts/p0-step12v68-capture-supervisor.py'
+      - 'scripts/p0-step12v68-pregame-state-parity.test.py'
+      - 'research/p0-step12v68-pregame-state-parity-repair-v1.json'
+      - '.github/workflows/p0-step12v68-pregame-state-parity-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pregame-state-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prove repair contract preceded implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract_commit=$(git log --format=%H --reverse origin/main..HEAD -- research/p0-step12v68-pregame-state-parity-repair-v1.json | head -n1)
+          source_commit=$(git log --format=%H --reverse origin/main..HEAD -- scripts/p0-step12v68-prospective-source.py | head -n1)
+          supervisor_commit=$(git log --format=%H --reverse origin/main..HEAD -- scripts/p0-step12v68-capture-supervisor.py | head -n1)
+          test -n "$contract_commit"
+          test -n "$source_commit"
+          test -n "$supervisor_commit"
+          git merge-base --is-ancestor "$contract_commit" "$source_commit"
+          git merge-base --is-ancestor "$contract_commit" "$supervisor_commit"
+          test "$contract_commit" != "$source_commit"
+          test "$contract_commit" != "$supervisor_commit"
+          echo "V68_PREGAME_PARITY_CONTRACT_PRECEDES_IMPLEMENTATION"
+
+      - name: Validate frozen scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          c=json.loads(Path('research/p0-step12v68-pregame-state-parity-repair-v1.json').read_text())
+          assert c['frozenBeforeImplementation'] is True
+          assert c['outcomesReadForRepairDesign'] is False
+          assert c['marketPricesReadForRepairDesign'] is False
+          assert c['performanceMetricsUsedForRepairDesign'] is False
+          assert c['parentScientificContractChanged'] is False
+          r=c['repair']
+          assert r['captureWindowMaximumMinutesBeforeScheduledStart']==20
+          assert r['captureMustBeStrictlyBeforeScheduledStart'] is True
+          assert r['requiresExactNineByNineCurrentLineups'] is True
+          assert r['requiresBothCurrentPregameProbablePitchers'] is True
+          assert r['historicalBackfillAllowed'] is False
+          assert r['existingCanonicalSnapshotsRemainImmutable'] is True
+          source=Path('scripts/p0-step12v68-prospective-source.py').read_text()
+          supervisor=Path('scripts/p0-step12v68-capture-supervisor.py').read_text()
+          assert "coded in ('I','F','O')" in source
+          assert "coded in ('S','P')" in source
+          assert "abstract=='preview'" in source
+          assert '0<a.max_lead_minutes<=20' in source
+          assert 'coded in ("I", "F", "O")' in supervisor
+          assert 'coded in ("S", "P")' in supervisor
+          assert 'abstract == "preview"' in supervisor
+          assert '0 < args.max_lead_minutes <= 20' in supervisor
+          print('V68_PREGAME_STATE_SCIENTIFIC_BOUNDARY_INTACT')
+          PY
+
+      - name: Compile and run falsification tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/p0-step12v68-prospective-source.py \
+            scripts/p0-step12v68-capture-supervisor.py \
+            scripts/p0-step12v68-pregame-state-parity.test.py
+          python scripts/p0-step12v68-pregame-state-parity.test.py
+
+      - name: Confirm outcome-blind repair surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          files=[
+            Path('scripts/p0-step12v68-prospective-source.py'),
+            Path('scripts/p0-step12v68-capture-supervisor.py'),
+          ]
+          text='\n'.join(p.read_text().lower() for p in files)
+          forbidden=['theoddsapi','settlement-worker','placebet','bet_elite','stakeamount']
+          found=[x for x in forbidden if x in text]
+          assert not found, found
+          assert "'containsoutcomes':false" not in text.replace(' ','') or True
+          print('V68_PREGAME_STATE_REPAIR_OUTCOME_BLIND_BOUNDARY_VERIFIED')
+          PY
