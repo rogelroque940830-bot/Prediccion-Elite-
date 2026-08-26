@@ -1,8 +1,9 @@
-import type {
-  MlbIntrinsicEdgeResult,
-  MlbIntrinsicGameProfile,
-  MlbIntrinsicThesisKind,
-  MlbIntrinsicThesisStructure,
+import {
+  rankMlbIntrinsicGames,
+  type MlbIntrinsicEdgeResult,
+  type MlbIntrinsicGameProfile,
+  type MlbIntrinsicThesisKind,
+  type MlbIntrinsicThesisStructure,
 } from "./mlb-intrinsic-edge";
 import type { MlbP1DailySlate } from "./mlb-p1-daily-slate";
 import type { MlbV16SettlementEvidence } from "./mlb-pure-settlement-evidence-adapter";
@@ -69,6 +70,8 @@ export interface MlbDailyOpportunityContextResult {
     marketPricesRead: false;
     oneUniversalWeightedScoreUsed: false;
     contextRankUsesExistingIntrinsicEngine: true;
+    wholeQualifiedIntrinsicPopulationRanked: true;
+    marketDiscoveryCapMayHideDailyOpportunity: false;
     finalInputStatusAffectsContextRank: false;
     gameStartTimeAffectsContextRank: false;
     provisionalGamesMayLeadDailyOpportunity: true;
@@ -190,7 +193,7 @@ function validateIdentity(slate: MlbP1DailySlate, intrinsic: MlbIntrinsicEdgeRes
   }
   const slatePks = new Set(slate.games.map((game) => game.gamePk));
   const seen = new Set<number>();
-  for (const game of intrinsic.rankedGames) {
+  for (const game of intrinsic.games) {
     if (!slatePks.has(game.gamePk)) {
       throw new Error(`MLB_DAILY_OPPORTUNITY_GAME_NOT_IN_SLATE:${game.gamePk}`);
     }
@@ -211,7 +214,12 @@ export function buildMlbDailyOpportunityContext(input: {
   const finalV16ByGame = input.finalV16ByGame ?? {};
   const provisionalV16ByGame = input.provisionalV16ByGame ?? {};
 
-  const rankedOpportunities = Object.freeze(input.intrinsic.rankedGames.map((game, index) =>
+  // Market discovery intentionally keeps a top-8 quota-control cap. The Daily Opportunity
+  // decision has a different job: identify the best sporting opportunity of the entire
+  // qualified slate. Re-rank the full intrinsic population here so a ninth or later game
+  // can never disappear merely because it was not needed for paid market discovery.
+  const fullContextRanking = rankMlbIntrinsicGames(input.intrinsic.games);
+  const rankedOpportunities = Object.freeze(fullContextRanking.map((game, index) =>
     entryFor(game, index + 1, finalV16ByGame, provisionalV16ByGame),
   ));
   const eligible = rankedOpportunities.filter((entry) => entry.eligibleSportingOpportunity);
@@ -255,6 +263,8 @@ export function buildMlbDailyOpportunityContext(input: {
       marketPricesRead: false as const,
       oneUniversalWeightedScoreUsed: false as const,
       contextRankUsesExistingIntrinsicEngine: true as const,
+      wholeQualifiedIntrinsicPopulationRanked: true as const,
+      marketDiscoveryCapMayHideDailyOpportunity: false as const,
       finalInputStatusAffectsContextRank: false as const,
       gameStartTimeAffectsContextRank: false as const,
       provisionalGamesMayLeadDailyOpportunity: true as const,
