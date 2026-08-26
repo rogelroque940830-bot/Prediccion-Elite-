@@ -99,6 +99,7 @@ export interface MlbDailyOpportunityPricedBridgeDependencies {
   oddsService: Pick<MlbSelectiveOddsAcquisitionService, "acquire">;
   evaluateMarketEdges?: typeof evaluateMlbMarketEdges;
   buildOperatingEnvelope?: typeof buildMlbOperatingEnvelope;
+  now?: () => Date;
 }
 
 const SUPPORTED_PRICED_MARKETS = new Set(["ML", "F5_ML"]);
@@ -290,12 +291,11 @@ function pricedDecision(input: {
     }
   }
 
+  if (unresolved) {
+    return Object.freeze({ action: "WAIT", reason: "UNRESOLVED_ECONOMIC_EVIDENCE", recommendation: null });
+  }
   if (candidates.length === 0) {
-    return Object.freeze({
-      action: unresolved ? "WAIT" : "NO_PLAY",
-      reason: unresolved ? "UNRESOLVED_ECONOMIC_EVIDENCE" : "NO_POSITIVE_EV",
-      recommendation: null,
-    });
+    return Object.freeze({ action: "NO_PLAY", reason: "NO_POSITIVE_EV", recommendation: null });
   }
 
   const frontier = candidates.filter((candidate) =>
@@ -392,10 +392,14 @@ export async function runMlbDailyOpportunityPricedBridge(input: {
     apiKey: input.runtime.apiKey,
   });
   const modelAssessments = buildSelectedModelAssessments({ assembled: input.assembled, live: input.live });
+  const economicNow = input.dependencies.now?.() ?? new Date();
+  if (!Number.isFinite(economicNow.getTime())) {
+    throw new Error("MLB_DAILY_OPPORTUNITY_ECONOMIC_NOW_INVALID");
+  }
   const marketEdge = (input.dependencies.evaluateMarketEdges ?? evaluateMlbMarketEdges)({
     acquisition,
     modelAssessments,
-    now: new Date(input.live.generatedAt),
+    now: economicNow,
   });
   const operatingEnvelope = (input.dependencies.buildOperatingEnvelope ?? buildMlbOperatingEnvelope)({ marketEdge });
   const decision = pricedDecision({ live: input.live, acquisition, operatingEnvelope });
