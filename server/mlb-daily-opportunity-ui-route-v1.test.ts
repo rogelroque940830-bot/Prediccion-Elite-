@@ -39,7 +39,7 @@ function fakeSlate() {
   } as any;
 }
 
-test("whole-slate opportunity endpoint returns WAIT without crossing paid odds", async () => {
+test("whole-slate opportunity endpoint returns WAIT with a capped pre-odds shortlist", async () => {
   let assemblyCalls = 0;
   let opportunityCalls = 0;
   const response = await executeMlbDailyOpportunityUiCommand(date, {
@@ -64,13 +64,28 @@ test("whole-slate opportunity endpoint returns WAIT without crossing paid odds",
         dailyOpportunity: {
           action: "WAIT",
           primaryOpportunity: { gamePk: 2, inputStage: "PROVISIONAL" },
-          summary: { intrinsicEvaluatedGames: 2, eligibleSportingOpportunities: 2, provisionalEligibleOpportunities: 1, finalEligibleOpportunities: 1, frontierSize: 2 },
+          summary: { intrinsicEvaluatedGames: 15, eligibleSportingOpportunities: 4, provisionalEligibleOpportunities: 2, finalEligibleOpportunities: 2, frontierSize: 3 },
+        },
+        priceConsultationShortlist: {
+          entries: [
+            { gamePk: 2, inputStage: "PROVISIONAL", priceTiming: "DEFER_UNTIL_FINAL_INPUTS" },
+            { gamePk: 1, inputStage: "FINAL", priceTiming: "READY_IF_PRICE_LAYER_INVOKED" },
+          ],
+          summary: {
+            wholeSlateSportingOpportunitiesEvaluated: 15,
+            nonDominatedFrontierSize: 3,
+            shortlistedForPossiblePriceConsultation: 2,
+            readyFinalCandidates: 1,
+            deferredProvisionalCandidates: 1,
+          },
         },
         provisionalV16: { attemptedGamePks: [2], scoredGamePks: [2], failed: [] },
         policy: {
           wholeQualifiedSlateCompetes: true,
           provisionalGamesMayLead: true,
           provisionalProbabilityUsesPriorDateLineupProxy: true,
+          maximumPossiblePriceConsultations: 3,
+          wholeSlateAnalysisDoesNotExpandPriceQuota: true,
         },
       } as any;
     },
@@ -79,6 +94,10 @@ test("whole-slate opportunity endpoint returns WAIT without crossing paid odds",
   assert.equal(response.httpStatus, 200);
   assert.equal(response.body.status, "OPPORTUNITY_EVALUATED");
   assert.equal((response.body.dailyOpportunity as any).action, "WAIT");
+  assert.equal((response.body.priceConsultationShortlist as any).entries.length, 2);
+  assert.equal((response.body.priceConsultationShortlist as any).summary.wholeSlateSportingOpportunitiesEvaluated, 15);
+  assert.equal((response.body.policy as any).maximumPossiblePriceConsultations, 3);
+  assert.equal((response.body.policy as any).wholeSlateAnalysisDoesNotExpandPriceQuota, true);
   assert.equal((response.body.policy as any).paidOddsCalled, false);
   assert.equal((response.body.policy as any).theOddsApiCreditsConsumed, 0);
   assert.equal((response.body.policy as any).wholeQualifiedSlateCompetes, true);
@@ -108,6 +127,7 @@ test("certified evidence blocker returns before opportunity scoring and before o
 
   assert.equal(response.httpStatus, 202);
   assert.equal(response.body.status, "OPPORTUNITY_INPUTS_BLOCKED");
+  assert.equal((response.body.policy as any).maximumPossiblePriceConsultations, 3);
   assert.equal((response.body.policy as any).paidOddsCalled, false);
   assert.equal((response.body.policy as any).theOddsApiCreditsConsumed, 0);
   assert.equal(opportunityCalls, 0);
