@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-best-pick-daily-canonicalization-result.v1",
+  "stage": "MLB_DAILY_BEST_PICK_OUTCOME_BLIND_DAILY_CANONICALIZATION_V1",
+  "sport": "MLB",
+  "classification": "MLB_DAILY_BEST_PICK_OUTCOME_BLIND_CANONICALIZATION_FROZEN_AND_VALIDATED",
+  "validatedHeadSha": "eadff8647db77823744358033f98f83437dade5c",
+  "validation": {
+    "workflowName": "MLB Daily BEST PICK Outcome-Blind Canonicalization V1",
+    "workflowRunId": 32926004680,
+    "jobId": 98048910557,
+    "conclusion": "success",
+    "artifactId": 9591519442,
+    "artifactName": "mlb-daily-best-pick-canonicalization-v1-validation",
+    "artifactDigest": "sha256:880b2a35e4f0916029fd2da139df54b2f0462bbeb7725808ae9a533be3665993"
+  },
+  "frozenSourceIdentity": {
+    "contractPath": "research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json",
+    "contractBlobSha": "bcd18bfd7475be7e14e1b5a9b445e5b89eacb235",
+    "implementationPath": "server/mlb-daily-best-pick-daily-canonicalization-v1.ts",
+    "implementationBlobSha": "2a2c6f8f1ab52c3f861c2e55ab6dc50500986a06",
+    "testPath": "server/mlb-daily-best-pick-daily-canonicalization-v1.test.ts",
+    "testBlobSha": "0948b4e1cb14916a09eb48501b3dc5a9ffdafd38"
+  },
+  "canonicalRule": {
+    "name": "LATEST_VERIFIABLY_INGESTED_OUTCOME_BLIND_TRUSTED_RUNTIME_BEFORE_CONSERVATIVE_FIRST_GAME_BOUNDARY",
+    "datePregameCutoff": "MINIMUM_SCHEDULED_START_TIME_ACROSS_ALL_GAMES_IN_ALL_INTEGRITY_VALID_COMPLETE_SCHEDULE_SNAPSHOTS_FOR_THE_OFFICIAL_DATE",
+    "strictCandidateConditions": [
+      "capturedAtUtc < datePregameCutoffUtc",
+      "prepriceRuntimeGeneratedAt < datePregameCutoffUtc",
+      "databaseCreatedAtMs < datePregameCutoffUtc"
+    ],
+    "sortKeysInOrder": [
+      "capturedAtUtc_DESC",
+      "prepriceRuntimeGeneratedAt_DESC",
+      "createdAtMs_ASC",
+      "sourceRunId_ASC",
+      "snapshotDigest_ASC"
+    ],
+    "noPlayEligible": true,
+    "manualOverrideAllowed": false,
+    "retrospectiveBestRunChoiceAllowed": false
+  },
+  "validationChecks": {
+    "contractPredatesImplementation": true,
+    "targetedTypeCheckPassed": true,
+    "syntheticRegressionSuitePassed": true,
+    "latestEligiblePregameRowTestPassed": true,
+    "postFirstGameCaptureRejected": true,
+    "postFirstGameDatabaseInsertionRejectedEvenWithOldEmbeddedTimestamp": true,
+    "noPlayEligibilityPassed": true,
+    "modelOutputCannotChangeSortOrder": true,
+    "earlierScheduleAcrossSnapshotsDefinesCutoff": true,
+    "missingFullSlateStartTimeRejected": true,
+    "deterministicTieBreakPassed": true,
+    "tamperedSnapshotRejected": true,
+    "readOnlySqliteBoundaryPassed": true,
+    "outcomeBlindStaticBoundaryPassed": true,
+    "productionBackendBuildPassed": true
+  },
+  "outcomeEmbargo": {
+    "outcomesRead": false,
+    "outcomeStatusRead": false,
+    "performanceMetricsRead": false,
+    "sportsbookPricesRead": false,
+    "minimumCanonicalOfficialDatesBeforeOutcomeEvaluationContractMayExecute": 30,
+    "minimumDateGateAloneUnlocksOutcomes": false,
+    "probabilityMappingContractRequiredBeforeSelectedPopulationProbabilityScoring": true,
+    "outcomeReadUnlocked": false
+  },
+  "scientificInterpretation": {
+    "oneDeterministicOfficialRuntimePerEligibleDateNowDefined": true,
+    "canonicalizationUsesModelOutcomeOrPerformance": false,
+    "canonicalizationUsesSportsbookPrice": false,
+    "canonicalizationCanBeChangedAfterOutcomeRead": false,
+    "allRawCustodyRunsRemainAuditEvidence": true,
+    "selectedPopulationProbabilityScoringAuthorized": false,
+    "crossSportProbabilityAuthorized": false
+  },
+  "safety": {
+    "mlbModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "selectorHierarchyChanged": false,
+    "visibleDailyBestPickChanged": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "promotionAllowed": false
+  },
+  "crossSportCalibration": "BLOCKED",
+  "globalEliteRanker": "BLOCKED",
+  "nextAction": "PROMOTE_VALIDATED_CANONICALIZATION_CODE_WITHOUT_UNLOCKING_OUTCOMES_THEN_FREEZE_MLB_SELECTED_SIDE_PROBABILITY_MAPPING_CONTRACT"
+}
