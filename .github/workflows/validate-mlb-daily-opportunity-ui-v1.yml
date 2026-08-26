@@ -11,6 +11,8 @@ on:
       - 'server/mlb-daily-opportunity-price-shortlist-v1.test.ts'
       - 'server/mlb-daily-opportunity-ui-route-v1.ts'
       - 'server/mlb-daily-opportunity-ui-route-v1.test.ts'
+      - 'server/mlb-unified-v16-live-input-assembler.ts'
+      - 'server/mlb-unified-elite-shared-live-provider-bundle.ts'
       - 'server/routes.ts'
       - '.github/workflows/validate-mlb-daily-opportunity-ui-v1.yml'
   workflow_dispatch:
@@ -48,7 +50,9 @@ jobs:
             server/mlb-daily-opportunity-price-shortlist-v1.test.ts \
             server/mlb-daily-opportunity-live-v1.ts \
             server/mlb-daily-opportunity-ui-route-v1.ts \
-            server/mlb-daily-opportunity-ui-route-v1.test.ts
+            server/mlb-daily-opportunity-ui-route-v1.test.ts \
+            server/mlb-unified-v16-live-input-assembler.ts \
+            server/mlb-unified-elite-shared-live-provider-bundle.ts
 
       - name: Execute context falsification suite
         run: npx tsx --test server/mlb-daily-opportunity-context-v1.test.ts
@@ -70,7 +74,11 @@ jobs:
           grep -F 'MLB_DAILY_OPPORTUNITY_MAX_PRICE_CONSULTATIONS = 3' server/mlb-daily-opportunity-price-shortlist-v1.ts
           grep -F 'wholeSlateAnalysisDoesNotExpandPriceQuota: true' server/mlb-daily-opportunity-price-shortlist-v1.ts
           grep -F 'provisionalCandidateCannotBeMarkedPriceReady: true' server/mlb-daily-opportunity-price-shortlist-v1.ts
+          grep -F 'requireCompleteProvisionalBullpenEvidence: true' server/mlb-daily-opportunity-ui-route-v1.ts
+          grep -F 'requireCompleteProvisionalBullpenEvidence: input.requireCompleteProvisionalBullpenEvidence === true' server/mlb-unified-v16-live-input-assembler.ts
           grep -F 'priceConsultationShortlist: live.priceConsultationShortlist' server/mlb-daily-opportunity-ui-route-v1.ts
+          grep -F 'provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider' server/routes.ts
+          grep -F 'certifiedMaterializer: sharedClassifierMaterializer' server/mlb-unified-elite-shared-live-provider-bundle.ts
           grep -F 'paidOddsBoundaryCrossed: false' server/mlb-daily-opportunity-live-v1.ts
           grep -F 'paidOddsCalled: false' server/mlb-daily-opportunity-ui-route-v1.ts
           grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-daily-opportunity-ui-route-v1.ts
