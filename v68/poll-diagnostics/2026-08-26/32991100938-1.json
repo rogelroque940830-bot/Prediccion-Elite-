@@ -1,0 +1,222 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:54:43.216243Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 15.279729283333333,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 2,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:55:29.577677Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 14.507038716666667,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 3,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:56:15.636866Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 13.739385566666666,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 4,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:57:01.322150Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 12.977964166666668,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 5,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:57:47.528554Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 12.207857433333334,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    },
+    {
+      "attempt": 6,
+      "exactReadyGamesInCaptureWindow": 0,
+      "firstSeenRowsAdded": 0,
+      "pollStartedAtUtc": "2026-08-26T16:58:33.490357Z",
+      "readiness": {
+        "counts": {
+          "exactReady": 0,
+          "feedError": 0,
+          "gamesInsideStrictWindow": 1,
+          "missingLineup": 0,
+          "missingPitcher": 0,
+          "notPregame": 1
+        },
+        "games": [
+          {
+            "awayLineupCount": 9,
+            "awayProbablePitcherKnown": true,
+            "codedGameState": "P",
+            "gamePk": 824234,
+            "homeLineupCount": 9,
+            "homeProbablePitcherKnown": true,
+            "leadMinutes": 11.441827383333333,
+            "reason": "NOT_PREGAME"
+          }
+        ]
+      },
+      "readinessError": null,
+      "scheduleGames": 15,
+      "sourceError": null,
+      "sourceRows": 0
+    }
+  ],
+  "attemptsConfigured": 6,
+  "captureWindowMaximumMinutesBeforeScheduledStart": 20,
+  "endedAtUtc": "2026-08-26T16:58:34.513178Z",
+  "firstSeenCanonicalCandidates": 0,
+  "gamePks": [],
+  "githubRunAttempt": "1",
+  "githubRunId": "32991100938",
+  "intervalSeconds": 45,
+  "marketPricesRead": false,
+  "outcomesRead": false,
+  "preflight": {
+    "futureScheduledGames": 15,
+    "nearCaptureWindow": true,
+    "nearestPositiveLeadMinutes": 15.282981533333333,
+    "preflightError": null,
+    "scheduleGames": 15,
+    "upcomingGamePksWithinPreflightHorizon": [
+      824234
+    ]
+  },
+  "preflightHorizonMinutes": 45,
+  "schemaVersion": "courtedge-p0-step12v68-capture-supervisor.v1",
+  "scientificModelChanged": false,
+  "startedAtUtc": "2026-08-26T16:54:43.021108Z",
+  "successfulSourceAttempts": 6,
+  "targetOfficialDate": "2026-08-26"
+}
