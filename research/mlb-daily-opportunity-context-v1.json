@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "courtedge-mlb-daily-opportunity-context-contract.v1",
+  "objective": "Rank the full MLB slate as context-specific sporting opportunities before lineup confirmation, preserve provisional uncertainty, and decide WAIT vs PLAY_NOW_CANDIDATE vs NO_PLAY without inventing one universal weighted score.",
+  "parentEvidence": {
+    "lineupSensitivityPr": 684,
+    "lineupSensitivityMainCommit": "14cd592582d895939c61156ad71605cf2b310254",
+    "pairedGames": 6563,
+    "distinctOfficialDates": 499,
+    "projectedProxyIdentityOverlap": 0.7602,
+    "projectionQualityMatchedIdentityOverlap": 0.8333,
+    "v16AbsoluteProbabilityDelta": {
+      "mean": 0.0204,
+      "median": 0.0166,
+      "p90": 0.0425,
+      "p95": 0.0533,
+      "max": 0.127
+    },
+    "projectionQualityMatched": {
+      "games": 1173,
+      "meanAbsoluteV16Delta": 0.0173,
+      "v16SelectedSideFlipRate": 0.1176,
+      "parentRouteFlipRate": 0.0375
+    }
+  },
+  "opportunityRanking": {
+    "source": "EXISTING_MLB_INTRINSIC_EDGE_RANK",
+    "usesContextSpecificThesisStructure": true,
+    "usesHorizonSpecificEvidence": true,
+    "usesCertifiedSupportingComponents": true,
+    "usesContradictionFailClosed": true,
+    "usesOneUniversalWeightedScore": false,
+    "gameStartTimeMayImproveRank": false,
+    "finalInputStatusMayImproveRank": false,
+    "provisionalGamesMayRankFirst": true,
+    "sameUnderlyingEvidenceMayDoubleCount": false
+  },
+  "uncertainty": {
+    "provisionalV16RobustProbabilityRule": "selected_side_probability_minus_empirical_p95_absolute_lineup_delta",
+    "p95AbsoluteLineupDelta": 0.0533,
+    "confirmedV16Penalty": 0.0,
+    "probabilityThresholdForOpportunityEligibility": null,
+    "reason": "Lineup confirmation changes probability materially but does not justify excluding a game from the daily competition."
+  },
+  "decisionSemantics": {
+    "eligibleSportingClass": "GAME_ELITE_RESEARCH_CANDIDATE",
+    "topOpportunityProvisional": "WAIT",
+    "topOpportunityFinalAndNoNonDominatedLaterProvisional": "PLAY_NOW_CANDIDATE",
+    "noEligibleOpportunity": "NO_PLAY",
+    "confirmationMayDowngradeToNoPlay": true,
+    "confirmationMayChangeDailyLeader": true,
+    "forcingOnePickPerDay": false
+  },
+  "dominance": {
+    "method": "PARETO_CONTEXT_RANK_AND_ROBUST_V16_PROBABILITY_WHEN_AVAILABLE",
+    "contextRankLowerIsBetter": true,
+    "robustV16ProbabilityHigherIsBetter": true,
+    "missingProbabilityCannotDominateMeasuredProbability": true,
+    "tradeoffCreatesNonDominatedFrontier": true,
+    "laterProvisionalOnFrontierCausesWait": true
+  },
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "recalibration": false,
+    "thresholdSearch": false,
+    "newUniversalContextWeights": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "ppHorizonProspectiveValidationChanged": false,
+    "productionDailyBestPickChanged": false,
+    "betEliteChanged": false,
+    "stakeChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

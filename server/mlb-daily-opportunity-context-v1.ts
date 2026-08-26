@@ -1,0 +1,271 @@
+import type {
+  MlbIntrinsicEdgeResult,
+  MlbIntrinsicGameProfile,
+  MlbIntrinsicThesisKind,
+  MlbIntrinsicThesisStructure,
+} from "./mlb-intrinsic-edge";
+import type { MlbP1DailySlate } from "./mlb-p1-daily-slate";
+import type { MlbV16SettlementEvidence } from "./mlb-pure-settlement-evidence-adapter";
+
+export const MLB_DAILY_OPPORTUNITY_CONTEXT_SCHEMA =
+  "courtedge-mlb-daily-opportunity-context.v1" as const;
+
+export const MLB_DAILY_OPPORTUNITY_LINEUP_P95_DELTA = 0.0533 as const;
+
+export type MlbDailyOpportunityAction = "WAIT" | "PLAY_NOW_CANDIDATE" | "NO_PLAY";
+export type MlbDailyOpportunityProbabilityStage =
+  | "CONFIRMED_V16"
+  | "PROVISIONAL_V16"
+  | "INTRINSIC_ONLY";
+
+export interface MlbDailyOpportunityEntry {
+  gamePk: number;
+  officialDate: string;
+  startTime: string | null;
+  awayTeam: string;
+  homeTeam: string;
+  inputStage: "FINAL" | "PROVISIONAL";
+  contextRank: number;
+  intrinsicClassification: MlbIntrinsicGameProfile["researchClassification"];
+  eligibleSportingOpportunity: boolean;
+  context: {
+    thesisKinds: readonly MlbIntrinsicThesisKind[];
+    thesisStructures: readonly MlbIntrinsicThesisStructure[];
+    supportingComponents: readonly string[];
+    fullGameElite: boolean;
+    earlyWindowElite: boolean;
+    maxAbsoluteNativeRunSignal: number;
+  };
+  probability: {
+    stage: MlbDailyOpportunityProbabilityStage;
+    selectedSide: "HOME" | "AWAY" | null;
+    selectedSideProbability: number | null;
+    lineupUncertaintyP95: number;
+    robustSelectedSideProbability: number | null;
+  };
+}
+
+export interface MlbDailyOpportunityContextResult {
+  schemaVersion: typeof MLB_DAILY_OPPORTUNITY_CONTEXT_SCHEMA;
+  date: string;
+  generatedAt: string;
+  action: MlbDailyOpportunityAction;
+  primaryOpportunity: MlbDailyOpportunityEntry | null;
+  nonDominatedFrontier: readonly MlbDailyOpportunityEntry[];
+  rankedOpportunities: readonly MlbDailyOpportunityEntry[];
+  summary: {
+    intrinsicEvaluatedGames: number;
+    eligibleSportingOpportunities: number;
+    provisionalEligibleOpportunities: number;
+    finalEligibleOpportunities: number;
+    frontierSize: number;
+  };
+  decisionReason:
+    | "NO_CONTEXT_QUALIFIED_OPPORTUNITY"
+    | "PROVISIONAL_OPPORTUNITY_REMAINS_NON_DOMINATED"
+    | "BEST_NON_DOMINATED_OPPORTUNITY_IS_FINAL";
+  policy: {
+    outcomesRead: false;
+    marketPricesRead: false;
+    oneUniversalWeightedScoreUsed: false;
+    contextRankUsesExistingIntrinsicEngine: true;
+    finalInputStatusAffectsContextRank: false;
+    gameStartTimeAffectsContextRank: false;
+    provisionalGamesMayLeadDailyOpportunity: true;
+    empiricalLineupUncertaintyAppliedToProvisionalV16Only: true;
+    probabilityThresholdCreatesOpportunityEligibility: false;
+    confirmationMayDowngradeToNoPlay: true;
+    v68Changed: false;
+    v80Changed: false;
+    productionDailyBestPickChanged: false;
+    automaticBetPlacement: false;
+    realFinancialExposure: 0;
+  };
+}
+
+type EvidenceByGame = Readonly<Record<number, MlbV16SettlementEvidence | undefined>>;
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+}
+
+function probabilityFor(
+  game: MlbIntrinsicGameProfile,
+  finalV16ByGame: EvidenceByGame,
+  provisionalV16ByGame: EvidenceByGame,
+): MlbDailyOpportunityEntry["probability"] {
+  const evidence = game.inputStage === "FINAL"
+    ? finalV16ByGame[game.gamePk]
+    : provisionalV16ByGame[game.gamePk];
+
+  if (!evidence) {
+    return {
+      stage: "INTRINSIC_ONLY",
+      selectedSide: null,
+      selectedSideProbability: null,
+      lineupUncertaintyP95: game.inputStage === "PROVISIONAL"
+        ? MLB_DAILY_OPPORTUNITY_LINEUP_P95_DELTA
+        : 0,
+      robustSelectedSideProbability: null,
+    };
+  }
+
+  const home = evidence.fullGame.homeWinProbability;
+  const away = evidence.fullGame.awayWinProbability;
+  if (!Number.isFinite(home) || !Number.isFinite(away) || Math.abs(home + away - 1) > 1e-10) {
+    throw new Error(`MLB_DAILY_OPPORTUNITY_V16_VECTOR_INVALID:${game.gamePk}`);
+  }
+  const selectedSide = home >= away ? "HOME" as const : "AWAY" as const;
+  const selectedSideProbability = Math.max(home, away);
+  const lineupUncertaintyP95 = game.inputStage === "PROVISIONAL"
+    ? MLB_DAILY_OPPORTUNITY_LINEUP_P95_DELTA
+    : 0;
+  const robustSelectedSideProbability = Math.max(
+    0,
+    selectedSideProbability - lineupUncertaintyP95,
+  );
+
+  return {
+    stage: game.inputStage === "FINAL" ? "CONFIRMED_V16" : "PROVISIONAL_V16",
+    selectedSide,
+    selectedSideProbability,
+    lineupUncertaintyP95,
+    robustSelectedSideProbability,
+  };
+}
+
+function entryFor(
+  game: MlbIntrinsicGameProfile,
+  contextRank: number,
+  finalV16ByGame: EvidenceByGame,
+  provisionalV16ByGame: EvidenceByGame,
+): MlbDailyOpportunityEntry {
+  const eliteTheses = [
+    ...game.projections.fullGame.theses,
+    ...game.projections.earlyWindow.theses,
+  ].filter((thesis) => thesis.researchEliteEligible);
+
+  return Object.freeze({
+    gamePk: game.gamePk,
+    officialDate: game.officialDate,
+    startTime: game.startTime,
+    awayTeam: game.awayTeam.name,
+    homeTeam: game.homeTeam.name,
+    inputStage: game.inputStage,
+    contextRank,
+    intrinsicClassification: game.researchClassification,
+    eligibleSportingOpportunity:
+      game.researchEliteCandidate
+      && game.researchClassification === "GAME_ELITE_RESEARCH_CANDIDATE",
+    context: Object.freeze({
+      thesisKinds: Object.freeze(uniqueSorted(eliteTheses.map((thesis) => thesis.kind))) as readonly MlbIntrinsicThesisKind[],
+      thesisStructures: Object.freeze(uniqueSorted(eliteTheses.map((thesis) => thesis.structure))) as readonly MlbIntrinsicThesisStructure[],
+      supportingComponents: Object.freeze(uniqueSorted(eliteTheses.flatMap((thesis) => thesis.supportingComponents))),
+      fullGameElite: game.projections.fullGame.researchEliteCandidate,
+      earlyWindowElite: game.projections.earlyWindow.researchEliteCandidate,
+      maxAbsoluteNativeRunSignal: game.maxAbsoluteNativeRunSignal,
+    }),
+    probability: Object.freeze(probabilityFor(game, finalV16ByGame, provisionalV16ByGame)),
+  });
+}
+
+function dominates(a: MlbDailyOpportunityEntry, b: MlbDailyOpportunityEntry): boolean {
+  if (!a.eligibleSportingOpportunity || !b.eligibleSportingOpportunity) return false;
+  if (a.contextRank > b.contextRank) return false;
+
+  const ap = a.probability.robustSelectedSideProbability;
+  const bp = b.probability.robustSelectedSideProbability;
+
+  if (ap === null && bp !== null) return false;
+  if (ap !== null && bp === null) return true;
+  if (ap === null && bp === null) return a.contextRank < b.contextRank;
+
+  return (ap as number) >= (bp as number)
+    && (a.contextRank < b.contextRank || (ap as number) > (bp as number));
+}
+
+function validateIdentity(slate: MlbP1DailySlate, intrinsic: MlbIntrinsicEdgeResult): void {
+  if (slate.date !== intrinsic.date) {
+    throw new Error(`MLB_DAILY_OPPORTUNITY_DATE_MISMATCH:${slate.date}:${intrinsic.date}`);
+  }
+  const slatePks = new Set(slate.games.map((game) => game.gamePk));
+  const seen = new Set<number>();
+  for (const game of intrinsic.rankedGames) {
+    if (!slatePks.has(game.gamePk)) {
+      throw new Error(`MLB_DAILY_OPPORTUNITY_GAME_NOT_IN_SLATE:${game.gamePk}`);
+    }
+    if (seen.has(game.gamePk)) {
+      throw new Error(`MLB_DAILY_OPPORTUNITY_DUPLICATE_GAME:${game.gamePk}`);
+    }
+    seen.add(game.gamePk);
+  }
+}
+
+export function buildMlbDailyOpportunityContext(input: {
+  slate: MlbP1DailySlate;
+  intrinsic: MlbIntrinsicEdgeResult;
+  finalV16ByGame?: EvidenceByGame;
+  provisionalV16ByGame?: EvidenceByGame;
+}): MlbDailyOpportunityContextResult {
+  validateIdentity(input.slate, input.intrinsic);
+  const finalV16ByGame = input.finalV16ByGame ?? {};
+  const provisionalV16ByGame = input.provisionalV16ByGame ?? {};
+
+  const rankedOpportunities = Object.freeze(input.intrinsic.rankedGames.map((game, index) =>
+    entryFor(game, index + 1, finalV16ByGame, provisionalV16ByGame),
+  ));
+  const eligible = rankedOpportunities.filter((entry) => entry.eligibleSportingOpportunity);
+  const frontier = Object.freeze(eligible.filter((candidate) =>
+    !eligible.some((other) => other.gamePk !== candidate.gamePk && dominates(other, candidate)),
+  ));
+  const primaryOpportunity = frontier[0] ?? null;
+
+  let action: MlbDailyOpportunityAction = "NO_PLAY";
+  let decisionReason: MlbDailyOpportunityContextResult["decisionReason"] =
+    "NO_CONTEXT_QUALIFIED_OPPORTUNITY";
+
+  if (primaryOpportunity) {
+    if (frontier.some((entry) => entry.inputStage === "PROVISIONAL")) {
+      action = "WAIT";
+      decisionReason = "PROVISIONAL_OPPORTUNITY_REMAINS_NON_DOMINATED";
+    } else {
+      action = "PLAY_NOW_CANDIDATE";
+      decisionReason = "BEST_NON_DOMINATED_OPPORTUNITY_IS_FINAL";
+    }
+  }
+
+  return Object.freeze({
+    schemaVersion: MLB_DAILY_OPPORTUNITY_CONTEXT_SCHEMA,
+    date: input.slate.date,
+    generatedAt: input.intrinsic.generatedAt,
+    action,
+    primaryOpportunity,
+    nonDominatedFrontier: frontier,
+    rankedOpportunities,
+    summary: Object.freeze({
+      intrinsicEvaluatedGames: rankedOpportunities.length,
+      eligibleSportingOpportunities: eligible.length,
+      provisionalEligibleOpportunities: eligible.filter((entry) => entry.inputStage === "PROVISIONAL").length,
+      finalEligibleOpportunities: eligible.filter((entry) => entry.inputStage === "FINAL").length,
+      frontierSize: frontier.length,
+    }),
+    decisionReason,
+    policy: Object.freeze({
+      outcomesRead: false as const,
+      marketPricesRead: false as const,
+      oneUniversalWeightedScoreUsed: false as const,
+      contextRankUsesExistingIntrinsicEngine: true as const,
+      finalInputStatusAffectsContextRank: false as const,
+      gameStartTimeAffectsContextRank: false as const,
+      provisionalGamesMayLeadDailyOpportunity: true as const,
+      empiricalLineupUncertaintyAppliedToProvisionalV16Only: true as const,
+      probabilityThresholdCreatesOpportunityEligibility: false as const,
+      confirmationMayDowngradeToNoPlay: true as const,
+      v68Changed: false as const,
+      v80Changed: false as const,
+      productionDailyBestPickChanged: false as const,
+      automaticBetPlacement: false as const,
+      realFinancialExposure: 0 as const,
+    }),
+  });
+}

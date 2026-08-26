@@ -1,0 +1,79 @@
+name: Validate MLB Daily Opportunity Context V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mlb-daily-opportunity-context-v1.json'
+      - 'server/mlb-daily-opportunity-context-v1.ts'
+      - 'server/mlb-daily-opportunity-context-v1.test.ts'
+      - '.github/workflows/validate-mlb-daily-opportunity-context-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Freeze opportunity contract
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('research/mlb-daily-opportunity-context-v1.json','utf8'));
+          if(c.schemaVersion!=='courtedge-mlb-daily-opportunity-context-contract.v1') throw new Error('schema');
+          if(c.parentEvidence.lineupSensitivityPr!==684) throw new Error('parent pr');
+          if(c.parentEvidence.pairedGames!==6563 || c.parentEvidence.distinctOfficialDates!==499) throw new Error('parent sample');
+          if(c.uncertainty.p95AbsoluteLineupDelta!==0.0533) throw new Error('p95');
+          if(c.opportunityRanking.usesOneUniversalWeightedScore!==false) throw new Error('weighted score');
+          if(c.opportunityRanking.gameStartTimeMayImproveRank!==false) throw new Error('start-time rank');
+          if(c.opportunityRanking.finalInputStatusMayImproveRank!==false) throw new Error('stage rank');
+          if(c.opportunityRanking.provisionalGamesMayRankFirst!==true) throw new Error('provisional rank');
+          if(c.decisionSemantics.topOpportunityProvisional!=='WAIT') throw new Error('wait');
+          if(c.decisionSemantics.noEligibleOpportunity!=='NO_PLAY') throw new Error('no play');
+          if(c.dominance.method!=='PARETO_CONTEXT_RANK_AND_ROBUST_V16_PROBABILITY_WHEN_AVAILABLE') throw new Error('dominance');
+          for (const k of ['outcomesRead','marketPricesRead','modelRefit','recalibration','thresholdSearch','newUniversalContextWeights','v68Changed','v80Changed','ppHorizonProspectiveValidationChanged','productionDailyBestPickChanged','betEliteChanged','stakeChanged','automaticBetPlacement']) {
+            if(c.policy[k]!==false) throw new Error(k);
+          }
+          if(c.policy.realFinancialExposure!==0) throw new Error('exposure');
+          console.log('MLB_DAILY_OPPORTUNITY_CONTEXT_CONTRACT_FROZEN');
+          NODE
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check opportunity engine
+        run: |
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-daily-opportunity-context-v1.ts \
+            server/mlb-daily-opportunity-context-v1.test.ts
+
+      - name: Execute opportunity falsification suite
+        run: npx tsx --test server/mlb-daily-opportunity-context-v1.test.ts
+
+      - name: Prove no price, outcome, V68 or V80 mutation surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -nE 'sportsbook|TheOdds|apiKey|expectedValue|stake|placeBet|homeScore|awayScore|\boutcomes\b' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'oneUniversalWeightedScoreUsed: false' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'finalInputStatusAffectsContextRank: false' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'gameStartTimeAffectsContextRank: false' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'v68Changed: false' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'v80Changed: false' server/mlb-daily-opportunity-context-v1.ts
+          git diff --check
