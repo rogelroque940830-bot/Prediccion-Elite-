@@ -34,6 +34,10 @@ import {
   unavailableLowerTierShadowDecisions,
   type MlbUnifiedEliteLowerTierShadowProvider,
 } from "./mlb-unified-elite-shadow-v1";
+import {
+  buildMlbUnifiedEliteVisibleDailyBestPick,
+  MLB_UNIFIED_ELITE_VISIBLE_DAILY_BEST_PICK_SCHEMA,
+} from "./mlb-unified-elite-visible-daily-best-pick-v1";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
 export const MLB_UNIFIED_V16_MANUAL_PRICE_ROUTE = "/api/mlb/unified-v16/manual-price" as const;
@@ -266,9 +270,9 @@ export async function executeMlbUnifiedV16UiCommand(
     reserveCredits: runtime.reserveCredits,
   });
   const noPlayAudit = auditMlbV16NoPlayFunnel(result);
-  const dailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
+  const parentDailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
 
-  const lowerTierProviderEligible = dailyBestPick.decision === "NO_PLAY";
+  const lowerTierProviderEligible = parentDailyBestPick.decision === "NO_PLAY";
   let lowerTierShadow = unavailableLowerTierShadowDecisions(
     lowerTierProviderEligible
       ? "LOWER_TIER_LIVE_SOURCE_NOT_MATERIALIZED"
@@ -288,13 +292,22 @@ export async function executeMlbUnifiedV16UiCommand(
   }
   const unifiedEliteShadow = buildMlbUnifiedEliteShadowView({
     officialDate: date,
-    dailyBestPick,
+    dailyBestPick: parentDailyBestPick,
     lowerTier: lowerTierShadow,
   });
+  const dailyBestPick = buildMlbUnifiedEliteVisibleDailyBestPick({
+    officialDate: date,
+    slate,
+    parentDailyBestPick,
+    lowerTier: lowerTierShadow,
+  });
+  const lowerTierVisible = dailyBestPick.schemaVersion === MLB_UNIFIED_ELITE_VISIBLE_DAILY_BEST_PICK_SCHEMA;
 
+  // Price continuity remains intentionally bound to the pre-existing A+/Premium pick only.
+  // Lower-tier visibility changes the sporting Daily BEST PICK, not the price/stake/autobet boundary.
   const dailyBestPickPrice = buildMlbDailyBestPickPriceViewFailClosed({
     priced: result,
-    dailyBestPick,
+    dailyBestPick: parentDailyBestPick,
     onRejected: (error) => console.error("Daily BEST PICK price visibility rejected:", error),
   });
 
@@ -302,7 +315,7 @@ export async function executeMlbUnifiedV16UiCommand(
   try {
     manualPrice = buildMlbDailyBestPickManualPriceContext({
       priced: result,
-      dailyBestPick,
+      dailyBestPick: parentDailyBestPick,
       automaticPrice: dailyBestPickPrice,
       now,
     });
@@ -323,37 +336,45 @@ export async function executeMlbUnifiedV16UiCommand(
         summary: result.summary,
         prepriceSummary: result.preprice.summary,
         dailyBestPick,
+        parentDailyBestPick,
         unifiedEliteShadow,
         dailyBestPickPrice,
         manualPriceContinuity: manualPrice?.availability ?? null,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. The visible Daily BEST PICK remains the certified A+/Premium pre-price selection. The unified A+ -> Premium -> PP_HORIZON -> Full Modular hierarchy now executes only as outcome-blind shadow evidence; lower tiers cannot change the visible pick, price continuity, BET_ELITE, stake, or automatic wagering before their frozen prospective promotion gates mature.",
+      nextBoundary: "Priced V16 evidence run completed. The visible sporting Daily BEST PICK now follows A+ -> Premium -> PP_HORIZON -> Full Modular -> NO PLAY. PP_HORIZON and Full Modular visibility does not change V68/V80 scientific validation, PP prospective custody, price continuity, BET_ELITE, stake, or automatic wagering.",
       policy: {
         explicitInvocationRequired: true,
         certifiedServerAssemblyComplete: true,
         pricedRunnerCalled: true,
-        dailyBestPickDerivedFromTrustedPreprice: true,
+        parentDailyBestPickDerivedFromTrustedPreprice: true,
+        dailyBestPickDerivedFromTrustedPreprice: !lowerTierVisible,
         dailyBestPickBrowserInputAllowed: false,
+        dailyBestPickChangesFrozenParentRouting: false,
         dailyBestPickChangesFrozenRouting: false,
         dailyBestPickGeneralV68FallbackAllowed: false,
         dailyBestPickV80DependencyAllowed: false,
         unifiedEliteShadowExecuted: true,
         unifiedEliteLowerTierProviderEligibleOnlyOnParentNoPlay: true,
         unifiedEliteLowerTierProviderCalled: lowerTierProviderEligible && Boolean(deps.unifiedEliteLowerTierShadowProvider),
-        unifiedEliteChangesVisibleDailyBestPick: false,
-        unifiedEliteLowerTierRecommendationVisible: false,
+        unifiedEliteChangesVisibleDailyBestPick: lowerTierVisible,
+        unifiedEliteLowerTierRecommendationVisible: lowerTierVisible,
+        unifiedEliteVisibleHierarchy: "A_PLUS_PREMIUM_PP_HORIZON_FULL_MODULAR_NO_PLAY",
         unifiedEliteLowerTierPromotionStatus: unifiedEliteShadow.lowerTierPromotionStatus,
         ppHorizonInterimOutcomesRead: false,
         unifiedElitePerformanceMetricsRead: false,
+        v68ScientificValidationChanged: false,
+        v80ScientificValidationChanged: false,
+        ppHorizonProspectiveCustodyChanged: false,
         dailyBestPickPriceExactIdentityOnly: true,
         dailyBestPickPriceMayChangeSportingSelection: false,
         dailyBestPickPriceFallbackAllowed: false,
         dailyBestPickPriceAddsThreshold: false,
         dailyBestPickPriceProducesBetElite: false,
+        lowerTierVisiblePickPriceEvaluationEnabled: false,
         providerOrFreshCachePricePrecedesManual: true,
-        manualPriceExactFrozenPickOnly: true,
+        manualPriceExactFrozenParentPickOnly: true,
         manualPriceMayChangeSportingSelection: false,
         manualPriceCallsTheOddsApi: false,
         manualPriceTheOddsApiCreditsConsumed: 0,
