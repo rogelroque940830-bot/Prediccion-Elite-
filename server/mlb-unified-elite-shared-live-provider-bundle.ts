@@ -1,4 +1,6 @@
 import { MlbC4CertifiedMaterializer } from "./mlb-c4-certified-materializer";
+import { assessMlbProvisionalV16LineupProxy } from "./mlb-provisional-v16-lineup-proxy-v1";
+import type { MlbDailyOpportunityProvisionalV16Provider } from "./mlb-daily-opportunity-live-v1";
 import {
   createMlbUnifiedV16CertifiedBullpenProvider,
   createMlbUnifiedV16CertifiedC4Provider,
@@ -11,6 +13,13 @@ import type { MlbUnifiedV16UiCommandDependencies } from "./mlb-unified-v16-ui-ro
 
 export const MLB_UNIFIED_ELITE_SHARED_LIVE_PROVIDER_BUNDLE_VERSION =
   "mlb-unified-elite-shared-live-provider-bundle-v1" as const;
+
+export interface MlbUnifiedEliteSharedLiveProviderBundle extends Pick<
+  MlbUnifiedV16UiCommandDependencies,
+  "liveEvidenceProviders" | "unifiedEliteLowerTierShadowProvider"
+> {
+  dailyOpportunityProvisionalV16Provider: MlbDailyOpportunityProvisionalV16Provider;
+}
 
 function durableProspectiveCustodyAvailable(): boolean {
   const railwayRuntime = Boolean(process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID);
@@ -30,10 +39,7 @@ function earliestT5DeadlineUtc(context: Parameters<NonNullable<MlbUnifiedV16UiCo
   return deadlines.length ? new Date(deadlines[0]).toISOString() : null;
 }
 
-export function createMlbUnifiedEliteSharedLiveProviderBundle(): Pick<
-  MlbUnifiedV16UiCommandDependencies,
-  "liveEvidenceProviders" | "unifiedEliteLowerTierShadowProvider"
-> {
+export function createMlbUnifiedEliteSharedLiveProviderBundle(): MlbUnifiedEliteSharedLiveProviderBundle {
   const sharedClassifierMaterializer = new MlbC4CertifiedMaterializer();
   const liveEvidenceProviders = Object.freeze({
     shortlistEvidence: createMlbUnifiedV16CertifiedShortlistProvider(),
@@ -43,6 +49,12 @@ export function createMlbUnifiedEliteSharedLiveProviderBundle(): Pick<
     }),
     c4Assessments: createMlbUnifiedV16CertifiedC4Provider(sharedClassifierMaterializer),
   });
+
+  const dailyOpportunityProvisionalV16Provider: MlbDailyOpportunityProvisionalV16Provider =
+    (game, generatedAt) => assessMlbProvisionalV16LineupProxy(game, {
+      certifiedMaterializer: sharedClassifierMaterializer,
+      generatedAt,
+    });
 
   const lowerTierLive = createMlbUnifiedEliteLowerTierLiveProvider({
     full13Materializer: sharedClassifierMaterializer,
@@ -70,5 +82,6 @@ export function createMlbUnifiedEliteSharedLiveProviderBundle(): Pick<
   return Object.freeze({
     liveEvidenceProviders,
     unifiedEliteLowerTierShadowProvider,
+    dailyOpportunityProvisionalV16Provider,
   });
 }
