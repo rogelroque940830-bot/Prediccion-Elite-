@@ -61,6 +61,10 @@ class PregameStateParityTests(unittest.TestCase):
     def test_preview_fallback_remains_pregame(self):
         self.assert_parity(feed("X", "Preview", "Unknown"), True)
 
+    def test_status_strings_are_trimmed_and_normalized(self):
+        self.assert_parity(feed(" p ", " LIVE ", " Warmup "), True)
+        self.assert_parity(feed(" i ", " LIVE ", " In Progress "), False)
+
     def test_source_hard_guard_cannot_widen_beyond_twenty_minutes(self):
         text = (ROOT / "p0-step12v68-prospective-source.py").read_text(encoding="utf-8")
         self.assertIn("0<a.max_lead_minutes<=20", text)
