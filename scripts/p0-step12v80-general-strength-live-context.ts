@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -20,8 +21,47 @@ function cachedJsonResponse(value: unknown): Response {
   });
 }
 
+function sha256File(file: string): string {
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function normalizePrepareGapAuditLayout(): void {
+  const gapRoot = arg("--gap-root");
+  if (!gapRoot) throw new Error("V80_PREPARE_GAP_ROOT_MISSING");
+
+  // The immutable V68 gap ledger stores this audit at the gap root, while the
+  // frozen V68 source base stores the same source family under t5-audit/.
+  // The V80 core predates that gap-ledger layout. Normalize only the local
+  // checkout used by this run; never rewrite or commit the V68 ledger.
+  const flatAudit = path.join(gapRoot, "t5-starter-identity-audit.json");
+  const nestedAudit = path.join(gapRoot, "t5-audit", "t5-starter-identity-audit.json");
+
+  if (!fs.existsSync(flatAudit) && !fs.existsSync(nestedAudit)) {
+    throw new Error(`V80_PREPARE_V68_GAP_AUDIT_MISSING:${flatAudit}`);
+  }
+
+  if (fs.existsSync(flatAudit) && fs.existsSync(nestedAudit)) {
+    if (sha256File(flatAudit) !== sha256File(nestedAudit)) {
+      throw new Error("V80_PREPARE_V68_GAP_AUDIT_LAYOUT_CONFLICT");
+    }
+    return;
+  }
+
+  if (!fs.existsSync(flatAudit)) return;
+  fs.mkdirSync(path.dirname(nestedAudit), { recursive: true });
+  fs.copyFileSync(flatAudit, nestedAudit);
+  if (sha256File(flatAudit) !== sha256File(nestedAudit)) {
+    throw new Error("V80_PREPARE_V68_GAP_AUDIT_COPY_DIGEST_MISMATCH");
+  }
+  console.log("V80_PREPARE_V68_GAP_AUDIT_LAYOUT_NORMALIZED");
+}
+
 const mode = arg("--mode");
 const gamePkRaw = arg("--game-pk");
+
+if (mode === "prepare") {
+  normalizePrepareGapAuditLayout();
+}
 
 if (mode === "live" && gamePkRaw !== null) {
   const gamePk = Number(gamePkRaw);
