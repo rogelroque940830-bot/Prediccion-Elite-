@@ -68,6 +68,7 @@ function lowerTierView(input: {
     row.gamePk === input.selection.gamePk && row.officialDate === input.officialDate,
   );
   if (!game) return null;
+  const side: "HOME" | "AWAY" = input.selection.side === "AWAY" ? "AWAY" : "HOME";
 
   return Object.freeze({
     schemaVersion: MLB_UNIFIED_ELITE_VISIBLE_DAILY_BEST_PICK_SCHEMA,
@@ -78,7 +79,7 @@ function lowerTierView(input: {
       homeTeam: game.homeTeam.name,
       market: input.selection.market.trim(),
       horizon: input.selection.horizon.trim(),
-      side: input.selection.side,
+      side,
       selectedLine: input.selection.selectedLine ?? null,
       route: input.tier === "PP_HORIZON"
         ? "PP_HORIZON_FROZEN_LIVE_V1" as const
