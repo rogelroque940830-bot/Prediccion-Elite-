@@ -1,0 +1,59 @@
+name: Validate MLB Daily Opportunity Priced Bridge V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-daily-opportunity-priced-bridge-v1.ts'
+      - 'server/mlb-daily-opportunity-priced-bridge-v1.test.ts'
+      - 'server/mlb-daily-opportunity-priced-route-v1.ts'
+      - 'server/routes.ts'
+      - '.github/workflows/validate-mlb-daily-opportunity-priced-bridge-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Bundle-check priced bridge and route
+        run: |
+          npx esbuild server/mlb-daily-opportunity-priced-bridge-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-priced-bridge.mjs
+          npx esbuild server/mlb-daily-opportunity-priced-route-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-priced-route.mjs
+
+      - name: Execute priced boundary falsification suite
+        run: npx tsx --test server/mlb-daily-opportunity-priced-bridge-v1.test.ts
+
+      - name: Prove whole-slate to max-three provider boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'MLB_DAILY_OPPORTUNITY_MAX_PRICE_CONSULTATIONS' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'PROVISIONAL_FRONTIER_REMAINS' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'priceDiscovery.games.length > MLB_DAILY_OPPORTUNITY_MAX_PRICE_CONSULTATIONS' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'SUPPORTED_PRICED_MARKETS = new Set(["ML", "F5_ML"])' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'ninthOrLaterWholeSlateGameMayReachPriceWhenShortlisted: true' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'onlyShortlistedFinalGamesReachOddsService: true' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'oneUniversalWeightedScoreUsed: false' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'finalSelectionUsesParetoDominance: true' server/mlb-daily-opportunity-priced-bridge-v1.ts
+          grep -F 'requiresPaidPrice(live)' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'requireCompleteProvisionalBullpenEvidence: true' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'registerMlbDailyOpportunityPricedRoute(app' server/routes.ts
+          ! grep -nE 'stakeAmount|placeBet|BET_ELITE|automaticBetPlacement: true' server/mlb-daily-opportunity-priced-bridge-v1.ts server/mlb-daily-opportunity-priced-route-v1.ts
+          git diff --check
+
+      - name: Build production backend
+        run: npm run build:backend
