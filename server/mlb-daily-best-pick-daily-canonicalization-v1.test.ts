@@ -23,6 +23,8 @@ const GAME_1 = 3001;
 const GAME_2 = 3002;
 const EARLY_GAME = 3099;
 
+type SlateStarts = readonly [string | null, string | null, (string | null)?];
+
 function routeStates(input: { premium: boolean; aPlus: boolean }) {
   return {
     PREMIUM_A_HOME_ML: input.premium ? "MATCH" : "NO_MATCH",
@@ -63,14 +65,15 @@ function entry(input: {
 function runtime(input: {
   runId: string;
   generatedAt: string;
-  slateStarts?: readonly [string | null, string | null, string | null?];
+  slateStarts?: SlateStarts;
   relevantStarts?: readonly [string, string];
   aPlus?: boolean;
   premium?: boolean;
   rankedOrder?: readonly number[];
 }): MlbUnifiedRunnerResult {
   const relevantStarts = input.relevantStarts ?? ["2026-08-26T22:00:00.000Z", "2026-08-26T23:00:00.000Z"];
-  const slateStarts = input.slateStarts ?? ["2026-08-26T20:00:00.000Z", relevantStarts[0], relevantStarts[1]];
+  const slateStarts: SlateStarts = input.slateStarts
+    ?? ["2026-08-26T20:00:00.000Z", relevantStarts[0], relevantStarts[1]];
   const aPlus = input.aPlus ?? true;
   const premium = input.premium ?? true;
   const rankedOrder = input.rankedOrder ?? [GAME_1, GAME_2];
@@ -169,7 +172,8 @@ function snapshot(input: {
   runId: string;
   generatedAt: string;
   capturedAt?: string;
-  slateStarts?: readonly [string | null, string | null, string | null?];
+  slateStarts?: SlateStarts;
+  relevantStarts?: readonly [string, string];
   aPlus?: boolean;
   premium?: boolean;
   rankedOrder?: readonly number[];
@@ -214,8 +218,7 @@ test("capture after the earliest full-slate game is rejected even if ranked game
   const postEarlyGame = snapshot({
     runId: "run-post-early",
     generatedAt: "2026-08-26T20:30:00.000Z",
-    relevantStarts: undefined as never,
-  } as any);
+  });
   const result = canonicalizeMlbDailyBestPickRows({
     officialDate: DATE,
     rows: [row(postEarlyGame, "2026-08-26T20:30:01.000Z")],
