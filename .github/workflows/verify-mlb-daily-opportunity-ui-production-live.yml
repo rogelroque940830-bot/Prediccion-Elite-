@@ -1,0 +1,94 @@
+name: Verify MLB Daily Opportunity UI Production Live
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-mlb-daily-opportunity-ui-production-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FRONTEND_BASE: https://fearless-illumination-production-6d16.up.railway.app
+      BACKEND_BASE: https://web-production-7067b.up.railway.app
+      EXPECTED_COMMIT: 1480879067e4c9989882b67e78cdcd88e2b05343
+    steps:
+      - name: Verify exact backend main deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "${BACKEND_BASE}/health" -o /tmp/mlb-opportunity-health.json
+          status=$(node -e "const j=require('/tmp/mlb-opportunity-health.json');process.stdout.write(String(j.status||''))")
+          commit=$(node -e "const j=require('/tmp/mlb-opportunity-health.json');process.stdout.write(String(j.commit||''))")
+          environment=$(node -e "const j=require('/tmp/mlb-opportunity-health.json');process.stdout.write(String(j.environment||''))")
+          echo "status=${status} commit=${commit} environment=${environment}"
+          [[ "${status}" == "healthy" && "${commit}" == "${EXPECTED_COMMIT}" && "${environment}" == "production" ]]
+          echo "MLB_DAILY_OPPORTUNITY_BACKEND_EXACT_MAIN_VERIFIED"
+
+      - name: Verify Daily Opportunity frontend bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "${FRONTEND_BASE}/" -o /tmp/mlb-opportunity-index.html
+          asset=$(grep -oE 'src="[^"]+\.js"' /tmp/mlb-opportunity-index.html | head -1 | sed -E 's/^src="([^"]+)"$/\1/' || true)
+          echo "asset=${asset}"
+          [[ -n "${asset}" ]] || { echo "FAIL: no JS asset found" >&2; exit 1; }
+          if [[ "${asset}" == http* ]]; then
+            bundle_url="${asset}"
+          elif [[ "${asset}" == /* ]]; then
+            bundle_url="${FRONTEND_BASE}${asset}"
+          else
+            clean_asset="${asset#./}"
+            bundle_url="${FRONTEND_BASE}/${clean_asset}"
+          fi
+          echo "bundle_url=${bundle_url}"
+          curl --fail --silent --show-error --max-time 45 "${bundle_url}" -o /tmp/mlb-opportunity-bundle.js
+          grep -Fq 'MLB Unified V16 · Daily Opportunity' /tmp/mlb-opportunity-bundle.js
+          grep -Fq 'Evalúa toda la jornada antes de cuotas.' /tmp/mlb-opportunity-bundle.js
+          grep -Fq 'PLAY · MEJOR OPORTUNIDAD DEL DÍA' /tmp/mlb-opportunity-bundle.js
+          grep -Fq 'WAIT · HAY UNA OPORTUNIDAD POSTERIOR COMPETITIVA' /tmp/mlb-opportunity-bundle.js
+          grep -Fq 'NO PLAY · NO HAY OPORTUNIDAD JUGABLE' /tmp/mlb-opportunity-bundle.js
+          grep -Fq '/api/mlb/unified-v16/daily-opportunity/run-priced' /tmp/mlb-opportunity-bundle.js
+          {
+            echo "bundle_url=${bundle_url}"
+            echo "MLB Unified V16 · Daily Opportunity"
+            echo "Evalúa toda la jornada antes de cuotas."
+            echo "PLAY · MEJOR OPORTUNIDAD DEL DÍA"
+            echo "WAIT · HAY UNA OPORTUNIDAD POSTERIOR COMPETITIVA"
+            echo "NO PLAY · NO HAY OPORTUNIDAD JUGABLE"
+            echo "/api/mlb/unified-v16/daily-opportunity/run-priced"
+          } > /tmp/mlb-opportunity-markers.txt
+          echo "MLB_DAILY_OPPORTUNITY_FRONTEND_PRODUCTION_BUNDLE_VERIFIED"
+
+      - name: Verify production route is present and not missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 30 \
+            -o /tmp/mlb-opportunity-route-response.json \
+            -w '%{http_code}' \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{"date":"2026-08-26"}' \
+            "${BACKEND_BASE}/api/mlb/unified-v16/daily-opportunity/run-priced")
+          echo "route_http_code=${code}"
+          [[ "${code}" != "404" && "${code}" != "000" ]]
+          echo "MLB_DAILY_OPPORTUNITY_ROUTE_PRESENT_IN_PRODUCTION"
+
+      - name: Upload production verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-daily-opportunity-ui-production-live-verification
+          path: |
+            /tmp/mlb-opportunity-health.json
+            /tmp/mlb-opportunity-index.html
+            /tmp/mlb-opportunity-markers.txt
+            /tmp/mlb-opportunity-route-response.json
+          if-no-files-found: warn
+          retention-days: 30
