@@ -175,6 +175,24 @@ async function loadBullpenWithProvisionalIsolation(input: {
   });
 }
 
+async function loadBullpenEvidence(input: {
+  provider: MlbUnifiedV16LiveEvidenceProvider<MlbIntrinsicBullpenByGame> | undefined;
+  context: MlbUnifiedV16LiveEvidenceContext;
+  requireCompleteProvisionalBullpenEvidence: boolean;
+}): Promise<MlbUnifiedV16LiveEvidenceLoad<MlbIntrinsicBullpenByGame>> {
+  if (!input.requireCompleteProvisionalBullpenEvidence) {
+    return loadBullpenWithProvisionalIsolation({ provider: input.provider, context: input.context });
+  }
+
+  return load({
+    provider: input.provider,
+    context: input.context,
+    missingCode: "BULLPEN_EVIDENCE_UNAVAILABLE",
+    gamePks: input.context.analysisEligibleGamePks,
+    missingMessage: "Certified bullpen evidence is required for every analysis-eligible Daily Opportunity competitor.",
+  });
+}
+
 function uniqueBlockers(
   blockers: readonly MlbUnifiedV16LiveInputBlocker[],
 ): readonly MlbUnifiedV16LiveInputBlocker[] {
@@ -198,6 +216,7 @@ export async function assembleMlbUnifiedV16LiveInput(
     runId: string;
     slate: MlbP1DailySlate;
     now?: Date;
+    requireCompleteProvisionalBullpenEvidence?: boolean;
   },
   providers: MlbUnifiedV16LiveEvidenceProviders = {},
 ): Promise<MlbUnifiedV16LiveInputAssemblyResult> {
@@ -248,9 +267,10 @@ export async function assembleMlbUnifiedV16LiveInput(
       gamePks: analysisEligibleGamePks,
       missingMessage: "Certified shortlist evidence is not available from a server-side provider.",
     }),
-    loadBullpenWithProvisionalIsolation({
+    loadBullpenEvidence({
       provider: providers.bullpenEvidence,
       context,
+      requireCompleteProvisionalBullpenEvidence: input.requireCompleteProvisionalBullpenEvidence === true,
     }),
     load({
       provider: providers.frozenRouteAssessments,

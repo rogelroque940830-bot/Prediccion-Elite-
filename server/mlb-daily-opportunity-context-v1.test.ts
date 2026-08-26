@@ -95,13 +95,13 @@ function v16(gamePk: number, home: number) {
 
 test("later provisional context-rank #1 forces WAIT instead of taking earlier final game", () => {
   const games = [
-    profile({ gamePk: 9, startTime: `${date}T01:00:00.000Z`, stage: "PROVISIONAL" }),
-    profile({ gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL" }),
+    profile({ gamePk: 9, startTime: `${date}T21:00:00.000Z`, stage: "PROVISIONAL", maxSignal: 0.50 }),
+    profile({ gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL", maxSignal: 0.30 }),
   ];
   const result = buildMlbDailyOpportunityContext({
     slate: slate([
       { gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL" },
-      { gamePk: 9, startTime: `${date}T01:00:00.000Z`, stage: "PROVISIONAL" },
+      { gamePk: 9, startTime: `${date}T21:00:00.000Z`, stage: "PROVISIONAL" },
     ]),
     intrinsic: intrinsic(games),
     finalV16ByGame: { 1: v16(1, 0.72) },
@@ -188,9 +188,40 @@ test("start time and FINAL/PROVISIONAL stage never rewrite the existing intrinsi
     ]),
     intrinsic: intrinsic([lateProvisional, earlyFinal]),
   });
-  assert.equal(result.rankedOpportunities[0].gamePk, 9);
+  assert.equal(result.rankedOpportunities[0].gamePk, 1);
   assert.equal(result.rankedOpportunities[0].contextRank, 1);
+  assert.equal(result.rankedOpportunities[1].gamePk, 9);
   assert.equal(result.rankedOpportunities[1].contextRank, 2);
   assert.equal(result.policy.finalInputStatusAffectsContextRank, false);
   assert.equal(result.policy.gameStartTimeAffectsContextRank, false);
+});
+
+test("whole qualified slate competes even when market discovery rankedGames kept only top eight", () => {
+  const profiles = Array.from({ length: 10 }, (_, index) => profile({
+    gamePk: index + 1,
+    startTime: `${date}T${String(12 + index).padStart(2, "0")}:00:00.000Z`,
+    stage: index === 9 ? "PROVISIONAL" : "FINAL",
+    maxSignal: index === 9 ? 0.99 : 0.20 + index / 100,
+  }));
+  const fakeIntrinsic = {
+    ...intrinsic(profiles),
+    rankedGames: profiles.slice(0, 8),
+  };
+  const fakeSlate = slate(profiles.map((game) => ({
+    gamePk: game.gamePk,
+    startTime: game.startTime,
+    stage: game.inputStage,
+  })));
+  const result = buildMlbDailyOpportunityContext({
+    slate: fakeSlate,
+    intrinsic: fakeIntrinsic,
+    provisionalV16ByGame: { 10: v16(10, 0.80) },
+  });
+
+  assert.equal(result.summary.intrinsicEvaluatedGames, 10);
+  assert.equal(result.rankedOpportunities.some((game) => game.gamePk === 10), true);
+  assert.equal(result.rankedOpportunities[0].gamePk, 10);
+  assert.equal(result.action, "WAIT");
+  assert.equal(result.policy.wholeQualifiedIntrinsicPopulationRanked, true);
+  assert.equal(result.policy.marketDiscoveryCapMayHideDailyOpportunity, false);
 });
