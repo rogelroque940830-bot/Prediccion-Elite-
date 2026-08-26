@@ -192,8 +192,9 @@ function decisionText(action: FinalAction | undefined, reason: string | undefine
 }
 
 function sideTeam(entry: OpportunityEntry | PriceShortlistEntry): string {
-  if (entry.selectedSide === "HOME") return entry.homeTeam;
-  if (entry.selectedSide === "AWAY") return entry.awayTeam;
+  const selectedSide = "probability" in entry ? entry.probability.selectedSide : entry.selectedSide;
+  if (selectedSide === "HOME") return entry.homeTeam;
+  if (selectedSide === "AWAY") return entry.awayTeam;
   return "Lado por definir";
 }
 
