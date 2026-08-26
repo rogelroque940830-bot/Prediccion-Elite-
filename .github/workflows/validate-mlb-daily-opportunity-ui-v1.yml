@@ -7,6 +7,8 @@ on:
       - 'server/mlb-daily-opportunity-context-v1.ts'
       - 'server/mlb-daily-opportunity-context-v1.test.ts'
       - 'server/mlb-daily-opportunity-live-v1.ts'
+      - 'server/mlb-daily-opportunity-price-shortlist-v1.ts'
+      - 'server/mlb-daily-opportunity-price-shortlist-v1.test.ts'
       - 'server/mlb-daily-opportunity-ui-route-v1.ts'
       - 'server/mlb-daily-opportunity-ui-route-v1.test.ts'
       - 'server/routes.ts'
@@ -42,6 +44,8 @@ jobs:
             --types node \
             server/mlb-daily-opportunity-context-v1.ts \
             server/mlb-daily-opportunity-context-v1.test.ts \
+            server/mlb-daily-opportunity-price-shortlist-v1.ts \
+            server/mlb-daily-opportunity-price-shortlist-v1.test.ts \
             server/mlb-daily-opportunity-live-v1.ts \
             server/mlb-daily-opportunity-ui-route-v1.ts \
             server/mlb-daily-opportunity-ui-route-v1.test.ts
@@ -49,10 +53,13 @@ jobs:
       - name: Execute context falsification suite
         run: npx tsx --test server/mlb-daily-opportunity-context-v1.test.ts
 
+      - name: Execute price-shortlist falsification suite
+        run: npx tsx --test server/mlb-daily-opportunity-price-shortlist-v1.test.ts
+
       - name: Execute UI boundary suite
         run: npx tsx --test server/mlb-daily-opportunity-ui-route-v1.test.ts
 
-      - name: Prove full-slate and pre-odds boundary
+      - name: Prove full-slate analysis and max-three economic boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -60,12 +67,16 @@ jobs:
           grep -F 'wholeQualifiedIntrinsicPopulationRanked: true' server/mlb-daily-opportunity-context-v1.ts
           grep -F 'marketDiscoveryCapMayHideDailyOpportunity: false' server/mlb-daily-opportunity-context-v1.ts
           grep -F 'provisionalGamesMayLeadDailyOpportunity: true' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'MLB_DAILY_OPPORTUNITY_MAX_PRICE_CONSULTATIONS = 3' server/mlb-daily-opportunity-price-shortlist-v1.ts
+          grep -F 'wholeSlateAnalysisDoesNotExpandPriceQuota: true' server/mlb-daily-opportunity-price-shortlist-v1.ts
+          grep -F 'provisionalCandidateCannotBeMarkedPriceReady: true' server/mlb-daily-opportunity-price-shortlist-v1.ts
+          grep -F 'priceConsultationShortlist: live.priceConsultationShortlist' server/mlb-daily-opportunity-ui-route-v1.ts
           grep -F 'paidOddsBoundaryCrossed: false' server/mlb-daily-opportunity-live-v1.ts
           grep -F 'paidOddsCalled: false' server/mlb-daily-opportunity-ui-route-v1.ts
           grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-daily-opportunity-ui-route-v1.ts
           grep -F 'v68Changed: false' server/mlb-daily-opportunity-live-v1.ts
           grep -F 'v80Changed: false' server/mlb-daily-opportunity-live-v1.ts
-          ! grep -nE 'apiKey|providerAccountScopeKey|stakeAmount|placeBet|BET_ELITE' server/mlb-daily-opportunity-live-v1.ts server/mlb-daily-opportunity-ui-route-v1.ts
+          ! grep -nE 'apiKey|providerAccountScopeKey|stakeAmount|placeBet|BET_ELITE' server/mlb-daily-opportunity-live-v1.ts server/mlb-daily-opportunity-price-shortlist-v1.ts server/mlb-daily-opportunity-ui-route-v1.ts
           git diff --check
 
       - name: Build production backend with Daily Opportunity route
