@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-pregame-state-parity-repair.v1",
+  "stage": "P0_STEP12V68_PREGAME_STATE_PARITY_REPAIR_V1",
+  "frozenAtUtc": "2026-08-26T17:02:26Z",
+  "researchOnly": true,
+  "frozenBeforeImplementation": true,
+  "outcomesReadForRepairDesign": false,
+  "marketPricesReadForRepairDesign": false,
+  "performanceMetricsUsedForRepairDesign": false,
+  "parentScientificContractChanged": false,
+  "parentScientificContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "triggerEvidence": {
+    "liveDiagnosticRunId": 32991100938,
+    "diagnosticCommit": "c7e662a7f01be6553c2e0150876f9546ab899f28",
+    "gamePk": 824234,
+    "observedPattern": {
+      "codedGameState": "P",
+      "homeLineupCount": 9,
+      "awayLineupCount": 9,
+      "homeProbablePitcherKnown": true,
+      "awayProbablePitcherKnown": true,
+      "leadMinutesRangeApprox": [11.44, 15.28],
+      "v68Classification": "NOT_PREGAME"
+    },
+    "diagnosticSafety": {
+      "containsOutcomes": false,
+      "containsMarketPrices": false
+    }
+  },
+  "existingCertifiedAuthority": {
+    "source": "merged PR #332 / server/mlb-market-pregame-lineup-history.ts v4",
+    "knownMlbPattern": "abstractGameState=Live,codedGameState=P,detailedState=Warmup",
+    "rule": {
+      "explicitNonPregameCodedStates": ["I", "F", "O"],
+      "explicitNonPregameDetailedStates": ["In Progress", "Final", "Game Over", "Completed Early"],
+      "acceptedPregameCodedStates": ["S", "P"],
+      "acceptedPregameDetailedStates": ["Scheduled", "Pre-Game", "Warmup", "Delayed Start"],
+      "fallbackAcceptedAbstractState": "Preview"
+    },
+    "reason": "The broad abstract Live label is not authoritative over specific coded/detailed pregame states."
+  },
+  "repair": {
+    "objective": "Restore V68 live pregame-state classification parity with the already-certified MLB pregame source semantics without widening any temporal or data eligibility rule.",
+    "filesAllowedToChange": [
+      "scripts/p0-step12v68-prospective-source.py",
+      "scripts/p0-step12v68-capture-supervisor.py",
+      "scripts/p0-step12v68-capture-supervisor.test.py",
+      ".github/workflows/p0-step12v68-capture-prospective-games.yml"
+    ],
+    "captureWindowMaximumMinutesBeforeScheduledStart": 20,
+    "captureMustBeStrictlyBeforeScheduledStart": true,
+    "requiresExactNineByNineCurrentLineups": true,
+    "requiresBothCurrentPregameProbablePitchers": true,
+    "densePollingRepairRemains": {
+      "cronCadenceMinutes": 5,
+      "pollAttemptsPerRun": 6,
+      "pollIntervalSeconds": 45
+    },
+    "existingCanonicalSnapshotsRemainImmutable": true,
+    "historicalBackfillAllowed": false
+  },
+  "requiredFalsificationTests": [
+    "LIVE_P_WARMUP_ACCEPTED",
+    "CODED_I_REJECTED",
+    "CODED_F_REJECTED",
+    "CODED_O_REJECTED",
+    "DETAILED_IN_PROGRESS_REJECTED",
+    "DETAILED_FINAL_REJECTED",
+    "SCHEDULED_OR_PRE_GAME_ACCEPTED",
+    "UNKNOWN_LIVE_STATE_REJECTED"
+  ],
+  "forbidden": [
+    "OUTCOME_PEEKING",
+    "MARKET_PRICE_PEEKING",
+    "MODEL_REFIT",
+    "RECALIBRATION",
+    "FEATURE_CHANGE",
+    "COEFFICIENT_CHANGE",
+    "THRESHOLD_CHANGE",
+    "CAPTURE_WINDOW_WIDENING",
+    "POST_HOC_GAME_INCLUSION",
+    "HISTORICAL_BACKFILL",
+    "GLOBAL_ELITE_RANKER_CHANGE"
+  ],
+  "successClassification": "V68_PREGAME_STATE_PARITY_REPAIRED_WITHOUT_SCIENTIFIC_BOUNDARY_CHANGE"
+}
