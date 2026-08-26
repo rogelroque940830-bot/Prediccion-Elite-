@@ -70,8 +70,8 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         <div><div className="text-muted-foreground">Tier</div><div className="font-semibold">{display.tierLabel}</div></div>
         <div><div className="text-muted-foreground">Mercado</div><div className="font-semibold">{display.marketLabel}</div></div>
-        <div><div className="text-muted-foreground">Orden pre-price</div><div className="font-semibold">{display.rankLabel}</div></div>
-        <div><div className="text-muted-foreground">Lado</div><div className="font-semibold">HOME</div></div>
+        <div><div className="text-muted-foreground">Orden</div><div className="font-semibold">{display.rankLabel}</div></div>
+        <div><div className="text-muted-foreground">Lado</div><div className="font-semibold">{display.sideLabel}</div></div>
       </div>
 
       <div className="mt-3 rounded border border-border/60 bg-muted/20 p-2 text-[11px]">
