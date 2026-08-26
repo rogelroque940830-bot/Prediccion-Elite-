@@ -17,15 +17,22 @@ import {
   resolveMlbUnifiedPricedV16RuntimeConfig,
   type MlbUnifiedPricedV16RuntimeConfig,
 } from "./mlb-unified-priced-v16-routes";
+import { buildMlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
+import {
+  unavailableLowerTierShadowDecisions,
+  type MlbUnifiedEliteLowerTierShadowProvider,
+} from "./mlb-unified-elite-shadow-v1";
+import { buildMlbUnifiedEliteVisibleDailyBestPick } from "./mlb-unified-elite-visible-daily-best-pick-v1";
 
 export const MLB_DAILY_OPPORTUNITY_PRICED_ROUTE =
   "/api/mlb/unified-v16/daily-opportunity/run-priced" as const;
 export const MLB_DAILY_OPPORTUNITY_PRICED_ROUTE_SCHEMA =
-  "courtedge-mlb-daily-opportunity-priced-command.v1" as const;
+  "courtedge-mlb-daily-opportunity-priced-command.v2" as const;
 
 export interface MlbDailyOpportunityPricedRouteDependencies {
   liveEvidenceProviders: MlbUnifiedV16LiveEvidenceProviders;
   provisionalV16Provider: MlbDailyOpportunityProvisionalV16Provider;
+  unifiedEliteLowerTierShadowProvider?: MlbUnifiedEliteLowerTierShadowProvider;
   buildSlate?: typeof buildMlbP1DailySlate;
   assembleLiveInput?: typeof assembleMlbUnifiedV16LiveInput;
   buildOpportunityLive?: typeof buildMlbDailyOpportunityLive;
@@ -56,6 +63,51 @@ function requiresPaidPrice(live: Awaited<ReturnType<typeof buildMlbDailyOpportun
   return entries.length > 0 && entries.every((entry) => entry.priceTiming === "READY_IF_PRICE_LAYER_INVOKED");
 }
 
+function slateSummary(slate: Awaited<ReturnType<typeof buildMlbP1DailySlate>>) {
+  const eligible = slate.games.filter((game) => game.analysisAllowed);
+  return Object.freeze({
+    total: slate.summary.total,
+    finalReady: eligible.filter((game) => game.analysisStage === "FINAL").length,
+    provisional: eligible.filter((game) => game.analysisStage === "PROVISIONAL").length,
+    waitingForPitchers: slate.summary.waitingForPitchers,
+    startedOrClosed: slate.summary.startedOrClosed,
+    dataInsufficient: slate.summary.dataInsufficient,
+  });
+}
+
+async function visibleDailyBestPick(input: {
+  date: string;
+  slate: Awaited<ReturnType<typeof buildMlbP1DailySlate>>;
+  now: Date;
+  live: Awaited<ReturnType<typeof buildMlbDailyOpportunityLive>>;
+  lowerTierProvider?: MlbUnifiedEliteLowerTierShadowProvider;
+}) {
+  const parent = buildMlbDailyBestPickUiView({ preprice: input.live.preprice, slate: input.slate });
+  let lowerTier = unavailableLowerTierShadowDecisions(
+    parent.decision === "NO_PLAY"
+      ? "LOWER_TIER_LIVE_SOURCE_NOT_MATERIALIZED"
+      : "SKIPPED_PARENT_A_PLUS_OR_PREMIUM_ACTIVE",
+  );
+  if (parent.decision === "NO_PLAY" && input.lowerTierProvider) {
+    try {
+      lowerTier = await input.lowerTierProvider({
+        officialDate: input.date,
+        slate: input.slate,
+        now: input.now,
+      });
+    } catch (error) {
+      console.error("Daily Opportunity lower-tier sporting provider failed closed:", error);
+      lowerTier = unavailableLowerTierShadowDecisions("LOWER_TIER_PROVIDER_FAILED_CLOSED");
+    }
+  }
+  return buildMlbUnifiedEliteVisibleDailyBestPick({
+    officialDate: input.date,
+    slate: input.slate,
+    parentDailyBestPick: parent,
+    lowerTier,
+  });
+}
+
 export async function executeMlbDailyOpportunityPricedCommand(
   date: string,
   deps: MlbDailyOpportunityPricedRouteDependencies,
@@ -67,6 +119,7 @@ export async function executeMlbDailyOpportunityPricedCommand(
   if (!runId) throw new Error("MLB_DAILY_OPPORTUNITY_PRICED_RUN_ID_REQUIRED");
 
   const slate = await (deps.buildSlate ?? buildMlbP1DailySlate)({ date, now });
+  const publicSlate = slateSummary(slate);
   const assembly = await (deps.assembleLiveInput ?? assembleMlbUnifiedV16LiveInput)(
     {
       runId,
@@ -85,6 +138,8 @@ export async function executeMlbDailyOpportunityPricedCommand(
         status: "OPPORTUNITY_INPUTS_BLOCKED",
         runId,
         date,
+        generatedAt: slate.generatedAt,
+        slate: publicSlate,
         blockers: assembly.blockers,
         policy: {
           wholeSlateAnalysisPrecedesPrice: true,
@@ -102,6 +157,13 @@ export async function executeMlbDailyOpportunityPricedCommand(
   const live = await (deps.buildOpportunityLive ?? buildMlbDailyOpportunityLive)({
     assembled: assembly.input,
     provisionalV16Provider: deps.provisionalV16Provider,
+  });
+  const dailyBestPick = await visibleDailyBestPick({
+    date,
+    slate,
+    now,
+    live,
+    lowerTierProvider: deps.unifiedEliteLowerTierShadowProvider,
   });
 
   // Do not even resolve paid-provider credentials while a provisional frontier candidate remains
@@ -127,8 +189,11 @@ export async function executeMlbDailyOpportunityPricedCommand(
       runId,
       date,
       generatedAt: priced.generatedAt,
+      slate: publicSlate,
+      dailyBestPick,
       dailyOpportunity: live.dailyOpportunity,
       priceConsultationShortlist: live.priceConsultationShortlist,
+      provisionalV16: live.provisionalV16,
       decision: priced.decision,
       priceDiscovery: priced.priceDiscovery,
       acquisition: priced.acquisition,
