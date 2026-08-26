@@ -1,0 +1,73 @@
+name: Validate MLB Daily Opportunity Visible UI V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-daily-opportunity-priced-route-v1.ts'
+      - 'server/routes.ts'
+      - 'frontend/client/src/components/mlb-daily-opportunity-control.tsx'
+      - 'frontend/client/src/pages/mlb-predictor-v16.tsx'
+      - '.github/workflows/validate-mlb-daily-opportunity-visible-ui-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Bundle-check visible Daily Opportunity route
+        run: npx esbuild server/mlb-daily-opportunity-priced-route-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-visible-route.mjs
+      - name: Prove certified sporting hierarchy is exposed without widening price boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'dailyBestPick,' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'buildMlbUnifiedEliteVisibleDailyBestPick' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'unifiedEliteLowerTierShadowProvider: mlbUnifiedLive.unifiedEliteLowerTierShadowProvider' server/routes.ts
+          grep -F 'requireCompleteProvisionalBullpenEvidence: true' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'maximumPriceConsultationCandidates: 3' server/mlb-daily-opportunity-priced-route-v1.ts
+          git diff --check
+      - name: Build backend
+        run: npm run build:backend
+
+  validate-frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Type-check frontend
+        run: npm run check
+      - name: Prove visible decision semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F '/api/mlb/unified-v16/daily-opportunity/run-priced' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F 'WAIT · HAY UNA OPORTUNIDAD POSTERIOR COMPETITIVA' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F 'PLAY · MEJOR OPORTUNIDAD DEL DÍA' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F 'NO PLAY · NO HAY OPORTUNIDAD JUGABLE' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F 'Top oportunidades · máximo 3 para cuotas' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F 'A+ → Premium → PP_HORIZON → Full Modular' client/src/components/mlb-daily-opportunity-control.tsx
+          grep -F '<MlbDailyOpportunityControl />' client/src/pages/mlb-predictor-v16.tsx
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://p0-staging.invalid
+        run: npm run build
