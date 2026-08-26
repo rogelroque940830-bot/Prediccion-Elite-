@@ -10,6 +10,7 @@ on:
       - "server/mlb-full-modular-live-operational-bridge.ts"
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
+      - "server/mlb-unified-elite-visible-daily-best-pick-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-live-providers.ts"
       - "server/mlb-c4-certified-materializer.ts"
@@ -37,6 +38,7 @@ on:
       - "server/mlb-full-modular-live-operational-bridge.ts"
       - "server/mlb-full-modular-mechanistic-feature-builder.ts"
       - "server/mlb-unified-elite-shadow-v1.ts"
+      - "server/mlb-unified-elite-visible-daily-best-pick-v1.ts"
       - "server/mlb-unified-v16-ui-routes.ts"
       - "server/mlb-unified-v16-live-providers.ts"
       - "server/mlb-c4-certified-materializer.ts"
@@ -80,29 +82,51 @@ jobs:
           test "sha256:$(sha256sum research/mlb-full-modular-pp-horizon-model-snapshot-v1.json | awk '{print $1}')" = 'sha256:bf51bb1d40f8b8f7f5e18686686c916457d1f9246be928191b8803c5884cc5f9'
           echo MLB_UNIFIED_ELITE_CERTIFIED_AUTHORITIES_UNCHANGED
 
-      - name: Prove prospective embargo remains intact
+      - name: Prove prospective embargo and visible hierarchy remain intact
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           shadow=Path('server/mlb-unified-elite-shadow-v1.ts').read_text()
+          visible=Path('server/mlb-unified-elite-visible-daily-best-pick-v1.ts').read_text()
           ui=Path('server/mlb-unified-v16-ui-routes.ts').read_text()
           routes=Path('server/routes.ts').read_text()
           provider=Path('server/mlb-unified-elite-lower-tier-live-provider.ts').read_text()
           bundle=Path('server/mlb-unified-elite-shared-live-provider-bundle.ts').read_text()
           test=Path('scripts/mlb-unified-elite-lower-tier-live-provider-v1.test.ts').read_text()
+
+          # Existing prospective scientific custody remains outcome-blind and unchanged.
           assert 'PROSPECTIVE_EMBARGO_SHADOW_ONLY' in shadow
-          assert 'lowerTierRecommendationVisible: false' in shadow
           assert 'outcomesRead: false' in shadow
           assert 'performanceMetricsRead: false' in shadow
-          assert 'visibleRecommendationChanged: false' in shadow
-          assert 'dailyBestPick.decision === "NO_PLAY"' in ui
-          assert 'unifiedEliteChangesVisibleDailyBestPick: false' in ui
           assert 'ppHorizonInterimOutcomesRead: false' in ui
+          assert 'v68ScientificValidationChanged: false' in ui
+          assert 'v80ScientificValidationChanged: false' in ui
+          assert 'ppHorizonProspectiveCustodyChanged: false' in ui
+
+          # The visible sporting hierarchy is now A+ -> Premium -> PP_HORIZON -> Full Modular -> NO PLAY.
+          assert 'A_PLUS_PREMIUM_PP_HORIZON_FULL_MODULAR_NO_PLAY' in ui
+          assert 'if (input.parentDailyBestPick.decision === "BEST_PICK")' in visible
+          assert 'input.lowerTier.ppHorizon.status === "SELECTION"' in visible
+          assert 'input.lowerTier.fullModular.status === "SELECTION"' in visible
+          assert 'premiumAlwaysPrecedesLowerTiers: true' in visible
+          assert 'ppHorizonPrecedesFullModular: true' in visible
+          assert 'fullModularFallbackAfterPpNoPlayAllowed: true' in visible
+          assert 'lowerTierSelectionUsesSportsbookPrice: false' in visible
+          assert 'v68ScientificContractChanged: false' in visible
+          assert 'v80ScientificContractChanged: false' in visible
+          assert 'ppHorizonProspectiveCustodyChanged: false' in visible
+
+          # Visibility does not create an economic execution path.
+          assert 'lowerTierVisiblePickPriceEvaluationEnabled: false' in ui
           assert 'finalBetRecommendationProduced: false' in ui
           assert 'stakeCalculated: false' in ui
           assert 'automaticBetPlacement: false' in ui
+          assert 'automaticBetPlacement: false' in visible
+          assert 'realFinancialExposure: 0' in visible
+
+          # Existing certified provider/materialization wiring remains intact.
           assert 'createMlbUnifiedEliteSharedLiveProviderBundle' in routes
           assert 'registerMlbUnifiedV16UiRoutes(app, createMlbUnifiedEliteSharedLiveProviderBundle())' in routes
           assert 'sharedClassifierMaterializer = new MlbC4CertifiedMaterializer()' in bundle
@@ -111,7 +135,7 @@ jobs:
           assert 'DECISION_TIMESTAMP_MISSING_OR_LATE' in provider
           assert 'CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1' in provider
           assert 'CERTIFIED_OPERATIONAL_LOWER_TIER_LIVE_V1:1' in test
-          print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_INTACT')
+          print('MLB_UNIFIED_ELITE_PROSPECTIVE_EMBARGO_AND_VISIBLE_HIERARCHY_INTACT')
           PY
 
       - name: Set up Node
@@ -139,6 +163,7 @@ jobs:
             server/mlb-unified-elite-router-v1.ts \
             server/mlb-full-modular-live-operational-bridge.ts \
             server/mlb-unified-elite-shadow-v1.ts \
+            server/mlb-unified-elite-visible-daily-best-pick-v1.ts \
             server/mlb-c4-certified-materializer.ts \
             server/mlb-v68-prospective-state-live-adapter.ts \
             server/mlb-full-modular-bullpen-live-materializer.ts \
@@ -191,5 +216,5 @@ jobs:
           forbidden=['theoddsapi','hard rock','stakeamount','bet_elite','placebet','settlementworker']
           found=[x for x in forbidden if x in text]
           assert not found, found
-          print('MLB_UNIFIED_ELITE_SHADOW_HAS_NO_PRICE_OR_WAGER_SURFACE')
+          print('MLB_UNIFIED_ELITE_VISIBLE_LOWER_TIERS_HAVE_NO_PRICE_OR_WAGER_SURFACE')
           PY
