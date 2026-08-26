@@ -116,7 +116,7 @@ export async function executeMlbDailyOpportunityPricedCommand(
     assembled: assembly.input,
     live,
     runtime,
-    dependencies: { oddsService },
+    dependencies: { oddsService, now: deps.now },
   });
 
   return {
@@ -159,9 +159,19 @@ export function registerMlbDailyOpportunityPricedRoute(
   app: Express,
   deps: MlbDailyOpportunityPricedRouteDependencies,
 ): void {
+  // The paid-odds coordinator/service are process resources. Construct them once when routes are
+  // registered and reuse them across explicit commands; do not leak a SQLite handle per request.
+  const coordinator = deps.coordinator ?? new MlbSelectiveOddsSqliteCoordinator();
+  const oddsService = deps.oddsService ?? new MlbSelectiveOddsAcquisitionService({ coordinator });
+  const commandDeps: MlbDailyOpportunityPricedRouteDependencies = Object.freeze({
+    ...deps,
+    coordinator,
+    oddsService,
+  });
+
   app.post(MLB_DAILY_OPPORTUNITY_PRICED_ROUTE, async (req: Request, res: Response) => {
     try {
-      const response = await executeMlbDailyOpportunityPricedCommand(requestDate(req), deps);
+      const response = await executeMlbDailyOpportunityPricedCommand(requestDate(req), commandDeps);
       return res.status(response.httpStatus).json(response.body);
     } catch (error) {
       const mapped = publicError(error);
