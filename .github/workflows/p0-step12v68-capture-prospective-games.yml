@@ -3,14 +3,17 @@ name: P0 Step 12V68 Capture Prospective Games
 on:
   workflow_dispatch:
   schedule:
-    - cron: '3,13,23,33,43,53 * * * *'
+    - cron: '*/5 * * * *'
   pull_request:
     branches: [main]
     paths:
       - 'scripts/p0-step12v68-prospective-source.py'
       - 'scripts/p0-step12v68-prospective-ledger.py'
       - 'scripts/p0-step12v68-fg-winner-prospective-capture.py'
+      - 'scripts/p0-step12v68-capture-supervisor.py'
+      - 'scripts/p0-step12v68-capture-supervisor.test.py'
       - 'research/p0-step12v68-prospective-source-manifests.json'
+      - 'research/p0-step12v68-capture-reliability-repair-v1.json'
       - '.github/workflows/p0-step12v68-capture-prospective-games.yml'
 
 permissions:
@@ -30,19 +33,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate frozen live-capture boundary
+      - name: Validate frozen scientific boundary and reliability amendment
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile \
             scripts/p0-step12v68-prospective-source.py \
             scripts/p0-step12v68-prospective-ledger.py \
-            scripts/p0-step12v68-fg-winner-prospective-capture.py
+            scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            scripts/p0-step12v68-capture-supervisor.py
+          python scripts/p0-step12v68-capture-supervisor.test.py
           python - <<'PY'
           import json
           m=json.load(open('research/p0-step12v68-prospective-source-manifests.json'))
+          r=json.load(open('research/p0-step12v68-capture-reliability-repair-v1.json'))
           op=m['operationalProspectiveCapture']
-          assert op['capturePollingCadenceMinutes']==10
+          boundary=r['scientificBoundary']
+          repair=r['operationalRepair']
           assert op['captureWindowMaximumMinutesBeforeScheduledStart']==20
           assert op['captureMustBeStrictlyBeforeScheduledStart'] is True
           assert op['requiresExactNineByNineCurrentLineups'] is True
@@ -50,16 +57,30 @@ jobs:
           assert op['firstCanonicalGameCaptureImmutable'] is True
           assert op['serializedDataLedgerWritesRequired'] is True
           assert op['outcomesOrMarketPricesInPregameLedgerAllowed'] is False
+          assert r['outcomesReadForRepairDesign'] is False
+          assert r['marketPricesReadForRepairDesign'] is False
+          assert r['parentScientificContractChanged'] is False
+          assert boundary['captureEligibilityWindowMaximumMinutesBeforeScheduledStart']==20
+          assert boundary['requiresExactNineByNineCurrentLineups'] is True
+          assert boundary['requiresBothCurrentPregameProbablePitchers'] is True
+          assert repair['cronCadenceMinutes']==5
+          assert repair['pollAttemptsPerRun']==6
+          assert repair['pollIntervalSeconds']==45
+          assert repair['preflightUpcomingGameHorizonMinutes']==45
           text=open('.github/workflows/p0-step12v68-capture-prospective-games.yml').read()
+          assert "cron: '*/5 * * * *'" in text
+          assert '--max-lead-minutes 20' in text
+          assert '--attempts 6' in text
+          assert '--interval-seconds 45' in text
           assert 'ledger/v68/final/evaluation.json' in text
           assert "steps.cohort.outputs.open == 'true'" in text
-          print('V68_AUTOMATED_CAPTURE_BOUNDARY_VERIFIED')
+          print('V68_DENSE_POLL_REPAIR_BOUNDARY_VERIFIED')
           PY
 
   capture-live-pregame:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 12
     steps:
       - name: Checkout frozen V68 code from default branch
         uses: actions/checkout@v4
@@ -126,7 +147,7 @@ jobs:
           repository: rogelroque940830-bot/Prediccion-Elite-
           run-id: 31704085189
 
-      - name: Poll authoritative MLB feed for exact pregame-ready games
+      - name: Densely poll authoritative MLB feed inside unchanged strict pregame window
         if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true'
         id: source
         working-directory: code
@@ -134,19 +155,48 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ../work
-          python scripts/p0-step12v68-prospective-source.py live \
+          python scripts/p0-step12v68-capture-supervisor.py \
             --state '../ledger/v68/states/${{ steps.date.outputs.target }}.json' \
             --target-date '${{ steps.date.outputs.target }}' \
             --source-manifest research/p0-step12v68-prospective-source-manifests.json \
             --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --source-script scripts/p0-step12v68-prospective-source.py \
             --max-lead-minutes 20 \
-            --out ../work/source.json
+            --preflight-horizon-minutes 45 \
+            --attempts 6 \
+            --interval-seconds 45 \
+            --out ../work/source.json \
+            --diagnostics-out ../work/supervisor-diagnostics.json
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           x=json.load(open('../work/source.json'))
+          d=json.load(open('../work/supervisor-diagnostics.json'))
           n=len(x.get('rows',[]))
+          near=bool((d.get('preflight') or {}).get('nearCaptureWindow'))
           print(f'rows={n}')
           print(f'has_rows={str(n>0).lower()}')
+          print(f'near_window={str(near).lower()}')
+          print(f'attempts={len(d.get("attempts",[]))}')
+          PY
+
+      - name: Preserve near-window dense-poll diagnostics without outcomes
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && steps.source.outputs.near_window == 'true'
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p '../ledger/v68/poll-diagnostics/${{ steps.date.outputs.target }}'
+          python - <<'PY'
+          import json,os
+          src='../work/supervisor-diagnostics.json'
+          x=json.load(open(src))
+          assert x['outcomesRead'] is False
+          assert x['marketPricesRead'] is False
+          assert x['scientificModelChanged'] is False
+          x['githubRunId']='${{ github.run_id }}'
+          x['githubRunAttempt']='${{ github.run_attempt }}'
+          out='../ledger/v68/poll-diagnostics/${{ steps.date.outputs.target }}/${{ github.run_id }}-${{ github.run_attempt }}.json'
+          open(out,'w').write(json.dumps(x,indent=2,sort_keys=True)+'\n')
           PY
 
       - name: Score V16 and frozen V68 before outcomes exist
@@ -210,16 +260,16 @@ jobs:
           open('../ledger/v68/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w').write(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
           PY
 
-      - name: Commit only newly captured immutable games
-        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && steps.source.outputs.has_rows == 'true' && steps.score.outputs.has_new == 'true'
+      - name: Commit diagnostics and only newly captured immutable games
+        if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true' && (steps.source.outputs.near_window == 'true' || steps.score.outputs.has_new == 'true')
         working-directory: ledger
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'court-edge-v68-research-bot'
           git config user.email 'v68-research-bot@users.noreply.github.com'
-          git add v68/captures v68/source-records v68/receipts
+          git add v68/poll-diagnostics v68/captures v68/source-records v68/receipts 2>/dev/null || true
           git diff --cached --quiet && exit 0
-          git commit -m "V68 capture ${{ steps.date.outputs.target }}: add ${{ steps.score.outputs.new }} immutable pregame game(s)"
+          git commit -m "V68 capture ${{ steps.date.outputs.target }}: dense-poll custody update"
           git pull --rebase origin data/p0-step12v68-prospective
           git push origin HEAD:data/p0-step12v68-prospective
