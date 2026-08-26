@@ -78,6 +78,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();
   registerMlbDailyOpportunityUiRoutes(app, {
     liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
+    provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider,
   });
   registerMlbUnifiedV16UiRoutes(app, mlbUnifiedLive);
 
