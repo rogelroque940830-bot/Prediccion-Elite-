@@ -42,12 +42,19 @@ function fakeSlate() {
 test("whole-slate opportunity endpoint returns WAIT with a capped pre-odds shortlist", async () => {
   let assemblyCalls = 0;
   let opportunityCalls = 0;
+  let strictBullpenEvidence = false;
+  let forwardedProvider: unknown = null;
+  const provisionalV16Provider = async () => {
+    throw new Error("not invoked by this boundary test");
+  };
   const response = await executeMlbDailyOpportunityUiCommand(date, {
     now: () => now,
     runIdFactory: () => "opportunity-test-1",
     buildSlate: async () => fakeSlate(),
-    assembleLiveInput: async ({ runId, slate }) => {
+    provisionalV16Provider: provisionalV16Provider as any,
+    assembleLiveInput: async ({ runId, slate, requireCompleteProvisionalBullpenEvidence }) => {
       assemblyCalls += 1;
+      strictBullpenEvidence = requireCompleteProvisionalBullpenEvidence === true;
       return {
         schemaVersion: "courtedge-p0-mlb-unified-v16-live-input-assembler.v1",
         status: "READY",
@@ -57,8 +64,9 @@ test("whole-slate opportunity endpoint returns WAIT with a capped pre-odds short
         policy: {},
       } as any;
     },
-    buildOpportunityLive: async () => {
+    buildOpportunityLive: async (input) => {
       opportunityCalls += 1;
+      forwardedProvider = input.provisionalV16Provider;
       return {
         generatedAt: now.toISOString(),
         dailyOpportunity: {
@@ -101,24 +109,31 @@ test("whole-slate opportunity endpoint returns WAIT with a capped pre-odds short
   assert.equal((response.body.policy as any).paidOddsCalled, false);
   assert.equal((response.body.policy as any).theOddsApiCreditsConsumed, 0);
   assert.equal((response.body.policy as any).wholeQualifiedSlateCompetes, true);
+  assert.equal((response.body.policy as any).completeProvisionalBullpenEvidenceRequired, true);
+  assert.equal(strictBullpenEvidence, true);
+  assert.equal(forwardedProvider, provisionalV16Provider);
   assert.equal(assemblyCalls, 1);
   assert.equal(opportunityCalls, 1);
 });
 
 test("certified evidence blocker returns before opportunity scoring and before odds", async () => {
   let opportunityCalls = 0;
+  let strictBullpenEvidence = false;
   const response = await executeMlbDailyOpportunityUiCommand(date, {
     now: () => now,
     runIdFactory: () => "opportunity-test-2",
     buildSlate: async () => fakeSlate(),
-    assembleLiveInput: async ({ runId }) => ({
-      schemaVersion: "courtedge-p0-mlb-unified-v16-live-input-assembler.v1",
-      status: "BLOCKED",
-      runId,
-      input: null,
-      blockers: [{ code: "SHORTLIST_EVIDENCE_UNAVAILABLE", gamePks: [2], message: "missing" }],
-      policy: {},
-    } as any),
+    assembleLiveInput: async ({ runId, requireCompleteProvisionalBullpenEvidence }) => {
+      strictBullpenEvidence = requireCompleteProvisionalBullpenEvidence === true;
+      return {
+        schemaVersion: "courtedge-p0-mlb-unified-v16-live-input-assembler.v1",
+        status: "BLOCKED",
+        runId,
+        input: null,
+        blockers: [{ code: "BULLPEN_EVIDENCE_UNAVAILABLE", gamePks: [2], message: "missing provisional bullpen" }],
+        policy: {},
+      } as any;
+    },
     buildOpportunityLive: async () => {
       opportunityCalls += 1;
       throw new Error("must not run");
@@ -128,7 +143,9 @@ test("certified evidence blocker returns before opportunity scoring and before o
   assert.equal(response.httpStatus, 202);
   assert.equal(response.body.status, "OPPORTUNITY_INPUTS_BLOCKED");
   assert.equal((response.body.policy as any).maximumPossiblePriceConsultations, 3);
+  assert.equal((response.body.policy as any).completeProvisionalBullpenEvidenceRequired, true);
   assert.equal((response.body.policy as any).paidOddsCalled, false);
   assert.equal((response.body.policy as any).theOddsApiCreditsConsumed, 0);
+  assert.equal(strictBullpenEvidence, true);
   assert.equal(opportunityCalls, 0);
 });
