@@ -1,0 +1,72 @@
+name: Validate MLB Daily Opportunity UI V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-daily-opportunity-context-v1.ts'
+      - 'server/mlb-daily-opportunity-context-v1.test.ts'
+      - 'server/mlb-daily-opportunity-live-v1.ts'
+      - 'server/mlb-daily-opportunity-ui-route-v1.ts'
+      - 'server/mlb-daily-opportunity-ui-route-v1.test.ts'
+      - 'server/routes.ts'
+      - '.github/workflows/validate-mlb-daily-opportunity-ui-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check Daily Opportunity live/UI boundary
+        run: |
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-daily-opportunity-context-v1.ts \
+            server/mlb-daily-opportunity-context-v1.test.ts \
+            server/mlb-daily-opportunity-live-v1.ts \
+            server/mlb-daily-opportunity-ui-route-v1.ts \
+            server/mlb-daily-opportunity-ui-route-v1.test.ts
+
+      - name: Execute context falsification suite
+        run: npx tsx --test server/mlb-daily-opportunity-context-v1.test.ts
+
+      - name: Execute UI boundary suite
+        run: npx tsx --test server/mlb-daily-opportunity-ui-route-v1.test.ts
+
+      - name: Prove full-slate and pre-odds boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'rankMlbIntrinsicGames(input.intrinsic.games)' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'wholeQualifiedIntrinsicPopulationRanked: true' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'marketDiscoveryCapMayHideDailyOpportunity: false' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'provisionalGamesMayLeadDailyOpportunity: true' server/mlb-daily-opportunity-context-v1.ts
+          grep -F 'paidOddsBoundaryCrossed: false' server/mlb-daily-opportunity-live-v1.ts
+          grep -F 'paidOddsCalled: false' server/mlb-daily-opportunity-ui-route-v1.ts
+          grep -F 'theOddsApiCreditsConsumed: 0' server/mlb-daily-opportunity-ui-route-v1.ts
+          grep -F 'v68Changed: false' server/mlb-daily-opportunity-live-v1.ts
+          grep -F 'v80Changed: false' server/mlb-daily-opportunity-live-v1.ts
+          ! grep -nE 'apiKey|providerAccountScopeKey|stakeAmount|placeBet|BET_ELITE' server/mlb-daily-opportunity-live-v1.ts server/mlb-daily-opportunity-ui-route-v1.ts
+          git diff --check
+
+      - name: Build production backend with Daily Opportunity route
+        run: npm run build:backend
