@@ -112,13 +112,18 @@ def lineup_count(feed, side):
 
 def pregame_status(feed):
     status = (feed.get("gameData") or {}).get("status") or {}
-    coded = str(status.get("codedGameState") or "").upper()
-    abstract = str(status.get("abstractGameState") or "").lower()
-    detailed = str(status.get("detailedState") or "").lower()
-    is_pregame = coded not in ("I", "F", "O") and abstract not in ("live", "final") and not any(
-        token in detailed for token in ("in progress", "final", "game over", "completed early")
-    )
-    return is_pregame, coded or None
+    coded = str(status.get("codedGameState") or "").strip().upper()
+    abstract = str(status.get("abstractGameState") or "").strip().lower()
+    detailed = str(status.get("detailedState") or "").strip().lower()
+    if coded in ("I", "F", "O"):
+        return False, coded or None
+    if detailed in ("in progress", "final", "game over", "completed early"):
+        return False, coded or None
+    if coded in ("S", "P"):
+        return True, coded or None
+    if detailed in ("scheduled", "pre-game", "warmup", "delayed start"):
+        return True, coded or None
+    return abstract == "preview", coded or None
 
 
 def readiness_diagnostics(target_date, now, max_lead_minutes):
