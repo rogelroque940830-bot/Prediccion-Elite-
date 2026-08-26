@@ -51,8 +51,10 @@ jobs:
             server/mlb-daily-opportunity-live-v1.ts \
             server/mlb-daily-opportunity-ui-route-v1.ts \
             server/mlb-daily-opportunity-ui-route-v1.test.ts \
-            server/mlb-unified-v16-live-input-assembler.ts \
-            server/mlb-unified-elite-shared-live-provider-bundle.ts
+            server/mlb-unified-v16-live-input-assembler.ts
+
+      - name: Bundle-check shared provider wiring
+        run: npx esbuild server/mlb-unified-elite-shared-live-provider-bundle.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-shared-provider.mjs
 
       - name: Execute context falsification suite
         run: npx tsx --test server/mlb-daily-opportunity-context-v1.test.ts
