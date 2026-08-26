@@ -110,9 +110,11 @@ jobs:
             './mlb-pure-settlement',
             './mlb-daily-best-pick-price',
             './mlb-daily-best-pick-manual-price',
-            'winner',
             'selected_win',
             'finalScore',
+            'homeScore',
+            'awayScore',
+            'settledOutcome',
           ]
           found=[x for x in forbidden if x in t]
           assert not found, found
