@@ -202,3 +202,79 @@ test("a ninth-or-later whole-slate game survives the old top-8 boundary when sho
     game.providerMarketKeysToRequestNow.length === game.plannedMarkets.length,
   ));
 });
+
+test("unresolved economic evidence forces WAIT even when another market is elite, and freshness uses post-acquisition time", async () => {
+  const game = intrinsicGame(9);
+  const live = fakeLive([shortlistEntry(9, "FINAL", 1)], [game]);
+  let evaluationNow: Date | null = null;
+  const postAcquisitionNow = new Date("2026-08-26T15:05:00.000Z");
+
+  const result = await runMlbDailyOpportunityPricedBridge({
+    assembled: {
+      c4ByGame: {
+        9: {
+          builderVersion: "mlb-c4-live-canonical-v1",
+          priceIndependent: true,
+          sameDateHistoryAllowed: false,
+          seasonResetHistory: true,
+          featureVector: {
+            lineup_exposure_rate_adv: 0,
+            starter_kbb_adv: 0,
+            combined_team_rs10: 8.5,
+            team_rd10_diff: 0,
+          },
+        },
+      },
+    } as any,
+    live,
+    runtime,
+    dependencies: {
+      oddsService: {
+        acquire: async () => ({
+          status: "COMPLETED",
+          providerCalls: { zeroCostEventsProbe: 1, paidEventOdds: 1, eventMarkets: 0, sportOdds: 0 },
+        }) as any,
+      } as any,
+      now: () => postAcquisitionNow,
+      evaluateMarketEdges: ((input: any) => {
+        evaluationNow = input.now;
+        return { schemaVersion: "test-market-edge", safety: {}, games: [], summary: {} } as any;
+      }) as any,
+      buildOperatingEnvelope: (() => ({
+        schemaVersion: "test-envelope",
+        summary: { eliteEvidenceCandidates: 1 },
+        safety: {},
+        games: [{
+          gamePk: 9,
+          homeTeam: { name: "Home 9" },
+          awayTeam: { name: "Away 9" },
+          markets: [
+            {
+              marketType: "ML",
+              selectedSide: "HOME",
+              selectedLine: null,
+              classification: "ELITE_EVIDENCE_CANDIDATE",
+              eliteEvidenceCandidate: true,
+              modelWinProbability: 0.72,
+              expectedValuePerUnit: 0.09,
+            },
+            {
+              marketType: "F5_ML",
+              selectedSide: null,
+              selectedLine: null,
+              classification: "UPSTREAM_BLOCKED",
+              eliteEvidenceCandidate: false,
+              modelWinProbability: null,
+              expectedValuePerUnit: null,
+            },
+          ],
+        }],
+      })) as any,
+    },
+  });
+
+  assert.equal(evaluationNow?.toISOString(), postAcquisitionNow.toISOString());
+  assert.equal(result.decision.action, "WAIT");
+  assert.equal(result.decision.reason, "UNRESOLVED_ECONOMIC_EVIDENCE");
+  assert.equal(result.decision.recommendation, null);
+});
