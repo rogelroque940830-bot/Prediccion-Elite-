@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-capture-reliability-repair.v1",
+  "stage": "P0_STEP12V68_CAPTURE_RELIABILITY_REPAIR_V1",
+  "frozenAtUtc": "2026-08-26T15:46:00Z",
+  "researchOnly": true,
+  "outcomesReadForRepairDesign": false,
+  "marketPricesReadForRepairDesign": false,
+  "performanceMetricsUsedForRepairDesign": false,
+  "existingProspectiveOutcomeEmbargoRemainsIntact": true,
+  "parentScientificContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "parentScientificContractChanged": false,
+  "problemStatement": {
+    "observedCanonicalGamesBeforeRepair": 4,
+    "observedDistinctOfficialDatesBeforeRepair": 3,
+    "lastCanonicalOfficialDateBeforeRepair": "2026-08-22",
+    "diagnosisBasis": "Pregame custody counts and workflow behavior only; no game outcomes were opened.",
+    "failureMode": "A single instantaneous poll every ten minutes inside a strict twenty-minute capture window is operationally fragile under scheduled-run jitter and late lineup publication, causing eligible games to be missed even while the scientific model remains unchanged."
+  },
+  "scientificBoundary": {
+    "candidateModelChanged": false,
+    "candidateFeaturesChanged": false,
+    "candidateCoefficientsChanged": false,
+    "candidateCalibrationChanged": false,
+    "controlModelChanged": false,
+    "captureEligibilityWindowMaximumMinutesBeforeScheduledStart": 20,
+    "captureMustBeStrictlyBeforeScheduledStart": true,
+    "requiresExactNineByNineCurrentLineups": true,
+    "requiresBothCurrentPregameProbablePitchers": true,
+    "wholeOfficialDatePriorStateOnly": true,
+    "sameDateOutcomesUsed": false,
+    "outcomesOrMarketPricesInPregameLedgerAllowed": false,
+    "firstCanonicalGameCaptureImmutable": true
+  },
+  "operationalRepair": {
+    "cronCadenceMinutes": 5,
+    "pollAttemptsPerRun": 6,
+    "pollIntervalSeconds": 45,
+    "maximumContinuousPollSpanSeconds": 225,
+    "preflightUpcomingGameHorizonMinutes": 45,
+    "firstReadySnapshotPerGameWinsWithinRun": true,
+    "existingCanonicalSnapshotAlwaysWinsAcrossRuns": true,
+    "persistNearWindowZeroCaptureDiagnostics": true,
+    "diagnosticDataMayContainOutcomes": false,
+    "diagnosticDataMayContainMarketPrices": false,
+    "reason": "Increase observation reliability without broadening the frozen twenty-minute eligibility window or changing any scientific decision rule."
+  },
+  "compatibility": {
+    "existingFourCanonicalGamesRemainEligible": true,
+    "reason": "The repair changes only observation frequency. Every pre-repair canonical game already satisfies the unchanged strict pregame, exact-lineup, exact-starter and <=20 minute eligibility rules."
+  },
+  "forbidden": [
+    "OUTCOME_PEEKING",
+    "MARKET_PRICE_PEEKING",
+    "MODEL_REFIT",
+    "RECALIBRATION",
+    "FEATURE_CHANGE",
+    "THRESHOLD_CHANGE",
+    "CAPTURE_WINDOW_WIDENING",
+    "POST_HOC_GAME_INCLUSION",
+    "HISTORICAL_BACKFILL"
+  ],
+  "validation": {
+    "syntheticSupervisorMergeRequired": true,
+    "workflowBoundaryAssertionsRequired": true,
+    "productionBackendChangeAllowed": false,
+    "globalEliteRankerChangeAllowed": false
+  }
+}
