@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "courtedge-mlb-provisional-v16-lineup-proxy-contract.v1",
+  "objective": "Produce a leakage-safe provisional V16 probability before official lineup confirmation so provisional games can participate in the Daily Opportunity engine.",
+  "projection": {
+    "method": "LAST_VALID_PRIOR_OFFICIAL_DATE_LINEUP",
+    "sameMethodAsSensitivityPr684": true,
+    "thirdPartyProjectionClaimed": false,
+    "currentDateOfficialLineupRequired": false,
+    "strictlyPriorOfficialDateLineupOnly": true,
+    "sameDateLineupAllowed": false,
+    "futureLineupAllowed": false,
+    "finalBoxscoreTargetLineupBackfillAllowed": false,
+    "bothProbablePitchersRequired": true,
+    "currentGameIdentityRevalidated": true
+  },
+  "model": {
+    "v16FrozenRuntimeScorerReused": true,
+    "modelRefit": false,
+    "recalibration": false,
+    "featureChange": false,
+    "provisionalEvidenceIsNotConfirmedEvidence": true
+  },
+  "uncertainty": {
+    "p95AbsoluteLineupDeltaFromPr684": 0.0533,
+    "appliedByDailyOpportunityEngine": true
+  },
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "thresholdSearch": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "ppHorizonProspectiveValidationChanged": false,
+    "productionDailyBestPickChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

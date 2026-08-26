@@ -1,0 +1,83 @@
+name: Validate MLB Provisional V16 Lineup Proxy V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mlb-provisional-v16-lineup-proxy-v1.json'
+      - 'server/mlb-provisional-v16-lineup-proxy-v1.ts'
+      - 'server/mlb-provisional-v16-lineup-proxy-v1.test.ts'
+      - '.github/workflows/validate-mlb-provisional-v16-lineup-proxy-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Freeze provisional V16 contract
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('research/mlb-provisional-v16-lineup-proxy-v1.json','utf8'));
+          if(c.schemaVersion!=='courtedge-mlb-provisional-v16-lineup-proxy-contract.v1') throw new Error('schema');
+          if(c.projection.method!=='LAST_VALID_PRIOR_OFFICIAL_DATE_LINEUP') throw new Error('projection');
+          if(c.projection.sameMethodAsSensitivityPr684!==true) throw new Error('parent');
+          if(c.projection.thirdPartyProjectionClaimed!==false) throw new Error('third-party claim');
+          if(c.projection.currentDateOfficialLineupRequired!==false) throw new Error('current lineup');
+          if(c.projection.strictlyPriorOfficialDateLineupOnly!==true) throw new Error('prior date');
+          if(c.projection.sameDateLineupAllowed!==false || c.projection.futureLineupAllowed!==false) throw new Error('leakage');
+          if(c.projection.finalBoxscoreTargetLineupBackfillAllowed!==false) throw new Error('backfill');
+          if(c.projection.bothProbablePitchersRequired!==true) throw new Error('pitchers');
+          if(c.model.v16FrozenRuntimeScorerReused!==true) throw new Error('V16 scorer');
+          if(c.model.modelRefit!==false || c.model.recalibration!==false || c.model.featureChange!==false) throw new Error('model mutation');
+          if(c.uncertainty.p95AbsoluteLineupDeltaFromPr684!==0.0533) throw new Error('p95');
+          for(const k of ['outcomesRead','marketPricesRead','thresholdSearch','v68Changed','v80Changed','ppHorizonProspectiveValidationChanged','productionDailyBestPickChanged','automaticBetPlacement']) {
+            if(c.policy[k]!==false) throw new Error(k);
+          }
+          if(c.policy.realFinancialExposure!==0) throw new Error('exposure');
+          console.log('MLB_PROVISIONAL_V16_LINEUP_PROXY_CONTRACT_FROZEN');
+          NODE
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type-check provisional V16 proxy
+        run: |
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-provisional-v16-lineup-proxy-v1.ts \
+            server/mlb-provisional-v16-lineup-proxy-v1.test.ts
+
+      - name: Execute provisional proxy falsification suite
+        run: npx tsx --test server/mlb-provisional-v16-lineup-proxy-v1.test.ts
+
+      - name: Prove no price, wager, V68 or V80 mutation surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -nE 'sportsbook|TheOdds|apiKey|expectedValue|stakeAmount|placeBet|BET_ELITE' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'currentGameOfficialLineupRead: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'strictlyPriorOfficialDateLineupOnly: true' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'sameDateHistoryAllowed: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'futureLineupAllowed: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'outcomesRead: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'marketPricesRead: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'v68Changed: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          grep -F 'v80Changed: false' server/mlb-provisional-v16-lineup-proxy-v1.ts
+          git diff --check
