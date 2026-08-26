@@ -4,6 +4,10 @@ import {
   type MlbDailyOpportunityContextResult,
 } from "./mlb-daily-opportunity-context-v1";
 import {
+  buildMlbDailyOpportunityPriceShortlist,
+  type MlbDailyOpportunityPriceShortlist,
+} from "./mlb-daily-opportunity-price-shortlist-v1";
+import {
   assessMlbProvisionalV16LineupProxy,
   type MlbProvisionalV16LineupProxyResult,
 } from "./mlb-provisional-v16-lineup-proxy-v1";
@@ -29,6 +33,7 @@ export interface MlbDailyOpportunityLiveResult {
   generatedAt: string;
   preprice: MlbUnifiedRunnerResult;
   dailyOpportunity: MlbDailyOpportunityContextResult;
+  priceConsultationShortlist: MlbDailyOpportunityPriceShortlist;
   provisionalV16: {
     attemptedGamePks: readonly number[];
     scoredGamePks: readonly number[];
@@ -39,6 +44,8 @@ export interface MlbDailyOpportunityLiveResult {
     provisionalGamesMayLead: true;
     provisionalProbabilityUsesPriorDateLineupProxy: true;
     provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true;
+    maximumPossiblePriceConsultations: 3;
+    wholeSlateAnalysisDoesNotExpandPriceQuota: true;
     paidOddsBoundaryCrossed: false;
     outcomesRead: false;
     marketPricesRead: false;
@@ -126,12 +133,14 @@ export async function buildMlbDailyOpportunityLive(input: {
     finalV16ByGame: finalByGame,
     provisionalV16ByGame: provisionalByGame,
   });
+  const priceConsultationShortlist = buildMlbDailyOpportunityPriceShortlist(dailyOpportunity);
 
   return Object.freeze({
     schemaVersion: MLB_DAILY_OPPORTUNITY_LIVE_SCHEMA,
     generatedAt: preprice.generatedAt,
     preprice,
     dailyOpportunity,
+    priceConsultationShortlist,
     provisionalV16: Object.freeze({
       attemptedGamePks: Object.freeze([...provisionalIntrinsicPks].sort((a, b) => a - b)),
       scoredGamePks: Object.freeze(scoredGamePks),
@@ -142,6 +151,8 @@ export async function buildMlbDailyOpportunityLive(input: {
       provisionalGamesMayLead: true as const,
       provisionalProbabilityUsesPriorDateLineupProxy: true as const,
       provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true as const,
+      maximumPossiblePriceConsultations: 3 as const,
+      wholeSlateAnalysisDoesNotExpandPriceQuota: true as const,
       paidOddsBoundaryCrossed: false as const,
       outcomesRead: false as const,
       marketPricesRead: false as const,
