@@ -21,6 +21,7 @@ import { registerMlbF5OddsProtectionRoutes } from "./mlb-f5-odds-routes";
 import { registerMlbP1M6a2MarketUniverseOddsRoutes } from "./mlb-market-universe-odds-routes";
 import { registerMlbUnifiedPricedV16Routes } from "./mlb-unified-priced-v16-routes";
 import { registerMlbUnifiedV16UiRoutes } from "./mlb-unified-v16-ui-routes";
+import { registerMlbDailyOpportunityUiRoutes } from "./mlb-daily-opportunity-ui-route-v1";
 import { createMlbUnifiedEliteSharedLiveProviderBundle } from "./mlb-unified-elite-shared-live-provider-bundle";
 import { registerMlbTeamTotalShadowRoutes } from "./mlb-team-total-shadow-routes";
 import { registerMlbBatterProspectiveCustodyRoutes } from "./mlb-batter-prospective-custody-routes";
@@ -70,10 +71,16 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   // Explicit future-only batter identity custody. This route captures only authoritative FINAL
   // pregame lineups/pitcher identities and never requests odds, scores a model, or mutates V16.
   registerMlbBatterProspectiveCustodyRoutes(app);
-  // Browser-facing explicit preflight: verifies the official slate and server custody without
-  // crossing the paid odds boundary or accepting forged certified sporting inputs from the UI.
-  // The same certified FULL13 materializer is shared by A+/Premium and lower-tier shadow scoring.
-  registerMlbUnifiedV16UiRoutes(app, createMlbUnifiedEliteSharedLiveProviderBundle());
+
+  // One shared certified provider bundle serves both the legacy visible Daily BEST PICK command and
+  // the whole-slate Daily Opportunity command. The opportunity route stays pre-odds and allows
+  // provisional games to compete without creating a second sporting-evidence reconstruction path.
+  const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();
+  registerMlbDailyOpportunityUiRoutes(app, {
+    liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
+  });
+  registerMlbUnifiedV16UiRoutes(app, mlbUnifiedLive);
+
   // Explicit command route for the full V16 priced runner. It is auth-protected by the global
   // private-read/write middleware registered before domain routes and never polls or self-triggers.
   registerMlbUnifiedPricedV16Routes(app);
