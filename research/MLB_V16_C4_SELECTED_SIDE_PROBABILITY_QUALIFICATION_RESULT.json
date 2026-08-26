@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "courtedge-mlb-v16-c4-selected-side-probability-qualification-result.v1",
+  "stage": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_QUALIFICATION",
+  "sport": "MLB",
+  "classification": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_NOT_QUALIFIED_FOR_CROSS_SPORT_USE",
+  "contractCommitSha": "10bb342b7f021ebe6eb1223589de813c7654affc",
+  "evaluatorCommitSha": "a32f37fcbb166e0a6eaa45d61ed55ecf2b0fc575",
+  "workflowHeadSha": "9537f2ad0217c563070eb28c0c6693fb2f3c949b",
+  "officialValidation": {
+    "workflowRunId": 32927250361,
+    "jobId": 98052524083,
+    "workflowConclusion": "success",
+    "artifactId": 9591957701,
+    "artifactName": "mlb-v16-c4-selected-side-probability-qualification",
+    "artifactDigest": "sha256:3b57212345e4cd256559f437d126cb6d1a8a12e43c20ff234e211f2f02bb8e9c",
+    "rowsetSha256": "0f72213913c89fc438a198eaf4a71fcd96f09e89e9492dc15e6ba9c9433bb5c8",
+    "rowsetRows": 6610
+  },
+  "combinedMetrics": {
+    "v16": {
+      "meanPredicted": 0.5172683175059403,
+      "observedRate": 0.5308623298033283,
+      "absoluteMeanCalibrationGap": 0.013594012297387992,
+      "brier": 0.24534486846517414,
+      "logLoss": 0.6837094013428716,
+      "ece10": 0.013594012297387882,
+      "calibrationInTheLargeZ": 2.22992344385467
+    },
+    "frozen2023Climatology": {
+      "probability": 0.5214672780325136,
+      "brier": 0.24913578359688676,
+      "logLoss": 0.6914179681147691,
+      "calibrationInTheLargeZ": 1.5290812271864376
+    },
+    "identityAffineLikelihoodRatio": {
+      "likelihoodRatioStatistic": 5.002941373195426,
+      "degreesOfFreedom": 2,
+      "pValue": 0.08196436604465131,
+      "alternativeAlpha": 0.05646015018555467,
+      "alternativeBeta": 0.98407463506962,
+      "alternativeUsedForPrediction": false
+    }
+  },
+  "mandatoryGates": {
+    "exactCustodyRows": true,
+    "probabilityComplementIdentity": true,
+    "allProbabilitiesFiniteAndUnitInterval": true,
+    "combinedBrierBeatsFrozenClimatology": true,
+    "combinedLogLossBeatsFrozenClimatology": true,
+    "combinedCalibrationInTheLarge": false,
+    "combinedIdentityAffineNotRejected": true,
+    "combinedEce10WithinFrozenV16Gate": true,
+    "everySeasonLogLossWithinFrozenNoCatastropheGate": true,
+    "everySeasonCoverageExact": true
+  },
+  "failureReason": {
+    "gate": "combinedCalibrationInTheLarge",
+    "observedAbsZ": 2.22992344385467,
+    "frozenCriticalAbsZ": 1.959963984540054,
+    "interpretation": "The frozen V16 C4 probability retains proper-score skill and low ECE, and the two-parameter identity affine likelihood-ratio test does not reject the identity map at alpha 0.05, but the combined mean probability level is statistically low relative to the held-out home-win rate under the predeclared calibration-in-the-large gate. The gate therefore fails and the probability is not authorized for cross-sport use."
+  },
+  "temporalDiagnostics": {
+    "2024": {
+      "rows": 2406,
+      "meanPredicted": 0.5166721811393402,
+      "observedRate": 0.5224438902743143,
+      "absoluteMeanCalibrationGap": 0.005771709134974046,
+      "calibrationInTheLargeZ": 0.5711328683092548,
+      "identityAffinePValue": 0.7652997603674226
+    },
+    "2025": {
+      "rows": 2423,
+      "meanPredicted": 0.5170169845236097,
+      "observedRate": 0.5435410647957079,
+      "absoluteMeanCalibrationGap": 0.026524080272098183,
+      "calibrationInTheLargeZ": 2.6364612096397804,
+      "identityAffinePValue": 0.03059445734122718
+    },
+    "2026_YTD": {
+      "rows": 1781,
+      "meanPredicted": 0.5184155852848438,
+      "observedRate": 0.5249859629421674,
+      "absoluteMeanCalibrationGap": 0.006570377657323601,
+      "calibrationInTheLargeZ": 0.5589174507004675,
+      "identityAffinePValue": 0.6516674936066105
+    }
+  },
+  "scientificDecision": {
+    "crossSportMlbFullGameCandidateAuthorized": false,
+    "first5CrossSportProbabilityAuthorized": false,
+    "doNotWeakenFrozenGateAfterResult": true,
+    "doNotDeployDiagnosticAffineAlternative": true,
+    "doNotRetuneV16OnTheSame6610HeldOutRows": true,
+    "historicalHitRateMayNotReplaceProbability": true,
+    "v68ProspectiveEmbargoRemainsUntouched": true,
+    "globalEliteRanker": "BLOCKED"
+  },
+  "safety": {
+    "mlbModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "selectorHierarchyChanged": false,
+    "sportsbookPricesRead": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextAction": "FREEZE_A_NEW_NON_TUNED_MLB_PROBABILITY_PATH_THAT_DOES_NOT_REUSE_THE_6610_HELD_OUT_ROWS_FOR_FITTING_AND_KEEP_GLOBAL_ELITE_BLOCKED"
+}
