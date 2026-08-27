@@ -1,33 +1,57 @@
 {
-  "name": "WNBA_R1A4C_PREFIX_CONSTRUCTOR_CERTIFICATION_V1",
+  "name": "WNBA_R1A4C_PREFIX_CONSTRUCTOR_CERTIFICATION_V2_CORRECTED",
   "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
-  "decision": "CERTIFIED_PREFIX_CUSTODY_RECONSTRUCTIBLE_GROUPS_TRAVEL_INJURY_MANUAL_STILL_OPEN",
+  "decision": "CERTIFIED_CORRECTED_REGULAR_SEASON_PREFIX_CUSTODY_TRAVEL_INJURY_MANUAL_STILL_OPEN",
   "certified_date": "2026-08-27",
   "branch": "research/wnba-r1-historical-foundation",
   "pull_request": 693,
   "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
-  "parent_contract": "research/wnba/WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY.json",
+  "parent_contract": "research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json",
   "parent_candidate_certification": "research/wnba/WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION.json",
+  "supersedes": {
+    "initial_run_id": 33082885259,
+    "initial_rowset_sha256": "d9cce660134a8cd9ee8b20d4beed733f398fb69170eaf092ad206132587afa05",
+    "initial_rowset_rows": 1148,
+    "reason": "Initial season_type=2 cohort included one WNBA All-Star Game and one separate Commissioner's Cup Championship per season. R1A.4C1 identified and froze those 10 special-event game IDs outcome-blind; corrected R1A.4C2 excludes them before target grouping and before any phase-2 stat projection."
+  },
   "scope": {
     "seasons": [2021, 2022, 2023, 2024, 2025],
-    "regular_season_only": true,
+    "regular_season_only_after_special_event_exclusion": true,
     "evaluation_labels_attached": false,
     "target_outcome_fields_in_rowset": 0,
     "market_data_consumed": false,
     "travel_injury_manual_imputed": false,
     "r1b_outcome_opening_authorized": false
   },
+  "special_event_classification": {
+    "evidence_run_id": 33083822921,
+    "evidence_artifact_id": 9651231078,
+    "evidence_artifact_digest": "sha256:f51e9d54cc694318e6917d5f001cc7bbe1d61c40274233d3a736b40c33090fcf",
+    "forbidden_outcome_values_loaded": false,
+    "excluded_game_ids_by_season": {
+      "2021": ["401341447", "401353913"],
+      "2022": ["401455978", "401430112"],
+      "2023": ["401558893", "401507376"],
+      "2024": ["401620458", "401677672"],
+      "2025": ["401781604", "401736430"]
+    },
+    "special_event_target_rows_in_final_rowset": 0,
+    "special_event_stat_request_count": 0,
+    "special_event_values_loaded": false
+  },
   "final_evidence": {
-    "workflow": "WNBA R1A.4C Full Prefix Constructor Custody",
-    "run_id": 33082885259,
-    "head_sha": "07e0c12b22c078e2e89e6b4baa2786ebcb0debca",
-    "artifact_id": 9650840442,
-    "artifact_name": "wnba-r1a4c-prefix-33082885259",
-    "artifact_digest": "sha256:082e603b34bd60257d92f2a4e46378eeb525fb9cbbb204c1a758d84a8879a863",
-    "evidence_name": "WNBA_R1A4C_PREFIX_CONSTRUCTOR_EVIDENCE_V1",
-    "rowset_sha256": "d9cce660134a8cd9ee8b20d4beed733f398fb69170eaf092ad206132587afa05",
-    "rowset_bytes": 1675576,
-    "rowset_rows": 1148
+    "workflow": "WNBA R1A.4C Corrected Prefix Constructor Custody",
+    "run_id": 33084467224,
+    "head_sha": "6aecfe18e7dcc4b50fb6a09331566c0ed9f8c577",
+    "artifact_id": 9651506612,
+    "artifact_name": "wnba-r1a4c2-prefix-33084467224",
+    "artifact_digest": "sha256:b90d67843b221a42512fbee20dce21354dede453bc2d771f96aa8800c2c6bbb2",
+    "evidence_name": "WNBA_R1A4C2_PREFIX_CONSTRUCTOR_EVIDENCE_V1",
+    "rowset_sha256": "47432224e80153617df70261d33bbbca26935fe71d5ec45552705c6aaf7f487f",
+    "rowset_bytes": 1668308,
+    "rowset_rows": 1143,
+    "independent_rowset_sha256_recomputed_and_matched": true,
+    "duplicate_target_game_ids": 0
   },
   "source_custody": {
     "all_source_custody_verified": true,
@@ -38,17 +62,25 @@
     "2024_team_box_sha256": "b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c",
     "2025_team_box_sha256": "b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09"
   },
+  "official_regular_fixture_structure": {
+    "gate_pass": true,
+    "2021": {"expected_regular_games": 192, "actual_after_exclusion": 192, "pass": true},
+    "2022": {"expected_regular_games": 216, "actual_after_exclusion": 216, "pass": true},
+    "2023": {"expected_regular_games": 240, "actual_after_exclusion": 240, "pass": true},
+    "2024": {"expected_regular_games": 240, "actual_after_exclusion": 240, "pass": true},
+    "2025": {"expected_regular_games": 286, "actual_after_exclusion": 286, "pass": true}
+  },
   "empirical_coverage": {
-    "total_regular_team_box_games": 1184,
-    "total_joined_regular_targets": 1184,
+    "total_regular_team_box_games": 1174,
+    "total_joined_regular_targets": 1174,
     "overall_identity_join_rate": 1.0,
-    "total_targets_with_two_team_prefix": 1148,
-    "targets_with_both_sos_ready": 1148,
-    "2021": {"regular_targets": 194, "prefix_rows": 187, "cold_start": 7, "join_rate": 1.0},
-    "2022": {"regular_targets": 218, "prefix_rows": 211, "cold_start": 7, "join_rate": 1.0},
-    "2023": {"regular_targets": 242, "prefix_rows": 235, "cold_start": 7, "join_rate": 1.0},
-    "2024": {"regular_targets": 242, "prefix_rows": 235, "cold_start": 7, "join_rate": 1.0},
-    "2025": {"regular_targets": 288, "prefix_rows": 280, "cold_start": 8, "join_rate": 1.0}
+    "total_targets_with_two_team_prefix": 1143,
+    "targets_with_both_sos_ready": 1143,
+    "2021": {"regular_targets": 192, "prefix_rows": 186, "cold_start": 6, "join_rate": 1.0},
+    "2022": {"regular_targets": 216, "prefix_rows": 210, "cold_start": 6, "join_rate": 1.0},
+    "2023": {"regular_targets": 240, "prefix_rows": 234, "cold_start": 6, "join_rate": 1.0},
+    "2024": {"regular_targets": 240, "prefix_rows": 234, "cold_start": 6, "join_rate": 1.0},
+    "2025": {"regular_targets": 286, "prefix_rows": 279, "cold_start": 7, "join_rate": 1.0}
   },
   "anti_leakage_closure": {
     "two_phase_daily_chokepoint_enforced": true,
@@ -57,8 +89,10 @@
     "future_value_used_count": 0,
     "target_outcome_fields_in_rowset": 0,
     "phase2_ingest_bad_games": 0,
-    "duplicate_target_game_ids": 0,
-    "independent_rowset_sha256_recomputed_and_matched": true,
+    "special_event_target_rows": 0,
+    "special_event_stat_request_count": 0,
+    "special_event_values_loaded": false,
+    "forbidden_score_winner_outcome_market_key_hits_in_independent_rowset_check": 0,
     "prior_game_scores_only_enter_later_date_prefixes": true
   },
   "certified_reconstructible_groups": [
@@ -75,7 +109,7 @@
     "preferred_BDL_advanced_exact_replay": "ACCESS_NOT_CERTIFIED"
   },
   "closure": {
-    "r1a4c": "PASS",
+    "r1a4c": "PASS_CORRECTED",
     "prefix_rowset_frozen": true,
     "target_outcomes_may_be_evaluated": false,
     "r1b_remains_closed": true,
