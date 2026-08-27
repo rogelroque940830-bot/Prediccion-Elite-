@@ -6,10 +6,15 @@ on:
       - research/wnba-r1-historical-foundation
     paths:
       - 'research/wnba/WNBA_R1A6_OUTCOME_BLIND_MODEL_REPLAY_CONTRACT.json'
+      - 'research/wnba/WNBA_R1A6_EXECUTION_AMENDMENT_1.json'
       - 'research/wnba/WNBA_R1A5_NEUTRAL_AVAILABILITY_CANDIDATE_CERTIFICATION.json'
       - 'scripts/wnba-r1a5-neutral-availability-candidate.py'
       - 'scripts/wnba-r1a6-direct-model-replay.mjs'
       - 'frontend/client/src/lib/wnba-model.ts'
+      - 'frontend/client/src/lib/wnba-shadow-emission.ts'
+      - 'frontend/client/src/lib/queryClient.ts'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
       - '.github/workflows/wnba-r1a6-direct-model-replay.yml'
   workflow_dispatch:
 
@@ -37,8 +42,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/wnba-r1a5-neutral-availability-candidate.py
-      - name: Directly execute production TypeScript sports-only model
-        run: npx --yes tsx@4.20.5 scripts/wnba-r1a6-direct-model-replay.mjs
+      - name: Verify frozen production import graph custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object frontend/client/src/lib/wnba-model.ts)" = "095527160535655d28e989c0cfe9638fc6681b4c"
+          test "$(git hash-object frontend/client/src/lib/wnba-shadow-emission.ts)" = "7dde8303ac0bac50ea0ed60cd5d7f78b091a5131"
+          test "$(git hash-object frontend/client/src/lib/queryClient.ts)" = "3f4176d17e660103db9784885400eadc54dd549c"
+          test "$(git hash-object frontend/package-lock.json)" = "f104d741b427df2a7cd73ccc3bbe66207b8cbb15"
+      - name: Install lockfile-frozen frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts
+      - name: Compile verified production source for Node execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontend/node_modules/.bin/esbuild frontend/client/src/lib/wnba-model.ts \
+            --bundle \
+            --platform=node \
+            --format=esm \
+            --target=node22 \
+            --outfile=/tmp/wnba-r1a6-model.bundle.mjs \
+            '--define:import.meta.env.VITE_API_BASE_URL=""' \
+            --define:import.meta.env.DEV=false
+      - name: Execute frozen production sports-only model
+        env:
+          WNBA_MODEL_MODULE: /tmp/wnba-r1a6-model.bundle.mjs
+          WNBA_MODEL_EXECUTION: ESBUILD_LOCKFILE_COMPILED_FROZEN_PRODUCTION_SOURCE_NODE22
+        run: node scripts/wnba-r1a6-direct-model-replay.mjs
       - name: Upload probability custody evidence
         if: always()
         uses: actions/upload-artifact@v4
