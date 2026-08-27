@@ -1,0 +1,81 @@
+{
+  "name": "WNBA_R1A4B1_PRODUCTION_FALLBACK_ASOF_ANALOGUE_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_DISTINCT_HISTORICAL_ANALOGUE",
+  "decision": "PENDING_2026_SEMANTICS_AUDIT",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent": "research/wnba/WNBA_R1A4B_ADVANCED_ASOF_SEMANTICS_AUDIT.json",
+  "why_distinct": "The preferred BALLDONTLIE advanced source cannot be certified in GitHub Actions because BDL_API_KEY is absent. This analogue therefore does not claim exact SPORTS_ONLY_V1 preferred-source replay; it freezes the already-deployed production fallback path as a separate historical candidate before any 2021-2025 target outcome is opened.",
+  "scope": {
+    "historical_target_seasons": [2021, 2022, 2023, 2024, 2025],
+    "validation_season": 2026,
+    "target_outcomes_opened": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "candidate_name": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "frozen_formula": {
+    "source_semantics": "Exact fallback expressions already present in server/wnba-independent-routes.ts; historical reconstruction uses per-game means over prior finalized regular-season games only.",
+    "pace": "mean(FGA) + 0.44*mean(FTA) - mean(OREB) + mean(TOV)",
+    "ppg": "mean(points_scored)",
+    "oppPpg": "mean(points_allowed)",
+    "offRtg": "100*ppg/pace",
+    "defRtg": "100*oppPpg/pace",
+    "netRtg": "offRtg-defRtg",
+    "quantization": "round pace/offRtg/defRtg/netRtg to one decimal before model consumption",
+    "recent_aliases": "recentPace=pace, recentOffRtg=offRtg, recentDefRtg=defRtg, recentNetRtg=netRtg, preserving frozen deployed alias semantics",
+    "no_posthoc_formula_change": true
+  },
+  "historical_constructor_rules": {
+    "eligible_games": "Regular-season games finalized strictly before target pregame cutoff.",
+    "target_exclusion": "Exclude target game_id before reading any score/stat value.",
+    "future_exclusion": "Exclude every game whose final state was not knowable before target cutoff.",
+    "aggregation": "Unweighted per-game arithmetic means, matching the per-game interpretation required by the deployed fallback expression.",
+    "overtime": "Use full-game final traditional boxscore values; no regulation-only normalization.",
+    "minimum_prior_games": 1,
+    "zero_or_missing_prior_games": "COLD_START_UNAVAILABLE; do not impute future/current/final-season values.",
+    "missing_required_box_field": "ROW_UNAVAILABLE; do not zero-fill.",
+    "season_type": "regular season only"
+  },
+  "certified_static_historical_source": {
+    "provider": "SportsDataverse ESPN WNBA team_box",
+    "custody_parent": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+    "required_columns_for_future_prefix_constructor": [
+      "game_id", "season", "season_type", "game_date_time", "team_id", "team_home_away", "opponent_team_id",
+      "field_goals_attempted", "free_throws_attempted", "offensive_rebounds", "turnovers", "team_score", "opponent_team_score"
+    ],
+    "target_outcome_values_may_be_read_during_this_r1a4b1_audit": false
+  },
+  "validation_2026": {
+    "source": "SportsDataverse WNBA Stats team_season_stats release",
+    "asset_id": 493743208,
+    "name": "team_season_stats_2026.parquet",
+    "size": 79175,
+    "sha256": "3eb8abfef0ff0a65e124bfaf743feda884eff9a8bc9caff293e868108b62b41b",
+    "purpose": "Validate the deployed fallback expression on an out-of-cohort season and quantify, descriptively only, its distance from official advanced ratings.",
+    "required_basic_fields": ["gp", "fga", "fta", "oreb", "tov", "pts"],
+    "required_advanced_fields": ["off_rating", "def_rating", "net_rating"],
+    "basic_snapshot_reconstruction_gate": "The selected regular-season/per-game row must produce finite fallback pace/offRtg. At least 10 teams required.",
+    "advanced_distance_policy": "Descriptive only. No closeness threshold is used to select or alter the analogue; the formula is already frozen because it is the deployed production fallback.",
+    "no_2021_2025_values_loaded": true
+  },
+  "anti_leakage_rules": [
+    "No 2021-2025 score, winner, linescore or target-derived statistic value may be loaded in R1A.4B1.",
+    "Historical Parquet schema metadata may be inspected to prove required columns exist.",
+    "2026 is outside the target evaluation cohort and may be used only for source/semantic characterization.",
+    "The 2026 comparison cannot change the frozen formula, quantization, minimum-prior-game rule, season type or missingness rule.",
+    "No injury/manual state is inferred or zero-filled by this gate.",
+    "No market data is consumed."
+  ],
+  "decision_policy": {
+    "if_static_historical_schemas_support_formula_and_2026_fallback_is_finite_for_at_least_10_teams": "CERTIFIED_DISTINCT_PRODUCTION_FALLBACK_ASOF_ANALOGUE",
+    "if_required_historical_columns_absent": "HISTORICAL_STATIC_SCHEMA_INSUFFICIENT",
+    "if_2026_validation_asset_or_required_fields_fail": "FALLBACK_SEMANTICS_NOT_VALIDATED",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_opened": false,
+    "next_gate_if_pass": "R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY_FOR_FALLBACK_ANALOGUE",
+    "preferred_BDL_advanced_route_status": "ACCESS_NOT_CERTIFIED_SEPARATE_FROM_THIS_ANALOGUE"
+  }
+}
