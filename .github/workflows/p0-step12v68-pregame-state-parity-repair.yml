@@ -24,11 +24,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Prove repair contract preceded implementation
         shell: bash
         run: |
@@ -36,14 +31,23 @@ jobs:
           contract_commit=$(git log --format=%H --reverse origin/main..HEAD -- research/p0-step12v68-pregame-state-parity-repair-v1.json | head -n1)
           source_commit=$(git log --format=%H --reverse origin/main..HEAD -- scripts/p0-step12v68-prospective-source.py | head -n1)
           supervisor_commit=$(git log --format=%H --reverse origin/main..HEAD -- scripts/p0-step12v68-capture-supervisor.py | head -n1)
-          test -n "$contract_commit"
-          test -n "$source_commit"
-          test -n "$supervisor_commit"
-          git merge-base --is-ancestor "$contract_commit" "$source_commit"
-          git merge-base --is-ancestor "$contract_commit" "$supervisor_commit"
-          test "$contract_commit" != "$source_commit"
-          test "$contract_commit" != "$supervisor_commit"
-          echo "V68_PREGAME_PARITY_CONTRACT_PRECEDES_IMPLEMENTATION"
+
+          if [ -n "$contract_commit" ]; then
+            test -n "$source_commit"
+            test -n "$supervisor_commit"
+            git merge-base --is-ancestor "$contract_commit" "$source_commit"
+            git merge-base --is-ancestor "$contract_commit" "$supervisor_commit"
+            test "$contract_commit" != "$source_commit"
+            test "$contract_commit" != "$supervisor_commit"
+            echo "V68_PREGAME_PARITY_CONTRACT_PRECEDES_IMPLEMENTATION"
+          else
+            # The parity repair is already frozen on main. Unrelated reliability changes to the
+            # shared supervisor must still run all parity boundary/tests below, but must not be
+            # rejected merely because the historical repair contract is not re-authored in this PR.
+            git diff --quiet origin/main...HEAD -- research/p0-step12v68-pregame-state-parity-repair-v1.json
+            test -f research/p0-step12v68-pregame-state-parity-repair-v1.json
+            echo "V68_PREGAME_PARITY_PREEXISTING_CONTRACT_UNCHANGED"
+          fi
 
       - name: Validate frozen scientific boundary
         shell: bash
