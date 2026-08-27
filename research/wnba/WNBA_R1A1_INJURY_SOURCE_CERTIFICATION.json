@@ -1,0 +1,108 @@
+{
+  "name": "WNBA_R1A1_INJURY_SOURCE_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SOURCE_AUDIT",
+  "decision": "NOT_CERTIFIED_FOR_2021_2025_YET",
+  "audited_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent_audit": "research/wnba/WNBA_R1A_INPUT_AUDIT.json",
+  "outcomes_opened": false,
+  "production_mutation": false,
+  "r1b_outcome_opening_authorized": false,
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "feature": "injury_adjustment",
+    "required_state": "player availability/injury information knowable before target tip",
+    "primary_candidate": "SPORTS_ONLY_V1"
+  },
+  "candidate_source": {
+    "vendor": "Sportradar",
+    "product": "WNBA API v8",
+    "feed": "Daily Injuries",
+    "endpoint_template": "https://api.sportradar.com/wnba/{access_level}/v8/{language_code}/league/{year}/{month}/{day}/daily_injuries.{format}",
+    "authentication": "x-api-key required",
+    "semantic_note": "The feed returns injuries updated on a given date; it is not documented as a complete immutable snapshot of every active injury at every intra-day timestamp."
+  },
+  "external_evidence": [
+    {
+      "source": "Sportradar WNBA Historical Data guide",
+      "url": "https://developer.sportradar.com/basketball/docs/wnba-ig-historical-data",
+      "supports": [
+        "WNBA API data availability goes back to the 2015 season.",
+        "Daily Injuries is listed among feeds that can be used for historical WNBA retrieval.",
+        "The guide warns that newly added data points are typically available in the most recent API version from the point they are added going forward."
+      ]
+    },
+    {
+      "source": "Sportradar WNBA Daily Injuries reference",
+      "url": "https://developer.sportradar.com/basketball/reference/wnba-daily-injuries",
+      "supports": [
+        "The endpoint accepts year/month/day path parameters.",
+        "The feed provides details for injuries updated on a given date.",
+        "Injury availability updates depend on scheduled game time."
+      ]
+    },
+    {
+      "source": "Sportradar NBA & WNBA API changelog",
+      "url": "https://developer.sportradar.com/sportradar-updates/changelog/nba-wnba-apis",
+      "supports": [
+        "Daily Injuries endpoint release date is 2024-08-30.",
+        "The endpoint was introduced to track injury updates by day over time."
+      ]
+    },
+    {
+      "source": "WNBA Injury Report policy",
+      "url": "https://www.wnba.com/wnba-injury-report",
+      "supports": [
+        "Teams must submit player participation/injury information before games under league reporting deadlines.",
+        "Reports are updated continually throughout the day."
+      ]
+    }
+  ],
+  "scientific_interpretation": {
+    "historical_feed_exists": true,
+    "historical_2021_2025_full_coverage_proven": false,
+    "reason": "Sportradar documents Daily Injuries as historically queryable, but the endpoint was only introduced on 2024-08-30 and Sportradar separately cautions that newly added data points are generally available from introduction forward. Documentation alone therefore does not prove complete injury-update coverage for 2021-2023 or the pre-release portion of 2024.",
+    "intra_day_pretip_snapshot_proven": false,
+    "reason_intra_day": "A daily list of updates is not by itself proof of the exact state visible at a specific pre-tip cutoff. Reconstruction requires update_date/content sequencing and a deterministic rule that never incorporates an update first known after target tip.",
+    "can_upgrade_r1a_to_pass_now": false
+  },
+  "empirical_certification_required": {
+    "credentials_required": true,
+    "probe_source": "Sportradar WNBA v8 Daily Injuries",
+    "minimum_checks": [
+      "Query representative in-season dates from each season 2021, 2022, 2023, 2024 and 2025.",
+      "Verify whether 2021-2023 and pre-2024-08-30 requests return genuine historical injury records rather than empty/unavailable responses caused by endpoint inception.",
+      "Measure game-day injury coverage over the intended cohort, not just endpoint HTTP availability.",
+      "Verify injury identifiers, start_date, update_date, status and comments are sufficient to order state changes without target-game participation inference.",
+      "Demonstrate a deterministic as-of-target-tip state constructor that ignores updates learned after tip.",
+      "Freeze raw-response hashes and a coverage report before any target outcomes are opened."
+    ],
+    "pass_requirements": {
+      "all_five_seasons_tested": true,
+      "no_future_or_post_tip_inference": true,
+      "unknown_not_zero": true,
+      "raw_source_custody_frozen": true,
+      "coverage_threshold_rule_must_be_preregistered_before_outcomes": true
+    }
+  },
+  "fallback_if_2021_2025_not_certifiable": {
+    "exact_SPORTS_ONLY_V1_historical_replay": "BLOCKED",
+    "allowed": [
+      "Preregister a distinct injury-neutral candidate before outcomes are opened.",
+      "Use a narrower certified injury era only as secondary validation while preserving the original 2021-2025 objective as unresolved.",
+      "Acquire another timestamped historical availability source and subject it to the same audit."
+    ],
+    "forbidden": [
+      "Treat missing injury state as healthy or zero adjustment.",
+      "Infer injury state from target-game minutes, box score, recap or final participation.",
+      "Use a later injury report as though it were known before target tip.",
+      "Open target outcomes and then choose the source/coverage rule."
+    ]
+  },
+  "closure": {
+    "scientific_result": "R1A1_SOURCE_PROMISING_BUT_NOT_CERTIFIED",
+    "primary_finding": "Sportradar is the strongest identified historical injury-source candidate, but documentation does not yet prove complete 2021-2025 pre-tip coverage.",
+    "next_gate": "EMPIRICAL_SPORTRADAR_COVERAGE_AND_ASOF_TEST",
+    "target_outcomes_may_be_opened": false
+  }
+}
