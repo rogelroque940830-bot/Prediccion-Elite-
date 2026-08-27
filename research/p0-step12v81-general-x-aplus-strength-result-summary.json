@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "courtedge-p0-step12v81-general-x-aplus-strength-result-summary.v1",
+  "classification": "V81_GENERAL_X_APLUS_RETROSPECTIVE_DISCOVERY_COMPLETE",
+  "sourceWorkflow": {
+    "runId": 32065606609,
+    "artifactId": 9299771764,
+    "artifactName": "p0-step12v81-general-x-aplus-strength",
+    "artifactDigest": "sha256:afb67c5e8cdb037ec2b125ba3274eb90b68a42185a20925294383c6f78fad1d0"
+  },
+  "baselineGeneral": {
+    "decisiveRows": 223,
+    "wins": 128,
+    "losses": 95,
+    "hitRate": 0.5739910313901345,
+    "home": {"decisiveRows": 128, "wins": 80, "losses": 48, "hitRate": 0.625},
+    "away": {"decisiveRows": 95, "wins": 48, "losses": 47, "hitRate": 0.5052631578947369}
+  },
+  "aPlusDirectionalSignalEvidence": {
+    "metric": "aPlusMinSelected",
+    "medianWins": 0.6554464888670148,
+    "medianLosses": 0.642614416524218,
+    "meanWins": 0.6562514695394714,
+    "meanLosses": 0.6401181275751865,
+    "pointBiserialR": 0.17379196934833896,
+    "pointBiserialP": 0.009308751016476758,
+    "mannWhitneyTwoSidedP": 0.020778710678471552,
+    "univariateLogisticSlope": 7.83842124025373,
+    "interpretation": "Higher selected-side frozen A+ probability is positively associated with General TOP1 winning historically."
+  },
+  "keyCrosses": {
+    "selectedStrongerAndAPlusMinGe060": {
+      "decisiveRows": 129,
+      "wins": 82,
+      "losses": 47,
+      "hitRate": 0.6356589147286822,
+      "bySeason": {
+        "2024": {"n": 48, "wins": 29, "losses": 19, "hitRate": 0.6041666666666666},
+        "2025": {"n": 45, "wins": 28, "losses": 17, "hitRate": 0.6222222222222222},
+        "2026_YTD": {"n": 36, "wins": 25, "losses": 11, "hitRate": 0.6944444444444444}
+      },
+      "home": {"n": 74, "wins": 53, "losses": 21, "hitRate": 0.7162162162162162},
+      "away": {"n": 55, "wins": 29, "losses": 26, "hitRate": 0.5272727272727272}
+    },
+    "selectedStrongerAndAPlusMinGe064": {
+      "decisiveRows": 92,
+      "wins": 60,
+      "losses": 32,
+      "hitRate": 0.6521739130434783,
+      "wilson95Lower": 0.550524829810952,
+      "bySeason": {
+        "2024": {"n": 28, "wins": 18, "losses": 10, "hitRate": 0.6428571428571429},
+        "2025": {"n": 38, "wins": 24, "losses": 14, "hitRate": 0.631578947368421},
+        "2026_YTD": {"n": 26, "wins": 18, "losses": 8, "hitRate": 0.6923076923076923}
+      },
+      "home": {"n": 56, "wins": 41, "losses": 15, "hitRate": 0.7321428571428571},
+      "away": {"n": 36, "wins": 19, "losses": 17, "hitRate": 0.5277777777777778}
+    },
+    "selectedStrongerAndFrozenAPlusProbabilityThresholds": {
+      "definition": "selected-side C4 probability >=0.69 and selected-side Full13 probability >=0.64",
+      "decisiveRows": 42,
+      "wins": 29,
+      "losses": 13,
+      "hitRate": 0.6904761904761905,
+      "bySeason": {
+        "2024": {"n": 12, "wins": 9, "losses": 3, "hitRate": 0.75},
+        "2025": {"n": 18, "wins": 10, "losses": 8, "hitRate": 0.5555555555555556},
+        "2026_YTD": {"n": 12, "wins": 10, "losses": 2, "hitRate": 0.8333333333333334}
+      },
+      "home": {"n": 29, "wins": 22, "losses": 7, "hitRate": 0.7586206896551724},
+      "away": {"n": 13, "wins": 7, "losses": 6, "hitRate": 0.5384615384615384}
+    },
+    "selectedStrongerAndAPlusMinGe069": {
+      "decisiveRows": 35,
+      "wins": 23,
+      "losses": 12,
+      "hitRate": 0.6571428571428571,
+      "home": {"n": 25, "wins": 18, "losses": 7, "hitRate": 0.72},
+      "away": {"n": 10, "wins": 5, "losses": 5, "hitRate": 0.5}
+    }
+  },
+  "negativeFinding": {
+    "premiumDirectionalSupportCountDidNotImproveTheMainCross": true,
+    "c4DirectionalSupportCountDidNotImproveTheMainCross": true,
+    "selectedStrongerMinGe060Premium3": {"n": 89, "wins": 53, "losses": 36, "hitRate": 0.5955056179775281},
+    "selectedStrongerMinGe060C4Support3": {"n": 102, "wins": 63, "losses": 39, "hitRate": 0.6176470588235294},
+    "interpretation": "The main incremental value comes from selected-side A+ probability strength and HOME orientation rather than stacking more component-sign conditions."
+  },
+  "primaryResearchInterpretation": {
+    "strongestRobustHistoricalRegime": "GENERAL_HOME + SELECTED_STRONGER + aPlusMinSelected>=0.64",
+    "record": "41-15",
+    "decisiveRows": 56,
+    "hitRate": 0.7321428571428571,
+    "reason": "It materially improves on General baseline, retains a nontrivial sample, and the broader stronger+0.64 cross is directionally stable across 2024, 2025, and 2026_YTD. General AWAY remains approximately coin-flip even under strong A+ directional probability.",
+    "productionReady": false,
+    "requiresSeparateProspectiveConfirmationBeforePromotion": true
+  },
+  "integrity": {
+    "retrospectiveDiscoveryOnly": true,
+    "thresholdsPredeclaredBeforeScorer": true,
+    "refitPerformed": false,
+    "recalibrationPerformed": false,
+    "oddsUsed": false,
+    "v80Changed": false,
+    "v68Changed": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "realFinancialExposure": 0
+  }
+}
