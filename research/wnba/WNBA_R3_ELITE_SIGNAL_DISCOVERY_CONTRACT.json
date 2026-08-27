@@ -1,0 +1,169 @@
+{
+  "name": "WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_R3_FEATURE_COMBINATION_TESTING",
+  "created_date": "2026-08-27",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r2_head": "e494634ebf808c29c0238e0f711ba2a5453d6a7c",
+  "parent_r2_decision": "WNBA_CALIBRATED_FALLBACK_PROBABILITY_REMAINS_BLOCKED_NO_RETUNE",
+  "r2_is_scientifically_closed": true,
+  "r2_post_result_retune_allowed": false,
+  "objective": {
+    "primary": "Discover which pregame WNBA signal families provide reproducible incremental predictive value and whether a selective Elite regime can reach at least 0.80 out-of-sample accuracy at meaningful coverage without leakage or post-result threshold selection.",
+    "secondary": "Develop a distinct R3 probability candidate whose discrimination and calibration can later be tested on an independent prospective cohort for cross-sport eligibility.",
+    "not_an_objective": [
+      "Make the closed R2 candidate pass by weakening the frozen ECE10 gate.",
+      "Claim 80 percent accuracy on all WNBA games.",
+      "Mine arbitrary subsets after observing target outcomes and present them as certified.",
+      "Use sportsbook prices as a sporting feature in the R3 sports-only candidate."
+    ]
+  },
+  "data_status": {
+    "development_years": [2020, 2021, 2022, 2023, 2024, 2025],
+    "development_labels_previously_exposed": true,
+    "development_role": "EXPLORATORY_AND_MODEL_DEVELOPMENT_ONLY",
+    "independent_certification_required": true,
+    "independent_certification_source": "A separately frozen prospective/new cohort not used to choose R3 features, interactions, thresholds, model family, or calibration parameters.",
+    "historical_development_result_can_certify_cross_sport": false
+  },
+  "signal_families": {
+    "BASE_R2": {
+      "role": "fixed reference",
+      "description": "R2 leakage-safe fallback sporting state: ratings, pace, win rate, recent form, SOS, rest, B2B, schedule load, streak and deployed travel semantics; availability neutralized."
+    },
+    "FOUR_FACTORS": {
+      "role": "candidate",
+      "allowed_components": [
+        "effective field goal percentage when reconstructible from prior-game boxscore fields",
+        "turnover rate",
+        "offensive rebound rate",
+        "free throw rate"
+      ],
+      "requirement": "Every target-game value must be derived strictly from finalized games on prior official dates."
+    },
+    "SHOT_PROFILE_MATCHUP": {
+      "role": "candidate",
+      "allowed_components": [
+        "three point attempt rate",
+        "free throw attempt rate",
+        "effective field goal percentage",
+        "offensive style versus opponent defensive profile interactions"
+      ],
+      "requirement": "Historical values must be prefix-derived; current/end-of-season ESPN aggregates may not be substituted backward."
+    },
+    "QUALITY_ADJUSTED_FORM": {
+      "role": "candidate",
+      "allowed_components": [
+        "L5 and L10 efficiency deltas",
+        "opponent-quality-adjusted recent efficiency",
+        "recent margin or possession efficiency derived only from prior games"
+      ]
+    },
+    "H2H_PREFIX": {
+      "role": "candidate_controlled",
+      "allowed_components": [
+        "prior two-season meeting count",
+        "prior two-season win share",
+        "prior two-season average margin"
+      ],
+      "requirement": "Only meetings strictly before the target date; H2H must prove incremental value and is not assumed useful."
+    },
+    "FATIGUE_TRAVEL_V2": {
+      "role": "candidate",
+      "allowed_components": [
+        "days rest",
+        "back to back",
+        "three games in five days",
+        "four games in seven days",
+        "actual prior-to-target location sequence if venue-coordinate custody is certified",
+        "timezone or travel-distance sequence if reconstructible without target outcomes"
+      ]
+    },
+    "AVAILABILITY_STAR_POWER": {
+      "role": "candidate_prospective_unless_historical_timestamp_custody_is_certified",
+      "allowed_components": [
+        "OUT or doubtful player identity",
+        "pregame player importance",
+        "minutes or usage share unavailable",
+        "starter continuity",
+        "multiple simultaneous absences",
+        "return-from-absence state"
+      ],
+      "historical_unknown_may_be_imputed_zero": false
+    },
+    "BOUNDED_MATCHUP_INTERACTIONS": {
+      "role": "candidate",
+      "allowed_interactions": [
+        "offensive shooting profile versus opponent defensive profile",
+        "offensive rebounding strength versus opponent defensive rebounding weakness",
+        "free-throw pressure versus opponent foul/free-throw allowance when reconstructible",
+        "availability loss interacted with team depth/usage concentration when custody exists",
+        "fatigue interacted with rotation/pace when custody exists"
+      ],
+      "arbitrary_unbounded_feature_crosses_allowed": false
+    },
+    "MULTIDIMENSIONAL_DOMINANCE": {
+      "role": "selective_elite_candidate",
+      "description": "A side may qualify only from prespecified independent signal-family advantages; dominance cannot be defined from target outcomes or sportsbook prices."
+    }
+  },
+  "development_protocol": {
+    "evaluation_style": "rolling-origin by season with all target-season thresholds and fitted parameters learned from earlier seasons only",
+    "same_game_outcome_at_decision_time_allowed": false,
+    "same_date_outcomes_allowed": false,
+    "future_games_allowed": false,
+    "target_season_threshold_search_allowed": false,
+    "post_target_row_dropping_allowed": false,
+    "market_features_allowed": false,
+    "manual_post_result_candidate_switching_allowed": false,
+    "ablation_order": [
+      "BASE_R2",
+      "BASE_R2+FOUR_FACTORS",
+      "BASE_R2+QUALITY_ADJUSTED_FORM",
+      "BASE_R2+H2H_PREFIX",
+      "BASE_R2+FATIGUE_TRAVEL_V2",
+      "BASE_R2+SHOT_PROFILE_MATCHUP",
+      "bounded combinations that contain only signal families which first demonstrate incremental OOS value",
+      "MULTIDIMENSIONAL_DOMINANCE selective screen"
+    ],
+    "incremental_value_rule": "A signal family must improve at least one proper scoring metric out of sample without materially degrading both other probability-quality metrics, and its directional contribution must not depend on a single target season, before it may enter a bounded combination.",
+    "availability_rule": "Availability cannot participate in historical combination tests unless timestamped historical custody is separately certified; otherwise it is prospective-only."
+  },
+  "elite_objective_and_reporting": {
+    "target_accuracy": 0.80,
+    "target_accuracy_is_guaranteed": false,
+    "required_reporting": [
+      "number of Elite selections",
+      "coverage among eligible games",
+      "accuracy",
+      "Wilson 95 percent confidence interval",
+      "Brier score",
+      "log loss",
+      "ECE10",
+      "mean predicted minus observed",
+      "per-season selection count and accuracy",
+      "feature-family ablation deltas"
+    ],
+    "historical_feasibility_minimum_total_elite_selections": 100,
+    "historical_feasibility_minimum_target_seasons_with_elite_selections": 4,
+    "tiny_sample_high_accuracy_is_not_evidence": true,
+    "historical_80pct_result_is_certification": false
+  },
+  "future_independent_certification": {
+    "must_be_preregistered_before_scoring_new_outcomes": true,
+    "candidate_features_must_be_frozen": true,
+    "candidate_coefficients_or_rules_must_be_frozen": true,
+    "elite_thresholds_must_be_frozen": true,
+    "calibration_method_must_be_frozen": true,
+    "minimum_sample_and_probability_gates_must_be_frozen": true,
+    "cross_sport_promotion_before_independent_pass": false
+  },
+  "safety_and_product_boundary": {
+    "production_predictor_changed": false,
+    "global_elite_ranker_changed": false,
+    "automatic_wagering_enabled": false,
+    "stake_calculation_enabled": false,
+    "real_financial_exposure": 0,
+    "r3_research_may_change_production": false
+  },
+  "next_gate": "R3A_SIGNAL_CUSTODY_AUDIT"
+}
