@@ -1,0 +1,56 @@
+{
+  "name": "WNBA_R1A4D1_SEASON_VENUE_REGISTRY_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
+  "decision": "VENUE_REGISTRY_SURFACE_CERTIFIED_COORDINATE_CUSTODY_NEXT",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent": "research/wnba/WNBA_R1A4D1_SEASON_VENUE_REGISTRY_PROBE.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "forbidden_outcome_values_loaded": false,
+    "market_data_consumed": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "evidence": {
+    "workflow": "WNBA R1A.4D1 Season Venue Registry Probe",
+    "run_id": 33085242158,
+    "head_sha": "ac3f578ae17a89e3a930eb157cc937b4ee3e0f74",
+    "artifact_id": 9651837675,
+    "artifact_name": "wnba-r1a4d1-venue-registry-33085242158",
+    "artifact_digest": "sha256:3f4a79fc4159416b01f82b66e8ee3774d9d3bb3889b4d545ad7426d9dc347c62"
+  },
+  "source_custody": {
+    "schedule_asset_id": 532156071,
+    "schedule_bytes": 448575,
+    "schedule_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "custody_verified": true,
+    "required_columns_missing": []
+  },
+  "coverage": {
+    "regular_targets_after_special_exclusion": 1174,
+    "registered_venue_pair_ready": 1174,
+    "registered_venue_pair_coverage": 1.0,
+    "franchise_season_registry_count": 61,
+    "franchise_season_multiple_registered_venue_ids": 0,
+    "distinct_registered_venue_ids": 16,
+    "2021": {"targets": 192, "registered_pair_ready": 192},
+    "2022": {"targets": 216, "registered_pair_ready": 216},
+    "2023": {"targets": 240, "registered_pair_ready": 240},
+    "2024": {"targets": 240, "registered_pair_ready": 240},
+    "2025": {"targets": 286, "registered_pair_ready": 286}
+  },
+  "scientific_interpretation": {
+    "certified": "The pinned schedule provides complete, unambiguous season/franchise registered-venue identity for every corrected 2021-2025 regular-season fixture without loading any target outcome field.",
+    "not_yet_certified": "Venue coordinates, travelMiles, and the deployed travel logit bucket.",
+    "production_semantics_note": "The deployed predictor does not route travel from the actual target-game venue_id. It calls getAwayTravelDistance using away and home franchise names against the static WNBA_ARENAS map. R1A.4D2 therefore must certify that deployed coordinate map and its season-valid franchise keys rather than substitute later physical-trip assumptions."
+  },
+  "closure": {
+    "r1a4d1": "PASS",
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A4D2_DEPLOYED_COORDINATE_AND_TRAVEL_BUCKET_CUSTODY"
+  }
+}
