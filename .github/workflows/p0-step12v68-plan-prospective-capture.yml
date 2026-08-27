@@ -1,0 +1,260 @@
+name: P0 Step 12V68 Plan Per-Game Capture Clock
+
+on:
+  workflow_dispatch:
+  schedule:
+    # MLB regular-season capture window in Eastern Daylight Time:
+    # 10:30 AM through 10:50 PM ET, every 10 minutes.
+    - cron: '30,40,50 14 * * *'
+    - cron: '0,10,20,30,40,50 15-23 * * *'
+    - cron: '0,10,20,30,40,50 0-2 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-capture-clock.py'
+      - 'scripts/p0-step12v68-capture-clock.test.py'
+      - 'scripts/p0-step12v68-per-game-attempt.py'
+      - 'research/p0-step12v68-per-game-capture-clock-v3.json'
+      - '.github/workflows/p0-step12v68-plan-prospective-capture.yml'
+      - '.github/workflows/p0-step12v68-capture-per-game-v3.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: p0-step12v68-plan-per-game-capture-clock
+  cancel-in-progress: false
+
+jobs:
+  validate-clock:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate freeze-first V68 per-game clock and scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/p0-step12v68-capture-clock.py scripts/p0-step12v68-per-game-attempt.py
+          python scripts/p0-step12v68-capture-clock.test.py
+          python - <<'PY'
+          import json
+          p=json.load(open('research/p0-step12v68-per-game-capture-clock-v3.json'))
+          assert p['protocolRevision']==3
+          assert p['effectiveOfficialDate']=='2026-08-27'
+          assert p['parentScientificContractChanged'] is False
+          s=p['scientificBoundary']
+          assert s['captureEligibilityWindowMaximumMinutesBeforeScheduledStart']==20
+          assert s['captureMustBeStrictlyBeforeScheduledStart'] is True
+          assert s['requiresExactNineByNineCurrentLineups'] is True
+          assert s['requiresBothCurrentPregameProbablePitchers'] is True
+          assert s['prospectiveOutcomeEmbargo']['minimumCanonicalGames']==500
+          assert s['prospectiveOutcomeEmbargo']['minimumDistinctOfficialDates']==30
+          assert s['prospectiveOutcomeEmbargo']['unchanged'] is True
+          c=p['captureClock']
+          assert c['primaryAttempt']['leadMinutes']==10
+          assert [x['leadMinutes'] for x in c['conditionalRetries']]==[7,4]
+          assert c['stopImmediatelyAfterFirstValidCapture'] is True
+          d=p['dailySlate']
+          assert d['fullSlateSnapshotAtOrAfterEasternTime']=='10:30'
+          assert d['routineFullSlateReadsPerOfficialDate']==1
+          assert p['planner']['dispatchCadenceMinutes']==10
+          assert p['gameSpecificRevalidation']['routineRevalidationScope']=='TARGET_GAME_PK_ONLY'
+          assert p['parallelismAndCustody']['sharedCanonicalMergeSerializedAfterEvidenceCapture'] is True
+          assert p['v68PregameStateAuthority']['liveAbstractWithCodedPRemainsPregame'] is True
+          assert p['legacyDenseSupervisor']['scheduledCaptureUseAfterEffectiveDate'] is False
+          assert p['existingCanonicalCohort']['remainEligible'] is True
+          assert p['researchBoundary']['outcomesReadForDesign'] is False
+          assert p['researchBoundary']['marketPricesReadForDesign'] is False
+          text=open('.github/workflows/p0-step12v68-plan-prospective-capture.yml').read()
+          assert "workflow='p0-step12v68-capture-per-game-v3.yml'" in text
+          assert '--min-lead-minutes 4' in text
+          assert '--max-lead-minutes 35' in text
+          print('V68_V80_STYLE_PER_GAME_CLOCK_BOUNDARY_VERIFIED')
+          PY
+
+  plan-and-dispatch:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Checkout V68 clock code from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout V68 immutable prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: v68-ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve Eastern operating window and protocol effective date
+        id: clock
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          now=dt.datetime.now(ZoneInfo('America/New_York'))
+          start=now.replace(hour=10,minute=30,second=0,microsecond=0)
+          cutoff=now.replace(hour=23,minute=0,second=0,microsecond=0)
+          effective=dt.date(2026,8,27)
+          active=start <= now < cutoff and now.date() >= effective
+          print(f'target={now.date().isoformat()}')
+          print(f'active={str(active).lower()}')
+          print(f'local_time={now.isoformat()}')
+          print(f'effective={str(now.date()>=effective).lower()}')
+          PY
+
+      - name: Stop outside protocol operating window
+        if: steps.clock.outputs.active != 'true'
+        run: echo "V68 V3 planner inactive before 2026-08-27 or outside 10:30 AM-11:00 PM ET."
+
+      - name: Check prospective cohort and immutable daily state
+        if: steps.clock.outputs.active == 'true'
+        id: readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ steps.clock.outputs.target }}'
+          if test -s v68-ledger/v68/final/evaluation.json; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'V68 prospective evaluation already exists; capture ledger permanently closed.'
+            exit 0
+          fi
+          if test ! -s "v68-ledger/v68/states/$target.json"; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo "V68 planner waiting for immutable daily state:$target"
+            exit 0
+          fi
+          python - "$target" <<'PY'
+          import json,sys
+          target=sys.argv[1]
+          x=json.load(open(f'v68-ledger/v68/states/{target}.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v68-prospective-state.v1'
+          assert x['targetOfficialDate']==target
+          assert x['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert x['chronology']['sameDateOutcomesUsed'] is False
+          PY
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Create one sanitized full-slate snapshot for the day
+        if: steps.clock.outputs.active == 'true' && steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ steps.clock.outputs.target }}'
+          path="v68-ledger/v68/slates/$target.json"
+          if test -s "$path"; then
+            echo "V68_DAILY_SLATE_ALREADY_FROZEN:$target"
+            exit 0
+          fi
+          mkdir -p v68-ledger/v68/slates
+          python code/scripts/p0-step12v68-capture-clock.py snapshot \
+            --target-date "$target" \
+            --out "$path"
+          python - "$path" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['policy']['sanitizedScheduleOnly'] is True
+          assert x['policy']['scoresStored'] is False
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          PY
+          (
+            cd v68-ledger
+            git config user.name 'court-edge-v68-research-bot'
+            git config user.email 'v68-research-bot@users.noreply.github.com'
+            git add "v68/slates/$target.json"
+            git commit -m "V68 slate $target: freeze sanitized 10:30 ET schedule" || true
+            git pull --rebase origin data/p0-step12v68-prospective
+            git push origin HEAD:data/p0-step12v68-prospective
+          )
+
+      - name: Plan only uncaptured games approaching their per-game clock
+        if: steps.clock.outputs.active == 'true' && steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ steps.clock.outputs.target }}'
+          slate="v68-ledger/v68/slates/$target.json"
+          test -s "$slate"
+          EXISTING=()
+          if test -s v68-ledger/v68/captures/canonical.json; then
+            EXISTING=(--existing-captures v68-ledger/v68/captures/canonical.json)
+          fi
+          STATES=()
+          if test -d "v68-ledger/v68/attempt-state/$target"; then
+            STATES=(--attempt-state-dir "v68-ledger/v68/attempt-state/$target")
+          fi
+          mkdir -p work
+          python code/scripts/p0-step12v68-capture-clock.py plan \
+            --target-date "$target" \
+            --slate-snapshot "$slate" \
+            "${EXISTING[@]}" \
+            "${STATES[@]}" \
+            --min-lead-minutes 4 \
+            --max-lead-minutes 35 \
+            --out work/plan.json
+
+      - name: Dispatch one active child per gamePk
+        if: steps.clock.outputs.active == 'true' && steps.readiness.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          plan=json.load(open('work/plan.json'))
+          repo=os.environ['REPO']
+          workflow='p0-step12v68-capture-per-game-v3.yml'
+          raw=subprocess.check_output([
+              'gh','run','list','--repo',repo,'--workflow',workflow,'--limit','100',
+              '--json','displayTitle,status'
+          ], text=True)
+          active=set()
+          for run in json.loads(raw):
+              if run.get('status') == 'completed':
+                  continue
+              m=re.match(r'^V68 game (\d+) ', str(run.get('displayTitle') or ''))
+              if m:
+                  active.add(int(m.group(1)))
+          dispatched=0
+          skipped_active=0
+          for game in plan.get('games', []):
+              gp=int(game['gamePk'])
+              if gp in active:
+                  skipped_active += 1
+                  print(f'V68_CAPTURE_CHILD_ALREADY_ACTIVE:{gp}')
+                  continue
+              subprocess.check_call([
+                  'gh','workflow','run',workflow,
+                  '--repo',repo,
+                  '--ref','main',
+                  '-f',f"target_date={game['officialDate']}",
+                  '-f',f"game_pk={gp}",
+                  '-f',f"scheduled_start={game.get('startTime') or ''}",
+              ])
+              dispatched += 1
+              active.add(gp)
+              print(f"V68_CAPTURE_CHILD_DISPATCHED:{gp}:{game.get('startTime')}:{game.get('dispatchReason')}")
+          print(json.dumps({
+              'plannerCandidates': len(plan.get('games', [])),
+              'dispatched': dispatched,
+              'skippedAlreadyActive': skipped_active,
+              'fullSlateRefetched': False,
+          }, indent=2))
+          PY

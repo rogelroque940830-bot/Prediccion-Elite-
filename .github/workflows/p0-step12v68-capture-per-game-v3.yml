@@ -1,0 +1,317 @@
+name: P0 Step 12V68 Capture Per-Game V3
+run-name: V68 game ${{ inputs.game_pk || 'validation' }} ${{ inputs.target_date || github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: MLB official date in Eastern time
+        required: true
+        type: string
+      game_pk:
+        description: MLB gamePk to capture
+        required: true
+        type: string
+      scheduled_start:
+        description: Planner-observed scheduled start in UTC
+        required: true
+        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p0-step12v68-capture-clock.py'
+      - 'scripts/p0-step12v68-capture-clock.test.py'
+      - 'scripts/p0-step12v68-per-game-attempt.py'
+      - 'scripts/p0-step12v68-prospective-source.py'
+      - 'scripts/p0-step12v68-fg-winner-prospective-capture.py'
+      - 'scripts/p0-step12v68-prospective-ledger.py'
+      - 'research/p0-step12v68-per-game-capture-clock-v3.json'
+      - '.github/workflows/p0-step12v68-capture-per-game-v3.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate per-game capture surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/p0-step12v68-capture-clock.py \
+            scripts/p0-step12v68-per-game-attempt.py \
+            scripts/p0-step12v68-prospective-source.py \
+            scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            scripts/p0-step12v68-prospective-ledger.py
+          python scripts/p0-step12v68-capture-clock.test.py
+          python scripts/p0-step12v68-pregame-state-parity.test.py
+          python - <<'PY'
+          import json
+          p=json.load(open('research/p0-step12v68-per-game-capture-clock-v3.json'))
+          assert p['parentScientificContractChanged'] is False
+          assert p['captureClock']['primaryAttempt']['leadMinutes']==10
+          assert [x['leadMinutes'] for x in p['captureClock']['conditionalRetries']]==[7,4]
+          assert p['scientificBoundary']['captureEligibilityWindowMaximumMinutesBeforeScheduledStart']==20
+          assert p['parallelismAndCustody']['sharedCanonicalMergeSerializedAfterEvidenceCapture'] is True
+          text=open('.github/workflows/p0-step12v68-capture-per-game-v3.yml').read()
+          assert 'p0-step12v68-per-game-attempt.py' in text
+          assert 'group: p0-step12v68-canonical-merge-v3' in text
+          assert 'p0-step12v68-fg-winner-prospective-capture.py' in text
+          assert 'p0-step12v68-prospective-ledger.py install-sources' in text
+          print('V68_PER_GAME_V3_WORKFLOW_BOUNDARY_VERIFIED')
+          PY
+
+  capture-evidence:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    concurrency:
+      group: p0-step12v68-game-${{ inputs.target_date }}-${{ inputs.game_pk }}
+      cancel-in-progress: false
+    outputs:
+      already: ${{ steps.existing.outputs.already }}
+      ready: ${{ steps.state.outputs.ready }}
+      artifact_name: ${{ steps.capture.outputs.artifact_name }}
+      has_rows: ${{ steps.capture.outputs.has_rows }}
+      retry_eligible: ${{ steps.capture.outputs.retry_eligible }}
+      capture_stage: ${{ steps.capture.outputs.capture_stage }}
+    steps:
+      - name: Checkout V68 code from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout immutable V68 prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Skip an existing immutable gamePk
+        id: existing
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json,os
+          gp=int('${{ inputs.game_pk }}')
+          path='ledger/v68/captures/canonical.json'
+          exists=False
+          if os.path.exists(path):
+              x=json.load(open(path))
+              exists=any(int(r['gamePk'])==gp for r in x.get('rows',[]))
+          print(f'already={str(exists).lower()}')
+          PY
+
+      - name: Verify cohort and immutable prior-date state
+        if: steps.existing.outputs.already != 'true'
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ inputs.target_date }}'
+          if test -s ledger/v68/final/evaluation.json; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'V68 prospective cohort already closed.'
+            exit 0
+          fi
+          if test ! -s "ledger/v68/states/$target.json"; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo "V68 state missing:$target"
+            exit 0
+          fi
+          python - "$target" <<'PY'
+          import json,sys
+          target=sys.argv[1]
+          x=json.load(open(f'ledger/v68/states/{target}.json'))
+          assert x['schemaVersion']=='courtedge-p0-step12v68-prospective-state.v1'
+          assert x['targetOfficialDate']==target
+          assert x['chronology']['wholeOfficialDatePriorStateOnly'] is True
+          assert x['chronology']['sameDateOutcomesUsed'] is False
+          PY
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Execute exact target-game T10 T7 T4 attempts
+        if: steps.existing.outputs.already != 'true' && steps.state.outputs.ready == 'true'
+        id: capture
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="v68-game-clock-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact" >> "$GITHUB_OUTPUT"
+          python scripts/p0-step12v68-per-game-attempt.py \
+            --target-date '${{ inputs.target_date }}' \
+            --game-pk '${{ inputs.game_pk }}' \
+            --scheduled-start '${{ inputs.scheduled_start }}' \
+            --state '../ledger/v68/states/${{ inputs.target_date }}.json' \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --work-dir ../work
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          c=json.load(open('../work/context.json'))
+          a=json.load(open('../work/attempts.json'))
+          print(f"has_rows={str(len(c.get('rows',[]))>0).lower()}")
+          print(f"retry_eligible={str(bool(a.get('retryEligible'))).lower()}")
+          print(f"capture_stage={a.get('captureStage') or ''}")
+          PY
+
+      - name: Upload immutable-attempt evidence before merge
+        if: steps.capture.outputs.artifact_name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.capture.outputs.artifact_name }}
+          path: |
+            work/context.json
+            work/attempts.json
+            work/clock-*.json
+            work/context-*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  canonical-merge:
+    if: needs.capture-evidence.result == 'success' && needs.capture-evidence.outputs.already != 'true' && needs.capture-evidence.outputs.ready == 'true'
+    needs: capture-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    concurrency:
+      group: p0-step12v68-canonical-merge-v3
+      cancel-in-progress: false
+    steps:
+      - name: Checkout V68 code from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code
+
+      - name: Checkout freshest immutable V68 prospective ledger
+        uses: actions/checkout@v4
+        with:
+          ref: data/p0-step12v68-prospective
+          path: ledger
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download exact pregame attempt evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.capture-evidence.outputs.artifact_name }}
+          path: evidence
+
+      - name: Download immutable V16 control manifest only for a valid capture
+        if: needs.capture-evidence.outputs.has_rows == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: v16
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31704085189
+
+      - name: Score frozen V16 and V68 against freshest canonical ledger
+        if: needs.capture-evidence.outputs.has_rows == 'true'
+        id: score
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING=()
+          if test -s ../ledger/v68/captures/canonical.json; then
+            EXISTING=(--existing ../ledger/v68/captures/canonical.json)
+          fi
+          python scripts/p0-step12v68-fg-winner-prospective-capture.py \
+            --input ../evidence/context.json \
+            --contract research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --v16-manifest ../v16/pure-settlement-model-manifest.json \
+            "${EXISTING[@]}" \
+            --out ../work-canonical.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          x=json.load(open('../work-canonical.json'))
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          print(f"has_new={str(int(x['summary']['newCaptures'])>0).lower()}")
+          print(f"total={x['summary']['canonicalGames']}")
+          PY
+
+      - name: Persist attempt state and immutable capture when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='${{ inputs.target_date }}'
+          gp='${{ inputs.game_pk }}'
+          mkdir -p "ledger/v68/attempt-state/$target" "ledger/v68/attempt-history/$target"
+          cp evidence/attempts.json "ledger/v68/attempt-state/$target/$gp.json"
+          cp evidence/attempts.json "ledger/v68/attempt-history/$target/$gp-${{ github.run_id }}-${{ github.run_attempt }}.json"
+
+          if [[ '${{ needs.capture-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
+            python code/scripts/p0-step12v68-prospective-ledger.py install-sources \
+              --input evidence/context.json \
+              --ledger-root ledger/v68
+            mkdir -p ledger/v68/captures ledger/v68/receipts
+            cp work-canonical.json ledger/v68/captures/canonical.json
+            python - <<'PY'
+          import json
+          target='${{ inputs.target_date }}'
+          gp=int('${{ inputs.game_pk }}')
+          a=json.load(open('evidence/attempts.json'))
+          x=json.load(open('work-canonical.json'))
+          assert x['policy']['outcomesRead'] is False
+          assert x['policy']['pricesRead'] is False
+          row=next(r for r in x['rows'] if int(r['gamePk'])==gp)
+          assert row['containsOutcome'] is False
+          assert row['containsMarketPrice'] is False
+          receipt={
+            'schemaVersion':'courtedge-p0-step12v68-capture-receipt.v2',
+            'officialDate':target,
+            'gamePk':gp,
+            'githubRunId':'${{ github.run_id }}',
+            'githubRunAttempt':'${{ github.run_attempt }}',
+            'captureAttemptStage':a.get('captureStage'),
+            'captureSummary':x['summary'],
+            'outcomesRead':False,
+            'pricesRead':False,
+            'researchOnly':True,
+            'realFinancialExposure':0,
+          }
+          with open(f'ledger/v68/receipts/${{ github.run_id }}-${{ github.run_attempt }}.json','w') as f:
+              json.dump(receipt,f,indent=2,sort_keys=True);f.write('\n')
+          PY
+          fi
+
+      - name: Commit serialized V68 evidence or retry state
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'court-edge-v68-research-bot'
+          git config user.email 'v68-research-bot@users.noreply.github.com'
+          git add v68/attempt-state v68/attempt-history v68/captures v68/source-records v68/receipts 2>/dev/null || true
+          git diff --cached --quiet && exit 0
+          if [[ '${{ needs.capture-evidence.outputs.has_rows }}' == 'true' && '${{ steps.score.outputs.has_new }}' == 'true' ]]; then
+            msg="V68 capture ${{ inputs.target_date }} game ${{ inputs.game_pk }} at ${{ needs.capture-evidence.outputs.capture_stage }}"
+          elif [[ '${{ needs.capture-evidence.outputs.retry_eligible }}' == 'true' ]]; then
+            msg="V68 retry-state ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
+          else
+            msg="V68 terminal no-capture ${{ inputs.target_date }} game ${{ inputs.game_pk }}"
+          fi
+          git commit -m "$msg"
+          git pull --rebase origin data/p0-step12v68-prospective
+          git push origin HEAD:data/p0-step12v68-prospective

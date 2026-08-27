@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-per-game-capture-clock.v3",
+  "protocolRevision": 3,
+  "frozenAtUtc": "2026-08-27T02:20:00Z",
+  "effectiveOfficialDate": "2026-08-27",
+  "scientificStatus": "FROZEN_V68_OPERATIONAL_CAPTURE_TIMING_V3_BEFORE_IMPLEMENTATION",
+  "researchOnly": true,
+  "purpose": "Adopt the proven V80 per-game capture-clock orchestration for V68 while preserving the already-frozen V68 scientific eligibility boundary and the certified V68 pregame-state precedence.",
+  "parentScientificContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "parentScientificContractChanged": false,
+  "supersedesOperationalAmendments": [
+    "research/p0-step12v68-capture-reliability-repair-v1.json",
+    "research/p0-step12v68-capture-window-entry-alignment-v2.json"
+  ],
+  "v80OperationalReference": "research/p0-step12v80-capture-clock-operational-protocol.json",
+  "scientificBoundary": {
+    "captureEligibilityWindowMaximumMinutesBeforeScheduledStart": 20,
+    "captureMustBeStrictlyBeforeScheduledStart": true,
+    "requiresExactNineByNineCurrentLineups": true,
+    "requiresBothCurrentPregameProbablePitchers": true,
+    "wholeOfficialDatePriorStateOnly": true,
+    "sameDateOutcomesUsed": false,
+    "outcomesOrMarketPricesInPregameLedgerAllowed": false,
+    "candidateModelChanged": false,
+    "candidateFeaturesChanged": false,
+    "candidateCoefficientsChanged": false,
+    "candidateCalibrationChanged": false,
+    "thresholdChanged": false,
+    "controlModelChanged": false,
+    "firstCanonicalGameCaptureImmutable": true,
+    "prospectiveOutcomeEmbargo": {
+      "minimumCanonicalGames": 500,
+      "minimumDistinctOfficialDates": 30,
+      "unchanged": true
+    }
+  },
+  "captureClock": {
+    "primaryAttempt": {
+      "label": "T10",
+      "leadMinutes": 10,
+      "required": true
+    },
+    "conditionalRetries": [
+      {
+        "label": "T7",
+        "leadMinutes": 7,
+        "allowedOnlyWhen": "NO_VALID_V68_CAPTURE_AT_T10"
+      },
+      {
+        "label": "T4",
+        "leadMinutes": 4,
+        "allowedOnlyWhen": "NO_VALID_V68_CAPTURE_AT_T10_OR_T7"
+      }
+    ],
+    "stageLateToleranceMinutes": 0.75,
+    "stopImmediatelyAfterFirstValidCapture": true,
+    "noFurtherAttemptAfterValidCapture": true,
+    "noPostStartCapture": true,
+    "noPostgameReconstruction": true,
+    "captureCutoffEasternTime": "23:00"
+  },
+  "dailySlate": {
+    "fullSlateSnapshotAtOrAfterEasternTime": "10:30",
+    "routineFullSlateReadsPerOfficialDate": 1,
+    "snapshotSanitizedNoScores": true,
+    "snapshotPath": "v68/slates/<officialDate>.json",
+    "subsequentDispatchersUseFrozenSnapshot": true,
+    "eachGameHandledByGamePk": true,
+    "newGamesAddedAfterSnapshotAreNotSilentlyBackfilled": true
+  },
+  "planner": {
+    "dispatchCadenceMinutes": 10,
+    "operatingWindowEasternTime": {
+      "start": "10:30",
+      "lastScheduledDispatcher": "22:50",
+      "captureCutoff": "23:00"
+    },
+    "dispatchWindowLeadMinutes": {
+      "exclusiveMinimum": 4,
+      "inclusiveMaximum": 35
+    },
+    "activeDuplicateChildRunsSuppressedByGamePk": true,
+    "fullSlateRefetchedByRoutineDispatchers": false
+  },
+  "gameSpecificRevalidation": {
+    "beforeEveryAttemptStage": true,
+    "routineRevalidationScope": "TARGET_GAME_PK_ONLY",
+    "latestOfficialStartTimeWins": true,
+    "sameDayLaterStartRearmsClock": true,
+    "delayedWithoutResolvedNewStartIsNonterminal": true,
+    "postponedSameDateUnresolvedIsNonterminal": true,
+    "postponedToAnotherDateIsTerminalForOriginalOfficialDate": true,
+    "cancelledIsTerminal": true,
+    "suspendedIsTerminal": true,
+    "startedOrFinalIsTerminal": true,
+    "nonterminalDelayRetryStatePersisted": true
+  },
+  "v68PregameStateAuthority": {
+    "source": "merged PR #682 / certified MLB pregame-state parity",
+    "mustNotBlindlyCopyV80AbstractStatePrecedence": true,
+    "explicitNonPregameCodedStates": ["I", "F", "O"],
+    "explicitNonPregameDetailedStates": ["In Progress", "Final", "Game Over", "Completed Early"],
+    "acceptedPregameCodedStates": ["S", "P"],
+    "acceptedPregameDetailedStates": ["Scheduled", "Pre-Game", "Warmup", "Delayed Start"],
+    "fallbackAcceptedAbstractState": "Preview",
+    "liveAbstractWithCodedPRemainsPregame": true
+  },
+  "parallelismAndCustody": {
+    "differentGamesMayCaptureEvidenceInParallel": true,
+    "sharedCanonicalMergeSerializedAfterEvidenceCapture": true,
+    "firstCanonicalGameSnapshotImmutable": true,
+    "duplicateGameCaptureReturnsExistingCanonicalSnapshot": true,
+    "captureEvidenceTimestampComesFromPregameAttemptNotLaterMergeTime": true,
+    "attemptStatePersistedPerGamePk": true,
+    "attemptHistoryPersistedPerRun": true
+  },
+  "legacyDenseSupervisor": {
+    "scheduledCaptureUseAfterEffectiveDate": false,
+    "retainedForHistoricalDiagnosticsAndRegressionTests": true,
+    "reason": "The per-game T10/T7/T4 clock replaces the six-by-45-second slate-wide burst as the active capture orchestrator."
+  },
+  "existingCanonicalCohort": {
+    "gamesBeforeV3": 4,
+    "distinctOfficialDatesBeforeV3": 3,
+    "remainEligible": true,
+    "reason": "They already satisfy the unchanged <=20-minute, exact-lineup, exact-probable-pitcher and prior-date-only scientific requirements. V3 changes observation orchestration only."
+  },
+  "researchBoundary": {
+    "outcomesReadForDesign": false,
+    "marketPricesReadForDesign": false,
+    "performanceMetricsUsedForDesign": false,
+    "oddsUsedAsFeatures": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteAllowed": false,
+    "automaticBetPlacementAllowed": false,
+    "globalEliteRankerChanged": false,
+    "realFinancialExposure": 0
+  },
+  "forbidden": [
+    "OUTCOME_PEEKING",
+    "MARKET_PRICE_PEEKING",
+    "MODEL_REFIT",
+    "RECALIBRATION",
+    "FEATURE_CHANGE",
+    "COEFFICIENT_CHANGE",
+    "THRESHOLD_CHANGE",
+    "CAPTURE_WINDOW_WIDENING",
+    "POST_HOC_GAME_INCLUSION",
+    "HISTORICAL_BACKFILL",
+    "GLOBAL_ELITE_RANKER_CHANGE"
+  ],
+  "liveClosureCriterion": "A post-v3 eligible game must show per-game READY at T10, T7 or T4, exact 9x9 lineups plus both probable pitchers, one-row V68 source evidence, frozen V16/V68 scoring, and immutable serialized canonical merge with no outcome or price reads."
+}
