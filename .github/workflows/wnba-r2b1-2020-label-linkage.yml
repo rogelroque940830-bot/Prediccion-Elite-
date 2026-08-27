@@ -1,0 +1,85 @@
+name: WNBA R2B1 2020 Seed Label Linkage
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R2B_FIVE_FOLD_PLATT_CERTIFICATION_CONTRACT.json'
+      - 'scripts/wnba-r2b1-2020-label-linkage.py'
+      - '.github/workflows/wnba-r2b1-2020-label-linkage.yml'
+      - 'research/wnba/WNBA_R2B1_EXECUTION_MARKER.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  label-linkage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install historical dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Reproduce frozen R2A1 candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r2a-2020-seed-candidate.py
+          test "$(sha256sum wnba-r2a-2020-seed-candidate-rowset.jsonl | cut -d' ' -f1)" = "8e037e9a688e62952f5c323ac6d48dbe3f437c8c28d6658f8c5147e4572da863"
+      - name: Verify frozen model import graph
+        run: |
+          set -euo pipefail
+          test "$(git hash-object frontend/client/src/lib/wnba-model.ts)" = "095527160535655d28e989c0cfe9638fc6681b4c"
+          test "$(git hash-object frontend/client/src/lib/wnba-shadow-emission.ts)" = "7dde8303ac0bac50ea0ed60cd5d7f78b091a5131"
+          test "$(git hash-object frontend/client/src/lib/queryClient.ts)" = "3f4176d17e660103db9784885400eadc54dd549c"
+          test "$(git hash-object frontend/package-lock.json)" = "f104d741b427df2a7cd73ccc3bbe66207b8cbb15"
+      - name: Install lockfile frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts
+      - name: Compile frozen WNBA model
+        run: |
+          frontend/node_modules/.bin/esbuild frontend/client/src/lib/wnba-model.ts \
+            --bundle --platform=node --format=esm --target=node22 \
+            --outfile=/tmp/wnba-r2b1-model.mjs \
+            '--define:import.meta.env.VITE_API_BASE_URL=""' \
+            --define:import.meta.env.DEV=false
+      - name: Reproduce frozen R2A2 probability rowset before label read
+        env:
+          WNBA_MODEL_MODULE: /tmp/wnba-r2b1-model.mjs
+        run: |
+          set -euo pipefail
+          node scripts/wnba-r2a2-2020-model-replay.mjs
+          test "$(sha256sum wnba-r2a2-2020-probability-rowset.jsonl | cut -d' ' -f1)" = "5cba8333071a4fde151ccf972712d0e67172c07cfaf7548217df13e675a5517d"
+      - name: Open 2020 labels once and freeze exact linkage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r2b1-2020-label-linkage.py
+      - name: Assert no metrics were computed in R2B1
+        run: |
+          set -euo pipefail
+          jq -e '.decision == "R2B1_2020_LABELED_SEED_FROZEN_NO_METRICS_YET"' wnba-r2b1-2020-label-linkage-evidence.json >/dev/null
+          jq -e '.labeledSeedRowset.rows == 126 and .linkage.matchedRows == 126 and .rowsDroppedAfterOutcome == 0' wnba-r2b1-2020-label-linkage-evidence.json >/dev/null
+          jq -e '.metricsComputed == false and .calibrationFitPerformed == false and .thresholdSearchPerformed == false' wnba-r2b1-2020-label-linkage-evidence.json >/dev/null
+          jq -e '.chronology.probabilityShaVerifiedBeforeOutcomeOpening == true and .chronology.assetShaVerifiedBeforeOutcomeOpening == true' wnba-r2b1-2020-label-linkage-evidence.json >/dev/null
+      - name: Upload frozen R2B1 linkage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r2b1-2020-label-linkage-${{ github.run_id }}
+          path: |
+            wnba-r2b1-2020-label-linkage-evidence.json
+            wnba-r2b1-2020-labeled-seed.jsonl
+            wnba-r2a2-2020-model-replay-evidence.json
+            wnba-r2a2-2020-probability-rowset.jsonl
+          if-no-files-found: warn
+          retention-days: 90
