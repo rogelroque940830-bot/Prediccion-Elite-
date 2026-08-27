@@ -13,10 +13,10 @@ on:
     paths:
       - 'scripts/p0-step12v68-capture-clock.py'
       - 'scripts/p0-step12v68-capture-clock.test.py'
-      - 'scripts/p0-step12v68-game-context.py'
+      - 'scripts/p0-step12v68-per-game-attempt.py'
       - 'research/p0-step12v68-per-game-capture-clock-v3.json'
       - '.github/workflows/p0-step12v68-plan-prospective-capture.yml'
-      - '.github/workflows/p0-step12v68-capture-prospective-games.yml'
+      - '.github/workflows/p0-step12v68-capture-per-game-v3.yml'
 
 permissions:
   contents: write
@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile scripts/p0-step12v68-capture-clock.py scripts/p0-step12v68-game-context.py
+          python -m py_compile scripts/p0-step12v68-capture-clock.py scripts/p0-step12v68-per-game-attempt.py
           python scripts/p0-step12v68-capture-clock.test.py
           python - <<'PY'
           import json
@@ -71,7 +71,7 @@ jobs:
           assert p['researchBoundary']['outcomesReadForDesign'] is False
           assert p['researchBoundary']['marketPricesReadForDesign'] is False
           text=open('.github/workflows/p0-step12v68-plan-prospective-capture.yml').read()
-          assert "workflow='p0-step12v68-capture-prospective-games.yml'" in text
+          assert "workflow='p0-step12v68-capture-per-game-v3.yml'" in text
           assert '--min-lead-minutes 4' in text
           assert '--max-lead-minutes 35' in text
           print('V68_V80_STYLE_PER_GAME_CLOCK_BOUNDARY_VERIFIED')
@@ -220,7 +220,7 @@ jobs:
           import json, os, re, subprocess
           plan=json.load(open('work/plan.json'))
           repo=os.environ['REPO']
-          workflow='p0-step12v68-capture-prospective-games.yml'
+          workflow='p0-step12v68-capture-per-game-v3.yml'
           raw=subprocess.check_output([
               'gh','run','list','--repo',repo,'--workflow',workflow,'--limit','100',
               '--json','displayTitle,status'
