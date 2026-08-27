@@ -56,6 +56,42 @@ def main() -> None:
         require(bool(str(group["missingness_policy"]).strip()), f"{name} missing missingness policy")
         require(bool(str(group["anti_leakage_rule"]).strip()), f"{name} missing anti-leakage rule")
 
+    recent = groups["recent_stats"]
+    require(recent.get("reconstruction_status") == "RECONSTRUCTIBLE_DEPLOYED_SEMANTICS",
+            "recent stats must preserve deployed semantics")
+    require(recent.get("deployed_alias_fields") == [
+        "recentNetRtg", "recentOffRtg", "recentDefRtg", "recentPace"
+    ], "deployed recent advanced aliases changed")
+    require(recent.get("true_l10_fields") == ["recentPpg", "recentWinPct"],
+            "true L10 field set changed")
+    recent_text = (str(recent.get("temporal_cutoff", "")) + " " +
+                   str(recent.get("missingness_policy", ""))).lower()
+    require("must equal" in recent_text and "true-l10" in recent_text,
+            "recent deployed-alias vs true-L10 distinction must remain explicit")
+
+    schedule = groups["schedule_context"]
+    require(schedule.get("reconstruction_status") == "RECONSTRUCTIBLE_DEPLOYED_SEMANTICS",
+            "schedule context must preserve deployed semantics")
+    require(schedule.get("known_deployed_semantics_quirk") is True,
+            "deployed schedule-context quirk must remain explicit")
+    schedule_text = str(schedule.get("temporal_cutoff", "")).lower()
+    require("gap between latest and second-latest" in schedule_text,
+            "deployed isB2B algorithm changed")
+    require("second-latest" in schedule_text and "b2bwasroad" in schedule_text,
+            "deployed b2bWasRoad algorithm changed")
+
+    sos = groups["sos"]
+    require(sos.get("reconstruction_status") == "RECONSTRUCTIBLE_CONDITIONED_SEASON_PARAMETERIZED_ANALOGUE",
+            "historical SOS must remain a season-parameterized analogue")
+    sos_text = str(sos.get("temporal_cutoff", "")).lower()
+    require("40%" in sos_text and "60%" in sos_text and "10 most recent prior opponents" in sos_text,
+            "frozen SOS historical formula changed")
+
+    findings = data.get("outcome_blind_source_semantics_findings", {})
+    require("recent_advanced_alias" in findings, "recent source-semantics finding missing")
+    require("fatigue_implementation" in findings, "fatigue source-semantics finding missing")
+    require("sos_current_season_literal" in findings, "SOS current-season literal finding missing")
+
     injuries = groups["injuries"]
     injury_status = injuries.get("reconstruction_status")
     require(injury_status in {
@@ -93,18 +129,24 @@ def main() -> None:
             "audit must distinguish valid prior-game outcomes from target leakage")
     require("target game's final score" in invariant_text,
             "target-game final score prohibition must be explicit")
+    require("deployed source semantics" in invariant_text and "separately preregistered" in invariant_text,
+            "outcome-blind deployed semantics may not be silently corrected")
 
     prohibited = " ".join(str(x).lower() for x in data.get("prohibited_next_actions", []))
     require("injury" in prohibited and "zero" in prohibited,
             "zero-filling unresolved historical injury state must be prohibited")
     require("open target outcomes" in prohibited,
             "opening target outcomes while conditional must be prohibited")
+    require("recent-advanced aliases" in prohibited and "b2b" in prohibited,
+            "silent source-semantics corrections must be prohibited")
 
     decision = data.get("decision")
     require(decision in {"PASS_RECONSTRUCTIBLE", "CONDITIONAL", "BLOCKED"},
             f"invalid decision: {decision!r}")
 
     closure = data.get("closure", {})
+    require(closure.get("source_semantics_frozen_outcome_blind") is True,
+            "outcome-blind source semantics must be frozen")
     require(closure.get("target_outcomes_may_be_opened") is False,
             "R1A closure must keep target outcomes closed")
 
@@ -113,6 +155,7 @@ def main() -> None:
     print(f"outcomes_opened={data['outcomes_opened']}")
     print(f"exact_product_replay_supported={data['exact_product_replay_supported']}")
     print(f"injury_status={injury_status}")
+    print("deployed_source_semantics=frozen")
 
 
 if __name__ == "__main__":
