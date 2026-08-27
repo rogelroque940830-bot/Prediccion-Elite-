@@ -1,0 +1,39 @@
+{
+  "name": "WNBA_R1A4B1_2026_SOURCE_LAYOUT_AMENDMENT_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SOURCE_LAYOUT_DISCOVERY",
+  "date": "2026-08-27",
+  "parent": "research/wnba/WNBA_R1A4B1_PRODUCTION_FALLBACK_ASOF_ANALOGUE.json",
+  "scientific_formula_changed": false,
+  "target_cohort_changed": false,
+  "target_outcomes_opened": false,
+  "historical_2021_2025_values_loaded": false,
+  "evidence": {
+    "run_id": 33080180571,
+    "artifact_id": 9649661068,
+    "artifact_digest": "sha256:9ea3246bfbaa2cd37a09f0450286452bf164d6b78c6b82259ba94f95f0648002",
+    "validation_season": 2026,
+    "asset_id": 493743208,
+    "asset_sha256": "3eb8abfef0ff0a65e124bfaf743feda884eff9a8bc9caff293e868108b62b41b"
+  },
+  "discovered_layout": {
+    "regular_season_literal": "regular-season",
+    "per_game_literal": "pergame",
+    "base_row": {
+      "measure_type": "base",
+      "fields": ["gp", "fga", "fta", "oreb", "tov", "pts"]
+    },
+    "advanced_row": {
+      "measure_type": "advanced",
+      "fields": ["gp", "off_rating", "def_rating", "net_rating", "pace", "poss"]
+    },
+    "opponent_row": {
+      "measure_type": "opponent",
+      "required_field_for_fallback_validation": "opp_pts"
+    },
+    "join_key": "team_id",
+    "expected_team_rows_per_surface": 15,
+    "join_policy": "Require unique team_id within each selected surface; inner-join base, opponent and advanced on team_id; fewer than 10 complete joined teams fails validation."
+  },
+  "interpretation": "The 2026 file stores base and advanced measures in separate rows by design. The initial zero-row result came from requiring both measure groups in a single row and is not evidence of missing source data.",
+  "anti_posthoc_rule": "This amendment may only map the already frozen formula to the empirically discovered 2026 file layout. It may not change the formula, coefficient 0.44, quantization, historical cutoff, minimum prior games, season type, missingness policy or candidate definition."
+}
