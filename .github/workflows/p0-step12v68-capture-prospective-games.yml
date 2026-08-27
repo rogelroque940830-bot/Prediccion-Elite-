@@ -14,6 +14,7 @@ on:
       - 'scripts/p0-step12v68-capture-supervisor.test.py'
       - 'research/p0-step12v68-prospective-source-manifests.json'
       - 'research/p0-step12v68-capture-reliability-repair-v1.json'
+      - 'research/p0-step12v68-capture-window-entry-alignment-v2.json'
       - '.github/workflows/p0-step12v68-capture-prospective-games.yml'
 
 permissions:
@@ -33,7 +34,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate frozen scientific boundary and reliability amendment
+      - name: Validate frozen scientific boundary and reliability amendments
         shell: bash
         run: |
           set -euo pipefail
@@ -47,9 +48,12 @@ jobs:
           import json
           m=json.load(open('research/p0-step12v68-prospective-source-manifests.json'))
           r=json.load(open('research/p0-step12v68-capture-reliability-repair-v1.json'))
+          a=json.load(open('research/p0-step12v68-capture-window-entry-alignment-v2.json'))
           op=m['operationalProspectiveCapture']
           boundary=r['scientificBoundary']
           repair=r['operationalRepair']
+          amendment=a['operationalAmendment']
+          scientific=a['scientificBoundary']
           assert op['captureWindowMaximumMinutesBeforeScheduledStart']==20
           assert op['captureMustBeStrictlyBeforeScheduledStart'] is True
           assert op['requiresExactNineByNineCurrentLineups'] is True
@@ -67,20 +71,44 @@ jobs:
           assert repair['pollAttemptsPerRun']==6
           assert repair['pollIntervalSeconds']==45
           assert repair['preflightUpcomingGameHorizonMinutes']==45
+          assert a['outcomesReadForRepairDesign'] is False
+          assert a['marketPricesReadForRepairDesign'] is False
+          assert a['performanceMetricsUsedForRepairDesign'] is False
+          assert a['parentScientificContractChanged'] is False
+          assert scientific['captureEligibilityWindowMaximumMinutesBeforeScheduledStart']==20
+          assert scientific['requiresExactNineByNineCurrentLineups'] is True
+          assert scientific['requiresBothCurrentPregameProbablePitchers'] is True
+          assert scientific['candidateModelChanged'] is False
+          assert scientific['candidateFeaturesChanged'] is False
+          assert scientific['candidateCoefficientsChanged'] is False
+          assert scientific['candidateCalibrationChanged'] is False
+          assert amendment['cronCadenceMinutes']==5
+          assert amendment['pollAttemptsPerRun']==6
+          assert amendment['pollIntervalSeconds']==45
+          assert amendment['preflightUpcomingGameHorizonMinutes']==45
+          assert amendment['windowEntryGuardSeconds']==15
+          assert amendment['alignFirstDensePollJustInsideStrictWindow'] is True
+          assert amendment['workflowTimeoutMinutes']==40
           text=open('.github/workflows/p0-step12v68-capture-prospective-games.yml').read()
+          supervisor=open('scripts/p0-step12v68-capture-supervisor.py').read()
           assert "cron: '*/5 * * * *'" in text
           assert '--max-lead-minutes 20' in text
+          assert '--preflight-horizon-minutes 45' in text
           assert '--attempts 6' in text
           assert '--interval-seconds 45' in text
+          assert 'timeout-minutes: 40' in text
           assert 'ledger/v68/final/evaluation.json' in text
           assert "steps.cohort.outputs.open == 'true'" in text
-          print('V68_DENSE_POLL_REPAIR_BOUNDARY_VERIFIED')
+          assert 'WINDOW_ENTRY_GUARD_SECONDS = 15' in supervisor
+          assert 'planned_window_entry_wait_seconds' in supervisor
+          assert '"scientificWindowChanged": False' in supervisor
+          print('V68_WINDOW_ENTRY_ALIGNMENT_BOUNDARY_VERIFIED')
           PY
 
   capture-live-pregame:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 40
     steps:
       - name: Checkout frozen V68 code from default branch
         uses: actions/checkout@v4
@@ -147,7 +175,7 @@ jobs:
           repository: rogelroque940830-bot/Prediccion-Elite-
           run-id: 31704085189
 
-      - name: Densely poll authoritative MLB feed inside unchanged strict pregame window
+      - name: Align to and densely poll authoritative MLB feed inside unchanged strict pregame window
         if: steps.cohort.outputs.open == 'true' && steps.date.outputs.eligible == 'true'
         id: source
         working-directory: code
@@ -177,6 +205,7 @@ jobs:
           print(f'has_rows={str(n>0).lower()}')
           print(f'near_window={str(near).lower()}')
           print(f'attempts={len(d.get("attempts",[]))}')
+          print(f'window_entry_wait_seconds={(d.get("windowEntryAlignment") or {}).get("appliedWaitSeconds",0)}')
           PY
 
       - name: Preserve near-window dense-poll diagnostics without outcomes
@@ -193,6 +222,7 @@ jobs:
           assert x['outcomesRead'] is False
           assert x['marketPricesRead'] is False
           assert x['scientificModelChanged'] is False
+          assert (x.get('windowEntryAlignment') or {}).get('scientificWindowChanged') is False
           x['githubRunId']='${{ github.run_id }}'
           x['githubRunAttempt']='${{ github.run_attempt }}'
           out='../ledger/v68/poll-diagnostics/${{ steps.date.outputs.target }}/${{ github.run_id }}-${{ github.run_attempt }}.json'
