@@ -1,0 +1,50 @@
+name: WNBA R1A.4D3 Travel Enriched Prefix Custody
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1A4D3_TRAVEL_ENRICHED_PREFIX_CUSTODY.json'
+      - 'research/wnba/WNBA_R1A4D2_DEPLOYED_TRAVEL_CUSTODY_CERTIFICATION.json'
+      - 'research/wnba/WNBA_R1A4C_PREFIX_CONSTRUCTOR_CERTIFICATION.json'
+      - 'research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json'
+      - 'scripts/wnba-r1a4c-prefix-constructor.py'
+      - 'scripts/wnba-r1a4c2-prefix-constructor.py'
+      - 'scripts/wnba-r1a4d3-travel-enriched-prefix.py'
+      - 'frontend/client/src/lib/travel.ts'
+      - 'frontend/client/src/lib/wnba-model.ts'
+      - '.github/workflows/wnba-r1a4d3-travel-enriched-prefix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Reproduce frozen prefix and attach certified travel
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r1a4d3-travel-enriched-prefix.py
+      - name: Upload D3 evidence and enriched rowset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r1a4d3-travel-prefix-${{ github.run_id }}
+          path: |
+            wnba-r1a4d3-travel-enriched-prefix-evidence.json
+            wnba-r1a4d3-travel-enriched-prefix-rowset.jsonl
+            wnba-r1a4c-prefix-rowset.jsonl
+          if-no-files-found: error
+          retention-days: 90
