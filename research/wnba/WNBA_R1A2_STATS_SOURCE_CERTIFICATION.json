@@ -1,0 +1,70 @@
+{
+  "name": "WNBA_R1A2_STATS_SOURCE_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SOURCE_ACCESS_AUDIT",
+  "decision": "ACCESS_BLOCKED_NOT_CERTIFIED",
+  "audited_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent_audit": "research/wnba/WNBA_R1A_INPUT_AUDIT.json",
+  "outcomes_opened": false,
+  "production_mutation": false,
+  "r1b_outcome_opening_authorized": false,
+  "candidate_source": {
+    "hosts": ["stats.nba.com", "stats.wnba.com"],
+    "league_id": "10",
+    "endpoints": ["leaguedashteamstats", "leaguegamelog"],
+    "historical_controls": ["Season", "DateTo", "LastNGames"],
+    "intended_inputs": ["season advanced team stats", "recent-10 advanced helper", "prior team game log"]
+  },
+  "probe_evidence": {
+    "initial_run": {
+      "run_id": 33072621714,
+      "head_sha": "1a1a5cfe201af4c01e84313ae5be55a80461e04f",
+      "result": "CANCELLED_AT_WORKFLOW_TIMEOUT",
+      "scientific_interpretation": "Operationally inconclusive. Sequential host timeouts exhausted the eight-minute workflow budget before an artifact could be written."
+    },
+    "classified_run": {
+      "run_id": 33073426510,
+      "head_sha": "4ecb9d224dcb39be0597a79558698cb64a1f8f98",
+      "artifact_id": 9646789562,
+      "artifact_name": "wnba-r1a2-stats-historical-probe-33073426510",
+      "artifact_digest": "sha256:45458895ad1d93f7f84eaf1f83c2b32bb8845e456f500bcca6e0dbc66bab872e",
+      "probe_version": "WNBA_R1A2_STATS_HISTORICAL_ASOF_PROBE_V2",
+      "probe_seasons": [2021, 2022, 2023, 2024, 2025],
+      "logical_blocks": 15,
+      "host_attempts": 30,
+      "successful_logical_blocks": 0,
+      "http_responses_received": 0,
+      "failure_mode": "TimeoutError: The read operation timed out",
+      "access_classification": "HOST_ACCESS_TIMEOUT_OR_NETWORK_BLOCK"
+    }
+  },
+  "scientific_interpretation": {
+    "historical_coverage_proven": false,
+    "historical_coverage_disproven": false,
+    "source_access_from_github_actions_proven_usable": false,
+    "reason": "Every attempt to both official Stats hosts timed out without an HTTP response. A network/access block cannot be interpreted as an empty historical dataset or as proof that historical DateTo retrieval is unsupported.",
+    "can_certify_as_primary_constructor_source_now": false
+  },
+  "anti_leakage_guards": [
+    "All probe DateTo cutoffs preceded hypothetical target dates.",
+    "No target-game box score, result, market price or injury inference was requested.",
+    "Network failure may not be converted into zero, default statistics or final-season snapshots.",
+    "Target outcomes remain closed."
+  ],
+  "allowed_next_actions": [
+    "Retest the same official Stats endpoints from a network environment with demonstrated access without changing scientific semantics.",
+    "Audit a credential-free fallback source for prior-game schedule and boxscore data, then reconstruct the same pre-tip inputs from prior games only.",
+    "Use Sportradar historical Game Summary/Schedule if credentials become available and freeze source custody before target outcomes are opened."
+  ],
+  "prohibited_next_actions": [
+    "Declare 2021-2025 historical Stats coverage absent based on these timeouts.",
+    "Fill failed source calls with zero/default team ratings.",
+    "Use end-of-season team ratings as historical pre-tip values.",
+    "Open target outcomes to choose a fallback source."
+  ],
+  "closure": {
+    "scientific_result": "R1A2_ACCESS_BLOCKED_NOT_COVERAGE_FAILURE",
+    "next_gate": "R1A3_CREDENTIAL_FREE_PRIOR_GAME_SOURCE_AUDIT",
+    "target_outcomes_may_be_opened": false
+  }
+}
