@@ -16,7 +16,7 @@ jobs:
       FRONTEND_URL: https://fearless-illumination-production-6d16.up.railway.app
       TARGET_DATE: '2026-08-27'
     steps:
-      - name: Verify public frontend
+      - name: Verify public frontend and discover deployed API base
         shell: bash
         run: |
           set -euo pipefail
@@ -24,29 +24,53 @@ jobs:
           echo "frontend_http=$code"
           test "$code" = "200"
           test -s /tmp/frontend.html
+          asset=$(grep -oE 'src="[^\"]+\.js"' /tmp/frontend.html | head -1 | cut -d'"' -f2)
+          test -n "$asset"
+          case "$asset" in
+            http*) bundle_url="$asset" ;;
+            /*) bundle_url="$FRONTEND_URL$asset" ;;
+            *) bundle_url="$FRONTEND_URL/${asset#./}" ;;
+          esac
+          echo "bundle_url=$bundle_url"
+          curl --max-time 30 -sS -L "$bundle_url" -o /tmp/bundle.js
+          test -s /tmp/bundle.js
+          grep -oE 'https://[A-Za-z0-9.-]+\.up\.railway\.app' /tmp/bundle.js | sort -u | tee /tmp/railway-domains.txt
+          test -s /tmp/railway-domains.txt
 
-      - name: Probe same-origin health
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=$(curl --max-time 30 -sS -L -o /tmp/health.txt -w '%{http_code}' "$FRONTEND_URL/health" || true)
-          echo "health_http=$code"
-          head -c 1000 /tmp/health.txt 2>/dev/null || true
-          echo
+          : > /tmp/backend_url
+          while IFS= read -r base; do
+            [ "$base" = "$FRONTEND_URL" ] && continue
+            hcode=$(curl --max-time 20 -sS -L -o /tmp/candidate-health.json -w '%{http_code}' "$base/health" || true)
+            echo "candidate=$base health_http=$hcode"
+            if [ "$hcode" = "200" ] && jq -e '.status == "healthy"' /tmp/candidate-health.json >/dev/null 2>&1; then
+              echo "$base" > /tmp/backend_url
+              cp /tmp/candidate-health.json /tmp/backend-health.json
+              break
+            fi
+          done < /tmp/railway-domains.txt
+
+          test -s /tmp/backend_url
+          echo "backend_url=$(cat /tmp/backend_url)"
+          jq . /tmp/backend-health.json
 
       - name: Execute same V16 priced daily-opportunity route as UI
         shell: bash
         run: |
           set -euo pipefail
+          BACKEND_URL=$(cat /tmp/backend_url)
           code=$(curl --max-time 240 -sS -L \
             -H 'Content-Type: application/json' \
             -X POST \
             --data "{\"date\":\"$TARGET_DATE\"}" \
             -o /tmp/v16.json \
             -w '%{http_code}' \
-            "$FRONTEND_URL/api/mlb/unified-v16/daily-opportunity/run-priced")
+            "$BACKEND_URL/api/mlb/unified-v16/daily-opportunity/run-priced")
           echo "v16_http=$code"
-          test "$code" = "200"
+          if [ "$code" != "200" ]; then
+            head -c 3000 /tmp/v16.json || true
+            echo
+            exit 1
+          fi
           jq -e . /tmp/v16.json >/dev/null
           jq '{schemaVersion,status,date,generatedAt,slate,dailyOpportunity:{action:.dailyOpportunity.action,decisionReason:.dailyOpportunity.decisionReason,summary:.dailyOpportunity.summary},priceConsultationShortlist:{summary:.priceConsultationShortlist.summary},decision,summary,policy}' /tmp/v16.json
 
