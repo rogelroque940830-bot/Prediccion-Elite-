@@ -1,0 +1,62 @@
+{
+  "name": "WNBA_R1A5_NEUTRAL_AVAILABILITY_CANDIDATE_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CANDIDATE_CERTIFICATION",
+  "decision": "FROZEN_NEUTRAL_AVAILABILITY_RESEARCH_CANDIDATE",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "parent_candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "parent_contract": "research/wnba/WNBA_R1A5_NEUTRAL_AVAILABILITY_CANDIDATE_FREEZE.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "evidence": {
+    "workflow": "WNBA R1A.5 Neutral Availability Candidate Freeze",
+    "run_id": 33086442468,
+    "head_sha": "96f8061dc7686c25129d0c7701989a08237527fd",
+    "artifact_id": 9652352724,
+    "artifact_name": "wnba-r1a5-neutral-availability-33086442468",
+    "artifact_digest": "sha256:55a9333a1c586ba890d9f06371f1bc1510fe639d8a89cce912d9044ffd6b6b91"
+  },
+  "parent_rowset": {
+    "sha256": "c071a027ba08f5c279215042c84f403102e933604ad3c4f3a89ed60d98b29f60",
+    "rows": 1143,
+    "match": true
+  },
+  "candidate_rowset": {
+    "sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+    "bytes": 2001631,
+    "rows": 1143,
+    "travel_ready_rows": 1143,
+    "non_availability_mutation_count": 0,
+    "duplicate_game_ids": 0,
+    "special_event_rows": 0,
+    "target_outcome_fields": 0,
+    "market_attached_rows": 0,
+    "injury_neutral_omission_side_values": 2286,
+    "manual_neutral_omission_side_values": 2286
+  },
+  "scientific_interpretation": {
+    "exact_product_replay": false,
+    "zero_is_historical_truth_claim": false,
+    "injury_feature_status": "OMITTED_BY_CANDIDATE_DEFINITION",
+    "manual_feature_status": "OMITTED_BY_CANDIDATE_DEFINITION",
+    "availability_policy": "NEUTRAL_FEATURE_OMISSION_V1",
+    "ratings_changed_from_parent": false,
+    "market_input": "EXCLUDED",
+    "travel": "CERTIFIED_DEPLOYED_SEMANTICS_INCLUDED",
+    "candidate_frozen_before_outcomes": true
+  },
+  "closure": {
+    "r1a5": "PASS",
+    "candidate_frozen": true,
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A6_OUTCOME_BLIND_MODEL_REPLAY_AND_PROBABILITY_ROWSET_FREEZE"
+  }
+}
