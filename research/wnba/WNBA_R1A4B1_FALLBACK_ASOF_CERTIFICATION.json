@@ -1,0 +1,99 @@
+{
+  "name": "WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
+  "decision": "CERTIFIED_DISTINCT_PRODUCTION_FALLBACK_ASOF_ANALOGUE",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "scope": {
+    "historical_target_seasons": [2021, 2022, 2023, 2024, 2025],
+    "validation_season": 2026,
+    "target_outcomes_opened": false,
+    "historical_values_loaded_during_r1a4b1": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "scientific_interpretation": {
+    "what_is_certified": "A distinct historical as-of candidate using the exact deployed production fallback expressions, reconstructible from frozen prior finalized regular-season game boxes.",
+    "what_is_not_certified": "Exact replay of the preferred BALLDONTLIE advanced-source SPORTS_ONLY_V1 semantics. The preferred route remains ACCESS_NOT_CERTIFIED in GitHub Actions because BDL_API_KEY is absent.",
+    "no_silent_equivalence_claim": true
+  },
+  "frozen_formula": {
+    "pace": "mean(FGA) + 0.44*mean(FTA) - mean(OREB) + mean(TOV)",
+    "ppg": "mean(points_scored)",
+    "oppPpg": "mean(points_allowed)",
+    "offRtg": "100*ppg/pace",
+    "defRtg": "100*oppPpg/pace",
+    "netRtg": "offRtg-defRtg",
+    "quantization": "round pace/offRtg/defRtg/netRtg to one decimal before model consumption",
+    "season_type": "regular season only",
+    "minimum_prior_games": 1,
+    "cold_start": "COLD_START_UNAVAILABLE",
+    "missing_required_box_field": "ROW_UNAVAILABLE",
+    "target_and_future_exclusion": "Exclude target game and every game not finalized before the target pregame cutoff before reading any score/stat value.",
+    "no_posthoc_formula_change": true
+  },
+  "final_evidence": {
+    "workflow": "WNBA R1A.4B1 Fallback As-Of Analogue Audit",
+    "run_id": 33080408057,
+    "head_sha": "2176d8a3f235ddf70a261b738959e6990705a1a8",
+    "artifact_id": 9649757169,
+    "artifact_name": "wnba-r1a4b1-fallback-asof-33080408057",
+    "artifact_digest": "sha256:d0657c2c88c3d747b3abe6b8d603039bf9154bf2049f8ddb4c61ebcfa7da6729",
+    "evidence_name": "WNBA_R1A4B1_FALLBACK_ASOF_EVIDENCE_V2",
+    "evidence_decision": "CERTIFIED_DISTINCT_PRODUCTION_FALLBACK_ASOF_ANALOGUE",
+    "source_layout_amendment": "WNBA_R1A4B1_2026_SOURCE_LAYOUT_AMENDMENT_V1"
+  },
+  "historical_schema_certification": {
+    "2021": {"asset_id": 479696175, "schema_pass": true, "custody_verified": true, "required_columns_missing": [], "values_loaded": false},
+    "2022": {"asset_id": 479697715, "schema_pass": true, "custody_verified": true, "required_columns_missing": [], "values_loaded": false},
+    "2023": {"asset_id": 165078397, "schema_pass": true, "custody_verified": true, "required_columns_missing": [], "values_loaded": false},
+    "2024": {"asset_id": 417936297, "schema_pass": true, "custody_verified": true, "required_columns_missing": [], "values_loaded": false},
+    "2025": {"asset_id": 505304728, "schema_pass": true, "custody_verified": true, "required_columns_missing": [], "values_loaded": false}
+  },
+  "validation_2026": {
+    "asset_id": 493743208,
+    "custody_verified": true,
+    "schema_column_count": 178,
+    "required_columns_missing": [],
+    "eligible_joined_teams": 15,
+    "surface_counts": {
+      "base_pergame_regular": 15,
+      "opponent_pergame_regular": 15,
+      "advanced_pergame_regular": 15
+    },
+    "duplicate_team_ids": {
+      "base": [],
+      "opponent": [],
+      "advanced": []
+    },
+    "descriptive_distance_only": {
+      "pace_mean_abs_delta": 13.233,
+      "pace_max_abs_delta": 14.8,
+      "offRtg_mean_abs_delta": 2.893,
+      "offRtg_max_abs_delta": 4.7,
+      "defRtg_mean_abs_delta": 2.9,
+      "defRtg_max_abs_delta": 4.3,
+      "netRtg_mean_abs_delta": 0.22,
+      "netRtg_max_abs_delta": 0.5,
+      "distance_is_selection_gate": false
+    },
+    "team_evidence_digest_sha256": "ddbf0bfb2efb7b9af79294ca71d5f5eb8a2219eddb1a6419ed0bdec38389558b"
+  },
+  "anti_leakage_closure": [
+    "No 2021-2025 target-game result, winner, score, linescore or target-derived statistic value was loaded in R1A.4B1.",
+    "Historical assets were inspected for custody and schema only.",
+    "2026 was used only as an out-of-cohort semantic/layout characterization surface.",
+    "The 2026 descriptive deltas were not used to choose, tune or alter the frozen fallback formula.",
+    "No injury/manual state or market data was inferred or consumed."
+  ],
+  "closure": {
+    "r1a4b1": "PASS",
+    "full_preferred_source_sports_only_v1_replay_certified": false,
+    "distinct_fallback_asof_candidate_certified": true,
+    "target_outcomes_may_be_opened": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY_FOR_FALLBACK_ANALOGUE"
+  }
+}
