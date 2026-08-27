@@ -10,7 +10,7 @@
     "season": 2020,
     "role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
     "rows": 126,
-    "bytes": 69039,
+    "bytes": 84310,
     "sha256": "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2",
     "source_run_id": 33105179131,
     "source_artifact_id": 9660137687,
@@ -49,6 +49,14 @@
     "all_scientific_thresholds_and_folds_frozen_before_2020_label_opening": true,
     "this_file_changes_scientific_method": false,
     "this_file_adds_only_r2b1_output_custody": true
+  },
+  "correction_record": {
+    "field": "r2b1_seed_label_custody.bytes",
+    "old_transcription": 69039,
+    "correct_value_from_r2b1_evidence": 84310,
+    "sha256_changed": false,
+    "rows_changed": false,
+    "scientific_method_changed": false
   },
   "forbidden": [
     "coefficient retune",
