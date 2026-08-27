@@ -1,0 +1,27 @@
+name: V68 One-Shot Dispatch Frozen Main Capture
+
+on:
+  push:
+    branches:
+      - ops/v68-one-shot-dispatch-20260826
+    paths:
+      - '.github/workflows/v68-one-shot-dispatch.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch frozen main V68 capture workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run p0-step12v68-capture-prospective-games.yml --ref main
+          echo 'V68_FROZEN_MAIN_CAPTURE_DISPATCHED'
