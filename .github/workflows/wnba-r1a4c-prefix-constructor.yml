@@ -1,15 +1,17 @@
-# Operational trigger revision 1; no scientific rule changed.
-name: WNBA R1A.4C Full Prefix Constructor Custody
+# Corrected R1A.4C2 runner; special-event exclusions frozen outcome-blind before this run.
+name: WNBA R1A.4C Corrected Prefix Constructor Custody
 
 on:
   push:
     branches:
       - research/wnba-r1-historical-foundation
     paths:
+      - 'research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json'
       - 'research/wnba/WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY.json'
       - 'research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json'
       - 'research/wnba/WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION.json'
       - 'scripts/wnba-r1a4c-prefix-constructor.py'
+      - 'scripts/wnba-r1a4c2-prefix-constructor.py'
       - '.github/workflows/wnba-r1a4c-prefix-constructor.yml'
   workflow_dispatch:
 
@@ -29,15 +31,15 @@ jobs:
           python-version: '3.12'
       - name: Install constructor dependency
         run: python -m pip install --quiet pyarrow
-      - name: Build outcome-blind prefix rowset
+      - name: Build corrected outcome-blind prefix rowset
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python scripts/wnba-r1a4c-prefix-constructor.py
-      - name: Upload R1A.4C evidence and rowset
+        run: python scripts/wnba-r1a4c2-prefix-constructor.py
+      - name: Upload corrected R1A.4C evidence and rowset
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wnba-r1a4c-prefix-${{ github.run_id }}
+          name: wnba-r1a4c2-prefix-${{ github.run_id }}
           path: |
             wnba-r1a4c-prefix-evidence.json
             wnba-r1a4c-prefix-rowset.jsonl
