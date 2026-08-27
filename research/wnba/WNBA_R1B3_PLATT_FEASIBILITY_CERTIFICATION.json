@@ -1,0 +1,131 @@
+{
+  "name": "WNBA_R1B3_PLATT_FEASIBILITY_CERTIFICATION_V1",
+  "status": "FROZEN_PROMISING_NOT_CERTIFIED",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "workflow": {
+    "name": "WNBA R1B3 Frozen Platt Feasibility",
+    "run_id": 33103360534,
+    "job_id": 98626629428,
+    "conclusion": "SUCCESS"
+  },
+  "artifact": {
+    "id": 9659417087,
+    "name": "wnba-r1b3-platt-feasibility-33103360534",
+    "digest": "sha256:70d68933752c975f459abd6a1794a5bddf5d661f2806a532810b6f923e1c5ecc"
+  },
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "raw_candidate_probability_status": "FAILED_FROZEN_NO_RETUNE",
+  "input_custody": {
+    "rows": 1143,
+    "sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319",
+    "match": true
+  },
+  "calibration_engine": {
+    "source_pull_request": 671,
+    "path": "server/cross-sport-calibration.ts",
+    "git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+    "method": "PLATT_LOGIT_1D",
+    "split": "ROLLING_ORIGIN_SEASON",
+    "exact_walk_forward_function_parity_all_folds": true
+  },
+  "target_folds": [2022, 2023, 2024, 2025],
+  "target_fold_count": 4,
+  "minimum_target_seasons_required": 5,
+  "five_target_season_requirement_met": false,
+  "folds": {
+    "2022": {
+      "training_seasons": [2021],
+      "training_observations": 186,
+      "test_observations": 210,
+      "platt_intercept": -0.16394635744199898,
+      "platt_slope": 0.6523799928011021,
+      "raw_brier": 0.2358787553072116,
+      "calibrated_brier": 0.22176628355608738,
+      "raw_log_loss": 0.6752728794051343,
+      "calibrated_log_loss": 0.63386884413285,
+      "raw_ece10": 0.11002200873097784,
+      "calibrated_ece10": 0.029318714601290645
+    },
+    "2023": {
+      "training_seasons": [2021, 2022],
+      "training_observations": 396,
+      "test_observations": 234,
+      "platt_intercept": -0.13536823593723898,
+      "platt_slope": 0.6174086980350126,
+      "raw_brier": 0.22769215528813125,
+      "calibrated_brier": 0.2165060875848939,
+      "raw_log_loss": 0.6583480204971784,
+      "calibrated_log_loss": 0.6230406819659055,
+      "raw_ece10": 0.10229671909055915,
+      "calibrated_ece10": 0.031980751061704484
+    },
+    "2024": {
+      "training_seasons": [2021, 2022, 2023],
+      "training_observations": 630,
+      "test_observations": 234,
+      "platt_intercept": -0.10750402023021668,
+      "platt_slope": 0.607430799799484,
+      "raw_brier": 0.21104286681632906,
+      "calibrated_brier": 0.2036634802858958,
+      "raw_log_loss": 0.6229504136339172,
+      "calibrated_log_loss": 0.5961502956938272,
+      "raw_ece10": 0.08890724489919143,
+      "calibrated_ece10": 0.02570507208589517
+    },
+    "2025": {
+      "training_seasons": [2021, 2022, 2023, 2024],
+      "training_observations": 864,
+      "test_observations": 279,
+      "platt_intercept": -0.11577183952378982,
+      "platt_slope": 0.6345514726638322,
+      "raw_brier": 0.23705895605389546,
+      "calibrated_brier": 0.22086742717279004,
+      "raw_log_loss": 0.6839497587299852,
+      "calibrated_log_loss": 0.63287785888998,
+      "raw_ece10": 0.12399703992895879,
+      "calibrated_ece10": 0.027008083293851532
+    }
+  },
+  "pooled_oos_2022_2025": {
+    "observations": 957,
+    "raw": {
+      "brier": 0.22814836209612888,
+      "log_loss": 0.6608705548039965,
+      "ece10": 0.10572928225433613
+    },
+    "calibrated": {
+      "brier": 0.21579165162983482,
+      "log_loss": 0.6217095806380183,
+      "ece10": 0.014847385221637067
+    }
+  },
+  "calibrated_oos_rowset": {
+    "rows": 957,
+    "bytes": 462760,
+    "sha256": "f749132e4debcbe59aa1b9571366b5de16f63b7fc36cb0e4cab8ebc255d30364"
+  },
+  "preregistered_promising_criterion_met": true,
+  "scientific_decision": "PLATT_FEASIBILITY_PROMISING_NOT_CERTIFIED",
+  "interpretation": {
+    "brier_improved_pooled": true,
+    "log_loss_improved_pooled": true,
+    "ece10_no_worse_pooled": true,
+    "brier_and_log_loss_improved_in_each_target_fold": true,
+    "calibration_certified": false,
+    "reason_not_certified": "Only four target seasons are available in 2021-2025 rolling-origin replay; the preexisting cross-sport protocol requires five target seasons when applicable."
+  },
+  "safety": {
+    "sport_elite_gate_passed": false,
+    "cross_sport_observation_certified": false,
+    "certification_eligible": false,
+    "coefficient_retune_performed": false,
+    "threshold_search_performed": false,
+    "elite_gate_discovery_performed": false,
+    "target_season_ranking_or_cap_used": false,
+    "global_ranker_promotion_authorized": false,
+    "production_change_authorized": false
+  },
+  "next_gate": "R2A_SEED_SEASON_FEASIBILITY_FOR_FIVE_TARGET_FOLDS_USING_THE_SAME_FROZEN_METHOD"
+}
