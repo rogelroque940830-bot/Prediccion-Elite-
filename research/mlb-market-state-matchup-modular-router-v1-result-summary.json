@@ -1,0 +1,197 @@
+{
+  "aggregate": {
+    "CHALLENGER_FULL_MODULAR": {
+      "brier": 0.18563005623613243,
+      "calibrationGap": 0.026494385947364973,
+      "coveragePct": 86.33663366336634,
+      "decisive": 235,
+      "hitRate": 0.7531914893617021,
+      "losses": 58,
+      "maxNoPlayStreak": 6,
+      "meanModelProbability": 0.7796858753090671,
+      "pushes": 1,
+      "remainingNoPlayDates": 69,
+      "shadowPickDates": 236,
+      "wilsonLower": 0.694288113258763,
+      "wilsonUpper": 0.8039503441161648,
+      "wins": 177
+    },
+    "CHALLENGER_STATE_X_STRUCTURE": {
+      "brier": 0.19110046855425142,
+      "calibrationGap": 0.027352423689680605,
+      "coveragePct": 82.37623762376238,
+      "decisive": 216,
+      "hitRate": 0.7453703703703703,
+      "losses": 55,
+      "maxNoPlayStreak": 8,
+      "meanModelProbability": 0.772722794060051,
+      "pushes": 0,
+      "remainingNoPlayDates": 89,
+      "shadowPickDates": 216,
+      "wilsonLower": 0.6833351958149303,
+      "wilsonUpper": 0.7988304546889409,
+      "wins": 161
+    },
+    "CONTROL_STATE_ONLY_BALANCED": {
+      "brier": 0.19280227229786123,
+      "calibrationGap": 0.03297208286250708,
+      "coveragePct": 87.12871287128714,
+      "decisive": 239,
+      "hitRate": 0.7405857740585774,
+      "losses": 62,
+      "maxNoPlayStreak": 6,
+      "meanModelProbability": 0.7735578569210845,
+      "pushes": 1,
+      "remainingNoPlayDates": 65,
+      "shadowPickDates": 240,
+      "wilsonLower": 0.6815209119754505,
+      "wilsonUpper": 0.7920390829219285,
+      "wins": 177
+    },
+    "CONTROL_UNIFORM_Q85": {
+      "brier": 0.19282857686482038,
+      "calibrationGap": 0.03216317038094052,
+      "coveragePct": 90.6930693069307,
+      "decisive": 257,
+      "hitRate": 0.7392996108949417,
+      "losses": 67,
+      "maxNoPlayStreak": 5,
+      "meanModelProbability": 0.7714627812758822,
+      "pushes": 1,
+      "remainingNoPlayDates": 47,
+      "shadowPickDates": 258,
+      "wilsonLower": 0.682381834605974,
+      "wilsonUpper": 0.7891689708376952,
+      "wins": 190
+    },
+    "CONTROL_UNIFORM_Q90": {
+      "brier": 0.19593327475946323,
+      "calibrationGap": 0.037450332345777215,
+      "coveragePct": 84.55445544554455,
+      "decisive": 226,
+      "hitRate": 0.7345132743362832,
+      "losses": 60,
+      "maxNoPlayStreak": 5,
+      "meanModelProbability": 0.7719636066820604,
+      "pushes": 1,
+      "remainingNoPlayDates": 78,
+      "shadowPickDates": 227,
+      "wilsonLower": 0.6733699857268494,
+      "wilsonUpper": 0.7878174803807934,
+      "wins": 166
+    }
+  },
+  "classification": "MARKET_STATE_MATCHUP_MODULAR_ROUTER_RETROSPECTIVE_ABLATION_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "fullModularBySeason": {
+    "2024": {
+      "brier": 0.15069538668439733,
+      "calibrationGap": 0.03241665933253557,
+      "coveragePct": 87.02702702702703,
+      "hitRate": 0.8095238095238095,
+      "losses": 16,
+      "picks": 84,
+      "pushes": 0,
+      "remainingNoPlayDates": 24,
+      "wilsonLower": 0.7127625740629011,
+      "wins": 68
+    },
+    "2025": {
+      "brier": 0.23075132233263657,
+      "calibrationGap": 0.10296126335322064,
+      "coveragePct": 88.04347826086956,
+      "hitRate": 0.675,
+      "losses": 26,
+      "picks": 81,
+      "pushes": 1,
+      "remainingNoPlayDates": 22,
+      "wilsonLower": 0.5664052731061473,
+      "wins": 54
+    },
+    "2026_YTD": {
+      "brier": 0.17612035137170165,
+      "calibrationGap": 0.010032098778959275,
+      "coveragePct": 83.08823529411765,
+      "hitRate": 0.7746478873239436,
+      "losses": 16,
+      "picks": 71,
+      "pushes": 0,
+      "remainingNoPlayDates": 23,
+      "wilsonLower": 0.6648482440200115,
+      "wins": 55
+    }
+  },
+  "fullModularKeyDiagnostics": {
+    "lineGeometry": {
+      "AGGRESSIVE": {"brier": 0.24702425081381593, "calibrationGap": 0.025239848534324594, "hitRate": 0.6190476190476191, "picks": 21, "wilsonLower": 0.4087865377511576},
+      "NEUTRAL_ML": {"brier": 0.19867731080035805, "calibrationGap": 0.005527108006557646, "hitRate": 0.7222222222222222, "picks": 19, "wilsonLower": 0.4912734343970254},
+      "PROTECTED": {"brier": 0.1778538895611966, "calibrationGap": 0.02956955011493867, "hitRate": 0.7704081632653061, "picks": 196, "wilsonLower": 0.7066688904715148}
+    },
+    "market": {
+      "F3_RL_HOME_PLUS_0_5": {"brier": 0.19659492429484185, "calibrationGap": 0.05396733872613402, "hitRate": 0.7346938775510204, "picks": 49, "wilsonLower": 0.5973771102868921},
+      "F5_ML": {"brier": 0.17175101404815615, "calibrationGap": 0.13767001029538561, "hitRate": 0.6666666666666666, "picks": 4, "wilsonLower": 0.2076596008020477},
+      "F5_RL_HOME_MINUS_0_5": {"brier": 0.32662767825966904, "calibrationGap": 0.25804413624231004, "hitRate": 0.5, "picks": 10, "wilsonLower": 0.236593090512564},
+      "F5_RL_HOME_PLUS_0_5": {"brier": 0.19443044162136228, "calibrationGap": 0.009698021421005398, "hitRate": 0.7727272727272727, "picks": 22, "wilsonLower": 0.5656004682477829},
+      "FG_ML": {"brier": 0.20406257015079843, "calibrationGap": 0.034166531666946054, "hitRate": 0.7333333333333333, "picks": 15, "wilsonLower": 0.4804956594401943},
+      "FG_RL_HOME_MINUS_1_5": {"brier": 0.1907361175008901, "calibrationGap": 0.05722411607291267, "hitRate": 0.7407407407407407, "picks": 81, "wilsonLower": 0.6359565111747224},
+      "FG_RL_HOME_PLUS_1_5": {"brier": 0.13491542390543024, "calibrationGap": 0.06038125907088476, "hitRate": 0.8363636363636363, "picks": 55, "wilsonLower": 0.7173625426094283}
+    },
+    "matchupStructure": {
+      "CONFLICTING": {"brier": 0.17170389251367132, "calibrationGap": 0.005970594655946182, "hitRate": 0.8, "picks": 25, "wilsonLower": 0.6086904963045967},
+      "MIXED": {"brier": 0.14165081828992263, "calibrationGap": 0.03697235618591943, "hitRate": 0.825, "picks": 40, "wilsonLower": 0.6805000966821229},
+      "SUPPORTIVE": {"brier": 0.20224183234247084, "calibrationGap": 0.04885524949190079, "hitRate": 0.7228915662650602, "picks": 166, "wilsonLower": 0.650350446117743},
+      "UNKNOWN": {"brier": 0.023072250550567934, "calibrationGap": 0.13854033424665657, "hitRate": 1.0, "picks": 5, "wilsonLower": 0.5101091635454027}
+    },
+    "teamState": {
+      "MIDDLE": {"brier": 0.17269866006825332, "calibrationGap": 0.0005336929563898307, "hitRate": 0.7735849056603774, "picks": 53, "wilsonLower": 0.6447372974853895},
+      "STRONG": {"brier": 0.16833442842080332, "calibrationGap": 0.011512687319642056, "hitRate": 0.7804878048780488, "picks": 83, "wilsonLower": 0.6794794576232296},
+      "UNSTABLE": {"brier": 0.23356113131326134, "calibrationGap": 0.13815205781574613, "hitRate": 0.6666666666666666, "picks": 21, "wilsonLower": 0.4537345197425524},
+      "WEAK": {"brier": 0.1995168018201181, "calibrationGap": 0.05368027996230473, "hitRate": 0.7341772151898734, "picks": 79, "wilsonLower": 0.6275696449007995}
+    }
+  },
+  "interpretation": {
+    "aggregateDecision": "RETROSPECTIVE_PARETO_CHALLENGER_NOT_PRODUCTION_WINNER",
+    "aggressiveGeometry": "WEAK_RESIDUAL_ROUTE_DESPITE_TIGHTENING",
+    "f5MinusHalf": "CONSISTENTLY_WEAK_DAILY_CANDIDATE_MARKET_DESCRIPTIVELY",
+    "fullModular": "BETTER_RETROSPECTIVE_HIT_RATE_WILSON_LOWER_BRIER_AND_CALIBRATION_AT_LOWER_COVERAGE",
+    "geometry": "ONLY_NESTED_ADDITION_IMPROVING_BOTH_COVERAGE_AND_QUALITY_VS_STATE_X_STRUCTURE",
+    "mixedVsSupportive": "MIXED_OUTPERFORMS_SUPPORTIVE_DESCRIPTIVELY_SO_CURRENT_LINEAR_STRUCTURE_SCORE_MUST_NOT_BE_POSTHOC_REVERSED",
+    "nextStudy": "PREREGISTER_2025_REGIME_DIAGNOSTIC_PLUS_MARKET_ADMISSIBILITY_AND_NONLINEAR_ROLE_VETO_STRUCTURE",
+    "nrfiYrfiContribution": 0,
+    "pairedSuperiorityEstablished": false,
+    "protectedGeometry": "STRONGEST_HIGH_VOLUME_GEOMETRY_DESCRIPTIVELY",
+    "seasonRisk": "FULL_MODULAR_2025_DEGRADATION_IS_A_MAJOR_ROBUSTNESS_BLOCKER",
+    "stateXStructure": "MODEST_QUALITY_GAIN_WITH_TOO_MUCH_ABSTENTION_AND_2025_DEGRADATION",
+    "teamStateOnly": "NEGLIGIBLE_AGGREGATE_GAIN_AFTER_COVERAGE_COST",
+    "uniformQ85": "HIGHEST_COVERAGE_AND_SHORTEST_ABSTENTION_STREAK_AMONG_PARETO_POLICIES"
+  },
+  "pairedComparisonsVsUniformQ85": {
+    "CHALLENGER_FULL_MODULAR": {"bothCorrect": 166, "bothWrong": 54, "challengerOnlyCorrect": 7, "controlOnlyCorrect": 4, "discordantDates": 11, "holmAdjustedPValue": 1.0, "holmRejectAt005": false, "overlapDecisiveDates": 231, "unadjustedPValue": 0.548828125},
+    "CHALLENGER_STATE_X_STRUCTURE": {"bothCorrect": 149, "bothWrong": 50, "challengerOnlyCorrect": 8, "controlOnlyCorrect": 5, "discordantDates": 13, "holmAdjustedPValue": 1.0, "holmRejectAt005": false, "overlapDecisiveDates": 212, "unadjustedPValue": 0.5810546875},
+    "CONTROL_STATE_ONLY_BALANCED": {"bothCorrect": 170, "bothWrong": 61, "challengerOnlyCorrect": 2, "controlOnlyCorrect": 1, "discordantDates": 3, "holmAdjustedPValue": 1.0, "holmRejectAt005": false, "overlapDecisiveDates": 234, "unadjustedPValue": 1.0}
+  },
+  "paretoPolicies": ["CONTROL_UNIFORM_Q85", "CHALLENGER_FULL_MODULAR"],
+  "sample": {"calibrationRows2023": 2399, "eligibleSlateDates": 505, "evaluationRows": 6610, "parentActiveDates": 200, "parentNoPlayDates": 305, "trainingRows2022": 2398},
+  "schemaVersion": "courtedge-mlb-market-state-matchup-modular-router-result-summary.v1",
+  "scientificBoundary": {
+    "automaticBetPlacement": false,
+    "betEliteProduced": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "forcedDailyPlayAllowed": false,
+    "generalV68Fallback": false,
+    "historicalPricesUsed": false,
+    "matchupStructureUsesPregameFeaturesOnly": true,
+    "nrfiYrfiContributesCoverage": false,
+    "oneShadowPickMaximumPerParentNoPlayDate": true,
+    "parentAPlusPremiumDatesReplaced": false,
+    "positiveEvEstablished": false,
+    "productionChanged": false,
+    "prospectiveConfirmationRequired": true,
+    "realFinancialExposure": 0,
+    "retrospective2024To2026IsIndependentConfirmation": false,
+    "rulesAreTeamStateAndStructureModularNotTeamNameSpecific": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "stakeCalculated": false,
+    "v80Dependency": false
+  },
+  "sourceArtifact": {"artifactId": 9328974424, "headSha": "513f166dafb79bd1c5f303042ca5186eebc289df", "jobId": 95749842086, "runId": 32149000672, "sha256": "bcaa835da7b61077a1bb5de734852906f5781074e8480ab9d97b9c62a7c5765b"}
+}

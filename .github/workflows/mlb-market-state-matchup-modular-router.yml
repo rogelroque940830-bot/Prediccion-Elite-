@@ -1,0 +1,253 @@
+name: MLB Market State Matchup Modular Router
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-market-state-matchup-modular-router-v1
+    paths:
+      - "research/mlb-market-state-matchup-modular-router-v1-contract.json"
+      - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
+      - "scripts/mlb-market-state-matchup-modular-router-v1.py"
+      - "scripts/mlb-multi-market-coverage-report-compat-v1.py"
+      - ".github/workflows/mlb-market-state-matchup-modular-router.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-market-state-matchup-modular-router-v1-contract.json"
+      - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
+      - "scripts/mlb-market-state-matchup-modular-router-v1.py"
+      - "scripts/mlb-multi-market-coverage-report-compat-v1.py"
+      - ".github/workflows/mlb-market-state-matchup-modular-router.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  market-state-matchup-modular-router:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen scientific dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Prove protocol freeze predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-market-state-matchup-modular-router-v1-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-market-state-matchup-modular-router-v1.py | tail -1)"
+          test -n "$CONTRACT_ADD"
+          test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-market-state-matchup-modular-router-v1-contract.json'))
+          assert c['schemaVersion']=='courtedge-mlb-market-state-matchup-modular-router-contract.v1'
+          assert c['scientificStatus']=='RETROSPECTIVE_MARKET_TEAM_STATE_MATCHUP_HORIZON_ROUTER_DISCOVERY_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert c['productionBase']['maximumDailyPicks']==1
+          assert c['scientificChronology']['retrospectiveEvaluationIsIndependentConfirmation'] is False
+          assert c['scientificChronology']['postResultRuleEditingAllowed'] is False
+          assert c['teamState']['minimumPriorGamesForStableTier']==20
+          assert c['teamState']['teamNameSpecificRulesAllowed'] is False
+          assert c['matchupStructure']['minimumObservedFeatureFraction']==0.60
+          assert c['matchupStructure']['outcomeMayDefineStructure'] is False
+          assert c['marketScope']['nrfiYrfiIncluded'] is False
+          assert set(c['policies'])=={
+            'CONTROL_UNIFORM_Q85','CONTROL_UNIFORM_Q90','CONTROL_STATE_ONLY_BALANCED',
+            'CHALLENGER_STATE_X_STRUCTURE','CHALLENGER_FULL_MODULAR'
+          }
+          assert c['dailyShadowRouter']['maximumShadowSelectionsPerDate']==1
+          assert c['dailyShadowRouter']['outcomeMaySelectDailyCandidate'] is False
+          assert c['nestedPolicyComparison']['multipleComparisonCorrection']=='HOLM_BONFERRONI'
+          assert c['primaryReporting']['singleWeightedUtilityScoreAllowed'] is False
+          assert c['primaryReporting']['winnerMayBeDeclaredFromRetrospectiveSeasons'] is False
+          assert c['promotionBoundary']['productionChanged'] is False
+          assert c['promotionBoundary']['positiveEvEstablished'] is False
+          print('MARKET_STATE_MATCHUP_MODULAR_ROUTER_PROTOCOL_PRE_SCORER_FREEZE_PROVED')
+          PY
+
+      - name: Syntax check frozen scorer and reporting adapter
+        run: |
+          python -m py_compile scripts/mlb-market-state-matchup-modular-router-v1.py
+          python -m py_compile scripts/mlb-multi-market-coverage-report-compat-v1.py
+          grep -q 'No model, threshold, candidate, settlement, ranking' scripts/mlb-multi-market-coverage-report-compat-v1.py
+          grep -q 'maximumNoPlayEligibleDateStreak' scripts/mlb-multi-market-coverage-report-compat-v1.py
+
+      - name: Materialize pinned team-state parent research
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH='research/mlb-modular-team-structure-nrfi-yrfi-v1'
+          PIN='b2cd717f49d3063c6b7ed679674661961679d2a2'
+          REF="refs/remotes/origin/${BRANCH}"
+          git fetch origin "refs/heads/${BRANCH}:${REF}"
+          test "$(git rev-parse "$REF")" = "$PIN"
+          mkdir -p inputs/modular-parent/scripts inputs/modular-parent/research
+          git show "${PIN}:scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py" > inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          git show "${PIN}:research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json" > inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+          test -s inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py
+          test -s inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json
+
+      - name: Materialize immutable V69 parent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_BRANCH='research/p0-step12v69-confluence-frequency-quality-frontier'
+          PARENT_REF="refs/remotes/origin/${PARENT_BRANCH}"
+          git fetch origin "refs/heads/${PARENT_BRANCH}:${PARENT_REF}"
+          mkdir -p inputs/parent/scripts inputs/parent/research inputs/parent/server
+          for FILE in \
+            scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            server/mlb-frozen-a-plus-classifier.ts \
+            server/mlb-frozen-research-route-assessor.ts
+          do
+            git show "${PARENT_REF}:${FILE}" > "inputs/parent/${FILE}"
+            test -s "inputs/parent/${FILE}"
+          done
+
+      - name: Download immutable Step12V3 historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: inputs/step12v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download immutable V66 pregame custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31962659793
+
+      - name: Download immutable V16 pure settlement manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v16-pure-ml-f5-settlement-probability
+          path: inputs/v16
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 31704085189
+
+      - name: Resolve immutable inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for S in 2022 2023 2024 2025 2026_YTD; do
+            test -s "inputs/step12v3/$S/game-anatomy-feature-table.json"
+          done
+          CUSTODY="$(find inputs/v66-custody -type f \( -name '*.jsonl.gz' -o -name '*custody*.gz' \) -print -quit)"
+          V16="$(find inputs/v16 -type f -name pure-settlement-model-manifest.json -print -quit)"
+          test -n "$CUSTODY" && test -s "$CUSTODY"
+          test -n "$V16" && test -s "$V16"
+          echo "custody=$CUSTODY" >> "$GITHUB_OUTPUT"
+          echo "v16=$V16" >> "$GITHUB_OUTPUT"
+
+      - name: Execute frozen market state matchup modular router study
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          python scripts/mlb-market-state-matchup-modular-router-v1.py \
+            --root inputs/step12v3 \
+            --custody '${{ steps.inputs.outputs.custody }}' \
+            --v16-manifest '${{ steps.inputs.outputs.v16 }}' \
+            --v68-contract inputs/parent/research/p0-step12v68-fg-winner-prospective-confirmation-contract.json \
+            --classifier-source inputs/parent/server/mlb-frozen-a-plus-classifier.ts \
+            --router-source inputs/parent/server/mlb-frozen-research-route-assessor.ts \
+            --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
+            --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
+            --multi-market-scorer scripts/mlb-multi-market-coverage-report-compat-v1.py \
+            --multi-market-contract research/mlb-multi-market-coverage-expansion-v1-contract.json \
+            --modular-parent-scorer inputs/modular-parent/scripts/mlb-modular-team-structure-nrfi-yrfi-v1.py \
+            --modular-parent-contract inputs/modular-parent/research/mlb-modular-team-structure-nrfi-yrfi-v1-contract.json \
+            --contract research/mlb-market-state-matchup-modular-router-v1-contract.json \
+            --out work/mlb-market-state-matchup-modular-router-v1.json
+
+      - name: Validate scientific and governance boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/mlb-market-state-matchup-modular-router-v1.json'))
+          assert r['schemaVersion']=='courtedge-mlb-market-state-matchup-modular-router.v1'
+          assert r['classification']=='MARKET_STATE_MATCHUP_MODULAR_ROUTER_RETROSPECTIVE_ABLATION_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED'
+          assert r['sample']=={
+            'trainingRows2022':2398,'calibrationRows2023':2399,'evaluationRows':6610,
+            'eligibleSlateDates':505,'parentActiveDates':200,'parentNoPlayDates':305
+          }
+          assert set(r['policyResults'])=={
+            'CONTROL_UNIFORM_Q85','CONTROL_UNIFORM_Q90','CONTROL_STATE_ONLY_BALANCED',
+            'CHALLENGER_STATE_X_STRUCTURE','CHALLENGER_FULL_MODULAR'
+          }
+          for name,p in r['dailyShadowPicks'].items():
+            dates=[x['officialDate'] for x in p]
+            assert len(dates)==len(set(dates))
+          assert r['scientificBoundary']['oneShadowPickMaximumPerParentNoPlayDate'] is True
+          assert r['scientificBoundary']['parentAPlusPremiumDatesReplaced'] is False
+          assert r['scientificBoundary']['rulesAreTeamStateAndStructureModularNotTeamNameSpecific'] is True
+          assert r['scientificBoundary']['matchupStructureUsesPregameFeaturesOnly'] is True
+          assert r['scientificBoundary']['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert r['scientificBoundary']['prospectiveConfirmationRequired'] is True
+          assert r['scientificBoundary']['nrfiYrfiContributesCoverage'] is False
+          assert r['scientificBoundary']['historicalPricesUsed'] is False
+          assert r['scientificBoundary']['positiveEvEstablished'] is False
+          assert r['scientificBoundary']['betEliteProduced'] is False
+          assert r['scientificBoundary']['stakeCalculated'] is False
+          assert r['scientificBoundary']['automaticBetPlacement'] is False
+          assert r['scientificBoundary']['realFinancialExposure']==0
+          assert r['scientificBoundary']['productionChanged'] is False
+          assert r['scientificBoundary']['currentAPlusPremiumHierarchyChanged'] is False
+          assert r['scientificBoundary']['generalV68Fallback'] is False
+          assert r['scientificBoundary']['v80Dependency'] is False
+          print(json.dumps({
+            'sample':r['sample'],
+            'policyResults':{
+              k:{
+                'coveragePct':v['combinedDailyOpportunityCoveragePct'],
+                'shadowPickDates':v['shadowPickDates'],
+                'hitRate':v['hitRate'],
+                'wilson95':v['wilson95'],
+                'calibrationGap':v['absoluteCalibrationGap'],
+                'brier':v['decisiveBrierScore'],
+                'maxNoPlayStreak':v['remainingNoPlayStreaks']['maximum'],
+                'bySeason':v['bySeason'],
+                'byMarket':v['byMarket'],
+                'byTeamState':v['byTeamState'],
+                'byMatchupStructure':v['byMatchupStructure'],
+                'byGeometry':v['bySelectedSideLineGeometry'],
+              } for k,v in r['policyResults'].items()
+            },
+            'paretoPolicies':r['paretoPolicies'],
+            'nestedComparisons':r['nestedPolicyComparisonsVsUniformQ85'],
+          },indent=2))
+          PY
+
+      - name: Upload frozen modular router artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-market-state-matchup-modular-router-v1
+          path: work/mlb-market-state-matchup-modular-router-v1.json
+          if-no-files-found: error
+          retention-days: 90
