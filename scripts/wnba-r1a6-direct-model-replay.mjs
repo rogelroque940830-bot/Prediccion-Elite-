@@ -9,6 +9,8 @@ const INPUT='wnba-r1a5-neutral-availability-candidate-rowset.jsonl';
 const MODEL='frontend/client/src/lib/wnba-model.ts';
 const OUT='wnba-r1a6-sports-only-probability-rowset.jsonl';
 const EVIDENCE='wnba-r1a6-model-replay-evidence.json';
+const EXECUTION_MODULE=process.env.WNBA_MODEL_MODULE || MODEL;
+const EXECUTION_LABEL=process.env.WNBA_MODEL_EXECUTION || 'DIRECT_TYPESCRIPT_IMPORT_NODE22';
 const specialIds=new Set(['401341447','401353913','401455978','401430112','401558893','401507376','401620458','401677672','401781604','401736430']);
 
 function sha256(buf){return crypto.createHash('sha256').update(buf).digest('hex');}
@@ -62,7 +64,10 @@ if(!inputOk || !modelOk){
   process.exit(2);
 }
 
-const moduleUrl=pathToFileURL(path.resolve(MODEL)).href;
+if(!fs.existsSync(EXECUTION_MODULE)) throw new Error(`Execution module unavailable: ${EXECUTION_MODULE}`);
+const executionBytes=fs.readFileSync(EXECUTION_MODULE);
+const executionModuleSha=sha256(executionBytes);
+const moduleUrl=pathToFileURL(path.resolve(EXECUTION_MODULE)).href;
 const mod=await import(moduleUrl);
 if(typeof mod.predictWNBA!=='function') throw new Error('predictWNBA export unavailable');
 
@@ -129,7 +134,7 @@ const evidence={
   threshold_tuning:false,
   r1b_outcome_opening_authorized:false,
   input_custody:{sha256:inputSha,expected_sha256:expectedInputSha,rows:inputRows.length,match:inputSha===expectedInputSha},
-  model_custody:{path:MODEL,git_blob_sha:modelBlob,expected_git_blob_sha:expectedModelBlob,match:modelOk,execution:'DIRECT_TYPESCRIPT_IMPORT_NODE22'},
+  model_custody:{path:MODEL,git_blob_sha:modelBlob,expected_git_blob_sha:expectedModelBlob,match:modelOk,execution:EXECUTION_LABEL,execution_module:EXECUTION_MODULE,execution_module_sha256:executionModuleSha},
   gates,
   probability_summary:{home_min:minHome,home_max:maxHome,selected_min:minSelected,selected_max:maxSelected},
   probability_rowset:{rows:out.length,bytes:canonical.length,sha256:outSha},
