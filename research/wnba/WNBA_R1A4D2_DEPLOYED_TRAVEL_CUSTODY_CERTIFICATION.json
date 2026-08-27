@@ -1,0 +1,74 @@
+{
+  "name": "WNBA_R1A4D2_DEPLOYED_TRAVEL_CUSTODY_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
+  "decision": "CERTIFIED_DEPLOYED_TRAVEL_COORDINATE_AND_BUCKET_CUSTODY",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "parent_contract": "research/wnba/WNBA_R1A4D2_DEPLOYED_COORDINATE_TRAVEL_BUCKET_CUSTODY.json",
+  "parent_venue_certification": "research/wnba/WNBA_R1A4D1_SEASON_VENUE_REGISTRY_CERTIFICATION.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "outcome_fields_loaded": 0,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "evidence": {
+    "workflow": "WNBA R1A.4D2 Deployed Travel Custody",
+    "run_id": 33085653325,
+    "head_sha": "8caa2fe29567151e7f1c3a120fca7417b1e4db72",
+    "artifact_id": 9652008129,
+    "artifact_name": "wnba-r1a4d2-deployed-travel-33085653325",
+    "artifact_digest": "sha256:30a0297e93ca4a6f83c00e33d6fe934066ac8297d2cb84bf59bf131a1b9ffdad"
+  },
+  "production_source_custody": {
+    "travel_ts_blob_sha": "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b",
+    "travel_ts_blob_matches": true,
+    "wnba_model_ts_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "wnba_model_ts_blob_matches": true,
+    "haversine_radius_3959_matches": true,
+    "travel_bucket_expression_matches": true,
+    "missing_required_symbols": []
+  },
+  "empirical_coverage": {
+    "regular_fixture_count": 1174,
+    "travel_pair_ready": 1174,
+    "travel_pair_coverage": 1.0,
+    "missing_coordinate_count": 0,
+    "special_event_rows_used": 0,
+    "fixture_structure_pass": true,
+    "2021": 192,
+    "2022": 216,
+    "2023": 240,
+    "2024": 240,
+    "2025": 286
+  },
+  "travel_bucket_counts": {
+    "LT500": 191,
+    "500_999": 346,
+    "1000_1999": 433,
+    "2000_2499": 181,
+    "GTE2500": 23
+  },
+  "distance_summary_miles": {
+    "min": 118.560673,
+    "max": 2658.272512
+  },
+  "scientific_interpretation": {
+    "certified_claim": "Exact custody and replayability of the deployed WNBA travel-coordinate and travel-logit-bucket semantics for every corrected 2021-2025 regular-season fixture.",
+    "distance_semantics": "Haversine between the away and home franchise coordinates in the frozen production WNBA_ARENAS map, with R=3959 miles; home travelMiles remains zero.",
+    "not_claimed": "Physical trip mileage, prior-location travel, actual target-game venue distance, or geographically corrected historical arena coordinates.",
+    "no_posthoc_coordinate_correction": true,
+    "missing_coordinate_is_not_zero": true
+  },
+  "closure": {
+    "r1a4d2": "PASS",
+    "travel_coordinate_and_bucket_custody_frozen": true,
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A4D3_ATTACH_TRAVEL_TO_FROZEN_PREFIX_ROWSET"
+  }
+}
