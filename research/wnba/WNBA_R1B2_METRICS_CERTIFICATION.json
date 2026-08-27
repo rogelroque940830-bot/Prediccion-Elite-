@@ -1,0 +1,65 @@
+{
+  "name": "WNBA_R1B2_METRICS_CERTIFICATION_V1",
+  "status": "FROZEN_SCIENTIFIC_FAIL_NO_RETUNE",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "workflow_run_id": 33090971827,
+  "artifact_id": 9654328679,
+  "artifact_digest": "sha256:cfeb746f8fa680c5d13671cc7fd6f16bcd0cf5c57677071481db1a9dd2b4605c",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "labeled_rowset_sha256": "4b4dc3086d9f6a322f01089a7bd828d6cc4095ff793d343e0c25eb1b147dbe4a",
+  "scored_rowset": {
+    "rows": 1143,
+    "bytes": 898701,
+    "sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319"
+  },
+  "overall_model_metrics": {
+    "accuracy": 0.6587926509186351,
+    "brier": 0.22816032677140718,
+    "log_loss": 0.6603449124177162,
+    "ece10": 0.10571230582524241,
+    "calibration_in_the_large_abs_z": 8.81846552794077,
+    "mean_predicted": 0.7645049567438775,
+    "observed_rate": 0.6587926509186351,
+    "mean_predicted_minus_observed": 0.10571230582524238
+  },
+  "walk_forward_climatology": {
+    "brier": 0.24880810432938305,
+    "log_loss": 0.690761917643413
+  },
+  "frozen_gate_results": {
+    "brier_beats_walk_forward_climatology": true,
+    "log_loss_beats_walk_forward_climatology": true,
+    "ece10_lte_0_02": false,
+    "calibration_abs_z_lte_1_959963984540054": false,
+    "abs_mean_predicted_minus_observed_lte_0_02": false,
+    "all_probability_gates_pass": false
+  },
+  "season_accuracy_report": {
+    "2021": 0.6559139784946236,
+    "2022": 0.6428571428571429,
+    "2023": 0.6581196581196581,
+    "2024": 0.688034188034188,
+    "2025": 0.6487455197132617
+  },
+  "scientific_interpretation": {
+    "discrimination_signal_present": true,
+    "reason": "Frozen candidate beats the preregistered walk-forward climatology on both Brier and log loss.",
+    "probability_calibration_qualified": false,
+    "reason_calibration": "The candidate materially overpredicts selected-side win probability: mean predicted 0.7645 versus observed 0.6588, with ECE10 0.1057 and calibration abs Z 8.8185.",
+    "raw_accuracy_is_not_probability_certification": true,
+    "exact_production_sports_only_v1_rehabilitated": false
+  },
+  "post_outcome_actions_forbidden": [
+    "retune the model coefficients on the 2021-2025 labeled cohort",
+    "change the frozen probability gates",
+    "select a probability threshold or Elite subset from these outcomes and call it certified",
+    "drop seasons or games based on observed performance",
+    "promote this raw probability to the cross-sport/global ranker"
+  ],
+  "decision": "WNBA_BASE_PROBABILITY_REMAINS_BLOCKED_AND_R1_MAY_NOT_RETUNE_AFTER_RESULTS",
+  "global_ranker_promotion_authorized": false,
+  "production_change_authorized": false,
+  "next_gate": "R1B3_FREEZE_FAILURE_NO_RETUNE_AND_DEFINE_INDEPENDENT_NEXT_PHASE"
+}
