@@ -1,7 +1,7 @@
 {
   "name": "WNBA_R1A4_STATIC_VERSIONED_DATASET_AUDIT_V1",
   "status": "PREREGISTERED_OUTCOME_BLIND_STATIC_SOURCE_AUDIT",
-  "decision": "PENDING_EMPIRICAL_ASSET_AUDIT",
+  "decision": "PENDING_FINAL_PINNED_RERUN",
   "preregistered_date": "2026-08-27",
   "branch": "research/wnba-r1-historical-foundation",
   "parent": "research/wnba/WNBA_R1A3_ESPN_PRIOR_GAME_SOURCE_CERTIFICATION.json",
@@ -47,8 +47,8 @@
         "asset_id": 165078397,
         "name": "team_box_2023.parquet",
         "size": 55000,
-        "sha256": null,
-        "first_audit_rule": "Compute SHA-256 from asset-id-addressed bytes, freeze it in this contract, then rerun R1A.4 before treating source custody as certified."
+        "sha256": "ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9",
+        "digest_provenance": "Computed outcome-blind from asset-id-addressed bytes in R1A.4 run 33077182651 before final pinned rerun."
       },
       "2024": {
         "asset_id": 417936297,
