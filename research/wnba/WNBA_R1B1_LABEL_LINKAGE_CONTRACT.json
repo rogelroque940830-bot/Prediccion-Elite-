@@ -1,0 +1,96 @@
+{
+  "name": "WNBA_R1B1_LABEL_LINKAGE_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_FIRST_OUTCOME_OPENING",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_closure": "research/wnba/WNBA_R1A7_CLOSURE_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "frozen_probability_rowset": {
+    "rows": 1143,
+    "sha256": "6621ad59210bdcac959b21168813f597a3c4914706eac3f2dde1fb13b56d5960"
+  },
+  "label_asset": {
+    "provider": "SportsDataverse",
+    "repository": "sportsdataverse/sportsdataverse-data",
+    "release_tag": "espn_wnba_schedules",
+    "asset_id": 532156071,
+    "asset_name": "wnba_games_in_data_repo.parquet",
+    "asset_size": 448575,
+    "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "release_download_url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_wnba_schedules/wnba_games_in_data_repo.parquet",
+    "acceptance_rule": "No outcome column may be read until downloaded bytes match the frozen SHA256 exactly."
+  },
+  "first_outcome_opening": {
+    "authorized": true,
+    "allowed_columns_only": [
+      "game_id",
+      "season",
+      "home_id",
+      "away_id",
+      "home_score",
+      "away_score",
+      "home_winner",
+      "away_winner"
+    ],
+    "forbidden_in_r1b1": [
+      "accuracy aggregation",
+      "Brier calculation",
+      "log-loss calculation",
+      "ECE calculation",
+      "calibration calculation",
+      "threshold discovery",
+      "Elite rule discovery",
+      "candidate switching",
+      "probability refit",
+      "model coefficient change",
+      "alternate outcome source"
+    ]
+  },
+  "identity_normalization": {
+    "rule": "IDs are canonicalized only as scalar integer-like identifiers: integer -> decimal string; finite integer-valued float -> decimal integer string; digit strings or digit strings ending only in .0... -> decimal integer string. No team-name, fuzzy, date, score or opponent matching is allowed.",
+    "join_key": "exact canonical game_id",
+    "team_identity_check": "canonical home_id and away_id from the label asset must equal frozen homeTeamId and awayTeamId for the same game_id"
+  },
+  "label_consistency": {
+    "exactly_one_winner_boolean": true,
+    "scores_finite": true,
+    "scores_unequal": true,
+    "home_winner_must_equal_home_score_gt_away_score": true,
+    "away_winner_must_equal_away_score_gt_home_score": true,
+    "missing_or_ambiguous": "FAIL_CLOSED"
+  },
+  "linkage_pass_requirements": {
+    "probability_rowset_sha_matches": true,
+    "asset_sha_matches_before_read": true,
+    "probability_rows": 1143,
+    "matched_rows": 1143,
+    "unmatched_probability_rows": 0,
+    "duplicate_probability_game_ids": 0,
+    "duplicate_matched_label_game_ids": 0,
+    "team_identity_mismatches": 0,
+    "season_mismatches": 0,
+    "winner_consistency_failures": 0,
+    "score_consistency_failures": 0
+  },
+  "labeled_rowset_schema": {
+    "preserve_frozen_probability_fields_unchanged": true,
+    "append_label_fields": [
+      "homeOutcome",
+      "winnerTeamId",
+      "homeScore",
+      "awayScore",
+      "labelSourceAssetId",
+      "labelSourceAssetSha256"
+    ],
+    "selected_side_correctness_not_computed_in_r1b1": true,
+    "canonical_serialization": "JSONL stable recursively sorted keys with LF line ending",
+    "row_order": "same order as frozen probability rowset"
+  },
+  "decision_policy": {
+    "pass": "R1B1_LABELED_ROWSET_FROZEN_AND_R1B2_METRICS_AUTHORIZED",
+    "fail": "R1B1_FAIL_CLOSED_NO_METRICS",
+    "production_change_authorized": false,
+    "global_ranker_promotion_authorized": false
+  }
+}
