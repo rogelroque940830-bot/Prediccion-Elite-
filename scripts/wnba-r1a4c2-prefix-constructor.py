@@ -23,7 +23,7 @@ spec.loader.exec_module(base)
 contract = json.loads(CONTRACT_PATH.read_text())
 EXCLUDED_BY_SEASON = {int(s): {str(x) for x in ids} for s, ids in contract['special_event_classification']['excluded_game_ids_by_season'].items()}
 EXCLUDED_ALL = set().union(*EXCLUDED_BY_SEASON.values())
-EXPECTED = {int(s): int(v['expected_games']) for s, v in contract['official_regular_season_structure_gate'].items()}
+EXPECTED = {int(s): int(v['expected_games']) for s, v in contract['official_regular_season_structure_gate'].items() if str(s).isdigit()}
 
 # Use the corrected contract for the base constructor's thresholds/candidate.
 base.CONTRACT = CONTRACT_PATH
@@ -51,8 +51,6 @@ def _filter_special_identity(table):
 
 
 def filtered_read_table(source, *args, **kwargs):
-    # The base constructor only uses pq.read_table for schedule/identity projections.
-    # Filtering happens after those SAFE, explicitly requested columns are loaded.
     table = _ORIG_READ_TABLE(source, *args, **kwargs)
     cols = kwargs.get('columns')
     if cols is None and len(args) >= 1:
@@ -87,7 +85,6 @@ except BaseException as exc:
     }, indent=2, sort_keys=True) + '\n')
     raise
 
-# Corrected post-run structural/classification gate.
 ev = json.loads(EVIDENCE_PATH.read_text())
 ev['name'] = 'WNBA_R1A4C2_PREFIX_CONSTRUCTOR_EVIDENCE_V1'
 ev['special_event_classification'] = {
