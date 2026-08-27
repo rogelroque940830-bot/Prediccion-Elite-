@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pyarrow.compute as pc
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 BASE_PATH = Path('scripts/wnba-r1a4c-prefix-constructor.py')
@@ -46,7 +46,7 @@ def _filter_special_identity(table):
     if 'game_id' not in table.column_names:
         return table
     gids = table['game_id'].to_pylist()
-    keep = [(_norm_gid(v) not in EXCLUDED_ALL) for v in gids]
+    keep = pa.array([(_norm_gid(v) not in EXCLUDED_ALL) for v in gids], type=pa.bool_())
     return table.filter(keep)
 
 
@@ -74,7 +74,18 @@ def guarded_read_stats(path, game_ids):
 
 base.pq.read_table = filtered_read_table
 base.read_stats_for_ids = guarded_read_stats
-base.main()
+try:
+    base.main()
+except BaseException as exc:
+    EVIDENCE_PATH.write_text(json.dumps({
+        'name':'WNBA_R1A4C2_OPERATIONAL_FAILURE_EVIDENCE_V1',
+        'decision':'OPERATIONAL_FAILURE_NO_SCIENTIFIC_DECISION',
+        'error_type':type(exc).__name__,
+        'error':str(exc),
+        'special_event_stat_request_count':stat_guard_requests,
+        'r1b_outcome_opening_authorized':False
+    }, indent=2, sort_keys=True) + '\n')
+    raise
 
 # Corrected post-run structural/classification gate.
 ev = json.loads(EVIDENCE_PATH.read_text())
