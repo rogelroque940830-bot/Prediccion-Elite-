@@ -1,0 +1,64 @@
+{
+  "name": "WNBA_R1B2_METRIC_MECHANICS_SPEC_V1",
+  "status": "MECHANICAL_SPECIFICATION_OF_PREREGISTERED_METRICS",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_outcome_blind_protocol": "research/wnba/WNBA_R1A7_PROBABILITY_CUSTODY_AND_R1B_PROTOCOL.json",
+  "parent_labeled_rowset_certification": "research/wnba/WNBA_R1B1_LABEL_LINKAGE_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "labeled_rowset_sha256": "4b4dc3086d9f6a322f01089a7bd828d6cc4095ff793d343e0c25eb1b147dbe4a",
+  "labeled_rows": 1143,
+  "scientific_policy_change": false,
+  "gate_change": false,
+  "threshold_change": false,
+  "candidate_change": false,
+  "probability_change": false,
+  "metric_definitions": {
+    "selected_side_label": "y=1 iff selectedTeamId == winnerTeamId; else y=0",
+    "selected_side_probability": "p=p_win_selected_side from the frozen probability rowset",
+    "accuracy": "mean(y)",
+    "brier": "mean((p-y)^2)",
+    "log_loss": "-mean(y*ln(p)+(1-y)*ln(1-p)); frozen probabilities are already strictly inside (0,1), so no post-hoc clipping is applied",
+    "ece10": "sum_b (n_b/N)*abs(mean(p in b)-mean(y in b)) over fixed bins [0,.1),[.1,.2),...,[.8,.9),[.9,1.0]; p=1.0, if ever present, belongs to the last bin",
+    "mean_predicted_minus_observed": "mean(p)-mean(y)",
+    "calibration_in_the_large_abs_z": "abs(sum(y-p))/sqrt(sum(p*(1-p)))",
+    "season_stability": "report the same selected-side accuracy, Brier, log loss, ECE10, mean predicted-minus-observed and calibration abs Z separately for each frozen season; no new season-level pass threshold is introduced"
+  },
+  "walk_forward_climatology": {
+    "home_probability_by_target_season": {
+      "2021": 0.5,
+      "2022": "mean(homeOutcome) among frozen 2021 rows only",
+      "2023": "mean(homeOutcome) among frozen 2021-2022 rows only",
+      "2024": "mean(homeOutcome) among frozen 2021-2023 rows only",
+      "2025": "mean(homeOutcome) among frozen 2021-2024 rows only"
+    },
+    "selected_side_conversion": "For each target row, baseline p_selected = q_home when selectedSide=HOME; otherwise 1-q_home.",
+    "baseline_brier": "mean((p_selected_baseline-y)^2) over all 1143 rows",
+    "baseline_log_loss": "binary log loss using p_selected_baseline and y over all 1143 rows",
+    "no_model_input_use": true
+  },
+  "frozen_probability_gates": {
+    "calibration_in_the_large_abs_z_max": 1.959963984540054,
+    "ece10_max": 0.02,
+    "abs_mean_predicted_minus_observed_max": 0.02,
+    "brier_must_be_strictly_less_than_walk_forward_climatology": true,
+    "log_loss_must_be_strictly_less_than_walk_forward_climatology": true
+  },
+  "decision": {
+    "all_five_gates_pass": "FALLBACK_BASE_PROBABILITY_RESEARCH_QUALIFIED",
+    "any_gate_fails": "WNBA_BASE_PROBABILITY_REMAINS_BLOCKED_AND_R1_MAY_NOT_RETUNE_AFTER_RESULTS"
+  },
+  "forbidden": [
+    "model refit",
+    "probability recalibration",
+    "coefficient change",
+    "candidate switching",
+    "threshold discovery",
+    "Elite gate discovery",
+    "dropping seasons or rows based on results",
+    "weakening or replacing frozen gates"
+  ],
+  "global_ranker_promotion_authorized_by_r1b2_alone": false,
+  "production_change_authorized": false
+}
