@@ -1,0 +1,84 @@
+{
+  "name": "WNBA_R1A4C_PREFIX_CONSTRUCTOR_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
+  "decision": "CERTIFIED_PREFIX_CUSTODY_RECONSTRUCTIBLE_GROUPS_TRAVEL_INJURY_MANUAL_STILL_OPEN",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "parent_contract": "research/wnba/WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY.json",
+  "parent_candidate_certification": "research/wnba/WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "regular_season_only": true,
+    "evaluation_labels_attached": false,
+    "target_outcome_fields_in_rowset": 0,
+    "market_data_consumed": false,
+    "travel_injury_manual_imputed": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "final_evidence": {
+    "workflow": "WNBA R1A.4C Full Prefix Constructor Custody",
+    "run_id": 33082885259,
+    "head_sha": "07e0c12b22c078e2e89e6b4baa2786ebcb0debca",
+    "artifact_id": 9650840442,
+    "artifact_name": "wnba-r1a4c-prefix-33082885259",
+    "artifact_digest": "sha256:082e603b34bd60257d92f2a4e46378eeb525fb9cbbb204c1a758d84a8879a863",
+    "evidence_name": "WNBA_R1A4C_PREFIX_CONSTRUCTOR_EVIDENCE_V1",
+    "rowset_sha256": "d9cce660134a8cd9ee8b20d4beed733f398fb69170eaf092ad206132587afa05",
+    "rowset_bytes": 1675576,
+    "rowset_rows": 1148
+  },
+  "source_custody": {
+    "all_source_custody_verified": true,
+    "schedule_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "2021_team_box_sha256": "02e574a18b06c883247bd67d0e4b29423f0b6a5cba04c8b1579bf12d7af28d8e",
+    "2022_team_box_sha256": "7919b2f7de526350476c868d1048162cc9b3bf6f9f059f41298e1d40450f871c",
+    "2023_team_box_sha256": "ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9",
+    "2024_team_box_sha256": "b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c",
+    "2025_team_box_sha256": "b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09"
+  },
+  "empirical_coverage": {
+    "total_regular_team_box_games": 1184,
+    "total_joined_regular_targets": 1184,
+    "overall_identity_join_rate": 1.0,
+    "total_targets_with_two_team_prefix": 1148,
+    "targets_with_both_sos_ready": 1148,
+    "2021": {"regular_targets": 194, "prefix_rows": 187, "cold_start": 7, "join_rate": 1.0},
+    "2022": {"regular_targets": 218, "prefix_rows": 211, "cold_start": 7, "join_rate": 1.0},
+    "2023": {"regular_targets": 242, "prefix_rows": 235, "cold_start": 7, "join_rate": 1.0},
+    "2024": {"regular_targets": 242, "prefix_rows": 235, "cold_start": 7, "join_rate": 1.0},
+    "2025": {"regular_targets": 288, "prefix_rows": 280, "cold_start": 8, "join_rate": 1.0}
+  },
+  "anti_leakage_closure": {
+    "two_phase_daily_chokepoint_enforced": true,
+    "target_self_in_prefix_count": 0,
+    "same_day_value_used_count": 0,
+    "future_value_used_count": 0,
+    "target_outcome_fields_in_rowset": 0,
+    "phase2_ingest_bad_games": 0,
+    "duplicate_target_game_ids": 0,
+    "independent_rowset_sha256_recomputed_and_matched": true,
+    "prior_game_scores_only_enter_later_date_prefixes": true
+  },
+  "certified_reconstructible_groups": [
+    "fallback season-to-date pace/offRtg/defRtg/netRtg/winRate/games",
+    "deployed recent advanced aliases",
+    "true recentPpg and recentWinPct over latest up to 10 prior games",
+    "gamesPlayed/daysRest/isB2B/b2bWasRoad/gamesLast7/streak under frozen deployed semantics",
+    "season-parameterized SOS analogue with 40/60 season/recent opponent blend"
+  ],
+  "still_open": {
+    "travelMiles": "PENDING_SEASON_VENUE_CERTIFICATION",
+    "injuryAdj": "UNRESOLVED_R1A1_UNKNOWN_IS_NOT_ZERO",
+    "manualAdjustment": "UNRESOLVED_NO_HISTORICAL_LOG",
+    "preferred_BDL_advanced_exact_replay": "ACCESS_NOT_CERTIFIED"
+  },
+  "closure": {
+    "r1a4c": "PASS",
+    "prefix_rowset_frozen": true,
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A4D_SEASON_VENUE_TRAVEL_CUSTODY_OR_R1A5_INJURY_NEUTRAL_CANDIDATE_FREEZE"
+  }
+}
