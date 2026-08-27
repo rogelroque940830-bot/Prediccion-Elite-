@@ -1,0 +1,46 @@
+{
+  "name": "WNBA_R2A1_2020_PREGAME_CANDIDATE_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SEED_CANDIDATE",
+  "workflow": {
+    "run_id": 33104441958,
+    "job_id": 98630392431,
+    "conclusion": "SUCCESS"
+  },
+  "artifact": {
+    "id": 9659840743,
+    "digest": "sha256:33012bf55405a29f3a5ca3e3cd07080d31d796654c6aa42063d21a4862ea0725"
+  },
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "season": 2020,
+  "role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
+  "regular_games": 132,
+  "joined_regular_games": 132,
+  "prefix_rows": 126,
+  "prefix_sha256": "133339793993ad2457cf53a2d75f259be9316726e254014a414ddc6b257488bd",
+  "candidate_rowset": {
+    "rows": 126,
+    "bytes": 225272,
+    "sha256": "8e037e9a688e62952f5c323ac6d48dbe3f437c8c28d6658f8c5147e4572da863"
+  },
+  "identity_fallback": {
+    "count": 1,
+    "game_id": "401241311",
+    "date": "2020-09-13",
+    "home_team_id": "20",
+    "away_team_id": "16",
+    "identity_only": true,
+    "outcome_columns_projected": false
+  },
+  "anti_leakage": {
+    "self": 0,
+    "same_day": 0,
+    "future": 0,
+    "target_outcome_attached_rows": 0,
+    "market_attached_rows": 0
+  },
+  "2020_labels_opened_for_calibration": false,
+  "supersedes_provisional_candidate_sha256": "ef1394d0e7a500f4f4c6722d58410343c61e300455069941561f40d40180852b",
+  "next_gate": "R2A2_DIRECT_FROZEN_MODEL_PROBABILITY_ROWSET_BEFORE_2020_LABEL_OPENING",
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false
+}
