@@ -6,6 +6,7 @@ on:
       - research/wnba-r1-historical-foundation
     paths:
       - 'research/wnba/WNBA_R2A_2020_SEED_SEASON_CUSTODY_CONTRACT.json'
+      - 'research/wnba/WNBA_R2A1_2020_IDENTITY_FALLBACK_AMENDMENT.json'
       - 'research/wnba/WNBA_R2A_2020_SOURCE_PINS.json'
       - 'scripts/wnba-r2a-2020-seed-candidate.py'
       - '.github/workflows/wnba-r2a-2020-seed-custody.yml'
@@ -36,14 +37,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/wnba-r2a-2020-seed-candidate.py
-      - name: Assert R2A outcome-blind custody gates
+      - name: Assert R2A1 outcome-blind custody gates
         shell: bash
         run: |
           set -euo pipefail
-          jq -e '.decision == "R2A_2020_PREGAME_CANDIDATE_FROZEN_LABELS_STILL_CLOSED"' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
-          jq -e '.competition.expectedRegularGames == 132 and .competition.actualRegularGames == 132' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
-          jq -e '.candidateRowset.rows >= 100' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
-          jq -e '.gates.joinRate == 1 and .gates.missingJoinCount == 0 and .gates.duplicateGameIds == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.decision == "R2A1_2020_PREGAME_CANDIDATE_FROZEN_LABELS_STILL_CLOSED"' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.competition.expectedRegularGames == 132 and .competition.actualRegularGames == 132 and .competition.joinedRegularGames == 132 and .competition.joinRate == 1' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.identityFallback.count == 1 and .identityFallback.identityOnly == true and .identityFallback.outcomeColumnsProjected == false' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.candidateRowset.rows == 126' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.gates.candidateJoinRate == 1 and .gates.missingJoinCount == 0 and .gates.duplicateGameIds == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
           jq -e '.gates.targetOutcomeAttachedRows == 0 and .gates.marketAttachedRows == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
           jq -e '.gates.selfLeakage == 0 and .gates.sameDayLeakage == 0 and .gates.futureLeakage == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
           jq -e '.["2020_labels_opened_for_calibration"] == false' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
