@@ -1,0 +1,84 @@
+name: WNBA R1B2 Preregistered Metrics
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1B1_LABEL_LINKAGE_CERTIFICATION.json'
+      - 'research/wnba/WNBA_R1B2_METRIC_MECHANICS_SPEC.json'
+      - 'scripts/wnba-r1b2-metrics.py'
+      - '.github/workflows/wnba-r1b2-metrics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install historical constructor dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Reproduce frozen R1A.5 candidate input
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r1a5-neutral-availability-candidate.py
+      - name: Verify frozen production import graph custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object frontend/client/src/lib/wnba-model.ts)" = "095527160535655d28e989c0cfe9638fc6681b4c"
+          test "$(git hash-object frontend/client/src/lib/wnba-shadow-emission.ts)" = "7dde8303ac0bac50ea0ed60cd5d7f78b091a5131"
+          test "$(git hash-object frontend/client/src/lib/queryClient.ts)" = "3f4176d17e660103db9784885400eadc54dd549c"
+          test "$(git hash-object frontend/package-lock.json)" = "f104d741b427df2a7cd73ccc3bbe66207b8cbb15"
+      - name: Install lockfile-frozen frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts
+      - name: Compile verified production source for Node execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontend/node_modules/.bin/esbuild frontend/client/src/lib/wnba-model.ts \
+            --bundle \
+            --platform=node \
+            --format=esm \
+            --target=node22 \
+            --outfile=/tmp/wnba-r1a6-model.bundle.mjs \
+            '--define:import.meta.env.VITE_API_BASE_URL=""' \
+            --define:import.meta.env.DEV=false
+      - name: Reproduce frozen R1A.6 probability rowset
+        env:
+          WNBA_MODEL_MODULE: /tmp/wnba-r1a6-model.bundle.mjs
+          WNBA_MODEL_EXECUTION: ESBUILD_LOCKFILE_COMPILED_FROZEN_PRODUCTION_SOURCE_NODE22
+        run: node scripts/wnba-r1a6-direct-model-replay.mjs
+      - name: Reproduce and verify frozen R1B1 labeled rowset
+        run: |
+          python scripts/wnba-r1b1-label-linkage.py
+          test "$(sha256sum wnba-r1b1-labeled-rowset.jsonl | cut -d' ' -f1)" = "4b4dc3086d9f6a322f01089a7bd828d6cc4095ff793d343e0c25eb1b147dbe4a"
+      - name: Compute preregistered R1B2 metrics without tuning
+        run: python scripts/wnba-r1b2-metrics.py
+      - name: Upload R1B2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r1b2-metrics-${{ github.run_id }}
+          path: |
+            wnba-r1b2-metrics-evidence.json
+            wnba-r1b2-scored-rowset.jsonl
+            wnba-r1b1-label-linkage-evidence.json
+            wnba-r1b1-labeled-rowset.jsonl
+            wnba-r1a6-model-replay-evidence.json
+            wnba-r1a6-sports-only-probability-rowset.jsonl
+          if-no-files-found: error
+          retention-days: 90
