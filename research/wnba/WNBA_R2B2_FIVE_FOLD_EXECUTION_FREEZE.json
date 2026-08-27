@@ -1,0 +1,70 @@
+{
+  "name": "WNBA_R2B2_FIVE_FOLD_EXECUTION_FREEZE_V1",
+  "status": "EXECUTION_CUSTODY_FROZEN_AFTER_R2B1_WITH_SCIENCE_ALREADY_PREREGISTERED",
+  "date": "2026-08-27",
+  "scientific_contract": "research/wnba/WNBA_R2B_FIVE_FOLD_PLATT_CERTIFICATION_CONTRACT.json",
+  "scientific_contract_git_blob_sha": "da4277bf0ad059dca6fef63f1ddb6a1801593234",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "calibration_candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1__PLATT_LOGIT_1D_ROLLING_ORIGIN",
+  "r2b1_seed_label_custody": {
+    "season": 2020,
+    "role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
+    "rows": 126,
+    "bytes": 69039,
+    "sha256": "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2",
+    "source_run_id": 33105179131,
+    "source_artifact_id": 9660137687,
+    "metrics_computed_in_r2b1": false,
+    "platt_fit_performed_in_r2b1": false
+  },
+  "frozen_target_scored_custody": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "rows": 1143,
+    "sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319"
+  },
+  "frozen_calibration_engine": {
+    "source_pull_request": 671,
+    "path": "server/cross-sport-calibration.ts",
+    "git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+    "method": "PLATT_LOGIT_1D",
+    "split": "ROLLING_ORIGIN_SEASON"
+  },
+  "exact_target_folds": [
+    {"target": 2021, "training": [2020]},
+    {"target": 2022, "training": [2020, 2021]},
+    {"target": 2023, "training": [2020, 2021, 2022]},
+    {"target": 2024, "training": [2020, 2021, 2022, 2023]},
+    {"target": 2025, "training": [2020, 2021, 2022, 2023, 2024]}
+  ],
+  "frozen_pooled_gates_copied_without_change_from_scientific_contract": {
+    "calibration_in_the_large_abs_z_max": 1.959963984540054,
+    "ece10_max": 0.02,
+    "abs_mean_predicted_minus_observed_max": 0.02,
+    "brier_must_be_strictly_better_than_walk_forward_climatology": true,
+    "log_loss_must_be_strictly_better_than_walk_forward_climatology": true,
+    "all_five_gates_required": true
+  },
+  "chronology": {
+    "2020_labels_opened_before_this_execution_freeze": true,
+    "all_scientific_thresholds_and_folds_frozen_before_2020_label_opening": true,
+    "this_file_changes_scientific_method": false,
+    "this_file_adds_only_r2b1_output_custody": true
+  },
+  "forbidden": [
+    "coefficient retune",
+    "feature search",
+    "threshold search",
+    "candidate switching",
+    "Platt method change",
+    "optimizer change",
+    "gate weakening",
+    "target-season ranking/cap",
+    "dropping rows or seasons because of results",
+    "market data",
+    "historical hit rate as game probability"
+  ],
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false,
+  "betting_authorized": false,
+  "real_financial_exposure": 0
+}
