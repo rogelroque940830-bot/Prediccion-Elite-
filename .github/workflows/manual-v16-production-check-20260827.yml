@@ -1,0 +1,62 @@
+name: Manual V16 Production Check 2026-08-27
+
+on:
+  push:
+    branches:
+      - ops/manual-v16-prod-check-20260827
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FRONTEND_URL: https://fearless-illumination-production-6d16.up.railway.app
+      TARGET_DATE: '2026-08-27'
+    steps:
+      - name: Verify public frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --max-time 30 -sS -L -o /tmp/frontend.html -w '%{http_code}' "$FRONTEND_URL/")
+          echo "frontend_http=$code"
+          test "$code" = "200"
+          test -s /tmp/frontend.html
+
+      - name: Probe same-origin health
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --max-time 30 -sS -L -o /tmp/health.txt -w '%{http_code}' "$FRONTEND_URL/health" || true)
+          echo "health_http=$code"
+          head -c 1000 /tmp/health.txt 2>/dev/null || true
+          echo
+
+      - name: Execute same V16 priced daily-opportunity route as UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --max-time 240 -sS -L \
+            -H 'Content-Type: application/json' \
+            -X POST \
+            --data "{\"date\":\"$TARGET_DATE\"}" \
+            -o /tmp/v16.json \
+            -w '%{http_code}' \
+            "$FRONTEND_URL/api/mlb/unified-v16/daily-opportunity/run-priced")
+          echo "v16_http=$code"
+          test "$code" = "200"
+          jq -e . /tmp/v16.json >/dev/null
+          jq '{schemaVersion,status,date,generatedAt,slate,dailyOpportunity:{action:.dailyOpportunity.action,decisionReason:.dailyOpportunity.decisionReason,summary:.dailyOpportunity.summary},priceConsultationShortlist:{summary:.priceConsultationShortlist.summary},decision,summary,policy}' /tmp/v16.json
+
+      - name: Assert response consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg date "$TARGET_DATE" '.date == $date' /tmp/v16.json >/dev/null
+          jq -e '.slate.total >= 0 and .slate.finalReady >= 0 and .slate.provisional >= 0 and .slate.waitingForPitchers >= 0' /tmp/v16.json >/dev/null
+          jq -e '(.decision.action == "PLAY" or .decision.action == "WAIT" or .decision.action == "NO_PLAY")' /tmp/v16.json >/dev/null
+          jq -e '(.summary.gamesExposedToOddsService // 0) <= 3' /tmp/v16.json >/dev/null
+          jq -e '(.policy.realFinancialExposure // 0) == 0' /tmp/v16.json >/dev/null
+          echo MANUAL_V16_PRODUCTION_CHECK_OK
