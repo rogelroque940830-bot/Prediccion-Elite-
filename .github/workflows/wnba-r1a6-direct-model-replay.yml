@@ -38,7 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/wnba-r1a5-neutral-availability-candidate.py
       - name: Directly execute production TypeScript sports-only model
-        run: node --experimental-strip-types scripts/wnba-r1a6-direct-model-replay.mjs
+        run: npx --yes tsx@4.20.5 scripts/wnba-r1a6-direct-model-replay.mjs
       - name: Upload probability custody evidence
         if: always()
         uses: actions/upload-artifact@v4
