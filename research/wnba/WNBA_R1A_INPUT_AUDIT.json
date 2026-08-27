@@ -3,6 +3,7 @@
   "status": "FROZEN_OUTCOME_BLIND_INPUT_AUDIT",
   "decision": "CONDITIONAL",
   "audited_at_utc": "2026-08-27T12:06:00Z",
+  "amended_outcome_blind_at_utc": "2026-08-27T13:05:00Z",
   "branch": "research/wnba-r1-historical-foundation",
   "parent_contract": "research/wnba/WNBA_R1_HISTORICAL_FOUNDATION_CONTRACT.json",
   "outcomes_opened": false,
@@ -40,12 +41,18 @@
     "injury_adjustment",
     "manual_adjustment"
   ],
+  "outcome_blind_source_semantics_findings": {
+    "recent_advanced_alias": "In server/wnba-independent-routes.ts the deployed snapshot assigns recentNetRtg=netRtg, recentOffRtg=offRtg, recentDefRtg=defRtg and recentPace=pace. These four fields are therefore season-stat aliases in the current deployed source chain, not independent L10 advanced statistics.",
+    "recent_true_l10_fields": "recentPpg and recentWinPct are computed from the most recent up-to-10 finalized games in buildGameContext.",
+    "fatigue_implementation": "The deployed buildGameContext computes daysRest relative to runtime now and the latest finalized game, but isB2B from the gap between the two latest finalized games and b2bWasRoad from the second-latest finalized game. This differs from the intuitive target-vs-last-game B2B definition. Exact deployed-pipeline research replay must preserve this implementation unless a separately preregistered corrected candidate is created before outcomes.",
+    "sos_current_season_literal": "server/wnba-s6b-data-resilience.ts currently hardcodes Season=2026 in the live SOS source. Historical replay therefore requires an explicitly season-parameterized historical analogue of the same formula; this is one reason the project does not claim literal byte-for-byte historical product replay."
+  },
   "candidate_assessment": {
     "SPORTS_ONLY_V1": {
       "status": "CONDITIONAL",
       "market_input": "EXCLUDED",
       "exact_historical_replay": false,
-      "reason": "Most statistical/context features are point-in-time reconstructible, but the repository's current injury source is a current-state ESPN scrape rather than a certified timestamped 2021-2025 archive, and historical manual-adjustment logs were not found."
+      "reason": "The frozen model function and most statistical/context inputs are point-in-time reconstructible under explicitly frozen deployed-source semantics, but the current injury source is not a certified timestamped 2021-2025 archive, historical manual-adjustment logs were not found, and current-only source literals require season-correct historical analogues."
     },
     "CURRENT_65_35_V1": {
       "status": "CONTROL_ONLY_SEPARATE_MARKET_AUDIT_REQUIRED",
@@ -64,36 +71,39 @@
       "anti_leakage_rule": "Target final score and any game completed after target tip are forbidden. Prior-game results are permitted only because they were knowable before target tip."
     },
     "recent_stats": {
-      "fields": ["netRtg", "offRtg", "defRtg", "pace", "winRate", "games"],
-      "reconstruction_status": "RECONSTRUCTIBLE_CONDITIONED",
-      "provenance": ["server/wnba-independent-routes.ts", "frontend/client/src/lib/wnba-model.ts"],
-      "temporal_cutoff": "Recompute the same rolling recent window using only finalized games strictly before target tip.",
-      "missingness_policy": "Do not backfill with future games; insufficient history must use an outcome-blind preregistered rule.",
-      "anti_leakage_rule": "No target-game or future-game statistics may enter the recent block."
+      "fields": ["recentNetRtg", "recentOffRtg", "recentDefRtg", "recentPace", "recentPpg", "recentWinPct"],
+      "reconstruction_status": "RECONSTRUCTIBLE_DEPLOYED_SEMANTICS",
+      "provenance": ["server/wnba-independent-routes.ts", "frontend/client/src/pages/wnba-predictor.tsx", "frontend/client/src/lib/wnba-model.ts"],
+      "temporal_cutoff": "For SPORTS_ONLY_V1 deployed-semantics replay, recentNetRtg/recentOffRtg/recentDefRtg/recentPace must equal the same pre-tip season-to-date values supplied by /api/wnba/all; recentPpg and recentWinPct use only the latest up-to-10 finalized prior games.",
+      "missingness_policy": "Do not replace the deployed season-alias behavior with true L10 advanced ratings inside SPORTS_ONLY_V1. A corrected true-L10 candidate would require separate preregistration before outcomes. Do not backfill recentPpg/recentWinPct with future games.",
+      "anti_leakage_rule": "No target-game or future-game statistics may enter either the season aliases or the true L10 recentPpg/recentWinPct fields.",
+      "deployed_alias_fields": ["recentNetRtg", "recentOffRtg", "recentDefRtg", "recentPace"],
+      "true_l10_fields": ["recentPpg", "recentWinPct"]
     },
     "schedule_context": {
       "fields": ["gamesPlayed", "daysRest", "isB2B", "b2bWasRoad", "gamesLast7", "streak"],
-      "reconstruction_status": "RECONSTRUCTIBLE_CONDITIONED",
-      "provenance": ["server/wnba-nhl-data-routes.ts", "frontend/client/src/lib/wnba-model.ts"],
-      "temporal_cutoff": "Derive from the schedule and completed games known before target tip.",
-      "missingness_policy": "Unknown/cancelled/postponed schedule states must be explicit; no inference from later game completion order.",
-      "anti_leakage_rule": "Future schedule changes or post-tip game status cannot rewrite the pregame state."
+      "reconstruction_status": "RECONSTRUCTIBLE_DEPLOYED_SEMANTICS",
+      "provenance": ["server/wnba-independent-routes.ts", "frontend/client/src/pages/wnba-predictor.tsx", "frontend/client/src/lib/wnba-model.ts"],
+      "temporal_cutoff": "Evaluate buildGameContext as-of the target pregame cutoff using only finalized prior games. daysRest is target-as-of minus latest finalized prior-game date. isB2B preserves the deployed implementation: gap between latest and second-latest finalized prior games <=1 day. b2bWasRoad preserves the deployed implementation: second-latest finalized prior game was road. gamesLast7 uses the target as-of timestamp; streak uses the most recent prior finals.",
+      "missingness_policy": "Unknown/cancelled/postponed schedule states must be explicit; no inference from later game completion order. Do not silently replace deployed B2B semantics with an intended target-vs-last definition inside SPORTS_ONLY_V1.",
+      "anti_leakage_rule": "Future schedule changes or post-tip game status cannot rewrite the pregame state; target outcome cannot enter schedule-context construction.",
+      "known_deployed_semantics_quirk": true
     },
     "sos": {
       "fields": ["sos", "oppAvgNetRtg"],
-      "reconstruction_status": "RECONSTRUCTIBLE_CONDITIONED",
-      "provenance": ["server/wnba-s6b-routes.ts", "frontend/client/src/lib/wnba-model.ts"],
-      "temporal_cutoff": "Recompute opponent strength as of target tip, with each opponent state itself restricted to information available before target tip.",
-      "missingness_policy": "Current-season/final-season SOS is not an allowed historical substitute.",
+      "reconstruction_status": "RECONSTRUCTIBLE_CONDITIONED_SEASON_PARAMETERIZED_ANALOGUE",
+      "provenance": ["server/wnba-s6b-routes.ts", "server/wnba-s6b-data-resilience.ts", "frontend/client/src/lib/wnba-model.ts"],
+      "temporal_cutoff": "Reproduce the frozen SOS formula for the target season and as-of date: identify up to the team's 10 most recent prior opponents, obtain each opponent's season-to-date OffRtg/DefRtg and recent-10 OffRtg/DefRtg using only information available before target tip, blend opponent season 40% + recent 60% when recent exists, then average blended opponent NetRtg.",
+      "missingness_policy": "Current/final-season SOS is not an allowed historical substitute. The current live hardcoded Season=2026 literal must be replaced only by the target season in the historical source constructor; the formula itself may not change.",
       "anti_leakage_rule": "No opponent end-of-season or future performance may be projected backward into an earlier target game."
     },
     "travel": {
       "fields": ["travelMiles"],
       "reconstruction_status": "RECONSTRUCTIBLE_CONDITIONED",
       "provenance": ["frontend/client/src/lib/travel.ts", "frontend/client/src/lib/wnba-model.ts"],
-      "temporal_cutoff": "Distance is deterministic from the target fixture and preceding location known pregame.",
+      "temporal_cutoff": "Distance is deterministic from the target fixture and season-correct team/venue mapping available pregame.",
       "missingness_policy": "Team/venue coordinate mapping must be versioned by season; current expansion/venue assumptions cannot be silently applied backward.",
-      "anti_leakage_rule": "Use season-correct team identity, home venue and prior location only."
+      "anti_leakage_rule": "Use season-correct team identity and home venue only. The current model applies travelMiles only to the away side."
     },
     "injuries": {
       "fields": ["injuryAdj", "player availability/status inputs"],
@@ -130,18 +140,20 @@
     "No season-end aggregate may be used backward unless it can be reconstructed from the pre-target prefix only.",
     "Unknown historical injury state cannot be treated as healthy/zero adjustment.",
     "SPORTS_ONLY_V1 cannot consume market data.",
+    "Deployed source semantics discovered outcome-blind must not be silently corrected inside SPORTS_ONLY_V1; corrections require a separately preregistered candidate before outcomes.",
     "No coefficient, threshold, calibration, feature rule or routing change may be selected after target outcomes are opened."
   ],
   "requirements_to_upgrade_pass": [
     "Provide and freeze a complete timestamped historical WNBA injury/availability archive with coverage adequate for the intended 2021-2025 cohort, plus a deterministic pre-tip selection rule.",
     "If exact product replay is claimed, provide timestamped historical manual-adjustment/override logs or explicitly redefine the claim as a separately preregistered research candidate before outcomes are opened.",
-    "Implement season/date/as-of reconstruction for statistics, recent form, schedule context, SOS and travel and freeze its source-row digest before opening target outcomes.",
+    "Implement season/date/as-of reconstruction for statistics, deployed recent-field semantics, deployed schedule-context semantics, season-parameterized SOS analogue and travel and freeze its source-row digest before opening target outcomes.",
     "For CURRENT_65_35_V1 control, separately certify timestamped pregame market inputs."
   ],
   "allowed_next_actions": [
     "Search for or ingest a timestamped historical injury archive and audit its temporal coverage without opening target outcomes.",
-    "Build the point-in-time historical feature constructor for the reconstructible groups and freeze deterministic missingness rules.",
+    "Build the point-in-time historical feature constructor for the reconstructible groups under the frozen deployed-source semantics and freeze deterministic missingness rules.",
     "Preregister a distinct injury-neutral research candidate such as SPORTS_ONLY_NO_INJURY_V1 before any target outcomes are opened, if exact historical injury data cannot be certified.",
+    "Preregister a distinct corrected-context candidate before outcomes if true L10 advanced stats or target-vs-last B2B semantics are to be studied; do not silently substitute them into SPORTS_ONLY_V1.",
     "Use a narrower period with certified injury coverage only as secondary validation; it does not silently replace the primary 2021-2025 objective."
   ],
   "prohibited_next_actions": [
@@ -149,12 +161,14 @@
     "Set missing historical injury adjustment to zero and call it exact SPORTS_ONLY_V1 replay.",
     "Infer injuries from target-game minutes, box scores, recaps or later reports.",
     "Use current/final-season statistics or SOS as historical pregame state.",
+    "Silently replace deployed recent-advanced aliases or deployed B2B semantics with corrected definitions inside SPORTS_ONLY_V1.",
     "Tune coefficients, thresholds, calibration, candidate definition or exclusion rules after observing target outcomes."
   ],
   "closure": {
     "scientific_result": "R1A_CONDITIONAL",
     "primary_blocker": "No certified timestamped historical WNBA injury/availability archive found in the current repository/source chain for 2021-2025.",
     "secondary_exact_replay_blocker": "No timestamped historical manual-adjustment/override log was found.",
+    "source_semantics_frozen_outcome_blind": true,
     "target_outcomes_may_be_opened": false
   }
 }
