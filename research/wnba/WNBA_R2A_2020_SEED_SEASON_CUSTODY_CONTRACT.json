@@ -1,0 +1,111 @@
+{
+  "name": "WNBA_R2A_2020_SEED_SEASON_CUSTODY_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_2020_TARGET_LABEL_OPENING",
+  "date": "2026-08-27",
+  "parent": "research/wnba/WNBA_R1B3_PLATT_FEASIBILITY_CERTIFICATION.json",
+  "purpose": "Add one earlier training-only season so the already-frozen PLATT_LOGIT_1D rolling-origin protocol can evaluate five OOS target seasons 2021-2025.",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "seed_season": 2020,
+  "future_target_seasons": [2021, 2022, 2023, 2024, 2025],
+  "seed_role": "TRAINING_ONLY_NEVER_A_TARGET_FOLD",
+  "candidate_semantics": {
+    "ratings": "Exact same deterministic basic-boxscore prefix fallback used in R1A4B1/R1A4C: pace=FGA+0.44*FTA-OREB+TOV; offRtg=100*PPG/pace; defRtg=100*oppPPG/pace; netRtg=offRtg-defRtg.",
+    "prefix_boundary": "Two-phase by official date: seal every date-D target from history strictly before D; only afterward may date-D boxscore values enter history for later dates.",
+    "same_day_games_as_features": false,
+    "target_game_as_feature": false,
+    "future_game_as_feature": false,
+    "recent_rating_alias_semantics": "recentNetRtg/recentOffRtg/recentDefRtg/recentPace remain aliases of season-to-date values exactly as frozen in R1.",
+    "injury": "OMITTED_BY_PREREGISTERED_CANDIDATE; numeric 0 is feature omission, not a claim of healthy status.",
+    "manual_adjustment": "OMITTED_BY_PREREGISTERED_CANDIDATE; numeric 0 is feature omission, not historical truth.",
+    "market": "FORBIDDEN",
+    "production_model": "Call exact frozen predictWNBA(home, away) with the market argument omitted."
+  },
+  "2020_bubble_travel_rule": {
+    "known_regime": "2020 WNBA season was played at a neutral-site bubble rather than normal franchise home arenas.",
+    "frozen_replay_semantics": "USE_DEPLOYED_STATIC_FRANCHISE_COORDINATE_DISTANCE_ANYWAY",
+    "rationale": "R2A is reconstructing the exact frozen candidate signal family, not claiming physical 2020 travel. Changing travel to factual bubble-zero would create a different signal family and invalidate use of 2020 as seed for the same calibrator.",
+    "home_travel_miles": 0,
+    "away_travel_miles": "Haversine from frozen WNBA_ARENAS away-franchise coordinate to home-franchise coordinate",
+    "interpret_as_actual_2020_travel": false,
+    "missing_arena_mapping_policy": "FAIL_CLOSED; never silently substitute 0"
+  },
+  "frozen_sources": {
+    "schedule_master": {
+      "provider": "SportsDataverse",
+      "asset_id": 532156071,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb"
+    },
+    "team_box_2020": {
+      "provider": "SportsDataverse",
+      "release": "espn_wnba_team_boxscores",
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    },
+    "travel_ts": {
+      "path": "frontend/client/src/lib/travel.ts",
+      "git_blob_sha": "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b"
+    },
+    "wnba_model_ts": {
+      "path": "frontend/client/src/lib/wnba-model.ts",
+      "git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c"
+    },
+    "platt_engine": {
+      "source_pr": 671,
+      "path": "server/cross-sport-calibration.ts",
+      "git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+      "method": "PLATT_LOGIT_1D"
+    }
+  },
+  "competition_structure_gate": {
+    "expected_regular_season_games": 132,
+    "basis": "12 teams x 22 regular-season games / 2",
+    "season_type": "REGULAR_ONLY",
+    "special_event_policy": "No game outside the source's regular-season cohort may enter. If metadata exposes an unexpected special event inside the regular category, stop before target values and preregister an exclusion amendment."
+  },
+  "pregame_rowset_gate": {
+    "schedule_team_box_join_rate_min": 0.99,
+    "minimum_two_team_prefix_rows": 100,
+    "target_outcome_attached_rows": 0,
+    "market_attached_rows": 0,
+    "self_leakage": 0,
+    "same_day_leakage": 0,
+    "future_leakage": 0,
+    "duplicate_game_ids": 0,
+    "travel_ready_rate": 1.0,
+    "injury_manual_omission_rate": 1.0
+  },
+  "chronology": [
+    "1_VERIFY_2020_SOURCE_CUSTODY_AND_REGULAR_STRUCTURE_WITHOUT_TARGET_LABEL_PROJECTION",
+    "2_BUILD_AND_FREEZE_2020_PREFIX_CANDIDATE_ROWSET",
+    "3_EXECUTE_AND_FREEZE_2020_MODEL_PROBABILITY_ROWSET",
+    "4_ONLY_AFTER_PROBABILITY_DIGEST_FREEZE_OPEN_2020_LABELS_ONCE",
+    "5_BUILD_2020_2025_LABELED_SIGNAL_FAMILY",
+    "6_RUN_EXACT_FROZEN_PLATT_ROLLING_ORIGIN_WITH_TARGETS_2021_2025"
+  ],
+  "forbidden": [
+    "2020 outcome-driven source/candidate selection",
+    "2020 target label access before its probability row is frozen",
+    "coefficient retuning",
+    "feature search",
+    "threshold search",
+    "Elite subset mining",
+    "changing Platt method or optimizer after seeing five-fold results",
+    "target-season ranking/cap",
+    "market data",
+    "claiming 2020 static franchise distance was real bubble travel",
+    "automatic Global Ranker promotion"
+  ],
+  "certification_boundary": {
+    "r2a_can_authorize_label_opening": true,
+    "r2a_can_certify_cross_sport_probability": false,
+    "sport_elite_gate_passed": false,
+    "production_change_authorized": false,
+    "global_ranker_promotion_authorized": false,
+    "real_financial_exposure": 0
+  },
+  "next_if_r2a_passes": "R2B_OPEN_2020_SEED_LABELS_AND_RUN_FIVE_TARGET_FOLD_PLATT"
+}
