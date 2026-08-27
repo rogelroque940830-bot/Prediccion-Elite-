@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "courtedge-p0-step12v68-capture-window-entry-alignment.v2",
+  "stage": "P0_STEP12V68_CAPTURE_WINDOW_ENTRY_ALIGNMENT_V2",
+  "frozenAtUtc": "2026-08-26T23:59:00Z",
+  "researchOnly": true,
+  "outcomesReadForRepairDesign": false,
+  "marketPricesReadForRepairDesign": false,
+  "performanceMetricsUsedForRepairDesign": false,
+  "parentScientificContract": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+  "parentScientificContractChanged": false,
+  "parentReliabilityRepair": "research/p0-step12v68-capture-reliability-repair-v1.json",
+  "diagnosticEvidenceOnly": {
+    "run33004130197": {
+      "initialNearestPositiveLeadMinutes": 24.868452416666667,
+      "attempts": 6,
+      "pollIntervalSeconds": 45,
+      "gamesInsideStrictWindowAcrossAttempts": 0,
+      "sourceRowsAcrossAttempts": 0,
+      "outcomesRead": false,
+      "marketPricesRead": false
+    },
+    "run33018613902": {
+      "initialNearestPositiveLeadMinutes": 28.7274212,
+      "attempts": 6,
+      "pollIntervalSeconds": 45,
+      "gamesInsideStrictWindowAcrossAttempts": 0,
+      "sourceRowsAcrossAttempts": 0,
+      "outcomesRead": false,
+      "marketPricesRead": false
+    },
+    "failureMode": "The 45-minute operational preflight horizon could start the fixed six-by-45-second dense-poll sequence before the unchanged <=20-minute scientific capture window opened. The sequence could therefore exhaust all polls without making a single scientifically eligible observation."
+  },
+  "scientificBoundary": {
+    "captureEligibilityWindowMaximumMinutesBeforeScheduledStart": 20,
+    "captureMustBeStrictlyBeforeScheduledStart": true,
+    "requiresExactNineByNineCurrentLineups": true,
+    "requiresBothCurrentPregameProbablePitchers": true,
+    "wholeOfficialDatePriorStateOnly": true,
+    "sameDateOutcomesUsed": false,
+    "outcomesOrMarketPricesInPregameLedgerAllowed": false,
+    "candidateModelChanged": false,
+    "candidateFeaturesChanged": false,
+    "candidateCoefficientsChanged": false,
+    "candidateCalibrationChanged": false,
+    "controlModelChanged": false,
+    "firstCanonicalGameCaptureImmutable": true
+  },
+  "operationalAmendment": {
+    "cronCadenceMinutes": 5,
+    "preflightUpcomingGameHorizonMinutes": 45,
+    "pollAttemptsPerRun": 6,
+    "pollIntervalSeconds": 45,
+    "windowEntryGuardSeconds": 15,
+    "alignFirstDensePollJustInsideStrictWindow": true,
+    "maximumPlannedWindowEntryWaitSecondsAtFortyFiveMinuteHorizon": 1515,
+    "workflowTimeoutMinutes": 40,
+    "firstReadySnapshotPerGameWinsWithinRun": true,
+    "existingCanonicalSnapshotAlwaysWinsAcrossRuns": true,
+    "reason": "Preserve the original observation cadence and immutable custody rules, but do not spend the dense-poll budget before the already-frozen scientific eligibility window exists."
+  },
+  "forbidden": [
+    "OUTCOME_PEEKING",
+    "MARKET_PRICE_PEEKING",
+    "MODEL_REFIT",
+    "RECALIBRATION",
+    "FEATURE_CHANGE",
+    "THRESHOLD_CHANGE",
+    "CAPTURE_WINDOW_WIDENING",
+    "POST_HOC_GAME_INCLUSION",
+    "HISTORICAL_BACKFILL"
+  ],
+  "successCriterion": "A future live run must show a game inside the unchanged <=20-minute window and, when exact 9x9 lineups plus both probable pitchers are present, EXACT_READY -> sourceRows > 0 -> immutable canonical capture."
+}
