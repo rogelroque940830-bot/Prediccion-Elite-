@@ -1,0 +1,64 @@
+{
+  "picks": [
+    {
+      "id": "valid-f5-ml",
+      "gameDate": "2026-07-31",
+      "awayTeam": "Pittsburgh Pirates",
+      "homeTeam": "Cincinnati Reds",
+      "marketType": "F5_ML",
+      "selection": "Pittsburgh Pirates",
+      "line": null,
+      "oddsAmerican": -145,
+      "book": "fanduel, betmgm, draftkings",
+      "capturedAt": "2026-07-31T21:14:30.879Z",
+      "modelProbabilityPct": 65.7,
+      "marketImpliedProbabilityPct": 59.18,
+      "edgePp": 6.52
+    },
+    {
+      "id": "baltimore-edge-outlier",
+      "gameDate": "2026-07-31",
+      "awayTeam": "Philadelphia Phillies",
+      "homeTeam": "Baltimore Orioles",
+      "marketType": "F5_ML",
+      "selection": "Baltimore Orioles",
+      "line": null,
+      "oddsAmerican": -120,
+      "book": "fanduel, draftkings, betmgm",
+      "capturedAt": "2026-07-31T21:21:15.529Z",
+      "modelProbabilityPct": 77.4,
+      "marketImpliedProbabilityPct": 54.55,
+      "edgePp": 22.85
+    },
+    {
+      "id": "rangers-edge-outlier",
+      "gameDate": "2026-07-31",
+      "awayTeam": "Texas Rangers",
+      "homeTeam": "Houston Astros",
+      "marketType": "F5_TOTAL",
+      "selection": "OVER 4",
+      "line": 4,
+      "oddsAmerican": -126,
+      "book": "fanduel, betmgm, draftkings",
+      "capturedAt": "2026-07-31T21:17:19.896Z",
+      "modelProbabilityPct": 78.5,
+      "marketImpliedProbabilityPct": 55.75,
+      "edgePp": 22.75
+    },
+    {
+      "id": "royals-invalid-odds",
+      "gameDate": "2026-07-31",
+      "awayTeam": "Kansas City Royals",
+      "homeTeam": "Colorado Rockies",
+      "marketType": "F5_TOTAL",
+      "selection": "UNDER 6",
+      "line": 6,
+      "oddsAmerican": -4,
+      "book": "fanduel, betmgm, draftkings",
+      "capturedAt": "2026-07-31T21:15:07.852Z",
+      "modelProbabilityPct": 61.1,
+      "marketImpliedProbabilityPct": 3.85,
+      "edgePp": 57.25
+    }
+  ]
+}
