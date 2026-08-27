@@ -1,0 +1,31 @@
+{
+  "name": "WNBA_R1A7_CLOSURE_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "workflow_run_id": 33089946876,
+  "artifact_id": 9653895921,
+  "artifact_digest": "sha256:a94b240a605794b3247aa3dfa5f1b23e8947d44ec7f3f746677bf8660745131d",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "candidate_input_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+  "model_git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+  "probability_rowset_sha256": "6621ad59210bdcac959b21168813f597a3c4914706eac3f2dde1fb13b56d5960",
+  "probability_rows": 1143,
+  "rows_by_season": {
+    "2021": 186,
+    "2022": 210,
+    "2023": 234,
+    "2024": 234,
+    "2025": 279
+  },
+  "outcomes_opened_during_r1a7": false,
+  "market_data_consumed": false,
+  "duplicate_game_ids": 0,
+  "special_event_rows": 0,
+  "decision": "R1A_CLOSED_AND_R1B_OUTCOME_OPENING_AUTHORIZED",
+  "exact_production_sports_only_v1_status": "BLOCKED_BY_UNCERTIFIED_2021_2025_INJURY_AND_MANUAL_STATE",
+  "global_ranker_promotion_authorized": false,
+  "production_change_authorized": false,
+  "next_gate": "R1B1_OPEN_FROZEN_LABEL_ASSET_AND_EXACT_GAME_ID_LINKAGE"
+}
