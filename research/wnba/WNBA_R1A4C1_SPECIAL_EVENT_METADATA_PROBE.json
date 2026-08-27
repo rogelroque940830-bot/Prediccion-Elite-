@@ -1,0 +1,20 @@
+{
+  "name": "WNBA_R1A4C1_SPECIAL_EVENT_METADATA_PROBE_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_SOURCE_CLASSIFICATION_PROBE",
+  "preregistered_date": "2026-08-27",
+  "trigger": "R1A.4C first run found exactly two season_type=2 games above expected WNBA regular-season schedule volume in every 2021-2025 season.",
+  "purpose": "Determine whether non-regular special events are encoded inside ESPN season_type=2 using only schedule metadata and without reading scores/winners/linescores.",
+  "source": "Pinned SportsDataverse schedule asset from R1A.4",
+  "seasons": [2021, 2022, 2023, 2024, 2025],
+  "allowed_value_columns": [
+    "game_id", "season", "season_type", "game_date_time", "game_date",
+    "home_id", "away_id", "home_display_name", "away_display_name",
+    "home_is_active", "away_is_active", "neutral_site", "notes_type", "notes_headline"
+  ],
+  "forbidden_value_columns": [
+    "home_score", "away_score", "home_winner", "away_winner", "home_linescores", "away_linescores"
+  ],
+  "probe_output_rule": "Emit only season_type=2 rows where notes_headline is non-empty OR either team is marked inactive; no outcome values may be loaded.",
+  "production_mutation": false,
+  "r1b_outcomes_remain_closed": true
+}
