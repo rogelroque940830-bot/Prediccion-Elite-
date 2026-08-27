@@ -13,6 +13,7 @@ SOURCE_SCHEMA = "courtedge-p0-step12v68-prospective-source-input.v1"
 SUPERVISOR_SCHEMA = "courtedge-p0-step12v68-capture-supervisor.v1"
 REQUEST_TIMEOUT = 20
 MAX_HTTP_ATTEMPTS = 3
+WINDOW_ENTRY_GUARD_SECONDS = 15
 
 
 def load(path):
@@ -93,6 +94,19 @@ def preflight(target_date, now, horizon_minutes):
         "nearCaptureWindow": bool(upcoming),
         "preflightError": None,
     }
+
+
+def planned_window_entry_wait_seconds(pre, max_lead_minutes):
+    """Wait only to align observation with the unchanged <=20 minute scientific window."""
+    if not pre.get("nearCaptureWindow"):
+        return 0.0
+    try:
+        nearest = float(pre.get("nearestPositiveLeadMinutes"))
+    except (TypeError, ValueError):
+        return 0.0
+    if not (nearest > max_lead_minutes):
+        return 0.0
+    return max(0.0, (nearest - float(max_lead_minutes)) * 60.0 + WINDOW_ENTRY_GUARD_SECONDS)
 
 
 def lineup_count(feed, side):
@@ -264,6 +278,15 @@ def main():
             pre["preflightError"] = f"{type(exc).__name__}:{exc}"
             pre["nearCaptureWindow"] = True
 
+    planned_wait_seconds = planned_window_entry_wait_seconds(pre, args.max_lead_minutes)
+    applied_wait_seconds = 0.0
+    if pre["nearCaptureWindow"] and planned_wait_seconds > 0 and not args.no_sleep:
+        # Preflight is intentionally wider than the scientific capture window. Do not spend the
+        # fixed six dense polls before the <=20m window opens; align the first source observation
+        # just inside that unchanged window instead. This reads only the schedule and no outcomes.
+        time.sleep(planned_wait_seconds)
+        applied_wait_seconds = planned_wait_seconds
+
     rows_by_game = {}
     attempts = []
     successful_source_attempts = 0
@@ -309,6 +332,14 @@ def main():
 
     ended = dt.datetime.now(dt.timezone.utc)
     rows = sorted(rows_by_game.values(), key=lambda r: (str(r.get("officialDate", "")), int(r.get("gamePk", 0))))
+    window_entry_alignment = {
+        "guardSeconds": WINDOW_ENTRY_GUARD_SECONDS,
+        "plannedWaitSeconds": planned_wait_seconds,
+        "appliedWaitSeconds": applied_wait_seconds,
+        "initialNearestPositiveLeadMinutes": pre.get("nearestPositiveLeadMinutes"),
+        "captureWindowMaximumMinutesBeforeScheduledStart": args.max_lead_minutes,
+        "scientificWindowChanged": False,
+    }
     combined = {
         "schemaVersion": SOURCE_SCHEMA,
         "targetOfficialDate": args.target_date,
@@ -321,6 +352,7 @@ def main():
             "attemptsCompleted": len(attempts),
             "successfulSourceAttempts": successful_source_attempts,
             "preflight": pre,
+            "windowEntryAlignment": window_entry_alignment,
         },
         "policy": {
             "containsOutcomes": False,
@@ -341,6 +373,7 @@ def main():
         "attemptsConfigured": args.attempts,
         "intervalSeconds": args.interval_seconds,
         "preflight": pre,
+        "windowEntryAlignment": window_entry_alignment,
         "attempts": attempts,
         "successfulSourceAttempts": successful_source_attempts,
         "firstSeenCanonicalCandidates": len(rows),
@@ -353,6 +386,7 @@ def main():
     print(json.dumps({
         "targetOfficialDate": args.target_date,
         "nearCaptureWindow": pre["nearCaptureWindow"],
+        "windowEntryWaitAppliedSeconds": applied_wait_seconds,
         "attemptsCompleted": len(attempts),
         "successfulSourceAttempts": successful_source_attempts,
         "firstSeenCanonicalCandidates": len(rows),
