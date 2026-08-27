@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "courtedge-mlb-nrfi-yrfi-half-inning-hazard-result-summary.v2",
+  "classification": "NRFI_YRFI_HALF_INNING_HAZARD_RETROSPECTIVE_ROBUSTNESS_CANDIDATE_ONLY",
+  "sourceWorkflow": {
+    "runId": 32144338154,
+    "jobId": 95734325693,
+    "conclusion": "success",
+    "artifactId": 9327193308,
+    "artifactName": "mlb-nrfi-yrfi-half-inning-hazard-v1",
+    "artifactDigest": "sha256:1666de992bc25b4e88491b14003be32a358f66e5fe79aff2294939a2f5916a0a"
+  },
+  "validationGatePassed": true,
+  "sample": {
+    "trainingGames2022": 2398,
+    "trainingHalfInningRows2022": 4796,
+    "validationGames2023": 2399,
+    "validationHalfInningRows2023": 4798,
+    "evaluationGames": 6608,
+    "evaluationHalfInningRows": 13216,
+    "featureCount": 12,
+    "firstInningLabelMismatchTotal": 0
+  },
+  "validation2023": {
+    "halfInning": {
+      "logLossImprovement": 0.005460376422089963,
+      "brierImprovement": 0.0023191003823345435,
+      "rocAuc": 0.5654532434393216
+    },
+    "gameLevel": {
+      "logLossImprovement": 0.002211627659729154,
+      "brierImprovement": 0.001111920807084693,
+      "rocAuc": 0.539179872115652
+    },
+    "allSixFrozenChecksPassed": true
+  },
+  "retrospectiveCombined2024_2026Ytd": {
+    "halfInning": {
+      "logLossImprovement": 0.0009045422679481163,
+      "brierImprovement": 0.00038844557270589775,
+      "rocAuc": 0.5398377845490774
+    },
+    "gameLevel": {
+      "logLossImprovement": -0.0016646196125307267,
+      "brierImprovement": -0.000811076028252089,
+      "rocAuc": 0.5143203051694816
+    }
+  },
+  "topHalfBrierImprovement": {
+    "2024": 0.0010673009169497871,
+    "2025": 0.0003886959546160196,
+    "2026_YTD": 0.0014328617764211848
+  },
+  "bottomHalfBrierImprovement": {
+    "2024": -0.0011496127553370927,
+    "2025": -0.0006658300530380801,
+    "2026_YTD": 0.0002081696445913328
+  },
+  "frontiers": {
+    "Q80": {
+      "candidates": 58,
+      "hitRate": 0.5172413793103449,
+      "wilson95Lower": 0.3916226178340948,
+      "meanPredictedProbability": 0.636575439052605,
+      "calibrationGap": 0.11933405974226019,
+      "rescuedParentNoPlayDates": 25,
+      "combinedOpportunityCoveragePct": 44.554455445544555
+    },
+    "Q85": {
+      "candidates": 49,
+      "hitRate": 0.46938775510204084,
+      "wilson95Lower": 0.3370350369317515,
+      "meanPredictedProbability": 0.6387843908768287,
+      "calibrationGap": 0.16939663577478786,
+      "rescuedParentNoPlayDates": 20,
+      "combinedOpportunityCoveragePct": 43.56435643564357
+    },
+    "Q90": {
+      "candidates": 39,
+      "hitRate": 0.48717948717948717,
+      "wilson95Lower": 0.33865175329862,
+      "meanPredictedProbability": 0.6420599341635166,
+      "calibrationGap": 0.15488044698402942,
+      "rescuedParentNoPlayDates": 13,
+      "combinedOpportunityCoveragePct": 42.17821782178218
+    },
+    "Q95": {
+      "candidates": 22,
+      "hitRate": 0.5,
+      "wilson95Lower": 0.3072210627372502,
+      "meanPredictedProbability": 0.6455129191954068,
+      "calibrationGap": 0.14551291919540676,
+      "rescuedParentNoPlayDates": 4,
+      "combinedOpportunityCoveragePct": 40.396039603960396
+    }
+  },
+  "decision": {
+    "validationDecision": "PASSED_ALL_FROZEN_2023_HALF_AND_GAME_LEVEL_GATES",
+    "retrospectiveRobustnessDecision": "FAILED_FOR_ELITE_PROMOTION",
+    "nrfiYrfiCoverageContributionToEliteRouter": 0,
+    "nrfiYrfiProductionPromotionAllowed": false,
+    "postHocTopOnlyPromotionAllowed": false,
+    "nextResearchMustFreezeAsymmetricArchitectureBeforeScoring": true,
+    "reason": "Combined 2024-2026 game-level Brier and log-loss improvements were negative, while Q80-Q95 candidate hit rates remained near chance with material overconfidence."
+  },
+  "scientificBoundary": {
+    "retrospective2024To2026IsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "forcedDailyPlayAllowed": false
+  }
+}
