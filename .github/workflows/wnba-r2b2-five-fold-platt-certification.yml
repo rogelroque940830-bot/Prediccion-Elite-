@@ -1,0 +1,160 @@
+name: WNBA R2B2 Five-Fold Platt Certification
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R2B_FIVE_FOLD_PLATT_CERTIFICATION_CONTRACT.json'
+      - 'research/wnba/WNBA_R2B2_FIVE_FOLD_EXECUTION_FREEZE.json'
+      - 'scripts/wnba-r2b2-five-fold-platt-certification.mjs'
+      - '.github/workflows/wnba-r2b2-five-fold-platt-certification.yml'
+      - 'research/wnba/WNBA_R2B2_EXECUTION_MARKER.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  five-fold-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout frozen WNBA research branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install historical dependency
+        run: python -m pip install --quiet pyarrow
+
+      - name: Reproduce frozen R2A1 2020 candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r2a-2020-seed-candidate.py
+          test "$(sha256sum wnba-r2a-2020-seed-candidate-rowset.jsonl | cut -d' ' -f1)" = "8e037e9a688e62952f5c323ac6d48dbe3f437c8c28d6658f8c5147e4572da863"
+
+      - name: Verify frozen production import graph custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object frontend/client/src/lib/wnba-model.ts)" = "095527160535655d28e989c0cfe9638fc6681b4c"
+          test "$(git hash-object frontend/client/src/lib/wnba-shadow-emission.ts)" = "7dde8303ac0bac50ea0ed60cd5d7f78b091a5131"
+          test "$(git hash-object frontend/client/src/lib/queryClient.ts)" = "3f4176d17e660103db9784885400eadc54dd549c"
+          test "$(git hash-object frontend/package-lock.json)" = "f104d741b427df2a7cd73ccc3bbe66207b8cbb15"
+
+      - name: Install lockfile-frozen frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts
+
+      - name: Compile frozen production WNBA source once
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontend/node_modules/.bin/esbuild frontend/client/src/lib/wnba-model.ts \
+            --bundle --platform=node --format=esm --target=node22 \
+            --outfile=/tmp/wnba-r2b2-model.mjs \
+            '--define:import.meta.env.VITE_API_BASE_URL=""' \
+            --define:import.meta.env.DEV=false
+
+      - name: Reproduce frozen R2A2 2020 probability rowset
+        env:
+          WNBA_MODEL_MODULE: /tmp/wnba-r2b2-model.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wnba-r2a2-2020-model-replay.mjs
+          test "$(sha256sum wnba-r2a2-2020-probability-rowset.jsonl | cut -d' ' -f1)" = "5cba8333071a4fde151ccf972712d0e67172c07cfaf7548217df13e675a5517d"
+
+      - name: Reproduce exact R2B1 labeled 2020 training seed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r2b1-2020-label-linkage.py
+          test "$(sha256sum wnba-r2b1-2020-labeled-seed.jsonl | cut -d' ' -f1)" = "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2"
+
+      - name: Reproduce frozen 2021-2025 candidate input
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r1a5-neutral-availability-candidate.py
+
+      - name: Reproduce frozen 2021-2025 probability rowset
+        env:
+          WNBA_MODEL_MODULE: /tmp/wnba-r2b2-model.mjs
+          WNBA_MODEL_EXECUTION: ESBUILD_LOCKFILE_COMPILED_FROZEN_PRODUCTION_SOURCE_NODE22
+        run: node scripts/wnba-r1a6-direct-model-replay.mjs
+
+      - name: Reproduce frozen 2021-2025 labels and scored rowset
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r1b1-label-linkage.py
+          test "$(sha256sum wnba-r1b1-labeled-rowset.jsonl | cut -d' ' -f1)" = "4b4dc3086d9f6a322f01089a7bd828d6cc4095ff793d343e0c25eb1b147dbe4a"
+          python scripts/wnba-r1b2-metrics.py
+          test "$(sha256sum wnba-r1b2-scored-rowset.jsonl | cut -d' ' -f1)" = "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319"
+
+      - name: Fetch and verify exact frozen Platt engine from PR 671
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/feat/cross-sport-calibration-v1/server/cross-sport-calibration.ts \
+            -o /tmp/cross-sport-calibration.ts
+          actual=$(git hash-object /tmp/cross-sport-calibration.ts)
+          echo "platt_engine_git_blob=$actual"
+          test "$actual" = "9099ed5182d64b6e20768b6d305e7867ed2b69ce"
+
+      - name: Compile exact frozen Platt engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontend/node_modules/.bin/esbuild /tmp/cross-sport-calibration.ts \
+            --bundle --platform=node --format=esm --target=node22 \
+            --outfile=/tmp/cross-sport-calibration.mjs
+
+      - name: Execute preregistered five-fold Platt certification
+        env:
+          WNBA_PLATT_ENGINE_MODULE: /tmp/cross-sport-calibration.mjs
+        run: node scripts/wnba-r2b2-five-fold-platt-certification.mjs
+
+      - name: Assert frozen R2B2 scientific boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.inputCustody.seed2020.match == true and .inputCustody.target2021To2025.match == true' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.targetFolds == [2021,2022,2023,2024,2025] and .targetFoldCount == 5 and .fiveTargetSeasonRequirementMet == true' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.engine.exactWalkForwardFunctionParityAllFolds == true and .exactFiveFoldGatePass == true and .rowCustodyGatePass == true' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.pooledOos2021To2025.observations == 1143 and .calibratedOosRowset.rows == 1143' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.chronology.2020UsedAsTargetFold == false and .chronology.targetSeasonsUsedToTrainTheirOwnCalibrator == false and .chronology.targetSeasonOutcomesUsedToSetOwnClimatologyBaseline == false' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.rowsDroppedAfterOutcomes == 0 and .coefficientRetunePerformed == false and .featureSearchPerformed == false and .thresholdSearchPerformed == false and .candidateSwitchPerformed == false' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.plattMethodChanged == false and .optimizerChanged == false and .gateWeakeningPerformed == false and .targetSeasonRankingOrCapUsed == false and .marketDataConsumed == false and .historicalHitRateUsedAsGameProbability == false' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+          jq -e '.sportEliteGatePassed == false and .globalRankerPromotionAuthorized == false and .productionChangeAuthorized == false and .automaticBettingAuthorized == false and .realFinancialExposure == 0' wnba-r2b2-five-fold-platt-certification-evidence.json >/dev/null
+
+      - name: Upload decisive R2B2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r2b2-five-fold-platt-certification-${{ github.run_id }}
+          path: |
+            wnba-r2b2-five-fold-platt-certification-evidence.json
+            wnba-r2b2-five-fold-platt-oos-rowset.jsonl
+            wnba-r2b1-2020-label-linkage-evidence.json
+            wnba-r2b1-2020-labeled-seed.jsonl
+            wnba-r1b2-metrics-evidence.json
+            wnba-r1b2-scored-rowset.jsonl
+          if-no-files-found: warn
+          retention-days: 90
