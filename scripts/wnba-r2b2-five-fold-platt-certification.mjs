@@ -42,7 +42,7 @@ const seedSha=sha256(seedBytes),targetSha=sha256(targetBytes);
 const seedRows=seedBytes.toString('utf8').split(/\r?\n/).filter(Boolean).map(JSON.parse);
 const targetRows=targetBytes.toString('utf8').split(/\r?\n/).filter(Boolean).map(JSON.parse);
 
-if(seedSha!==freeze.r2b1_seed_label_custody.sha256||seedRows.length!==freeze.r2b1_seed_label_custody.rows) throw new Error(`R2B2 seed custody mismatch sha=${seedSha} rows=${seedRows.length}`);
+if(seedSha!==freeze.r2b1_seed_label_custody.sha256||seedRows.length!==freeze.r2b1_seed_label_custody.rows||seedBytes.length!==freeze.r2b1_seed_label_custody.bytes) throw new Error(`R2B2 seed custody mismatch sha=${seedSha} rows=${seedRows.length} bytes=${seedBytes.length}`);
 if(targetSha!==science.frozen_target_signal.scored_rowset_sha256||targetRows.length!==science.frozen_target_signal.rows) throw new Error(`R2B2 target custody mismatch sha=${targetSha} rows=${targetRows.length}`);
 if(!fs.existsSync(ENGINE)) throw new Error('R2B2 Platt engine module missing');
 const mod=await import(pathToFileURL(ENGINE).href);
@@ -140,7 +140,7 @@ const gates={
 };
 const fiveProbabilityGatesPass=Object.values(gates).every(g=>g.pass===true);
 const exactFiveFoldGate=targetFoldsExact&&actualTargets.length===Number(science.target_fold_count_required)&&engineParity;
-const rowCustodyGate=targetRowCount===Number(science.target_rows_required)&&seedRows.length===126&&targetRows.length===1143&&duplicateGameIds===0;
+const rowCustodyGate=targetRowCount===Number(science.target_rows_required)&&seedRows.length===freeze.r2b1_seed_label_custody.rows&&seedBytes.length===freeze.r2b1_seed_label_custody.bytes&&targetRows.length===science.frozen_target_signal.rows&&duplicateGameIds===0;
 const researchQualified=fiveProbabilityGatesPass&&exactFiveFoldGate&&rowCustodyGate;
 const outBytes=Buffer.from(oos.map(stable).join('\n')+'\n','utf8');
 fs.writeFileSync(OUT,outBytes);
@@ -148,14 +148,14 @@ const decision=researchQualified?science.decision.if_all_five_gates_pass_and_fiv
 const evidence={
   name:'WNBA_R2B2_FIVE_FOLD_PLATT_CERTIFICATION_EVIDENCE_V1',decision,candidate:science.candidate,calibrationCandidate:science.calibration_candidate,
   scientificContract:{path:SCIENCE,gitBlobSha:freeze.scientific_contract_git_blob_sha,status:science.status},
-  inputCustody:{seed2020:{rows:seedRows.length,sha256:seedSha,expectedSha256:freeze.r2b1_seed_label_custody.sha256,match:seedSha===freeze.r2b1_seed_label_custody.sha256,role:'TRAINING_ONLY_NEVER_TARGET_FOLD'},target2021To2025:{rows:targetRows.length,sha256:targetSha,expectedSha256:science.frozen_target_signal.scored_rowset_sha256,match:targetSha===science.frozen_target_signal.scored_rowset_sha256},duplicateGameIds},
+  inputCustody:{seed2020:{rows:seedRows.length,bytes:seedBytes.length,expectedBytes:freeze.r2b1_seed_label_custody.bytes,sha256:seedSha,expectedSha256:freeze.r2b1_seed_label_custody.sha256,match:seedSha===freeze.r2b1_seed_label_custody.sha256&&seedBytes.length===freeze.r2b1_seed_label_custody.bytes,role:'TRAINING_ONLY_NEVER_TARGET_FOLD'},target2021To2025:{rows:targetRows.length,sha256:targetSha,expectedSha256:science.frozen_target_signal.scored_rowset_sha256,match:targetSha===science.frozen_target_signal.scored_rowset_sha256},duplicateGameIds},
   engine:{sourcePullRequest:science.calibration_engine.source_pull_request,gitBlobSha:science.calibration_engine.git_blob_sha,method:science.calibration_engine.method,split:science.calibration_engine.split,exactWalkForwardFunctionParityAllFolds:engineParity},
   targetFolds:actualTargets,targetFoldCount:actualTargets.length,targetFoldCountRequired:science.target_fold_count_required,fiveTargetSeasonRequirementMet:actualTargets.length===science.target_fold_count_required,
   folds:foldEvidence,
   pooledOos2021To2025:{observations:targetRowCount,selectedSideAccuracy:meanBinary(pooledYs),raw:pooledRaw,calibrated:pooledCal,walkForwardClimatology:pooledBaseline,calibratedCalibrationInTheLargeAbsZ:pooledZ,calibratedMeanPredictedMinusObserved:pooledBias},
   frozenGates:gates,allFiveProbabilityGatesPass:fiveProbabilityGatesPass,exactFiveFoldGatePass:exactFiveFoldGate,rowCustodyGatePass:rowCustodyGate,researchProbabilityFoundationQualified:researchQualified,
   calibratedOosRowset:{rows:oos.length,bytes:outBytes.length,sha256:sha256(outBytes)},
-  chronology:{scientificThresholdsFrozenBefore2020OutcomeOpening:true,r2b1SeedLabelShaFrozenBeforeR2B2:true,2020UsedAsTargetFold:false,targetSeasonsUsedToTrainTheirOwnCalibrator:false,targetSeasonOutcomesUsedToSetOwnClimatologyBaseline:false},
+  chronology:{scientificThresholdsFrozenBefore2020OutcomeOpening:true,r2b1SeedLabelShaFrozenBeforeR2B2:true,seed2020UsedAsTargetFold:false,targetSeasonsUsedToTrainTheirOwnCalibrator:false,targetSeasonOutcomesUsedToSetOwnClimatologyBaseline:false},
   rowsDroppedAfterOutcomes:0,coefficientRetunePerformed:false,featureSearchPerformed:false,thresholdSearchPerformed:false,candidateSwitchPerformed:false,plattMethodChanged:false,optimizerChanged:false,gateWeakeningPerformed:false,targetSeasonRankingOrCapUsed:false,marketDataConsumed:false,historicalHitRateUsedAsGameProbability:false,
   sportEliteGatePassed:false,exactProductionSportsOnlyV1Rehabilitated:false,globalRankerPromotionAuthorized:false,productionChangeAuthorized:false,automaticBettingAuthorized:false,realFinancialExposure:0,
   nextGate:researchQualified?'R2C_FREEZE_CALIBRATED_WNBA_PROBABILITY_FOUNDATION_THEN_SEPARATE_SPORT_ELITE_SELECTION_POLICY_RESEARCH':'STOP_CALIBRATION_PATH_NO_POST_RESULT_RETUNE',
