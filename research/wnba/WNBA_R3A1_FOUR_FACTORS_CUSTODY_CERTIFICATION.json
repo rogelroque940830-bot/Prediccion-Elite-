@@ -1,0 +1,94 @@
+{
+  "name": "WNBA_R3A1_FOUR_FACTORS_CUSTODY_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "decision": "EXACT_COMPONENTS_AVAILABLE_FOR_STRICT_PREFIX_RECONSTRUCTION",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "preregistered_parent": {
+    "path": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+    "commit_sha": "e466abee37c386aee965264e7687224fa4f7602b",
+    "status": "PREREGISTERED_BEFORE_R3_FEATURE_COMBINATION_TESTING"
+  },
+  "execution": {
+    "workflow": "WNBA R3A1 Four Factors Custody",
+    "run_id": 33142843007,
+    "job_id": 98757285315,
+    "head_sha": "b066d99c55b2e6848c086fd8ff4537bbf22e95c6",
+    "conclusion": "success",
+    "artifact_id": 9674601684,
+    "artifact_name": "wnba-r3a1-four-factors-custody-33142843007",
+    "artifact_digest": "sha256:b768af52c45d32a01de44b6d0a74ba9f8bf4c18a6f6a0aa306206be31c3c04de",
+    "artifact_digest_independently_matched": true,
+    "evidence_file": "wnba-r3a1-four-factors-custody-evidence.json",
+    "evidence_version": "WNBA_R3A1_FOUR_FACTORS_CUSTODY_EVIDENCE_V1"
+  },
+  "historical_scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "regular_season_games": 1174,
+    "side_rows": 2348,
+    "season_game_counts": {
+      "2021": 192,
+      "2022": 216,
+      "2023": 240,
+      "2024": 240,
+      "2025": 286
+    },
+    "known_special_events_excluded": true,
+    "two_sided_pair_integrity_failures": 0,
+    "asset_custody_all_verified": true,
+    "required_schema_complete_all_seasons": true
+  },
+  "frozen_formula_semantics": {
+    "efg_pct": "(FGM + 0.5 * 3PM) / FGA",
+    "tov_pct": "TOV / (FGA + 0.44 * FTA + TOV)",
+    "orb_pct": "OREB / (OREB + opponent_DREB)",
+    "ftr": "FTA / FGA",
+    "three_point_attempt_rate": "3PA / FGA"
+  },
+  "component_coverage": {
+    "efg_pct": {
+      "valid_side_rows": 2348,
+      "invalid_or_zero_denominator_rows": 0,
+      "status": "EXACT_COMPONENT_COVERAGE"
+    },
+    "tov_pct": {
+      "valid_side_rows": 2348,
+      "invalid_or_zero_denominator_rows": 0,
+      "status": "EXACT_COMPONENT_COVERAGE"
+    },
+    "orb_pct": {
+      "valid_side_rows": 2348,
+      "invalid_or_zero_denominator_rows": 0,
+      "status": "EXACT_COMPONENT_COVERAGE"
+    },
+    "ftr": {
+      "valid_side_rows": 2348,
+      "invalid_or_zero_denominator_rows": 0,
+      "status": "EXACT_COMPONENT_COVERAGE"
+    },
+    "three_point_attempt_rate": {
+      "valid_side_rows": 2348,
+      "invalid_or_zero_denominator_rows": 0,
+      "status": "EXACT_COMPONENT_COVERAGE"
+    }
+  },
+  "scientific_boundaries": {
+    "elite_model_scored": false,
+    "hit_rate_tested": false,
+    "market_data_consumed": false,
+    "winner_or_score_values_projected": false,
+    "same_game_values_used_for_prediction": false,
+    "component_values_role": "SOURCE_COVERAGE_AUDIT_ONLY",
+    "prefix_timing_certified_by_r3a1": false,
+    "full_defensive_shot_profile_certified_by_r3a1": false,
+    "availability_star_power_historical_certified": false,
+    "production_mutation": false,
+    "cross_sport_promotion_authorized": false
+  },
+  "scientific_interpretation": {
+    "four_factors": "The frozen SportsDataverse team-box assets contain all exact completed-game components needed to compute eFG%, TOV%, ORB% and FTr for every audited regular-season side. Therefore no statistical approximation is required for these component formulas.",
+    "shot_profile": "3PAr, eFG% and FTr have exact historical completed-game components. Rich defensive shot-profile or opponent-style interactions require separate prefix/matchup construction and are not certified here.",
+    "anti_leakage": "R3A1 proves source reconstructibility only. No target-game factor may enter a pregame feature. R3A2 must independently prove that each target row uses only finalized games from official dates strictly earlier than the target date."
+  },
+  "next_gate": "R3A2_STRICT_PRIOR_DATE_PREFIX_FEATURE_CONSTRUCTOR"
+}
