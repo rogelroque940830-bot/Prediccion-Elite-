@@ -1,0 +1,47 @@
+name: WNBA R3B0 Per-Season Schedule Resolution V3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V3.json"
+      - "scripts/wnba-r3b0-per-season-schedule-resolution.py"
+      - ".github/workflows/wnba-r3b0-per-season-schedule-resolution.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen branch state
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install audit dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+
+      - name: Run R3B0 V3 per-season schedule resolution
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3b0-per-season-schedule-resolution.py
+
+      - name: Upload R3B0 V3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3b0-v3-per-season-schedule-${{ github.run_id }}
+          path: wnba-r3b0-v3-per-season-schedule-evidence.json
+          if-no-files-found: error
+          retention-days: 30
