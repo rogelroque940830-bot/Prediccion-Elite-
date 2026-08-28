@@ -1,0 +1,125 @@
+{
+  "name": "WNBA_R3A4_FIRST_OOS_FOUR_FACTORS_ABLATION_RESULT_V1",
+  "date": "2026-08-28",
+  "status": "FROZEN_RESULT_NO_POST_RESULT_RETUNE",
+  "decision": "FOUR_FACTORS_NOT_ADMITTED_BY_FROZEN_R3A4_ABLATION",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "scientific_contract": {
+    "path": "research/wnba/WNBA_R3A4_FIRST_OOS_FAMILY_ABLATION_CONTRACT.json",
+    "commit_sha": "f0574fb6e8a6f709ded68be3176daab106619a9d",
+    "status": "PREREGISTERED_BEFORE_R3A4_METRIC_COMPUTATION"
+  },
+  "operational_chronology": {
+    "attempt_1": {
+      "run_id": 33144032847,
+      "job_id": 98761042332,
+      "head_sha": "c377d15cb3435be5ee3fa886943bf43c3cf200e6",
+      "conclusion": "FAIL_TRANSPORT_ONLY_BEFORE_ANY_METRIC_COMPUTATION",
+      "reason": "urllib followed the GitHub artifact redirect while forwarding authentication to the signed storage host, which returned HTTP 401.",
+      "scientific_contract_changed": false,
+      "metrics_computed": false
+    },
+    "transport_repair": {
+      "runner_commit_sha": "5453af38e965306aff3638b95c0c39023c853d6c",
+      "workflow_commit_sha": "97c3125605111718f49ba0f930ada4a92d9be8d3",
+      "change_scope": "Manual signed-redirect transport that sends GitHub authorization only to api.github.com and not to the signed storage host; statistical engine unchanged."
+    },
+    "final_run": {
+      "run_id": 33144105505,
+      "job_id": 98761261668,
+      "head_sha": "97c3125605111718f49ba0f930ada4a92d9be8d3",
+      "conclusion": "SUCCESS_OPERATIONALLY_SCIENTIFIC_FAIL",
+      "artifact_id": 9675085298,
+      "artifact_name": "wnba-r3a4-first-oos-four-factors-ablation-33144105505",
+      "artifact_zip_sha256": "de605f0339f432944261bf57e424abdea9496ab098f06babff79190c6b8698b4",
+      "artifact_zip_digest_independently_matched": true
+    }
+  },
+  "input_and_population_integrity": {
+    "r2_and_r3a2_exact_one_to_one_join": true,
+    "joined_rows": 1269,
+    "oos_rows_2021_2025": 1143,
+    "r2_duplicate_identity_count": 0,
+    "r3a2_duplicate_identity_count": 0,
+    "identity_mismatch_count": 0,
+    "rows_dropped_after_join": 0,
+    "reference_platt_all_five_folds_parity_pass": true,
+    "reference_platt_max_absolute_error": 3.608224830031759e-16,
+    "reference_platt_required_tolerance": 1e-9
+  },
+  "pooled_oos_2021_2025": {
+    "observations": 1143,
+    "selected_side_accuracy_descriptive_only": 0.6587926509186351,
+    "reference": {
+      "brier": 0.21646800209480166,
+      "log_loss": 0.6230894551629533,
+      "ece10": 0.022279398253893024,
+      "mean_predicted_minus_observed": 0.01731981404598404
+    },
+    "base_r2_plus_four_factors": {
+      "brier": 0.2210020576095325,
+      "log_loss": 0.6344064844432612,
+      "ece10": 0.03609489527339085,
+      "mean_predicted_minus_observed": 0.01912289863824923
+    },
+    "delta_augmented_minus_reference": {
+      "brier": 0.00453405551473085,
+      "log_loss": 0.011317029280307866,
+      "ece10": 0.01381549701949783,
+      "mean_predicted_minus_observed": 0.0018030845922651917
+    }
+  },
+  "season_breadth": {
+    "brier_point_improvement_seasons": 1,
+    "log_loss_point_improvement_seasons": 1,
+    "only_improving_target_season": 2024
+  },
+  "paired_bootstrap": {
+    "method": "SEASON_STRATIFIED_PAIRED_BOOTSTRAP",
+    "replicates": 10000,
+    "rng": "NumPy PCG64",
+    "seed": 940830,
+    "brier_augmented_minus_reference": {
+      "point": 0.0045340555147308885,
+      "ci95_percentile": [0.0011926680786426829, 0.007925557043426788]
+    },
+    "log_loss_augmented_minus_reference": {
+      "point": 0.011317029280307901,
+      "ci95_percentile": [0.0031899806962031683, 0.019566513774313572]
+    }
+  },
+  "frozen_gate": {
+    "brier_directional_95_upper_below_zero": false,
+    "log_loss_directional_95_upper_below_zero": false,
+    "ece_non_degradation_within_plus_0_010": false,
+    "brier_path_secondary_log_loss_within_plus_0_005": false,
+    "log_loss_path_secondary_brier_within_plus_0_002": false,
+    "brier_path_pass": false,
+    "log_loss_path_pass": false,
+    "incremental_value_pass": false
+  },
+  "oos_rowset": {
+    "rows": 1143,
+    "bytes": 1192885,
+    "sha256": "186c4b0189ee92d71f3f5b892192d6c189b7fe088a9611b64857e38bb298a8e9",
+    "independently_verified": true
+  },
+  "interpretation": {
+    "four_factors_as_this_preregistered_family": "REJECTED_FOR_BOUNDED_COMBINATION_ADMISSION",
+    "reason": "The augmented model worsened pooled Brier, log loss and ECE10; both paired-bootstrap 95% intervals were entirely above zero, and point improvement occurred in only one of five target seasons.",
+    "does_not_mean": "Individual basketball efficiency components can never be useful in a differently preregistered future research family; it means this R3A4 family cannot be retuned or admitted after seeing these outcomes.",
+    "elite_80_percent_tested_here": false
+  },
+  "safety": {
+    "side_switching_performed": false,
+    "elite_threshold_search_performed": false,
+    "coverage_filter_search_performed": false,
+    "target_season_feature_selection_performed": false,
+    "target_season_hyperparameter_tuning_performed": false,
+    "post_result_row_dropping_performed": false,
+    "market_feature_use": false,
+    "production_mutation": false,
+    "cross_sport_promotion_authorized": false
+  },
+  "next_gate": "R3A5_CONTINUE_PREREGISTERED_ABLATION_ORDER_WITHOUT_FOUR_FACTORS_COMBINATION_ADMISSION"
+}
