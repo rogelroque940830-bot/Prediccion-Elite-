@@ -1,0 +1,50 @@
+{
+  "name": "WNBA_R3B1_PER_SEASON_SCHEDULE_RECOVERY_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_RECOVERY_PROBE",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "purpose": "Recover immutable-enough schedule custody for R3B after the previously frozen mutable aggregate schedule asset 532156071 was deleted/replaced upstream. This probe may inspect only schedule/team identity and chronology fields; it must not load target score, winner, line score, market, injury or performance values.",
+  "superseded_transport": {
+    "asset_id": 532156071,
+    "name": "wnba_games_in_data_repo.parquet",
+    "size": 448575,
+    "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "reason": "Upstream mutable release replaced/deleted this asset on 2026-08-28. It remains historical evidence but is no longer downloadable by asset ID."
+  },
+  "candidate_schedule_assets": {
+    "2021": {"asset_id": 102865309, "name": "wnba_schedule_2021.parquet", "size": 56023, "provider_digest": null},
+    "2022": {"asset_id": 106016460, "name": "wnba_schedule_2022.parquet", "size": 58429, "provider_digest": null},
+    "2023": {"asset_id": 165078585, "name": "wnba_schedule_2023.parquet", "size": 85480, "provider_digest": null},
+    "2024": {"asset_id": 417936705, "name": "wnba_schedule_2024.parquet", "size": 85259, "provider_digest": "sha256:4c4b8f8dc4290996f5fee5786855018a9f4cf07c5c9ac32bc34644f26835cef6"},
+    "2025": {"asset_id": 417940259, "name": "wnba_schedule_2025.parquet", "size": 99293, "provider_digest": "sha256:c7cc5144a0d4bd84ddd22576930e178a47f81d9570802b2b23823e63ad9a333a"}
+  },
+  "team_box_custody_source": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+  "special_event_ids": {
+    "2021": ["401341447", "401353913"],
+    "2022": ["401455978", "401430112"],
+    "2023": ["401558893", "401507376"],
+    "2024": ["401620458", "401677672"],
+    "2025": ["401781604", "401736430"]
+  },
+  "expected_regular_fixtures": {"2021": 192, "2022": 216, "2023": 240, "2024": 240, "2025": 286},
+  "allowlisted_schedule_columns": ["game_id", "season", "season_type", "game_date_time", "game_date", "date", "start_date", "home_id", "away_id", "home_display_name", "away_display_name"],
+  "allowlisted_team_box_columns": ["game_id", "season", "season_type", "team_id", "team_home_away", "opponent_team_id"],
+  "forbidden_value_columns": ["home_score", "away_score", "team_score", "opponent_team_score", "winner", "winning_team", "linescore", "odds", "spread", "moneyline", "total"],
+  "gates": {
+    "candidate_asset_id_name_size_exact": true,
+    "provider_digest_match_when_present": true,
+    "team_box_frozen_sha_match": true,
+    "computed_schedule_sha256_required": true,
+    "regular_fixture_count_exact_each_season": true,
+    "two_sided_team_box_identity_exact": true,
+    "schedule_to_team_box_identity_join_rate": 1.0,
+    "forbidden_value_columns_projected": 0,
+    "outcomes_opened": false
+  },
+  "decision_policy": {
+    "pass": "CERTIFY_PER_SEASON_SCHEDULE_PINS_FOR_R3B_V2",
+    "fail": "R3B1_RECOVERY_BLOCKED",
+    "r3b_feature_definitions_may_change": false,
+    "r3c_performance_testing_authorized": false
+  },
+  "production_mutation": false
+}
