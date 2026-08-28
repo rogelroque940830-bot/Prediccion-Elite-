@@ -1,0 +1,104 @@
+{
+  "name": "WNBA_R3B1_PREFIX_FEATURE_MATERIALIZATION_CERTIFICATION_V1",
+  "status": "FROZEN_LEAKAGE_SAFE_FEATURE_ROWSET_CERTIFICATION",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "definition_contract": "research/wnba/WNBA_R3B1_PREFIX_FEATURE_DEFINITION_CONTRACT.json",
+  "quality_form_addendum": "research/wnba/WNBA_R3B1_QUALITY_FORM_SEMANTICS_ADDENDUM.json",
+  "source_custody": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_CERTIFICATION.json",
+  "production_mutation": false,
+  "model_fitting_performed": false,
+  "feature_family_ranking_performed": false,
+  "final_run": {
+    "run_id": 33205012290,
+    "head_sha": "dc5faa9a7e61fb2ddf6078eec67a2c10502e1b8c",
+    "conclusion": "success",
+    "artifact_id": 9699288471,
+    "artifact_name": "wnba-r3b1-prefix-features-33205012290",
+    "artifact_digest": "sha256:0582800790e86faa5956b0cfa1f442595b046e32b5fd6f2fbf9b04a302f9ab26"
+  },
+  "backbone": {
+    "rows": 1143,
+    "sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+    "source_artifact_id": 9652352724,
+    "transport": "actions/download-artifact@v4 using frozen run and artifact name",
+    "season_rows": {"2021":186,"2022":210,"2023":234,"2024":234,"2025":279}
+  },
+  "feature_rowset": {
+    "file": "wnba-r3b1-prefix-feature-rowset.jsonl",
+    "rows": 1143,
+    "bytes": 3139494,
+    "sha256": "ba963903031eeb2becc254661af1657a45759fa4be9d9a7c8c046dc69e181113",
+    "duplicate_game_ids": 0,
+    "membership_matches_backbone_exactly": true
+  },
+  "evidence_file": {
+    "file": "wnba-r3b1-prefix-feature-evidence.json",
+    "bytes": 3140,
+    "sha256": "0fbb1c53b13292de0719ff482d8f413c04fff521692ef9006896b7884a711b5d"
+  },
+  "season_structure": {
+    "2021": {"regular_fixtures":192,"target_rows":186},
+    "2022": {"regular_fixtures":216,"target_rows":210},
+    "2023": {"regular_fixtures":240,"target_rows":234},
+    "2024": {"regular_fixtures":240,"target_rows":234},
+    "2025": {"regular_fixtures":286,"target_rows":279}
+  },
+  "materialized_families": [
+    "FOUR_FACTORS",
+    "SHOT_PROFILE_MATCHUP",
+    "QUALITY_ADJUSTED_FORM",
+    "H2H_PREFIX",
+    "FATIGUE_CORE"
+  ],
+  "explicitly_excluded": {
+    "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY",
+    "TRAVEL_V2_ACTUAL_VENUE_SEQUENCE": "SOURCE_CUSTODY_BLOCKED"
+  },
+  "anti_leakage_gates": {
+    "same_date_history_use": 0,
+    "future_history_use": 0,
+    "target_self_history_use": 0,
+    "special_event_history_rows": 0,
+    "target_identity_mismatch": 0,
+    "all_team_box_sha_pins_match": true,
+    "target_outcome_fields_in_output": 0,
+    "market_fields_in_output": 0,
+    "availability_fields_in_output": 0
+  },
+  "independent_post_run_checks": {
+    "rows_parsed": 1143,
+    "unique_game_ids": 1143,
+    "non_finite_numeric_values": 0,
+    "forbidden_output_keys_found": 0,
+    "side_rows_checked": 2286,
+    "four_factors_ready_sides": 2286,
+    "shot_profile_ready_sides": 2286,
+    "quality_form_ready_sides": 2286,
+    "h2h_ready_sides": 2286,
+    "fatigue_ready_sides": 2286,
+    "base_days_rest_mismatch_sides": 0,
+    "observed_range_checks": {
+      "efg": [0.2714285714285714,0.664179104477612],
+      "tov_rate": [0.06538796861377506,0.29990403071017274],
+      "orb_rate": [0.08571428571428572,0.47619047619047616],
+      "ftr": [0.08333333333333333,0.5076923076923077],
+      "three_par": [0.11538461538461539,0.5555555555555556],
+      "days_rest": [1,36],
+      "prior_games_last4_days": [0,2],
+      "prior_games_last6_days": [0,3]
+    }
+  },
+  "rolling_origin_boundary": {
+    "seed_season": 2021,
+    "eligible_oos_development_seasons": [2022,2023,2024,2025],
+    "historical_role": "DEVELOPMENT_ONLY",
+    "independent_future_cohort_still_required_for_cross_sport_certification": true
+  },
+  "closure": {
+    "r3b1": "PASS",
+    "r3b2_protocol_freeze_authorized": true,
+    "historical_outcome_scoring_before_r3b2_protocol_freeze": false,
+    "next_gate": "R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL_FREEZE"
+  }
+}
