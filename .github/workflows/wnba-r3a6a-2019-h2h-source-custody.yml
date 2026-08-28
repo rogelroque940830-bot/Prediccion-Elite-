@@ -1,0 +1,55 @@
+name: WNBA R3A6A 2019 H2H Source Custody
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A6A_2019_H2H_SOURCE_CUSTODY_CONTRACT.json"
+      - "scripts/wnba-r3a6a-2019-h2h-source-custody.py"
+      - ".github/workflows/wnba-r3a6a-2019-h2h-source-custody.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deterministic dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Audit frozen 2019 H2H source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a6a-2019-h2h-source-custody.py
+      - name: Show R3A6A summary
+        if: always()
+        run: |
+          if [ -f wnba-r3a6a-2019-h2h-source-custody-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a6a-2019-h2h-source-custody-evidence.json'))
+          print(json.dumps({
+            'decision':p.get('decision'),
+            'source':p.get('source'),
+            'schema':p.get('schema'),
+            'audit':p.get('2019SeasonType2Audit'),
+            'specialEventDiscovery':p.get('specialEventDiscovery'),
+            'nextGate':p.get('nextGate')
+          },indent=2))
+          PY
+          fi
+      - name: Upload R3A6A evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a6a-2019-h2h-source-custody-${{ github.run_id }}
+          path: wnba-r3a6a-2019-h2h-source-custody-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
