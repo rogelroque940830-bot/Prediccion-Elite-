@@ -1,0 +1,111 @@
+{
+  "name": "WNBA_R3A5B_QUALITY_ADJUSTED_FORM_OOS_ABLATION_RESULT_V1",
+  "date": "2026-08-28",
+  "status": "FROZEN_RESULT_NO_POST_RESULT_RETUNE",
+  "decision": "QUALITY_ADJUSTED_FORM_NOT_ADMITTED_BY_FROZEN_R3A5B_ABLATION",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "scientific_contract": {
+    "path": "research/wnba/WNBA_R3A5B_QUALITY_ADJUSTED_FORM_OOS_ABLATION_CONTRACT.json",
+    "commit_sha": "1ef3fd8925de4f5ba530d9c5396607c8f674426a",
+    "status": "PREREGISTERED_BEFORE_R3A5B_METRIC_COMPUTATION"
+  },
+  "execution": {
+    "workflow": "WNBA R3A5B Quality Adjusted Form OOS Ablation",
+    "run_id": 33144443814,
+    "job_id": 98762299083,
+    "head_sha": "5cb7e3c5c9e29f09c604056b63a6ac4dbc2212a6",
+    "conclusion": "success",
+    "artifact_id": 9675208420,
+    "artifact_name": "wnba-r3a5b-quality-adjusted-form-oos-ablation-33144443814",
+    "artifact_zip_sha256": "b43a00ad581d5745782fc9fa0d95b74e2ee3979ea2c07b98f3c6ac63238b6ef8",
+    "artifact_zip_digest_independently_matched": true
+  },
+  "population_integrity": {
+    "joined_rows": 1269,
+    "oos_rows": 1143,
+    "exact_one_to_one_join": true,
+    "identity_mismatch_count": 0,
+    "rows_dropped_after_join": 0,
+    "reference_platt_all_five_folds_parity_pass": true,
+    "reference_platt_max_absolute_error": 3.608224830031759e-16,
+    "reference_platt_required_tolerance": 1e-9
+  },
+  "pooled_oos_2021_2025": {
+    "observations": 1143,
+    "selected_side_accuracy_descriptive_only": 0.6587926509186351,
+    "reference": {
+      "brier": 0.21646800209480166,
+      "log_loss": 0.6230894551629533,
+      "ece10": 0.022279398253893024,
+      "mean_predicted_minus_observed": 0.01731981404598404
+    },
+    "base_r2_plus_quality_adjusted_form": {
+      "brier": 0.21725465650719347,
+      "log_loss": 0.6248502136627958,
+      "ece10": 0.03694184427714723,
+      "mean_predicted_minus_observed": 0.01948183244788737
+    },
+    "delta_augmented_minus_reference": {
+      "brier": 0.0007866544123918129,
+      "log_loss": 0.0017607584998424741,
+      "ece10": 0.014662446023254207,
+      "mean_predicted_minus_observed": 0.0021620184019033317
+    }
+  },
+  "season_breadth": {
+    "brier_point_improvement_seasons": [2021, 2023, 2025],
+    "log_loss_point_improvement_seasons": [2021, 2023, 2025],
+    "brier_point_improvement_count": 3,
+    "log_loss_point_improvement_count": 3
+  },
+  "paired_bootstrap": {
+    "method": "SEASON_STRATIFIED_PAIRED_BOOTSTRAP",
+    "replicates": 10000,
+    "rng": "NumPy PCG64",
+    "seed": 940830,
+    "brier_augmented_minus_reference": {
+      "point": 0.000786654412391842,
+      "ci95_percentile": [-0.003150791897760283, 0.004855570091904492]
+    },
+    "log_loss_augmented_minus_reference": {
+      "point": 0.0017607584998425277,
+      "ci95_percentile": [-0.007468637533013999, 0.011338302109854566]
+    }
+  },
+  "frozen_gate": {
+    "brier_directional_95_upper_below_zero": false,
+    "log_loss_directional_95_upper_below_zero": false,
+    "ece_non_degradation_within_plus_0_010": false,
+    "brier_path_secondary_log_loss_within_plus_0_005": true,
+    "log_loss_path_secondary_brier_within_plus_0_002": true,
+    "brier_path_pass": false,
+    "log_loss_path_pass": false,
+    "incremental_value_pass": false
+  },
+  "oos_rowset": {
+    "rows": 1143,
+    "bytes": 1209266,
+    "sha256": "0a507cf04acf09314d71e0c773fc584f7e2bfa76fc1f3eab33fb28da861a8d77",
+    "independent_line_count": 1143,
+    "independent_sha256_matched": true
+  },
+  "interpretation": {
+    "quality_adjusted_form_family": "REJECTED_FOR_BOUNDED_COMBINATION_ADMISSION",
+    "reason": "Although point estimates improved Brier and log loss in three of five seasons, pooled point estimates worsened, neither paired-bootstrap 95 percent interval established directional improvement, and pooled ECE10 degraded by 0.0146624460, exceeding the frozen +0.010 non-degradation bound.",
+    "post_result_retune_allowed": false,
+    "elite_80_percent_tested_here": false
+  },
+  "scientific_boundaries": {
+    "side_switching_performed": false,
+    "elite_threshold_search_performed": false,
+    "coverage_filter_search_performed": false,
+    "target_season_feature_selection_performed": false,
+    "target_season_hyperparameter_tuning_performed": false,
+    "post_result_row_dropping_performed": false,
+    "four_factors_combined": false,
+    "market_feature_use": false,
+    "production_mutation": false,
+    "cross_sport_promotion_authorized": false
+  },
+  "next_gate": "R3A6_H2H_PREFIX_ABLATION_WITHOUT_QUALITY_FORM_COMBINATION_ADMISSION"
+}
