@@ -1,0 +1,84 @@
+{
+  "name": "WNBA_R3A_SIGNAL_CUSTODY_AUDIT_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_SCHEMA_AND_SOURCE_CUSTODY_AUDIT",
+  "created_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "source_pins": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+  "target_outcome_values_may_be_loaded": false,
+  "schema_metadata_may_be_inspected": true,
+  "production_mutation": false,
+  "objective": "Determine which preregistered R3 signal families are historically reconstructible from frozen 2021-2025 WNBA assets without reading target-game outcome values, and which must remain partial, blocked, or prospective-only.",
+  "team_box_requirements": {
+    "FOUR_FACTORS": {
+      "efg": ["field_goals_made", "three_point_field_goals_made", "field_goals_attempted"],
+      "tov_rate": ["turnovers", "field_goals_attempted", "free_throws_attempted"],
+      "orb_rate": ["offensive_rebounds", "defensive_rebounds"],
+      "free_throw_rate": ["free_throws_attempted", "field_goals_attempted"]
+    },
+    "SHOT_PROFILE_MATCHUP": [
+      "field_goals_made",
+      "field_goals_attempted",
+      "three_point_field_goals_made",
+      "three_point_field_goals_attempted",
+      "free_throws_attempted",
+      "offensive_rebounds",
+      "defensive_rebounds",
+      "turnovers"
+    ],
+    "QUALITY_ADJUSTED_FORM_PREFIX": [
+      "game_id",
+      "game_date",
+      "team_id",
+      "opponent_team_id",
+      "team_home_away",
+      "team_score",
+      "opponent_team_score",
+      "field_goals_attempted",
+      "free_throws_attempted",
+      "offensive_rebounds",
+      "turnovers"
+    ],
+    "H2H_PREFIX": [
+      "game_id",
+      "game_date",
+      "team_id",
+      "opponent_team_id",
+      "team_home_away",
+      "team_score",
+      "opponent_team_score"
+    ]
+  },
+  "schedule_schema_hints_for_travel_v2": [
+    "venue",
+    "arena",
+    "city",
+    "address",
+    "latitude",
+    "longitude"
+  ],
+  "anti_leakage_rules": [
+    "The probe may inspect Parquet schema names and Parquet metadata row counts only.",
+    "The probe may not project or deserialize team_score, opponent_team_score, winner, linescore or any target-game outcome value.",
+    "Presence of score columns in schema may certify later prefix feasibility only; it does not authorize target-row outcome use.",
+    "Every historical feature used later must be constructed strictly from games finalized on official dates before the target date.",
+    "Current ESPN injury or current team aggregate endpoints cannot be backfilled as historical truth.",
+    "No family may enter R3 combination testing unless this audit classifies its historical custody as READY or separately freezes an explicit partial definition."
+  ],
+  "classification_values": [
+    "READY_HISTORICAL_PREFIX",
+    "PARTIAL_HISTORICAL_PREFIX",
+    "PROSPECTIVE_ONLY",
+    "BLOCKED_SOURCE_CUSTODY"
+  ],
+  "pre_probe_expected_constraints": {
+    "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY unless separately timestamped historical injury/player-availability custody is certified.",
+    "BASE_R2": "READY by prior R1/R2 custody and used only as fixed reference.",
+    "FOUR_FACTORS": "PENDING_SCHEMA_PROBE",
+    "SHOT_PROFILE_MATCHUP": "PENDING_SCHEMA_PROBE",
+    "QUALITY_ADJUSTED_FORM": "PENDING_SCHEMA_PROBE",
+    "H2H_PREFIX": "PENDING_SCHEMA_PROBE",
+    "FATIGUE_TRAVEL_V2": "Prefix fatigue is expected reconstructible from dates/home-away; actual venue-sequence travel remains pending schedule schema/coordinate custody."
+  },
+  "next_gate": "R3A_PINNED_PARQUET_SCHEMA_PROBE"
+}
