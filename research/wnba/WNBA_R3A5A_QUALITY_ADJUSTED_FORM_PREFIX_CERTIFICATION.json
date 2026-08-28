@@ -1,0 +1,78 @@
+{
+  "name": "WNBA_R3A5A_QUALITY_ADJUSTED_FORM_PREFIX_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "decision": "STRICT_PRIOR_DATE_QUALITY_ADJUSTED_FORM_PREFIX_CERTIFIED",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "contract": {
+    "path": "research/wnba/WNBA_R3A5A_QUALITY_ADJUSTED_FORM_PREFIX_CONTRACT.json",
+    "commit_sha": "ed5a3831e141f746a189b40910d923ba4163ad8d",
+    "status": "PREREGISTERED_BEFORE_QUALITY_FORM_FEATURE_CONSTRUCTION_OR_EVALUATION"
+  },
+  "execution": {
+    "workflow": "WNBA R3A5A Quality Adjusted Form Prefix",
+    "run_id": 33144301933,
+    "job_id": 98761863195,
+    "head_sha": "136baa6f016e2be089b8b226e6e8935f52d1e21c",
+    "conclusion": "success",
+    "artifact_id": 9675157064,
+    "artifact_name": "wnba-r3a5a-quality-adjusted-form-prefix-33144301933",
+    "artifact_digest": "sha256:4c8f1f402a984a27a7684eabf144115469b8d3226542f075929927688f9f51e8",
+    "artifact_digest_independently_matched": true,
+    "rowset_file": "wnba-r3a5a-quality-adjusted-form-prefix.jsonl",
+    "evidence_file": "wnba-r3a5a-quality-adjusted-form-prefix-evidence.json"
+  },
+  "rowset": {
+    "rows": 1269,
+    "bytes": 1787738,
+    "sha256": "4c535400a27ccc731b6601c2ada10fa47ca7e44eb1b175e50ad2b70f822c982e",
+    "independent_line_count": 1269,
+    "independent_sha256_matched": true
+  },
+  "population_parity": {
+    "r3a2_identity_rows": 1269,
+    "r3a5a_identity_rows": 1269,
+    "common_rows": 1269,
+    "r3a2_only_rows": 0,
+    "r3a5a_only_rows": 0,
+    "exact": true
+  },
+  "coverage": {
+    "2020": {"regular_games": 132, "prefix_rows": 126, "cold_start_exclusions": 6},
+    "2021": {"regular_games": 192, "prefix_rows": 186, "cold_start_exclusions": 6},
+    "2022": {"regular_games": 216, "prefix_rows": 210, "cold_start_exclusions": 6},
+    "2023": {"regular_games": 240, "prefix_rows": 234, "cold_start_exclusions": 6},
+    "2024": {"regular_games": 240, "prefix_rows": 234, "cold_start_exclusions": 6},
+    "2025": {"regular_games": 286, "prefix_rows": 279, "cold_start_exclusions": 7}
+  },
+  "anti_leakage": {
+    "daily_two_phase_seal_then_ingest": true,
+    "same_day_source_use_count": 0,
+    "future_source_use_count": 0,
+    "target_self_source_use_count": 0,
+    "max_prior_date_violation_count": 0,
+    "missing_recent_opponent_target_date_state_count": 0,
+    "pair_or_date_identity_failure_count": 0,
+    "invalid_ingested_possession_count": 0,
+    "duplicate_emitted_game_id_count": 0
+  },
+  "frozen_feature_semantics": {
+    "estimated_possessions": "FGA + 0.44*FTA - OREB + TOV",
+    "net_efficiency": "100*(sum(points scored)-sum(points allowed))/sum(estimated possessions)",
+    "recent_windows": [5, 10],
+    "efficiency_delta": "recent net efficiency minus season-to-date net efficiency",
+    "quality_adjustment": "recent net efficiency plus occurrence-weighted average current-season net efficiency of the recent opponents, all measured strictly before the target date",
+    "margin": "mean points scored minus points allowed over the frozen recent window"
+  },
+  "scientific_boundaries": {
+    "target_outcomes_scored_in_gate": false,
+    "model_fit": false,
+    "feature_weight_search": false,
+    "elite_threshold_search": false,
+    "coverage_filter_search": false,
+    "market_feature_use": false,
+    "four_factors_combined": false,
+    "production_mutation": false
+  },
+  "next_gate": "R3A5B_PREREGISTER_BASE_R2_PLUS_QUALITY_ADJUSTED_FORM_OOS_ABLATION"
+}
