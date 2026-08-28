@@ -1,0 +1,48 @@
+{
+  "name": "WNBA_R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "decision": "REMAINING_SIGNAL_FAMILY_CUSTODY_CLASSIFIED",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "contract_commit_sha": "8a619b898eb036fc05ef5c7916b2adcd4d91ab22",
+  "execution": {
+    "workflow": "WNBA R3A3 Remaining Signal Family Custody",
+    "run_id": 33143633408,
+    "job_id": 98759806171,
+    "head_sha": "a526b6f0a369899270499e11461dcf2aa65d2585",
+    "conclusion": "success",
+    "artifact_id": 9674910059,
+    "artifact_digest": "sha256:c421f3f0342ea4c9376b42d37e98a54d86e38bc98e9484231832bde6c184eb75",
+    "artifact_digest_independently_matched": true
+  },
+  "coverage": {
+    "regular_games": 1306,
+    "side_rows": 2612,
+    "asset_custody_all_verified": true,
+    "required_schema_complete_all_seasons": true,
+    "regular_game_counts_all_match": true
+  },
+  "integrity": {
+    "pair_failures": 0,
+    "date_failures": 0,
+    "score_component_failures": 0,
+    "shot_component_failures": 0,
+    "positive_possession_estimate_failures": 0
+  },
+  "family_classification": {
+    "SHOT_PROFILE_MATCHUP": "HISTORICALLY_RECONSTRUCTIBLE_PREFIX_REQUIRED",
+    "QUALITY_ADJUSTED_FORM": "HISTORICALLY_RECONSTRUCTIBLE_FORMULA_FREEZE_REQUIRED",
+    "H2H_PREFIX": "HISTORICALLY_RECONSTRUCTIBLE_2021_2025__2020_NEEDS_2019_FOR_FULL_TWO_SEASON_WINDOW",
+    "FATIGUE_DATE_BASED_V2": "HISTORICALLY_RECONSTRUCTIBLE_PREFIX_REQUIRED",
+    "ACTUAL_TRAVEL_SEQUENCE_V2": "BLOCKED_PENDING_HISTORICAL_VENUE_COORDINATE_CUSTODY",
+    "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY_HISTORICAL_TIMESTAMP_CUSTODY_NOT_CERTIFIED"
+  },
+  "research_boundaries": {
+    "target_result_scoring_performed": false,
+    "model_fit_performed": false,
+    "feature_weight_search_performed": false,
+    "selection_threshold_search_performed": false,
+    "production_mutation": false
+  },
+  "next_gate": "R3A4_PREREGISTER_FIRST_OOS_FAMILY_ABLATION_BASE_R2_PLUS_FOUR_FACTORS"
+}
