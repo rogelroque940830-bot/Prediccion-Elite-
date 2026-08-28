@@ -1,0 +1,55 @@
+{
+  "name": "WNBA_R3A6A_2019_H2H_SOURCE_CUSTODY_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_2019_H2H_SOURCE_AUDIT",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a5b_result": "research/wnba/WNBA_R3A5B_QUALITY_ADJUSTED_FORM_OOS_ABLATION_RESULT.json",
+  "purpose": "Certify the 2019 WNBA game-level source needed to give 2020 H2H targets the same target-season-plus-immediately-prior-season horizon used for later target seasons. This gate performs no R3 H2H model evaluation.",
+  "source": {
+    "provider": "SportsDataverse",
+    "repository": "sportsdataverse/sportsdataverse-data",
+    "release_tag": "espn_wnba_team_boxscores",
+    "release_id": 97421042,
+    "asset_id": 479692984,
+    "filename": "team_box_2019.parquet",
+    "bytes": 41102,
+    "sha256": "52890ad5e2c5a893f7493d6f23e69c01d62fe26e00b9f1b779d5e7f65fdaf849",
+    "metadata_observed_before_audit": true
+  },
+  "allowlisted_columns": [
+    "game_id",
+    "season",
+    "season_type",
+    "game_date",
+    "team_id",
+    "team_home_away",
+    "opponent_team_id",
+    "team_score",
+    "opponent_team_score"
+  ],
+  "audit_questions": [
+    "Does the downloaded asset reproduce the frozen byte size and SHA-256 exactly?",
+    "Are all allowlisted H2H identity/result columns present?",
+    "How many 2019 season_type=2 game IDs exist before special-event classification?",
+    "Does every candidate game have exactly two reciprocal team rows, exactly one HOME and one AWAY, a coherent official date, and reciprocal scores?",
+    "Which season_type=2 game IDs involve team identities outside the franchise team-ID universe observed in the remaining 2019 season_type=2 fixtures?",
+    "Is there a small objectively identifiable special-event set that must be frozen before constructing the two-season H2H prefix?"
+  ],
+  "special_event_rule_in_this_gate": {
+    "automatic_exclusion_authorized": false,
+    "reason": "R3A6A is discovery/custody only. It may report anomalous season_type=2 identities and game IDs, but the exact exclusion list must be frozen in a subsequent constructor contract before H2H features are built."
+  },
+  "scientific_boundaries": {
+    "r3_target_outcome_scoring": false,
+    "h2h_feature_construction": false,
+    "model_fit": false,
+    "feature_weight_search": false,
+    "elite_threshold_search": false,
+    "coverage_filter_search": false,
+    "market_feature_use": false,
+    "production_mutation": false
+  },
+  "next_gate_on_clean_source": "R3A6B_FREEZE_UNIFORM_TWO_SEASON_H2H_PREFIX_CONSTRUCTOR",
+  "next_gate_on_failure": "R3A6A_SOURCE_REPAIR_REQUIRED"
+}
