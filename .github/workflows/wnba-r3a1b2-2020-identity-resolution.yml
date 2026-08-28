@@ -1,0 +1,47 @@
+name: WNBA R3A1B2 2020 Identity Resolution
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A1B2_2020_IDENTITY_RESOLUTION_CONTRACT.json"
+      - "scripts/wnba-r3a1b2-2020-identity-resolution.py"
+      - ".github/workflows/wnba-r3a1b2-2020-identity-resolution.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Resolve 2020 identity custody
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a1b2-2020-identity-resolution.py
+      - name: Show result
+        if: always()
+        run: |
+          if [ -f wnba-r3a1b2-2020-identity-resolution-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a1b2-2020-identity-resolution-evidence.json'))
+          print(json.dumps({k:p.get(k) for k in ['decision','team_box_games','unique_teams','all_teams_22_games','team_box_only_game_ids','schedule_only_game_ids','missing_game_identity','all_note_candidates_rescheduled_regular','next_gate']},indent=2))
+          PY
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a1b2-2020-identity-resolution-${{ github.run_id }}
+          path: wnba-r3a1b2-2020-identity-resolution-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
