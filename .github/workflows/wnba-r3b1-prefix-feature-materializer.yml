@@ -1,0 +1,50 @@
+name: WNBA R3B1 Prefix Feature Materializer
+
+on:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - 'research/wnba/WNBA_R3B1_PREFIX_FEATURE_DEFINITION_CONTRACT.json'
+      - 'research/wnba/WNBA_R3B1_QUALITY_FORM_SEMANTICS_ADDENDUM.json'
+      - 'research/wnba/WNBA_R3A_SIGNAL_CUSTODY_CERTIFICATION.json'
+      - 'research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json'
+      - 'scripts/wnba-r3b1-prefix-feature-materializer.py'
+      - '.github/workflows/wnba-r3b1-prefix-feature-materializer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Materialize frozen R3 prefix features
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/wnba-r3b1-prefix-feature-materializer.py 2>&1 | tee wnba-r3b1-prefix-feature-materializer.log
+      - name: Upload R3B1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3b1-prefix-features-${{ github.run_id }}
+          path: |
+            wnba-r3b1-prefix-feature-materializer.log
+            wnba-r3b1-prefix-feature-evidence.json
+            wnba-r3b1-prefix-feature-rowset.jsonl
+          if-no-files-found: warn
+          retention-days: 90
