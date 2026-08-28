@@ -1,0 +1,85 @@
+{
+  "name": "WNBA_R3B1_PREFIX_FEATURE_DEFINITION_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_FEATURE_MATERIALIZATION_OR_ABLATION",
+  "created_date": "2026-08-28",
+  "parent": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_CERTIFICATION.json",
+  "target_backbone": {
+    "artifact_id": 9652352724,
+    "run_id": 33086442468,
+    "file": "wnba-r1a5-neutral-availability-candidate-rowset.jsonl",
+    "rows": 1143,
+    "sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+    "season_rows": {"2021":186,"2022":210,"2023":234,"2024":234,"2025":279}
+  },
+  "rolling_origin": {
+    "seed_season": 2021,
+    "evaluation_seasons": [2022,2023,2024,2025],
+    "2020_authorized": false
+  },
+  "chronology": {
+    "rule": "For target date D, construct every feature only from finalized regular-season games with game_date < D. Ingest date-D statistics only after every target row on D is sealed.",
+    "same_date_allowed": false,
+    "future_allowed": false,
+    "target_self_allowed": false,
+    "row_membership_may_change": false
+  },
+  "definitions": {
+    "possession_estimate": "FGA + 0.44*FTA - OREB + TOV",
+    "FOUR_FACTORS": {
+      "aggregation": "aggregate prior current-season counts",
+      "efg": "(sum(FGM)+0.5*sum(3PM))/sum(FGA)",
+      "tov_rate": "sum(TOV)/(sum(FGA)+0.44*sum(FTA)+sum(TOV))",
+      "orb_rate": "sum(OREB)/(sum(OREB)+sum(OPP_DREB))",
+      "ftr": "sum(FTA)/sum(FGA)",
+      "defense": "Use the same four formulas on opponent counts faced by the side."
+    },
+    "SHOT_PROFILE_MATCHUP": {
+      "three_par": "sum(3PA)/sum(FGA)",
+      "three_par_allowed": "sum(OPP_3PA)/sum(OPP_FGA)",
+      "efg_edge": "side efg - opponent efg_allowed",
+      "orb_edge": "side orb_rate - opponent orb_rate_allowed",
+      "ftr_edge": "side ftr - opponent ftr_allowed",
+      "three_par_style_gap": "side three_par - opponent three_par_allowed"
+    },
+    "QUALITY_ADJUSTED_FORM": {
+      "game_net_eff": "100*(PTS-OPP_PTS)/(FGA+0.44*FTA-OREB+TOV)",
+      "net_eff_l5": "mean last min(5,N) prior game_net_eff",
+      "net_eff_l10": "mean last min(10,N) prior game_net_eff",
+      "quality_adj_l5": "mean(game_net_eff minus that opponent's target-date prefix net efficiency) over last 5 prior games with available opponent state",
+      "quality_adj_l10": "same over last 10 prior games"
+    },
+    "H2H_PREFIX": {
+      "window": "current target season plus immediately previous certified season; strictly before target date",
+      "features": ["meeting_count","side_win_share","side_avg_margin"],
+      "2021": "one certified season available; explicit status",
+      "2022_2025": "two-season window when meetings exist"
+    },
+    "FATIGUE_CORE": {
+      "prior_games_last4_days": "count games in [D-4,D)",
+      "prior_games_last6_days": "count games in [D-6,D)",
+      "three_in_five": "1 if prior_games_last4_days >= 2",
+      "four_in_seven": "1 if prior_games_last6_days >= 3",
+      "days_rest": "D minus most recent prior game date"
+    }
+  },
+  "excluded": [
+    "historical availability/star-power because no timestamped custody is certified",
+    "actual venue-sequence travel because R3A source custody is blocked",
+    "current/end-of-season aggregates projected backward",
+    "sportsbook information"
+  ],
+  "materialization_gates": {
+    "backbone_sha_exact": true,
+    "backbone_rows": 1143,
+    "team_box_sha_exact_all_years": true,
+    "special_event_history_rows": 0,
+    "same_date_use": 0,
+    "future_use": 0,
+    "target_self_use": 0,
+    "output_rows": 1143,
+    "duplicate_game_ids": 0,
+    "feature_membership_exactly_matches_backbone": true
+  },
+  "r3b1_may_fit_or_compare_models": false,
+  "next_gate": "R3B1_PREFIX_FEATURE_MATERIALIZATION"
+}
