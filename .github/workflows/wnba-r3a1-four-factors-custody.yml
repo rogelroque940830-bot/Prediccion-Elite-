@@ -1,0 +1,63 @@
+name: WNBA R3A1 Four Factors Custody
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "scripts/wnba-r3a1-four-factors-custody.py"
+      - "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json"
+      - "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json"
+      - ".github/workflows/wnba-r3a1-four-factors-custody.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  custody-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout frozen R3 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deterministic audit dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+
+      - name: Audit pinned WNBA Four Factors components
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a1-four-factors-custody.py
+
+      - name: Show evidence summary
+        if: always()
+        run: |
+          if [ -f wnba-r3a1-four-factors-custody-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p = json.load(open('wnba-r3a1-four-factors-custody-evidence.json'))
+          print(json.dumps({
+              'decision': p.get('four_factors_source_decision'),
+              'shot_profile': p.get('shot_profile_source_decision'),
+              'total_regular_games': p.get('total_regular_games'),
+              'total_side_rows': p.get('total_side_rows'),
+              'pair_integrity_failures': p.get('pair_integrity_failures'),
+              'next_gate': p.get('next_gate'),
+          }, indent=2))
+          PY
+          fi
+
+      - name: Upload R3A1 custody evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a1-four-factors-custody-${{ github.run_id }}
+          path: wnba-r3a1-four-factors-custody-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
