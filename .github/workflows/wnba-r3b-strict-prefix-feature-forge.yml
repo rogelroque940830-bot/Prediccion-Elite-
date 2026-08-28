@@ -1,0 +1,55 @@
+name: WNBA R3B Strict Prefix Feature Forge
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3B_STRICT_PREFIX_FEATURE_FORGE_CONTRACT.json"
+      - "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json"
+      - "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CERTIFICATION.json"
+      - "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json"
+      - "scripts/wnba-r1a4c-prefix-constructor.py"
+      - "scripts/wnba-r3b-strict-prefix-feature-forge.py"
+      - "frontend/client/src/lib/travel.ts"
+      - "frontend/client/src/lib/wnba-model.ts"
+      - ".github/workflows/wnba-r3b-strict-prefix-feature-forge.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout frozen branch state
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install forge dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+
+      - name: Build strict pregame R3B feature rowset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3b-strict-prefix-feature-forge.py
+
+      - name: Upload frozen rowset and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3b-strict-prefix-feature-${{ github.run_id }}
+          path: |
+            wnba-r3b-strict-prefix-feature-rowset.jsonl
+            wnba-r3b-strict-prefix-feature-evidence.json
+          if-no-files-found: error
+          retention-days: 90
