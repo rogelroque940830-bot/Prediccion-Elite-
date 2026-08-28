@@ -1,0 +1,73 @@
+{
+  "name": "WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_2019_2020_SUPPORT_AUDIT",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a_certification": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json",
+  "purpose": "Close the historical support window needed to construct the preregistered two-season H2H and strict-prefix R3 features for the 2020-2025 development years without backward substitution or post-outcome cohort changes.",
+  "target_cohort_policy": {
+    "preregistered_development_target_years": [2020, 2021, 2022, 2023, 2024, 2025],
+    "2019_role": "SUPPORT_ONLY_FOR_2020_PREFIX_AND_H2H",
+    "2019_may_become_target_year": false,
+    "2020_role": "TARGET_ELIGIBLE_ONLY_IF_THIS_AUDIT_CERTIFIES_FIXTURE_IDENTITY_AND_REQUIRED_FEATURE_CUSTODY",
+    "2021_2025_role": "TARGET_YEARS_ALREADY_COVERED_BY_R3A_AND_PRIOR_R1_CUSTODY",
+    "performance_outcomes_may_change_target_year_eligibility": false
+  },
+  "h2h_semantics": {
+    "lookback": "Target-season meetings strictly before target date plus immediately preceding season meetings; no game on target date and no future game.",
+    "2020_requires": [2019, "2020 strict prior-date prefix"],
+    "2021_requires": [2020, "2021 strict prior-date prefix"],
+    "later_years": "Previous season plus strict prior-date target-season meetings.",
+    "same_date_outcomes_allowed": false
+  },
+  "frozen_support_assets_from_release_metadata": {
+    "2019_team_box": {
+      "asset_id": 479692984,
+      "name": "team_box_2019.parquet",
+      "size": 41102,
+      "expected_sha256": "52890ad5e2c5a893f7493d6f23e69c01d62fe26e00b9f1b779d5e7f65fdaf849",
+      "role": "SUPPORT_ONLY"
+    },
+    "2020_team_box": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "expected_sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53",
+      "role": "TARGET_AND_SUPPORT"
+    },
+    "schedule_master": {
+      "asset_id": 532156071,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 448575,
+      "expected_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+      "role": "FIXTURE_IDENTITY_AND_CHRONOLOGY"
+    }
+  },
+  "audit_requirements": [
+    "Download every asset by exact release asset_id and independently match exact byte size and SHA-256.",
+    "Inspect 2019 and 2020 season_type values and regular-season two-sided game identity without assuming modern special-event structure.",
+    "Join every candidate 2020 regular-season target game to the frozen schedule master by canonical game_id and verify home/away identity.",
+    "Verify all R3A required Four Factors and shot-profile stat fields exist and are valid on 2019 and 2020 two-sided regular rows.",
+    "Verify schedule chronology can support strict target-date batching.",
+    "Do not select/exclude 2020 games based on winner, score margin, model probability, accuracy or sportsbook information."
+  ],
+  "required_feature_fields": [
+    "field_goals_made",
+    "field_goals_attempted",
+    "three_point_field_goals_made",
+    "three_point_field_goals_attempted",
+    "free_throws_attempted",
+    "offensive_rebounds",
+    "defensive_rebounds",
+    "turnovers"
+  ],
+  "outcome_policy": {
+    "score_or_winner_values_loaded_for_custody_decision": false,
+    "outcome_columns_may_be_visible_as_schema_names": true,
+    "market_data_allowed": false
+  },
+  "pass_rule": "2019 support and 2020 target/support advance only if exact asset custody, two-sided regular identity, schedule chronology/join and required feature coverage all pass without outcome-based exclusions.",
+  "fail_rule": "If 2020 target custody fails, 2020 cannot silently remain in performance evaluation; the failure must be frozen as a custody limitation before any R3 combination scoring.",
+  "next_gate_on_pass": "R3B_STRICT_PREFIX_FEATURE_FORGE_2020_2025",
+  "production_mutation": false
+}
