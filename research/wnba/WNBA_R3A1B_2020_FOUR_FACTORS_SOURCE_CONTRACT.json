@@ -1,0 +1,68 @@
+{
+  "name": "WNBA_R3A1B_2020_FOUR_FACTORS_SOURCE_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_2020_COMPONENT_AUDIT",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3_contract_commit": "e466abee37c386aee965264e7687224fa4f7602b",
+  "parent_r3a1_certification": "research/wnba/WNBA_R3A1_FOUR_FACTORS_CUSTODY_CERTIFICATION.json",
+  "purpose": "Extend exact Four Factors source custody to the preregistered 2020 development seed without reopening or altering the frozen 2021-2025 R3A1 certification.",
+  "frozen_sources": {
+    "schedule_master": {
+      "asset_id": 532156071,
+      "size": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb"
+    },
+    "team_box_2020": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    }
+  },
+  "schedule_metadata_allowlist": [
+    "game_id", "season", "season_type", "game_date_time", "game_date",
+    "home_id", "away_id", "home_display_name", "away_display_name",
+    "home_is_active", "away_is_active", "neutral_site", "notes_type", "notes_headline"
+  ],
+  "team_box_value_allowlist": [
+    "game_id", "season", "season_type", "game_date", "team_id", "team_home_away", "opponent_team_id",
+    "field_goals_made", "field_goals_attempted", "three_point_field_goals_made",
+    "three_point_field_goals_attempted", "free_throws_attempted",
+    "offensive_rebounds", "defensive_rebounds", "turnovers"
+  ],
+  "forbidden_value_columns": [
+    "team_score", "opponent_team_score", "home_score", "away_score",
+    "home_winner", "away_winner", "winner", "moneyline", "spread", "total"
+  ],
+  "regular_season_classification": {
+    "base_rule": "season_type must be regular/regularseason/2",
+    "special_event_probe": "Within 2020 season_type=2 schedule rows, inspect only notes_type, notes_headline and active-team metadata. Any event-like annotation or inactive-team identity must be emitted for review rather than silently included.",
+    "expected_2020_game_count_frozen_before_audit": null,
+    "reason_expected_count_not_hardcoded": "The audit must establish the source population empirically rather than force a remembered league total."
+  },
+  "frozen_formulas": {
+    "efg_pct": "(FGM + 0.5 * 3PM) / FGA",
+    "tov_pct": "TOV / (FGA + 0.44 * FTA + TOV)",
+    "orb_pct": "OREB / (OREB + opponent_DREB)",
+    "ftr": "FTA / FGA",
+    "three_point_attempt_rate": "3PA / FGA"
+  },
+  "pass_requirements": [
+    "Both source bytes match the frozen size and SHA-256 pins.",
+    "Required allowlisted schema columns exist.",
+    "Every accepted 2020 regular-season game has exactly two coherent opponent side rows.",
+    "Schedule and team-box accepted game IDs match exactly.",
+    "Every accepted side has valid components and denominators for all frozen formulas.",
+    "No forbidden outcome, score or market value is projected."
+  ],
+  "scientific_boundaries": {
+    "outcomes_scored": false,
+    "hit_rate_tested": false,
+    "model_fit": false,
+    "market_used": false,
+    "production_mutation": false,
+    "cross_sport_promotion": false
+  },
+  "next_gate_on_pass": "R3A2_STRICT_PRIOR_DATE_PREFIX_FEATURE_CONSTRUCTOR"
+}
