@@ -1,0 +1,48 @@
+name: WNBA R3B1 Per-Season Schedule Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3B1_PER_SEASON_SCHEDULE_RECOVERY_CONTRACT.json"
+      - "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json"
+      - "scripts/wnba-r3b1-per-season-schedule-recovery.py"
+      - ".github/workflows/wnba-r3b1-per-season-schedule-recovery.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen branch state
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install probe dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+
+      - name: Recover and verify per-season schedule custody
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3b1-per-season-schedule-recovery.py
+
+      - name: Upload outcome-blind recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3b1-per-season-schedule-recovery-${{ github.run_id }}
+          path: wnba-r3b1-per-season-schedule-recovery-evidence.json
+          if-no-files-found: error
+          retention-days: 90
