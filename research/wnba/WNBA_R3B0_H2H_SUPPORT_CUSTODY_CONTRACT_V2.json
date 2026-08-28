@@ -1,0 +1,82 @@
+{
+  "name": "WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V2",
+  "status": "FROZEN_BEFORE_RETRY",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "supersedes_operational_source_contract": "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT.json",
+  "supersession_reason": "Attempt 1 failed before reading any dataset because the previously frozen schedule asset_id 532156071 returned HTTP 404 after the mutable upstream release replaced that asset. No scientific rule, target cohort, feature formula or performance criterion is changed.",
+  "failed_attempt": {
+    "run_id": 33200107040,
+    "job_id": 98947141623,
+    "head_sha": "83bedd42d253e482b45a8d2cc03fd7cac2d4c399",
+    "failure_stage": "schedule asset metadata fetch",
+    "dataset_rows_read": false,
+    "outcome_values_loaded": false,
+    "market_data_loaded": false
+  },
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a_certification": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json",
+  "purpose": "Close the historical support window needed for strict-prefix two-season H2H and R3 feature construction across preregistered development targets 2020-2025.",
+  "target_cohort_policy": {
+    "preregistered_development_target_years": [2020, 2021, 2022, 2023, 2024, 2025],
+    "2019_role": "SUPPORT_ONLY_FOR_2020_PREFIX_AND_H2H",
+    "2019_may_become_target_year": false,
+    "2020_role": "TARGET_ELIGIBLE_ONLY_IF_CUSTODY_AUDIT_PASSES",
+    "performance_outcomes_may_change_target_year_eligibility": false
+  },
+  "h2h_semantics": {
+    "lookback": "Target-season meetings strictly before target date plus immediately preceding season meetings; same-date and future games excluded.",
+    "2020_requires": [2019, "2020 strict prior-date prefix"],
+    "2021_requires": [2020, "2021 strict prior-date prefix"],
+    "later_years": "Previous season plus strict prior-date target-season meetings."
+  },
+  "frozen_support_assets_from_release_metadata": {
+    "2019_team_box": {
+      "asset_id": 479692984,
+      "name": "team_box_2019.parquet",
+      "size": 41102,
+      "expected_sha256": "52890ad5e2c5a893f7493d6f23e69c01d62fe26e00b9f1b779d5e7f65fdaf849",
+      "role": "SUPPORT_ONLY"
+    },
+    "2020_team_box": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "expected_sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53",
+      "role": "TARGET_AND_SUPPORT"
+    },
+    "schedule_master": {
+      "asset_id": 533647611,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 449902,
+      "expected_sha256": "01ea843a464a37b510e92649d358ba81e242e755f7b590b059ffc2b736347dfd",
+      "metadata_observed_before_content_audit": "2026-08-28 upstream release replacement",
+      "role": "FIXTURE_IDENTITY_AND_CHRONOLOGY"
+    }
+  },
+  "audit_requirements": [
+    "Independently download every exact asset_id and match exact filename, byte size and SHA-256 before row inspection.",
+    "Inspect 2019/2020 season_type values and two-sided regular identity without assuming modern special-event counts.",
+    "Join every candidate 2020 regular target to the newly pinned schedule by canonical game_id and exact home/away identity.",
+    "Verify all R3A Four Factors/shot-profile required fields and formula-valid denominators on 2019/2020 two-sided regular rows.",
+    "Verify valid schedule dates for strict date-batch prefix construction.",
+    "No game may be included or excluded based on winner, score margin, model probability, accuracy or sportsbook information."
+  ],
+  "required_feature_fields": [
+    "field_goals_made",
+    "field_goals_attempted",
+    "three_point_field_goals_made",
+    "three_point_field_goals_attempted",
+    "free_throws_attempted",
+    "offensive_rebounds",
+    "defensive_rebounds",
+    "turnovers"
+  ],
+  "outcome_policy": {
+    "score_or_winner_values_loaded_for_custody_decision": false,
+    "outcome_columns_may_be_visible_as_schema_names": true,
+    "market_data_allowed": false
+  },
+  "pass_rule": "2019 support and 2020 target/support advance only if exact asset custody, two-sided regular identity, schedule chronology/join and required feature coverage all pass without outcome-based exclusions.",
+  "next_gate_on_pass": "R3B_STRICT_PREFIX_FEATURE_FORGE_2020_2025",
+  "production_mutation": false
+}
