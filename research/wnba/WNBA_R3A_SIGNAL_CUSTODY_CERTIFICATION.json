@@ -1,0 +1,132 @@
+{
+  "name": "WNBA_R3A_SIGNAL_CUSTODY_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SIGNAL_CUSTODY_CERTIFICATION",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "audit_contract": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT.json",
+  "probe_script": "scripts/wnba-r3a-signal-custody-probe.py",
+  "workflow": ".github/workflows/wnba-r3a-signal-custody-probe.yml",
+  "decision": "R3_HISTORICAL_PREFIX_FEATURE_CUSTODY_READY_FOR_FOUR_FACTORS_SHOT_PROFILE_QUALITY_FORM_H2H_AND_FATIGUE_CORE;_ACTUAL_VENUE_SEQUENCE_TRAVEL_BLOCKED;_AVAILABILITY_PROSPECTIVE_ONLY",
+  "target_outcomes_opened": false,
+  "target_outcome_values_loaded": false,
+  "parquet_values_projected_by_probe": false,
+  "production_mutation": false,
+  "combination_testing_authorized_by_r3a": false,
+  "final_evidence": {
+    "run_id": 33204405323,
+    "head_sha": "ff59a49a04b4dd599f262119c5b53040d8deccf8",
+    "conclusion": "success",
+    "artifact_id": 9699050328,
+    "artifact_name": "wnba-r3a-signal-custody-33204405323",
+    "artifact_digest": "sha256:e096ab509d33c7ac7b60947c390cce21998667d781d989014e548a6babc20669",
+    "evidence_file": "wnba-r3a-signal-custody-probe-evidence.json",
+    "evidence_bytes": 26922,
+    "evidence_sha256": "92c02c5cf8b08b0124909942ac9e7ad2d8f154c3d16e16a3183b69f3b2696947"
+  },
+  "team_box_custody": {
+    "2021": {
+      "asset_id": 479696175,
+      "bytes": 40196,
+      "sha256": "02e574a18b06c883247bd67d0e4b29423f0b6a5cba04c8b1579bf12d7af28d8e",
+      "schema_columns": 54,
+      "metadata_rows": 422,
+      "custody_verified": true
+    },
+    "2022": {
+      "asset_id": 479697715,
+      "bytes": 42711,
+      "sha256": "7919b2f7de526350476c868d1048162cc9b3bf6f9f059f41298e1d40450f871c",
+      "schema_columns": 54,
+      "metadata_rows": 482,
+      "custody_verified": true
+    },
+    "2023": {
+      "asset_id": 165078397,
+      "bytes": 55000,
+      "sha256": "ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9",
+      "schema_columns": 57,
+      "metadata_rows": 524,
+      "custody_verified": true
+    },
+    "2024": {
+      "asset_id": 417936297,
+      "bytes": 50957,
+      "sha256": "b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c",
+      "schema_columns": 57,
+      "metadata_rows": 528,
+      "custody_verified": true
+    },
+    "2025": {
+      "asset_id": 505304728,
+      "bytes": 49409,
+      "sha256": "b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09",
+      "schema_columns": 57,
+      "metadata_rows": 624,
+      "custody_verified": true
+    }
+  },
+  "common_required_schema_confirmed_2021_2025": [
+    "game_id",
+    "game_date",
+    "team_id",
+    "opponent_team_id",
+    "team_home_away",
+    "team_score",
+    "opponent_team_score",
+    "field_goals_made",
+    "field_goals_attempted",
+    "three_point_field_goals_made",
+    "three_point_field_goals_attempted",
+    "free_throws_attempted",
+    "offensive_rebounds",
+    "defensive_rebounds",
+    "turnovers"
+  ],
+  "signal_family_classification": {
+    "BASE_R2": "READY_HISTORICAL_PREFIX",
+    "FOUR_FACTORS": "READY_HISTORICAL_PREFIX",
+    "SHOT_PROFILE_MATCHUP": "READY_HISTORICAL_PREFIX",
+    "QUALITY_ADJUSTED_FORM": "READY_HISTORICAL_PREFIX",
+    "H2H_PREFIX": "READY_HISTORICAL_PREFIX",
+    "FATIGUE_CORE": "READY_HISTORICAL_PREFIX",
+    "TRAVEL_V2_ACTUAL_VENUE_SEQUENCE": "BLOCKED_SOURCE_CUSTODY",
+    "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY"
+  },
+  "four_factors_exact_schema_feasibility": {
+    "efg_pct": "READY: (field_goals_made + 0.5 * three_point_field_goals_made) / field_goals_attempted",
+    "turnover_rate": "READY: turnovers with field_goals_attempted and free_throws_attempted; exact R3 formula must be frozen before construction",
+    "offensive_rebound_rate": "READY: offensive_rebounds and opponent defensive_rebounds are reconstructible from the paired prior-game rows; exact pairing/formula must be frozen before construction",
+    "free_throw_rate": "READY: free_throws_attempted / field_goals_attempted"
+  },
+  "schedule_pin_drift": {
+    "asset_id": 532156071,
+    "expected_name": "wnba_games_in_data_repo.parquet",
+    "expected_size": 448575,
+    "expected_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "current_status": "UPSTREAM_PIN_NO_LONGER_RESOLVABLE_HTTP_404",
+    "prior_frozen_certification_rewritten": false,
+    "replacement_asset_silently_substituted": false,
+    "effect_on_r3a": "Does not invalidate the five frozen team-box schemas or already certified R2 static travel semantics, but blocks any new R3 claim of actual historical venue-sequence travel until separate source custody is established."
+  },
+  "scope_constraint": {
+    "certified_historical_source_years": [2021, 2022, 2023, 2024, 2025],
+    "2020_status": "NOT_AUDITED_BY_R3A_AND_NOT_AUTHORIZED_BY_THIS_CERTIFICATION",
+    "recommended_rolling_origin_design": "Use 2021 only as initial historical seed and evaluate target seasons 2022, 2023, 2024 and 2025 unless a separate 2020 custody certification is completed before feature construction. This preserves four OOS target seasons without inventing 2020 custody.",
+    "historical_results_role": "DEVELOPMENT_AND_FEASIBILITY_ONLY_NOT_CROSS_SPORT_CERTIFICATION"
+  },
+  "anti_leakage_closure": [
+    "R3A inspected schema metadata only; no Parquet values were projected or deserialized by the probe.",
+    "The presence of team_score/opponent_team_score in schema certifies only that later prior-game prefix features are feasible; target-game outcome values remain forbidden during feature construction.",
+    "Every R3 historical feature must be computed from finalized games on official dates strictly before the target date, with same-date and future games excluded.",
+    "Current or end-of-season ESPN aggregates may not be projected backward.",
+    "Unknown historical injury/availability state may not be imputed as zero or inferred from outcomes.",
+    "No feature-family combination, coefficient, threshold or Elite screen was tested during R3A."
+  ],
+  "closure": {
+    "r3a_status": "PASS_WITH_EXPLICIT_TRAVEL_AND_AVAILABILITY_BOUNDARIES",
+    "historical_feature_materialization_authorized": true,
+    "historical_combination_testing_authorized_now": false,
+    "next_gate": "R3B1_PREFIX_FEATURE_DEFINITION_AND_MATERIALIZATION_CONTRACT"
+  }
+}
