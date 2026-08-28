@@ -1,0 +1,47 @@
+name: WNBA R3A Signal Custody Probe
+
+on:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - 'research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json'
+      - 'research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT.json'
+      - 'research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json'
+      - 'scripts/wnba-r3a-signal-custody-probe.py'
+      - '.github/workflows/wnba-r3a-signal-custody-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install schema dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Probe pinned WNBA schemas without projecting values
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/wnba-r3a-signal-custody-probe.py 2>&1 | tee wnba-r3a-signal-custody-probe.log
+      - name: Upload R3A custody evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a-signal-custody-${{ github.run_id }}
+          path: |
+            wnba-r3a-signal-custody-probe.log
+            wnba-r3a-signal-custody-probe-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
