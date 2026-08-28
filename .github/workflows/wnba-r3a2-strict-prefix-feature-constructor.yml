@@ -1,0 +1,62 @@
+name: WNBA R3A2 Strict Prefix Four Factors
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CONTRACT.json"
+      - "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json"
+      - "scripts/wnba-r3a2-strict-prefix-feature-constructor.py"
+      - ".github/workflows/wnba-r3a2-strict-prefix-feature-constructor.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  construct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deterministic dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Build strict prior-date prefix
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a2-strict-prefix-feature-constructor.py
+      - name: Show evidence summary
+        if: always()
+        run: |
+          if [ -f wnba-r3a2-strict-prefix-four-factors-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a2-strict-prefix-four-factors-evidence.json'))
+          print(json.dumps({
+            'decision':p.get('decision'),
+            'rowset':p.get('rowset'),
+            'seasons':p.get('seasons'),
+            'same_day':p.get('same_day_source_use_count'),
+            'future':p.get('future_source_use_count'),
+            'self':p.get('target_self_source_use_count'),
+            'max_prior_violations':p.get('max_prior_date_violation_count'),
+            'duplicates':p.get('duplicate_emitted_game_id_count'),
+            'invalid_factor_ranges':p.get('invalid_factor_range_side_count'),
+            'next_gate':p.get('next_gate')
+          },indent=2))
+          PY
+          fi
+      - name: Upload R3A2 evidence and frozen rowset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a2-strict-prefix-four-factors-${{ github.run_id }}
+          path: |
+            wnba-r3a2-strict-prefix-four-factors-evidence.json
+            wnba-r3a2-strict-prefix-four-factors.jsonl
+          if-no-files-found: warn
+          retention-days: 90
