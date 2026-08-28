@@ -1,0 +1,96 @@
+{
+  "name": "WNBA_R3B0_H2H_SUPPORT_CUSTODY_CERTIFICATION_V1",
+  "status": "CERTIFIED_PASS",
+  "decision": "ADVANCE_TO_R3B_STRICT_PREFIX_FEATURE_FORGE_2020_2025",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "r3a_certification": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json",
+  "winning_source_contract": "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V3.json",
+  "production_mutation": false,
+  "target_outcome_values_loaded": false,
+  "market_data_loaded": false,
+  "performance_metrics_computed": false,
+  "evidence": {
+    "workflow": "WNBA R3B0 Per-Season Schedule Resolution V3",
+    "run_id": 33200690166,
+    "job_id": 98949111952,
+    "head_sha": "a65c0bbb1dcb0c73f191f0940ae5174eb9a715c1",
+    "artifact_id": 9697619001,
+    "artifact_name": "wnba-r3b0-v3-per-season-schedule-33200690166",
+    "artifact_zip_sha256": "0b9f38366d027026aaf2bf290dbf35c788217e96cb03e248d9ad8a3ba1a59800",
+    "evidence_file": "wnba-r3b0-v3-per-season-schedule-evidence.json",
+    "evidence_file_bytes": 9009,
+    "evidence_file_sha256": "069446799864e46f2bb1f1bf9e06a8c6559435889845927df4f20bc33ea7947e"
+  },
+  "frozen_assets": {
+    "2019_team_box": {
+      "asset_id": 479692984,
+      "name": "team_box_2019.parquet",
+      "size": 41102,
+      "sha256": "52890ad5e2c5a893f7493d6f23e69c01d62fe26e00b9f1b779d5e7f65fdaf849"
+    },
+    "2020_team_box": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    },
+    "2019_schedule": {
+      "asset_id": 102864880,
+      "name": "wnba_schedule_2019.parquet",
+      "size": 56756,
+      "sha256": "7ceacdd2d3672589feabbc9e156a2efdc96dd17a82f9ae16150037244df7fc5e",
+      "metadata_digest_was_null": true,
+      "digest_provenance": "Independently computed from exact frozen asset_id in outcome-blind V3 run 33200690166 and frozen here before R3B feature forging."
+    },
+    "2020_schedule": {
+      "asset_id": 102865118,
+      "name": "wnba_schedule_2020.parquet",
+      "size": 49341,
+      "sha256": "3499d19a2cd88771ccd1aabd6f2db02b5bebb153db91314a84ac9979238ee4b2",
+      "metadata_digest_was_null": true,
+      "digest_provenance": "Independently computed from exact frozen asset_id in outcome-blind V3 run 33200690166 and frozen here before R3B feature forging."
+    }
+  },
+  "identity_closure": {
+    "2019": {
+      "type2_team_box_games_before_special_exclusion": 205,
+      "special_event_game_id": "401151757",
+      "special_event_identity_rule": "The two team IDs are exactly 111719 and 112530, each appearing in no other type-2 game; exclusion leaves 12 franchise IDs with exactly 34 games each.",
+      "franchise_games": 204,
+      "schedule_joins": 204,
+      "exact_home_away_matches": 204,
+      "valid_date_games": 204,
+      "missing_franchise_game_ids": [],
+      "identity_mismatch_game_ids": []
+    },
+    "2020": {
+      "type2_team_box_games": 132,
+      "special_exclusions": [],
+      "franchise_games": 132,
+      "schedule_joins": 132,
+      "exact_home_away_matches": 132,
+      "valid_date_games": 132,
+      "missing_franchise_game_ids": [],
+      "identity_mismatch_game_ids": []
+    }
+  },
+  "v2_gap_resolution": {
+    "2019": {
+      "401105109": "REGULAR_FRANCHISE_FIXTURE_PRESENT_IN_PER_SEASON_SCHEDULE",
+      "401156333": "REGULAR_FRANCHISE_FIXTURE_PRESENT_IN_PER_SEASON_SCHEDULE"
+    },
+    "2020": {
+      "401241311": "REGULAR_FRANCHISE_FIXTURE_PRESENT_IN_PER_SEASON_SCHEDULE"
+    },
+    "root_cause": "wnba_games_in_data_repo.parquet is not a complete historical fixture chronology for these seasons; per-season schedule assets are authoritative for R3B0 fixture custody."
+  },
+  "anti_leakage_closure": [
+    "Only allowlisted game identity/date fields were projected from schedule assets.",
+    "No home_score, away_score, winner, team_score or opponent_score values were projected.",
+    "No sportsbook data was loaded.",
+    "No performance metric was computed.",
+    "The 2019 special-event exclusion was determined by preregistered low-frequency team identity, not by score, winner or predictive performance."
+  ],
+  "next_gate": "R3B_STRICT_PREFIX_FEATURE_FORGE_2020_2025"
+}
