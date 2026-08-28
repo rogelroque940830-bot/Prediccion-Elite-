@@ -1,0 +1,15 @@
+{
+  "name": "WNBA_R3B1_QUALITY_FORM_SEMANTICS_ADDENDUM_V1",
+  "status": "FROZEN_BEFORE_FEATURE_VALUE_MATERIALIZATION",
+  "created_date": "2026-08-28",
+  "parent": "research/wnba/WNBA_R3B1_PREFIX_FEATURE_DEFINITION_CONTRACT.json",
+  "clarification": {
+    "team_target_date_prefix_net_efficiency": "100 * (sum prior PTS - sum prior OPP_PTS) / sum prior possession_estimate within the current season, where possession_estimate = FGA + 0.44*FTA - OREB + TOV.",
+    "quality_adjusted_recent_game_value": "prior game_net_efficiency minus that game's opponent team_target_date_prefix_net_efficiency evaluated using the information set available before the current target date.",
+    "l5_l10_aggregation": "Arithmetic mean of qualifying adjusted recent-game values in chronological recency order.",
+    "missing_opponent_prefix": "Skip that game only for the quality-adjusted mean and expose the number of adjusted games used; do not alter target-row membership.",
+    "same_date_opponent_data": false,
+    "future_opponent_data": false
+  },
+  "no_feature_values_observed_before_freeze": true
+}
