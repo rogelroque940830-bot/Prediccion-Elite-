@@ -1,0 +1,95 @@
+{
+  "name": "WNBA_R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_REMAINING_FAMILY_AUDIT",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a2_certification": "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CERTIFICATION.json",
+  "historical_scope": {
+    "development_seasons": [2020, 2021, 2022, 2023, 2024, 2025],
+    "regular_season_only": true,
+    "target_outcome_scoring_in_this_gate": false,
+    "model_fit_in_this_gate": false,
+    "threshold_search_in_this_gate": false
+  },
+  "source_custody": {
+    "2020": "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json",
+    "2021_2025": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+    "required_asset_rule": "Exact pinned release asset id, byte size and SHA-256 must reproduce before any source classification may pass."
+  },
+  "families_under_audit": {
+    "SHOT_PROFILE_MATCHUP": {
+      "required_completed_game_components": [
+        "field_goals_made", "field_goals_attempted",
+        "three_point_field_goals_made", "three_point_field_goals_attempted",
+        "free_throws_attempted", "offensive_rebounds", "defensive_rebounds", "turnovers"
+      ],
+      "historical_candidate_semantics": [
+        "offensive eFG%, 3PAr and FTr from prior finalized games",
+        "defensive allowed eFG%, 3PAr and FTr from the paired opponent row of prior finalized games",
+        "offensive rebounding versus opponent defensive-rebounding interaction from prior finalized games"
+      ],
+      "current_or_end_of_season_snapshot_substitution_allowed": false
+    },
+    "QUALITY_ADJUSTED_FORM": {
+      "required_completed_game_components": [
+        "team_score", "opponent_team_score",
+        "field_goals_attempted", "free_throws_attempted", "offensive_rebounds", "turnovers",
+        "opponent_team_id", "game_date"
+      ],
+      "historical_candidate_semantics": [
+        "L5 and L10 prior-game scoring margin",
+        "L5 and L10 prior-game estimated possession efficiency",
+        "opponent-quality adjustment only after its exact formula is separately frozen before outcome evaluation"
+      ],
+      "post_target_score_use_allowed": false
+    },
+    "H2H_PREFIX": {
+      "required_completed_game_components": [
+        "game_id", "game_date", "season", "team_id", "team_home_away", "opponent_team_id", "team_score", "opponent_team_score"
+      ],
+      "historical_candidate_semantics": [
+        "meeting count strictly before target date",
+        "win share strictly before target date",
+        "average margin strictly before target date"
+      ],
+      "two_season_window_rule": "target season plus immediately preceding season only",
+      "known_boundary": "Full two-season support for a 2020 target requires a separately pinned 2019 source; this contract does not silently impute that missing previous-season history."
+    },
+    "FATIGUE_TRAVEL_V2": {
+      "date_based_components": ["game_date", "team_home_away", "team_id", "opponent_team_id"],
+      "historically_reconstructible_candidates": [
+        "days rest", "back-to-back", "three games in five days", "four games in seven days"
+      ],
+      "actual_trip_sequence_requirement": "Historical venue coordinates and venue identity for every prior stop must be separately certified before actual trip-distance or timezone sequence may enter R3.",
+      "deployed_static_franchise_distance_is_not_actual_trip_truth": true
+    },
+    "AVAILABILITY_STAR_POWER": {
+      "historical_status_expected": "BLOCKED_UNLESS_TIMESTAMPED_ARCHIVE_IS_FOUND",
+      "current_backend_source": "Live ESPN injury page scraper with daysOut evaluated against current time.",
+      "unknown_historical_availability_may_be_imputed_zero": false,
+      "prospective_capture_allowed_after_separate_freeze": true
+    }
+  },
+  "required_audit_evidence": [
+    "All 2020-2025 pinned team-box assets reproduce exact custody.",
+    "Required schema columns for each reconstructible family are present in every audited season.",
+    "Every accepted regular-season game has exactly two coherent opponent rows, one HOME and one AWAY.",
+    "All score/possession component values needed for quality-form and H2H reconstruction are finite where required.",
+    "Shot-profile offensive and opponent-allowed components are pair-reconstructible without external current snapshots.",
+    "Date-based fatigue features are reconstructible strictly from prior official dates.",
+    "No claim of actual historical travel sequence is made unless venue-coordinate custody passes separately.",
+    "Availability remains blocked historically unless an independently timestamped archive is certified."
+  ],
+  "scientific_boundaries": {
+    "this_gate_is_source_and_reconstructibility_audit_only": true,
+    "feature_weights_searched": false,
+    "elite_threshold_searched": false,
+    "hit_rate_tested": false,
+    "probability_calibration_tested": false,
+    "sportsbook_market_used": false,
+    "production_mutation": false,
+    "cross_sport_promotion": false
+  },
+  "next_gate_on_pass": "R3A4_PREREGISTER_FIRST_OOS_FAMILY_ABLATION_BASE_R2_PLUS_FOUR_FACTORS"
+}
