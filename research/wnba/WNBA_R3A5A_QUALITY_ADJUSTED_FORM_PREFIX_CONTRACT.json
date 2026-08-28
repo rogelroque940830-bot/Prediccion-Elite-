@@ -1,0 +1,116 @@
+{
+  "name": "WNBA_R3A5A_QUALITY_ADJUSTED_FORM_PREFIX_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_QUALITY_FORM_FEATURE_CONSTRUCTION_OR_EVALUATION",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a3_certification": "research/wnba/WNBA_R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_CERTIFICATION.json",
+  "parent_r3a4_result": "research/wnba/WNBA_R3A4_FIRST_OOS_FAMILY_ABLATION_RESULT.json",
+  "family": "QUALITY_ADJUSTED_FORM",
+  "purpose": "Construct deterministic leakage-safe L5/L10 recent efficiency, efficiency delta, margin and opponent-quality-adjusted form features before any R3A5 OOS family evaluation.",
+  "historical_scope": {
+    "seasons": [2020, 2021, 2022, 2023, 2024, 2025],
+    "regular_season_only": true,
+    "expected_regular_games": {
+      "2020": 132,
+      "2021": 192,
+      "2022": 216,
+      "2023": 240,
+      "2024": 240,
+      "2025": 286
+    },
+    "known_non_regular_special_event_ids_excluded": {
+      "2020": [],
+      "2021": ["401341447", "401353913"],
+      "2022": ["401455978", "401430112"],
+      "2023": ["401558893", "401507376"],
+      "2024": ["401620458", "401677672"],
+      "2025": ["401781604", "401736430"]
+    },
+    "expected_prefix_rows": {
+      "2020": 126,
+      "2021": 186,
+      "2022": 210,
+      "2023": 234,
+      "2024": 234,
+      "2025": 279,
+      "total": 1269
+    }
+  },
+  "source_custody": {
+    "2020_pin": "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json",
+    "2021_2025_pins": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+    "required_columns": [
+      "game_id", "season", "season_type", "game_date", "team_id", "team_home_away", "opponent_team_id",
+      "team_score", "opponent_team_score", "field_goals_attempted", "free_throws_attempted", "offensive_rebounds", "turnovers"
+    ],
+    "asset_rule": "Every source asset must reproduce its frozen byte size and SHA-256 before a row can be emitted."
+  },
+  "strict_temporal_custody": {
+    "cutoff": "STRICTLY_PRIOR_OFFICIAL_DATE",
+    "two_phase_same_date_sealing": "For every official date D, construct every target row on D from histories containing only dates < D. Only after all date-D target rows are sealed may date-D game statistics enter team histories.",
+    "same_day_results_allowed": false,
+    "target_game_result_allowed": false,
+    "future_game_results_allowed": false,
+    "season_carryover": false,
+    "cold_start_rule": "A target is excluded only if either side has zero prior finalized games in that season. No post-result exclusion is allowed."
+  },
+  "frozen_possession_and_efficiency_semantics": {
+    "estimated_possessions_per_game": "FGA + 0.44 * FTA - OREB + TOV",
+    "window_net_efficiency": "100 * (sum(team_score) - sum(opponent_team_score)) / sum(estimated_possessions)",
+    "window_margin_per_game": "mean(team_score - opponent_team_score)",
+    "season_window": "All finalized games in the current season on official dates strictly before target date.",
+    "recent5_window": "Last min(5, priorGameCount) finalized games by official date then game_id, all strictly before target date.",
+    "recent10_window": "Last min(10, priorGameCount) finalized games by official date then game_id, all strictly before target date."
+  },
+  "frozen_quality_adjustment": {
+    "opponent_strength_for_occurrence": "For each opponent occurrence in the side's recent window, compute that opponent's seasonNetEfficiency using all of that opponent's finalized current-season games strictly before the target date.",
+    "occurrence_weighting": "Each recent opponent occurrence receives equal weight. Repeat meetings therefore count once per occurrence.",
+    "recent_opponent_avg_season_net_efficiency": "Arithmetic mean of opponent seasonNetEfficiency across occurrences in the recent window.",
+    "quality_adjusted_recent_net_efficiency": "recentNetEfficiency + recentOpponentAvgSeasonNetEfficiency",
+    "direction": "A positive opponent season net efficiency increases the quality-adjusted value; a negative opponent season net efficiency decreases it.",
+    "missing_opponent_state_rule": "If any recent opponent occurrence has no strictly-prior target-date season state, fail construction for that target side; do not impute league average or zero."
+  },
+  "side_level_output_fields": [
+    "priorGameCount",
+    "maxPriorDate",
+    "seasonNetEfficiency",
+    "recent5GameCount",
+    "recent5NetEfficiency",
+    "recent5EfficiencyDeltaVsSeason",
+    "recent5MarginPerGame",
+    "recent5OpponentAvgSeasonNetEfficiency",
+    "recent5QualityAdjustedNetEfficiency",
+    "recent10GameCount",
+    "recent10NetEfficiency",
+    "recent10EfficiencyDeltaVsSeason",
+    "recent10MarginPerGame",
+    "recent10OpponentAvgSeasonNetEfficiency",
+    "recent10QualityAdjustedNetEfficiency"
+  ],
+  "constructor_gates": [
+    "All six pinned assets reproduce exact custody.",
+    "Every season contains exactly the frozen regular-season game count after exclusions.",
+    "Every accepted game has exactly one HOME and one AWAY row with reciprocal opponent identity and one official date.",
+    "Every ingested prior-game possession estimate is finite and > 0.",
+    "Same-day source-use count is 0.",
+    "Future source-use count is 0.",
+    "Target-self source-use count is 0.",
+    "Max-prior-date violations are 0.",
+    "Missing recent-opponent target-date state count is 0 for emitted rows.",
+    "Emitted row counts exactly equal 126,186,210,234,234,279 by season.",
+    "2021-2025 emitted game IDs exactly equal the frozen R1/R2 1,143-game population; 2020 exactly equals the frozen R2 126-game seed population."
+  ],
+  "scientific_boundaries": {
+    "target_outcomes_scored_in_this_gate": false,
+    "r3a5_model_fit_in_this_gate": false,
+    "feature_weight_search_in_this_gate": false,
+    "elite_threshold_search_in_this_gate": false,
+    "coverage_filter_search_in_this_gate": false,
+    "market_feature_use": false,
+    "four_factors_admitted_into_this_family": false,
+    "production_mutation": false
+  },
+  "next_gate_on_pass": "R3A5B_PREREGISTER_BASE_R2_PLUS_QUALITY_ADJUSTED_FORM_OOS_ABLATION",
+  "next_gate_on_fail": "R3A5A_REPAIR_REQUIRED_WITHOUT_FORMULA_RETUNE"
+}
