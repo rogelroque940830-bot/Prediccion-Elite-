@@ -9,6 +9,7 @@ on:
       - "research/wnba/WNBA_R3A4_FIRST_OOS_FAMILY_ABLATION_CONTRACT.json"
       - "research/wnba/WNBA_R2B2_FIVE_FOLD_RESULT.json"
       - "scripts/wnba-r3a4-first-oos-four-factors-ablation.py"
+      - "scripts/wnba-r3a4-artifact-redirect-runner.py"
       - ".github/workflows/wnba-r3a4-first-oos-four-factors-ablation.yml"
 
 permissions:
@@ -29,7 +30,7 @@ jobs:
       - name: Run frozen rolling-origin Four Factors ablation
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python scripts/wnba-r3a4-first-oos-four-factors-ablation.py
+        run: python scripts/wnba-r3a4-artifact-redirect-runner.py
       - name: Show R3A4 evidence summary
         if: always()
         run: |
