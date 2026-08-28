@@ -1,0 +1,64 @@
+name: WNBA R3A5A Quality Adjusted Form Prefix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A5A_QUALITY_ADJUSTED_FORM_PREFIX_CONTRACT.json"
+      - "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json"
+      - "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json"
+      - "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CERTIFICATION.json"
+      - "scripts/wnba-r3a5a-quality-adjusted-form-prefix.py"
+      - ".github/workflows/wnba-r3a5a-quality-adjusted-form-prefix.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  construct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deterministic dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Construct strict prior-date quality-adjusted form rowset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a5a-quality-adjusted-form-prefix.py
+      - name: Show R3A5A evidence summary
+        if: always()
+        run: |
+          if [ -f wnba-r3a5a-quality-adjusted-form-prefix-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a5a-quality-adjusted-form-prefix-evidence.json'))
+          print(json.dumps({
+            'decision':p.get('decision'),
+            'rowset':p.get('rowset'),
+            'populationParity':p.get('populationParity'),
+            'sameDay':p.get('same_day_source_use_count'),
+            'future':p.get('future_source_use_count'),
+            'targetSelf':p.get('target_self_source_use_count'),
+            'missingOpponentState':p.get('missing_recent_opponent_target_date_state_count'),
+            'seasons':p.get('seasons'),
+            'nextGate':p.get('nextGate')
+          },indent=2))
+          PY
+          fi
+      - name: Upload R3A5A evidence and rowset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a5a-quality-adjusted-form-prefix-${{ github.run_id }}
+          path: |
+            wnba-r3a5a-quality-adjusted-form-prefix-evidence.json
+            wnba-r3a5a-quality-adjusted-form-prefix.jsonl
+          if-no-files-found: warn
+          retention-days: 90
