@@ -1,0 +1,118 @@
+{
+  "name": "WNBA_R3A5B_QUALITY_ADJUSTED_FORM_OOS_ABLATION_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_R3A5B_METRIC_COMPUTATION",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_prefix_certification": "research/wnba/WNBA_R3A5A_QUALITY_ADJUSTED_FORM_PREFIX_CERTIFICATION.json",
+  "r3a4_four_factors_result": "FOUR_FACTORS_NOT_ADMITTED_BY_FROZEN_R3A4_ABLATION",
+  "ablation": "BASE_R2_VS_BASE_R2_PLUS_QUALITY_ADJUSTED_FORM",
+  "purpose": "Measure whether the preregistered quality-adjusted recent-form family adds reproducible rolling-origin OOS probability information conditional on the frozen R2 selected side. No Elite threshold or side-selection policy is searched in this gate.",
+  "frozen_inputs": {
+    "r2_artifact_id": 9661302701,
+    "r2_artifact_zip_sha256": "ff0d2757c233186150addc77b8bb9e45505c4acb2eb63937d8848f0c3e37a636",
+    "r2_2020_seed_file": "wnba-r2b1-2020-labeled-seed.jsonl",
+    "r2_2020_seed_sha256": "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2",
+    "r2_2021_2025_scored_file": "wnba-r1b2-scored-rowset.jsonl",
+    "r2_2021_2025_scored_sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319",
+    "quality_form_artifact_id": 9675157064,
+    "quality_form_artifact_zip_sha256": "4c8f1f402a984a27a7684eabf144115469b8d3226542f075929927688f9f51e8",
+    "quality_form_file": "wnba-r3a5a-quality-adjusted-form-prefix.jsonl",
+    "quality_form_sha256": "4c535400a27ccc731b6601c2ada10fa47ca7e44eb1b175e50ad2b70f822c982e",
+    "required_join": "Exact one-to-one season + gameId join across all 1269 rows. No post-result row dropping."
+  },
+  "population": {
+    "training_seed_season": 2020,
+    "target_seasons": [2021, 2022, 2023, 2024, 2025],
+    "expected_rows_all_seasons": 1269,
+    "expected_oos_target_rows": 1143,
+    "rolling_origin_rule": "For target season Y, fit only seasons strictly less than Y."
+  },
+  "orientation": {
+    "base_side": "Frozen R2 selectedSide.",
+    "raw_base_signal": "Frozen R2 p_win_selected_side.",
+    "response": "Frozen R2 selectedSideOutcome.",
+    "orientation_value": "+1 HOME selected, -1 AWAY selected.",
+    "side_switching": false
+  },
+  "frozen_features": [
+    "recent5_efficiency_delta_adv = orientation * (home.recent5EfficiencyDeltaVsSeason - away.recent5EfficiencyDeltaVsSeason)",
+    "recent10_efficiency_delta_adv = orientation * (home.recent10EfficiencyDeltaVsSeason - away.recent10EfficiencyDeltaVsSeason)",
+    "recent5_margin_adv = orientation * (home.recent5MarginPerGame - away.recent5MarginPerGame)",
+    "recent10_margin_adv = orientation * (home.recent10MarginPerGame - away.recent10MarginPerGame)",
+    "recent5_quality_adjusted_efficiency_adv = orientation * (home.recent5QualityAdjustedNetEfficiency - away.recent5QualityAdjustedNetEfficiency)",
+    "recent10_quality_adjusted_efficiency_adv = orientation * (home.recent10QualityAdjustedNetEfficiency - away.recent10QualityAdjustedNetEfficiency)"
+  ],
+  "excluded": [
+    "FOUR_FACTORS",
+    "SHOT_PROFILE_MATCHUP",
+    "H2H_PREFIX",
+    "new fatigue/travel features beyond BASE_R2",
+    "availability/star power",
+    "actual trip sequence",
+    "sportsbook market",
+    "manual adjustments"
+  ],
+  "training_only_preprocessing": {
+    "base_logit": "logit(clamp(raw_base_signal,1e-12,1-1e-12)); not standardized.",
+    "feature_standardization": "Within each rolling-origin fold, subtract training-fold mean and divide by training-fold population standard deviation for each of the six features. Target season never contributes to preprocessing.",
+    "zero_variance_rule": "If training population SD <= 1e-12, set that feature z-value to zero in train and target and report the event."
+  },
+  "reference_model": {
+    "form": "sigmoid(intercept + slope*base_logit)",
+    "algorithm": "Exact deterministic 1D Platt semantics frozen in R2 and reverified in R3A4.",
+    "ridge_lambda_on_slope": 0.001,
+    "initial": [0, 1],
+    "max_iterations": 100,
+    "newton_step_component_clamp": 2,
+    "convergence_tolerance": 1e-9,
+    "required_r2_fold_parameter_parity_abs_tolerance": 1e-9
+  },
+  "augmented_model": {
+    "form": "sigmoid(intercept + beta_base*base_logit + sum(beta_j*z_j)) for the six frozen quality-form features.",
+    "optimizer": "Same deterministic multivariate Newton/IRLS generalization used in frozen R3A4.",
+    "ridge_lambda": 0.001,
+    "penalty": "Intercept unpenalized; beta_base and all six feature slopes use identical L2 ridge lambda.",
+    "initial_parameters": "intercept=0, beta_base=1, all quality-form slopes=0",
+    "max_iterations": 100,
+    "newton_step_component_clamp": 2,
+    "convergence_tolerance": 1e-9,
+    "singular_hessian_rule": "Operational fail; no alternate optimizer after target outcomes."
+  },
+  "metrics": {
+    "per_fold": ["Brier", "log loss", "ECE10", "mean predicted minus observed"],
+    "pooled": ["Brier", "log loss", "ECE10", "mean predicted minus observed"],
+    "selected_side_accuracy": "descriptive and invariant because side switching is disabled"
+  },
+  "paired_uncertainty": {
+    "method": "Season-stratified paired bootstrap",
+    "replicates": 10000,
+    "rng": "NumPy PCG64",
+    "seed": 940830,
+    "reported": ["95 percent percentile CI for augmented-minus-reference Brier", "95 percent percentile CI for augmented-minus-reference log loss"]
+  },
+  "frozen_incremental_value_gate": {
+    "primary": "At least one pooled proper score has a directional 95 percent paired-bootstrap upper bound below 0 for augmented-minus-reference Brier OR log loss.",
+    "if_brier_qualifies": "Pooled log-loss degradation <= +0.005.",
+    "if_log_loss_qualifies": "Pooled Brier degradation <= +0.002.",
+    "ece_non_degradation": "Pooled ECE10 degradation <= +0.010.",
+    "season_breadth": "The qualifying proper score improves by point estimate in at least 3 of 5 target seasons.",
+    "single_season_dependency_forbidden": true,
+    "pass": "QUALITY_ADJUSTED_FORM_ADMITTED_TO_BOUNDED_R3_COMBINATION_RESEARCH",
+    "fail": "QUALITY_ADJUSTED_FORM_NOT_ADMITTED_BY_FROZEN_R3A5B_ABLATION"
+  },
+  "scientific_boundaries": {
+    "elite_threshold_search": false,
+    "coverage_filter_search": false,
+    "side_switching": false,
+    "target_season_feature_selection": false,
+    "target_season_hyperparameter_tuning": false,
+    "post_result_row_dropping": false,
+    "four_factors_combined": false,
+    "market_feature_use": false,
+    "production_mutation": false,
+    "historical_result_is_independent_certification": false
+  },
+  "next_gate_on_pass": "R3A6_H2H_PREFIX_ABLATION_WITH_QUALITY_FORM_ELIGIBLE_FOR_LATER_BOUNDED_COMBINATION",
+  "next_gate_on_fail": "R3A6_H2H_PREFIX_ABLATION_WITHOUT_QUALITY_FORM_COMBINATION_ADMISSION"
+}
