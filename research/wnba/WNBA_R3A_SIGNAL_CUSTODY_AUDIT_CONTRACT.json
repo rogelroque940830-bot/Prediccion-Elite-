@@ -1,0 +1,84 @@
+{
+  "name": "WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_SCHEMA_AND_COVERAGE_AUDIT",
+  "parent_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "purpose": "Determine which preregistered R3 signal families are exactly reconstructible from frozen historical WNBA assets before any feature-combination performance testing.",
+  "performance_labels_used_for_signal_selection": false,
+  "market_data_allowed": false,
+  "post_result_definition_changes_allowed": false,
+  "source_custody": {
+    "pins_from": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "download_rule": "Download each exact SportsDataverse release asset by frozen asset_id and require exact byte size and SHA-256 before schema/coverage inspection.",
+    "special_event_exclusion_game_ids": ["401341447", "401353913", "401455978", "401430112", "401558893", "401507376", "401620458", "401677672", "401781604", "401736430"]
+  },
+  "frozen_feature_definitions": {
+    "eFG_pct": {
+      "formula": "(FGM + 0.5 * 3PM) / FGA",
+      "required_fields": ["field_goals_made", "three_point_field_goals_made", "field_goals_attempted"]
+    },
+    "TOV_pct": {
+      "formula": "TOV / (FGA + 0.44 * FTA + TOV)",
+      "required_fields": ["turnovers", "field_goals_attempted", "free_throws_attempted"]
+    },
+    "ORB_pct": {
+      "formula": "OREB / (OREB + opponent_DREB)",
+      "required_fields": ["offensive_rebounds", "defensive_rebounds_on_paired_opponent_row"]
+    },
+    "FTr": {
+      "formula": "FTA / FGA",
+      "required_fields": ["free_throws_attempted", "field_goals_attempted"],
+      "consistency_note": "Matches the current WNBA shot-profile implementation's FTA/FGA convention."
+    },
+    "three_point_attempt_rate": {
+      "formula": "3PA / FGA",
+      "required_fields": ["three_point_field_goals_attempted", "field_goals_attempted"]
+    },
+    "opponent_allowed_profiles": {
+      "formula": "Use the paired opponent row from finalized prior games and the same frozen formulas; no target-game values.",
+      "required_fields": ["two_sided_game_identity", "same_stat_fields_as_offensive_profile"]
+    }
+  },
+  "coverage_rule": {
+    "exact_historical_reconstructible": "All required fields exist with finite/valid values at materially complete coverage on two-sided regular-season rows, and the target feature can be generated using only finalized prior official dates.",
+    "partial_or_proxy_only": "A required exact field or denominator is absent/incomplete but a non-equivalent proxy could be computed. Proxies are not silently promoted to the exact signal.",
+    "prospective_only": "The implementation/source is current-state only and no timestamped historical pregame custody is certified.",
+    "blocked": "No defensible historical or prospective custody currently exists for the preregistered signal."
+  },
+  "preclassified_non_schema_signals": {
+    "AVAILABILITY_STAR_POWER": {
+      "classification": "PROSPECTIVE_ONLY",
+      "reason": "Current ESPN injury implementation is a live scrape and computes days-out relative to current time; no timestamped 2021-2025 pregame injury archive is certified.",
+      "historical_unknown_imputed_zero": false
+    },
+    "MANUAL_AVAILABILITY_ADJUSTMENT": {
+      "classification": "BLOCKED",
+      "reason": "No historical timestamped manual-adjustment ledger is certified."
+    },
+    "H2H_PREFIX": {
+      "classification": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+      "reason": "Frozen schedule/team-game identity and finalized prior-game scores permit strict date-prefix reconstruction; target-date/same-date results remain excluded."
+    },
+    "FATIGUE_CALENDAR": {
+      "classification": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+      "reason": "Days rest, B2B, 3-in-5 and 4-in-7 are deterministic from frozen prior schedule chronology."
+    },
+    "TRAVEL_DEPLOYED_STATIC_SEMANTICS": {
+      "classification": "HISTORICAL_EXACT_DEPLOYED_SEMANTICS_RECONSTRUCTIBLE",
+      "reason": "R1A4D certified exact deployed franchise-coordinate Haversine semantics; this is not a claim of physical trip truth."
+    },
+    "TRAVEL_ACTUAL_LOCATION_SEQUENCE": {
+      "classification": "UNRESOLVED_PENDING_SEPARATE_VENUE_SEQUENCE_CUSTODY",
+      "reason": "R3 permits it only if actual prior-to-target location/venue coordinate custody is independently certified."
+    }
+  },
+  "hard_fail_conditions": [
+    "Any frozen asset id, byte size or SHA-256 mismatch.",
+    "Any schema-driven change to a frozen feature formula during the audit.",
+    "Any use of sportsbook data to classify sporting-signal custody.",
+    "Any claim that current injury status is historical pregame truth."
+  ],
+  "next_gate_on_pass": "R3B_STRICT_PREFIX_FEATURE_FORGE",
+  "production_mutation": false
+}
