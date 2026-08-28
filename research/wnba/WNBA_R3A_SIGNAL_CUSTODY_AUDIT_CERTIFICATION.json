@@ -1,0 +1,79 @@
+{
+  "name": "WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION_V1",
+  "status": "CERTIFIED_PASS",
+  "decision": "ADVANCE_TO_R3B_STRICT_PREFIX_FEATURE_FORGE",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "audit_contract": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CONTRACT.json",
+  "production_mutation": false,
+  "combination_performance_testing_performed": false,
+  "target_outcome_values_loaded": false,
+  "market_data_loaded": false,
+  "evidence": {
+    "workflow": "WNBA R3A Signal Custody Audit",
+    "run_id": 33199720373,
+    "job_id": 98945839271,
+    "head_sha": "9a3266f568749c49ee05a7dd347dbe33e4cdb97b",
+    "artifact_id": 9697236331,
+    "artifact_name": "wnba-r3a-signal-custody-33199720373",
+    "artifact_zip_sha256": "551bd1280345b9ed55827d830de969dbf849a2dd5285afe7c6edd37cfc63667f",
+    "evidence_file": "wnba-r3a-signal-custody-evidence.json",
+    "evidence_file_bytes": 29597,
+    "evidence_file_sha256": "58d1ac271e85ff6562bf7282156a6fcdb37a9e6caa2249fb9bf2d5a4e845b24c"
+  },
+  "source_custody": {
+    "all_frozen_assets_verified": true,
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "two_sided_regular_games": 1174,
+    "expected_two_sided_regular_games": 1174,
+    "two_sided_regular_rows": 2348,
+    "special_events_excluded": true,
+    "hard_failures": 0
+  },
+  "exact_historical_feature_custody": {
+    "eFG_pct": {
+      "formula": "(FGM + 0.5 * 3PM) / FGA",
+      "valid_rows": 2348,
+      "valid_row_rate": 1.0
+    },
+    "TOV_pct": {
+      "formula": "TOV / (FGA + 0.44 * FTA + TOV)",
+      "valid_rows": 2348,
+      "valid_row_rate": 1.0
+    },
+    "ORB_pct": {
+      "formula": "OREB / (OREB + opponent_DREB)",
+      "valid_rows": 2348,
+      "valid_row_rate": 1.0
+    },
+    "FTr": {
+      "formula": "FTA / FGA",
+      "valid_rows": 2348,
+      "valid_row_rate": 1.0
+    },
+    "three_point_attempt_rate": {
+      "formula": "3PA / FGA",
+      "valid_rows": 2348,
+      "valid_row_rate": 1.0
+    }
+  },
+  "signal_family_classification": {
+    "FOUR_FACTORS": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+    "SHOT_PROFILE_MATCHUP": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+    "QUALITY_ADJUSTED_FORM": "HISTORICAL_EXACT_RECONSTRUCTIBLE_FROM_STRICT_PRIOR_GAME_PREFIX",
+    "H2H_PREFIX": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+    "FATIGUE_CALENDAR": "HISTORICAL_EXACT_RECONSTRUCTIBLE",
+    "TRAVEL_DEPLOYED_STATIC_SEMANTICS": "HISTORICAL_EXACT_DEPLOYED_SEMANTICS_RECONSTRUCTIBLE",
+    "TRAVEL_ACTUAL_LOCATION_SEQUENCE": "UNRESOLVED_PENDING_SEPARATE_VENUE_SEQUENCE_CUSTODY",
+    "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY",
+    "MANUAL_AVAILABILITY_ADJUSTMENT": "BLOCKED"
+  },
+  "anti_leakage_closure": [
+    "Feature definitions were frozen before schema inspection.",
+    "No sportsbook data was loaded.",
+    "No target outcome values were loaded to classify signal custody.",
+    "Historical unknown injuries were not imputed as zero.",
+    "No feature-combination accuracy testing was performed in R3A."
+  ],
+  "next_gate": "R3B_STRICT_PREFIX_FEATURE_FORGE"
+}
