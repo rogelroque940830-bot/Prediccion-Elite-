@@ -1,0 +1,56 @@
+name: WNBA R3A3 Remaining Signal Family Custody
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_CONTRACT.json"
+      - "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json"
+      - "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json"
+      - "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CONTRACT.json"
+      - "scripts/wnba-r3a3-remaining-signal-family-custody.py"
+      - ".github/workflows/wnba-r3a3-remaining-signal-family-custody.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deterministic dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Audit remaining historical signal-family custody
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a3-remaining-signal-family-custody.py
+      - name: Show evidence summary
+        if: always()
+        run: |
+          if [ -f wnba-r3a3-remaining-signal-family-custody-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a3-remaining-signal-family-custody-evidence.json'))
+          print(json.dumps({
+            'decision':p.get('decision'),
+            'totals':p.get('totals'),
+            'families':p.get('family_classification'),
+            'next_gate':p.get('next_gate')
+          },indent=2))
+          PY
+          fi
+      - name: Upload R3A3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a3-remaining-signal-family-custody-${{ github.run_id }}
+          path: wnba-r3a3-remaining-signal-family-custody-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
