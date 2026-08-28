@@ -1,0 +1,48 @@
+name: WNBA R3A1B 2020 Four Factors Custody
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_SOURCE_CONTRACT.json"
+      - "scripts/wnba-r3a1b-2020-four-factors-custody.py"
+      - ".github/workflows/wnba-r3a1b-2020-four-factors-custody.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  custody-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install audit dependency
+        run: python -m pip install --disable-pip-version-check "pyarrow==21.0.0"
+      - name: Audit frozen 2020 source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r3a1b-2020-four-factors-custody.py
+      - name: Show result
+        if: always()
+        run: |
+          if [ -f wnba-r3a1b-2020-four-factors-evidence.json ]; then
+            python - <<'PY'
+          import json
+          p=json.load(open('wnba-r3a1b-2020-four-factors-evidence.json'))
+          print(json.dumps({k:p.get(k) for k in ['decision','schedule_type2_games','team_box_type2_games','special_event_classification','pair_integrity_failures','next_gate']},indent=2))
+          PY
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3a1b-2020-four-factors-custody-${{ github.run_id }}
+          path: wnba-r3a1b-2020-four-factors-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
