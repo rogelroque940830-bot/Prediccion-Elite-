@@ -1,0 +1,96 @@
+{
+  "name": "WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_PREFIX_CONSTRUCTION",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3_contract_commit": "e466abee37c386aee965264e7687224fa4f7602b",
+  "source_certifications": [
+    "research/wnba/WNBA_R3A1_FOUR_FACTORS_CUSTODY_CERTIFICATION.json",
+    "research/wnba/WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION.json"
+  ],
+  "historical_scope": {
+    "seasons": [2020, 2021, 2022, 2023, 2024, 2025],
+    "market": "FULL_GAME_GAME_WINNER_RESEARCH_FEATURES_ONLY",
+    "regular_season_only": true,
+    "known_non_regular_special_event_ids_excluded": {
+      "2020": [],
+      "2021": ["401341447", "401353913"],
+      "2022": ["401455978", "401430112"],
+      "2023": ["401558893", "401507376"],
+      "2024": ["401620458", "401677672"],
+      "2025": ["401781604", "401736430"]
+    }
+  },
+  "identity_rule": {
+    "primary_game_identity": "Pinned season team-box assets: game_id, game_date, team_id, team_home_away, opponent_team_id.",
+    "2020_exception": "Pinned schedule master is known to omit game_id 401241311; certified team-box identity is authoritative for 2020.",
+    "pair_requirement": "Exactly two coherent opponent rows, exactly one HOME and one AWAY, and identical parsed game_date on both sides."
+  },
+  "anti_leakage_batch_rule": {
+    "target_date_rule": "For every official date D, construct and seal ALL target-game feature rows from team histories containing only finalized regular-season games with game_date strictly less than D.",
+    "ingestion_rule": "Only after every target row for date D is sealed may any completed-game components from date D be appended to team history.",
+    "same_day_values_allowed": false,
+    "future_values_allowed": false,
+    "target_game_self_values_allowed": false,
+    "cross_season_history_allowed": false,
+    "outcome_or_score_values_projected": false,
+    "market_values_allowed": false
+  },
+  "cold_start_rule": {
+    "target_row_is_emitted_only_if": "Both target sides have at least one prior finalized regular-season game in the same season.",
+    "reason": "Every emitted factor requires genuine pregame team history; no league-average or post-hoc imputation is authorized.",
+    "exclusion_is_outcome_blind": true
+  },
+  "frozen_feature_windows": {
+    "season_to_date": "All prior finalized same-season regular-season games.",
+    "recent10": "The last at most 10 prior finalized same-season regular-season games ordered by game_date, then game_id for deterministic tie handling."
+  },
+  "frozen_aggregation_semantics": {
+    "method": "RATIO_OF_SUMS",
+    "reason": "Preserves possession/attempt weighting and avoids treating low-volume and high-volume games as equal percentage observations.",
+    "efg_pct": "(sum(FGM) + 0.5 * sum(3PM)) / sum(FGA)",
+    "tov_pct": "sum(TOV) / (sum(FGA) + 0.44 * sum(FTA) + sum(TOV))",
+    "orb_pct": "sum(OREB) / (sum(OREB) + sum(opponent_DREB))",
+    "ftr": "sum(FTA) / sum(FGA)",
+    "three_point_attempt_rate": "sum(3PA) / sum(FGA)"
+  },
+  "row_schema": {
+    "identity": ["season", "gameId", "gameDate", "homeTeamId", "awayTeamId"],
+    "side_prefix_fields": [
+      "priorGameCount", "maxPriorDate",
+      "season.efgPct", "season.tovPct", "season.orbPct", "season.ftr", "season.threePointAttemptRate",
+      "recent10.gameCount", "recent10.efgPct", "recent10.tovPct", "recent10.orbPct", "recent10.ftr", "recent10.threePointAttemptRate"
+    ],
+    "provenance": ["featureCutoffRule", "sameDayExcluded", "outcomeAttached", "marketAttached"]
+  },
+  "determinism": {
+    "row_order": "season ascending, gameDate ascending, gameId ascending",
+    "serialization": "Canonical compact JSON per row with sorted object keys, newline-delimited UTF-8.",
+    "digest": "SHA-256 of exact JSONL bytes."
+  },
+  "required_evidence": [
+    "Frozen asset size/SHA verification for all 2020-2025 team-box sources.",
+    "Per-season accepted regular-season game counts.",
+    "Per-season emitted prefix row counts and cold-start exclusions.",
+    "Zero duplicate emitted gameIds.",
+    "Zero pair/date identity failures.",
+    "Zero same-day source uses.",
+    "Zero future source uses.",
+    "Zero target-self source uses.",
+    "For every emitted side, maxPriorDate < target gameDate.",
+    "All emitted factor values finite and within mathematically valid ranges.",
+    "No score, winner, market, injury or manual-adjustment values in the output rowset.",
+    "Canonical rowset bytes and SHA-256."
+  ],
+  "scientific_boundaries": {
+    "outcomes_opened": false,
+    "model_fit": false,
+    "feature_weight_search": false,
+    "elite_threshold_search": false,
+    "hit_rate_tested": false,
+    "production_mutation": false,
+    "cross_sport_promotion": false
+  },
+  "next_gate_on_pass": "R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_OR_PREREGISTERED_FAMILY_ABLATION_STAGE"
+}
