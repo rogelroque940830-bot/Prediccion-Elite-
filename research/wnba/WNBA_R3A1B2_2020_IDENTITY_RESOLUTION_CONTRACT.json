@@ -1,0 +1,49 @@
+{
+  "name": "WNBA_R3A1B2_2020_IDENTITY_RESOLUTION_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_IDENTITY_RESOLUTION_RUN",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "trigger_run_id": 33143028487,
+  "trigger_finding": {
+    "team_box_type2_games": 132,
+    "schedule_type2_games": 131,
+    "team_box_only_game_id": "401241311",
+    "factor_component_rows_valid": 264,
+    "pair_integrity_failures": 0,
+    "schedule_metadata_candidates": 5,
+    "candidate_note_pattern": "RESCHEDULED FROM ..."
+  },
+  "official_population_control": {
+    "expected_teams": 12,
+    "expected_regular_games_per_team": 22,
+    "expected_regular_games_total": 132,
+    "derivation": "12 teams * 22 games / 2 = 132",
+    "source_basis": "WNBA official 2020 season announcement states a 22-game schedule for each of 12 teams.",
+    "source_url": "https://www.wnba.com/news/wnbas-2020-regular-season-tips-off-july-25-with-opening-weekend-dedicated-to-black-lives-matter-movement"
+  },
+  "resolution_rule": {
+    "primary_2020_identity_source_if_pass": "Pinned team_box_2020.parquet",
+    "schedule_role": "Secondary identity cross-check; one empirically identified missing schedule row is tolerated only if all independent population and pair controls pass.",
+    "rescheduled_note_rule": "Schedule rows whose note is exactly a RESCHEDULED FROM annotation remain regular-season games; rescheduling is not a special-event exclusion.",
+    "no_other_schedule_gap_allowed": true,
+    "missing_game_id_must_equal": "401241311"
+  },
+  "pass_requirements": [
+    "Pinned team-box and schedule assets still match frozen SHA-256 and size.",
+    "Team-box season_type=2 contains exactly 132 unique games and 264 side rows.",
+    "Exactly 12 unique teams appear and every team appears in exactly 22 games.",
+    "Every game has exactly two coherent opponent rows with one home and one away side.",
+    "Every game has a parseable game_date and the two side rows agree on the date.",
+    "The schedule contains 131 of the 132 team-box game IDs, with no schedule-only IDs and exactly one team-box-only ID: 401241311.",
+    "All non-empty 2020 schedule note candidates are ordinary RESCHEDULED FROM annotations with active teams; no other special-event metadata candidate is present.",
+    "No score, winner, outcome or market values are projected."
+  ],
+  "scientific_boundaries": {
+    "outcomes_scored": false,
+    "model_fit": false,
+    "hit_rate_tested": false,
+    "market_used": false,
+    "production_mutation": false
+  },
+  "next_gate_on_pass": "R3A2_STRICT_PRIOR_DATE_PREFIX_FEATURE_CONSTRUCTOR"
+}
