@@ -1,0 +1,134 @@
+{
+  "name": "WNBA_R3B_STRICT_PREFIX_FEATURE_FORGE_CONTRACT_V1",
+  "status": "FROZEN_BEFORE_R3B_ROWSET_CONSTRUCTION",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a_certification": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json",
+  "parent_r3b0_certification": "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CERTIFICATION.json",
+  "purpose": "Forge one deterministic leakage-safe pregame feature row per eligible 2020-2025 WNBA regular-season target before any R3 family weighting, model fitting, threshold search, calibration or performance comparison.",
+  "development_scope": {
+    "target_seasons": [2020, 2021, 2022, 2023, 2024, 2025],
+    "support_only_season": 2019,
+    "support_only_role": "2019 may contribute only finalized prior meetings to 2020 H2H_PREFIX; 2019 never becomes an R3 target row.",
+    "expected_regular_targets_before_cold_start": {"2020": 132, "2021": 192, "2022": 216, "2023": 240, "2024": 240, "2025": 286},
+    "market_data_allowed": false,
+    "availability_history_allowed": false,
+    "performance_metrics_allowed": false
+  },
+  "source_custody": {
+    "2019_2020": "Use only exact team-box and per-season schedule assets frozen in WNBA_R3B0_H2H_SUPPORT_CUSTODY_CERTIFICATION.json.",
+    "2021_2025": "Use only exact team-box and schedule-master assets frozen in WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json.",
+    "special_events": {
+      "2019": ["401151757"],
+      "2020": [],
+      "2021": ["401341447", "401353913"],
+      "2022": ["401455978", "401430112"],
+      "2023": ["401558893", "401507376"],
+      "2024": ["401620458", "401677672"],
+      "2025": ["401781604", "401736430"]
+    },
+    "production_travel_ts_blob_sha": "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b",
+    "production_wnba_model_ts_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c"
+  },
+  "strict_daily_chokepoint": {
+    "phase_1": "For target date D, build and serialize every eligible target row from state containing only dates strictly earlier than D.",
+    "phase_2": "Only after all date-D target rows are sealed may date-D score/stat values be projected and appended for later dates.",
+    "same_date_results": "NEVER usable, regardless of actual tip/final ordering within date D.",
+    "future_results": "NEVER usable.",
+    "target_self": "NEVER present in its own feature prefix."
+  },
+  "eligibility": {
+    "base_requirement": "Both target teams need at least one finalized current-season prior game with all traditional fields required by BASE_R2 and exact R3 families.",
+    "cold_start": "Exclude row and report; do not borrow previous-season ratings or season-end snapshots.",
+    "missing_required_stat": "Exclude row and report; never zero-fill.",
+    "h2h_zero_meetings": "Keep row with meetings=0 and winShare/avgMargin null."
+  },
+  "base_r2_frozen_reference": {
+    "pace": "mean(FGA) + 0.44*mean(FTA) - mean(OREB) + mean(TOV)",
+    "offRtg": "100*mean(points_scored)/pace",
+    "defRtg": "100*mean(points_allowed)/pace",
+    "netRtg": "offRtg-defRtg",
+    "winRate": "wins/gamesPlayed",
+    "recent_advanced_aliases": "recentPace/recentOffRtg/recentDefRtg/recentNetRtg remain aliases of full current-season prefix values, matching frozen R2 fallback semantics.",
+    "recentPpg_recentWinPct": "latest up to 10 current-season prior games",
+    "deployed_daysRest": "calendar-day difference target date minus latest prior game date",
+    "deployed_isB2B_quirk": "true iff the gap between latest and second-latest prior games is <=1 day; preserved only inside BASE_R2 reference.",
+    "b2bWasRoad": "when deployed_isB2B_quirk is true, second-latest prior game was road",
+    "gamesLast7": "prior current-season games dated >= target date minus 7 days",
+    "streak": "signed current W/L run from latest prior final",
+    "sos": "latest up to 10 opponent occurrences; each opponent uses its strict current-date prefix with 40% season + 60% latest-up-to-10 fallback off/def ratings; repeated opponents retain occurrence weighting.",
+    "travel": "Exact deployed static franchise-coordinate Haversine semantics parsed from frozen travel.ts; home travel=0, away travel=away-franchise-to-home-franchise distance. This is not physical trip truth.",
+    "availability": "Omitted from historical R3 rowset; historical unknown is not zero."
+  },
+  "four_factors": {
+    "windows": ["season_to_date", "latest_up_to_10"],
+    "offense": {
+      "eFG": "(FGM + 0.5*3PM)/FGA",
+      "TOVpct": "TOV/(FGA + 0.44*FTA + TOV)",
+      "ORBpct": "OREB/(OREB + opponent_DREB)",
+      "FTr": "FTA/FGA"
+    },
+    "allowed_profile": "For each side also forge opponent-allowed values from paired opponent rows in its own prior games using identical formulas.",
+    "aggregation_rule": "Aggregate numerators and denominators across the selected prior-game window, then divide; do not average per-game percentages."
+  },
+  "shot_profile_matchup": {
+    "windows": ["season_to_date", "latest_up_to_10"],
+    "threePointAttemptRate": "sum(3PA)/sum(FGA)",
+    "eFG": "same exact FOUR_FACTORS eFG",
+    "FTr": "same exact FOUR_FACTORS FTr",
+    "opponent_allowed": "same quantities calculated from opponents' paired rows in games previously played by the target team",
+    "bounded_raw_matchup_deltas": ["off_eFG-minus-opponentAllowed_eFG", "off_3PAr-minus-opponentAllowed_3PAr", "off_FTr-minus-opponentAllowed_FTr"]
+  },
+  "quality_adjusted_form": {
+    "recent_windows": [5, 10],
+    "recentNetRtg": "100*(sum(points_scored)-sum(points_allowed))/sum(possessions_estimate), where possessions_estimate=FGA+0.44*FTA-OREB+TOV.",
+    "formDelta": "recentNetRtg - current-season prefix netRtg",
+    "qualityAdjustedGameNet": "one-game netRtg minus opponent pregame current-season netRtg known before that historical game's date; unavailable when opponent had no prior state.",
+    "qualityAdjustedRecent": "mean qualityAdjustedGameNet across available latest 5 or 10 prior current-season games; null if none available."
+  },
+  "h2h_prefix": {
+    "season_window": "target season plus immediately previous season only",
+    "date_rule": "meeting date strictly earlier than target date",
+    "outputs_per_side": ["meetings", "winShare", "avgMargin"],
+    "2019_usage": "Only as previous-season support for 2020 targets."
+  },
+  "fatigue_calendar_v2": {
+    "trueDaysRest": "target date minus latest prior current-season game date",
+    "trueB2B": "true iff trueDaysRest==1",
+    "priorGamesLast4Days": "count prior games dated >= target date minus 4 days",
+    "wouldBe3in5": "priorGamesLast4Days>=2",
+    "priorGamesLast6Days": "count prior games dated >= target date minus 6 days",
+    "wouldBe4in7": "priorGamesLast6Days>=3",
+    "actual_location_sequence": "EXCLUDED_UNTIL_SEPARATE_CUSTODY; deployed static travel remains only in BASE_R2."
+  },
+  "rowset_rules": {
+    "one_row_per_game": true,
+    "target_score_present": false,
+    "target_winner_present": false,
+    "market_present": false,
+    "injury_or_manual_adjustment_present": false,
+    "canonical_order": "season,targetDate,gameId",
+    "canonical_encoding": "UTF-8 JSON Lines, sort_keys=true, compact separators, terminal newline",
+    "sha256_freeze_required": true
+  },
+  "empirical_gates": {
+    "source_hashes_match": true,
+    "regular_fixture_counts_exact": true,
+    "target_self_in_prefix_count": 0,
+    "same_day_value_used_count": 0,
+    "future_value_used_count": 0,
+    "target_outcome_fields_in_rowset": 0,
+    "duplicate_game_ids": 0,
+    "2019_target_rows": 0,
+    "travel_coordinate_missing_rows": 0,
+    "minimum_total_eligible_rows": 1200,
+    "required_target_seasons": 6
+  },
+  "decision_policy": {
+    "if_all_gates_pass": "CERTIFIED_R3B_STRICT_PREFIX_FEATURE_ROWSET",
+    "otherwise": "R3B_NOT_CERTIFIED_REPAIR_REQUIRED",
+    "performance_testing_remains_blocked_until_certification": true
+  },
+  "next_gate_on_pass": "R3C_PREREGISTERED_ROLLING_ORIGIN_ABLATION",
+  "production_mutation": false
+}
