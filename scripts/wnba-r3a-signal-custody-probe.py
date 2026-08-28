@@ -7,6 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import pyarrow.parquet as pq
@@ -56,7 +57,24 @@ def download_and_verify(pin: dict[str, Any], dst: Path) -> dict[str, Any]:
         "sha256": sha,
         "expected_sha256": expected_sha,
         "custody_verified": ok,
+        "resolvable_now": True,
     }
+
+
+def safe_download_and_verify(pin: dict[str, Any], dst: Path) -> dict[str, Any]:
+    try:
+        return download_and_verify(pin, dst)
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        return {
+            "asset_id": int(pin["asset_id"]),
+            "expected_name": pin.get("name"),
+            "expected_size": int(pin["size"]),
+            "expected_sha256": str(pin["sha256"]).removeprefix("sha256:"),
+            "custody_verified": False,
+            "resolvable_now": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "scientific_interpretation": "Pinned bytes are not currently resolvable from the mutable upstream release surface; prior frozen certification is not silently replaced by a new asset.",
+        }
 
 
 def schema_only(path: Path) -> dict[str, Any]:
@@ -100,19 +118,28 @@ def main() -> None:
 
         schedule_pin = dict(pins["frozen_asset_pins"]["schedule_master"])
         schedule_path = root / "schedule.parquet"
-        sev = download_and_verify(schedule_pin, schedule_path)
+        sev = safe_download_and_verify(schedule_pin, schedule_path)
         evidence["assets"]["schedule_master"] = sev
-        if not sev["custody_verified"]:
-            raise SystemExit("schedule custody mismatch")
-        s_schema = schema_only(schedule_path)
-        s_names = set(s_schema["columns"])
         hints = audit["schedule_schema_hints_for_travel_v2"]
-        matched_hints = sorted([c for c in s_names if any(h in c.lower() for h in hints)])
-        evidence["schedule"] = {
-            **s_schema,
-            "travel_location_columns_matching_hints": matched_hints,
-            "actual_venue_sequence_schema_candidate": bool(matched_hints),
-        }
+        matched_hints: list[str] = []
+        if sev.get("custody_verified") and schedule_path.exists():
+            s_schema = schema_only(schedule_path)
+            s_names = set(s_schema["columns"])
+            matched_hints = sorted([c for c in s_names if any(h in c.lower() for h in hints)])
+            evidence["schedule"] = {
+                **s_schema,
+                "travel_location_columns_matching_hints": matched_hints,
+                "actual_venue_sequence_schema_candidate": bool(matched_hints),
+                "current_pin_status": "RESOLVABLE_AND_MATCHED",
+            }
+        else:
+            evidence["schedule"] = {
+                "values_projected": False,
+                "travel_location_columns_matching_hints": [],
+                "actual_venue_sequence_schema_candidate": False,
+                "current_pin_status": "UPSTREAM_PIN_NO_LONGER_RESOLVABLE",
+                "prior_certification_preserved": True,
+            }
 
         common: set[str] | None = None
         union: set[str] = set()
@@ -125,13 +152,22 @@ def main() -> None:
 
         for year in SEASONS:
             pin = dict(pins["frozen_asset_pins"][f"{year}_team_box"])
-            # Older certification omitted name for some season pins; frozen filename is deterministic.
             pin.setdefault("name", f"team_box_{year}.parquet")
             path = root / f"team_box_{year}.parquet"
-            ev = download_and_verify(pin, path)
+            ev = safe_download_and_verify(pin, path)
             evidence["assets"][f"team_box_{year}"] = ev
-            all_custody &= bool(ev["custody_verified"])
-            if not ev["custody_verified"]:
+            verified = bool(ev.get("custody_verified"))
+            all_custody &= verified
+            if not verified:
+                all_four_factor_ready = False
+                all_shot_ready = False
+                all_quality_ready = False
+                all_h2h_ready = False
+                evidence["team_box_seasons"][str(year)] = {
+                    "schema_available": False,
+                    "values_projected": False,
+                    "reason": ev.get("error", "custody mismatch"),
+                }
                 continue
             sch = schema_only(path)
             names = set(sch["columns"])
@@ -157,25 +193,28 @@ def main() -> None:
                 "h2h_prefix_complete": h2h_ready,
             }
 
-        if not all_custody:
-            raise SystemExit("one or more team-box custody mismatches")
-
         common = common or set()
         evidence["cross_season"] = {
             "common_columns": sorted(common),
             "union_columns": sorted(union),
-            "schema_identical_all_years": len({tuple(sorted(v)) for v in year_column_sets.values()}) == 1,
-            "all_five_seasons_custody_verified": all_custody,
+            "schema_identical_across_resolved_years": len({tuple(sorted(v)) for v in year_column_sets.values()}) <= 1,
+            "resolved_team_box_seasons": sorted(year_column_sets),
+            "all_five_seasons_custody_verified_now": all_custody,
         }
 
-        fatigue_core = {"game_date", "team_id", "team_home_away"}.issubset(common)
+        fatigue_core = all_custody and {"game_date", "team_id", "team_home_away"}.issubset(common)
+        def historical_class(ready: bool) -> str:
+            if not all_custody:
+                return "BLOCKED_SOURCE_CUSTODY"
+            return "READY_HISTORICAL_PREFIX" if ready else "PARTIAL_HISTORICAL_PREFIX"
+
         evidence["classification"] = {
             "BASE_R2": "READY_HISTORICAL_PREFIX",
-            "FOUR_FACTORS": "READY_HISTORICAL_PREFIX" if all_four_factor_ready else "PARTIAL_HISTORICAL_PREFIX",
-            "SHOT_PROFILE_MATCHUP": "READY_HISTORICAL_PREFIX" if all_shot_ready else "PARTIAL_HISTORICAL_PREFIX",
-            "QUALITY_ADJUSTED_FORM": "READY_HISTORICAL_PREFIX" if all_quality_ready else "PARTIAL_HISTORICAL_PREFIX",
-            "H2H_PREFIX": "READY_HISTORICAL_PREFIX" if all_h2h_ready else "PARTIAL_HISTORICAL_PREFIX",
-            "FATIGUE_CORE": "READY_HISTORICAL_PREFIX" if fatigue_core else "PARTIAL_HISTORICAL_PREFIX",
+            "FOUR_FACTORS": historical_class(all_four_factor_ready),
+            "SHOT_PROFILE_MATCHUP": historical_class(all_shot_ready),
+            "QUALITY_ADJUSTED_FORM": historical_class(all_quality_ready),
+            "H2H_PREFIX": historical_class(all_h2h_ready),
+            "FATIGUE_CORE": historical_class(fatigue_core),
             "TRAVEL_V2_ACTUAL_VENUE_SEQUENCE": "PARTIAL_HISTORICAL_PREFIX" if matched_hints else "BLOCKED_SOURCE_CUSTODY",
             "AVAILABILITY_STAR_POWER": "PROSPECTIVE_ONLY",
         }
@@ -185,11 +224,14 @@ def main() -> None:
             "target_row_scores_still_forbidden_in_feature_construction": True,
             "current_or_end_of_season_aggregates_backfilled": False,
             "combination_testing_authorized_by_this_probe": False,
+            "schedule_upstream_drift_does_not_rewrite_prior_certification": True,
         }
 
     OUT.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "classification": evidence["classification"],
+        "resolved_team_box_seasons": evidence["cross_season"]["resolved_team_box_seasons"],
+        "schedule_pin_status": evidence["schedule"]["current_pin_status"],
         "schedule_location_hints": evidence["schedule"]["travel_location_columns_matching_hints"],
         "target_outcome_values_loaded": False,
         "evidence": str(OUT),
