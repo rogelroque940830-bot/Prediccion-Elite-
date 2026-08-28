@@ -1,0 +1,121 @@
+{
+  "name": "WNBA_R3A4_FIRST_OOS_FAMILY_ABLATION_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_R3A4_METRIC_COMPUTATION",
+  "date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a2_certification": "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CERTIFICATION.json",
+  "parent_r3a3_certification": "research/wnba/WNBA_R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_CERTIFICATION.json",
+  "ablation": "BASE_R2_VS_BASE_R2_PLUS_FOUR_FACTORS",
+  "purpose": "Test whether strictly prior-date Four Factors provide reproducible incremental out-of-sample probability value conditional on the frozen R2 selected side. This gate does not search an Elite threshold and does not claim an 80 percent regime.",
+  "frozen_inputs": {
+    "r2_artifact_id": 9661302701,
+    "r2_artifact_zip_sha256": "ff0d2757c233186150addc77b8bb9e45505c4acb2eb63937d8848f0c3e37a636",
+    "r2_2020_seed_file": "wnba-r2b1-2020-labeled-seed.jsonl",
+    "r2_2020_seed_sha256": "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2",
+    "r2_2021_2025_scored_file": "wnba-r1b2-scored-rowset.jsonl",
+    "r2_2021_2025_scored_sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319",
+    "r3a2_artifact_id": 9674761962,
+    "r3a2_artifact_zip_sha256": "1ec6a95aff0992ec39d8abce23568414ff41a3bb30b1cfdbeb4c85cad3cd80f1",
+    "r3a2_feature_file": "wnba-r3a2-strict-prefix-four-factors.jsonl",
+    "r3a2_feature_sha256": "fe1a79da84831db43a41cbc9809fdf75e513e870a2e3a836f6a92bc947d779e7",
+    "required_join": "Exact one-to-one join on season + gameId across all 1269 rows; no post-result row dropping."
+  },
+  "population": {
+    "training_seed_season": 2020,
+    "target_seasons": [2021, 2022, 2023, 2024, 2025],
+    "expected_rows_all_seasons": 1269,
+    "expected_oos_target_rows": 1143,
+    "rolling_origin_rule": "For target season Y, fit only on seasons strictly less than Y."
+  },
+  "orientation": {
+    "base_side": "Frozen R2 selectedSide for each game.",
+    "raw_base_signal": "Frozen R2 p_win_selected_side in (0,1).",
+    "response": "Frozen R2 selectedSideOutcome binary label.",
+    "factor_orientation": "Every Four Factors differential is multiplied by +1 for HOME-selected rows and -1 for AWAY-selected rows so positive always means advantage for the frozen R2 selected side.",
+    "side_switching_in_this_ablation": false,
+    "reason": "This first nested test isolates whether Four Factors add probability information without confounding the result with a new side-selection policy."
+  },
+  "frozen_factor_features": [
+    "season_efg_adv = orientation * (home.season.efgPct - away.season.efgPct)",
+    "season_tov_adv = orientation * (away.season.tovPct - home.season.tovPct)",
+    "season_orb_adv = orientation * (home.season.orbPct - away.season.orbPct)",
+    "season_ftr_adv = orientation * (home.season.ftr - away.season.ftr)",
+    "recent10_efg_adv = orientation * (home.recent10.efgPct - away.recent10.efgPct)",
+    "recent10_tov_adv = orientation * (away.recent10.tovPct - home.recent10.tovPct)",
+    "recent10_orb_adv = orientation * (home.recent10.orbPct - away.recent10.orbPct)",
+    "recent10_ftr_adv = orientation * (home.recent10.ftr - away.recent10.ftr)"
+  ],
+  "excluded_from_this_ablation": [
+    "threePointAttemptRate",
+    "shot-profile matchup interactions",
+    "quality-adjusted form",
+    "H2H",
+    "fatigue-v2 additions beyond BASE_R2",
+    "actual travel sequence",
+    "availability/star power",
+    "market prices",
+    "manual adjustments"
+  ],
+  "training_only_preprocessing": {
+    "base_logit": "logit(clamp(raw_base_signal,1e-12,1-1e-12)); never standardized.",
+    "factor_standardization": "For each fold and each of the eight factors, subtract training-fold mean and divide by training-fold population standard deviation. Target-season values never influence means or standard deviations.",
+    "zero_variance_rule": "If a training factor standard deviation is <= 1e-12, its standardized value is fixed to 0 for both train and target fold and the event is reported."
+  },
+  "reference_model": {
+    "form": "sigmoid(intercept + slope * base_logit)",
+    "algorithm": "Exact deterministic 1D Platt semantics from frozen cross-sport-calibration blob 9099ed5182d64b6e20768b6d305e7867ed2b69ce.",
+    "ridge_lambda_on_slope": 0.001,
+    "initial_intercept": 0,
+    "initial_slope": 1,
+    "max_iterations": 100,
+    "newton_step_component_clamp": 2,
+    "convergence_tolerance": 1e-9,
+    "required_parity": "Reference intercept and slope must match the frozen R2B2 fold values to absolute tolerance <= 1e-9 before the augmented model is evaluated."
+  },
+  "augmented_model": {
+    "form": "sigmoid(intercept + beta_base*base_logit + sum(beta_j*z_j)) for the eight frozen standardized Four Factors advantages.",
+    "optimizer": "Deterministic multivariate Newton/IRLS generalization of the frozen 1D Platt algorithm.",
+    "ridge_lambda": 0.001,
+    "penalty": "Intercept unpenalized; beta_base and all eight factor slopes receive identical L2 ridge lambda.",
+    "initial_parameters": "intercept=0, beta_base=1, all eight factor slopes=0.",
+    "max_iterations": 100,
+    "newton_step_component_clamp": 2,
+    "convergence_tolerance": 1e-9,
+    "singular_hessian_rule": "Fail the gate; no alternate optimizer or hyperparameter is permitted after target outcomes are evaluated."
+  },
+  "metrics": {
+    "per_fold": ["Brier", "log loss", "ECE10", "mean predicted minus observed"],
+    "pooled_oos": ["Brier", "log loss", "ECE10", "mean predicted minus observed"],
+    "descriptive_only": ["frozen selected-side accuracy"],
+    "accuracy_note": "Selected-side accuracy is invariant in this fixed-side ablation and cannot be used to admit or reject Four Factors."
+  },
+  "paired_uncertainty": {
+    "method": "Season-stratified paired bootstrap of target rows.",
+    "replicates": 10000,
+    "rng": "NumPy PCG64",
+    "seed": 940830,
+    "reported": ["95 percent percentile CI for augmented-minus-reference Brier", "95 percent percentile CI for augmented-minus-reference log loss"]
+  },
+  "frozen_incremental_value_gate": {
+    "primary": "At least one pooled proper-score improvement must be statistically directional: the 95 percent bootstrap upper bound of augmented-minus-reference Brier OR log loss must be < 0.",
+    "secondary_proper_score_non_degradation": "If Brier is the qualifying metric, pooled log-loss degradation may not exceed +0.005. If log loss is the qualifying metric, pooled Brier degradation may not exceed +0.002.",
+    "ece_non_degradation": "Pooled ECE10 degradation may not exceed +0.010.",
+    "season_breadth": "For at least one qualifying proper score, augmented point performance must improve over reference in at least 3 of the 5 target seasons.",
+    "single_season_dependency_forbidden": true,
+    "pass_interpretation": "FOUR_FACTORS_ADMITTED_TO_BOUNDED_R3_COMBINATION_RESEARCH",
+    "fail_interpretation": "FOUR_FACTORS_NOT_ADMITTED_BY_THIS_FROZEN_ABLATION; no post-result optimizer, feature, or gate change is allowed within R3A4."
+  },
+  "scientific_boundaries": {
+    "elite_threshold_search": false,
+    "coverage_filter_search": false,
+    "target_season_feature_selection": false,
+    "target_season_hyperparameter_tuning": false,
+    "post_result_row_dropping": false,
+    "market_feature_use": false,
+    "production_mutation": false,
+    "historical_result_is_independent_certification": false
+  },
+  "next_gate_on_pass": "R3A5_NEXT_PREREGISTERED_SIGNAL_FAMILY_ABLATION",
+  "next_gate_on_fail": "R3A5_CONTINUE_PREREGISTERED_ABLATION_ORDER_WITHOUT_FOUR_FACTORS_COMBINATION_ADMISSION"
+}
