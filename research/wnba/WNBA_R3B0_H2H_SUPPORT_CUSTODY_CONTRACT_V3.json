@@ -1,0 +1,84 @@
+{
+  "name": "WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V3",
+  "status": "FROZEN_BEFORE_PER_SEASON_SCHEDULE_CONTENT_AUDIT",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3a_certification": "research/wnba/WNBA_R3A_SIGNAL_CUSTODY_AUDIT_CERTIFICATION.json",
+  "supersedes_operational_fixture_source": "research/wnba/WNBA_R3B0_H2H_SUPPORT_CUSTODY_CONTRACT_V2.json",
+  "reason_for_v3": "V2 proved that wnba_games_in_data_repo.parquet is incomplete as fixture chronology for 2019-2020: it joins 203/205 type-2 team-box game groups in 2019 and 131/132 in 2020 even though all preregistered boxscore feature fields are complete. V3 resolves fixture identity using the provider's independent per-season schedule assets. No outcome, model-performance or market information motivated this source correction.",
+  "failed_v2_evidence": {
+    "run_id": 33200396006,
+    "job_id": 98948122476,
+    "artifact_id": 9697501440,
+    "artifact_zip_sha256": "c69d4535d954eeca99b5ef042f2e707ca907bcc5a37cdb8a1c853de631879a72",
+    "2019_type2_two_sided_team_box_games": 205,
+    "2019_aggregate_schedule_joins": 203,
+    "2019_missing_ids": ["401105109", "401156333"],
+    "2020_type2_two_sided_team_box_games": 132,
+    "2020_aggregate_schedule_joins": 131,
+    "2020_missing_ids": ["401241311"],
+    "feature_formula_coverage_complete": true,
+    "outcome_values_loaded": false,
+    "market_data_loaded": false
+  },
+  "frozen_target_policy": {
+    "development_target_years": [2020, 2021, 2022, 2023, 2024, 2025],
+    "2019_role": "SUPPORT_ONLY_FOR_2020_PREFIX_AND_TWO_SEASON_H2H",
+    "2019_may_become_target_year": false,
+    "2020_target_eligibility_may_depend_on_performance": false,
+    "same_date_results_allowed_in_prefix": false,
+    "future_results_allowed_in_prefix": false
+  },
+  "frozen_assets": {
+    "2019_team_box": {
+      "asset_id": 479692984,
+      "name": "team_box_2019.parquet",
+      "size": 41102,
+      "sha256": "52890ad5e2c5a893f7493d6f23e69c01d62fe26e00b9f1b779d5e7f65fdaf849"
+    },
+    "2020_team_box": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    },
+    "2019_schedule": {
+      "asset_id": 102864880,
+      "name": "wnba_schedule_2019.parquet",
+      "size": 56756,
+      "metadata_digest": null,
+      "created_at": "2023-04-09T00:00:55Z",
+      "sha256_policy": "Compute independently from the exact frozen asset_id in V3 audit and freeze the result in V3 certification before R3B feature forging."
+    },
+    "2020_schedule": {
+      "asset_id": 102865118,
+      "name": "wnba_schedule_2020.parquet",
+      "size": 49341,
+      "metadata_digest": null,
+      "created_at": "2023-04-09T00:04:15Z",
+      "sha256_policy": "Compute independently from the exact frozen asset_id in V3 audit and freeze the result in V3 certification before R3B feature forging."
+    }
+  },
+  "special_event_identity_rule_2019": {
+    "known_low_frequency_team_ids_from_outcome_blind_v2_identity_audit": ["111719", "112530"],
+    "classification_rule": "Exactly one 2019 type-2 game may be classified SPECIAL_EVENT only if its two team IDs are exactly 111719 and 112530, those IDs appear in no other type-2 game, and removing that one game leaves exactly 12 franchise IDs with exactly 34 type-2 games each (204 franchise fixtures).",
+    "score_or_winner_may_be_used": false,
+    "missing_schedule_membership_alone_is_not_sufficient_to_classify_special": true
+  },
+  "regular_fixture_rules": {
+    "2019_expected_franchise_games_after_identity_only_special_exclusion": 204,
+    "2020_expected_franchise_games": 132,
+    "2020_special_exclusions_allowed": false,
+    "all_real_franchise_games_must_have_valid_date_and_exact_home_away_identity": true,
+    "post_result_game_dropping_allowed": false
+  },
+  "audit_projection_allowlist": {
+    "team_box": ["game_id", "season", "season_type", "game_date", "team_id", "team_home_away", "opponent_team_id"],
+    "schedule": ["game_id", "season", "season_type", "game_date", "game_date_time", "home_id", "away_id"],
+    "score_winner_columns_values_allowed": false,
+    "market_columns_values_allowed": false
+  },
+  "pass_rule": "Both per-season schedule assets must match frozen asset id/name/size, receive independently computed SHA-256, and provide exact identity/date coverage for all 204 real 2019 franchise fixtures and all 132 2020 franchise fixtures. The sole 2019 special-event exclusion must satisfy the frozen low-frequency-team identity rule. No result-based exclusion is permitted.",
+  "next_gate_on_pass": "R3B_STRICT_PREFIX_FEATURE_FORGE_2020_2025",
+  "production_mutation": false
+}
