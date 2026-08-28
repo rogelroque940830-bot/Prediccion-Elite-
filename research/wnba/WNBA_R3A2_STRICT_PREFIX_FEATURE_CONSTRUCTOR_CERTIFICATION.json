@@ -1,0 +1,83 @@
+{
+  "name": "WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "decision": "STRICT_PRIOR_DATE_FOUR_FACTORS_PREFIX_CERTIFIED",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "contract": {
+    "path": "research/wnba/WNBA_R3A2_STRICT_PREFIX_FEATURE_CONSTRUCTOR_CONTRACT.json",
+    "commit_sha": "5dd6f0a51364f730b5de1ee559d23cba7726715d",
+    "status": "FROZEN_BEFORE_PREFIX_CONSTRUCTION"
+  },
+  "execution": {
+    "workflow": "WNBA R3A2 Strict Prefix Four Factors",
+    "run_id": 33143247915,
+    "job_id": 98758570975,
+    "head_sha": "edc942bea577bd76f2d4689090030f4ecd3d94a0",
+    "conclusion": "success",
+    "artifact_id": 9674761962,
+    "artifact_name": "wnba-r3a2-strict-prefix-four-factors-33143247915",
+    "artifact_digest": "sha256:1ec6a95aff0992ec39d8abce23568414ff41a3bb30b1cfdbeb4c85cad3cd80f1",
+    "artifact_digest_independently_matched": true,
+    "evidence_file": "wnba-r3a2-strict-prefix-four-factors-evidence.json",
+    "rowset_file": "wnba-r3a2-strict-prefix-four-factors.jsonl"
+  },
+  "rowset": {
+    "rows": 1269,
+    "bytes": 1199842,
+    "sha256": "fe1a79da84831db43a41cbc9809fdf75e513e870a2e3a836f6a92bc947d779e7",
+    "independent_sha256_recomputed_and_matched": true,
+    "independent_line_count": 1269
+  },
+  "coverage": {
+    "2020": {"regular_games": 132, "prefix_rows": 126, "cold_start_exclusions": 6},
+    "2021": {"regular_games": 192, "prefix_rows": 186, "cold_start_exclusions": 6},
+    "2022": {"regular_games": 216, "prefix_rows": 210, "cold_start_exclusions": 6},
+    "2023": {"regular_games": 240, "prefix_rows": 234, "cold_start_exclusions": 6},
+    "2024": {"regular_games": 240, "prefix_rows": 234, "cold_start_exclusions": 6},
+    "2025": {"regular_games": 286, "prefix_rows": 279, "cold_start_exclusions": 7}
+  },
+  "anti_leakage": {
+    "daily_two_phase_seal_then_ingest": true,
+    "same_day_source_use_count": 0,
+    "future_source_use_count": 0,
+    "target_self_source_use_count": 0,
+    "max_prior_date_violation_count": 0,
+    "duplicate_emitted_game_id_count": 0,
+    "pair_or_date_identity_failure_count": 0,
+    "invalid_factor_range_side_count": 0,
+    "score_or_winner_values_projected": false,
+    "outcomes_opened": false,
+    "market_values_consumed": false,
+    "injury_values_consumed": false,
+    "manual_adjustment_values_consumed": false
+  },
+  "frozen_feature_semantics": {
+    "aggregation": "RATIO_OF_SUMS",
+    "windows": ["SEASON_TO_DATE", "RECENT10"],
+    "efg_pct": "(sum(FGM) + 0.5 * sum(3PM)) / sum(FGA)",
+    "tov_pct": "sum(TOV) / (sum(FGA) + 0.44 * sum(FTA) + sum(TOV))",
+    "orb_pct": "sum(OREB) / (sum(OREB) + sum(opponent_DREB))",
+    "ftr": "sum(FTA) / sum(FGA)",
+    "three_point_attempt_rate": "sum(3PA) / sum(FGA)"
+  },
+  "r1_population_parity_independent_check": {
+    "r1_artifact_id": 9651506612,
+    "r1_prefix_rows_2021_2025": 1143,
+    "r3a2_prefix_rows_2021_2025": 1143,
+    "common_season_game_ids": 1143,
+    "r1_only_ids": 0,
+    "r3a2_only_ids": 0,
+    "status": "EXACT_TARGET_ID_PARITY"
+  },
+  "scientific_boundaries": {
+    "model_fit": false,
+    "feature_weight_search": false,
+    "elite_threshold_search": false,
+    "hit_rate_tested": false,
+    "production_mutation": false,
+    "cross_sport_promotion": false,
+    "interpretation": "R3A2 certifies feature custody and chronology only; it makes no claim that Four Factors improve prediction accuracy."
+  },
+  "next_gate": "R3A3_REMAINING_SIGNAL_FAMILY_CUSTODY_OR_PREREGISTERED_FAMILY_ABLATION_STAGE"
+}
