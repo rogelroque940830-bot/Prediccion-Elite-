@@ -10,6 +10,7 @@ on:
       - 'research/wnba/WNBA_R3A_SIGNAL_CUSTODY_CERTIFICATION.json'
       - 'research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json'
       - 'scripts/wnba-r3b1-prefix-feature-materializer.py'
+      - 'scripts/wnba-r3b1-local-backbone-runner.py'
       - '.github/workflows/wnba-r3b1-prefix-feature-materializer.yml'
   workflow_dispatch:
 
@@ -24,6 +25,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Download exact frozen R1A5 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wnba-r1a5-neutral-availability-33086442468
+          path: r3b1-input
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 33086442468
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,10 +42,11 @@ jobs:
       - name: Materialize frozen R3 prefix features
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          WNBA_R3B1_BACKBONE_FILE: r3b1-input/wnba-r1a5-neutral-availability-candidate-rowset.jsonl
         shell: bash
         run: |
           set -o pipefail
-          python scripts/wnba-r3b1-prefix-feature-materializer.py 2>&1 | tee wnba-r3b1-prefix-feature-materializer.log
+          python scripts/wnba-r3b1-local-backbone-runner.py 2>&1 | tee wnba-r3b1-prefix-feature-materializer.log
       - name: Upload R3B1 evidence
         if: always()
         uses: actions/upload-artifact@v4
