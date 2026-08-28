@@ -1,0 +1,95 @@
+{
+  "name": "WNBA_R3A1B_2020_FOUR_FACTORS_CUSTODY_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "decision": "2020_EXACT_COMPONENTS_AND_TEAM_BOX_PRIMARY_IDENTITY_CERTIFIED",
+  "certified_date": "2026-08-28",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "source": {
+    "team_box_2020": {
+      "asset_id": 479694512,
+      "bytes": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    },
+    "schedule_master_crosscheck": {
+      "asset_id": 532156071,
+      "bytes": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+      "known_2020_gap": "game_id 401241311 absent from schedule master but present with coherent two-sided identity/date in team_box_2020"
+    }
+  },
+  "component_audit": {
+    "run_id": 33143028487,
+    "job_id": 98757878494,
+    "head_sha": "bde511f214abeb4f7fb2517cf9b5ae57801b6910",
+    "artifact_id": 9674675234,
+    "artifact_digest": "sha256:59273c405b6b1521a7a6093613923c64a131f0ae561ef5b399781c05612b556d",
+    "artifact_digest_independently_matched": true,
+    "finding": {
+      "team_box_type2_games": 132,
+      "side_rows": 264,
+      "pair_integrity_failures": 0,
+      "efg_valid": 264,
+      "tov_valid": 264,
+      "orb_valid": 264,
+      "ftr_valid": 264,
+      "three_par_valid": 264,
+      "invalid_denominators_any_factor": 0
+    }
+  },
+  "identity_resolution": {
+    "contract": "research/wnba/WNBA_R3A1B2_2020_IDENTITY_RESOLUTION_CONTRACT.json",
+    "run_id": 33143126772,
+    "job_id": 98758189879,
+    "head_sha": "1d1b5d36b244f16347945849667369b8af95a98d",
+    "conclusion": "success",
+    "artifact_id": 9674714888,
+    "artifact_digest": "sha256:074c98326268c58ec554b5b4a11e6d52b3ef793cdc9328ca12bff6af1ea18b81",
+    "artifact_digest_independently_matched": true,
+    "finding": {
+      "team_box_games": 132,
+      "side_rows": 264,
+      "unique_teams": 12,
+      "every_team_games": 22,
+      "pair_failures": 0,
+      "date_failures": 0,
+      "schedule_games": 131,
+      "schedule_only_game_ids": [],
+      "team_box_only_game_ids": ["401241311"],
+      "missing_schedule_game_identity": {
+        "game_id": "401241311",
+        "game_date": "2020-09-13",
+        "home_team_id": "20",
+        "away_team_id": "16"
+      },
+      "rescheduled_note_candidates": 5,
+      "all_note_candidates_classified_as_rescheduled_regular": true
+    }
+  },
+  "official_population_control": {
+    "statement": "WNBA official 2020 season materials specify a 22-game regular-season schedule for each of 12 teams, yielding 132 regular-season games.",
+    "url": "https://www.wnba.com/news/wnbas-2020-regular-season-tips-off-july-25-with-opening-weekend-dedicated-to-black-lives-matter-movement"
+  },
+  "frozen_formula_semantics": {
+    "efg_pct": "(FGM + 0.5 * 3PM) / FGA",
+    "tov_pct": "TOV / (FGA + 0.44 * FTA + TOV)",
+    "orb_pct": "OREB / (OREB + opponent_DREB)",
+    "ftr": "FTA / FGA",
+    "three_point_attempt_rate": "3PA / FGA"
+  },
+  "scientific_boundaries": {
+    "outcomes_scored": false,
+    "hit_rate_tested": false,
+    "model_fit": false,
+    "market_used": false,
+    "prefix_timing_certified_here": false,
+    "production_mutation": false,
+    "cross_sport_promotion": false
+  },
+  "combined_r3a1_scope_after_this_certification": {
+    "seasons": [2020, 2021, 2022, 2023, 2024, 2025],
+    "regular_games": 1306,
+    "side_rows": 2612,
+    "four_factors_component_coverage": "EXACT_COMPLETED_GAME_COMPONENTS_ALL_SIX_SEASONS"
+  },
+  "next_gate": "R3A2_STRICT_PRIOR_DATE_PREFIX_FEATURE_CONSTRUCTOR"
+}
