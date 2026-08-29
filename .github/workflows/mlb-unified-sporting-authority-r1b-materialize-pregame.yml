@@ -1,0 +1,95 @@
+name: MLB Unified Sporting Authority R1B Pregame Materialization
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  custody-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact research branch
+        uses: actions/checkout@v4
+        with:
+          ref: research/mlb-unified-sporting-authority-r1
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax check fail-closed R1B materializer
+        run: python -m py_compile scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py
+
+      - name: Verify R1A and R1B contracts remain research-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          a=json.load(open('research/mlb-unified-sporting-authority-r1a-feature-custody.json'))
+          b=json.load(open('research/mlb-unified-sporting-authority-r1b-materialization-certification.json'))
+          assert a['status']=='R1A_AUDIT_COMPLETE_NO_OUTCOMES_READ'
+          assert b['status']=='R1B_BLOCKED_BEFORE_ROWSET_MATERIALIZATION'
+          assert b['rowsetProduced'] is False
+          assert b['policy']['marketPricesRead'] is False
+          assert b['policy']['newWeightsCreated'] is False
+          assert b['policy']['productionChanged'] is False
+          assert b['policy']['realFinancialExposure']==0
+          print('R1B_RESEARCH_BOUNDARY_VERIFIED')
+          PY
+
+      - name: Verify immutable V66 pre-outcome artifact digest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          expected='sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12'
+          actual="$(gh api "repos/${REPO}/actions/runs/31962659793/artifacts" --jq '.artifacts[] | select(.name=="p0-step12v66-game-horizon-exposure-custody") | .digest' | head -n1)"
+          test "$actual" = "$expected"
+          echo 'R1B_V66_PREGAME_CUSTODY_DIGEST_VERIFIED'
+
+      - name: Verify immutable frozen matchup artifact digests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          check_digest() {
+            local run_id="$1" name="$2" expected="$3"
+            actual="$(gh api "repos/${REPO}/actions/runs/${run_id}/artifacts" --jq ".artifacts[] | select(.name==\"${name}\") | .digest" | head -n1)"
+            test "$actual" = "$expected"
+          }
+          check_digest 31666803576 p0-step12v9-hand-splits-2026_YTD sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48
+          check_digest 31669146698 p0-step12v12-pitchmix-2025 sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2
+          check_digest 31669146698 p0-step12v12-pitchmix-2026_YTD sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7
+          echo 'R1B_MATCHUP_PARTIAL_CUSTODY_DIGESTS_VERIFIED'
+
+      - name: Fail closed until every R1A family has exact full-history pregame custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          b=json.load(open('research/mlb-unified-sporting-authority-r1b-materialization-certification.json'))
+          blockers=b['blockedRequiredFamilies']
+          assert blockers
+          print('R1B_MATERIALIZATION_BLOCKED_BY_PREDECLARED_SOURCE_CUSTODY_GATES')
+          for item in blockers:
+            print(f"- {item['family']}: {item['reason']}")
+          raise SystemExit(42)
+          PY
+
+  # The materialization job is intentionally absent while custody-preflight is blocked.
+  # Once every family has a parity-certified normalized pregame pack, a later frozen
+  # revision will download those exact pinned artifacts and call:
+  # scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py
+  # No outcome or price artifact belongs in this workflow.
