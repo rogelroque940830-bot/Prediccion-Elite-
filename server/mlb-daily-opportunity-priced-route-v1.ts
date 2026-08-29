@@ -181,6 +181,18 @@ export async function executeMlbDailyOpportunityPricedCommand(
     dependencies: { oddsService, now: deps.now },
   });
 
+  // A provider call that completes without a single usable quote is not negative-EV evidence.
+  // Preserve the sporting candidate and fail closed as WAIT until an executable price exists.
+  const officialDecision = priced.decision.reason === "NO_POSITIVE_EV"
+    && priced.acquisition != null
+    && priced.acquisition.summary.usableMarketQuotes === 0
+    ? Object.freeze({
+        action: "WAIT" as const,
+        reason: "PRICE_ACQUISITION_INCOMPLETE" as const,
+        recommendation: null,
+      })
+    : priced.decision;
+
   return {
     httpStatus: 200,
     body: {
@@ -194,7 +206,7 @@ export async function executeMlbDailyOpportunityPricedCommand(
       dailyOpportunity: live.dailyOpportunity,
       priceConsultationShortlist: live.priceConsultationShortlist,
       provisionalV16: live.provisionalV16,
-      decision: priced.decision,
+      decision: officialDecision,
       priceDiscovery: priced.priceDiscovery,
       acquisition: priced.acquisition,
       marketEdge: priced.marketEdge,
