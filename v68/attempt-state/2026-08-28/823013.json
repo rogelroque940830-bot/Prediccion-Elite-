@@ -1,0 +1,56 @@
+{
+  "attemptOrder": [
+    "T10",
+    "T7",
+    "T4"
+  ],
+  "attempts": [
+    {
+      "abstractGameState": "Live",
+      "clockStatus": "READY",
+      "codedGameState": "P",
+      "contextDiagnostics": {
+        "attemptStage": "T10",
+        "exactReadyGamesInCaptureWindow": 1,
+        "leadMinutes": 9.995328,
+        "maximumLeadMinutes": 10.0,
+        "reason": "EXACT_READY",
+        "targetGameOnlyRevalidation": true,
+        "targetGamePk": 823013
+      },
+      "contextRows": 1,
+      "detailedState": "Warmup",
+      "disposition": "PREGAME",
+      "leadMinutes": 9.997808766666667,
+      "observedAt": "2026-08-29T00:05:00.131474Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T10",
+      "startTime": "2026-08-29T00:15:00Z",
+      "targetLeadMinutes": 10,
+      "terminal": false
+    }
+  ],
+  "captureStage": "T10",
+  "captureSucceeded": true,
+  "gamePk": 823013,
+  "lastObservedAt": "2026-08-29T00:05:00.131474Z",
+  "officialDate": "2026-08-28",
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "scientificCaptureWindowMaximumMinutes": 20,
+    "scientificModelChanged": false
+  },
+  "retryEligible": false,
+  "retryStartTime": null,
+  "scheduledStartFromPlanner": "2026-08-29T00:15:00Z",
+  "schemaVersion": "courtedge-p0-step12v68-per-game-attempts.v1",
+  "terminal": true,
+  "terminalReason": "CAPTURED",
+  "updatedAt": "2026-08-29T00:05:00.411520Z"
+}
