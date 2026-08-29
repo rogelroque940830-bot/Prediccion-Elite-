@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "courtedge-mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.v1",
+  "status": "R1B1_AUDIT_COMPLETE_FAIL_CLOSED",
+  "parentContract": "research/mlb-unified-sporting-authority-r1.json",
+  "parentR1A": "research/mlb-unified-sporting-authority-r1a-feature-custody.json",
+  "parentR1B": "research/mlb-unified-sporting-authority-r1b-materialization-certification.json",
+  "objective": "Close R1B1 by classifying every required R1B feature family according to exact historical pregame source custody and semantic parity. No analogous feature, zero-fill, current-only payload, outcome-reading replay, or post-hoc history restriction may be promoted to exact parity.",
+  "classificationPolicy": {
+    "PARITY_CERTIFIED": "Exact current family semantics are reproducible historically for the intended evaluation universe with immutable pregame custody, required identity/timestamp provenance, no outcome fields, and no market-price fields.",
+    "PARTIAL_PARITY": "A valid pregame source, exact builder semantics, or upstream equivalent evidence exists, but full-universe coverage and/or exact current-family adapter parity is not yet proven.",
+    "BLOCKED": "Exact current-family historical pregame semantics cannot presently be certified without an unsupported substitution or missing source custody."
+  },
+  "requiredFamilies": [
+    {
+      "family": "V16_BASELINE",
+      "classification": "BLOCKED",
+      "evidence": [
+        "R1B located an immutable historical V16 artifact only as a pure-settlement-model manifest, not a per-game/per-side pregame sporting probability rowset under current R1A semantics."
+      ],
+      "coverage": "NO_CERTIFIED_FULL_HISTORICAL_PER_GAME_SIDE_ROWSET",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Identify or materialize immutable pregame V16 probabilities by officialDate/gamePk/side/stage with no outcome or price fields."
+    },
+    {
+      "family": "FROZEN_ROUTE_EVIDENCE",
+      "classification": "BLOCKED",
+      "evidence": [
+        "The located historical Daily Best Pick replay imports a parent scorer carrying outcomes.",
+        "Existing certification states production prepriceRank is not reconstructed exactly."
+      ],
+      "coverage": "OUTCOME_BLIND_EXACT_ROUTE_REPLAY_NOT_CERTIFIED",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Produce an outcome-blind adapter from frozen pregame inputs that emits exact A+/Premium evidence and source preprice rank before settlement."
+    },
+    {
+      "family": "STATCAST_QUALITY",
+      "classification": "PARTIAL_PARITY",
+      "evidence": [
+        "Pregame starter-quality custody exists in prior V62/V66 evidence.",
+        "Exact equivalence to current STATCAST_QUALITY homeSP.runsDelta/awaySP.runsDelta plus provenance semantics has not been parity-certified."
+      ],
+      "coverage": "UPSTREAM_PREGAME_CUSTODY_EXISTS_FULL_PARITY_UNPROVEN",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Parity-test an exact historical adapter against the current certified component semantics and provenance contract."
+    },
+    {
+      "family": "DISCIPLINE_SPEED",
+      "classification": "BLOCKED",
+      "evidence": [
+        "No immutable full-history normalized pregame pack under current homeRunsDelta/awayRunsDelta semantics has been proven."
+      ],
+      "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Identify or materialize exact historical DISCIPLINE_SPEED inputs with immutable source timestamps and provenance."
+    },
+    {
+      "family": "SOS",
+      "classification": "BLOCKED",
+      "evidence": [
+        "No immutable full-history normalized pregame pack under current adjustedRpgDelta semantics has been proven."
+      ],
+      "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Identify or materialize exact historical SOS component with strictly prior-date opponent-strength custody."
+    },
+    {
+      "family": "ADVANCED_CONTEXT",
+      "classification": "BLOCKED",
+      "evidence": [
+        "No immutable full-history normalized pregame pack under current totalAdjustment semantics has been proven.",
+        "Non-overlap with the other matchup-family adapters has not yet been proven."
+      ],
+      "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Identify or materialize exact historical ADVANCED_CONTEXT and prove temporal custody and non-duplication."
+    },
+    {
+      "family": "BULLPEN_FULL_GAME",
+      "classification": "PARTIAL_PARITY",
+      "evidence": [
+        "P0 Step12V66 contains verified pre-outcome bullpen/source custody across 2022-2026_YTD.",
+        "The adapter to current homeBullpen.runsAdjustment/awayBullpen.runsAdjustment semantics has not been parity-certified."
+      ],
+      "coverage": "2022_2026_YTD_UPSTREAM_CUSTODY",
+      "exactSemanticParity": false,
+      "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_MUST_BE_NOT_APPLICABLE_NOT_ZERO",
+      "requiredUnblock": "Build and parity-certify the exact FULL_GAME bullpen adapter."
+    },
+    {
+      "family": "HAND_SPLIT_SLG_MATCHUP",
+      "classification": "PARTIAL_PARITY",
+      "evidence": [
+        "Frozen builder semantics are historically reconstructable pregame with target-date exclusion and no same-date outcome leakage.",
+        "Pinned immutable hand-split source custody identified for R1B covers 2026_YTD only."
+      ],
+      "coverage": "2026_YTD_ONLY_PINNED_SOURCE_PACK",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Pin equivalent immutable source packs for every season in the intended R1B historical universe and reproduce the frozen builder."
+    },
+    {
+      "family": "PITCHMIX_MATCHUP",
+      "classification": "PARTIAL_PARITY",
+      "evidence": [
+        "Frozen pitchmix builder semantics are historically reconstructable pregame under the 365-day exclusive-target-date rule and frozen coverage thresholds.",
+        "Pinned immutable source custody identified for R1B covers 2025 and 2026_YTD only."
+      ],
+      "coverage": "2025_AND_2026_YTD_ONLY_PINNED_SOURCE_PACKS",
+      "exactSemanticParity": false,
+      "requiredUnblock": "Pin equivalent immutable source packs for every earlier season in the intended R1B historical universe and reproduce the frozen builder."
+    }
+  ],
+  "summary": {
+    "requiredFamilyCount": 9,
+    "parityCertified": 0,
+    "partialParity": 4,
+    "blocked": 5,
+    "allRequiredFamiliesParityCertified": false,
+    "r1bHistoricalRowsetAuthorized": false,
+    "r1b2Authorized": false
+  },
+  "verifiedCustodyAnchors": [
+    {
+      "name": "P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY",
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+      "headSha": "1e5b68801181f900ee0531eee9e392da02599006",
+      "rows": 11407,
+      "rowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
+      "containsOutcomeTargets": false
+    },
+    {
+      "name": "V17_FROZEN_HAND_SPLIT_2026_YTD",
+      "workflowRunId": 31666803576,
+      "artifactDigest": "sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"
+    },
+    {
+      "name": "V17_FROZEN_PITCHMIX_2025",
+      "workflowRunId": 31669146698,
+      "artifactDigest": "sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"
+    },
+    {
+      "name": "V17_FROZEN_PITCHMIX_2026_YTD",
+      "workflowRunId": 31669146698,
+      "artifactDigest": "sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"
+    }
+  ],
+  "forbiddenPromotions": [
+    "PARTIAL_PARITY_TO_PARITY_CERTIFIED_WITHOUT_FULL_UNIVERSE_COVERAGE_AND_EXACT_SEMANTIC_PROOF",
+    "ANALOGOUS_OLDER_FEATURE_TO_CURRENT_FAMILY_WITHOUT_PARITY_TEST",
+    "OUTCOME_REPLAY_AS_FEATURE_SOURCE",
+    "ZERO_FILL_FOR_MISSING_REQUIRED_FAMILY",
+    "POST_HOC_HISTORY_SHRINK_TO_AVOID_MISSING_CUSTODY",
+    "MARKET_PRICE_OR_IMPLIED_PROBABILITY_IN_SPORTING_MATERIALIZATION",
+    "OUTCOME_JOIN_BEFORE_FEATURE_ROWSET_FREEZE"
+  ],
+  "closureDecision": {
+    "r1b1Closed": true,
+    "scientificResult": "FAIL_CLOSED_REQUIRED_FAMILY_PARITY_INCOMPLETE",
+    "meaning": "R1B1 itself is complete as an audit. R1B historical materialization remains scientifically blocked because zero of nine required families currently meet full exact historical parity for the intended universe.",
+    "nextPermittedWork": "REMEDIATE_BLOCKED_AND_PARTIAL_FAMILIES_UNDER_THE_FROZEN_R1A_SEMANTICS; DO_NOT_START_R1B2_OR_OUTCOME_EVALUATION_UNTIL_ALL_NINE_ARE_PARITY_CERTIFIED."
+  },
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "frozenRoutesChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}
