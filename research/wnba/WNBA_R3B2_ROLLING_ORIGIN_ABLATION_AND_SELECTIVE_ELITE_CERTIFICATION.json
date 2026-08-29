@@ -1,0 +1,179 @@
+{
+  "name": "WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_CERTIFICATION_V1",
+  "status": "FROZEN_DEVELOPMENT_EVALUATION_CERTIFICATION",
+  "certified_date": "2026-08-29",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "protocol": {
+    "file": "research/wnba/WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL.json",
+    "freeze_commit": "c4538170c2ecd98cd0d33d260a55fbb16a5800df",
+    "sha256": "0deb67c282addd80599d0ac3e99200c2fd199567e975a3c642e7073bbe4b0334",
+    "outcome_values_read_before_protocol_freeze": false
+  },
+  "final_run": {
+    "run_id": 33261318965,
+    "job_id": 99123654885,
+    "head_sha": "2de415208c469c4149ae5d5f2ec7255624d25cdb",
+    "conclusion": "success",
+    "artifact_id": 9717334663,
+    "artifact_name": "wnba-r3b2-frozen-oos-evaluation-33261318965",
+    "artifact_digest": "sha256:64e98507abe53dcf18e9a2b469a2b7974f1924ad3ef557cb054443e69aaaceb1"
+  },
+  "first_operational_attempt": {
+    "run_id": 33261132319,
+    "head_sha": "5dc3f6a8753ae27bc36da987c6a3574e099e2570",
+    "conclusion": "failure",
+    "r3b1_exact_reproduction_passed": true,
+    "science_result_produced": false,
+    "failure": "The evaluator encountered null H2H winShare/avgMargin values for rows with zero prior meetings.",
+    "repair": "Applied the already-frozen FAIL_CLOSED / no-imputation / no-target-row-dropping policy to mark H2H_PREFIX unscorable. No scientific threshold, feature definition, model hyperparameter, fold, gate or winner rule changed after outcomes were opened."
+  },
+  "frozen_feature_rowset": {
+    "rows": 1143,
+    "season_rows": {"2021":186,"2022":210,"2023":234,"2024":234,"2025":279},
+    "sha256": "ba963903031eeb2becc254661af1657a45759fa4be9d9a7c8c046dc69e181113",
+    "exact_r3b1_reproduction_passed_in_final_run": true
+  },
+  "outcome_custody": {
+    "labels": 1143,
+    "home_wins": 617,
+    "home_win_rate": 0.5398075240594926,
+    "season": {
+      "2021": {"labels":186,"home_wins":101,"home_win_rate":0.543010752688172},
+      "2022": {"labels":210,"home_wins":115,"home_win_rate":0.5476190476190477},
+      "2023": {"labels":234,"home_wins":122,"home_win_rate":0.5213675213675214},
+      "2024": {"labels":234,"home_wins":123,"home_win_rate":0.5256410256410257},
+      "2025": {"labels":279,"home_wins":156,"home_win_rate":0.5591397849462365}
+    },
+    "membership_matches_feature_rowset_exactly": true,
+    "market_or_line_fields_loaded": false,
+    "score_fields_projected": ["game_id","team_home_away","team_score","opponent_team_score"]
+  },
+  "rolling_origin_oos": {
+    "rows": 957,
+    "target_seasons": [2022,2023,2024,2025],
+    "baseline": {
+      "candidate": "BASE_R2_FEATURE_LOGIT",
+      "note": "Controlled frozen research baseline; not a claim of exact production-R2 probability replay.",
+      "accuracy": 0.6489028213166145,
+      "brier": 0.22332695112974066,
+      "log_loss": 0.6416633276142174,
+      "ece10": 0.04935665754477775,
+      "mean_predicted_minus_observed": 0.001757919752385595
+    },
+    "single_family_results": {
+      "FOUR_FACTORS": {
+        "status": "EVALUATED_FAIL",
+        "qualifies": false,
+        "accuracy": 0.6248693834900731,
+        "brier": 0.23479007133955745,
+        "log_loss": 0.6703847935594729,
+        "ece10": 0.08125119133568794,
+        "pooled_brier_improvement_vs_base": -0.011463120209816796,
+        "pooled_log_loss_improvement_vs_base": -0.028721465945255487,
+        "proper_score_improved_target_seasons": [2025]
+      },
+      "QUALITY_ADJUSTED_FORM": {
+        "status": "EVALUATED_FAIL",
+        "qualifies": false,
+        "accuracy": 0.6478578892371996,
+        "brier": 0.2234387638752684,
+        "log_loss": 0.6423747259950833,
+        "ece10": 0.0488749140605444,
+        "pooled_brier_improvement_vs_base": -0.00011181274552773957,
+        "pooled_log_loss_improvement_vs_base": -0.0007113983808658686,
+        "proper_score_improved_target_seasons": [2023,2024],
+        "note": "Passed non-degradation and seasonal-stability subgates but failed the frozen minimum incremental-improvement threshold."
+      },
+      "H2H_PREFIX": {
+        "status": "UNSCORABLE_FAIL_CLOSED",
+        "qualifies": false,
+        "affected_games": 71,
+        "missing_side_values": 284,
+        "missing_by_field": {"avgMargin":142,"winShare":142},
+        "reason": "Rows with zero prior meetings have undefined winShare/avgMargin; frozen protocol forbids imputation and target-row dropping."
+      },
+      "FATIGUE_CORE": {
+        "status": "EVALUATED_FAIL",
+        "qualifies": false,
+        "accuracy": 0.6415882967607106,
+        "brier": 0.2252523113355711,
+        "log_loss": 0.644731996608832,
+        "ece10": 0.053766352823806034,
+        "pooled_brier_improvement_vs_base": -0.0019253602058304509,
+        "pooled_log_loss_improvement_vs_base": -0.003068668994614554,
+        "proper_score_improved_target_seasons": [2024]
+      },
+      "SHOT_PROFILE_MATCHUP": {
+        "status": "EVALUATED_FAIL",
+        "qualifies": false,
+        "accuracy": 0.6175548589341693,
+        "brier": 0.23331552746834566,
+        "log_loss": 0.6667158422176179,
+        "ece10": 0.08502818812773973,
+        "pooled_brier_improvement_vs_base": -0.009988576338605004,
+        "pooled_log_loss_improvement_vs_base": -0.025052514603400522,
+        "proper_score_improved_target_seasons": [2022,2024,2025]
+      }
+    },
+    "eligible_single_families": [],
+    "bounded_combinations_evaluated": 0,
+    "reason_no_combinations": "Frozen protocol permits pairs/triples only from individually qualifying families; none qualified.",
+    "final_candidate": "BASE_R2_FEATURE_LOGIT",
+    "multidimensional_elite_screen_enabled": false,
+    "elite_selections": 0,
+    "development_80pct_target_reached": false
+  },
+  "artifact_files": {
+    "evaluation_evidence": {
+      "file": "wnba-r3b2-evaluation-evidence.json",
+      "bytes": 27186,
+      "sha256": "8c92f1f987bd44a48889c50273d47edba9286e0771337a30ad6062356e2befd6"
+    },
+    "all_oos_predictions": {
+      "file": "wnba-r3b2-oos-predictions.jsonl",
+      "rows": 4785,
+      "bytes": 979474,
+      "sha256": "5e57a23a8a5b2523d4d62ea8f3d2f6a0cc6c75785484882020080824a662749a"
+    },
+    "final_candidate_predictions": {
+      "file": "wnba-r3b2-final-candidate-predictions.jsonl",
+      "rows": 957,
+      "bytes": 220568,
+      "sha256": "1126f50410bb1cc8094fe203d5950a05e391984045e1058e60cbacca9f3bc39e"
+    }
+  },
+  "independent_post_run_checks": {
+    "all_prediction_file_hashes_match_evidence": true,
+    "r3b1_rowset_sha_matches_frozen_certification": true,
+    "candidate_prediction_groups": 5,
+    "rows_per_evaluated_candidate": 957,
+    "unique_oos_game_ids": 957,
+    "outcome_label_conflicts_across_candidates": 0,
+    "independently_recomputed_pooled_and_per_season_metrics_match": true,
+    "maximum_observed_metric_difference_from_evidence": 1.1102230246251565e-16,
+    "all_four_evaluable_single_family_gates_independently_reproduced_as_false": true,
+    "final_candidate_probability_mismatches_vs_baseline": 0,
+    "final_candidate_elite_true_rows": 0
+  },
+  "anti_leakage_and_no_retune": {
+    "same_game_outcome_used_as_feature": false,
+    "same_date_outcome_used_as_feature": false,
+    "future_outcome_used_as_feature": false,
+    "market_fields_used": false,
+    "target_season_threshold_search": false,
+    "post_result_row_dropping": false,
+    "manual_candidate_switching": false,
+    "hyperparameter_search": false,
+    "r3b2_science_changed_after_outcome_opening": false
+  },
+  "closure": {
+    "r3b2": "FAIL_NO_INCREMENTAL_FAMILY_QUALIFIED",
+    "scientific_decision": "R3_NO_MULTIDIMENSIONAL_ELITE_CANDIDATE",
+    "r3_candidate_advanced": false,
+    "cross_sport_certified": false,
+    "production_mutation": false,
+    "global_ranker_mutation": false,
+    "wnba_cross_sport_status": "BLOCKED",
+    "required_next_step": "Any altered features, model class, thresholds, missing-value semantics or gates must be a separately versioned future WNBA research contract. The already-seen 2021-2025 outcomes cannot serve as an independent confirmation cohort for such changes."
+  }
+}
