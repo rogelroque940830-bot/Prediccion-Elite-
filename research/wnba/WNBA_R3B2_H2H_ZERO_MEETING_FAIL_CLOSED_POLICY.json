@@ -1,0 +1,62 @@
+{
+  "name": "WNBA_R3B2_H2H_ZERO_MEETING_FAIL_CLOSED_OPERATIONAL_POLICY_V1",
+  "status": "FROZEN_OPERATIONAL_BUGFIX_NO_SCIENCE_CHANGE",
+  "created_date": "2026-08-29",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_protocol": "research/wnba/WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL.json",
+  "parent_protocol_status": "FROZEN_BEFORE_R3B2_OUTCOME_OPENING",
+  "first_failed_run": {
+    "run_id": 33261132319,
+    "head_sha": "5dc3f6a8753ae27bc36da987c6a3574e099e2570",
+    "conclusion": "failure",
+    "failure_stage": "H2H_PREFIX model-matrix construction",
+    "exception": "TypeError: float() argument must be a string or a real number, not 'NoneType'",
+    "persisted_r3b2_metric_evidence": false,
+    "note": "Frozen outcome assets had already been opened by the evaluator before the matrix exception. This policy is derived only from the already-frozen pregame R3B1 feature rowset and does not use outcome values or persisted model metrics."
+  },
+  "frozen_feature_rowset": {
+    "rows": 1143,
+    "sha256": "ba963903031eeb2becc254661af1657a45759fa4be9d9a7c8c046dc69e181113"
+  },
+  "input_defect": {
+    "family": "H2H_PREFIX",
+    "affected_games": 71,
+    "affected_games_by_season": {
+      "2021": 60,
+      "2022": 0,
+      "2023": 0,
+      "2024": 0,
+      "2025": 11
+    },
+    "null_values": 284,
+    "exact_pattern": "For each affected game, home.meetingCount=0 and away.meetingCount=0; home/away winShare and avgMargin are null. No frozen BASE_R2 or other authorized R3 model field is null or non-finite.",
+    "root_cause": "R3B1 H2H materialization labels zero-meeting H2H state READY while winShare and avgMargin are structurally undefined; the R3B1 non-finite audit did not count JSON null as non-finite."
+  },
+  "governing_frozen_rule": {
+    "source": "R3B2 preprocessing.missing_or_nonfinite_policy",
+    "value": "FAIL_CLOSED; no imputation and no target-row dropping. R3B1 certification already reports complete finite inputs."
+  },
+  "operational_resolution": {
+    "H2H_PREFIX": "INPUT_BLOCKED_FAIL_CLOSED",
+    "impute_null_to_zero": false,
+    "drop_affected_rows": false,
+    "change_H2H_feature_definition": false,
+    "change_model_or_hyperparameters": false,
+    "change_thresholds_or_gates": false,
+    "use_outcomes_to_make_this_resolution": false,
+    "remaining_families": [
+      "FOUR_FACTORS",
+      "QUALITY_ADJUSTED_FORM",
+      "FATIGUE_CORE",
+      "SHOT_PROFILE_MATCHUP"
+    ],
+    "combination_rule": "H2H_PREFIX cannot enter bounded combinations because its frozen input vector is not executable under the predeclared FAIL_CLOSED missing-data rule. All remaining families retain the exact frozen R3B2 model, folds, gates, thresholds and winner rule."
+  },
+  "scientific_boundary": {
+    "frozen_R3B2_protocol_modified": false,
+    "new_scientific_hypothesis_introduced": false,
+    "post_result_retune": false,
+    "operationally_equivalent_rerun_authorized_by_parent_protocol": true,
+    "H2H_future_research": "Any executable alternative for zero-meeting H2H, including explicit zero encoding, missingness indicators, feature deletion, shrinkage or a different H2H definition, requires a separately versioned future research contract and cannot be called the frozen R3B2 result."
+  }
+}
