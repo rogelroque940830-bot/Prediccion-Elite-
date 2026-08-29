@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "courtedge-mlb-unified-sporting-authority-contract.r1",
+  "status": "RESEARCH_ONLY_FROZEN_BEFORE_OUTCOME_EVALUATION",
+  "objective": "Determine one slate-wide sporting authority by evaluating each side as a matchup-specific opportunity, combining existing certified sporting-route evidence with opponent-relative context and robust V16 probability before any market price is read.",
+  "problemStatement": {
+    "legacyRouteAuthority": "A_PLUS_PRECEDES_PREMIUM_AND_PREPRICE_RANK_IS_PRESERVED_WITHIN_TIER",
+    "dailyOpportunityAuthority": "PARETO_CONTEXT_RANK_AND_ROBUST_V16_PROBABILITY",
+    "knownFailureMode": "TWO_INDEPENDENT_PREPRICE_AUTHORITIES_CAN_NAME_DIFFERENT GAMES",
+    "requiredResolution": "ONE_MATCHUP_RELATIVE_SPORTING_COMPETITION_BEFORE_PRICE"
+  },
+  "scientificPrinciples": {
+    "teamStrengthAloneMayCrownWinner": false,
+    "contextAloneMayCrownWinner": false,
+    "routeTierAloneMayCrownWinner": false,
+    "fixedUniversalWeightedScoreAllowed": false,
+    "arbitraryNewWeightsAllowed": false,
+    "hardPerformanceThresholdsAddedBeforeValidation": false,
+    "opponentRelativeEvidenceRequired": true,
+    "matchupInteractionsRequired": true,
+    "contradictoryEvidenceMustRemainVisible": true,
+    "missingCriticalEvidenceFailsClosed": true,
+    "onePickPerDayForced": false
+  },
+  "sportingDimensions": {
+    "baselineTeamAndSideEvidence": [
+      "CONFIRMED_OR_ROBUST_V16_SIDE_PROBABILITY",
+      "FROZEN_A_PLUS_ROUTE_EVIDENCE",
+      "FROZEN_PREMIUM_ROUTE_EVIDENCE"
+    ],
+    "matchupRelativeEvidence": [
+      "STARTER_VS_OPPOSING_LINEUP",
+      "OFFENSE_VS_OPPOSING_STARTER",
+      "OFFENSE_VS_OPPOSING_BULLPEN",
+      "BULLPEN_VS_OPPOSING_OFFENSE",
+      "SOS_RELATIVE_CONTEXT",
+      "STATCAST_QUALITY_RELATIVE_CONTEXT",
+      "DISCIPLINE_SPEED_RELATIVE_CONTEXT",
+      "ADVANCED_CONTEXT"
+    ],
+    "horizonsRemainDistinct": ["EARLY_WINDOW", "FULL_GAME"],
+    "sameUnderlyingEvidenceMayDoubleCount": false
+  },
+  "competitionDesign": {
+    "unit": "GAME_SIDE_MARKET_HORIZON",
+    "wholeSlateCompetition": true,
+    "stage1": "BUILD_MATCHUP_RELATIVE_EVIDENCE_VECTOR_FOR_EACH_ELIGIBLE_SIDE",
+    "stage2": "REMOVE_ONLY_INTEGRITY_BLOCKED_OR_STRICTLY_DOMINATED_SPORTING_CANDIDATES",
+    "stage3": "PRESERVE_NONDOMINATED_FRONTIER_WHEN_STRENGTH_AND_MATCHUP_TRADE_OFF",
+    "stage4": "IF_ONE_SPORTING_CANDIDATE_DOMINATES_RETURN_SPORTING_LEADER_ELSE_WAIT_FOR_MORE_EVIDENCE_OR_PRESERVE_FRONTIER",
+    "stage5": "ONLY_AFTER_SPORTING_COMPETITION_MAY_PRICE_EV_BE_READ"
+  },
+  "validationPlan": {
+    "phaseA": "AUDIT_FEATURE_PROVENANCE_AND_DEFINE_RELATIVE_MATCHUP_VECTOR_WITHOUT_OUTCOMES",
+    "phaseB": "MATERIALIZE_HISTORICAL_PREGAME_ROWS_WITH_STRICT_TIMESTAMP_CUSTODY",
+    "phaseC": "ROLLING_ORIGIN_OOS_COMPARE_LEGACY_ROUTE_ONLY_VS_CONTEXT_ONLY_VS_UNIFIED_MATCHUP_AUTHORITY",
+    "phaseD": "SELECTIVE_PERFORMANCE_BY_CONFIDENCE_AND_MATCHUP_REGIME",
+    "phaseE": "PROSPECTIVE_SHADOW_BEFORE_PRODUCTION_PROMOTION",
+    "primaryMetrics": ["BRIER", "LOG_LOSS", "CALIBRATION_ECE10", "SELECTIVE_ACCURACY", "COVERAGE"],
+    "mustReportByRegime": ["STRONG_TEAM_STRONG_MATCHUP", "STRONG_TEAM_ADVERSE_MATCHUP", "WEAKER_TEAM_FAVORABLE_MATCHUP", "CONFLICTED_MATCHUP"]
+  },
+  "productionPolicy": {
+    "outcomesReadDuringContractFreeze": false,
+    "marketPricesReadDuringSportingSelection": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "frozenRouteDefinitionsChanged": false,
+    "productionDailyOpportunityChanged": false,
+    "automaticPromotionAllowed": false,
+    "stakeChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}
