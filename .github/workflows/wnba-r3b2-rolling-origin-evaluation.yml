@@ -7,6 +7,7 @@ on:
     paths:
       - 'research/wnba/WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL.json'
       - 'scripts/wnba-r3b2-rolling-origin-evaluation.py'
+      - 'scripts/wnba-r3b2-rolling-origin-evaluation-failclosed.py'
       - 'scripts/wnba-r3b1-prefix-feature-materializer.py'
       - 'scripts/wnba-r3b1-local-backbone-runner.py'
       - '.github/workflows/wnba-r3b2-rolling-origin-evaluation.yml'
@@ -58,7 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/wnba-r3b2-rolling-origin-evaluation.py 2>&1 | tee wnba-r3b2-evaluation.log
+          python scripts/wnba-r3b2-rolling-origin-evaluation-failclosed.py 2>&1 | tee wnba-r3b2-evaluation.log
 
       - name: Upload R3B2 evaluation evidence
         if: always()
