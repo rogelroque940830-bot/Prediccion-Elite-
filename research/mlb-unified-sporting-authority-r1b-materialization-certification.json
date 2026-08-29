@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "courtedge-mlb-unified-sporting-authority-r1b-materialization-certification.v1",
+  "status": "R1B_BLOCKED_BEFORE_ROWSET_MATERIALIZATION",
+  "parentR1ACommit": "f6e1651525acaa9c722a59c6a58abcdeb08283c3",
+  "scientificReason": "A feature-only historical rowset cannot be certified until every required R1A family has exact pregame historical custody under the same semantics. Substituting outcome-reading replays, current-only payloads, or analogous older features is prohibited.",
+  "verifiedPregameCustody": [
+    {
+      "source": "P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY",
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+      "headSha": "1e5b68801181f900ee0531eee9e392da02599006",
+      "rows": 11407,
+      "rowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
+      "containsOutcomeTargets": false,
+      "sameDateOutcomeLeakageAllowed": false,
+      "usableRole": "UPSTREAM_PREGAME_CUSTODY_AND_BULLPEN_STARTER_EXPOSURE_SOURCE; EXACT R1A FAMILY ADAPTERS STILL_REQUIRED"
+    },
+    {
+      "source": "V17_FROZEN_MATCHUP_SEED_INPUTS",
+      "artifacts": [
+        {"runId": 31666803576, "name": "p0-step12v9-hand-splits-2026_YTD", "digest": "sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"},
+        {"runId": 31669146698, "name": "p0-step12v12-pitchmix-2025", "digest": "sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},
+        {"runId": 31669146698, "name": "p0-step12v12-pitchmix-2026_YTD", "digest": "sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}
+      ],
+      "sameDateOutcomeLeakageAllowed": false,
+      "limitation": "HAND_SPLIT CUSTODY IS PROVEN HERE ONLY FOR 2026_YTD; PITCHMIX CUSTODY IS PROVEN HERE ONLY FOR 2025 AND 2026_YTD, SO THIS DOES NOT COVER THE FULL R1B HISTORICAL UNIVERSE."
+    }
+  ],
+  "blockedRequiredFamilies": [
+    {
+      "family": "V16_BASELINE",
+      "reason": "The located immutable V16 artifact used by historical Daily Best Pick is a pure-settlement-model manifest, not a certified per-game/per-side historical V16 sporting probability rowset under current R1A semantics.",
+      "requiredUnblock": "Materialize or identify an immutable pregame V16 per-game/per-side probability source with exact date/game/stage custody and no outcome fields."
+    },
+    {
+      "family": "FROZEN_ROUTE_EVIDENCE",
+      "reason": "The located historical Daily Best Pick replay imports a parent scorer that carries outcomes, and its own certification states current production prepriceRank is not reconstructed exactly.",
+      "requiredUnblock": "Create an outcome-blind replay/adapter that emits exact A+/Premium route evidence and source preprice rank from frozen pregame inputs before any settlement join."
+    },
+    {
+      "family": "STATCAST_QUALITY",
+      "reason": "Pregame starter-quality custody exists in older V62/V66 evidence, but exact equivalence to the current certified STATCAST_QUALITY payload semantics (including runsDelta and provenance contract) has not been proven in R1B.",
+      "requiredUnblock": "Prove semantic parity or materialize the exact certified component historically."
+    },
+    {
+      "family": "DISCIPLINE_SPEED",
+      "reason": "No immutable full-history normalized pregame pack under current certified DISCIPLINE_SPEED homeRunsDelta/awayRunsDelta semantics has yet been proven.",
+      "requiredUnblock": "Identify/materialize exact historical component with source timestamps and provenance."
+    },
+    {
+      "family": "SOS",
+      "reason": "No immutable full-history normalized pregame pack under current certified SOS adjustedRpgDelta semantics has yet been proven.",
+      "requiredUnblock": "Identify/materialize exact historical component with strictly prior-date opponent-strength custody."
+    },
+    {
+      "family": "ADVANCED_CONTEXT",
+      "reason": "No immutable full-history normalized pregame pack under current certified ADVANCED_CONTEXT totalAdjustment semantics has yet been proven.",
+      "requiredUnblock": "Identify/materialize exact historical component and prove no overlap/leakage with other family adapters."
+    },
+    {
+      "family": "BULLPEN_FULL_GAME",
+      "reason": "V66 contains verified pre-outcome bullpen/source custody, but an adapter to the exact current certified homeBullpen.runsAdjustment/awayBullpen.runsAdjustment semantics has not yet been parity-certified.",
+      "requiredUnblock": "Build and parity-certify the FULL_GAME-only R1B bullpen adapter; early horizons must emit NOT_APPLICABLE rather than zero."
+    },
+    {
+      "family": "HAND_SPLIT_SLG_MATCHUP",
+      "reason": "Exact frozen builder semantics are proven, but the pinned hand-split artifact identified in R1A covers 2026_YTD only.",
+      "requiredUnblock": "Acquire/pin equivalent immutable hand-split source packs for every R1B historical season to be evaluated."
+    },
+    {
+      "family": "PITCHMIX_MATCHUP",
+      "reason": "Exact frozen builder semantics are proven, but the pinned pitchmix artifacts identified in R1A cover 2025 and 2026_YTD only.",
+      "requiredUnblock": "Acquire/pin equivalent immutable pitchmix source packs for every earlier R1B historical season to be evaluated."
+    }
+  ],
+  "forbiddenSubstitutions": [
+    "DO_NOT_USE_OUTCOME_REPLAY_AS_FEATURE_SOURCE",
+    "DO_NOT_TREAT_ANALOGOUS_OLDER_FEATURE_AS_CURRENT_COMPONENT_WITHOUT_PARITY_PROOF",
+    "DO_NOT_FILL_MISSING_FAMILY_WITH_ZERO",
+    "DO_NOT_SHRINK_HISTORY_POST_HOC_TO_ONLY_SEASONS_WHERE_A_SIGNAL_LOOKS_GOOD",
+    "DO_NOT_READ_MARKET_ODDS",
+    "DO_NOT_JOIN_OUTCOMES_BEFORE_FEATURE_ROWSET_FREEZE"
+  ],
+  "materializer": "scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py",
+  "materializerState": "IMPLEMENTED_FAIL_CLOSED_AWAITING_NORMALIZED_CUSTODIED_FAMILY_PACKS",
+  "rowsetProduced": false,
+  "rowCount": null,
+  "dateRange": null,
+  "rowsetSha256": null,
+  "duplicateCount": null,
+  "forbiddenOutcomeFields": null,
+  "forbiddenPriceFields": null,
+  "policy": {
+    "outcomesReadByR1BMaterializer": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "frozenRoutesChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextStep": "R1B1_SOURCE_CUSTODY_AND_EXACT_SEMANTIC_ADAPTERS"
+}
