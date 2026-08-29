@@ -1,0 +1,77 @@
+name: WNBA R3B2 Frozen Rolling-Origin Evaluation
+
+on:
+  push:
+    branches:
+      - research/wnba-r3-elite-signal-discovery
+    paths:
+      - 'research/wnba/WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL.json'
+      - 'scripts/wnba-r3b2-rolling-origin-evaluation.py'
+      - 'scripts/wnba-r3b1-prefix-feature-materializer.py'
+      - 'scripts/wnba-r3b1-local-backbone-runner.py'
+      - '.github/workflows/wnba-r3b2-rolling-origin-evaluation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download exact frozen R1A5 backbone
+        uses: actions/download-artifact@v4
+        with:
+          name: wnba-r1a5-neutral-availability-33086442468
+          path: r3b2-input
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 33086442468
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frozen evaluator dependencies
+        run: python -m pip install --quiet pyarrow scikit-learn==1.7.1
+
+      - name: Reproduce exact frozen R3B1 feature rowset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WNBA_R3B1_BACKBONE_FILE: r3b2-input/wnba-r1a5-neutral-availability-candidate-rowset.jsonl
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r3b1-local-backbone-runner.py 2>&1 | tee wnba-r3b2-r3b1-reproduction.log
+          echo 'ba963903031eeb2becc254661af1657a45759fa4be9d9a7c8c046dc69e181113  wnba-r3b1-prefix-feature-rowset.jsonl' | sha256sum --check
+
+      - name: Open frozen outcomes and run R3B2 OOS evaluation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WNBA_R3B2_FEATURE_ROWSET: wnba-r3b1-prefix-feature-rowset.jsonl
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/wnba-r3b2-rolling-origin-evaluation.py 2>&1 | tee wnba-r3b2-evaluation.log
+
+      - name: Upload R3B2 evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r3b2-frozen-oos-evaluation-${{ github.run_id }}
+          path: |
+            wnba-r3b2-r3b1-reproduction.log
+            wnba-r3b2-evaluation.log
+            wnba-r3b1-prefix-feature-evidence.json
+            wnba-r3b1-prefix-feature-rowset.jsonl
+            wnba-r3b2-evaluation-evidence.json
+            wnba-r3b2-oos-predictions.jsonl
+            wnba-r3b2-final-candidate-predictions.jsonl
+          if-no-files-found: warn
+          retention-days: 90
