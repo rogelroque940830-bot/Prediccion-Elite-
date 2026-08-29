@@ -3,6 +3,15 @@
   "status": "R1B_BLOCKED_BEFORE_ROWSET_MATERIALIZATION",
   "parentR1ACommit": "f6e1651525acaa9c722a59c6a58abcdeb08283c3",
   "scientificReason": "A feature-only historical rowset cannot be certified until every required R1A family has exact pregame historical custody under the same semantics. Substituting outcome-reading replays, current-only payloads, or analogous older features is prohibited.",
+  "r1b1Certification": {
+    "artifact": "research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json",
+    "status": "R1B1_AUDIT_COMPLETE_FAIL_CLOSED",
+    "parityCertified": 0,
+    "partialParity": 4,
+    "blocked": 5,
+    "r1bHistoricalRowsetAuthorized": false,
+    "r1b2Authorized": false
+  },
   "verifiedPregameCustody": [
     {
       "source": "P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY",
@@ -106,5 +115,5 @@
     "automaticBetPlacement": false,
     "realFinancialExposure": 0
   },
-  "nextStep": "R1B1_SOURCE_CUSTODY_AND_EXACT_SEMANTIC_ADAPTERS"
+  "nextStep": "REMEDIATE_R1B1_BLOCKED_AND_PARTIAL_FAMILIES_BEFORE_R1B2"
 }
