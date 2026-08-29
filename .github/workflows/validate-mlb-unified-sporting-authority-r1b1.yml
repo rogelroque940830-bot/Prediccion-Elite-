@@ -6,11 +6,13 @@ on:
       - research/mlb-unified-sporting-authority-r1
     paths:
       - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
+      - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
       - scripts/validate-mlb-unified-sporting-authority-r1b1.py
       - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
   pull_request:
     paths:
       - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
+      - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
       - scripts/validate-mlb-unified-sporting-authority-r1b1.py
       - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
 
@@ -22,5 +24,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate frozen R1B1 source-custody certification
+      - name: Validate frozen R1B1 source-custody certification and parent gate
         run: python scripts/validate-mlb-unified-sporting-authority-r1b1.py
