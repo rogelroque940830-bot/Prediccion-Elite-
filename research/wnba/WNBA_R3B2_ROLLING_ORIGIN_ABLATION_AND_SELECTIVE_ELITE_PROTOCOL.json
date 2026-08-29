@@ -1,0 +1,192 @@
+{
+  "name": "WNBA_R3B2_ROLLING_ORIGIN_ABLATION_AND_SELECTIVE_ELITE_PROTOCOL_V1",
+  "status": "FROZEN_BEFORE_R3B2_OUTCOME_OPENING",
+  "created_date": "2026-08-29",
+  "branch": "research/wnba-r3-elite-signal-discovery",
+  "parent_r3_contract": "research/wnba/WNBA_R3_ELITE_SIGNAL_DISCOVERY_CONTRACT.json",
+  "parent_r3b1_certification": "research/wnba/WNBA_R3B1_PREFIX_FEATURE_MATERIALIZATION_CERTIFICATION.json",
+  "production_mutation": false,
+  "global_ranker_mutation": false,
+  "historical_role": "DEVELOPMENT_ONLY_NOT_CROSS_SPORT_CERTIFICATION",
+  "outcome_values_read_for_this_protocol_freeze": false,
+  "frozen_feature_rowset": {
+    "file": "wnba-r3b1-prefix-feature-rowset.jsonl",
+    "rows": 1143,
+    "sha256": "ba963903031eeb2becc254661af1657a45759fa4be9d9a7c8c046dc69e181113",
+    "season_rows": {"2021":186,"2022":210,"2023":234,"2024":234,"2025":279},
+    "all_five_historical_r3_families_ready_both_sides": true,
+    "non_finite_numeric_values": 0,
+    "target_outcome_fields": 0,
+    "market_fields": 0,
+    "availability_fields": 0
+  },
+  "outcome_label_contract": {
+    "name": "HOME_WIN",
+    "type": "binary",
+    "definition": "HOME_WIN=1 iff the canonical home side's full-game final team_score is greater than the canonical away side's full-game final team_score; otherwise HOME_WIN=0.",
+    "overtime": "INCLUDED_FULL_GAME_FINAL_SCORE",
+    "draw_policy": "FAIL_CLOSED_IF_EQUAL_FINAL_SCORE_OR_MISSING_SCORE",
+    "join_key": "gameId/game_id canonical identity",
+    "source": "the same frozen SportsDataverse ESPN WNBA team-box assets already pinned in R1A4/R3 custody",
+    "score_fields_authorized_after_this_protocol_commit_only": ["team_score","opponent_team_score"],
+    "market_or_line_fields_authorized": false,
+    "special_events_authorized": false,
+    "frozen_asset_pins": {
+      "2021": {"asset_id":479696175,"sha256":"02e574a18b06c883247bd67d0e4b29423f0b6a5cba04c8b1579bf12d7af28d8e"},
+      "2022": {"asset_id":479697715,"sha256":"7919b2f7de526350476c868d1048162cc9b3bf6f9f059f41298e1d40450f871c"},
+      "2023": {"asset_id":165078397,"sha256":"ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9"},
+      "2024": {"asset_id":417936297,"sha256":"b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c"},
+      "2025": {"asset_id":505304728,"sha256":"b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09"}
+    }
+  },
+  "rolling_origin_folds": [
+    {"fold":"F2022","train_seasons":[2021],"target_season":2022},
+    {"fold":"F2023","train_seasons":[2021,2022],"target_season":2023},
+    {"fold":"F2024","train_seasons":[2021,2022,2023],"target_season":2024},
+    {"fold":"F2025","train_seasons":[2021,2022,2023,2024],"target_season":2025}
+  ],
+  "controlled_model": {
+    "candidate_class": "SPORTS_ONLY_LOGISTIC_RESEARCH_MODEL",
+    "implementation": "scikit-learn LogisticRegression",
+    "scikit_learn_version": "1.7.1",
+    "penalty": "l2",
+    "C": 1.0,
+    "solver": "liblinear",
+    "fit_intercept": true,
+    "class_weight": null,
+    "max_iter": 10000,
+    "tol": 1e-10,
+    "random_state": 940830,
+    "hyperparameter_search_allowed": false,
+    "posthoc_calibration_in_r3b2": false,
+    "note": "BASE_R2_FEATURE_LOGIT is a controlled research baseline built from frozen R2 state features; it is not a claim of exact production-R2 probability replay."
+  },
+  "preprocessing": {
+    "directional_rule": "For side-symmetric numeric or boolean fields use HOME minus AWAY after boolean-to-0/1 conversion. H2H likewise uses home-minus-away directional fields.",
+    "standardization": "StandardScaler fit on training seasons only inside each fold, then applied unchanged to that fold's target season.",
+    "missing_or_nonfinite_policy": "FAIL_CLOSED; no imputation and no target-row dropping. R3B1 certification already reports complete finite inputs.",
+    "target_season_statistics_allowed": false,
+    "outcome_informed_transforms_allowed": false
+  },
+  "feature_vectors": {
+    "BASE_R2": [
+      "netRtg","offRtg","defRtg","pace","daysRest","winRate","isB2B","streak",
+      "recentNetRtg","recentOffRtg","recentDefRtg","recentWinPct","gamesPlayed",
+      "sosOppAvgNetRtg","b2bWasRoad","gamesLast7","travelMiles"
+    ],
+    "FOUR_FACTORS": [
+      "efg","efgAllowed","tovRate","tovRateForced","orbRate","orbRateAllowed","ftr","ftrAllowed"
+    ],
+    "QUALITY_ADJUSTED_FORM": [
+      "netEffL5","netEffL10","qualityAdjNetL5","qualityAdjNetL10"
+    ],
+    "H2H_PREFIX": [
+      "meetingCount","winShare","avgMargin","historySeasonsAvailable"
+    ],
+    "FATIGUE_CORE": [
+      "priorGamesLast4Days","priorGamesLast6Days","threeInFive","fourInSeven"
+    ],
+    "SHOT_PROFILE_MATCHUP": [
+      "efgEdge","ftrEdge","orbEdge","threePar","threeParAllowed","threeParStyleGap"
+    ]
+  },
+  "historical_family_boundaries": {
+    "AVAILABILITY_STAR_POWER": "EXCLUDED_PROSPECTIVE_ONLY",
+    "TRAVEL_V2_ACTUAL_VENUE_SEQUENCE": "EXCLUDED_SOURCE_CUSTODY_BLOCKED",
+    "deployed_static_travel_semantics": "ALREADY_PRESENT_IN_BASE_R2_TRAVELMILES",
+    "arbitrary_new_interactions": "PROHIBITED",
+    "shot_profile_edges": "AUTHORIZED_AS_ALREADY_FROZEN_R3B1_BOUNDED_MATCHUP_INTERACTIONS"
+  },
+  "ablation_order": [
+    "BASE_R2_FEATURE_LOGIT",
+    "BASE_R2+FOUR_FACTORS",
+    "BASE_R2+QUALITY_ADJUSTED_FORM",
+    "BASE_R2+H2H_PREFIX",
+    "BASE_R2+FATIGUE_CORE",
+    "BASE_R2+SHOT_PROFILE_MATCHUP"
+  ],
+  "metrics": {
+    "primary_proper_scores": ["BRIER","LOG_LOSS"],
+    "probability_diagnostics": ["ECE10","MEAN_PREDICTED_MINUS_OBSERVED"],
+    "secondary": ["ACCURACY","SELECTION_COUNT","COVERAGE","WILSON_95_CI"],
+    "ece10_definition": "Ten fixed probability bins [0.0,0.1),...,[0.9,1.0], weighted by row count; sum absolute bin mean-prediction minus bin observed-rate gaps.",
+    "log_loss_clipping": "clip probability to [1e-15,1-1e-15] for numerical evaluation only"
+  },
+  "single_family_incremental_gate": {
+    "comparison": "each BASE_R2+family versus BASE_R2_FEATURE_LOGIT on the pooled 2022-2025 rolling-origin OOS rows",
+    "minimum_improvement": "pooled Brier improvement >=0.001 OR pooled log-loss improvement >=0.002",
+    "non_degradation_limits": {
+      "maximum_brier_worsening": 0.0015,
+      "maximum_log_loss_worsening": 0.003,
+      "maximum_ece10_worsening": 0.01
+    },
+    "seasonal_stability": "At least one proper score must improve versus BASE_R2 in at least 2 of the 4 target seasons.",
+    "accuracy_alone_can_qualify": false,
+    "failure_rule": "A family that fails this gate cannot enter bounded combinations in R3B2."
+  },
+  "bounded_combination_protocol": {
+    "eligible_families": "only families passing the single-family incremental gate",
+    "enumeration": ["all eligible pairs","all eligible triples"],
+    "four_or_five_family_subset_search": false,
+    "arbitrary_feature_subsets_within_family": false,
+    "combination_advancement_gate": {
+      "reference": "best qualifying single family by pooled log loss, then Brier, then lexical candidate ID",
+      "minimum_improvement": "pooled Brier improvement >=0.001 OR pooled log-loss improvement >=0.002 versus that reference",
+      "non_degradation_limits": {
+        "maximum_brier_worsening": 0.0015,
+        "maximum_log_loss_worsening": 0.003,
+        "maximum_ece10_worsening": 0.01
+      },
+      "seasonal_stability": "At least one proper score improves versus the reference in at least 2 target seasons."
+    },
+    "winner_rule": "Among advancing combinations choose lowest pooled OOS log loss; tie-break by lowest Brier, then fewer R3 families, then lexical candidate ID. If no combination advances, retain the best qualifying single. If no single qualifies, retain BASE_R2_FEATURE_LOGIT and disable multidimensional Elite feasibility."
+  },
+  "family_contribution_definition": {
+    "calculation": "Within each fitted target fold, family logit contribution is the sum of fitted beta_j times the train-standardized target x_j for columns belonging to that family.",
+    "home_direction": "positive contribution favors HOME",
+    "away_direction": "negative contribution favors AWAY",
+    "intercept_is_family_contribution": false,
+    "base_r2_contribution_counts_as_independent_r3_confirmation": false
+  },
+  "selective_elite_feasibility_screen": {
+    "enabled_only_if_final_candidate_has_at_least_r3_families": 2,
+    "selected_side": "HOME if p_home>=0.5 else AWAY",
+    "p_win_selected_side": "max(p_home,1-p_home)",
+    "fixed_probability_threshold": 0.75,
+    "threshold_search_after_outcome_opening": false,
+    "minimum_independent_r3_families_favoring_selected_side": 2,
+    "aggregate_non_base_r3_contribution_must_favor_selected_side": true,
+    "maximum_single_family_share_of_absolute_non_base_contribution": 0.70,
+    "minimum_total_elite_selections_pooled": 100,
+    "minimum_target_seasons_with_elite_selections": 4,
+    "minimum_elite_selections_each_target_season": 15,
+    "development_target_accuracy_pooled": 0.80,
+    "minimum_accuracy_each_target_season": 0.70,
+    "required_reporting": [
+      "selection count","coverage","accuracy","Wilson 95% CI","Brier","log loss","ECE10",
+      "mean predicted minus observed","per-season selection count and accuracy","family contribution support counts"
+    ],
+    "passing_meaning": "DEVELOPMENT_FEASIBILITY_ONLY; does not certify probability calibration, cross-sport eligibility, production deployment, or wagering."
+  },
+  "anti_leakage_and_no_retune": {
+    "same_game_outcome_at_decision_time": false,
+    "same_date_outcomes_as_features": false,
+    "future_games_as_features": false,
+    "market_features": false,
+    "target_season_threshold_search": false,
+    "post_target_row_dropping": false,
+    "manual_post_result_candidate_switching": false,
+    "change_gates_after_results": false,
+    "if_r3b2_fails": "Record failure. Any altered features, thresholds, models or gates require a separately versioned future research contract; they cannot be presented as this frozen R3B2 result."
+  },
+  "outcome_opening_authorization": {
+    "authorized_only_after_commit_containing_this_exact_protocol": true,
+    "authorized_purpose": "Run the frozen R3B2 rolling-origin development evaluation exactly once per operationally equivalent rerun; operational bug fixes may rerun without changing science.",
+    "scores_may_not_be_used_to_change_this_protocol": true
+  },
+  "closure": {
+    "r3b2_protocol_frozen": true,
+    "outcome_opening_next": true,
+    "next_gate": "R3B2_FROZEN_PROTOCOL_OUTCOME_OPENING_AND_OOS_EVALUATION"
+  }
+}
