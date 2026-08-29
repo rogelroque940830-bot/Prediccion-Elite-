@@ -2,6 +2,14 @@ import { CircleSlash2, ShieldCheck, Target, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { presentMlbDailyBestPick } from "@/lib/mlb-daily-best-pick";
 
+/**
+ * Compatibility presentation for the frozen A+/Premium/lower-tier route selector.
+ *
+ * IMPORTANT: this is a pre-price routing diagnostic, not the slate-wide official
+ * PLAY / WAIT / NO_PLAY authority. The official daily decision lives in Daily
+ * Opportunity. Keeping this distinction explicit prevents two independent
+ * pre-price selectors from both presenting themselves as "the best pick".
+ */
 export function MlbDailyBestPickCard({ value }: { value: unknown }) {
   const display = presentMlbDailyBestPick(value);
 
@@ -14,11 +22,13 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2 font-semibold">
             <TriangleAlert className="h-4 w-4 text-destructive" />
-            {display.title}
+            RUTA PRE-PRICE NO DISPONIBLE
           </div>
           <Badge variant="destructive">{display.badge}</Badge>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{display.message}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {display.message} Esta tarjeta es diagnóstica y nunca sustituye la decisión oficial Daily Opportunity.
+        </p>
       </div>
     );
   }
@@ -32,11 +42,13 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2 text-base font-extrabold tracking-wide">
             <CircleSlash2 className="h-5 w-5" />
-            {display.title}
+            RUTA PRE-PRICE · SIN SELECCIÓN
           </div>
           <Badge variant="secondary">{display.badge}</Badge>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{display.message}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {display.message} No constituye una recomendación oficial de apuesta.
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
           <div><div className="text-muted-foreground">A+ READY</div><div className="font-semibold">{display.audit.readyAPlusEvaluations}</div></div>
           <div><div className="text-muted-foreground">Premium READY</div><div className="font-semibold">{display.audit.readyPremiumEvaluations}</div></div>
@@ -56,7 +68,7 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
         <div>
           <div className="flex items-center gap-2 text-base font-extrabold tracking-wide">
             <Target className="h-5 w-5 text-primary" />
-            {display.title}
+            SEÑAL DE RUTA PRE-PRICE
           </div>
           <div className="mt-1 text-xs text-muted-foreground">{display.matchup}</div>
         </div>
@@ -70,7 +82,7 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         <div><div className="text-muted-foreground">Tier</div><div className="font-semibold">{display.tierLabel}</div></div>
         <div><div className="text-muted-foreground">Mercado</div><div className="font-semibold">{display.marketLabel}</div></div>
-        <div><div className="text-muted-foreground">Orden</div><div className="font-semibold">{display.rankLabel}</div></div>
+        <div><div className="text-muted-foreground">Orden de ruta</div><div className="font-semibold">{display.rankLabel}</div></div>
         <div><div className="text-muted-foreground">Lado</div><div className="font-semibold">{display.sideLabel}</div></div>
       </div>
 
@@ -81,7 +93,9 @@ export function MlbDailyBestPickCard({ value }: { value: unknown }) {
 
       <div className="mt-3 flex items-start gap-2 text-[11px] text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-        <span>{display.message}</span>
+        <span>
+          Diagnóstico de jerarquía certificada pre-price. No es la recomendación oficial del día y no puede contradecir ni sustituir PLAY / WAIT / NO PLAY de Daily Opportunity. {display.message}
+        </span>
       </div>
     </div>
   );
