@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CERT = ROOT / "research" / "mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json"
+PARENT_R1B = ROOT / "research" / "mlb-unified-sporting-authority-r1b-materialization-certification.json"
 EXPECTED = (
     "V16_BASELINE",
     "FROZEN_ROUTE_EVIDENCE",
@@ -69,4 +70,24 @@ for field in ("outcomesRead", "marketPricesRead", "modelRefit", "newWeightsCreat
         fail("policy:" + field)
 if policy.get("realFinancialExposure") != 0:
     fail("real_financial_exposure")
-print(json.dumps({"status": "R1B1_CERTIFICATION_VALID", "counts": counts, "rowsetAuthorized": all_certified}, sort_keys=True))
+
+parent = json.loads(PARENT_R1B.read_text(encoding="utf-8"))
+link = parent.get("r1b1Certification", {})
+if link.get("artifact") != "research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json":
+    fail("parent_artifact_link")
+if link.get("status") != data.get("status"):
+    fail("parent_status_drift")
+if link.get("parityCertified") != counts["PARITY_CERTIFIED"]:
+    fail("parent_parity_count_drift")
+if link.get("partialParity") != counts["PARTIAL_PARITY"]:
+    fail("parent_partial_count_drift")
+if link.get("blocked") != counts["BLOCKED"]:
+    fail("parent_blocked_count_drift")
+if link.get("r1bHistoricalRowsetAuthorized") is not all_certified:
+    fail("parent_rowset_authorization_drift")
+if link.get("r1b2Authorized") is not all_certified:
+    fail("parent_r1b2_authorization_drift")
+if all_certified is False and parent.get("nextStep") != "REMEDIATE_R1B1_BLOCKED_AND_PARTIAL_FAMILIES_BEFORE_R1B2":
+    fail("parent_next_step")
+
+print(json.dumps({"status": "R1B1_CERTIFICATION_VALID", "counts": counts, "rowsetAuthorized": all_certified, "parentConsistent": True}, sort_keys=True))
