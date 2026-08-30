@@ -1,0 +1,73 @@
+{
+  "attemptOrder": [
+    "T10",
+    "T7",
+    "T4"
+  ],
+  "attempts": [
+    {
+      "abstractGameState": "Live",
+      "clockStatus": "MISSED_STAGE",
+      "codedGameState": "P",
+      "contextRows": null,
+      "detailedState": "Warmup",
+      "disposition": "PREGAME",
+      "leadMinutes": 8.678266500000001,
+      "observedAt": "2026-08-30T18:06:19.304010Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T10",
+      "startTime": "2026-08-30T18:15:00Z",
+      "targetLeadMinutes": 10,
+      "terminal": false
+    },
+    {
+      "abstractGameState": "Live",
+      "clockStatus": "READY",
+      "codedGameState": "P",
+      "contextDiagnostics": {
+        "attemptStage": "T7",
+        "exactReadyGamesInCaptureWindow": 1,
+        "leadMinutes": 6.984412666666667,
+        "maximumLeadMinutes": 7.0,
+        "reason": "EXACT_READY",
+        "targetGameOnlyRevalidation": true,
+        "targetGamePk": 823010
+      },
+      "contextRows": 1,
+      "detailedState": "Warmup",
+      "disposition": "PREGAME",
+      "leadMinutes": 6.98524425,
+      "observedAt": "2026-08-30T18:08:00.885345Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T7",
+      "startTime": "2026-08-30T18:15:00Z",
+      "targetLeadMinutes": 7,
+      "terminal": false
+    }
+  ],
+  "captureStage": "T7",
+  "captureSucceeded": true,
+  "gamePk": 823010,
+  "lastObservedAt": "2026-08-30T18:08:00.885345Z",
+  "officialDate": "2026-08-30",
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "scientificCaptureWindowMaximumMinutes": 20,
+    "scientificModelChanged": false
+  },
+  "retryEligible": false,
+  "retryStartTime": null,
+  "scheduledStartFromPlanner": "2026-08-30T18:15:00Z",
+  "schemaVersion": "courtedge-p0-step12v68-per-game-attempts.v1",
+  "terminal": true,
+  "terminalReason": "CAPTURED",
+  "updatedAt": "2026-08-30T18:08:00.987866Z"
+}
