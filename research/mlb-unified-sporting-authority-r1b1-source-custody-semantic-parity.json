@@ -4,19 +4,17 @@
   "parentContract": "research/mlb-unified-sporting-authority-r1.json",
   "parentR1A": "research/mlb-unified-sporting-authority-r1a-feature-custody.json",
   "parentR1B": "research/mlb-unified-sporting-authority-r1b-materialization-certification.json",
-  "objective": "Close R1B1 by classifying every required R1B feature family according to exact historical pregame source custody and semantic parity. No analogous feature, zero-fill, current-only payload, outcome-reading replay, or post-hoc history restriction may be promoted to exact parity.",
+  "objective": "Classify every required R1B family by exact historical pregame custody and semantic parity. No analogous substitution, zero fill, outcome-reading replay, price input, or post-hoc history restriction may be promoted to parity.",
   "classificationPolicy": {
-    "PARITY_CERTIFIED": "Exact current family semantics are reproducible historically for the intended evaluation universe with immutable pregame custody, required identity/timestamp provenance, no outcome fields, and no market-price fields.",
-    "PARTIAL_PARITY": "A valid pregame source, exact builder semantics, or upstream equivalent evidence exists, but full-universe coverage and/or exact current-family adapter parity is not yet proven.",
-    "BLOCKED": "Exact current-family historical pregame semantics cannot presently be certified without an unsupported substitution or missing source custody."
+    "PARITY_CERTIFIED": "Exact frozen family semantics are reproducible for the intended historical universe with immutable pregame custody, explicit temporal provenance, no target leakage, and no market-price inputs.",
+    "PARTIAL_PARITY": "Valid pregame upstream custody or exact builder semantics exist, but full-universe and/or exact current-family parity remains unproven.",
+    "BLOCKED": "Exact current-family historical pregame semantics cannot presently be certified without unsupported substitution or missing source custody."
   },
   "requiredFamilies": [
     {
       "family": "V16_BASELINE",
       "classification": "BLOCKED",
-      "evidence": [
-        "R1B located an immutable historical V16 artifact only as a pure-settlement-model manifest, not a per-game/per-side pregame sporting probability rowset under current R1A semantics."
-      ],
+      "evidence": ["No certified immutable per-game/per-side historical V16 sporting-probability rowset under current R1A stage semantics has been proven."],
       "coverage": "NO_CERTIFIED_FULL_HISTORICAL_PER_GAME_SIDE_ROWSET",
       "exactSemanticParity": false,
       "requiredUnblock": "Identify or materialize immutable pregame V16 probabilities by officialDate/gamePk/side/stage with no outcome or price fields."
@@ -24,10 +22,7 @@
     {
       "family": "FROZEN_ROUTE_EVIDENCE",
       "classification": "BLOCKED",
-      "evidence": [
-        "The located historical Daily Best Pick replay imports a parent scorer carrying outcomes.",
-        "Existing certification states production prepriceRank is not reconstructed exactly."
-      ],
+      "evidence": ["Located historical Daily Best Pick replay carries outcomes and does not reconstruct current production prepriceRank exactly."],
       "coverage": "OUTCOME_BLIND_EXACT_ROUTE_REPLAY_NOT_CERTIFIED",
       "exactSemanticParity": false,
       "requiredUnblock": "Produce an outcome-blind adapter from frozen pregame inputs that emits exact A+/Premium evidence and source preprice rank before settlement."
@@ -36,21 +31,18 @@
       "family": "STATCAST_QUALITY",
       "classification": "PARTIAL_PARITY",
       "evidence": [
-        "Pregame starter-quality custody exists in prior V62/V66 evidence.",
-        "Current certified STATCAST_QUALITY is produced from Baseball Savant current-season expected_statistics and statcast pitcher leaderboards, including ERA/xERA gap, xwOBA gap, HardHit% and Barrel% before conversion to runsDelta.",
-        "V66 starter-quality custody instead standardizes pitch-level velocity, spin, whiff, strike and hard-contact components; it is upstream quality evidence but not the same current runsDelta semantics.",
-        "No immutable target-date historical Savant leaderboard snapshots covering the intended 2022-2026_YTD universe have yet been proven."
+        "Pregame starter-quality custody exists in V62/V66.",
+        "Current STATCAST_QUALITY uses Baseball Savant expected-statistics/statcast leaderboard semantics before conversion to homeSP.runsDelta/awaySP.runsDelta; V66 pitch-level velocity/spin/whiff/strike/hard-contact custody is not the same semantic payload.",
+        "Immutable target-date historical Savant leaderboard snapshots across 2022-2026_YTD have not been proven."
       ],
       "coverage": "UPSTREAM_PREGAME_CUSTODY_EXISTS_CURRENT_SAVANT_SEMANTIC_PARITY_UNPROVEN",
       "exactSemanticParity": false,
-      "requiredUnblock": "Identify immutable pregame target-date Savant expected-statistics/statcast snapshots and reproduce the current certified evaluatePitcher runsDelta path exactly, including provenance and fail-closed behavior."
+      "requiredUnblock": "Identify immutable target-date Savant snapshots and reproduce the certified evaluatePitcher runsDelta path exactly with provenance and fail-closed behavior."
     },
     {
       "family": "DISCIPLINE_SPEED",
       "classification": "BLOCKED",
-      "evidence": [
-        "No immutable full-history normalized pregame pack under current homeRunsDelta/awayRunsDelta semantics has been proven."
-      ],
+      "evidence": ["No immutable full-history normalized pregame pack under current homeRunsDelta/awayRunsDelta semantics has been proven."],
       "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
       "exactSemanticParity": false,
       "requiredUnblock": "Identify or materialize exact historical DISCIPLINE_SPEED inputs with immutable source timestamps and provenance."
@@ -58,20 +50,15 @@
     {
       "family": "SOS",
       "classification": "BLOCKED",
-      "evidence": [
-        "No immutable full-history normalized pregame pack under current adjustedRpgDelta semantics has been proven."
-      ],
+      "evidence": ["No immutable full-history normalized pregame pack under current adjustedRpgDelta semantics has been proven."],
       "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
       "exactSemanticParity": false,
-      "requiredUnblock": "Identify or materialize exact historical SOS component with strictly prior-date opponent-strength custody."
+      "requiredUnblock": "Identify or materialize exact historical SOS with strictly prior-date opponent-strength custody."
     },
     {
       "family": "ADVANCED_CONTEXT",
       "classification": "BLOCKED",
-      "evidence": [
-        "No immutable full-history normalized pregame pack under current totalAdjustment semantics has been proven.",
-        "Non-overlap with the other matchup-family adapters has not yet been proven."
-      ],
+      "evidence": ["No immutable full-history normalized pregame pack under current totalAdjustment semantics has been proven, and non-overlap with other matchup families remains unproven."],
       "coverage": "NO_CERTIFIED_FULL_HISTORY_NORMALIZED_PACK",
       "exactSemanticParity": false,
       "requiredUnblock": "Identify or materialize exact historical ADVANCED_CONTEXT and prove temporal custody and non-duplication."
@@ -80,45 +67,47 @@
       "family": "BULLPEN_FULL_GAME",
       "classification": "PARTIAL_PARITY",
       "evidence": [
-        "P0 Step12V66 contains verified pre-outcome bullpen workload/source custody across 2022-2026_YTD, including recent bullpen pitches and reliever identities.",
-        "Current certified bullpen evidence is produced through createMlbUnifiedV16CertifiedBullpenProvider -> getBullpenStatus and requires target-time active roster, season pitching evidence used for reliever-role classification, and complete recent-game usage feeds before runsAdjustment is certified.",
-        "The inspected V66 custody does not establish immutable target-time active-roster snapshots or the complete season-stat role evidence required to reproduce current getBullpenStatus semantics exactly.",
-        "Therefore V66 workload custody alone cannot be promoted to current homeBullpen.runsAdjustment/awayBullpen.runsAdjustment parity."
+        "V66 contains verified pre-outcome bullpen workload/source custody across 2022-2026_YTD.",
+        "Current getBullpenStatus requires target-time active roster, season-stat role classification and complete recent usage before runsAdjustment certification.",
+        "V66 does not prove immutable target-time active-roster snapshots or complete historical season-stat role evidence, so workload custody alone cannot reproduce current homeBullpen.runsAdjustment/awayBullpen.runsAdjustment exactly."
       ],
       "coverage": "2022_2026_YTD_WORKLOAD_CUSTODY_ACTIVE_ROSTER_AND_ROLE_CUSTODY_UNPROVEN",
       "exactSemanticParity": false,
       "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_MUST_BE_NOT_APPLICABLE_NOT_ZERO",
-      "requiredUnblock": "Prove immutable target-date active-roster and season-stat role custody across the intended universe, combine it with the certified recent-usage history, and reproduce current getBullpenStatus/runsAdjustment exactly including no-history and fail-closed dispositions."
+      "requiredUnblock": "Prove immutable target-date roster and role-stat custody, combine it with certified recent usage, and reproduce getBullpenStatus/runsAdjustment exactly."
     },
     {
       "family": "HAND_SPLIT_SLG_MATCHUP",
-      "classification": "PARTIAL_PARITY",
+      "classification": "PARITY_CERTIFIED",
       "evidence": [
-        "Frozen builder semantics are historically reconstructable pregame with target-date exclusion and no same-date outcome leakage.",
-        "Successful workflow run 31666803576 pins immutable hand-split source packs for 2024, 2025 and 2026_YTD.",
-        "No equivalent 2022 or 2023 hand-split artifact is present in that successful run, so the intended 2022-2026_YTD universe remains incomplete."
+        "R1A freezes historical reconstruction with official-date-strictly-before-target chronology, minimum prior PA 50 and no same-date outcome leakage.",
+        "Original successful V9 run 31666803576 pins 2024, 2025 and 2026_YTD packs.",
+        "R1B1 remediation run 33316909056 generated 2022 and 2023 packs from the immutable canonical V3 artifact using the exact frozen V9 acquisition implementation at commit aa81f9f576b49b944ac2e27e8388bc11cb8d30a3.",
+        "Both remediation jobs passed source-digest verification, frozen semantic-boundary checks, complete-game acquisition, excluded-PA quality gate, no same-date leakage, no price use, no target-row outcome join and no missing-split imputation."
       ],
-      "coverage": "2024_2026_YTD_PINNED_SOURCE_PACKS; 2022_2023_MISSING",
-      "exactSemanticParity": false,
-      "requiredUnblock": "Pin equivalent immutable 2022 and 2023 pregame source packs and reproduce the frozen hand-split builder under identical target-date exclusion semantics."
+      "coverage": "2022_2026_YTD_FULL_PINNED_SOURCE_CUSTODY",
+      "exactSemanticParity": true,
+      "sourceBuilderCommit": "aa81f9f576b49b944ac2e27e8388bc11cb8d30a3",
+      "temporalRule": "ONLY_GAMES_WITH_OFFICIAL_DATE_STRICTLY_BEFORE_TARGET_DATE",
+      "missingnessPolicy": "NO_MISSING_SPLIT_IMPUTATION"
     },
     {
       "family": "PITCHMIX_MATCHUP",
       "classification": "PARTIAL_PARITY",
       "evidence": [
-        "Frozen pitchmix builder semantics are historically reconstructable pregame under the 365-day exclusive-target-date rule and frozen coverage thresholds.",
-        "Successful workflow run 31669146698 pins immutable pitchmix source packs for 2023, 2024, 2025 and 2026_YTD.",
-        "No equivalent 2022 pitchmix artifact is present in that successful run, so the intended 2022-2026_YTD universe remains incomplete."
+        "Frozen pitchmix semantics use a 365-day target-date-exclusive window and frozen coverage thresholds.",
+        "Successful run 31669146698 pins source packs for 2023, 2024, 2025 and 2026_YTD.",
+        "The frozen V12 contract explicitly defines 2023 as warmup and 2024-2026_YTD as evaluation seasons; no 2022 source pack exists. R1A requires the family to be materialized with explicit missingnessReason, so the exact pre-2024 disposition must be frozen before parity promotion rather than manufacturing a 2022 value."
       ],
-      "coverage": "2023_2026_YTD_PINNED_SOURCE_PACKS; 2022_MISSING",
+      "coverage": "2023_2026_YTD_PINNED_SOURCE_PACKS; PRE_2024_DISPOSITION_PENDING_EXACT_ADAPTER",
       "exactSemanticParity": false,
-      "requiredUnblock": "Pin an equivalent immutable 2022 pregame source pack and reproduce the frozen pitchmix builder under the identical 365-day exclusive-target-date and coverage semantics."
+      "requiredUnblock": "Freeze and parity-test the R1B adapter so 2022/2023 follow the original V12 warmup/evaluation boundary with explicit non-numeric missingness where structurally inapplicable; do not fabricate a 2022 pitchmix value."
     }
   ],
   "summary": {
     "requiredFamilyCount": 9,
-    "parityCertified": 0,
-    "partialParity": 4,
+    "parityCertified": 1,
+    "partialParity": 3,
     "blocked": 5,
     "allRequiredFamiliesParityCertified": false,
     "r1bHistoricalRowsetAuthorized": false,
@@ -132,51 +121,18 @@
       "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
       "headSha": "1e5b68801181f900ee0531eee9e392da02599006",
       "rows": 11407,
-      "rowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
+      "rowsBySeason": {"2022":2398,"2023":2399,"2024":2406,"2025":2423,"2026_YTD":1781},
       "containsOutcomeTargets": false
     },
-    {
-      "name": "V17_FROZEN_HAND_SPLIT_2024",
-      "workflowRunId": 31666803576,
-      "artifactId": 9168251159,
-      "artifactDigest": "sha256:66525c58827e52155122c02321c1d4aae194b3f5f9fb31af0b3215fed96bbd6f"
-    },
-    {
-      "name": "V17_FROZEN_HAND_SPLIT_2025",
-      "workflowRunId": 31666803576,
-      "artifactId": 9168248833,
-      "artifactDigest": "sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425"
-    },
-    {
-      "name": "V17_FROZEN_HAND_SPLIT_2026_YTD",
-      "workflowRunId": 31666803576,
-      "artifactId": 9168238661,
-      "artifactDigest": "sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"
-    },
-    {
-      "name": "V17_FROZEN_PITCHMIX_2023",
-      "workflowRunId": 31669146698,
-      "artifactId": 9169089040,
-      "artifactDigest": "sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"
-    },
-    {
-      "name": "V17_FROZEN_PITCHMIX_2024",
-      "workflowRunId": 31669146698,
-      "artifactId": 9169099182,
-      "artifactDigest": "sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231"
-    },
-    {
-      "name": "V17_FROZEN_PITCHMIX_2025",
-      "workflowRunId": 31669146698,
-      "artifactId": 9169102385,
-      "artifactDigest": "sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"
-    },
-    {
-      "name": "V17_FROZEN_PITCHMIX_2026_YTD",
-      "workflowRunId": 31669146698,
-      "artifactId": 9169078788,
-      "artifactDigest": "sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"
-    }
+    {"name":"R1B1_FROZEN_HAND_SPLIT_2022","workflowRunId":33316909056,"artifactId":9733736986,"artifactDigest":"sha256:37b744998373694588d614e8541f565fb5243048de06aeadbc2a1a353d8dfb99"},
+    {"name":"R1B1_FROZEN_HAND_SPLIT_2023","workflowRunId":33316909056,"artifactId":9733750627,"artifactDigest":"sha256:3c230bd76bacf9e6a8dc82857d331ba14cfc9c0d55d6cd0c44fca6c9ea2d8f84"},
+    {"name":"V17_FROZEN_HAND_SPLIT_2024","workflowRunId":31666803576,"artifactId":9168251159,"artifactDigest":"sha256:66525c58827e52155122c02321c1d4aae194b3f5f9fb31af0b3215fed96bbd6f"},
+    {"name":"V17_FROZEN_HAND_SPLIT_2025","workflowRunId":31666803576,"artifactId":9168248833,"artifactDigest":"sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425"},
+    {"name":"V17_FROZEN_HAND_SPLIT_2026_YTD","workflowRunId":31666803576,"artifactId":9168238661,"artifactDigest":"sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"},
+    {"name":"V17_FROZEN_PITCHMIX_2023","workflowRunId":31669146698,"artifactId":9169089040,"artifactDigest":"sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"},
+    {"name":"V17_FROZEN_PITCHMIX_2024","workflowRunId":31669146698,"artifactId":9169099182,"artifactDigest":"sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231"},
+    {"name":"V17_FROZEN_PITCHMIX_2025","workflowRunId":31669146698,"artifactId":9169102385,"artifactDigest":"sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},
+    {"name":"V17_FROZEN_PITCHMIX_2026_YTD","workflowRunId":31669146698,"artifactId":9169078788,"artifactDigest":"sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}
   ],
   "forbiddenPromotions": [
     "PARTIAL_PARITY_TO_PARITY_CERTIFIED_WITHOUT_FULL_UNIVERSE_COVERAGE_AND_EXACT_SEMANTIC_PROOF",
@@ -190,8 +146,8 @@
   "closureDecision": {
     "r1b1Closed": true,
     "scientificResult": "FAIL_CLOSED_REQUIRED_FAMILY_PARITY_INCOMPLETE",
-    "meaning": "R1B1 itself is complete as an audit. R1B historical materialization remains scientifically blocked because zero of nine required families currently meet full exact historical parity for the intended universe.",
-    "nextPermittedWork": "REMEDIATE_BLOCKED_AND_PARTIAL_FAMILIES_UNDER_THE_FROZEN_R1A_SEMANTICS; DO_NOT_START_R1B2_OR_OUTCOME_EVALUATION_UNTIL_ALL_NINE_ARE_PARITY_CERTIFIED."
+    "meaning": "R1B1 audit is closed and remediation is progressing: one of nine required families is now parity-certified, while R1B historical materialization remains blocked until all nine are certified.",
+    "nextPermittedWork": "REMEDIATE_BLOCKED_AND_PARTIAL_FAMILIES_UNDER_FROZEN_R1A_SEMANTICS; DO_NOT_START_R1B2_OR_OUTCOME_EVALUATION_UNTIL_ALL_NINE_ARE_PARITY_CERTIFIED."
   },
   "policy": {
     "outcomesRead": false,
