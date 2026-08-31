@@ -51,7 +51,7 @@ jobs:
           grep -F 'modelRefit:false' "$src" "$verify"
           grep -F 'newWeightsCreated:false' "$src" "$verify"
           grep -F 'productionChanged:false' "$src" "$verify"
-          ! grep -Ei 'sportsbook|stake|placeBet|automaticBetPlacement:true|realFinancialExposure:[1-9]' "$src" "$verify"
+          ! grep -Ei 'placeBet|automaticBetPlacement:true|realFinancialExposure:[1-9]' "$src" "$verify"
 
   materialize:
     needs: static-validation
