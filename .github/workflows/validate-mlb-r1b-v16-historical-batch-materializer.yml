@@ -1,0 +1,63 @@
+name: Validate MLB R1B V16 Historical Batch Materializer
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - server/mlb-r1b-v16-historical-batch-materializer.ts
+      - server/mlb-r1b-v16-historical-batch-materializer.test.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-batch-materializer.yml
+  pull_request:
+    paths:
+      - server/mlb-r1b-v16-historical-batch-materializer.ts
+      - server/mlb-r1b-v16-historical-batch-materializer.test.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-batch-materializer.yml
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run batch-vs-certified-bridge parity tests
+        run: npx tsx --test server/mlb-r1b-v16-historical-batch-materializer.test.ts
+
+      - name: Compile research-only batch materializer
+        run: |
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext \
+            server/mlb-r1b-v16-historical-batch-materializer.ts \
+            server/mlb-r1b-v16-historical-batch-materializer.test.ts
+
+      - name: Verify research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-r1b-v16-historical-batch-materializer.ts'
+          grep -F 'researchOnly: true' "$source"
+          grep -F 'sameDateHistoryAllowed: false' "$source"
+          grep -F 'targetOutcomeUsedAsFeature: false' "$source"
+          grep -F 'marketPricesRead: false' "$source"
+          grep -F 'modelRefit: false' "$source"
+          grep -F 'newWeightsCreated: false' "$source"
+          grep -F 'productionChanged: false' "$source"
+          ! grep -Ei 'sportsbook|stake|placeBet|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
