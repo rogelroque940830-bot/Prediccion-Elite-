@@ -47,10 +47,8 @@ jobs:
 
       - name: Compile research-only batch materializer
         run: |
-          npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext \
-            server/mlb-r1b-v16-historical-batch-materializer.ts \
-            server/mlb-r1b-v16-historical-batch-materializer.test.ts \
-            scripts/mlb-r1b-v16-historical-batch-live-parity.ts
+          npx esbuild server/mlb-r1b-v16-historical-batch-materializer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-r1b-v16-historical-batch-materializer.cjs
+          npx esbuild scripts/mlb-r1b-v16-historical-batch-live-parity.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-r1b-v16-historical-batch-live-parity.cjs
 
       - name: Verify research boundary
         shell: bash
