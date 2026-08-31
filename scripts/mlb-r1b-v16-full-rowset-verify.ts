@@ -20,7 +20,7 @@ function close(a:number,b:number):boolean{return Number.isFinite(a)&&Number.isFi
 async function main():Promise<void>{
   const root=arg("root","research/mlb-r1b-v16-baseline-historical");
   const out=arg("out",join(root,"combined-manifest.json"));
-  const seasonSummaries:any[]=[]; const combinedKeys:string[]=[]; let totalRows=0,totalEligible=0,totalFrozen=0,totalSourceUniverse=0,totalC4Excluded=0,totalSourceExcluded=0; let parityChecked=0;
+  const seasonSummaries:any[]=[]; const combinedKeys=new Set<string>(); let totalRows=0,totalEligible=0,totalFrozen=0,totalSourceUniverse=0,totalC4Excluded=0,totalSourceExcluded=0; let parityChecked=0;
   const combinedHash=createHash("sha256");
   for(const season of SEASONS){
     const manifestPath=join(root,`manifest-${season}.json`), coveragePath=join(root,`coverage-${season}.json`), featurePath=join(root,`c4-features-${season}.jsonl`), rowsetPath=join(root,`v16-baseline-${season}.jsonl`), priorPath=join(root,`prior-history-${season}.jsonl`);
@@ -37,7 +37,7 @@ async function main():Promise<void>{
       for(const e of expected){const r=byKey.get(key(e));if(!r||r.stage!=="FINAL"||!close(Number(r.probability),e.probability)||!close(Number(r.pushProbability),e.pushProbability))throw new Error(`MLB_R1B_V16_VERIFY_SCORER_PARITY:${season}:${key(e)}`);parityChecked++;}
     }
     const raw=readFileSync(rowsetPath); combinedHash.update(`${season}\n`); combinedHash.update(raw);
-    for(const r of rows){const k=key(r);if(combinedKeys.includes(k))throw new Error(`MLB_R1B_V16_VERIFY_CROSS_SEASON_DUPLICATE:${k}`);combinedKeys.push(k);}
+    for(const r of rows){const k=key(r);if(combinedKeys.has(k))throw new Error(`MLB_R1B_V16_VERIFY_CROSS_SEASON_DUPLICATE:${k}`);combinedKeys.add(k);}
     const rowText=raw.toString("utf8"); if(/"(?:odds|price|sportsbook|winner|targetOutcome|homeRuns|awayRuns)"\s*:/.test(rowText))throw new Error(`MLB_R1B_V16_VERIFY_FORBIDDEN_ROW_FIELD:${season}`);
     totalRows+=rows.length; totalEligible+=features.length; totalFrozen+=Number(coverage.sourceUniverse.frozenT5EligibleCount); totalSourceUniverse+=Number(coverage.sourceUniverse.unionGameCount); totalC4Excluded+=Number(coverage.currentC4.structurallyIneligibleGameCount); totalSourceExcluded+=Number(coverage.sourceUniverse.sourceExcludedCount);
     seasonSummaries.push({season,rowsetSha256:actual.rowset,featureSha256:actual.features,priorHistorySha256:actual.prior,coverageSha256:actual.coverage,sourceUniverseGameCount:coverage.sourceUniverse.unionGameCount,frozenT5EligibleGameCount:coverage.sourceUniverse.frozenT5EligibleCount,c4EligibleGameCount:coverage.currentC4.eligibleGameCount,c4IneligibleGameCount:coverage.currentC4.structurallyIneligibleGameCount,rowCount:rows.length,dateRange:coverage.rowset.dateRange});
