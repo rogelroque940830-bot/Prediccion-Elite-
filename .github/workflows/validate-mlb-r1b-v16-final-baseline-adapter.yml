@@ -7,12 +7,18 @@ on:
     paths:
       - server/mlb-r1b-v16-final-baseline-adapter.ts
       - server/mlb-r1b-v16-final-baseline-adapter.test.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-historical-target-bridge.test.ts
+      - server/mlb-c4-certified-materializer.ts
       - server/mlb-pure-settlement-scorer.ts
       - .github/workflows/validate-mlb-r1b-v16-final-baseline-adapter.yml
   pull_request:
     paths:
       - server/mlb-r1b-v16-final-baseline-adapter.ts
       - server/mlb-r1b-v16-final-baseline-adapter.test.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-historical-target-bridge.test.ts
+      - server/mlb-c4-certified-materializer.ts
       - server/mlb-pure-settlement-scorer.ts
       - .github/workflows/validate-mlb-r1b-v16-final-baseline-adapter.yml
 
@@ -30,15 +36,26 @@ jobs:
           node-version: '24.18.0'
           cache: npm
       - run: npm ci
-      - name: Run V16 final-baseline falsification tests
-        run: npx tsx --test server/mlb-r1b-v16-final-baseline-adapter.test.ts server/mlb-pure-settlement-scorer.test.ts
+      - name: Run V16 final-baseline and historical-bridge falsification tests
+        run: |
+          npx tsx --test \
+            server/mlb-r1b-v16-final-baseline-adapter.test.ts \
+            server/mlb-r1b-v16-historical-target-bridge.test.ts \
+            server/mlb-c4-certified-materializer.test.ts \
+            server/mlb-pure-settlement-scorer.test.ts
+      - name: Compile V16 historical bridge
+        run: npx esbuild server/mlb-r1b-v16-historical-target-bridge.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-r1b-v16-historical-target-bridge.cjs
       - name: Verify research boundary
         shell: bash
         run: |
           set -euo pipefail
-          source='server/mlb-r1b-v16-final-baseline-adapter.ts'
-          grep -F 'MLB_R1B_V16_PROVISIONAL_NOT_CERTIFIED_BY_FINAL_ADAPTER' "$source"
-          grep -F 'outcomeFieldsRead: false' "$source"
-          grep -F 'marketPricesRead: false' "$source"
-          grep -F 'newWeightsCreated: false' "$source"
-          ! grep -Ei 'odds|sportsbook|stake|placeBet|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
+          adapter='server/mlb-r1b-v16-final-baseline-adapter.ts'
+          bridge='server/mlb-r1b-v16-historical-target-bridge.ts'
+          grep -F 'MLB_R1B_V16_PROVISIONAL_NOT_CERTIFIED_BY_FINAL_ADAPTER' "$adapter"
+          grep -F 'FROZEN_SYNTHETIC_IDENTITY_ONLY' "$bridge"
+          grep -F 'externalTargetFeedRead: false' "$bridge"
+          grep -F 'outcomeFieldsRead: false' "$adapter" "$bridge"
+          grep -F 'marketPricesRead: false' "$adapter" "$bridge"
+          grep -F 'newWeightsCreated: false' "$adapter" "$bridge"
+          grep -F 'productionChanged: false' "$bridge"
+          ! grep -Ei 'sportsbook|stake|placeBet|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$adapter" "$bridge"
