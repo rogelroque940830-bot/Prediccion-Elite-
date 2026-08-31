@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { C4_FEATURE_NAMES } from "../server/mlb-c4-live-feature-builder";
 import { materializeR1bV16HistoricalTarget } from "../server/mlb-r1b-v16-historical-target-bridge";
@@ -167,13 +167,7 @@ async function main(): Promise<void> {
     if (!parity) throw new Error(`MLB_R1B_V16_SAMPLE_PARITY_MISMATCH:${season}:${row.gamePk}:${maxAbsDelta}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!readFileSync) throw error;
-    try {
-      const existing = load(out);
-      if (existing.status === "MISMATCH") throw error;
-    } catch {
-      writeReport(out, { ...baseReport, status: "ERROR", error: message });
-    }
+    if (!existsSync(out)) writeReport(out, { ...baseReport, status: "ERROR", error: message });
     throw error;
   }
 }
