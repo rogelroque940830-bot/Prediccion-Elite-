@@ -11,6 +11,7 @@ on:
       - server/mlb-c4-certified-materializer.ts
       - server/mlb-c4-live-feature-builder.ts
       - server/mlb-pure-settlement-scorer.ts
+      - research/mlb-r1b-v16-historical-parity-sample.json
       - .github/workflows/validate-mlb-r1b-v16-historical-parity-sample.yml
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - server/mlb-c4-certified-materializer.ts
       - server/mlb-c4-live-feature-builder.ts
       - server/mlb-pure-settlement-scorer.ts
+      - research/mlb-r1b-v16-historical-parity-sample.json
       - .github/workflows/validate-mlb-r1b-v16-historical-parity-sample.yml
 
 permissions:
@@ -74,11 +76,30 @@ jobs:
           run-id: 31919873754
 
       - name: Probe one deterministic real historical target
+        id: probe
+        continue-on-error: true
         run: |
           npx tsx scripts/mlb-r1b-v16-historical-parity-sample.ts \
             --season '${{ matrix.season }}' \
             --root artifacts/v16-sample \
             --out 'artifacts/v16-sample/report-${{ matrix.season }}.json'
+
+      - name: Assert direct Step12V3 substitution is falsified
+        shell: bash
+        env:
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+          REPORT: artifacts/v16-sample/report-${{ matrix.season }}.json
+        run: |
+          set -euo pipefail
+          test "$PROBE_OUTCOME" = failure
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync(process.env.REPORT, 'utf8'));
+          if (report.status !== 'MISMATCH') throw new Error(`EXPECTED_MISMATCH_GOT:${report.status}`);
+          if (!(Number(report.maxAbsDelta) > Number(report.tolerance))) {
+            throw new Error(`EXPECTED_DELTA_ABOVE_TOLERANCE:${report.maxAbsDelta}:${report.tolerance}`);
+          }
+          NODE
 
       - name: Upload parity evidence
         if: always()
