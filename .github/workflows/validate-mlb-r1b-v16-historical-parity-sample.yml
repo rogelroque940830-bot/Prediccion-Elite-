@@ -1,0 +1,102 @@
+name: Validate MLB R1B V16 Historical Parity Sample
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-v16-historical-parity-sample.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-certified-materializer.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-parity-sample.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-v16-historical-parity-sample.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-certified-materializer.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-parity-sample.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  historical-parity-sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - season: '2022'
+            v60_artifact: p0-step12v60-matchup-custody-2022
+          - season: '2023'
+            v60_artifact: p0-step12v60-matchup-custody-2023
+          - season: '2024'
+            v60_artifact: p0-step12v60-matchup-custody-2024
+          - season: '2025'
+            v60_artifact: p0-step12v60-matchup-custody-2025
+          - season: '2026_YTD'
+            v60_artifact: p0-step12v60-matchup-custody-2026_YTD
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Download frozen Step12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/v16-sample/step12v3
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download frozen V60 starter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.v60_artifact }}
+          path: artifacts/v16-sample/v60
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31919873754
+
+      - name: Probe one deterministic real historical target
+        run: |
+          npx tsx scripts/mlb-r1b-v16-historical-parity-sample.ts \
+            --season '${{ matrix.season }}' \
+            --root artifacts/v16-sample \
+            --out 'artifacts/v16-sample/report-${{ matrix.season }}.json'
+
+      - name: Upload parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-v16-historical-parity-sample-${{ matrix.season }}
+          path: artifacts/v16-sample/report-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='scripts/mlb-r1b-v16-historical-parity-sample.ts'
+          grep -F 'targetOutcomeUsedAsFeature: false' "$source"
+          grep -F 'marketPricesRead: false' "$source"
+          grep -F 'modelRefit: false' "$source"
+          grep -F 'newWeightsCreated: false' "$source"
+          grep -F 'productionChanged: false' "$source"
+          ! grep -Ei 'sportsbook|stake|placeBet|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source"
