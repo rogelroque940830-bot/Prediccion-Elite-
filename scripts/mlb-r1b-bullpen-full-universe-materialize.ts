@@ -18,6 +18,7 @@ const MANIFEST_SCHEMA = "courtedge-mlb-r1b-bullpen-full-universe-season-manifest
 const MLB_V1 = "https://statsapi.mlb.com/api/v1";
 const MLB_V11 = "https://statsapi.mlb.com/api/v1.1";
 const ALLOWED_ADJUSTMENTS = new Set([0, 0.15, 0.3, 0.5, 0.7]);
+const CURRENT_ROLE_STATS_AUTHORITY = "PEOPLE_HYDRATED_BY_DATE_RANGE" as const;
 
 type Json = Record<string, any>;
 type Side = "HOME" | "AWAY";
@@ -355,21 +356,12 @@ function schedulePayload(index: ScheduleGame[], teamId: number, start: string, e
 async function currentRoleBundle(teamId: number, date: string, ids: number[]): Promise<{ current: Map<number, any>; currentIds: number[] }> {
   const prior = shiftDate(date, -1);
   const start = `${date.slice(0,4)}-03-01`;
-  const aUrl = `${MLB_V1}/stats?stats=byDateRange&group=pitching&teamId=${teamId}&startDate=${start}&endDate=${prior}&playerPool=ALL&limit=1000`;
   const hydrate = `stats(group=[pitching],type=[byDateRange],startDate=${start},endDate=${prior})`;
-  const bUrl = `${MLB_V1}/people?personIds=${ids.join(",")}&hydrate=${encodeURIComponent(hydrate)}`;
-  const [aPayload, bPayload] = await Promise.all([fetchJson(aUrl), fetchJson(bUrl)]);
-  const a = mapTeamStats(aPayload);
-  const b = mapPeopleStats(bPayload);
-  const currentIds: number[] = [];
-  for (const id of ids) {
-    const left = a.get(id) ?? null;
-    const right = b.get(id) ?? null;
-    if ((left == null) !== (right == null)) throw new Error(`BULK_CURRENT_ROLE_STATS_PRESENCE_MISMATCH:${teamId}:${date}:${id}`);
-    if (left && right && !sameRoleFields(left, right)) throw new Error(`BULK_CURRENT_ROLE_STATS_FIELD_MISMATCH:${teamId}:${date}:${id}`);
-    if (left) currentIds.push(id);
-  }
-  return { current: a, currentIds };
+  const url = `${MLB_V1}/people?personIds=${ids.join(",")}&hydrate=${encodeURIComponent(hydrate)}`;
+  const payload = await fetchJson(url);
+  const current = mapPeopleStats(payload);
+  const currentIds = ids.filter((id) => current.has(id));
+  return { current, currentIds };
 }
 
 function runtimeFor(params: {
@@ -541,6 +533,10 @@ async function main(): Promise<void> {
   if (contract.schemaVersion !== CONTRACT_SCHEMA || contract.status !== "FROZEN_BEFORE_FULL_UNIVERSE_MATERIALIZATION") {
     throw new Error("BULLPEN_FULL_CONTRACT_INVALID");
   }
+  if (contract.roleStatsPolicy?.authoritativeCurrentSeasonRoute !== CURRENT_ROLE_STATS_AUTHORITY
+    || contract.roleStatsPolicy?.crossRouteConsensusRequired !== false) {
+    throw new Error("BULLPEN_FULL_ROLE_STATS_AUTHORITY_CONTRACT_DRIFT");
+  }
   const lineup = readJson(lineupHistory);
   const snapshots: FrozenSnapshot[] = Array.isArray(lineup?.snapshots) ? lineup.snapshots : [];
   const snapshotByPk = new Map<number, FrozenSnapshot>(snapshots.map((row) => [Number(row.gamePk), row]));
@@ -652,6 +648,8 @@ async function main(): Promise<void> {
     status: "FULL_UNIVERSE_MATERIALIZED_PENDING_INDEPENDENT_VERIFICATION",
     family: "BULLPEN_FULL_GAME",
     season,
+    currentRoleStatsAuthority: CURRENT_ROLE_STATS_AUTHORITY,
+    roleStatsRouteSelectionEvidence: "research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json",
     gameCount: targets.length,
     rowCount: packRows.length,
     fullGameRows: fg.length,
