@@ -3,26 +3,143 @@
   "status": "R1B_BLOCKED_BEFORE_ROWSET_MATERIALIZATION",
   "parentR1ACommit": "f6e1651525acaa9c722a59c6a58abcdeb08283c3",
   "scientificReason": "A feature-only historical rowset cannot be certified until every required R1A family has exact pregame historical custody under the same frozen semantics. Substituting outcome-reading replays, current-only payloads, analogous older features, or fabricated values is prohibited.",
-  "r1b1Certification": {"artifact":"research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json","status":"R1B1_AUDIT_COMPLETE_FAIL_CLOSED","parityCertified":2,"partialParity":3,"blocked":4,"r1bHistoricalRowsetAuthorized":false,"r1b2Authorized":false},
+  "r1b1Certification": {
+    "artifact": "research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json",
+    "status": "R1B1_AUDIT_COMPLETE_FAIL_CLOSED",
+    "parityCertified": 3,
+    "partialParity": 2,
+    "blocked": 4,
+    "r1bHistoricalRowsetAuthorized": false,
+    "r1b2Authorized": false
+  },
   "verifiedPregameCustody": [
-    {"source":"P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY","workflowRunId":31962659793,"artifactId":9267784926,"artifactName":"p0-step12v66-game-horizon-exposure-custody","artifactDigest":"sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12","headSha":"1e5b68801181f900ee0531eee9e392da02599006","rows":11407,"rowsBySeason":{"2022":2398,"2023":2399,"2024":2406,"2025":2423,"2026_YTD":1781},"containsOutcomeTargets":false,"sameDateOutcomeLeakageAllowed":false,"usableRole":"UPSTREAM_PREGAME_CUSTODY_AND_BULLPEN_STARTER_EXPOSURE_SOURCE; EXACT FAMILY_ADAPTERS_STILL_REQUIRED"},
-    {"source":"P0_V16_FULL13_CERTIFIED_BUILD_AND_SCORER_PATH","materializerGateCommit":"8756ae64cad7ee347c1e5f5325a458b497c7099d","builder":"server/mlb-c4-certified-materializer.ts","scorer":"server/mlb-pure-settlement-scorer.ts","runtime":"server/mlb-unified-priced-v16-runner.ts","sameDateHistoryAllowed":false,"seasonResetHistory":true,"priceIndependent":true,"status":"PARTIAL_PARITY_EXACT_PATH_PROVEN_HISTORICAL_PROBABILITY_ROWSET_NOT_YET_PINNED"},
-    {"source":"R1B1_HAND_SPLIT_FULL_HISTORICAL_CUSTODY","sourceBuilderCommit":"aa81f9f576b49b944ac2e27e8388bc11cb8d30a3","artifacts":[{"runId":33316909056,"artifactId":9733736986,"name":"r1b1-hand-splits-2022","digest":"sha256:37b744998373694588d614e8541f565fb5243048de06aeadbc2a1a353d8dfb99"},{"runId":33316909056,"artifactId":9733750627,"name":"r1b1-hand-splits-2023","digest":"sha256:3c230bd76bacf9e6a8dc82857d331ba14cfc9c0d55d6cd0c44fca6c9ea2d8f84"},{"runId":31666803576,"artifactId":9168251159,"name":"p0-step12v9-hand-splits-2024","digest":"sha256:66525c58827e52155122c02321c1d4aae194b3f5f9fb31af0b3215fed96bbd6f"},{"runId":31666803576,"artifactId":9168248833,"name":"p0-step12v9-hand-splits-2025","digest":"sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425"},{"runId":31666803576,"artifactId":9168238661,"name":"p0-step12v9-hand-splits-2026_YTD","digest":"sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"}],"sameDateOutcomeLeakageAllowed":false,"missingSplitImputation":false,"status":"PARITY_CERTIFIED_2022_2026_YTD"},
-    {"source":"V17_FROZEN_PITCHMIX_INPUTS","artifacts":[{"runId":31669146698,"artifactId":9169089040,"name":"p0-step12v12-pitchmix-2023","digest":"sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"},{"runId":31669146698,"artifactId":9169099182,"name":"p0-step12v12-pitchmix-2024","digest":"sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231"},{"runId":31669146698,"artifactId":9169102385,"name":"p0-step12v12-pitchmix-2025","digest":"sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},{"runId":31669146698,"artifactId":9169078788,"name":"p0-step12v12-pitchmix-2026_YTD","digest":"sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}],"sameDateOutcomeLeakageAllowed":false,"adapter":"server/mlb-r1b-pitchmix-matchup-adapter.ts","adapterCommit":"e6c138bdd3f5831b3454143ca9086baecddcdb8d","parityTestCommit":"698c2b844fc599d4355fed0efde419b36f469635","validationRunId":33317341550,"status":"PARITY_CERTIFIED_WITH_STRUCTURAL_NA_2022_AND_WARMUP_2023"}
+    {
+      "source": "P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY",
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12",
+      "headSha": "1e5b68801181f900ee0531eee9e392da02599006",
+      "rows": 11407,
+      "rowsBySeason": {"2022": 2398, "2023": 2399, "2024": 2406, "2025": 2423, "2026_YTD": 1781},
+      "containsOutcomeTargets": false,
+      "sameDateOutcomeLeakageAllowed": false,
+      "usableRole": "UPSTREAM_PREGAME_CUSTODY_AND_BULLPEN_STARTER_EXPOSURE_SOURCE; EXACT FAMILY_ADAPTERS_STILL_REQUIRED"
+    },
+    {
+      "source": "P0_V16_FULL13_CERTIFIED_BUILD_AND_SCORER_PATH",
+      "materializerGateCommit": "8756ae64cad7ee347c1e5f5325a458b497c7099d",
+      "builder": "server/mlb-c4-certified-materializer.ts",
+      "scorer": "server/mlb-pure-settlement-scorer.ts",
+      "runtime": "server/mlb-unified-priced-v16-runner.ts",
+      "sameDateHistoryAllowed": false,
+      "seasonResetHistory": true,
+      "priceIndependent": true,
+      "status": "PARITY_CERTIFIED_FULL_HISTORICAL_PROBABILITY_ROWSET_PINNED_AND_SCORER_PARITY_VERIFIED",
+      "parityCertification": "research/mlb-r1b-v16-baseline-parity-certification.json",
+      "combinedManifest": "research/mlb-r1b-v16-baseline-historical/combined-manifest.json",
+      "combinedRowsetSha256": "b06d003b8412f886afd03da1765d0f03af4ee031a3a8ed83fc81aa1a7d308f7e",
+      "checkedRows": 44016,
+      "failedRows": 0,
+      "duplicateCount": 0,
+      "pinnedRowsetCommit": "2eb9961ff4e5ab64d7fdf0eb06824888f003f3f2",
+      "parityCertificationCommit": "1cc9fd365c28abd2db1c0ca86ae9d9673536a7ae"
+    },
+    {
+      "source": "R1B1_HAND_SPLIT_FULL_HISTORICAL_CUSTODY",
+      "sourceBuilderCommit": "aa81f9f576b49b944ac2e27e8388bc11cb8d30a3",
+      "artifacts": [
+        {"runId": 33316909056, "artifactId": 9733736986, "name": "r1b1-hand-splits-2022", "digest": "sha256:37b744998373694588d614e8541f565fb5243048de06aeadbc2a1a353d8dfb99"},
+        {"runId": 33316909056, "artifactId": 9733750627, "name": "r1b1-hand-splits-2023", "digest": "sha256:3c230bd76bacf9e6a8dc82857d331ba14cfc9c0d55d6cd0c44fca6c9ea2d8f84"},
+        {"runId": 31666803576, "artifactId": 9168251159, "name": "p0-step12v9-hand-splits-2024", "digest": "sha256:66525c58827e52155122c02321c1d4aae194b3f5f9fb31af0b3215fed96bbd6f"},
+        {"runId": 31666803576, "artifactId": 9168248833, "name": "p0-step12v9-hand-splits-2025", "digest": "sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425"},
+        {"runId": 31666803576, "artifactId": 9168238661, "name": "p0-step12v9-hand-splits-2026_YTD", "digest": "sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"}
+      ],
+      "sameDateOutcomeLeakageAllowed": false,
+      "missingSplitImputation": false,
+      "status": "PARITY_CERTIFIED_2022_2026_YTD"
+    },
+    {
+      "source": "V17_FROZEN_PITCHMIX_INPUTS",
+      "artifacts": [
+        {"runId": 31669146698, "artifactId": 9169089040, "name": "p0-step12v12-pitchmix-2023", "digest": "sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"},
+        {"runId": 31669146698, "artifactId": 9169099182, "name": "p0-step12v12-pitchmix-2024", "digest": "sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88f6b97be99ea98ed7eb6231"},
+        {"runId": 31669146698, "artifactId": 9169102385, "name": "p0-step12v12-pitchmix-2025", "digest": "sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},
+        {"runId": 31669146698, "artifactId": 9169078788, "name": "p0-step12v12-pitchmix-2026_YTD", "digest": "sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}
+      ],
+      "sameDateOutcomeLeakageAllowed": false,
+      "adapter": "server/mlb-r1b-pitchmix-matchup-adapter.ts",
+      "adapterCommit": "e6c138bdd3f5831b3454143ca9086baecddcdb8d",
+      "parityTestCommit": "698c2b844fc599d4355fed0efde419b36f469635",
+      "validationRunId": 33317341550,
+      "status": "PARITY_CERTIFIED_WITH_STRUCTURAL_NA_2022_AND_WARMUP_2023"
+    }
   ],
   "blockedRequiredFamilies": [
-    {"family":"V16_BASELINE","reason":"Exact certified FULL13/C4→V16 preprice build and scorer semantics exist, but the immutable 2022-2026_YTD per-game/per-side probability rowset has not yet been materialized and digest-pinned.","requiredUnblock":"Materialize the exact certified path across the intended universe and parity-test the pinned probability rows against the locked V16 scorer with no target outcome or price fields.","currentClassification":"PARTIAL_PARITY"},
-    {"family":"FROZEN_ROUTE_EVIDENCE","reason":"Located historical Daily Best Pick replay carries outcomes and does not reconstruct production prepriceRank exactly.","requiredUnblock":"Create an outcome-blind replay/adapter that emits exact A+/Premium route evidence and source preprice rank from frozen pregame inputs before settlement."},
-    {"family":"STATCAST_QUALITY","reason":"V62/V66 provide upstream starter-quality custody but not exact current Savant expected-statistics runsDelta semantics across the historical universe.","requiredUnblock":"Prove immutable target-date Savant source custody and reproduce the current certified runsDelta path exactly.","currentClassification":"PARTIAL_PARITY"},
-    {"family":"DISCIPLINE_SPEED","reason":"No immutable full-history normalized pregame pack under current homeRunsDelta/awayRunsDelta semantics has been proven.","requiredUnblock":"Identify or materialize exact historical DISCIPLINE_SPEED with source timestamps and provenance."},
-    {"family":"SOS","reason":"Current certifiable provenance exists but no immutable full-history target-date pack under current adjustedRpgDelta semantics has been proven.","requiredUnblock":"Identify or materialize exact historical SOS with strictly prior-date opponent-strength custody."},
-    {"family":"ADVANCED_CONTEXT","reason":"Current certifiable provenance exists but no immutable full-history target-date pack under current totalAdjustment semantics and non-overlap controls has been proven.","requiredUnblock":"Identify or materialize exact historical ADVANCED_CONTEXT and prove temporal custody and non-duplication."},
-    {"family":"BULLPEN_FULL_GAME","reason":"V66 proves workload custody but not target-time active-roster and role-stat custody needed to reproduce current getBullpenStatus/runsAdjustment exactly.","requiredUnblock":"Prove historical roster/role-stat custody and parity-certify the FULL_GAME-only adapter; early horizons must be NOT_APPLICABLE rather than zero.","currentClassification":"PARTIAL_PARITY"}
+    {
+      "family": "FROZEN_ROUTE_EVIDENCE",
+      "reason": "Located historical Daily Best Pick replay carries outcomes and does not reconstruct production prepriceRank exactly.",
+      "requiredUnblock": "Create an outcome-blind replay/adapter that emits exact A+/Premium route evidence and source preprice rank from frozen pregame inputs before settlement."
+    },
+    {
+      "family": "STATCAST_QUALITY",
+      "reason": "V62/V66 provide upstream starter-quality custody but not exact current Savant expected-statistics runsDelta semantics across the historical universe.",
+      "requiredUnblock": "Prove immutable target-date Savant source custody and reproduce the current certified runsDelta path exactly.",
+      "currentClassification": "PARTIAL_PARITY"
+    },
+    {
+      "family": "DISCIPLINE_SPEED",
+      "reason": "No immutable full-history normalized pregame pack under current homeRunsDelta/awayRunsDelta semantics has been proven.",
+      "requiredUnblock": "Identify or materialize exact historical DISCIPLINE_SPEED with source timestamps and provenance."
+    },
+    {
+      "family": "SOS",
+      "reason": "Current certifiable provenance exists but no immutable full-history target-date pack under current adjustedRpgDelta semantics has been proven.",
+      "requiredUnblock": "Identify or materialize exact historical SOS with strictly prior-date opponent-strength custody."
+    },
+    {
+      "family": "ADVANCED_CONTEXT",
+      "reason": "Current certifiable provenance exists but no immutable full-history target-date pack under current totalAdjustment semantics and non-overlap controls has been proven.",
+      "requiredUnblock": "Identify or materialize exact historical ADVANCED_CONTEXT and prove temporal custody and non-duplication."
+    },
+    {
+      "family": "BULLPEN_FULL_GAME",
+      "reason": "V66 proves workload custody but target-time active-roster and role-stat custody still require exact historical semantic parity under getBullpenStatus/runsAdjustment.",
+      "requiredUnblock": "Prove historical target-time roster/role-stat custody and parity-certify the FULL_GAME-only adapter; early horizons must be NOT_APPLICABLE rather than zero.",
+      "currentClassification": "PARTIAL_PARITY"
+    }
   ],
-  "forbiddenSubstitutions": ["DO_NOT_USE_OUTCOME_REPLAY_AS_FEATURE_SOURCE","DO_NOT_TREAT_ANALOGOUS_OLDER_FEATURE_AS_CURRENT_COMPONENT_WITHOUT_PARITY_PROOF","DO_NOT_FILL_MISSING_FAMILY_WITH_ZERO","DO_NOT_SHRINK_HISTORY_POST_HOC_TO_ONLY_SEASONS_WHERE_A_SIGNAL_LOOKS_GOOD","DO_NOT_FABRICATE_PRE_WARMUP_PITCHMIX_VALUES","DO_NOT_READ_MARKET_ODDS","DO_NOT_JOIN_OUTCOMES_BEFORE_FEATURE_ROWSET_FREEZE"],
-  "materializer":"scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py",
-  "materializerState":"IMPLEMENTED_FAIL_CLOSED_AWAITING_REMAINING_NORMALIZED_CUSTODIED_FAMILY_PACKS",
-  "rowsetProduced":false,"rowCount":null,"dateRange":null,"rowsetSha256":null,"duplicateCount":null,"forbiddenOutcomeFields":null,"forbiddenPriceFields":null,
-  "policy":{"outcomesReadByR1BMaterializer":false,"marketPricesRead":false,"modelRefit":false,"newWeightsCreated":false,"thresholdSearch":false,"productionChanged":false,"v16Changed":false,"v68Changed":false,"v80Changed":false,"frozenRoutesChanged":false,"automaticBetPlacement":false,"realFinancialExposure":0},
-  "nextStep":"REMEDIATE_R1B1_BLOCKED_AND_PARTIAL_FAMILIES_BEFORE_R1B2"
+  "forbiddenSubstitutions": [
+    "DO_NOT_USE_OUTCOME_REPLAY_AS_FEATURE_SOURCE",
+    "DO_NOT_TREAT_ANALOGOUS_OLDER_FEATURE_AS_CURRENT_COMPONENT_WITHOUT_PARITY_PROOF",
+    "DO_NOT_FILL_MISSING_FAMILY_WITH_ZERO",
+    "DO_NOT_SHRINK_HISTORY_POST_HOC_TO_ONLY_SEASONS_WHERE_A_SIGNAL_LOOKS_GOOD",
+    "DO_NOT_FABRICATE_PRE_WARMUP_PITCHMIX_VALUES",
+    "DO_NOT_READ_MARKET_ODDS",
+    "DO_NOT_JOIN_OUTCOMES_BEFORE_FEATURE_ROWSET_FREEZE"
+  ],
+  "materializer": "scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py",
+  "materializerState": "IMPLEMENTED_FAIL_CLOSED_AWAITING_REMAINING_NORMALIZED_CUSTODIED_FAMILY_PACKS",
+  "rowsetProduced": false,
+  "rowCount": null,
+  "dateRange": null,
+  "rowsetSha256": null,
+  "duplicateCount": null,
+  "forbiddenOutcomeFields": null,
+  "forbiddenPriceFields": null,
+  "policy": {
+    "outcomesReadByR1BMaterializer": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "frozenRoutesChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextStep": "REMEDIATE_R1B1_BLOCKED_AND_PARTIAL_FAMILIES_BEFORE_R1B2"
 }
