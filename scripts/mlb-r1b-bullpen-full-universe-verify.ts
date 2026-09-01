@@ -84,7 +84,7 @@ function forbiddenKeyCounts(value: any): { outcome: number; price: number } {
   return { outcome, price };
 }
 
-function verifySide(side: any, pack: any, counters: any): void {
+function verifySide(side: any, pack: any, counters: any, allowedMissingness: Set<string>): void {
   const dateFp = side?.dateFingerprint ?? null;
   const t5Fp = side?.t5Fingerprint ?? null;
   const parity = dateFp != null && t5Fp != null && canonical(dateFp) === canonical(t5Fp);
@@ -103,6 +103,7 @@ function verifySide(side: any, pack: any, counters: any): void {
   } else {
     counters.missingFullGameRows += 1;
     if (!side?.reason || typeof side.reason !== "string") throw new Error("BULLPEN_VERIFY_MISSINGNESS_NOT_EXPLICIT");
+    if (!allowedMissingness.has(side.reason)) throw new Error(`BULLPEN_VERIFY_UNAPPROVED_MISSINGNESS:${side.reason}`);
     if (side.runsAdjustment !== null) throw new Error("BULLPEN_VERIFY_MISSINGNESS_CONVERTED_TO_VALUE");
     if (pack.feature?.eligible !== false || pack.feature?.values !== null || pack.feature?.missingnessReason !== side.reason) {
       throw new Error("BULLPEN_VERIFY_PACK_MISSINGNESS_DRIFT");
@@ -121,7 +122,15 @@ function main(): void {
   const out = arg("out");
   const contract = readJson(contractFile);
   if (contract.schemaVersion !== CONTRACT_SCHEMA || contract.family !== "BULLPEN_FULL_GAME") throw new Error("BULLPEN_VERIFY_CONTRACT_INVALID");
-  if (contract.certificationGate?.promotionOnlyAfterIndependentVerification !== true) throw new Error("BULLPEN_VERIFY_GATE_NOT_FROZEN");
+  if (contract.certificationGate?.promotionOnlyAfterIndependentVerification !== true
+    || contract.certificationGate?.onlyPredeclaredStructuralMissingnessMayPassVerification !== true) {
+    throw new Error("BULLPEN_VERIFY_GATE_NOT_FROZEN");
+  }
+  const missingnessList = contract.eligibility?.allowedFullGameMissingnessReasons;
+  if (!Array.isArray(missingnessList) || !missingnessList.length || missingnessList.some((x: unknown) => typeof x !== "string" || !x)) {
+    throw new Error("BULLPEN_VERIFY_MISSINGNESS_ALLOWLIST_INVALID");
+  }
+  const allowedMissingness = new Set<string>(missingnessList);
   const v16Combined = readJson(path.join(v16Root, "combined-manifest.json"));
   if (v16Combined.combinedRowsetSha256 !== contract.universe.combinedV16RowsetSha256) throw new Error("BULLPEN_VERIFY_V16_AUTHORITY_DIGEST_DRIFT");
 
@@ -146,6 +155,9 @@ function main(): void {
     if (manifest.schemaVersion !== MANIFEST_SCHEMA || manifest.status !== "FULL_UNIVERSE_MATERIALIZED_PENDING_INDEPENDENT_VERIFICATION" || manifest.family !== "BULLPEN_FULL_GAME" || manifest.season !== season) {
       throw new Error(`BULLPEN_VERIFY_MANIFEST_INVALID:${season}`);
     }
+    if (manifest.currentRoleStatsAuthority !== contract.roleStatsPolicy?.authoritativeCurrentSeasonRoute) {
+      throw new Error(`BULLPEN_VERIFY_ROLE_STATS_AUTHORITY_DRIFT:${season}`);
+    }
     if (sha256(packBytes) !== manifest.packSha256 || sha256(witnessBytes) !== manifest.witnessSha256) throw new Error(`BULLPEN_VERIFY_MANIFEST_DIGEST_DRIFT:${season}`);
     combinedPackParts.push(packBytes); combinedWitnessParts.push(witnessBytes);
 
@@ -158,7 +170,6 @@ function main(): void {
     for (const key of expectedGameKeys) allGameKeys.add(`${season}|${key}`);
 
     const packById = new Map(packRows.map((r) => [id(r), r]));
-    const witnessByGame = new Map(witnessRows.map((r) => [gameKey(r), r]));
     for (const row of packRows) {
       if (row.schemaVersion !== PACK_SCHEMA || row.feature?.sourceVersion !== SOURCE_VERSION || row.feature?.inputStage !== "PREGAME_T5") throw new Error(`BULLPEN_VERIFY_PACK_SCHEMA_DRIFT:${season}`);
       const forbidden = forbiddenKeyCounts(row); counters.forbiddenOutcomeFieldCount += forbidden.outcome; counters.forbiddenPriceFieldCount += forbidden.price;
@@ -175,7 +186,7 @@ function main(): void {
         const side = sideName === "HOME" ? w.home : w.away;
         const pack = packById.get(`${w.officialDate}|${w.gamePk}|${sideName}|FG_ML|FULL_GAME`);
         if (!pack) throw new Error(`BULLPEN_VERIFY_FULL_GAME_PACK_MISSING:${season}:${w.gamePk}:${sideName}`);
-        verifySide(side, pack, counters);
+        verifySide(side, pack, counters, allowedMissingness);
       }
     }
     counters.totalRows += packRows.length;
@@ -202,6 +213,8 @@ function main(): void {
       v16CombinedRowsetSha256: v16Combined.combinedRowsetSha256,
       expectedRows: contract.universe.expectedRows,
       expectedGames: contract.universe.expectedGames,
+      currentRoleStatsAuthority: contract.roleStatsPolicy.authoritativeCurrentSeasonRoute,
+      allowedFullGameMissingnessReasons: [...allowedMissingness].sort(),
     },
     verification: counters,
     seasons: seasonReports,
@@ -221,7 +234,7 @@ function main(): void {
   };
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(verification, null, 2) + "\n");
-  console.log(JSON.stringify({ promotionEligible: verification.promotionEligible, rows: counters.totalRows, games: allGameKeys.size, fullGameRows: counters.fullGameRows, earlyWindowRows: counters.earlyWindowRows, eligibleFullGameRows: counters.eligibleFullGameRows, missingFullGameRows: counters.missingFullGameRows, recomputedEligibleRows: counters.recomputedEligibleRows, combinedPackSha256: verification.combinedPackSha256 }, null, 2));
+  console.log(JSON.stringify({ promotionEligible: verification.promotionEligible, rows: counters.totalRows, games: allGameKeys.size, fullGameRows: counters.fullGameRows, earlyWindowRows: counters.earlyWindowRows, eligibleFullGameRows: counters.eligibleFullGameRows, missingFullGameRows: counters.missingFullGameRows, recomputedEligibleRows: counters.recomputedEligibleRows, allowedFullGameMissingnessReasons: verification.authority.allowedFullGameMissingnessReasons, combinedPackSha256: verification.combinedPackSha256 }, null, 2));
 }
 
 main();
