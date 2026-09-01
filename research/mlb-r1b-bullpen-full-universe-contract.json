@@ -47,9 +47,18 @@
   },
   "roleStatsPolicy": {
     "currentSeasonWindow": "SEASON_START_THROUGH_D_MINUS_1",
-    "bulkRouteA": "/stats?stats=byDateRange&group=pitching&teamId=...&playerPool=ALL",
-    "bulkRouteB": "/people?personIds=...&hydrate=stats(...byDateRange...)",
-    "fullUniverseBulkRouteParityRequiredForCurrentLines": true,
+    "authoritativeCurrentSeasonRoute": "PEOPLE_HYDRATED_BY_DATE_RANGE",
+    "authoritativeUrlShape": "/people?personIds=...&hydrate=stats(...byDateRange...)",
+    "diagnosticNonAuthoritativeRoute": "/stats?stats=byDateRange&group=pitching&teamId=...&playerPool=ALL",
+    "crossRouteConsensusRequired": false,
+    "authoritativeRouteFullUniverseCoverageRequired": true,
+    "routeSelectionEvidence": {
+      "file": "research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json",
+      "workflowRunId": 33564653034,
+      "status": "SAMPLE_ROUTE_SELECTION_ONLY_NOT_FULL_UNIVERSE_CERTIFICATION",
+      "peopleHydratedExactAcrossAllFiveSeasonSamples": true,
+      "teamStatsByDateRangeExactAcrossAllFiveSeasonSamples": false
+    },
     "roleFields": ["gamesStarted", "gamesPlayed", "inningsPitched", "saves", "holds"],
     "previousSeasonFallback": "FULL_PRIOR_SEASON_OFFICIAL_MLB",
     "careerFallback": "OFFICIAL_MLB_BY_DATE_RANGE_THROUGH_D_MINUS_1",
@@ -66,12 +75,13 @@
     "fullGameRowEligibleOnlyIf": [
       "T5_SOURCE_IDENTITY_VALID",
       "DATE_ROSTER_VALID",
-      "BULK_CURRENT_ROLE_STATS_PARITY",
+      "AUTHORITATIVE_CURRENT_ROLE_STATS_ROUTE_APPLIED",
       "PRODUCTION_DATE_ROSTER_STATUS_COMPLETE",
       "PRODUCTION_T5_ROSTER_STATUS_COMPLETE",
       "DECISION_FINGERPRINTS_IDENTICAL",
       "RUNS_ADJUSTMENT_ALLOWED_VALUE"
     ],
+    "missingCurrentSeasonLineDisposition": "USE_UNCHANGED_PRODUCTIVE_PREVIOUS_SEASON_THEN_CAREER_FALLBACK",
     "missingnessNeverConvertedToZero": true,
     "transportFailureMayNotBePromotedAsStructuralMissingness": true
   },
@@ -87,6 +97,8 @@
     "all22008EarlyWindowRowsNotApplicable": true,
     "everyEligibleFullGameRowExactProductionSemantics": true,
     "allAmbiguityExplicitMissingness": true,
+    "authoritativeRoleStatsRouteMustSurviveFullUniverse": true,
+    "sampleRouteSelectionDoesNotCertifyFamily": true,
     "duplicateIdentityCount": 0,
     "forbiddenOutcomeFieldCount": 0,
     "forbiddenPriceFieldCount": 0,
