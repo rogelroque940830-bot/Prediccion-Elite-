@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s "artifacts/p0-step12v3/${{ matrix.season }}/pregame-lineup-history.json"
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
       - name: Run historical bullpen source probe
         shell: bash
         run: |
@@ -48,7 +48,7 @@ jobs:
           mkdir -p artifacts/mlb-r1b-bullpen-probe
           npx tsx scripts/mlb-r1b-bullpen-historical-source-probe.ts \
             --season '${{ matrix.season }}' \
-            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/pregame-lineup-history.json" \
+            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json" \
             --out "artifacts/mlb-r1b-bullpen-probe/bullpen-source-probe-${{ matrix.season }}.json"
       - name: Validate fail-closed scientific boundary
         shell: bash
