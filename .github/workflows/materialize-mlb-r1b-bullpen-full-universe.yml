@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
+      - 'scripts/mlb-r1b-bullpen-full-universe-verify.ts'
       - 'research/mlb-r1b-bullpen-full-universe-contract.json'
       - 'research/mlb-r1b-v16-baseline-historical/v16-baseline-*.jsonl'
       - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
@@ -12,6 +13,7 @@ on:
     branches: [research/mlb-unified-sporting-authority-r1]
     paths:
       - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
+      - 'scripts/mlb-r1b-bullpen-full-universe-verify.ts'
       - 'research/mlb-r1b-bullpen-full-universe-contract.json'
       - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
   workflow_dispatch:
@@ -107,5 +109,72 @@ jobs:
         with:
           name: mlb-r1b-bullpen-full-universe-${{ matrix.season }}
           path: artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}/*
+          if-no-files-found: error
+          retention-days: 90
+
+  independent-verification:
+    needs: materialize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download all five bullpen season artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mlb-r1b-bullpen-full-universe-*
+          path: artifacts/mlb-r1b-bullpen-full-aggregate
+          merge-multiple: true
+      - name: Independently verify all 44,016 identities and production decision semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mlb-r1b-bullpen-full-verification
+          npx tsx scripts/mlb-r1b-bullpen-full-universe-verify.ts \
+            --artifact-root artifacts/mlb-r1b-bullpen-full-aggregate \
+            --v16-root research/mlb-r1b-v16-baseline-historical \
+            --contract research/mlb-r1b-bullpen-full-universe-contract.json \
+            --out artifacts/mlb-r1b-bullpen-full-verification/independent-verification.json
+      - name: Enforce independent certification gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT=artifacts/mlb-r1b-bullpen-full-verification/independent-verification.json
+          node --input-type=module - "$REPORT" <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-r1b-bullpen-full-universe-verification.v1') throw new Error('schema');
+          if(r.family!=='BULLPEN_FULL_GAME'||r.promotionEligible!==true) throw new Error('promotion gate');
+          if(r.authority.expectedRows!==44016||r.authority.expectedGames!==11004) throw new Error('authority');
+          if(r.verification.totalRows!==44016||r.verification.fullGameRows!==22008||r.verification.earlyWindowRows!==22008) throw new Error('coverage');
+          if(r.verification.eligibleFullGameRows+r.verification.missingFullGameRows!==22008) throw new Error('FG accounting');
+          if(r.verification.recomputedEligibleRows!==r.verification.eligibleFullGameRows) throw new Error('semantic replay');
+          if(r.verification.duplicateIdentityCount!==0||r.verification.forbiddenOutcomeFieldCount!==0||r.verification.forbiddenPriceFieldCount!==0) throw new Error('integrity');
+          if(!/^[a-f0-9]{64}$/.test(r.combinedPackSha256)||!/^[a-f0-9]{64}$/.test(r.combinedWitnessSha256)) throw new Error('digest');
+          if(r.policy.researchOnly!==true||r.policy.targetOutcomeFieldsRead!==false||r.policy.marketPricesRead!==false||r.policy.productionChanged!==false||r.policy.r1b2Authorized!==false||r.policy.realFinancialExposure!==0) throw new Error('policy');
+          console.log(JSON.stringify({promotionEligible:r.promotionEligible,verification:r.verification,combinedPackSha256:r.combinedPackSha256,combinedWitnessSha256:r.combinedWitnessSha256},null,2));
+          NODE
+      - name: Static verifier boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='scripts/mlb-r1b-bullpen-full-universe-verify.ts'
+          grep -F 'fingerprintAdjustment' "$src"
+          grep -F 'NOT_APPLICABLE_EARLY_HORIZON' "$src"
+          grep -F 'targetOutcomeFieldsRead: false' "$src"
+          grep -F 'marketPricesRead: false' "$src"
+          grep -F 'productionChanged: false' "$src"
+          grep -F 'r1b2Authorized: false' "$src"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+      - name: Upload independent verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-full-universe-independent-verification
+          path: artifacts/mlb-r1b-bullpen-full-verification/independent-verification.json
           if-no-files-found: error
           retention-days: 90
