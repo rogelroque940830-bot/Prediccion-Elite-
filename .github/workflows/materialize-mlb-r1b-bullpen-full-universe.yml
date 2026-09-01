@@ -7,6 +7,7 @@ on:
       - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
       - 'scripts/mlb-r1b-bullpen-full-universe-verify.ts'
       - 'research/mlb-r1b-bullpen-full-universe-contract.json'
+      - 'research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json'
       - 'research/mlb-r1b-v16-baseline-historical/v16-baseline-*.jsonl'
       - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
   push:
@@ -15,6 +16,7 @@ on:
       - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
       - 'scripts/mlb-r1b-bullpen-full-universe-verify.ts'
       - 'research/mlb-r1b-bullpen-full-universe-contract.json'
+      - 'research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json'
       - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
   workflow_dispatch:
 
@@ -48,13 +50,25 @@ jobs:
           github-token: ${{ github.token }}
           repository: rogelroque940830-bot/Prediccion-Elite-
           run-id: 31659518059
-      - name: Verify frozen inputs
+      - name: Verify frozen inputs and selected bulk route evidence
         shell: bash
         run: |
           set -euo pipefail
           test -s "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
           test -s "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl"
           test -s research/mlb-r1b-bullpen-full-universe-contract.json
+          test -s research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('research/mlb-r1b-bullpen-full-universe-contract.json','utf8'));
+          const e=JSON.parse(fs.readFileSync('research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json','utf8'));
+          if(c.roleStatsPolicy?.authoritativeCurrentSeasonRoute!=='PEOPLE_HYDRATED_BY_DATE_RANGE') throw new Error('authoritative route');
+          if(c.roleStatsPolicy?.crossRouteConsensusRequired!==false) throw new Error('cross-route consensus');
+          if(c.certificationGate?.sampleRouteSelectionDoesNotCertifyFamily!==true) throw new Error('sample boundary');
+          if(e.status!=='SAMPLE_ROUTE_SELECTION_ONLY_NOT_FULL_UNIVERSE_CERTIFICATION') throw new Error('route evidence status');
+          if(e.finding?.peopleHydratedExactAcrossAllFiveSeasonSamples!==true) throw new Error('five-season sample route evidence');
+          if(e.finding?.fullUniverseStillRequired!==true||e.finding?.bullpenFullGameParityCertified!==false) throw new Error('promotion boundary');
+          NODE
       - name: Materialize complete canonical V16 identity universe for bullpen
         shell: bash
         run: |
@@ -84,6 +98,8 @@ jobs:
           if(r.status!=='FULL_UNIVERSE_MATERIALIZED_PENDING_INDEPENDENT_VERIFICATION') throw new Error('status');
           if(r.family!=='BULLPEN_FULL_GAME') throw new Error('family');
           if(r.season!==process.env.SEASON) throw new Error(`season=${r.season}`);
+          if(r.currentRoleStatsAuthority!=='PEOPLE_HYDRATED_BY_DATE_RANGE') throw new Error('role stats authority');
+          if(r.roleStatsRouteSelectionEvidence!=='research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json') throw new Error('route evidence');
           if(r.rowCount!==r.fullGameRows+r.earlyWindowRows) throw new Error('row accounting');
           if(r.fullGameRows!==r.earlyWindowRows) throw new Error('horizon symmetry');
           if(r.eligibleFullGameRows+r.missingFullGameRows!==r.fullGameRows) throw new Error('FG accounting');
@@ -91,7 +107,7 @@ jobs:
           if(!/^[a-f0-9]{64}$/.test(r.packSha256)||!/^[a-f0-9]{64}$/.test(r.witnessSha256)) throw new Error('digest');
           const p=r.policy;
           if(p.researchOnly!==true||p.sameDateFinalGameReadAllowed!==false||p.marketPricesRead!==false||p.modelRefit!==false||p.newWeightsCreated!==false||p.productionChanged!==false||p.r1b2Authorized!==false||p.automaticBetPlacement!==false||p.realFinancialExposure!==0) throw new Error('policy');
-          console.log(JSON.stringify({season:r.season,gameCount:r.gameCount,rowCount:r.rowCount,eligibleFullGameRows:r.eligibleFullGameRows,missingFullGameRows:r.missingFullGameRows,missingnessReasonCounts:r.missingnessReasonCounts,packSha256:r.packSha256,witnessSha256:r.witnessSha256,networkUniqueRequestCount:r.networkUniqueRequestCount},null,2));
+          console.log(JSON.stringify({season:r.season,gameCount:r.gameCount,rowCount:r.rowCount,currentRoleStatsAuthority:r.currentRoleStatsAuthority,eligibleFullGameRows:r.eligibleFullGameRows,missingFullGameRows:r.missingFullGameRows,missingnessReasonCounts:r.missingnessReasonCounts,packSha256:r.packSha256,witnessSha256:r.witnessSha256,networkUniqueRequestCount:r.networkUniqueRequestCount},null,2));
           NODE
       - name: Static fail-closed boundary
         shell: bash
@@ -99,6 +115,8 @@ jobs:
           set -euo pipefail
           src='scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
           grep -F 'getBullpenStatus' "$src"
+          grep -F 'PEOPLE_HYDRATED_BY_DATE_RANGE' "$src"
+          grep -F 'BULLPEN_FULL_ROLE_STATS_AUTHORITY_CONTRACT_DRIFT' "$src"
           grep -F 'NOT_APPLICABLE_EARLY_HORIZON' "$src"
           grep -F 'sameDateFinalGameReadAllowed: false' "$src"
           grep -F 'productionChanged: false' "$src"
