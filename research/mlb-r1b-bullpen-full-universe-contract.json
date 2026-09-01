@@ -81,6 +81,13 @@
       "DECISION_FINGERPRINTS_IDENTICAL",
       "RUNS_ADJUSTMENT_ALLOWED_VALUE"
     ],
+    "allowedFullGameMissingnessReasons": [
+      "ROSTER_MEMBERSHIP_OR_ORDER_DECISION_AMBIGUOUS",
+      "DATE_ROSTER_EMPTY",
+      "T5_ROSTER_EMPTY",
+      "BULLPEN_RELIEVERS_EMPTY"
+    ],
+    "allOtherNonTransportErrorsAreCertificationFailures": true,
     "missingCurrentSeasonLineDisposition": "USE_UNCHANGED_PRODUCTIVE_PREVIOUS_SEASON_THEN_CAREER_FALLBACK",
     "missingnessNeverConvertedToZero": true,
     "transportFailureMayNotBePromotedAsStructuralMissingness": true
@@ -97,6 +104,7 @@
     "all22008EarlyWindowRowsNotApplicable": true,
     "everyEligibleFullGameRowExactProductionSemantics": true,
     "allAmbiguityExplicitMissingness": true,
+    "onlyPredeclaredStructuralMissingnessMayPassVerification": true,
     "authoritativeRoleStatsRouteMustSurviveFullUniverse": true,
     "sampleRouteSelectionDoesNotCertifyFamily": true,
     "duplicateIdentityCount": 0,
