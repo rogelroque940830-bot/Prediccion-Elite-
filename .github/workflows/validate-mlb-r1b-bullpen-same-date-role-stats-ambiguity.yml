@@ -1,0 +1,89 @@
+name: Validate MLB R1B Bullpen Same-Date RoleStats Ambiguity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts'
+      - '.github/workflows/validate-mlb-r1b-bullpen-same-date-role-stats-ambiguity.yml'
+      - 'research/mlb-r1b-v16-baseline-historical/v16-baseline-*.jsonl'
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - 'scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts'
+      - '.github/workflows/validate-mlb-r1b-bullpen-same-date-role-stats-ambiguity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        season: [2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download frozen Step12V3 custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
+          test -s "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl"
+      - name: Compile audit
+        run: npx esbuild scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/bullpen-samedate-audit.cjs
+      - name: Audit same-date role-stats ambiguity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mlb-r1b-bullpen-samedate
+          npx tsx scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts \
+            --season '${{ matrix.season }}' \
+            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json" \
+            --v16-rowset "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl" \
+            --out "artifacts/mlb-r1b-bullpen-samedate/same-date-role-stats-${{ matrix.season }}.json"
+      - name: Validate research-only boundary
+        shell: bash
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/mlb-r1b-bullpen-samedate/same-date-role-stats-${{ matrix.season }}.json"
+          node --input-type=module - "$REPORT" <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-r1b-bullpen-same-date-role-stats-ambiguity.v1') throw new Error('schema');
+          if(r.season!==process.env.SEASON) throw new Error('season');
+          if(r.finding?.missingnessReason!=='SAME_DATE_ROLE_STATS_CACHE_AMBIGUOUS') throw new Error('reason');
+          const p=r.policy;
+          if(p.researchOnly!==true||p.scheduleMetadataOnly!==true||p.sameDateFinalGameRead!==false||p.gameFeedRead!==false||p.targetResultRead!==false||p.marketPricesRead!==false||p.modelRefit!==false||p.newWeightsCreated!==false||p.productionChanged!==false||p.r1b2Authorized!==false||p.favorableResultRequired!==false) throw new Error('policy');
+          console.log(JSON.stringify({season:r.season,status:r.status,affectedGames:r.finding.affectedGames,affectedFullGameSides:r.finding.affectedFullGameSides},null,2));
+          NODE
+          ! grep -F 'feed/live' scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts
+          ! grep -Ei 'odds|sportsbook|placeBet|automaticBetPlacement' scripts/mlb-r1b-bullpen-same-date-role-stats-ambiguity-audit.ts
+      - name: Upload ambiguity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-samedate-${{ matrix.season }}
+          path: artifacts/mlb-r1b-bullpen-samedate/same-date-role-stats-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
