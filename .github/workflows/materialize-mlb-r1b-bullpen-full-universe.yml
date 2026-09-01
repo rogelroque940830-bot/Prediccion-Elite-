@@ -26,12 +26,12 @@ jobs:
   materialize:
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         season: [2022, 2023, 2024, 2025, 2026_YTD]
     name: bullpen-full-${{ matrix.season }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v5
@@ -66,7 +66,7 @@ jobs:
             --v16-rowset "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl" \
             --contract research/mlb-r1b-bullpen-full-universe-contract.json \
             --out-dir "artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}" \
-            --concurrency 6
+            --concurrency 4
       - name: Validate materialization boundary
         shell: bash
         env:
