@@ -1,0 +1,111 @@
+name: Materialize MLB R1B Bullpen Full Universe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
+      - 'research/mlb-r1b-bullpen-full-universe-contract.json'
+      - 'research/mlb-r1b-v16-baseline-historical/v16-baseline-*.jsonl'
+      - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
+  push:
+    branches: [research/mlb-unified-sporting-authority-r1]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
+      - 'research/mlb-r1b-bullpen-full-universe-contract.json'
+      - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  materialize:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        season: [2022, 2023, 2024, 2025, 2026_YTD]
+    name: bullpen-full-${{ matrix.season }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download immutable Step12V3 T-5 custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify frozen inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
+          test -s "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl"
+          test -s research/mlb-r1b-bullpen-full-universe-contract.json
+      - name: Materialize complete canonical V16 identity universe for bullpen
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}"
+          npx tsx scripts/mlb-r1b-bullpen-full-universe-materialize.ts \
+            --season '${{ matrix.season }}' \
+            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json" \
+            --v16-rowset "research/mlb-r1b-v16-baseline-historical/v16-baseline-${{ matrix.season }}.jsonl" \
+            --contract research/mlb-r1b-bullpen-full-universe-contract.json \
+            --out-dir "artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}" \
+            --concurrency 6
+      - name: Validate materialization boundary
+        shell: bash
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          set -euo pipefail
+          DIR="artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}"
+          test -s "$DIR/bullpen-${{ matrix.season }}.jsonl"
+          test -s "$DIR/bullpen-witness-${{ matrix.season }}.jsonl"
+          test -s "$DIR/bullpen-manifest-${{ matrix.season }}.json"
+          node --input-type=module - "$DIR/bullpen-manifest-${{ matrix.season }}.json" <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-r1b-bullpen-full-universe-season-manifest.v1') throw new Error('schema');
+          if(r.status!=='FULL_UNIVERSE_MATERIALIZED_PENDING_INDEPENDENT_VERIFICATION') throw new Error('status');
+          if(r.family!=='BULLPEN_FULL_GAME') throw new Error('family');
+          if(r.season!==process.env.SEASON) throw new Error(`season=${r.season}`);
+          if(r.rowCount!==r.fullGameRows+r.earlyWindowRows) throw new Error('row accounting');
+          if(r.fullGameRows!==r.earlyWindowRows) throw new Error('horizon symmetry');
+          if(r.eligibleFullGameRows+r.missingFullGameRows!==r.fullGameRows) throw new Error('FG accounting');
+          if(r.duplicateIdentityCount!==0) throw new Error('duplicates');
+          if(!/^[a-f0-9]{64}$/.test(r.packSha256)||!/^[a-f0-9]{64}$/.test(r.witnessSha256)) throw new Error('digest');
+          const p=r.policy;
+          if(p.researchOnly!==true||p.sameDateFinalGameReadAllowed!==false||p.marketPricesRead!==false||p.modelRefit!==false||p.newWeightsCreated!==false||p.productionChanged!==false||p.r1b2Authorized!==false||p.automaticBetPlacement!==false||p.realFinancialExposure!==0) throw new Error('policy');
+          console.log(JSON.stringify({season:r.season,gameCount:r.gameCount,rowCount:r.rowCount,eligibleFullGameRows:r.eligibleFullGameRows,missingFullGameRows:r.missingFullGameRows,missingnessReasonCounts:r.missingnessReasonCounts,packSha256:r.packSha256,witnessSha256:r.witnessSha256,networkUniqueRequestCount:r.networkUniqueRequestCount},null,2));
+          NODE
+      - name: Static fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
+          grep -F 'getBullpenStatus' "$src"
+          grep -F 'NOT_APPLICABLE_EARLY_HORIZON' "$src"
+          grep -F 'sameDateFinalGameReadAllowed: false' "$src"
+          grep -F 'productionChanged: false' "$src"
+          grep -F 'r1b2Authorized: false' "$src"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+      - name: Upload season evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-full-universe-${{ matrix.season }}
+          path: artifacts/mlb-r1b-bullpen-full/${{ matrix.season }}/*
+          if-no-files-found: error
+          retention-days: 90
