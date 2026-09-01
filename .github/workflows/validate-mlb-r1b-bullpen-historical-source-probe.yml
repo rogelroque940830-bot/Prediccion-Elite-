@@ -1,0 +1,106 @@
+name: Validate MLB R1B Bullpen Historical Source Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-historical-source-probe.ts'
+      - '.github/workflows/validate-mlb-r1b-bullpen-historical-source-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        season: [2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download canonical Step 12V3 T-5 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify frozen source input exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/pregame-lineup-history.json"
+      - name: Run historical bullpen source probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mlb-r1b-bullpen-probe
+          npx tsx scripts/mlb-r1b-bullpen-historical-source-probe.ts \
+            --season '${{ matrix.season }}' \
+            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/pregame-lineup-history.json" \
+            --out "artifacts/mlb-r1b-bullpen-probe/bullpen-source-probe-${{ matrix.season }}.json"
+      - name: Validate fail-closed scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/mlb-r1b-bullpen-probe/bullpen-source-probe-${{ matrix.season }}.json"
+          node --input-type=module - "$REPORT" <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (report.schemaVersion !== 'courtedge-mlb-r1b-bullpen-historical-source-probe.v1') throw new Error('schema');
+          if (report.season !== process.env.SEASON) throw new Error(`season=${report.season}`);
+          const f = report.findings;
+          if (f.productionGetBullpenStatusReused !== true) throw new Error('production getBullpenStatus not reused');
+          if (f.historicalRosterDateEndpointUsable !== true) throw new Error('historical roster source not usable');
+          if (f.currentSeasonStatsClosedAtPriorDate !== true) throw new Error('current-season stats not closed at D-1');
+          if (f.recentScheduleClosedAtPriorDate !== true) throw new Error('recent schedule not closed at D-1');
+          if (f.noTargetOutcomeRead !== true) throw new Error('target outcome boundary');
+          if (f.marketPricesRead !== false) throw new Error('market price boundary');
+          if (f.v66UsedAsExactSubstitute !== false) throw new Error('V66 substitution boundary');
+          const p = report.policy;
+          for (const key of ['targetOutcomeFieldsAllowed','sameDateFinalGameReadAllowed','futureSeasonAggregateAllowed','marketPricesAllowed','modelRefitAllowed','newWeightsAllowed','productionChangeAllowed','r1b2AuthorizationChanged']) {
+            if (p[key] !== false) throw new Error(`${key}=${p[key]}`);
+          }
+          if (p.researchOnly !== true) throw new Error('researchOnly');
+          console.log(JSON.stringify({
+            season: report.season,
+            classification: report.classification,
+            exactT5RosterParityBothSides: f.exactT5RosterParityBothSides,
+            gamePk: report.sample.gamePk,
+            home: report.home.rosterComparison,
+            away: report.away.rosterComparison,
+            homeRunsAdjustment: report.home.productionStatus.runsAdjustment,
+            awayRunsAdjustment: report.away.productionStatus.runsAdjustment,
+          }, null, 2));
+          NODE
+        env:
+          SEASON: ${{ matrix.season }}
+      - name: Static research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='scripts/mlb-r1b-bullpen-historical-source-probe.ts'
+          grep -F 'getBullpenStatus' "$source"
+          grep -F 'currentSeasonStatsClosedAtPriorDate: true' "$source"
+          grep -F 'sameDateFinalGameReadAllowed: false' "$source"
+          grep -F 'productionChangeAllowed: false' "$source"
+          grep -F 'r1b2AuthorizationChanged: false' "$source"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacementAllowed[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$source"
+      - name: Upload season probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-historical-source-probe-${{ matrix.season }}
+          path: artifacts/mlb-r1b-bullpen-probe/bullpen-source-probe-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30
