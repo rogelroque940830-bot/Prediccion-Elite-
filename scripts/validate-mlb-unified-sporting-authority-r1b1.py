@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CERT = ROOT / "research" / "mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json"
 PARENT_R1B = ROOT / "research" / "mlb-unified-sporting-authority-r1b-materialization-certification.json"
+BULLPEN_CERT = ROOT / "research" / "mlb-r1b-bullpen-full-universe-parity-certification.json"
 EXPECTED = (
     "V16_BASELINE",
     "FROZEN_ROUTE_EVIDENCE",
@@ -71,6 +72,39 @@ for field in ("outcomesRead", "marketPricesRead", "modelRefit", "newWeightsCreat
 if policy.get("realFinancialExposure") != 0:
     fail("real_financial_exposure")
 
+# BULLPEN_FULL_GAME may remain PARITY_CERTIFIED only while its independent
+# full-universe authority is present and internally fail-closed.
+bullpen_row = next((r for r in rows if r.get("family") == "BULLPEN_FULL_GAME"), None)
+if bullpen_row is None:
+    fail("bullpen_family_missing")
+if bullpen_row.get("classification") == "PARITY_CERTIFIED":
+    if bullpen_row.get("exactSemanticParity") is not True:
+        fail("bullpen_exact_parity_flag")
+    if bullpen_row.get("parityCertification") != "research/mlb-r1b-bullpen-full-universe-parity-certification.json":
+        fail("bullpen_cert_link")
+    if bullpen_row.get("requiredUnblock") is not None:
+        fail("bullpen_certified_but_still_blocked")
+    if not BULLPEN_CERT.exists():
+        fail("bullpen_cert_missing")
+    bullpen_cert = json.loads(BULLPEN_CERT.read_text(encoding="utf-8"))
+    if bullpen_cert.get("family") != "BULLPEN_FULL_GAME":
+        fail("bullpen_cert_family")
+    if bullpen_cert.get("status") != "PARITY_CERTIFIED" or bullpen_cert.get("classification") != "PARITY_CERTIFIED":
+        fail("bullpen_cert_status")
+    if bullpen_cert.get("exactSemanticParity") is not True or bullpen_cert.get("familyPromotionAuthorized") is not True:
+        fail("bullpen_cert_promotion_authority")
+    verification = bullpen_cert.get("verification", {})
+    if verification.get("promotionEligible") is not True:
+        fail("bullpen_verifier_promotion")
+    if verification.get("totalRows") != 44016 or verification.get("expectedGames") != 11004:
+        fail("bullpen_verifier_universe_drift")
+    for field in ("duplicateIdentityCount", "forbiddenOutcomeFieldCount", "forbiddenPriceFieldCount", "fingerprintMismatchEligibleRows"):
+        if verification.get(field) != 0:
+            fail("bullpen_verifier_nonzero:" + field)
+    blocked_names = {r.get("family") for r in json.loads(PARENT_R1B.read_text(encoding="utf-8")).get("blockedRequiredFamilies", [])}
+    if "BULLPEN_FULL_GAME" in blocked_names:
+        fail("bullpen_parent_still_blocked")
+
 parent = json.loads(PARENT_R1B.read_text(encoding="utf-8"))
 link = parent.get("r1b1Certification", {})
 if link.get("artifact") != "research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json":
@@ -90,4 +124,4 @@ if link.get("r1b2Authorized") is not all_certified:
 if all_certified is False and parent.get("nextStep") != "REMEDIATE_R1B1_BLOCKED_AND_PARTIAL_FAMILIES_BEFORE_R1B2":
     fail("parent_next_step")
 
-print(json.dumps({"status": "R1B1_CERTIFICATION_VALID", "counts": counts, "rowsetAuthorized": all_certified, "parentConsistent": True}, sort_keys=True))
+print(json.dumps({"status": "R1B1_CERTIFICATION_VALID", "counts": counts, "rowsetAuthorized": all_certified, "parentConsistent": True, "bullpenParityAuthority": bullpen_row.get("classification") == "PARITY_CERTIFIED"}, sort_keys=True))
