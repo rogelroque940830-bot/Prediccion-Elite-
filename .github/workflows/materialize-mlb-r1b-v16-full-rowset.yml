@@ -11,14 +11,11 @@ on:
       - server/mlb-c4-live-feature-builder.ts
       - server/mlb-r1b-v16-final-baseline-adapter.ts
       - server/mlb-pure-settlement-scorer.ts
-  pull_request:
-    paths:
-      - scripts/mlb-r1b-v16-full-rowset-materialize.ts
-      - scripts/mlb-r1b-v16-full-rowset-verify.ts
-      - .github/workflows/materialize-mlb-r1b-v16-full-rowset.yml
-      - server/mlb-c4-live-feature-builder.ts
-      - server/mlb-r1b-v16-final-baseline-adapter.ts
-      - server/mlb-pure-settlement-scorer.ts
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
