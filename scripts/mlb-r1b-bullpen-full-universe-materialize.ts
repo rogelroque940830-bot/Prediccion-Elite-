@@ -517,7 +517,7 @@ function packRow(identity: Identity, snapshot: FrozenSnapshot, result: SideMater
       sourceVersion: SOURCE_VERSION,
       sourceTimestampOrPriorWindow: snapshot.requestedTimecode,
       inputStage: "PREGAME_T5",
-      missingnessReason: early ? "NOT_APPLICABLE_EARLY_HORIZON" : (result?.reason ?? "BULLPEN_SOURCE_UNAVAILABLE"),
+      missingnessReason: early ? "NOT_APPLICABLE_EARLY_HORIZON" : (eligible ? null : (result?.reason ?? "BULLPEN_SOURCE_UNAVAILABLE")),
     },
   };
 }
