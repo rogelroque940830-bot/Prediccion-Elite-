@@ -280,7 +280,7 @@ async function fetchJson(url: string, memo = true): Promise<any> {
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       try {
         const response = await fetch(url, {
-          headers: { Accept: "application/json", "User-Agent": "CourtEdge-R1B-Bullpen-Full/1.0" },
+          headers: { Accept: "application/json", "User-Agent": "CourtEdge-MLB-R1B-Bullpen-Probe/2.0" },
           signal: AbortSignal.timeout(25_000),
         });
         if (response.ok) return await response.json();
