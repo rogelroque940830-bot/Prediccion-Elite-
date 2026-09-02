@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
       - name: Probe MLB StatsAPI transport from hosted runner
         shell: bash
         run: |
@@ -49,4 +52,29 @@ jobs:
           probe roster_date 'https://statsapi.mlb.com/api/v1/teams/138/roster?rosterType=Active&date=2026-03-26&season=2026'
           probe pitcher_stats 'https://statsapi.mlb.com/api/v1/people/605483/stats?stats=season&group=pitching&season=2026'
 
-          echo 'Transport probe completed; this workflow is diagnostic only and changes no model, weights, routing, staking, or production behavior.'
+      - name: Compare Node fetch and node:https
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import https from 'node:https';
+          const url='https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-03-01&endDate=2026-08-09';
+          const headers={Accept:'application/json','User-Agent':'CourtEdge-R1B-Transport-Probe/1.0'};
+          try {
+            const r=await fetch(url,{headers,signal:AbortSignal.timeout(25000)});
+            const text=await r.text();
+            console.log(`node_fetch HTTP=${r.status} bytes=${Buffer.byteLength(text)}`);
+          } catch (error) {
+            console.log(`node_fetch ERROR=${error instanceof Error ? error.message : String(error)}`);
+          }
+          await new Promise((resolve) => {
+            const req=https.get(url,{headers,timeout:25000},(r)=>{
+              let bytes=0;
+              r.on('data',(chunk)=>{bytes+=chunk.length;});
+              r.on('end',()=>{console.log(`node_https HTTP=${r.statusCode} bytes=${bytes}`); resolve();});
+            });
+            req.on('timeout',()=>req.destroy(new Error('timeout')));
+            req.on('error',(error)=>{console.log(`node_https ERROR=${error.message}`); resolve();});
+          });
+          NODE
+          echo 'Transport probe completed; diagnostic only. No model, weights, routing, staking, or production behavior changed.'
