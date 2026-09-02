@@ -87,16 +87,29 @@
     },
     {
       "family": "BULLPEN_FULL_GAME",
-      "classification": "PARTIAL_PARITY",
+      "classification": "PARITY_CERTIFIED",
       "evidence": [
-        "V66 contains verified pre-outcome bullpen workload/source custody across 2022-2026_YTD.",
-        "Current getBullpenStatus requires target-time active roster, season-stat role classification and complete recent usage before runsAdjustment certification.",
-        "V66 does not prove immutable target-time active-roster snapshots or complete historical season-stat role evidence, so workload custody alone cannot reproduce current homeBullpen.runsAdjustment/awayBullpen.runsAdjustment exactly."
+        "Full-universe workflow run 33635623186 (#28) materialized the canonical V16 identity universe for 2022, 2023, 2024, 2025 and 2026_YTD under the frozen FULL_GAME-only bullpen semantics.",
+        "Independent verification recomputed the frozen decision semantics across 44016 identities / 11004 games and passed with zero duplicate identities, zero forbidden outcome fields, zero forbidden price fields and zero eligible-row fingerprint mismatches.",
+        "The frozen certification research/mlb-r1b-bullpen-full-universe-parity-certification.json pins the run, artifact digests, combined pack/witness hashes, missingness semantics and promotion authority.",
+        "Early-window rows remain structural NOT_APPLICABLE and are never zero-filled; only FULL_GAME rows are eligible for bullpen runsAdjustment."
       ],
-      "coverage": "2022_2026_YTD_WORKLOAD_CUSTODY_ACTIVE_ROSTER_AND_ROLE_CUSTODY_UNPROVEN",
-      "exactSemanticParity": false,
-      "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_MUST_BE_NOT_APPLICABLE_NOT_ZERO",
-      "requiredUnblock": "Prove immutable target-date roster and role-stat custody, combine it with certified recent usage, and reproduce getBullpenStatus/runsAdjustment exactly."
+      "coverage": "2022_2026_YTD_FULL_UNIVERSE_FULL_GAME_ONLY_WITH_EXPLICIT_STRUCTURAL_EARLY_WINDOW_NA",
+      "exactSemanticParity": true,
+      "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_IS_NOT_APPLICABLE_NOT_ZERO",
+      "parityCertification": "research/mlb-r1b-bullpen-full-universe-parity-certification.json",
+      "workflowRunId": 33635623186,
+      "workflowRunNumber": 28,
+      "certificationHeadSha": "bf356be288456c332f2eb4c756b8d7504405e2e1",
+      "independentVerificationArtifactId": 9857291642,
+      "independentVerificationArtifactDigest": "sha256:d2372b753241f97a62ff9947dbd188f88d21fa06bd48e15e86d33f8201b604ed",
+      "checkedRows": 44016,
+      "expectedGames": 11004,
+      "eligibleFullGameRows": 231,
+      "duplicateIdentityCount": 0,
+      "forbiddenOutcomeFieldCount": 0,
+      "forbiddenPriceFieldCount": 0,
+      "fingerprintMismatchEligibleRows": 0
     },
     {
       "family": "HAND_SPLIT_SLG_MATCHUP",
@@ -135,8 +148,8 @@
   ],
   "summary": {
     "requiredFamilyCount": 9,
-    "parityCertified": 3,
-    "partialParity": 2,
+    "parityCertified": 4,
+    "partialParity": 1,
     "blocked": 4,
     "allRequiredFamiliesParityCertified": false,
     "r1bHistoricalRowsetAuthorized": false,
@@ -154,6 +167,23 @@
       "duplicateCount": 0,
       "containsOutcomeTargets": false,
       "marketPricesRead": false
+    },
+    {
+      "name": "R1B1_BULLPEN_FULL_UNIVERSE_PARITY",
+      "parityCertification": "research/mlb-r1b-bullpen-full-universe-parity-certification.json",
+      "workflowRunId": 33635623186,
+      "workflowRunNumber": 28,
+      "headSha": "bf356be288456c332f2eb4c756b8d7504405e2e1",
+      "independentVerificationArtifactId": 9857291642,
+      "independentVerificationArtifactDigest": "sha256:d2372b753241f97a62ff9947dbd188f88d21fa06bd48e15e86d33f8201b604ed",
+      "combinedPackSha256": "58941cfd3eebd7408191046bb480f6cd6bbd991c693cfe1a06d6d0a5f4bf41c3",
+      "combinedWitnessSha256": "3f40624e1c9f2f6d6f2d4af31a3a8df97ab29168126ba187670492f74b04f0cc",
+      "checkedRows": 44016,
+      "expectedGames": 11004,
+      "duplicateIdentityCount": 0,
+      "forbiddenOutcomeFieldCount": 0,
+      "forbiddenPriceFieldCount": 0,
+      "fingerprintMismatchEligibleRows": 0
     },
     {
       "name": "P0_STEP12V66_GAME_HORIZON_EXPOSURE_CUSTODY",
@@ -179,7 +209,7 @@
     {"name":"V17_FROZEN_HAND_SPLIT_2025","workflowRunId":31666803576,"artifactId":9168248833,"artifactDigest":"sha256:b266f11e43cebae54b36f6b0547209de3c3b1ff4e192ca9322e461b29250c425"},
     {"name":"V17_FROZEN_HAND_SPLIT_2026_YTD","workflowRunId":31666803576,"artifactId":9168238661,"artifactDigest":"sha256:2dacb88229524aecc9ebcd7d90b84e0327be360618eafe1b35ecab890e888f48"},
     {"name":"V17_FROZEN_PITCHMIX_2023","workflowRunId":31669146698,"artifactId":9169089040,"artifactDigest":"sha256:53f5a10c550b2aab3cd156f3ceb17285c25b86775dad9603c98fe148af2fac92"},
-    {"name":"V17_FROZEN_PITCHMIX_2024","workflowRunId":31669146698,"artifactId":9169099182,"artifactDigest":"sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88bbf6b97be99ea98ed7eb6231"},
+    {"name":"V17_FROZEN_PITCHMIX_2024","workflowRunId":31669146698,"artifactId":9169099182,"artifactDigest":"sha256:c31c2dee92b9660bb45ac52c120d6daba1150e88f6b97be99ea98ed7eb6231"},
     {"name":"V17_FROZEN_PITCHMIX_2025","workflowRunId":31669146698,"artifactId":9169102385,"artifactDigest":"sha256:eca343e9c88bb4fd3ea1d4b14cc10144a4604e681d25f0140c39de9b47cebaf2"},
     {"name":"V17_FROZEN_PITCHMIX_2026_YTD","workflowRunId":31669146698,"artifactId":9169078788,"artifactDigest":"sha256:3fe195aec739bd9a6558fbc36fbd6a32deb4d6666910ee3be8022add910be8f7"}
   ],
@@ -195,8 +225,8 @@
   "closureDecision": {
     "r1b1Closed": true,
     "scientificResult": "FAIL_CLOSED_REQUIRED_FAMILY_PARITY_INCOMPLETE",
-    "meaning": "R1B1 audit is closed and remediation is progressing: three of nine required families are parity-certified, including V16_BASELINE with a full pinned 2022-2026_YTD rowset and exact locked-scorer parity; R1B historical materialization remains blocked until all nine are certified.",
-    "nextPermittedWork": "CONTINUE_REMEDIATION_OF_STATCAST_QUALITY_BULLPEN_FULL_GAME_FROZEN_ROUTE_EVIDENCE_DISCIPLINE_SPEED_SOS_AND_ADVANCED_CONTEXT; DO_NOT_START_R1B2_OR_OUTCOME_EVALUATION_UNTIL_ALL_NINE_ARE_PARITY_CERTIFIED."
+    "meaning": "R1B1 audit remains fail-closed while remediation progresses: four of nine required families are now parity-certified, including BULLPEN_FULL_GAME after full-universe 2022-2026_YTD materialization and independent verification; R1B historical materialization remains blocked until all nine are certified.",
+    "nextPermittedWork": "REMEDIATE_STATCAST_QUALITY_NEXT; THEN_CONTINUE_FROZEN_ROUTE_EVIDENCE_DISCIPLINE_SPEED_SOS_AND_ADVANCED_CONTEXT; DO_NOT_START_R1B2_OR_OUTCOME_EVALUATION_UNTIL_ALL_NINE_ARE_PARITY_CERTIFIED."
   },
   "policy": {
     "outcomesRead": false,
