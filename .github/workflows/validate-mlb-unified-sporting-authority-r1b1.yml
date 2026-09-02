@@ -7,14 +7,20 @@ on:
     paths:
       - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
       - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
+      - research/mlb-r1b-bullpen-full-universe-parity-certification.json
       - scripts/validate-mlb-unified-sporting-authority-r1b1.py
       - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
   pull_request:
     paths:
       - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
       - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
+      - research/mlb-r1b-bullpen-full-universe-parity-certification.json
       - scripts/validate-mlb-unified-sporting-authority-r1b1.py
       - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-r1b1:
