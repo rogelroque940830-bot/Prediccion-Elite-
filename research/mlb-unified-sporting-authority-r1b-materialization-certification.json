@@ -6,8 +6,8 @@
   "r1b1Certification": {
     "artifact": "research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json",
     "status": "R1B1_AUDIT_COMPLETE_FAIL_CLOSED",
-    "parityCertified": 3,
-    "partialParity": 2,
+    "parityCertified": 4,
+    "partialParity": 1,
     "blocked": 4,
     "r1bHistoricalRowsetAuthorized": false,
     "r1b2Authorized": false
@@ -73,6 +73,26 @@
       "parityTestCommit": "698c2b844fc599d4355fed0efde419b36f469635",
       "validationRunId": 33317341550,
       "status": "PARITY_CERTIFIED_WITH_STRUCTURAL_NA_2022_AND_WARMUP_2023"
+    },
+    {
+      "source": "R1B1_BULLPEN_FULL_UNIVERSE_PARITY",
+      "status": "PARITY_CERTIFIED_2022_2026_YTD_FULL_GAME_ONLY",
+      "parityCertification": "research/mlb-r1b-bullpen-full-universe-parity-certification.json",
+      "workflowRunId": 33635623186,
+      "workflowRunNumber": 28,
+      "headSha": "bf356be288456c332f2eb4c756b8d7504405e2e1",
+      "independentVerificationArtifactId": 9857291642,
+      "independentVerificationArtifactDigest": "sha256:d2372b753241f97a62ff9947dbd188f88d21fa06bd48e15e86d33f8201b604ed",
+      "combinedPackSha256": "58941cfd3eebd7408191046bb480f6cd6bbd991c693cfe1a06d6d0a5f4bf41c3",
+      "combinedWitnessSha256": "3f40624e1c9f2f6d6f2d4af31a3a8df97ab29168126ba187670492f74b04f0cc",
+      "checkedRows": 44016,
+      "expectedGames": 11004,
+      "eligibleFullGameRows": 231,
+      "duplicateIdentityCount": 0,
+      "forbiddenOutcomeFieldCount": 0,
+      "forbiddenPriceFieldCount": 0,
+      "fingerprintMismatchEligibleRows": 0,
+      "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_IS_NOT_APPLICABLE_NOT_ZERO"
     }
   ],
   "blockedRequiredFamilies": [
@@ -101,12 +121,6 @@
       "family": "ADVANCED_CONTEXT",
       "reason": "Current certifiable provenance exists but no immutable full-history target-date pack under current totalAdjustment semantics and non-overlap controls has been proven.",
       "requiredUnblock": "Identify or materialize exact historical ADVANCED_CONTEXT and prove temporal custody and non-duplication."
-    },
-    {
-      "family": "BULLPEN_FULL_GAME",
-      "reason": "V66 proves workload custody but target-time active-roster and role-stat custody still require exact historical semantic parity under getBullpenStatus/runsAdjustment.",
-      "requiredUnblock": "Prove historical target-time roster/role-stat custody and parity-certify the FULL_GAME-only adapter; early horizons must be NOT_APPLICABLE rather than zero.",
-      "currentClassification": "PARTIAL_PARITY"
     }
   ],
   "forbiddenSubstitutions": [
