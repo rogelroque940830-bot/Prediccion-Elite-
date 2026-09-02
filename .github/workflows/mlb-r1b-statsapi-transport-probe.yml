@@ -1,4 +1,4 @@
-name: MLB R1B StatsAPI Transport Probe
+name: MLB R1B Bullpen Full-Universe Smoke Probe
 
 on:
   push:
@@ -9,70 +9,74 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  transport-probe:
+  bullpen-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v5
         with:
           node-version: '24.18.0'
-      - name: Reproduce materializer transport exactly
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download immutable Step12V3 T-5 custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Build one-game midseason canonical smoke subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mlb-r1b-bullpen-smoke/input artifacts/mlb-r1b-bullpen-smoke/out
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const lineupPath='artifacts/p0-step12v3/2022/cohort/pregame-lineup-history.json';
+          const v16Path='research/mlb-r1b-v16-baseline-historical/v16-baseline-2022.jsonl';
+          const lineup=JSON.parse(fs.readFileSync(lineupPath,'utf8'));
+          const rows=fs.readFileSync(v16Path,'utf8').split(/\r?\n/).filter(Boolean).map(JSON.parse);
+          const byPk=new Map();
+          for(const row of rows){const list=byPk.get(Number(row.gamePk))??[];list.push(row);byPk.set(Number(row.gamePk),list);}
+          const snapshots=(lineup.snapshots??[])
+            .filter((s)=>s?.complete===true&&s?.availability==='COMPLETE'&&String(s.officialDate)>='2022-06-15')
+            .filter((s)=>(byPk.get(Number(s.gamePk))??[]).length===4)
+            .sort((a,b)=>String(a.officialDate).localeCompare(String(b.officialDate))||Number(a.gamePk)-Number(b.gamePk));
+          const snapshot=snapshots[0];
+          if(!snapshot) throw new Error('SMOKE_NO_CANONICAL_GAME');
+          const gameRows=byPk.get(Number(snapshot.gamePk));
+          fs.writeFileSync('artifacts/mlb-r1b-bullpen-smoke/input/lineup.json',JSON.stringify({snapshots:[snapshot]},null,2)+'\n');
+          fs.writeFileSync('artifacts/mlb-r1b-bullpen-smoke/input/v16.jsonl',gameRows.map(JSON.stringify).join('\n')+'\n');
+          console.log(JSON.stringify({gamePk:snapshot.gamePk,officialDate:snapshot.officialDate,requestedTimecode:snapshot.requestedTimecode,rowCount:gameRows.length},null,2));
+          NODE
+      - name: Run canonical materializer on smoke subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/mlb-r1b-bullpen-full-universe-materialize.ts \
+            --season '2022_SMOKE' \
+            --lineup-history artifacts/mlb-r1b-bullpen-smoke/input/lineup.json \
+            --v16-rowset artifacts/mlb-r1b-bullpen-smoke/input/v16.jsonl \
+            --contract research/mlb-r1b-bullpen-full-universe-contract.json \
+            --out-dir artifacts/mlb-r1b-bullpen-smoke/out \
+            --concurrency 1
+      - name: Validate smoke result without promoting family
         shell: bash
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          const url='https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-03-01&endDate=2026-08-09';
-          const variants=[
-            ['materializer_exact', {'Accept':'application/json','User-Agent':'CourtEdge-R1B-Bullpen-Full/1.0'}],
-            ['historical_probe', {'Accept':'application/json','User-Agent':'CourtEdge-MLB-R1B-Bullpen-Probe/2.0'}],
-            ['transport_probe', {'Accept':'application/json','User-Agent':'CourtEdge-R1B-Transport-Probe/1.0'}],
-          ];
-          for (const [label,headers] of variants) {
-            try {
-              const response=await fetch(url,{headers,signal:AbortSignal.timeout(25000)});
-              const text=await response.text();
-              console.log(`${label} HTTP=${response.status} bytes=${Buffer.byteLength(text)} bodyPrefix=${JSON.stringify(text.slice(0,80))}`);
-            } catch (error) {
-              console.log(`${label} ERROR=${error instanceof Error ? error.message : String(error)}`);
-            }
-          }
+          import fs from 'node:fs';
+          const p='artifacts/mlb-r1b-bullpen-smoke/out/bullpen-manifest-2022_SMOKE.json';
+          const m=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(m.status!=='FULL_UNIVERSE_MATERIALIZED_PENDING_INDEPENDENT_VERIFICATION') throw new Error('smoke status');
+          if(m.gameCount!==1||m.rowCount!==4||m.fullGameRows!==2||m.earlyWindowRows!==2) throw new Error('smoke identity counts');
+          if(m.policy?.researchOnly!==true||m.policy?.productionChanged!==false||m.policy?.r1b2Authorized!==false) throw new Error('smoke policy boundary');
+          console.log(JSON.stringify({status:m.status,gameCount:m.gameCount,rowCount:m.rowCount,eligibleFullGameRows:m.eligibleFullGameRows,missingFullGameRows:m.missingFullGameRows,networkUniqueRequestCount:m.networkUniqueRequestCount,priorFinalFeedUniqueRequestCount:m.priorFinalFeedUniqueRequestCount,t5FeedUniqueRequestCount:m.t5FeedUniqueRequestCount,missingnessReasonCounts:m.missingnessReasonCounts},null,2));
           NODE
-
-      - name: Reproduce retry wrapper exactly
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          class TransportError extends Error {}
-          const url='https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-03-01&endDate=2026-08-09';
-          async function exactFetchJson(url) {
-            let last=null;
-            for (let attempt=1; attempt<=4; attempt+=1) {
-              try {
-                const response=await fetch(url,{
-                  headers:{Accept:'application/json','User-Agent':'CourtEdge-R1B-Bullpen-Full/1.0'},
-                  signal:AbortSignal.timeout(25000),
-                });
-                console.log(`exact_wrapper attempt=${attempt} HTTP=${response.status}`);
-                if(response.ok) return await response.json();
-                const error=new TransportError(`BULLPEN_FULL_HTTP_${response.status}:${url}`);
-                if(![408,425,429].includes(response.status) && response.status < 500) throw error;
-                last=error;
-              } catch(error) {
-                last=error;
-              }
-              if(attempt<4) await new Promise((resolve)=>setTimeout(resolve,350*2**(attempt-1)));
-            }
-            throw last instanceof Error ? last : new TransportError(`BULLPEN_FULL_FETCH_FAILED:${url}`);
-          }
-          try {
-            const payload=await exactFetchJson(url);
-            console.log(`exact_wrapper SUCCESS dates=${Array.isArray(payload?.dates)?payload.dates.length:'invalid'}`);
-          } catch(error) {
-            console.log(`exact_wrapper FAILURE=${error instanceof Error ? error.message : String(error)}`);
-            process.exitCode=1;
-          }
-          NODE
-          echo 'Exact transport reproduction completed; diagnostic only. No model, weights, routing, staking, or production behavior changed.'
+          echo 'SMOKE_ONLY_NO_FAMILY_PROMOTION'
