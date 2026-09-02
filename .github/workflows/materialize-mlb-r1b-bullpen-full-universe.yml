@@ -1,15 +1,6 @@
 name: Materialize MLB R1B Bullpen Full Universe
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/mlb-r1b-bullpen-full-universe-materialize.ts'
-      - 'scripts/mlb-r1b-bullpen-full-universe-verify.ts'
-      - 'research/mlb-r1b-bullpen-full-universe-contract.json'
-      - 'research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json'
-      - 'research/mlb-r1b-v16-baseline-historical/v16-baseline-*.jsonl'
-      - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
   push:
     branches: [research/mlb-unified-sporting-authority-r1]
     paths:
@@ -19,6 +10,10 @@ on:
       - 'research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json'
       - '.github/workflows/materialize-mlb-r1b-bullpen-full-universe.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
