@@ -1,0 +1,52 @@
+name: MLB R1B StatsAPI Transport Probe
+
+on:
+  push:
+    branches: [research/mlb-unified-sporting-authority-r1]
+    paths:
+      - '.github/workflows/mlb-r1b-statsapi-transport-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transport-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Probe MLB StatsAPI transport from hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          UA='CourtEdge-R1B-Transport-Probe/1.0'
+          probe() {
+            local label="$1"
+            local url="$2"
+            local body="/tmp/${label}.body"
+            local headers="/tmp/${label}.headers"
+            local code
+            code=$(curl --silent --show-error --location \
+              --connect-timeout 10 --max-time 25 \
+              -A "$UA" -H 'Accept: application/json' \
+              -D "$headers" -o "$body" -w '%{http_code}' "$url" || true)
+            local bytes
+            bytes=$(wc -c < "$body" 2>/dev/null || echo 0)
+            local content_type
+            content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{gsub(/\r/,""); print $0}' "$headers" | tail -1 | cut -d: -f2- | xargs || true)
+            printf '%s HTTP=%s bytes=%s content_type=%s\n' "$label" "$code" "$bytes" "$content_type"
+            if [[ "$code" != "200" ]]; then
+              printf '%s first_body_bytes=' "$label"
+              head -c 160 "$body" | tr '\n' ' ' || true
+              printf '\n'
+            fi
+          }
+
+          probe sports 'https://statsapi.mlb.com/api/v1/sports/1'
+          probe schedule_day 'https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-03-26&endDate=2026-03-26'
+          probe schedule_season 'https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-03-01&endDate=2026-08-09'
+          probe t5_feed 'https://statsapi.mlb.com/api/v1.1/game/823081/feed/live?timecode=20260326_201000'
+          probe roster_date 'https://statsapi.mlb.com/api/v1/teams/138/roster?rosterType=Active&date=2026-03-26&season=2026'
+          probe pitcher_stats 'https://statsapi.mlb.com/api/v1/people/605483/stats?stats=season&group=pitching&season=2026'
+
+          echo 'Transport probe completed; this workflow is diagnostic only and changes no model, weights, routing, staking, or production behavior.'
