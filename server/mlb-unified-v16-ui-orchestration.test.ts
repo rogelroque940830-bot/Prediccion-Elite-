@@ -31,21 +31,22 @@ function slate(stage: "FINAL" | "PROVISIONAL"): MlbP1DailySlate {
       blockers: final ? [] : ["LINEUPS_PENDING"],
       source: { name: "MLB_STATS_API", fetchedAt: "2026-08-13T17:00:00.000Z", quality: "AUTHORITATIVE" },
     }],
-    summary: { total: 1, ready: final ? 1 : 0, provisional: final ? 0 : 1, waitingForPitchers: 0, startedOrClosed: 0, dataInsufficient: 0 },
-    safety: { mode: "SHADOW_DECISION_SUPPORT", realFinancialExposure: 0, automaticBetPlacement: false, automaticModelChangesAllowed: false, automaticPromotionAllowed: false },
+    summary: {
+      total: 1,
+      ready: final ? 1 : 0,
+      provisional: final ? 0 : 1,
+      waitingForPitchers: 0,
+      startedOrClosed: 0,
+      dataInsufficient: 0,
+    },
+    safety: {
+      mode: "SHADOW_DECISION_SUPPORT",
+      realFinancialExposure: 0,
+      automaticBetPlacement: false,
+      automaticModelChangesAllowed: false,
+      automaticPromotionAllowed: false,
+    },
   };
-}
-
-function settlementEvidence() {
-  return [{
-    gamePk: 123,
-    generatedAt: "2026-08-13T17:01:00.000Z",
-    modelVersion: "fixture",
-    manifestSha256: "fixture",
-    priceIndependent: true,
-    fullGame: { homeWinProbability: 0.612, awayWinProbability: 0.388, pushProbability: 0 },
-    first5: { homeWinProbability: 0.55, awayWinProbability: 0.35, pushProbability: 0.10 },
-  }];
 }
 
 function frozenRoutes(tier: "A_PLUS" | "PREMIUM" | "NONE") {
@@ -64,7 +65,10 @@ function basePreprice(input: {
   plannedMarkets: string[];
   paidLookupEligibleNow: boolean;
   dailyTier: "A_PLUS" | "PREMIUM" | "NONE";
+  stage?: "FINAL" | "PROVISIONAL";
 }) {
+  const stage = input.stage ?? "FINAL";
+  const final = stage === "FINAL";
   const hasThesis = input.plannedMarkets.length > 0;
   const shortlistCandidate = {
     gamePk: 123,
@@ -75,6 +79,10 @@ function basePreprice(input: {
   const intrinsicGame = {
     gamePk: 123,
     officialDate: DATE,
+    inputStage: stage,
+    startTime: "2026-08-13T23:10:00.000Z",
+    awayTeam: { id: 2, name: "Away" },
+    homeTeam: { id: 1, name: "Home" },
     researchClassification: hasThesis ? "GAME_ELITE_RESEARCH_CANDIDATE" : "NO_STRONG_THESIS",
   };
   return {
@@ -85,40 +93,32 @@ function basePreprice(input: {
     summary: {
       slateGames: 1,
       analysisEligibleGames: 1,
-      finalAnalysisEligibleGames: 1,
-      provisionalAnalysisEligibleGames: 0,
+      finalAnalysisEligibleGames: final ? 1 : 0,
+      provisionalAnalysisEligibleGames: final ? 0 : 1,
       intrinsicResearchEliteCandidates: hasThesis ? 1 : 0,
       gamesWithMarketDiscoveryPlan: hasThesis ? 1 : 0,
       gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
       frozenRouteRowsCaptured: 1,
     },
     cheapScreen: {
-      games: [{ gamePk: 123, eligibleForDeepPrefilterNow: true, finalInputsAvailable: true }],
+      games: [{ gamePk: 123, eligibleForDeepPrefilterNow: true, finalInputsAvailable: final }],
     },
-    shortlist: {
-      candidates: [shortlistCandidate],
-      selected: [shortlistCandidate],
-    },
-    intrinsic: {
-      games: [intrinsicGame],
-      rankedGames: [intrinsicGame],
-    },
+    shortlist: { candidates: [shortlistCandidate], selected: [shortlistCandidate] },
+    intrinsic: { games: [intrinsicGame], rankedGames: [intrinsicGame] },
     discovery: {
       games: [{
         gamePk: 123,
-        inputStage: "FINAL",
+        inputStage: stage,
         intrinsicRank: 1,
         plannedMarkets: input.plannedMarkets.map((canonicalMarketType) => ({ canonicalMarketType })),
         paidLookupEligibleNow: input.paidLookupEligibleNow,
         paidLookupHoldReason: input.paidLookupEligibleNow
           ? null
-          : hasThesis
-            ? "OFFICIAL_FINAL_INPUTS_REQUIRED"
-            : "NO_STRONG_INTRINSIC_MARKET_THESIS",
+          : final
+            ? "NO_STRONG_INTRINSIC_MARKET_THESIS"
+            : "OFFICIAL_FINAL_INPUTS_REQUIRED",
       }],
-      summary: {
-        gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0,
-      },
+      summary: { gamesPaidLookupEligibleNow: input.paidLookupEligibleNow ? 1 : 0 },
     },
     frozenRouteLedger: {
       schemaVersion: "courtedge-p0-mlb-frozen-research-route-ledger.v2",
@@ -132,14 +132,21 @@ function basePreprice(input: {
         scheduledStartTime: "2026-08-13T23:10:00.000Z",
         evaluatedAt: "2026-08-13T17:00:30.000Z",
         capturedAt: "2026-08-13T17:01:00.000Z",
-        finalInputs: true,
+        finalInputs: final,
         featureSnapshotDigest: "a".repeat(64),
         scorerVersion: "frozen-route-router-scorer.v2",
-        routes: frozenRoutes(input.dailyTier),
+        routes: final ? frozenRoutes(input.dailyTier) : {
+          PREMIUM_A_HOME_ML: "NOT_EVALUATED",
+          A_PLUS_HOME_ML: "NOT_EVALUATED",
+          A_PLUS_SLG_POS: "NOT_EVALUATED",
+          A_PLUS_PITCHMIX_AT2: "NOT_EVALUATED",
+          F5_HRPA_OR_AT2: "NOT_EVALUATED",
+          F5_PARETO_UNION: "NOT_EVALUATED",
+        },
         routers: {
-          A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1: input.dailyTier === "A_PLUS"
-            ? "FIRST_5_HOME"
-            : "NOT_APPLICABLE",
+          A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1: final
+            ? input.dailyTier === "A_PLUS" ? "FIRST_5_HOME" : "NOT_APPLICABLE"
+            : "NOT_EVALUATED",
         },
       }],
       policy: {
@@ -160,7 +167,90 @@ function basePreprice(input: {
       automaticBetPlacement: false,
       realFinancialExposure: 0,
     },
-  };
+  } as any;
+}
+
+function rankedOpportunity(stage: "FINAL" | "PROVISIONAL") {
+  return {
+    gamePk: 123,
+    officialDate: DATE,
+    startTime: "2026-08-13T23:10:00.000Z",
+    awayTeam: "Away",
+    homeTeam: "Home",
+    inputStage: stage,
+    contextRank: 1,
+    intrinsicClassification: "NO_STRONG_THESIS",
+    eligibleSportingOpportunity: false,
+    context: {
+      thesisKinds: [],
+      thesisStructures: [],
+      supportingComponents: [],
+      fullGameElite: false,
+      earlyWindowElite: false,
+      maxAbsoluteNativeRunSignal: 0.1,
+    },
+    probability: {
+      stage: stage === "FINAL" ? "CONFIRMED_V16" : "PROVISIONAL_V16",
+      selectedSide: "HOME",
+      selectedSideProbability: 0.58,
+      lineupUncertaintyP95: stage === "PROVISIONAL" ? 0.0533 : 0,
+      robustSelectedSideProbability: stage === "PROVISIONAL" ? 0.5267 : 0.58,
+    },
+  } as any;
+}
+
+function opportunityLive(input: {
+  runId: string;
+  tier: "A_PLUS" | "PREMIUM" | "NONE";
+  stage: "FINAL" | "PROVISIONAL";
+}) {
+  const final = input.stage === "FINAL";
+  const preprice = basePreprice({
+    runId: input.runId,
+    plannedMarkets: input.tier === "NONE" ? [] : ["ML"],
+    paidLookupEligibleNow: final && input.tier !== "NONE",
+    dailyTier: input.tier,
+    stage: input.stage,
+  });
+  return {
+    schemaVersion: "courtedge-mlb-daily-opportunity-live.v1",
+    date: DATE,
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    preprice,
+    provisionalV16: input.stage === "PROVISIONAL"
+      ? { 123: { gamePk: 123, generatedAt: "2026-08-13T17:01:00.000Z" } }
+      : {},
+    dailyOpportunity: {
+      schemaVersion: "courtedge-mlb-daily-opportunity-context.v1",
+      date: DATE,
+      generatedAt: "2026-08-13T17:01:00.000Z",
+      action: input.stage === "PROVISIONAL" ? "WAIT" : "NO_PLAY",
+      primaryOpportunity: null,
+      nonDominatedFrontier: [],
+      rankedOpportunities: [rankedOpportunity(input.stage)],
+      summary: {
+        intrinsicEvaluatedGames: 1,
+        eligibleSportingOpportunities: 0,
+        provisionalEligibleOpportunities: 0,
+        finalEligibleOpportunities: 0,
+        frontierSize: 0,
+      },
+      decisionReason: "NO_CONTEXT_QUALIFIED_OPPORTUNITY",
+      policy: {},
+    },
+  } as any;
+}
+
+function settlementEvidence() {
+  return [{
+    gamePk: 123,
+    generatedAt: "2026-08-13T17:01:00.000Z",
+    modelVersion: "fixture",
+    manifestSha256: "fixture",
+    priceIndependent: true,
+    fullGame: { homeWinProbability: 0.612, awayWinProbability: 0.388, pushProbability: 0 },
+    first5: { homeWinProbability: 0.55, awayWinProbability: 0.35, pushProbability: 0.10 },
+  }];
 }
 
 function eliteRunnerResult(input: any) {
@@ -188,8 +278,21 @@ function eliteRunnerResult(input: any) {
     runId: input.runId,
     date: DATE,
     generatedAt: "2026-08-13T17:01:00.000Z",
-    summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 1, positiveEvMarkets: 1, eliteEvidenceCandidates: 1, eliteEvidenceRowsCaptured: 1 },
-    preprice: basePreprice({ runId: input.runId, plannedMarkets: ["ML"], paidLookupEligibleNow: true, dailyTier: "A_PLUS" }),
+    summary: {
+      finalGamesScoredByV16: 1,
+      modelAssessments: 4,
+      paidLookupEligibleGames: 1,
+      positiveEvMarkets: 1,
+      eliteEvidenceCandidates: 1,
+      eliteEvidenceRowsCaptured: 1,
+    },
+    preprice: basePreprice({
+      runId: input.runId,
+      plannedMarkets: ["ML"],
+      paidLookupEligibleNow: true,
+      dailyTier: "A_PLUS",
+      stage: "FINAL",
+    }),
     settlementEvidence: settlementEvidence(),
     marketEdge: {
       games: [{ gamePk: 123, markets: [{ classification: "POSITIVE_EV", execution: { bookKey: "fixture" } }] }],
@@ -206,84 +309,99 @@ function eliteRunnerResult(input: any) {
   } as any;
 }
 
-function noPlayRunnerResult(input: any) {
+function assembled(stage: "FINAL" | "PROVISIONAL") {
   return {
-    schemaVersion: "courtedge-p0-mlb-unified-priced-v16-runner.v1",
-    runId: input.runId,
-    date: DATE,
-    generatedAt: "2026-08-13T17:01:00.000Z",
-    summary: { finalGamesScoredByV16: 1, modelAssessments: 4, paidLookupEligibleGames: 0, positiveEvMarkets: 0, eliteEvidenceCandidates: 0, eliteEvidenceRowsCaptured: 0 },
-    preprice: basePreprice({ runId: input.runId, plannedMarkets: [], paidLookupEligibleNow: false, dailyTier: "NONE" }),
-    settlementEvidence: settlementEvidence(),
-    marketEdge: {
-      games: [],
-      summary: { positiveEvMarkets: 0, noPositiveEvMarkets: 0, blockedOrUnavailableMarkets: 0 },
+    status: "READY",
+    input: {
+      runId: stage === "FINAL" ? "run-complete" : "run-provisional",
+      slate: slate(stage),
+      shortlistEvidence: { 123: {} },
+      bullpenEvidence: { 123: {} },
+      frozenRouteAssessments: { 123: {} },
+      c4Assessments: { 123: {} },
     },
-    operatingEnvelope: {
-      games: [],
-      summary: { positiveEvEnvelopeBlocked: 0, eliteEvidenceCandidates: 0 },
-    },
-    eliteEvidenceLedger: { summary: { capturedCandidates: 0 }, entries: [] },
   } as any;
 }
 
-test("provisional-only command does not assemble or invoke the priced runner", async () => {
+test("provisional-only command analyzes whole slate, exposes one provisional leader, and never calls price", async () => {
   let assemblyCalls = 0;
+  let opportunityCalls = 0;
   let runtimeCalls = 0;
   let pricedCalls = 0;
   const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("PROVISIONAL"),
-    assembleLiveInput: (async () => { assemblyCalls += 1; throw new Error("unexpected assembler call"); }) as any,
+    assembleLiveInput: (async () => { assemblyCalls += 1; return assembled("PROVISIONAL"); }) as any,
+    buildOpportunityLive: (async () => {
+      opportunityCalls += 1;
+      return opportunityLive({ runId: "run-provisional", tier: "NONE", stage: "PROVISIONAL" });
+    }) as any,
     resolveRuntimeConfig: () => { runtimeCalls += 1; throw new Error("unexpected runtime call"); },
     runPriced: (async () => { pricedCalls += 1; throw new Error("unexpected priced call"); }) as any,
     runIdFactory: () => "run-provisional",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
   });
+
   assert.equal(response.httpStatus, 200);
-  assert.equal(response.body.status, "WAITING_FOR_FINAL_INPUTS");
-  assert.equal(assemblyCalls, 0);
+  assert.equal(response.body.status, "WAITING_FOR_SPORTING_FINALIZATION");
+  assert.equal(assemblyCalls, 1);
+  assert.equal(opportunityCalls, 1);
   assert.equal(runtimeCalls, 0);
   assert.equal(pricedCalls, 0);
-  assert.equal("dailyBestPick" in response.body, false);
+  const result = response.body.result as Record<string, any>;
+  assert.equal(result.sportingSlateLeader.gamePk, 123);
+  assert.equal(result.sportingSlateLeader.inputStage, "PROVISIONAL");
+  assert.equal(result.sportingFinalization.state, "WAIT_FOR_PROVISIONAL_COMPETITOR");
+  const policy = response.body.policy as Record<string, unknown>;
+  assert.equal(policy.paidOddsCalled, false);
+  assert.equal(policy.researchEliteCandidateIsProductionHardGate, false);
 });
 
-test("missing certified evidence blocks before runtime custody and Step 8", async () => {
+test("missing certified evidence blocks before whole-slate ranking and price", async () => {
+  let opportunityCalls = 0;
   let runtimeCalls = 0;
   let pricedCalls = 0;
   const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
+    buildOpportunityLive: (async () => { opportunityCalls += 1; throw new Error("unexpected opportunity call"); }) as any,
     resolveRuntimeConfig: () => { runtimeCalls += 1; throw new Error("unexpected runtime call"); },
     runPriced: (async () => { pricedCalls += 1; throw new Error("unexpected priced call"); }) as any,
     runIdFactory: () => "run-blocked",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
   });
+
   assert.equal(response.httpStatus, 202);
   assert.equal(response.body.status, "CERTIFIED_INPUT_ASSEMBLY_BLOCKED");
+  assert.equal(opportunityCalls, 0);
   assert.equal(runtimeCalls, 0);
   assert.equal(pricedCalls, 0);
   const policy = response.body.policy as Record<string, unknown>;
   assert.equal(policy.pricedRunnerCalled, false);
   assert.equal(policy.paidOddsCalled, false);
-  assert.equal(policy.theOddsApiCreditsConsumed, 0);
 });
 
-test("complete certified assembly returns Elite evidence plus one trusted Daily BEST PICK without leaking server custody", async () => {
+test("stable FINAL A+ sporting pick is frozen before price and server custody never leaks", async () => {
   let runtimeCalls = 0;
   let pricedCalls = 0;
   let capturedInput: any = null;
   const opaqueKey = "server-only-opaque-key";
   const opaqueScope = "server-only-account-scope";
+
   const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
-    liveEvidenceProviders: {
-      shortlistEvidence: async () => ({ value: { 123: {} } }),
-      bullpenEvidence: async () => ({ value: { 123: {} } }),
-      frozenRouteAssessments: async () => ({ value: { 123: {} as any } }),
-      c4Assessments: async () => ({ value: { 123: {} as any } }),
-    },
+    assembleLiveInput: (async () => assembled("FINAL")) as any,
+    buildOpportunityLive: (async () => opportunityLive({
+      runId: "run-complete",
+      tier: "A_PLUS",
+      stage: "FINAL",
+    })) as any,
     resolveRuntimeConfig: () => {
       runtimeCalls += 1;
-      return { providerAccountScopeKey: opaqueScope, apiKey: opaqueKey, maxRunCredits: 314159, reserveCredits: 271828 };
+      return {
+        providerAccountScopeKey: opaqueScope,
+        apiKey: opaqueKey,
+        maxRunCredits: 314159,
+        reserveCredits: 271828,
+      };
     },
     getOddsService: () => ({} as any),
     runPriced: (async (input: any) => {
@@ -294,6 +412,7 @@ test("complete certified assembly returns Elite evidence plus one trusted Daily 
     runIdFactory: () => "run-complete",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
   });
+
   assert.equal(response.httpStatus, 200);
   assert.equal(response.body.status, "RUN_COMPLETED");
   assert.equal(runtimeCalls, 1);
@@ -302,70 +421,18 @@ test("complete certified assembly returns Elite evidence plus one trusted Daily 
   assert.equal(capturedInput.providerAccountScopeKey, opaqueScope);
 
   const result = response.body.result as Record<string, any>;
+  assert.equal(result.dailyBestPick.decision, "BEST_PICK");
+  assert.equal(result.dailyBestPick.pick.gamePk, 123);
+  assert.equal(result.dailyBestPick.pick.tier, "A_PLUS");
+  assert.equal(result.sportingFinalization.state, "FINAL_SPORTING_PICK");
+  assert.equal(result.sportingSlateLeader.gamePk, 123);
   assert.equal(result.eliteCandidates.length, 1);
   assert.equal(result.noPlayAudit.primaryBlocker, "NONE");
-  assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.fullGameHomeWinProbability, 0.612);
-  assert.equal(result.noPlayAudit.policy.predictionRemainsPriceIndependent, true);
-  assert.deepEqual(result.dailyBestPick, {
-    schemaVersion: "courtedge-mlb-daily-best-pick-ui.v1",
-    decision: "BEST_PICK",
-    pick: {
-      gamePk: 123,
-      awayTeam: "Away",
-      homeTeam: "Home",
-      market: "FIRST_5_ML",
-      side: "HOME",
-      route: "A_PLUS_BULLPEN_D1_F5_ELSE_FG_V1",
-      tier: "A_PLUS",
-      prepriceRank: 0,
-    },
-    audit: {
-      readyAPlusEvaluations: 1,
-      readyPremiumEvaluations: 0,
-      provisionalRowsSkipped: 0,
-      frozenRouteMatchesOutsideRankedPreprice: 0,
-    },
-    policy: {
-      trustedUnifiedPrepriceRuntimeOnly: true,
-      finalFrozenInputsOnly: true,
-      aPlusAlwaysPrecedesPremium: true,
-      existingPrepriceRankPreservedWithinTier: true,
-      generalV68FallbackAllowed: false,
-      v80Read: false,
-      v80Changed: false,
-      automaticBetPlacement: false,
-      realFinancialExposure: 0,
-    },
-  });
-  assert.deepEqual(result.eliteCandidates[0], {
-    predictionId: "pred-123-home-ml",
-    gamePk: 123,
-    awayTeam: "Away",
-    homeTeam: "Home",
-    marketType: "h2h",
-    selectedSide: "HOME",
-    selectedLine: null,
-    modelWinProbability: 0.612,
-    modelPushProbability: 0,
-    expectedValuePerUnit: 0.074,
-    executionEdgePp: 5.2,
-    executionNoVigEdgePp: 4.8,
-    referenceNoVigEdgePp: 4.4,
-    referenceAgreement: "AGREES",
-    executionBookTitle: "Test Book",
-    executionOddsAmerican: -105,
-    executionCapturedAt: "2026-08-13T17:00:30.000Z",
-    intrinsicProjectionScope: "FULL_GAME",
-    intrinsicThesisKinds: ["A_PLUS"],
-    supportingComponents: ["C4", "FULL13"],
-  });
 
   const policy = response.body.policy as Record<string, unknown>;
-  assert.equal(policy.dailyBestPickDerivedFromTrustedPreprice, true);
-  assert.equal(policy.dailyBestPickBrowserInputAllowed, false);
-  assert.equal(policy.dailyBestPickChangesFrozenRouting, false);
-  assert.equal(policy.dailyBestPickGeneralV68FallbackAllowed, false);
-  assert.equal(policy.dailyBestPickV80DependencyAllowed, false);
+  assert.equal(policy.sportingDailyBestPickFinalizedBeforePrice, true);
+  assert.equal(policy.dailyBestPickPriceMayChangeSportingSelection, false);
+  assert.equal(policy.researchEliteCandidateIsProductionHardGate, false);
 
   const serialized = JSON.stringify(response.body);
   assert.equal(serialized.includes(opaqueKey), false);
@@ -375,36 +442,33 @@ test("complete certified assembly returns Elite evidence plus one trusted Daily 
   assert.equal(serialized.includes("obs-123"), false);
 });
 
-test("completed no-play run exposes explicit Daily BEST PICK NO_PLAY without fabricating a fallback", async () => {
+test("sporting NO PLAY is final only after the whole slate resolves and never calls odds", async () => {
+  let runtimeCalls = 0;
+  let pricedCalls = 0;
   const response = await executeMlbUnifiedV16UiCommand(DATE, {
     buildSlate: async () => slate("FINAL"),
-    liveEvidenceProviders: {
-      shortlistEvidence: async () => ({ value: { 123: {} } }),
-      bullpenEvidence: async () => ({ value: { 123: {} } }),
-      frozenRouteAssessments: async () => ({ value: { 123: {} as any } }),
-      c4Assessments: async () => ({ value: { 123: {} as any } }),
-    },
-    resolveRuntimeConfig: () => ({ providerAccountScopeKey: "scope", apiKey: "key", maxRunCredits: 1, reserveCredits: 0 }),
-    getOddsService: () => ({} as any),
-    runPriced: (async (input: any) => noPlayRunnerResult(input)) as any,
+    assembleLiveInput: (async () => assembled("FINAL")) as any,
+    buildOpportunityLive: (async () => opportunityLive({
+      runId: "run-no-play",
+      tier: "NONE",
+      stage: "FINAL",
+    })) as any,
+    resolveRuntimeConfig: () => { runtimeCalls += 1; throw new Error("unexpected runtime call"); },
+    runPriced: (async () => { pricedCalls += 1; throw new Error("unexpected priced call"); }) as any,
     runIdFactory: () => "run-no-play",
     now: () => new Date("2026-08-13T17:01:00.000Z"),
   });
 
   assert.equal(response.httpStatus, 200);
   assert.equal(response.body.status, "RUN_COMPLETED");
+  assert.equal(runtimeCalls, 0);
+  assert.equal(pricedCalls, 0);
   const result = response.body.result as Record<string, any>;
-  assert.deepEqual(result.eliteCandidates, []);
   assert.equal(result.dailyBestPick.decision, "NO_PLAY");
-  assert.equal(result.dailyBestPick.pick, null);
-  assert.equal(result.dailyBestPick.policy.generalV68FallbackAllowed, false);
-  assert.equal(result.dailyBestPick.policy.v80Read, false);
-  assert.equal(result.noPlayAudit.primaryBlocker, "NO_STRONG_INTRINSIC_THESIS_ON_V16_SCORED_GAMES");
-  assert.equal(result.noPlayAudit.counts.v16ScoredGames, 1);
-  assert.equal(result.noPlayAudit.counts.v16ScoredSelectedForMarketDiscovery, 1);
-  assert.equal(result.noPlayAudit.counts.v16ScoredWithoutStrongIntrinsicThesis, 1);
-  assert.equal(result.noPlayAudit.counts.paidLookupEligibleGames, 0);
-  assert.equal(result.noPlayAudit.gameAudits[0].sportsPrediction.scoredByV16, true);
-  assert.equal(result.noPlayAudit.gameAudits[0].prePriceRouting.selectedForMarketDiscovery, true);
-  assert.equal(result.noPlayAudit.gameAudits[0].earliestBlocker, "NO_STRONG_INTRINSIC_MARKET_THESIS");
+  assert.equal(result.sportingFinalization.state, "SPORTING_NO_PLAY");
+  assert.equal(result.economicEvaluationSkippedReason, "SPORTING_NO_PLAY");
+  assert.equal(result.dailyBestPickPrice, null);
+  const policy = response.body.policy as Record<string, unknown>;
+  assert.equal(policy.priceMayCreateSportingPick, false);
+  assert.equal(policy.paidOddsCalled, false);
 });
