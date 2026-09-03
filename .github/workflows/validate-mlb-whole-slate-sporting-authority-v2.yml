@@ -8,6 +8,7 @@ on:
       - 'server/mlb-whole-slate-sporting-finalization-v1.test.ts'
       - 'server/mlb-unified-v16-ui-routes.ts'
       - 'server/mlb-unified-v16-ui-routes.test.ts'
+      - 'server/mlb-unified-v16-ui-orchestration.test.ts'
       - 'server/routes.ts'
       - 'frontend/client/src/components/mlb-sporting-daily-pick-control.tsx'
       - '.github/workflows/validate-mlb-whole-slate-sporting-authority-v2.yml'
@@ -27,23 +28,17 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Test whole-slate sporting finalization and visible route contract
+      - name: Test whole-slate sporting finalization and visible orchestration
         run: |
           npx tsx --test \
             server/mlb-whole-slate-sporting-finalization-v1.test.ts \
-            server/mlb-unified-v16-ui-routes.test.ts
-      - name: Type-check touched sporting authority modules
+            server/mlb-unified-v16-ui-routes.test.ts \
+            server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Bundle-check touched sporting authority modules
         run: |
-          npx tsc --noEmit \
-            --module ESNext \
-            --moduleResolution bundler \
-            --target ES2022 \
-            --esModuleInterop \
-            --skipLibCheck \
-            --types node \
-            server/mlb-whole-slate-sporting-finalization-v1.ts \
-            server/mlb-unified-v16-ui-routes.ts \
-            server/routes.ts
+          npx esbuild server/mlb-whole-slate-sporting-finalization-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-whole-slate-finalization.mjs
+          npx esbuild server/mlb-unified-v16-ui-routes.ts --bundle --platform=node --format=esm --external:better-sqlite3 --outfile=/tmp/mlb-whole-slate-ui-route.mjs
+          npx esbuild server/routes.ts --bundle --platform=node --format=esm --external:better-sqlite3 --external:bufferutil --outfile=/tmp/mlb-whole-slate-routes.mjs
       - name: Build production backend
         run: npm run build:backend
       - name: Diff integrity
