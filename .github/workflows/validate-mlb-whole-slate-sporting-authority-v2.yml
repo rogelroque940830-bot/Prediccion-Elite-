@@ -1,0 +1,80 @@
+name: Validate MLB Whole-Slate Sporting Authority V2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-whole-slate-sporting-finalization-v1.ts'
+      - 'server/mlb-whole-slate-sporting-finalization-v1.test.ts'
+      - 'server/mlb-unified-v16-ui-routes.ts'
+      - 'server/mlb-unified-v16-ui-routes.test.ts'
+      - 'server/routes.ts'
+      - 'frontend/client/src/components/mlb-sporting-daily-pick-control.tsx'
+      - '.github/workflows/validate-mlb-whole-slate-sporting-authority-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Test whole-slate sporting finalization and visible route contract
+        run: |
+          npx tsx --test \
+            server/mlb-whole-slate-sporting-finalization-v1.test.ts \
+            server/mlb-unified-v16-ui-routes.test.ts
+      - name: Type-check touched sporting authority modules
+        run: |
+          npx tsc --noEmit \
+            --module ESNext \
+            --moduleResolution bundler \
+            --target ES2022 \
+            --esModuleInterop \
+            --skipLibCheck \
+            --types node \
+            server/mlb-whole-slate-sporting-finalization-v1.ts \
+            server/mlb-unified-v16-ui-routes.ts \
+            server/routes.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Diff integrity
+        run: git diff --check origin/main...HEAD
+
+  validate-frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Type-check frontend
+        run: npm run check
+      - name: Prove one visible provisional leader and separated price layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'Líder provisional del slate' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'WAIT · RANK #' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '1 PICK MÁXIMO' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'NO CAMBIA EL DAILY PICK' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '/api/mlb/unified-v16/ui-run' client/src/components/mlb-sporting-daily-pick-control.tsx
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://web-production-7067b.up.railway.app
+        run: npm run build
