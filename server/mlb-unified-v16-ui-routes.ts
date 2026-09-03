@@ -19,8 +19,12 @@ import {
   type MlbUnifiedV16LiveInputAssemblyResult,
 } from "./mlb-unified-v16-live-input-assembler";
 import { createMlbUnifiedV16DefaultLiveEvidenceProviders } from "./mlb-unified-v16-live-providers";
+import {
+  buildMlbDailyOpportunityLive,
+  type MlbDailyOpportunityProvisionalV16Provider,
+} from "./mlb-daily-opportunity-live-v1";
 import { auditMlbV16NoPlayFunnel } from "./mlb-v16-no-play-funnel-audit";
-import { buildMlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
+import { buildMlbDailyBestPickUiView, type MlbDailyBestPickUiView } from "./mlb-daily-best-pick-ui-view";
 import { buildMlbDailyBestPickPriceViewFailClosed } from "./mlb-daily-best-pick-price-safe-view";
 import {
   buildMlbDailyBestPickManualPriceContext,
@@ -38,10 +42,11 @@ import {
   buildMlbUnifiedEliteVisibleDailyBestPick,
   MLB_UNIFIED_ELITE_VISIBLE_DAILY_BEST_PICK_SCHEMA,
 } from "./mlb-unified-elite-visible-daily-best-pick-v1";
+import { finalizeMlbWholeSlateSportingAuthority } from "./mlb-whole-slate-sporting-finalization-v1";
 
 export const MLB_UNIFIED_V16_UI_ROUTE = "/api/mlb/unified-v16/ui-run" as const;
 export const MLB_UNIFIED_V16_MANUAL_PRICE_ROUTE = "/api/mlb/unified-v16/manual-price" as const;
-export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v2" as const;
+export const MLB_UNIFIED_V16_UI_SCHEMA = "courtedge-p0-mlb-unified-v16-ui-command.v3" as const;
 export const MLB_UNIFIED_V16_MANUAL_PRICE_SCHEMA = "courtedge-p0-mlb-unified-v16-manual-price-command.v1" as const;
 
 function floridaDate(now = new Date()): string {
@@ -125,6 +130,11 @@ function publicEliteCandidates(result: MlbUnifiedPricedV16RunnerResult, slate: M
   });
 }
 
+function parentPickIdentity(view: MlbDailyBestPickUiView): string {
+  if (view.decision !== "BEST_PICK" || !view.pick) return "NO_PLAY";
+  return [view.pick.gamePk, view.pick.market, view.pick.side, view.pick.route, view.pick.tier, view.pick.prepriceRank].join(":");
+}
+
 function manualRequestFromBody(req: Request): MlbDailyBestPickManualPriceRequest {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
     throw new MlbDailyBestPickManualPriceError("REQUEST_BODY_INVALID", "manual price request body must be an object");
@@ -149,7 +159,9 @@ function manualRequestFromBody(req: Request): MlbDailyBestPickManualPriceRequest
 export interface MlbUnifiedV16UiCommandDependencies {
   buildSlate?: typeof buildMlbP1DailySlate;
   assembleLiveInput?: typeof assembleMlbUnifiedV16LiveInput;
+  buildOpportunityLive?: typeof buildMlbDailyOpportunityLive;
   liveEvidenceProviders?: MlbUnifiedV16LiveEvidenceProviders;
+  provisionalV16Provider?: MlbDailyOpportunityProvisionalV16Provider;
   resolveRuntimeConfig?: () => MlbUnifiedPricedV16RuntimeConfig;
   getOddsService?: () => MlbSelectiveOddsAcquisitionService;
   runPriced?: typeof runMlbUnifiedPricedV16Step11c;
@@ -189,6 +201,7 @@ export async function executeMlbUnifiedV16UiCommand(
   if (!Number.isFinite(now.getTime())) throw new Error("MLB_UNIFIED_V16_UI_NOW_INVALID");
   const buildSlate = deps.buildSlate ?? buildMlbP1DailySlate;
   const assembleLiveInput = deps.assembleLiveInput ?? assembleMlbUnifiedV16LiveInput;
+  const buildOpportunityLive = deps.buildOpportunityLive ?? buildMlbDailyOpportunityLive;
   const resolveRuntime = deps.resolveRuntimeConfig ?? (() => resolveMlbUnifiedPricedV16RuntimeConfig());
   const runPriced = deps.runPriced ?? runMlbUnifiedPricedV16Step11c;
   const runId = (deps.runIdFactory?.() ?? `mlb-v16-${date}-${randomUUID()}`).trim();
@@ -206,31 +219,11 @@ export async function executeMlbUnifiedV16UiCommand(
     games: publicGames(slate),
   };
 
-  if (summary.finalReady.length === 0) {
-    return {
-      httpStatus: 200,
-      body: {
-        ...common,
-        status: "WAITING_FOR_FINAL_INPUTS",
-        blockers: [],
-        nextBoundary: "Wait for final pregame inputs; no paid odds boundary is crossed.",
-        policy: {
-          explicitInvocationRequired: true,
-          certifiedServerAssemblyComplete: false,
-          pricedRunnerCalled: false,
-          paidOddsCalled: false,
-          browserReceivesProviderSecret: false,
-          browserMayForgeCertifiedInputs: false,
-          automaticPolling: false,
-          automaticBetPlacement: false,
-          realFinancialExposure: 0,
-        },
-      },
-    };
-  }
-
+  // Whole-slate sporting analysis is intentionally assembled before any odds boundary.
+  // Provisional competitors remain visible and may delay finalization, but can never become
+  // an official Daily BEST PICK until the frozen FINAL route hierarchy certifies them.
   const assembly: MlbUnifiedV16LiveInputAssemblyResult = await assembleLiveInput(
-    { runId, slate, now },
+    { runId, slate, now, requireCompleteProvisionalBullpenEvidence: true },
     deps.liveEvidenceProviders ?? {},
   );
 
@@ -241,9 +234,11 @@ export async function executeMlbUnifiedV16UiCommand(
         ...common,
         status: "CERTIFIED_INPUT_ASSEMBLY_BLOCKED",
         blockers: assembly.blockers,
-        nextBoundary: "Complete the missing certified server evidence before Step 8. No paid odds call was made.",
+        nextBoundary: "Complete certified sporting evidence for the whole analysis-eligible slate. No paid odds call was made.",
         policy: {
           explicitInvocationRequired: true,
+          wholeSlateSportingAnalysisAttempted: true,
+          completeProvisionalBullpenEvidenceRequired: true,
           certifiedServerAssemblyComplete: false,
           pricedRunnerCalled: false,
           paidOddsCalled: false,
@@ -258,25 +253,20 @@ export async function executeMlbUnifiedV16UiCommand(
     };
   }
 
-  const runtime = resolveRuntime();
-  const oddsService = deps.getOddsService?.()
-    ?? new MlbSelectiveOddsAcquisitionService({ coordinator: new MlbSelectiveOddsSqliteCoordinator() });
-  const result: MlbUnifiedPricedV16RunnerResult = await runPriced({
-    ...assembly.input,
-    oddsService,
-    providerAccountScopeKey: runtime.providerAccountScopeKey,
-    apiKey: runtime.apiKey,
-    maxRunCredits: runtime.maxRunCredits,
-    reserveCredits: runtime.reserveCredits,
+  const live = await buildOpportunityLive({
+    assembled: assembly.input,
+    provisionalV16Provider: deps.provisionalV16Provider,
   });
-  const noPlayAudit = auditMlbV16NoPlayFunnel(result);
-  const parentDailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
+  const preprice = live.preprice;
+  const parentDailyBestPick = buildMlbDailyBestPickUiView({ preprice, slate });
 
-  const lowerTierProviderEligible = parentDailyBestPick.decision === "NO_PLAY";
+  const lowerTierProviderEligible = parentDailyBestPick.decision === "NO_PLAY" && summary.finalReady.length > 0;
   let lowerTierShadow = unavailableLowerTierShadowDecisions(
     lowerTierProviderEligible
       ? "LOWER_TIER_LIVE_SOURCE_NOT_MATERIALIZED"
-      : "SKIPPED_PARENT_A_PLUS_OR_PREMIUM_ACTIVE",
+      : summary.finalReady.length === 0
+        ? "LOWER_TIER_WAITING_FOR_FINAL_INPUTS"
+        : "SKIPPED_PARENT_A_PLUS_OR_PREMIUM_ACTIVE",
   );
   if (lowerTierProviderEligible && deps.unifiedEliteLowerTierShadowProvider) {
     try {
@@ -290,6 +280,7 @@ export async function executeMlbUnifiedV16UiCommand(
       lowerTierShadow = unavailableLowerTierShadowDecisions("LOWER_TIER_PROVIDER_FAILED_CLOSED");
     }
   }
+
   const unifiedEliteShadow = buildMlbUnifiedEliteShadowView({
     officialDate: date,
     dailyBestPick: parentDailyBestPick,
@@ -302,9 +293,143 @@ export async function executeMlbUnifiedV16UiCommand(
     lowerTier: lowerTierShadow,
   });
   const lowerTierVisible = dailyBestPick.schemaVersion === MLB_UNIFIED_ELITE_VISIBLE_DAILY_BEST_PICK_SCHEMA;
+  const sportingFinalization = finalizeMlbWholeSlateSportingAuthority({
+    dailyBestPick,
+    rankedOpportunities: live.dailyOpportunity.rankedOpportunities,
+    parentPrepricePopulationSize: preprice.intrinsic.rankedGames.length,
+  });
 
-  // Price continuity remains intentionally bound to the pre-existing A+/Premium pick only.
-  // Lower-tier visibility changes the sporting Daily BEST PICK, not the price/stake/autobet boundary.
+  const prepriceResult = {
+    schemaVersion: preprice.schemaVersion,
+    summary: preprice.summary,
+    prepriceSummary: preprice.summary,
+    dailyBestPick,
+    parentDailyBestPick,
+    unifiedEliteShadow,
+    sportingFinalization,
+    sportingSlateLeader: sportingFinalization.sportingSlateLeader,
+    provisionalV16: live.provisionalV16,
+    dailyBestPickPrice: null,
+    manualPriceContinuity: null,
+    noPlayAudit: null,
+    eliteCandidates: [],
+  };
+
+  if (sportingFinalization.state === "WAIT_FOR_PROVISIONAL_COMPETITOR") {
+    return {
+      httpStatus: 200,
+      body: {
+        ...common,
+        generatedAt: live.generatedAt,
+        status: "WAITING_FOR_SPORTING_FINALIZATION",
+        blockers: [],
+        result: prepriceResult,
+        nextBoundary: "Whole slate was analyzed. An unresolved provisional competitor can still change the frozen sporting hierarchy, so the official Daily BEST PICK is not finalized and no paid odds call is allowed yet.",
+        policy: {
+          explicitInvocationRequired: true,
+          wholeSlateSportingAnalysisCompleted: true,
+          wholeQualifiedSlateCompetes: true,
+          provisionalGamesMayLead: true,
+          researchEliteCandidateIsProductionHardGate: false,
+          provisionalMayBecomeOfficialPick: false,
+          finalSportingHierarchy: "A_PLUS_PREMIUM_PP_HORIZON_FULL_MODULAR_NO_PLAY",
+          certifiedServerAssemblyComplete: true,
+          pricedRunnerCalled: false,
+          paidOddsCalled: false,
+          theOddsApiCreditsConsumed: 0,
+          priceMayChangeSportingSelection: false,
+          automaticPolling: false,
+          automaticBetPlacement: false,
+          realFinancialExposure: 0,
+        },
+      },
+    };
+  }
+
+  if (sportingFinalization.state === "SPORTING_NO_PLAY") {
+    return {
+      httpStatus: 200,
+      body: {
+        ...common,
+        generatedAt: live.generatedAt,
+        status: "RUN_COMPLETED",
+        blockers: [],
+        result: {
+          ...prepriceResult,
+          economicEvaluationSkippedReason: "SPORTING_NO_PLAY",
+        },
+        nextBoundary: "The whole slate is sporting-final and the certified hierarchy produced NO PLAY. Odds/EV were not consulted because price cannot create a sporting selection.",
+        policy: {
+          explicitInvocationRequired: true,
+          wholeSlateSportingAnalysisCompleted: true,
+          sportingDailyBestPickFinalized: true,
+          sportingNoPlayFinal: true,
+          researchEliteCandidateIsProductionHardGate: false,
+          pricedRunnerCalled: false,
+          paidOddsCalled: false,
+          theOddsApiCreditsConsumed: 0,
+          priceMayCreateSportingPick: false,
+          priceMayChangeSportingSelection: false,
+          automaticPolling: false,
+          automaticBetPlacement: false,
+          realFinancialExposure: 0,
+        },
+      },
+    };
+  }
+
+  // Lower-tier sporting selections are already final, but the existing price-continuity
+  // contract is deliberately limited to the frozen A+/Premium parent. Do not spend provider
+  // credits on unrelated discovery candidates just to create an inapplicable price card.
+  if (lowerTierVisible) {
+    return {
+      httpStatus: 200,
+      body: {
+        ...common,
+        generatedAt: live.generatedAt,
+        status: "RUN_COMPLETED",
+        blockers: [],
+        result: {
+          ...prepriceResult,
+          economicEvaluationSkippedReason: "LOWER_TIER_PRICE_ADAPTER_NOT_CERTIFIED",
+        },
+        nextBoundary: "The whole-slate sporting hierarchy finalized a lower-tier Daily BEST PICK. The current certified automatic price adapter remains A+/Premium-only, so no unrelated odds lookup was made and the sporting pick remains intact.",
+        policy: {
+          explicitInvocationRequired: true,
+          wholeSlateSportingAnalysisCompleted: true,
+          sportingDailyBestPickFinalized: true,
+          unifiedEliteVisibleHierarchy: "A_PLUS_PREMIUM_PP_HORIZON_FULL_MODULAR_NO_PLAY",
+          lowerTierVisiblePickPriceEvaluationEnabled: false,
+          pricedRunnerCalled: false,
+          paidOddsCalled: false,
+          theOddsApiCreditsConsumed: 0,
+          priceMayChangeSportingSelection: false,
+          automaticPolling: false,
+          automaticBetPlacement: false,
+          realFinancialExposure: 0,
+        },
+      },
+    };
+  }
+
+  // Only now is the sporting winner stable and A+/Premium price continuity applicable.
+  const runtime = resolveRuntime();
+  const oddsService = deps.getOddsService?.()
+    ?? new MlbSelectiveOddsAcquisitionService({ coordinator: new MlbSelectiveOddsSqliteCoordinator() });
+  const result: MlbUnifiedPricedV16RunnerResult = await runPriced({
+    ...assembly.input,
+    oddsService,
+    providerAccountScopeKey: runtime.providerAccountScopeKey,
+    apiKey: runtime.apiKey,
+    maxRunCredits: runtime.maxRunCredits,
+    reserveCredits: runtime.reserveCredits,
+  });
+  const pricedParentDailyBestPick = buildMlbDailyBestPickUiView({ preprice: result.preprice, slate });
+  if (parentPickIdentity(pricedParentDailyBestPick) !== parentPickIdentity(parentDailyBestPick)) {
+    throw new Error("MLB_UNIFIED_V16_PREPRICE_SPORTING_SELECTION_DRIFT");
+  }
+
+  const noPlayAudit = auditMlbV16NoPlayFunnel(result);
   const dailyBestPickPrice = buildMlbDailyBestPickPriceViewFailClosed({
     priced: result,
     dailyBestPick: parentDailyBestPick,
@@ -338,18 +463,25 @@ export async function executeMlbUnifiedV16UiCommand(
         dailyBestPick,
         parentDailyBestPick,
         unifiedEliteShadow,
+        sportingFinalization,
+        sportingSlateLeader: sportingFinalization.sportingSlateLeader,
+        provisionalV16: live.provisionalV16,
         dailyBestPickPrice,
         manualPriceContinuity: manualPrice?.availability ?? null,
         noPlayAudit,
         eliteCandidates: publicEliteCandidates(result, slate),
       },
-      nextBoundary: "Priced V16 evidence run completed. The visible sporting Daily BEST PICK now follows A+ -> Premium -> PP_HORIZON -> Full Modular -> NO PLAY. PP_HORIZON and Full Modular visibility does not change V68/V80 scientific validation, PP prospective custody, price continuity, BET_ELITE, stake, or automatic wagering.",
+      nextBoundary: "Whole-slate sporting authority finalized first. Only afterward was the exact A+/Premium Daily BEST PICK passed to the economic price/EV layer. Price cannot erase or replace the sporting selection.",
       policy: {
         explicitInvocationRequired: true,
+        wholeSlateSportingAnalysisCompleted: true,
+        wholeQualifiedSlateCompetes: true,
+        provisionalGamesMayLead: true,
+        researchEliteCandidateIsProductionHardGate: false,
+        sportingDailyBestPickFinalizedBeforePrice: true,
         certifiedServerAssemblyComplete: true,
         pricedRunnerCalled: true,
         parentDailyBestPickDerivedFromTrustedPreprice: true,
-        dailyBestPickDerivedFromTrustedPreprice: !lowerTierVisible,
         dailyBestPickBrowserInputAllowed: false,
         dailyBestPickChangesFrozenParentRouting: false,
         dailyBestPickChangesFrozenRouting: false,

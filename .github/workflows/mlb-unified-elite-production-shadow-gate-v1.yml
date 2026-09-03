@@ -125,13 +125,16 @@ jobs:
           assert 'automaticBetPlacement: false' in visible
           assert 'realFinancialExposure: 0' in visible
 
-          # The same certified bundle still feeds the existing V16 route; the new pre-odds
-          # Daily Opportunity route only reuses its sporting evidence providers.
+          # The same certified bundle feeds all three MLB command surfaces. The visible V16
+          # command now receives the strictly-prior provisional V16 scorer explicitly so its
+          # whole-slate sporting analysis can run before the price boundary.
           assert routes.count('createMlbUnifiedEliteSharedLiveProviderBundle()') == 1
           assert 'const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();' in routes
-          assert 'registerMlbUnifiedV16UiRoutes(app, mlbUnifiedLive);' in routes
+          assert 'registerMlbUnifiedV16UiRoutes(app, {' in routes
           assert 'registerMlbDailyOpportunityUiRoutes(app, {' in routes
-          assert 'liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders' in routes
+          assert routes.count('liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders') >= 3
+          assert routes.count('provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider') >= 3
+          assert routes.count('unifiedEliteLowerTierShadowProvider: mlbUnifiedLive.unifiedEliteLowerTierShadowProvider') >= 2
           assert 'sharedClassifierMaterializer = new MlbC4CertifiedMaterializer()' in bundle
           assert bundle.count('full13Materializer: sharedClassifierMaterializer') == 2
           assert 'MLB_UNIFIED_ELITE_FIRST_PROSPECTIVE_DATE' in provider

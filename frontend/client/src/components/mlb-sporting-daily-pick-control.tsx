@@ -10,8 +10,21 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 
 type SportingUiStatus =
   | "WAITING_FOR_FINAL_INPUTS"
+  | "WAITING_FOR_SPORTING_FINALIZATION"
   | "CERTIFIED_INPUT_ASSEMBLY_BLOCKED"
   | "RUN_COMPLETED";
+
+type SportingSlateLeader = {
+  gamePk: number;
+  awayTeam: string;
+  homeTeam: string;
+  inputStage: "FINAL" | "PROVISIONAL";
+  contextRank: number;
+  selectedSide: "HOME" | "AWAY" | null;
+  selectedSideProbability: number | null;
+  robustSelectedSideProbability: number | null;
+  probabilityStage: string;
+};
 
 type SportingUiResponse = {
   date: string;
@@ -29,6 +42,16 @@ type SportingUiResponse = {
   result?: {
     dailyBestPick?: unknown;
     dailyBestPickPrice?: unknown;
+    sportingSlateLeader?: SportingSlateLeader | null;
+    sportingFinalization?: {
+      state?: string;
+      reason?: string;
+      wholeSlateEvaluatedGames?: number;
+      provisionalGamesEvaluated?: number;
+      finalGamesEvaluated?: number;
+      unresolvedProvisionalGamePks?: number[];
+    };
+    economicEvaluationSkippedReason?: string;
   };
 };
 
@@ -41,6 +64,18 @@ function blockerLabel(blocker: unknown): string {
     return [code, message].filter(Boolean).join(": ") || "Bloqueo certificado";
   }
   return "Bloqueo certificado";
+}
+
+function percent(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1)}%`
+    : "N/D";
+}
+
+function leaderSide(leader: SportingSlateLeader): string {
+  if (leader.selectedSide === "HOME") return leader.homeTeam;
+  if (leader.selectedSide === "AWAY") return leader.awayTeam;
+  return "Pendiente";
 }
 
 export function MlbSportingDailyPickControl() {
@@ -65,7 +100,11 @@ export function MlbSportingDailyPickControl() {
 
   const completed = result?.status === "RUN_COMPLETED";
   const blocked = result?.status === "CERTIFIED_INPUT_ASSEMBLY_BLOCKED";
-  const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS";
+  const waiting = result?.status === "WAITING_FOR_FINAL_INPUTS"
+    || result?.status === "WAITING_FOR_SPORTING_FINALIZATION";
+  const leader = result?.result?.sportingSlateLeader ?? null;
+  const finalization = result?.result?.sportingFinalization;
+  const economicSkipped = result?.result?.economicEvaluationSkippedReason;
   const statusLabel = !result
     ? "IDLE"
     : completed
@@ -85,8 +124,8 @@ export function MlbSportingDailyPickControl() {
               MLB Unified V16 · Daily BEST PICK
             </CardTitle>
             <p className="mt-1 max-w-4xl text-xs text-muted-foreground">
-              La jugada diaria sale de la jerarquía deportiva certificada A+ → Premium → PP_HORIZON → Full Modular.
-              La cuota y el EV se evalúan después como una capa económica separada y nunca borran la selección deportiva.
+              Se analiza todo el slate antes de cerrar una única jugada deportiva. La autoridad final conserva
+              A+ → Premium → PP_HORIZON → Full Modular; la cuota y el EV se evalúan después y nunca borran la selección deportiva.
             </p>
           </div>
           <Badge variant={statusVariant}>{statusLabel}</Badge>
@@ -122,9 +161,28 @@ export function MlbSportingDailyPickControl() {
               <div><div className="text-xs text-muted-foreground">Pitchers pendientes</div><div className="font-semibold">{result.slate.waitingForPitchers}</div></div>
             </div>
 
-            {waiting && (
+            {waiting && leader && (
+              <div className="rounded-md border border-primary/35 bg-primary/5 p-3" data-testid="mlb-provisional-slate-leader">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide">Líder provisional del slate</div>
+                  <Badge variant="secondary">WAIT · RANK #{leader.contextRank}</Badge>
+                </div>
+                <div className="text-base font-bold">{leader.awayTeam} @ {leader.homeTeam}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                  <div><div className="text-muted-foreground">Lado provisional</div><div className="font-semibold">{leaderSide(leader)}</div></div>
+                  <div><div className="text-muted-foreground">Prob. V16</div><div className="font-semibold">{percent(leader.selectedSideProbability)}</div></div>
+                  <div><div className="text-muted-foreground">Prob. robusta</div><div className="font-semibold">{percent(leader.robustSelectedSideProbability)}</div></div>
+                  <div><div className="text-muted-foreground">Slate analizado</div><div className="font-semibold">{finalization?.wholeSlateEvaluatedGames ?? "N/D"}</div></div>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Este es el competidor deportivo que impide cerrar todavía el Daily BEST PICK. No es una jugada oficial hasta que los inputs FINAL confirmen la jerarquía certificada. No se consultan cuotas mientras siga en WAIT.
+                </p>
+              </div>
+            )}
+
+            {waiting && !leader && (
               <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
-                Todavía no hay inputs pregame FINAL suficientes para cerrar la selección deportiva.
+                El slate fue revisado, pero todavía faltan inputs pregame para cerrar una única selección deportiva.
               </div>
             )}
 
@@ -151,17 +209,27 @@ export function MlbSportingDailyPickControl() {
                   <MlbDailyBestPickCard value={result.result?.dailyBestPick} />
                 </div>
 
-                <div className="rounded-md border border-border/70 bg-muted/10 p-3">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide">Validación de cuota / EV</div>
-                    <Badge variant="secondary">NO CAMBIA EL DAILY PICK</Badge>
+                {!economicSkipped && (
+                  <div className="rounded-md border border-border/70 bg-muted/10 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide">Validación de cuota / EV</div>
+                      <Badge variant="secondary">NO CAMBIA EL DAILY PICK</Badge>
+                    </div>
+                    <MlbDailyBestPickPriceCard value={result.result?.dailyBestPickPrice} />
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Si la cuota actual no ofrece EV positivo, la capa económica puede indicar esperar o no apostar a ese precio,
+                      pero la selección deportiva de arriba permanece intacta.
+                    </p>
                   </div>
-                  <MlbDailyBestPickPriceCard value={result.result?.dailyBestPickPrice} />
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Si la cuota actual no ofrece EV positivo, la capa económica puede indicar esperar o no apostar a ese precio,
-                    pero la selección deportiva de arriba permanece intacta para conservar la lógica y cobertura históricas de las rutas certificadas.
-                  </p>
-                </div>
+                )}
+
+                {economicSkipped && (
+                  <div className="rounded-md border border-border/70 bg-muted/10 p-3 text-xs text-muted-foreground">
+                    Capa económica no consultada: {economicSkipped === "SPORTING_NO_PLAY"
+                      ? "la jerarquía deportiva cerró NO PLAY; una cuota no puede crear una jugada."
+                      : "el pick pertenece a una ruta cuya validación automática de precio todavía no está certificada. La selección deportiva permanece intacta."}
+                  </div>
+                )}
               </div>
             )}
           </div>
