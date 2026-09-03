@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: npm ci
       - name: Test whole-slate sporting finalization and visible orchestration
         run: |
           npx tsx --test \
