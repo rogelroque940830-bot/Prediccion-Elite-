@@ -105,6 +105,13 @@ export function MlbSportingDailyPickControl() {
   const leader = result?.result?.sportingSlateLeader ?? null;
   const finalization = result?.result?.sportingFinalization;
   const economicSkipped = result?.result?.economicEvaluationSkippedReason;
+  const slateEvaluated = result ? result.slate.finalReady + result.slate.provisional : null;
+  const rankedCompetitors = typeof finalization?.wholeSlateEvaluatedGames === "number"
+    ? finalization.wholeSlateEvaluatedGames
+    : null;
+  const screenedOut = slateEvaluated != null && rankedCompetitors != null
+    ? Math.max(0, slateEvaluated - rankedCompetitors)
+    : null;
   const statusLabel = !result
     ? "IDLE"
     : completed
@@ -124,8 +131,9 @@ export function MlbSportingDailyPickControl() {
               MLB Unified V16 · Daily BEST PICK
             </CardTitle>
             <p className="mt-1 max-w-4xl text-xs text-muted-foreground">
-              Se analiza todo el slate antes de cerrar una única jugada deportiva. La autoridad final conserva
-              A+ → Premium → PP_HORIZON → Full Modular; la cuota y el EV se evalúan después y nunca borran la selección deportiva.
+              Se evalúa todo el slate pregame elegible antes de cerrar una única jugada deportiva. Solo los juegos que superan
+              el filtro preprecio certificado entran al ranking profundo. La autoridad final conserva A+ → Premium → PP_HORIZON → Full Modular;
+              la cuota y el EV se evalúan después y nunca borran la selección deportiva.
             </p>
           </div>
           <Badge variant={statusVariant}>{statusLabel}</Badge>
@@ -168,12 +176,18 @@ export function MlbSportingDailyPickControl() {
                   <Badge variant="secondary">WAIT · RANK #{leader.contextRank}</Badge>
                 </div>
                 <div className="text-base font-bold">{leader.awayTeam} @ {leader.homeTeam}</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
                   <div><div className="text-muted-foreground">Lado provisional</div><div className="font-semibold">{leaderSide(leader)}</div></div>
                   <div><div className="text-muted-foreground">Prob. V16</div><div className="font-semibold">{percent(leader.selectedSideProbability)}</div></div>
                   <div><div className="text-muted-foreground">Prob. robusta</div><div className="font-semibold">{percent(leader.robustSelectedSideProbability)}</div></div>
-                  <div><div className="text-muted-foreground">Slate analizado</div><div className="font-semibold">{finalization?.wholeSlateEvaluatedGames ?? "N/D"}</div></div>
+                  <div><div className="text-muted-foreground">Slate evaluado</div><div className="font-semibold">{slateEvaluated ?? "N/D"}</div></div>
+                  <div><div className="text-muted-foreground">Competidores ranking</div><div className="font-semibold">{rankedCompetitors ?? "N/D"}</div></div>
                 </div>
+                {screenedOut != null && screenedOut > 0 && (
+                  <p className="mt-2 text-[11px] text-muted-foreground" data-testid="mlb-slate-screened-out-note">
+                    {screenedOut} juego{screenedOut === 1 ? " fue evaluado" : "s fueron evaluados"} en el slate pero no entró{screenedOut === 1 ? "" : "aron"} al ranking profundo porque no superó{screenedOut === 1 ? "" : "aron"} el filtro preprecio certificado. No se fuerza su inclusión.
+                  </p>
+                )}
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Este es el competidor deportivo que impide cerrar todavía el Daily BEST PICK. No es una jugada oficial hasta que los inputs FINAL confirmen la jerarquía certificada. No se consultan cuotas mientras siga en WAIT.
                 </p>
