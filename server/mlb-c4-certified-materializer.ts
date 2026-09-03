@@ -89,12 +89,20 @@ function isFinalStatus(status: any): boolean {
   return abstract === "final" || /final|game over|completed early/.test(detailed);
 }
 
-function battingOrder(feed: any, side: "home" | "away"): number[] | null {
-  const raw = feed?.liveData?.boxscore?.teams?.[side]?.battingOrder;
-  if (!Array.isArray(raw)) return null;
-  const order = raw.map(positiveInt).filter((id): id is number => id !== null);
+function officialNinePlayerOrder(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const order = value.map(positiveInt).filter((id): id is number => id !== null);
   if (order.length !== 9 || new Set(order).size !== 9) return null;
   return order;
+}
+
+function battingOrder(feed: any, side: "home" | "away"): number[] | null {
+  const team = feed?.liveData?.boxscore?.teams?.[side];
+  // `battingOrder` is authoritative whenever MLB has hydrated it. Before first pitch,
+  // MLB can expose the posted nine-man lineup in `batters` first, so use that exact
+  // official order as a fail-closed pregame fallback.
+  return officialNinePlayerOrder(team?.battingOrder)
+    ?? officialNinePlayerOrder(team?.batters);
 }
 
 function starterLine(

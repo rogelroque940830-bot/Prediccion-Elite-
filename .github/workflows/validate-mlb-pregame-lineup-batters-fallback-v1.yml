@@ -1,0 +1,37 @@
+name: Validate MLB Pregame Lineup Batters Fallback V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-p1-daily-slate.ts'
+      - 'server/mlb-p1-daily-slate.test.ts'
+      - 'server/mlb-c4-certified-materializer.ts'
+      - 'server/mlb-c4-certified-materializer.test.ts'
+      - '.github/workflows/validate-mlb-pregame-lineup-batters-fallback-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Test P1 readiness and C4 official-lineup materialization
+        run: npx tsx --test server/mlb-p1-daily-slate.test.ts server/mlb-c4-certified-materializer.test.ts
+      - name: Compile touched MLB modules
+        run: |
+          npx esbuild server/mlb-p1-daily-slate.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-p1-daily-slate.mjs
+          npx esbuild server/mlb-c4-certified-materializer.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-c4-certified-materializer.mjs
+      - name: Build backend
+        run: npm run build:backend
+      - name: Diff integrity
+        run: git diff --check

@@ -43,6 +43,8 @@ function liveFeed(options: {
   awayPitcher?: boolean;
   homeLineup?: number;
   awayLineup?: number;
+  homeBatters?: number;
+  awayBatters?: number;
 } = {}) {
   const {
     state = "Preview",
@@ -51,8 +53,10 @@ function liveFeed(options: {
     awayPitcher = true,
     homeLineup = 0,
     awayLineup = 0,
+    homeBatters = 0,
+    awayBatters = 0,
   } = options;
-  const battingOrder = (count: number, start: number) => Array.from({ length: count }, (_, index) => start + index);
+  const playerIds = (count: number, start: number) => Array.from({ length: count }, (_, index) => start + index);
   return {
     gameData: {
       status: { abstractGameState: state, detailedState: detailed },
@@ -71,8 +75,14 @@ function liveFeed(options: {
     liveData: {
       boxscore: {
         teams: {
-          home: { battingOrder: battingOrder(homeLineup, 100) },
-          away: { battingOrder: battingOrder(awayLineup, 200) },
+          home: {
+            battingOrder: playerIds(homeLineup, 100),
+            batters: playerIds(homeBatters, 100),
+          },
+          away: {
+            battingOrder: playerIds(awayLineup, 200),
+            batters: playerIds(awayBatters, 200),
+          },
         },
       },
     },
@@ -166,6 +176,35 @@ test("builds a sorted daily slate and exposes FINAL versus PROVISIONAL readiness
   assert.equal(report.summary.ready, 1);
   assert.equal(report.summary.provisional, 1);
   assert.equal(report.safety.realFinancialExposure, 0);
+});
+
+test("posted official pregame batters make a game FINAL even before battingOrder is hydrated", async () => {
+  const fetchImpl = async (url: string): Promise<Response> => {
+    if (url.includes("/schedule?")) return response({ dates: [{ games: [scheduleGame(400)] }] });
+    if (url.includes("/game/400/")) {
+      return response(liveFeed({
+        detailed: "Pre-Game",
+        homeLineup: 0,
+        awayLineup: 0,
+        homeBatters: 9,
+        awayBatters: 9,
+      }));
+    }
+    return response({}, 404);
+  };
+  const report = await buildMlbP1DailySlate({
+    date: "2026-08-04",
+    fetchImpl,
+    now: new Date("2026-08-04T22:55:00Z"),
+  });
+  assert.equal(report.games.length, 1);
+  assert.equal(report.games[0].homeLineupCount, 9);
+  assert.equal(report.games[0].awayLineupCount, 9);
+  assert.equal(report.games[0].lineupState, "CONFIRMED");
+  assert.equal(report.games[0].readiness, "READY_TO_ANALYZE");
+  assert.equal(report.games[0].analysisStage, "FINAL");
+  assert.equal(report.summary.ready, 1);
+  assert.equal(report.summary.provisional, 0);
 });
 
 test("degrades one game safely when its official live feed is unavailable", async () => {

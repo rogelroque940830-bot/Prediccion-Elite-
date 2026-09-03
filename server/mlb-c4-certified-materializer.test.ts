@@ -82,7 +82,8 @@ function historicalFeed(input: {
   };
 }
 
-function targetFeed() {
+function targetFeed(options: { battersOnly?: boolean } = {}) {
+  const battersOnly = options.battersOnly === true;
   return {
     gamePk: TARGET_GAME_PK,
     gameData: {
@@ -101,8 +102,12 @@ function targetFeed() {
     liveData: {
       boxscore: {
         teams: {
-          home: { battingOrder: HOME_ORDER },
-          away: { battingOrder: AWAY_ORDER },
+          home: battersOnly
+            ? { battingOrder: [], batters: HOME_ORDER }
+            : { battingOrder: HOME_ORDER },
+          away: battersOnly
+            ? { battingOrder: [], batters: AWAY_ORDER }
+            : { battingOrder: AWAY_ORDER },
         },
       },
     },
@@ -136,7 +141,7 @@ function targetGame(): MlbP1SlateGame {
   };
 }
 
-function fixtures(options: { missingHomeLineupGamePk?: number } = {}) {
+function fixtures(options: { missingHomeLineupGamePk?: number; targetBattersOnly?: boolean } = {}) {
   const feeds = new Map<number, any>();
   const scheduleDates: Array<{ date: string; games: any[] }> = [];
 
@@ -200,12 +205,12 @@ function fixtures(options: { missingHomeLineupGamePk?: number } = {}) {
       status: { abstractGameState: "Final", detailedState: "Final" },
     }],
   });
-  feeds.set(TARGET_GAME_PK, targetFeed());
+  feeds.set(TARGET_GAME_PK, targetFeed({ battersOnly: options.targetBattersOnly }));
 
   return { feeds, scheduleDates, sameDatePk };
 }
 
-function fixtureFetch(options: { missingHomeLineupGamePk?: number } = {}) {
+function fixtureFetch(options: { missingHomeLineupGamePk?: number; targetBattersOnly?: boolean } = {}) {
   const { feeds, scheduleDates, sameDatePk } = fixtures(options);
   const calls: string[] = [];
   const fetchImpl = async (input: string): Promise<Response> => {
@@ -269,6 +274,25 @@ test("certified materializer uses strict prior official evidence and hands a com
   await materializer.assessGame(targetGame());
   assert.equal(fixture.calls.length, callsAfterFirstAssessment, "compact prior evidence and the current target feed should be cached");
   assert.equal((materializer as any).feedCache.size, 1);
+});
+
+test("certified materializer accepts the official nine-man pregame batters list before battingOrder hydration", async () => {
+  const fixture = fixtureFetch({ targetBattersOnly: true });
+  const materializer = new MlbC4CertifiedMaterializer({
+    fetchImpl: fixture.fetchImpl,
+    apiBaseUrl: "https://statsapi.test/api",
+    maxConcurrency: 3,
+  });
+
+  const assessment = await materializer.assessGame(targetGame());
+  assert.equal(assessment.builderVersion, "mlb-c4-live-canonical-v1");
+  assert.equal(assessment.priceIndependent, true);
+  assert.equal(assessment.diagnostics.homePriorCompleteLineups, 5);
+  assert.equal(assessment.diagnostics.awayPriorCompleteLineups, 5);
+  for (const value of Object.values(assessment.featureVector)) {
+    assert.equal(typeof value, "number");
+    assert.ok(Number.isFinite(value));
+  }
 });
 
 test("certified materializer fails closed instead of imputing a missing historical official lineup", async () => {
