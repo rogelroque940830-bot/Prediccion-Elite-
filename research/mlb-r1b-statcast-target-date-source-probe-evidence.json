@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-target-date-source-probe-evidence.v1",
+  "status": "SOURCE_CAPABILITY_PROBE_COMPLETE_NOT_PARITY_CERTIFICATION",
+  "family": "STATCAST_QUALITY",
+  "classificationBeforeProbe": "PARTIAL_PARITY",
+  "classificationAfterProbe": "PARTIAL_PARITY",
+  "workflow": {
+    "name": "MLB R1B Statcast Target-Date Source Probe",
+    "runId": 33774635923,
+    "runNumber": 1,
+    "headSha": "894047596439867208bcee9bfcd87dc83981036d",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 9901113428,
+    "name": "mlb-r1b-statcast-target-date-source-probe",
+    "digest": "sha256:a4f2143477e5c6f053d06a1fee47fae257e2e2033de9510673e2e0b92a50ae95",
+    "expiresAt": "2026-10-03T15:48:31Z"
+  },
+  "probeBoundary": {
+    "season": 2025,
+    "targetCutoff": "2025-05-31",
+    "rawStatcastSearchRange": {
+      "start": "2025-05-01",
+      "end": "2025-05-03"
+    },
+    "productionChanged": false,
+    "weightsChanged": false,
+    "targetOutcomesReadForModeling": false,
+    "marketPricesRead": false,
+    "r1b2Authorized": false,
+    "parityCertifiedByProbe": false
+  },
+  "expectedStatisticsQualified": {
+    "productionUrl": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2025&min=q&csv=true",
+    "cutoffProbeUrl": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2025&min=q&game_date_lt=2025-05-31&csv=true",
+    "fullSha256": "4bd1e666c516d135b0dfb53fcffcb5a691c861f9c0f60b5e5be0565e728263cf",
+    "cutoffSha256": "4bd1e666c516d135b0dfb53fcffcb5a691c861f9c0f60b5e5be0565e728263cf",
+    "fullRows": 349,
+    "cutoffRows": 349,
+    "identicalPayload": true,
+    "finding": "GAME_DATE_LT_DOES_NOT_CREATE_TARGET_DATE_CUSTODY_ON_EXPECTED_STATISTICS_LEADERBOARD"
+  },
+  "expectedStatisticsMin1Diagnostic": {
+    "fullRows": 873,
+    "cutoffRows": 873,
+    "identicalPayload": true,
+    "finding": "CUTOFF_IS_IGNORED_OR_SEMANTICALLY_INACTIVE_EVEN_WITH_NONQUALIFIED_MINIMUM"
+  },
+  "statcastLeaderboardQualified": {
+    "productionUrl": "https://baseballsavant.mlb.com/leaderboard/statcast?type=pitcher&year=2025&min=q&csv=true",
+    "cutoffProbeUrl": "https://baseballsavant.mlb.com/leaderboard/statcast?type=pitcher&year=2025&min=q&game_date_lt=2025-05-31&csv=true",
+    "fullSha256": "62f52a6a8f8867bacff463d1ae819fdcbf355f4daebb890eaaeaed28fffb3c1c",
+    "cutoffSha256": "62f52a6a8f8867bacff463d1ae819fdcbf355f4daebb890eaaeaed28fffb3c1c",
+    "fullRows": 349,
+    "cutoffRows": 349,
+    "identicalPayload": true,
+    "finding": "GAME_DATE_LT_DOES_NOT_CREATE_TARGET_DATE_CUSTODY_ON_STATCAST_LEADERBOARD"
+  },
+  "dateBoundedRawStatcastSearch": {
+    "status": 200,
+    "rows": 11331,
+    "minimumObservedGameDate": "2025-05-01",
+    "maximumObservedGameDate": "2025-05-03",
+    "observedDateCount": 3,
+    "hasGameDate": true,
+    "hasPitcherId": true,
+    "hasEstimatedWobaUsingSpeedAngle": true,
+    "hasWobaValue": true,
+    "hasWobaDenom": true,
+    "hasLaunchSpeed": true,
+    "hasLaunchAngle": true,
+    "hasExactXeraColumn": false,
+    "finding": "RAW_STATCAST_SEARCH_SUPPORTS_DATE_BOUNDARY_BUT_DOES_NOT_DIRECTLY_EMIT_XERA"
+  },
+  "scientificConclusion": {
+    "productionLeaderboardsSupportTargetDateCutoff": false,
+    "rawStatcastSearchSupportsDateBoundedCustody": true,
+    "rawStatcastSearchDirectlySuppliesExactXera": false,
+    "immutableTargetDateExpectedStatisticsSnapshotsStillRequiredOrExactReconstructionMustBeProven": true,
+    "xeraExactReconstructionStillUnproven": true,
+    "qualifierMinQAsOfStillUnproven": true,
+    "familyPromotionAuthorized": false,
+    "nextGate": "PROVE_EXACT_XW0BA_WOBA_HARDHIT_BARREL_AND_XERA_RECONSTRUCTION_FROM_TARGET_DATE_BOUNDED_CUSTODY_OR_IDENTIFY_IMMUTABLE_EXPECTED_STATISTICS_SNAPSHOTS"
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
