@@ -1,10 +1,10 @@
 import MLBPredictor from "@/pages/mlb-predictor";
-import { MlbDailyOpportunityControl } from "@/components/mlb-daily-opportunity-control";
+import { MlbSportingDailyPickControl } from "@/components/mlb-sporting-daily-pick-control";
 
 export default function MLBPredictorV16() {
   return (
     <>
-      <MlbDailyOpportunityControl />
+      <MlbSportingDailyPickControl />
       <MLBPredictor />
     </>
   );

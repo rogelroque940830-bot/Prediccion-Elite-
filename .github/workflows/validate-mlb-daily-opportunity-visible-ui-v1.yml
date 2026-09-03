@@ -1,11 +1,13 @@
-name: Validate MLB Daily Opportunity Visible UI V1
+name: Validate MLB Sporting Daily Pick Visible Authority V1
 
 on:
   pull_request:
     branches: [main]
     paths:
+      - 'server/mlb-unified-v16-ui-routes.ts'
       - 'server/mlb-daily-opportunity-priced-route-v1.ts'
       - 'server/routes.ts'
+      - 'frontend/client/src/components/mlb-sporting-daily-pick-control.tsx'
       - 'frontend/client/src/components/mlb-daily-opportunity-control.tsx'
       - 'frontend/client/src/pages/mlb-predictor-v16.tsx'
       - '.github/workflows/validate-mlb-daily-opportunity-visible-ui-v1.yml'
@@ -25,16 +27,18 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Bundle-check visible Daily Opportunity route
-        run: npx esbuild server/mlb-daily-opportunity-priced-route-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-visible-route.mjs
-      - name: Prove certified sporting hierarchy is exposed without widening price boundary
+      - name: Bundle-check sporting Daily Pick and retained Daily Opportunity routes
+        run: |
+          npx esbuild server/mlb-unified-v16-ui-routes.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-sporting-daily-pick-route.mjs
+          npx esbuild server/mlb-daily-opportunity-priced-route-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-daily-opportunity-diagnostic-route.mjs
+      - name: Prove certified sporting hierarchy remains authoritative without removing price diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'dailyBestPick,' server/mlb-daily-opportunity-priced-route-v1.ts
-          grep -F 'buildMlbUnifiedEliteVisibleDailyBestPick' server/mlb-daily-opportunity-priced-route-v1.ts
+          grep -F 'buildMlbUnifiedEliteVisibleDailyBestPick' server/mlb-unified-v16-ui-routes.ts
+          grep -F 'dailyBestPick,' server/mlb-unified-v16-ui-routes.ts
+          grep -F 'dailyBestPickPrice,' server/mlb-unified-v16-ui-routes.ts
           grep -F 'unifiedEliteLowerTierShadowProvider: mlbUnifiedLive.unifiedEliteLowerTierShadowProvider' server/routes.ts
-          grep -F 'requireCompleteProvisionalBullpenEvidence: true' server/mlb-daily-opportunity-priced-route-v1.ts
           grep -F 'maximumPriceConsultationCandidates: 3' server/mlb-daily-opportunity-priced-route-v1.ts
           git diff --check
       - name: Build backend
@@ -56,17 +60,21 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Type-check frontend
         run: npm run check
-      - name: Prove visible decision semantics
+      - name: Prove visible sporting authority and secondary price semantics
         shell: bash
         run: |
           set -euo pipefail
+          grep -F '/api/mlb/unified-v16/ui-run' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'A+ → Premium → PP_HORIZON → Full Modular' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'Autoridad deportiva diaria' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '1 PICK MÁXIMO' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'Validación de cuota / EV' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'NO CAMBIA EL DAILY PICK' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '<MlbDailyBestPickCard value={result.result?.dailyBestPick} />' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '<MlbDailyBestPickPriceCard value={result.result?.dailyBestPickPrice} />' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '<MlbSportingDailyPickControl />' client/src/pages/mlb-predictor-v16.tsx
+          ! grep -F '<MlbDailyOpportunityControl />' client/src/pages/mlb-predictor-v16.tsx
           grep -F '/api/mlb/unified-v16/daily-opportunity/run-priced' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F 'WAIT · HAY UNA OPORTUNIDAD POSTERIOR COMPETITIVA' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F 'PLAY · MEJOR OPORTUNIDAD DEL DÍA' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F 'NO PLAY · NO HAY OPORTUNIDAD JUGABLE' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F 'Top oportunidades · máximo 3 para cuotas' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F 'A+ → Premium → PP_HORIZON → Full Modular' client/src/components/mlb-daily-opportunity-control.tsx
-          grep -F '<MlbDailyOpportunityControl />' client/src/pages/mlb-predictor-v16.tsx
       - name: Build frontend
         env:
           VITE_API_BASE_URL: https://p0-staging.invalid
