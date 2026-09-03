@@ -73,10 +73,10 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   // pregame lineups/pitcher identities and never requests odds, scores a model, or mutates V16.
   registerMlbBatterProspectiveCustodyRoutes(app);
 
-  // One shared certified provider bundle serves the legacy visible Daily BEST PICK command,
-  // whole-slate pre-odds Daily Opportunity, and the explicit priced Daily Opportunity command.
-  // The priced command crosses the odds boundary only after the whole-slate sporting shortlist is
-  // final-only and capped at three candidates.
+  // One shared certified provider bundle serves the visible whole-slate sporting command,
+  // pre-odds Daily Opportunity, and the explicit priced Daily Opportunity command.
+  // The normal V16 button now receives the same strictly-prior provisional V16 scorer so all
+  // analysis-eligible games compete before the price boundary without making provisional rows official.
   const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();
   registerMlbDailyOpportunityUiRoutes(app, {
     liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
@@ -87,7 +87,11 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
     provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider,
     unifiedEliteLowerTierShadowProvider: mlbUnifiedLive.unifiedEliteLowerTierShadowProvider,
   });
-  registerMlbUnifiedV16UiRoutes(app, mlbUnifiedLive);
+  registerMlbUnifiedV16UiRoutes(app, {
+    liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
+    provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider,
+    unifiedEliteLowerTierShadowProvider: mlbUnifiedLive.unifiedEliteLowerTierShadowProvider,
+  });
 
   // Explicit command route for the full legacy V16 priced runner. It is auth-protected by the global
   // private-read/write middleware registered before domain routes and never polls or self-triggers.
