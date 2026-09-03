@@ -130,9 +130,18 @@ function pitcherFromFeed(feed: any, side: "home" | "away", fallback: RawSchedule
   };
 }
 
+function uniqueOfficialPlayerCount(value: unknown): number {
+  if (!Array.isArray(value)) return 0;
+  return new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0)).size;
+}
+
 function lineupCount(feed: any, side: "home" | "away"): number {
-  const order = feed?.liveData?.boxscore?.teams?.[side]?.battingOrder;
-  return Array.isArray(order) ? new Set(order.map(Number).filter(Number.isFinite)).size : 0;
+  const team = feed?.liveData?.boxscore?.teams?.[side];
+  const battingOrderCount = uniqueOfficialPlayerCount(team?.battingOrder);
+  const battersCount = uniqueOfficialPlayerCount(team?.batters);
+  // MLB can publish the official pregame lineup in `batters` before `battingOrder`
+  // is hydrated. Use the strongest official 9-player evidence from the same feed.
+  return Math.max(battingOrderCount, battersCount);
 }
 
 function lineupState(home: number, away: number, feedAvailable: boolean): MlbP1LineupState {
