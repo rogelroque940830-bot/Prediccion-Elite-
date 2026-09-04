@@ -62,7 +62,7 @@ export interface MlbDailyOpportunityEntry {
   contextRank: number;
   intrinsicClassification: MlbIntrinsicGameProfile["researchClassification"];
   eligibleSportingOpportunity: boolean;
-  evidenceCoverage: MlbDailyOpportunityEvidenceCoverage | null;
+  evidenceCoverage?: MlbDailyOpportunityEvidenceCoverage | null;
   context: {
     thesisKinds: readonly MlbIntrinsicThesisKind[];
     thesisStructures: readonly MlbIntrinsicThesisStructure[];
@@ -95,8 +95,8 @@ export interface MlbDailyOpportunityContextResult {
     provisionalEligibleOpportunities: number;
     finalEligibleOpportunities: number;
     frontierSize: number;
-    evidencePendingGames: number;
-    provisionalEvidencePendingGames: number;
+    evidencePendingGames?: number;
+    provisionalEvidencePendingGames?: number;
   };
   decisionReason:
     | "NO_CONTEXT_QUALIFIED_OPPORTUNITY"
@@ -115,8 +115,8 @@ export interface MlbDailyOpportunityContextResult {
     empiricalLineupUncertaintyAppliedToProvisionalV16Only: true;
     probabilityThresholdCreatesOpportunityEligibility: false;
     confirmationMayDowngradeToNoPlay: true;
-    missingDataCountsAsNegativeEvidence: false;
-    incompleteEvidenceRemainsExplicitlyUnresolved: true;
+    missingDataCountsAsNegativeEvidence?: false;
+    incompleteEvidenceRemainsExplicitlyUnresolved?: true;
     v68Changed: false;
     v80Changed: false;
     productionDailyBestPickChanged: false;
