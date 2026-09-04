@@ -61,6 +61,77 @@ function stringOrNull(value: unknown): string | null {
   return text || null;
 }
 
+function objectOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function numberOrNull(value: unknown, digits = 3): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? round(numeric, digits) : null;
+}
+
+function probabilityPctOrNull(value: unknown): number | null {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const probability = numeric > 1 ? numeric : numeric * 100;
+  return probability >= 0 && probability <= 100 ? round(probability, 1) : null;
+}
+
+function booleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function earlyEngineHistoryProjection(payload: unknown) {
+  const root = objectOrNull(payload);
+  const analysis = objectOrNull(root?.analysis);
+  const layers = objectOrNull(analysis?.layers);
+  const capture = objectOrNull(layers?.earlyEngine);
+  if (!capture || capture.schemaVersion !== "mlb-early-engine-capture.v1") return null;
+
+  const output = objectOrNull(capture.output);
+  const homeEre = objectOrNull(output?.homeEre);
+  const awayEre = objectOrNull(output?.awayEre);
+  const markets = objectOrNull(output?.markets);
+  const f5Unified = objectOrNull(output?.f5Unified);
+  const finalRecommendation = objectOrNull(markets?.finalRecommendation);
+  const recommendationRelation = objectOrNull(capture.recommendationRelation);
+  const savedPick = objectOrNull(capture.savedPick);
+
+  return {
+    schemaVersion: "mlb-early-engine-capture.v1" as const,
+    source: stringOrNull(capture.source),
+    observedAt: stringOrNull(capture.observedAt),
+    freshness: stringOrNull(capture.freshness),
+    ageMsAtSavedPick: numberOrNull(capture.ageMsAtSavedPick, 0),
+    savedMarketType: stringOrNull(savedPick?.marketType),
+    savedSide: stringOrNull(savedPick?.side),
+    recommendationMatchesSavedPick: booleanOrNull(recommendationRelation?.matchesSavedPick),
+    homeEreScore: numberOrNull(homeEre?.ereScore, 1),
+    awayEreScore: numberOrNull(awayEre?.ereScore, 1),
+    homeEreCategory: stringOrNull(homeEre?.category),
+    awayEreCategory: stringOrNull(awayEre?.category),
+    homeEreDataStatus: stringOrNull(homeEre?.dataStatus),
+    awayEreDataStatus: stringOrNull(awayEre?.dataStatus),
+    f5ProbHomePct: probabilityPctOrNull(f5Unified?.f5ProbHome ?? markets?.f5ProbHome),
+    f5ProbAwayPct: probabilityPctOrNull(f5Unified?.f5ProbAway ?? markets?.f5ProbAway),
+    f5PickSide: stringOrNull(f5Unified?.pickSide ?? markets?.f5RecommendedSide),
+    f5Confidence: stringOrNull(f5Unified?.confidence),
+    f5TotalRunsEstimated: numberOrNull(markets?.f5TotalRunsEstimated, 2),
+    earlyConfidence: stringOrNull(markets?.confidence),
+    earlyDataIncomplete: booleanOrNull(markets?.dataIncomplete),
+    earlyWarnings: stringArray(markets?.warnings).slice(0, 12),
+    finalRecommendation: finalRecommendation ? {
+      market: stringOrNull(finalRecommendation.market),
+      side: stringOrNull(finalRecommendation.side),
+      action: stringOrNull(finalRecommendation.action),
+      reason: stringOrNull(finalRecommendation.reason),
+      isPremium: booleanOrNull(finalRecommendation.isPremium),
+    } : null,
+  };
+}
+
 export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
   const ordered = [...records].sort((a, b) => b.prediction.recordedAtMs - a.prediction.recordedAtMs);
   const analyticalStatuses = classifyMlbAnalyticalDuplicates(records);
@@ -133,9 +204,11 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
     const provenance = prediction.payload?.analysis?.rawInputs?.marketProvenance ?? {};
     const economicLayer = prediction.payload?.analysis?.layers?.p1M4bEconomicDecision ?? null;
     const effectiveDecision = economicLayer?.effectiveDecision ?? null;
+    const earlyEngine = earlyEngineHistoryProjection(prediction.payload);
     return {
       id: prediction.id,
       clientRequestId: prediction.clientRequestId,
+      supersedesId: prediction.supersedesId ?? null,
       recordedAt: prediction.recordedAt,
       gameDate: prediction.game.gameDate,
       commenceTime: prediction.game.commenceTime,
@@ -168,6 +241,7 @@ export function buildMlbLedgerHistoryView(records: LedgerRecord[]) {
       economicActionability: stringOrNull(effectiveDecision?.actionability),
       economicAnalyticalUnits: round(Number(effectiveDecision?.analyticalUnits || 0), 4),
       economicReasons: stringArray(effectiveDecision?.reasons).slice(0, 12),
+      earlyEngine,
       result: settlement ? RESULT_LABELS[settlement.result] || settlement.result : "PENDING",
       settlementResult: settlement?.result || null,
       settledAt: settlement?.settledAt || null,

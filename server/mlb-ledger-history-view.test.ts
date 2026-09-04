@@ -109,6 +109,7 @@ test("builds ledger-backed history summary and keeps pending picks", () => {
   assert.equal(view.picks[0].id, "new-pending");
   assert.equal(view.picks[0].result, "PENDING");
   assert.equal(view.picks[0].immutable, true);
+  assert.equal(view.picks[0].earlyEngine, null);
   assert.equal(view.picks[1].result, "W");
   assert.equal(view.picks[2].result, "L");
 });
@@ -216,4 +217,109 @@ test("exposes only compact P1-M4 effective actionability fields", () => {
   assert.deepEqual(pick.economicReasons, ["POSITIVE_EXPECTED_VALUE", "PRICE_ACCEPTABLE"]);
   assert.equal("economicDecision" in pick, false);
   assert.equal("internalDiagnostics" in pick, false);
+});
+
+test("projects the exact Early/ERE snapshot into a compact immutable history view", () => {
+  const captured = record({
+    id: "f5-ere-history",
+    recordedAtMs: 6000,
+    marketType: "F5_ML",
+    selection: "Detroit Tigers F5",
+    odds: -118,
+    stake: 1,
+  });
+  captured.prediction.supersedesId = "prior-f5-version";
+  captured.prediction.payload.analysis.layers = {
+    earlyEngine: {
+      schemaVersion: "mlb-early-engine-capture.v1",
+      source: "react-query:/api/mlb/early-markets",
+      observedAt: "2026-07-28T20:00:00.000Z",
+      ageMsAtSavedPick: 120000,
+      freshness: "FRESH",
+      savedPick: {
+        marketType: "F5_ML",
+        side: "HOME",
+        oddsAmerican: -118,
+      },
+      recommendationRelation: {
+        matchesSavedPick: true,
+      },
+      output: {
+        homeEre: {
+          teamName: "Detroit Tigers",
+          ereScore: 71.4,
+          category: "STRONG_EARLY",
+          dataStatus: "VERIFIED",
+          sourceErrors: ["must not leak"],
+        },
+        awayEre: {
+          teamName: "Baltimore Orioles",
+          ereScore: 48.9,
+          category: "NEUTRAL",
+          dataStatus: "PARTIAL",
+        },
+        f5Unified: {
+          f5ProbHome: 0.642,
+          f5ProbAway: 0.358,
+          pickSide: "HOME",
+          confidence: "HIGH",
+          layers: { internal: "not projected" },
+        },
+        markets: {
+          f5ProbHome: 0.64,
+          f5ProbAway: 0.36,
+          f5TotalRunsEstimated: 4.82,
+          confidence: "HIGH",
+          dataIncomplete: false,
+          warnings: ["warning one", "warning two"],
+          finalRecommendation: {
+            market: "F5_ML",
+            side: "HOME",
+            action: "BET",
+            reason: "PREMIUM ERE setup",
+            isPremium: true,
+          },
+          alternativePicks: [{ internal: "not projected" }],
+        },
+      },
+    },
+  };
+
+  const view = buildMlbLedgerHistoryView([captured]);
+  const pick = view.picks[0];
+  assert.equal(pick.supersedesId, "prior-f5-version");
+  assert.deepEqual(pick.earlyEngine, {
+    schemaVersion: "mlb-early-engine-capture.v1",
+    source: "react-query:/api/mlb/early-markets",
+    observedAt: "2026-07-28T20:00:00.000Z",
+    freshness: "FRESH",
+    ageMsAtSavedPick: 120000,
+    savedMarketType: "F5_ML",
+    savedSide: "HOME",
+    recommendationMatchesSavedPick: true,
+    homeEreScore: 71.4,
+    awayEreScore: 48.9,
+    homeEreCategory: "STRONG_EARLY",
+    awayEreCategory: "NEUTRAL",
+    homeEreDataStatus: "VERIFIED",
+    awayEreDataStatus: "PARTIAL",
+    f5ProbHomePct: 64.2,
+    f5ProbAwayPct: 35.8,
+    f5PickSide: "HOME",
+    f5Confidence: "HIGH",
+    f5TotalRunsEstimated: 4.82,
+    earlyConfidence: "HIGH",
+    earlyDataIncomplete: false,
+    earlyWarnings: ["warning one", "warning two"],
+    finalRecommendation: {
+      market: "F5_ML",
+      side: "HOME",
+      action: "BET",
+      reason: "PREMIUM ERE setup",
+      isPremium: true,
+    },
+  });
+  assert.equal("output" in (pick.earlyEngine as any), false);
+  assert.equal("alternativePicks" in (pick.earlyEngine as any), false);
+  assert.equal("sourceErrors" in (pick.earlyEngine as any), false);
 });
