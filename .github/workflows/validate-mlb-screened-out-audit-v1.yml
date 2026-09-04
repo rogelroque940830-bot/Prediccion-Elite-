@@ -1,0 +1,72 @@
+name: Validate MLB Screened-Out Ranking Audit V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-whole-slate-sporting-finalization-v1.ts'
+      - 'server/mlb-whole-slate-sporting-finalization-v1.test.ts'
+      - 'frontend/client/src/components/mlb-sporting-daily-pick-control.tsx'
+      - 'frontend/client/src/components/mlb-sporting-daily-pick-control.audit-contract.txt'
+      - 'docs/mlb-screened-out-ranking-audit-v1.md'
+      - '.github/workflows/validate-mlb-screened-out-audit-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Test ranked identity audit
+        run: npx tsx --test server/mlb-whole-slate-sporting-finalization-v1.test.ts
+      - name: Bundle-check finalization helper
+        run: npx esbuild server/mlb-whole-slate-sporting-finalization-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-screened-out-audit.mjs
+      - name: Prove qualification boundary is observability-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'rankedGamePks' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'modelThresholdChanged: false' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'priceMayCreateSportingPick: false' server/mlb-whole-slate-sporting-finalization-v1.ts
+          git diff --check origin/main...HEAD
+
+  validate-frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Type-check frontend
+        run: npm run check
+      - name: Prove exact excluded matchup is visible
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'Fuera del ranking profundo' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'rankedGamePks' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F 'no alcanzó la regla mínima del filtro preprecio' client/src/components/mlb-sporting-daily-pick-control.tsx
+          grep -F '0 señales independientes clasificatorias' client/src/components/mlb-sporting-daily-pick-control.tsx
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://web-production-7067b.up.railway.app
+        run: npm run build

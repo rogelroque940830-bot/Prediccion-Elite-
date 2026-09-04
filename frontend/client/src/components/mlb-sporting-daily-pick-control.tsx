@@ -26,6 +26,16 @@ type SportingSlateLeader = {
   probabilityStage: string;
 };
 
+type SportingSlateGame = {
+  gamePk: number;
+  startTime: string | null;
+  awayTeam: string;
+  homeTeam: string;
+  analysisStage: "FINAL" | "PROVISIONAL";
+  readiness: string;
+  blockers?: string[];
+};
+
 type SportingUiResponse = {
   date: string;
   generatedAt: string;
@@ -38,6 +48,7 @@ type SportingUiResponse = {
     startedOrClosed: number;
     dataInsufficient: number;
   };
+  games?: SportingSlateGame[];
   blockers?: unknown[];
   result?: {
     dailyBestPick?: unknown;
@@ -50,6 +61,10 @@ type SportingUiResponse = {
       provisionalGamesEvaluated?: number;
       finalGamesEvaluated?: number;
       unresolvedProvisionalGamePks?: number[];
+      rankedGamePks?: number[];
+      policy?: {
+        shortlistQualificationRule?: string;
+      };
     };
     economicEvaluationSkippedReason?: string;
   };
@@ -112,6 +127,10 @@ export function MlbSportingDailyPickControl() {
   const screenedOut = slateEvaluated != null && rankedCompetitors != null
     ? Math.max(0, slateEvaluated - rankedCompetitors)
     : null;
+  const rankedGamePks = new Set(finalization?.rankedGamePks ?? []);
+  const screenedOutGames = Array.isArray(result?.games) && finalization?.rankedGamePks
+    ? result.games.filter((game) => !rankedGamePks.has(game.gamePk))
+    : [];
   const statusLabel = !result
     ? "IDLE"
     : completed
@@ -183,11 +202,32 @@ export function MlbSportingDailyPickControl() {
                   <div><div className="text-muted-foreground">Slate evaluado</div><div className="font-semibold">{slateEvaluated ?? "N/D"}</div></div>
                   <div><div className="text-muted-foreground">Competidores ranking</div><div className="font-semibold">{rankedCompetitors ?? "N/D"}</div></div>
                 </div>
+
                 {screenedOut != null && screenedOut > 0 && (
-                  <p className="mt-2 text-[11px] text-muted-foreground" data-testid="mlb-slate-screened-out-note">
-                    {screenedOut} juego{screenedOut === 1 ? " fue evaluado" : "s fueron evaluados"} en el slate pero no entró{screenedOut === 1 ? "" : "aron"} al ranking profundo porque no superó{screenedOut === 1 ? "" : "aron"} el filtro preprecio certificado. No se fuerza su inclusión.
-                  </p>
+                  <div className="mt-3 rounded-md border border-border/70 bg-background/35 p-3" data-testid="mlb-slate-screened-out-audit">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide">Fuera del ranking profundo · {screenedOut}</div>
+                    {screenedOutGames.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        {screenedOutGames.map((game) => (
+                          <div key={game.gamePk} className="rounded border border-border/60 p-2 text-xs" data-testid={`mlb-screened-out-game-${game.gamePk}`}>
+                            <div className="font-semibold">{game.awayTeam} @ {game.homeTeam}</div>
+                            <div className="mt-1 text-muted-foreground">
+                              Motivo: no alcanzó la regla mínima del filtro preprecio — al menos 1 señal nativa de carreras distinta de cero proveniente de un componente certificado. Por definición, este juego quedó con 0 señales independientes clasificatorias en este snapshot.
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {screenedOut} juego{screenedOut === 1 ? " fue evaluado" : "s fueron evaluados"} pero no superó{screenedOut === 1 ? "" : "aron"} la regla mínima del filtro preprecio certificado.
+                      </p>
+                    )}
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Regla vigente: ≥1 señal nativa de carreras no-cero de un componente con evidencia certificada. No se fuerza la inclusión de juegos sin señal clasificatoria.
+                    </p>
+                  </div>
                 )}
+
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Este es el competidor deportivo que impide cerrar todavía el Daily BEST PICK. No es una jugada oficial hasta que los inputs FINAL confirmen la jerarquía certificada. No se consultan cuotas mientras siga en WAIT.
                 </p>
