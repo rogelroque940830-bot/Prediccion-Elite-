@@ -172,7 +172,11 @@ test("builds a sorted daily slate and exposes FINAL versus PROVISIONAL readiness
   assert.deepEqual(report.games.map((game) => game.gamePk), [100, 200]);
   assert.equal(report.games[0].readiness, "READY_TO_ANALYZE");
   assert.equal(report.games[0].analysisStage, "FINAL");
+  assert.deepEqual(report.games[0].homeLineupIds, [100, 101, 102, 103, 104, 105, 106, 107, 108]);
+  assert.deepEqual(report.games[0].awayLineupIds, [200, 201, 202, 203, 204, 205, 206, 207, 208]);
   assert.equal(report.games[1].readiness, "PROVISIONAL_WAITING_FOR_LINEUPS");
+  assert.deepEqual(report.games[1].homeLineupIds, []);
+  assert.deepEqual(report.games[1].awayLineupIds, []);
   assert.equal(report.summary.ready, 1);
   assert.equal(report.summary.provisional, 1);
   assert.equal(report.safety.realFinancialExposure, 0);
@@ -200,11 +204,25 @@ test("posted official pregame batters make a game FINAL even before battingOrder
   assert.equal(report.games.length, 1);
   assert.equal(report.games[0].homeLineupCount, 9);
   assert.equal(report.games[0].awayLineupCount, 9);
+  assert.deepEqual(report.games[0].homeLineupIds, [100, 101, 102, 103, 104, 105, 106, 107, 108]);
+  assert.deepEqual(report.games[0].awayLineupIds, [200, 201, 202, 203, 204, 205, 206, 207, 208]);
   assert.equal(report.games[0].lineupState, "CONFIRMED");
   assert.equal(report.games[0].readiness, "READY_TO_ANALYZE");
   assert.equal(report.games[0].analysisStage, "FINAL");
   assert.equal(report.summary.ready, 1);
   assert.equal(report.summary.provisional, 0);
+});
+
+test("partial official arrays are not retained as final nine-man evidence", async () => {
+  const fetchImpl = async (url: string): Promise<Response> => {
+    if (url.includes("/schedule?")) return response({ dates: [{ games: [scheduleGame(450)] }] });
+    if (url.includes("/game/450/")) return response(liveFeed({ homeLineup: 7, awayLineup: 8 }));
+    return response({}, 404);
+  };
+  const report = await buildMlbP1DailySlate({ date: "2026-08-04", fetchImpl });
+  assert.equal(report.games[0].analysisStage, "PROVISIONAL");
+  assert.deepEqual(report.games[0].homeLineupIds, []);
+  assert.deepEqual(report.games[0].awayLineupIds, []);
 });
 
 test("degrades one game safely when its official live feed is unavailable", async () => {
