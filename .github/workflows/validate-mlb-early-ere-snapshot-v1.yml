@@ -1,0 +1,38 @@
+name: Validate MLB Early ERE Snapshot V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/client/src/lib/queryClient.ts'
+      - 'frontend/client/src/lib/mlb-scientific-snapshot.ts'
+      - 'frontend/client/src/lib/mlb-scientific-snapshot.test.ts'
+      - '.github/workflows/validate-mlb-early-ere-snapshot-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Test exact Early/ERE snapshot capture
+        run: npx tsx --test frontend/client/src/lib/mlb-scientific-snapshot.test.ts
+      - name: Typecheck frontend
+        run: npm --prefix frontend run check
+      - name: Build frontend
+        run: npm --prefix frontend run build
+      - name: Diff integrity
+        run: git diff --check origin/main...HEAD
