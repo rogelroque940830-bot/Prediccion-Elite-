@@ -1,0 +1,74 @@
+name: MLB R1B Statcast Custom Leaderboard xERA As-Of Probe
+
+on:
+  push:
+    branches: [research/mlb-unified-sporting-authority-r1]
+    paths:
+      - scripts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.ts
+      - .github/workflows/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.ts
+      - .github/workflows/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Probe custom leaderboard direct xERA and date-boundary semantics
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe
+          npx tsx scripts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe/evidence.json
+      - name: Enforce diagnostic-only fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe/evidence.json','utf8'));
+          if(e.status!=='CUSTOM_LEADERBOARD_XERA_ASOF_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY'||e.season!==2025) throw new Error('boundary');
+          if(!Array.isArray(e.variants)||e.variants.length!==5) throw new Error('variant coverage');
+          if(e.interpretationPolicy?.acceptedQueryParameterIsNotEvidenceOfSemanticActivity!==true) throw new Error('parameter authority');
+          if(e.interpretationPolicy?.payloadOrMetricChangeRequiredForDateBoundaryClaim!==true) throw new Error('date activity authority');
+          if(e.interpretationPolicy?.fullSeasonExactXeraParityRequiredBeforeAsOfUse!==true) throw new Error('xera parity authority');
+          if(e.interpretationPolicy?.empiricalApproximationForbidden!==true||e.interpretationPolicy?.seasonFinalXeraMayNotBeAppliedRetroactively!==true) throw new Error('approximation boundary');
+          if(e.decision?.familyPromotionAuthorized!==false||e.decision?.authoritativeExactXeraAsOfSemanticsProvenByThisProbe!==false) throw new Error('premature promotion');
+          const s=e.scientificBoundary;
+          if(s?.researchOnly!==true||s?.productionChanged!==false||s?.weightsChanged!==false||s?.routingChanged!==false||s?.stakingChanged!==false||s?.betEliteChanged!==false||s?.marketPricesRead!==false||s?.targetOutcomeReadForModeling!==false||s?.automaticBetPlacementAllowed!==false||s?.realFinancialExposure!==0||s?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'empiricalApproximationForbidden: true' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload custom-leaderboard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-custom-leaderboard-xera-asof-probe
+          path: artifacts/mlb-r1b-statcast-custom-leaderboard-xera-asof-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
