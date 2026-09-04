@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-square-law-probe-evidence.v1",
+  "status": "PINNED_XERA_SQUARE_LAW_PROBE_NOT_PARITY_CERTIFICATION",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "workflow": {
+    "name": "MLB R1B Statcast xERA Square-Law Probe",
+    "runId": 33917572942,
+    "runNumber": 1,
+    "headSha": "145dde420dce262f43c9038d45f348d3d03201e0",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 9953803036,
+    "name": "mlb-r1b-statcast-xera-square-law-probe",
+    "digest": "sha256:f257f15a370020913ad0c4af3d5dcdf4d6697ca5526aad174c42c89c5f23cd24",
+    "expiresAt": "2026-10-04T20:45:07Z"
+  },
+  "productionDomain": {
+    "minimumPa": 50,
+    "seasons": [2022, 2023, 2024, 2025, 2026],
+    "currentQualifiedSurfaceValueParityWithMin1EverySeason": true
+  },
+  "affineSquareDiagnostics": [
+    {
+      "season": 2022,
+      "a": -0.5367191300423348,
+      "b": 47.142365010303365,
+      "exactAfterRound2": 5,
+      "uniqueDisplayedXwobaValues": 172,
+      "displayRoundingIntervalsAllCompatible": false
+    },
+    {
+      "season": 2023,
+      "a": -0.6780050005435934,
+      "b": 49.76811440237814,
+      "exactAfterRound2": 3,
+      "uniqueDisplayedXwobaValues": 165,
+      "displayRoundingIntervalsAllCompatible": false
+    },
+    {
+      "season": 2024,
+      "a": -0.619794596753942,
+      "b": 47.96039422933568,
+      "exactAfterRound2": 5,
+      "uniqueDisplayedXwobaValues": 168,
+      "displayRoundingIntervalsAllCompatible": false
+    },
+    {
+      "season": 2025,
+      "a": -0.7416812561825603,
+      "b": 49.833145931141814,
+      "exactAfterRound2": 2,
+      "uniqueDisplayedXwobaValues": 164,
+      "displayRoundingIntervalsAllCompatible": false
+    },
+    {
+      "season": 2026,
+      "a": -0.48592467715677135,
+      "b": 47.87638981847301,
+      "exactAfterRound2": 6,
+      "uniqueDisplayedXwobaValues": 170,
+      "displayRoundingIntervalsAllCompatible": false
+    }
+  ],
+  "scientificConclusion": {
+    "exactProportionalSquareLawOnDisplayedValuesEverySeason": false,
+    "exactAffineSquareLawOnDisplayedValuesEverySeason": false,
+    "fittedAffineSquareRoundingIntervalsCompatibleEverySeason": false,
+    "authoritativeExactFormulaProven": false,
+    "authoritativeTargetDateRunEnvironmentProven": false,
+    "targetDateXeraCustodyProven": false,
+    "familyPromotionAuthorized": false,
+    "interpretation": "The documented xwOBA-to-ERA relationship is not an exact recoverable production formula from displayed xwOBA using either proportional or affine xwOBA-squared forms. Even allowing the displayed three-decimal xwOBA rounding interval does not make the fitted affine-square model universally compatible. Fitted coefficients are therefore rejected as historical authority.",
+    "nextGate": "AUTHORITATIVE_IMMUTABLE_ASOF_XERA_SNAPSHOT_OR_SOURCE_MECHANISM_REQUIRED"
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "marketPricesRead": false,
+    "targetOutcomeReadForModeling": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "r1b2Authorized": false
+  }
+}
