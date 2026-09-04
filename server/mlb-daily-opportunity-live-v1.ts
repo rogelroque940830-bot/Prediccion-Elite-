@@ -1,6 +1,7 @@
 import {
   buildMlbDailyOpportunityContext,
   type MlbDailyOpportunityContextResult,
+  type MlbDailyOpportunityEvidenceCoverageByGame,
 } from "./mlb-daily-opportunity-context-v1";
 import {
   buildMlbDailyOpportunityPriceShortlist,
@@ -40,6 +41,8 @@ export interface MlbDailyOpportunityLiveResult {
     provisionalGamesMayLead: true;
     provisionalProbabilityUsesPriorDateLineupProxy: true;
     provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true;
+    missingEvidenceCountsAsNegativeEvidence: false;
+    incompleteEvidenceRemainsInCompetition: true;
     registeredSharedProvisionalProviderRequired: true;
     maximumPossiblePriceConsultations: 3;
     wholeSlateAnalysisDoesNotExpandPriceQuota: true;
@@ -73,6 +76,22 @@ function finalV16Evidence(
     output[gamePk] = scoreMlbV16SettlementEvidence(gamePk, preprice.generatedAt, c4);
   }
   return Object.freeze(output);
+}
+
+function evidenceCoverageByGame(preprice: MlbUnifiedRunnerResult): MlbDailyOpportunityEvidenceCoverageByGame {
+  return Object.freeze(Object.fromEntries(preprice.shortlist.candidates.map((candidate) => [
+    candidate.gamePk,
+    Object.freeze({
+      coreState: candidate.coreEvidenceCoverage.state,
+      qualificationDisposition: candidate.qualificationDisposition,
+      pending: candidate.coreEvidenceCoverage.state !== "COMPLETE",
+      certifiedCoreComponents: candidate.coreEvidenceCoverage.certifiedComponents,
+      signalCoreComponents: candidate.coreEvidenceCoverage.signalComponents,
+      neutralCoreComponents: candidate.coreEvidenceCoverage.neutralComponents,
+      unavailableCoreComponents: candidate.coreEvidenceCoverage.unavailableComponents,
+      missingDataCountsAsNegativeEvidence: false as const,
+    }),
+  ])));
 }
 
 export async function buildMlbDailyOpportunityLive(input: {
@@ -122,6 +141,7 @@ export async function buildMlbDailyOpportunityLive(input: {
     intrinsic: preprice.intrinsic,
     finalV16ByGame: finalByGame,
     provisionalV16ByGame: provisionalByGame,
+    evidenceCoverageByGame: evidenceCoverageByGame(preprice),
   });
   const priceConsultationShortlist = buildMlbDailyOpportunityPriceShortlist(dailyOpportunity);
 
@@ -141,6 +161,8 @@ export async function buildMlbDailyOpportunityLive(input: {
       provisionalGamesMayLead: true as const,
       provisionalProbabilityUsesPriorDateLineupProxy: true as const,
       provisionalProbabilityFailureDoesNotEraseIntrinsicContext: true as const,
+      missingEvidenceCountsAsNegativeEvidence: false as const,
+      incompleteEvidenceRemainsInCompetition: true as const,
       registeredSharedProvisionalProviderRequired: true as const,
       maximumPossiblePriceConsultations: 3 as const,
       wholeSlateAnalysisDoesNotExpandPriceQuota: true as const,
