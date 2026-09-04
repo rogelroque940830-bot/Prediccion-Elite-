@@ -19,6 +19,7 @@ export interface MlbWholeSlateSportingLeaderView {
   selectedSideProbability: number | null;
   robustSelectedSideProbability: number | null;
   probabilityStage: MlbDailyOpportunityEntry["probability"]["stage"];
+  marketProbabilities: NonNullable<MlbDailyOpportunityEntry["probability"]["marketProbabilities"]> | null;
   researchClassification: MlbDailyOpportunityEntry["intrinsicClassification"];
   researchEligibilityIgnoredAsProductionGate: true;
 }
@@ -68,6 +69,7 @@ function leaderView(entry: MlbDailyOpportunityEntry | undefined): MlbWholeSlateS
     selectedSideProbability: entry.probability.selectedSideProbability,
     robustSelectedSideProbability: entry.probability.robustSelectedSideProbability,
     probabilityStage: entry.probability.stage,
+    marketProbabilities: entry.probability.marketProbabilities ?? null,
     researchClassification: entry.intrinsicClassification,
     researchEligibilityIgnoredAsProductionGate: true as const,
   });
