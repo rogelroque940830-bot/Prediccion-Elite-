@@ -77,6 +77,45 @@ jobs:
           print('DAILY_BEST_PICK_AUDIT_CONTRACT_SCORER_COFREEZE_PROVED')
           PY
 
+      - name: Materialize frozen production snapshot source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SNAPSHOT_REF="$(python - <<'PY'
+          import json
+          c=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-contract.json'))
+          print(c['productionSnapshot']['mainCommit'])
+          PY
+          )"
+          test -n "$SNAPSHOT_REF"
+          git cat-file -e "${SNAPSHOT_REF}^{commit}"
+          mkdir -p inputs/production-snapshot/server
+          for FILE in \
+            server/mlb-daily-best-pick-selector.ts \
+            server/mlb-daily-best-pick-runtime-adapter.ts \
+            server/mlb-intrinsic-edge.ts \
+            server/mlb-shortlist.ts
+          do
+            git show "${SNAPSHOT_REF}:${FILE}" > "inputs/production-snapshot/${FILE}"
+            test -s "inputs/production-snapshot/${FILE}"
+          done
+          python - <<'PY'
+          import hashlib, json
+          c=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-contract.json'))
+          paths={
+            'selector':'inputs/production-snapshot/server/mlb-daily-best-pick-selector.ts',
+            'runtimeAdapter':'inputs/production-snapshot/server/mlb-daily-best-pick-runtime-adapter.ts',
+            'intrinsicRank':'inputs/production-snapshot/server/mlb-intrinsic-edge.ts',
+            'shortlist':'inputs/production-snapshot/server/mlb-shortlist.ts',
+          }
+          for key,path in paths.items():
+            data=open(path,'rb').read()
+            actual=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+            expected=c['productionSnapshot'][key]['gitBlobSha']
+            assert actual==expected, (key,actual,expected)
+          print('DAILY_BEST_PICK_FROZEN_PRODUCTION_SNAPSHOT_MATERIALIZED')
+          PY
+
       - name: Syntax check audit scorer
         run: python -m py_compile scripts/mlb-daily-best-pick-historical-coverage-v1.py
 
@@ -156,10 +195,10 @@ jobs:
             --v69-contract inputs/parent/research/p0-step12v69-confluence-frequency-quality-frontier-contract.json \
             --v69-scorer inputs/parent/scripts/p0-step12v69-confluence-frequency-quality-frontier.py \
             --audit-contract research/mlb-daily-best-pick-historical-coverage-v1-contract.json \
-            --selector server/mlb-daily-best-pick-selector.ts \
-            --runtime-adapter server/mlb-daily-best-pick-runtime-adapter.ts \
-            --intrinsic-rank server/mlb-intrinsic-edge.ts \
-            --shortlist server/mlb-shortlist.ts \
+            --selector inputs/production-snapshot/server/mlb-daily-best-pick-selector.ts \
+            --runtime-adapter inputs/production-snapshot/server/mlb-daily-best-pick-runtime-adapter.ts \
+            --intrinsic-rank inputs/production-snapshot/server/mlb-intrinsic-edge.ts \
+            --shortlist inputs/production-snapshot/server/mlb-shortlist.ts \
             --out work/mlb-daily-best-pick-historical-coverage-v1.json
 
       - name: Validate certified coverage ceiling and fail-closed boundaries
