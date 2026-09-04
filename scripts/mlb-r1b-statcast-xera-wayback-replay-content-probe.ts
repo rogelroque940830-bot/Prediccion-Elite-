@@ -97,13 +97,32 @@ function decodeHtmlEntities(value: string): string {
 function numberProperty(objectText: string, names: readonly string[]): number | null {
   for (const name of names) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`(?:["']?${escaped}["']?\\s*:\\s*)(?:["']?)(-?\\d+(?:\\.\\d+)?)(?:["']?)`, "i");
+    const re = new RegExp(
+      `(?:^|[,\\{])\\s*["']?${escaped}["']?\\s*:\\s*["']?(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+))["']?(?=\\s*[,}])`,
+      "i",
+    );
     const match = objectText.match(re);
     if (!match) continue;
     const value = Number(match[1]);
     if (Number.isFinite(value)) return value;
   }
   return null;
+}
+
+function assertNumberPropertyParser(): void {
+  const sample = '{"player_id":657277,"pa":314,"est_woba":".324","xera":"4.26","era":"3.10","era_minus_xera_diff":"-1.16"}';
+  const expected: Array<[readonly string[], number]> = [
+    [["player_id", "entity_id"], 657277],
+    [["pa"], 314],
+    [["est_woba"], 0.324],
+    [["xera"], 4.26],
+    [["era"], 3.1],
+    [["era_minus_xera_diff"], -1.16],
+  ];
+  for (const [names, value] of expected) {
+    const parsed = numberProperty(sample, names);
+    if (parsed !== value) throw new Error(`PROPERTY_PARSER_SELF_TEST_FAILED:${names.join("|")}:${String(parsed)}:${value}`);
+  }
 }
 
 function extractFlatExpectedRows(html: string): { rows: ParsedRow[]; candidateObjects: number; xeraSnippets: string[] } {
@@ -173,6 +192,8 @@ function compareCaptures(captures: readonly { timestamp: string; rows: ParsedRow
 }
 
 async function main() {
+  assertNumberPropertyParser();
+
   const cdxUrl = new URL("https://web.archive.org/cdx/search/cdx");
   cdxUrl.searchParams.set("url", "baseballsavant.mlb.com/leaderboard/expected_statistics*");
   cdxUrl.searchParams.set("output", "json");
@@ -190,6 +211,9 @@ async function main() {
   const seasonEvidence: unknown[] = [];
   let parsedCaptureCount = 0;
   let parsedRowCount = 0;
+  let productionTupleRowCount = 0;
+  let parserIntegrityCheckedRowCount = 0;
+  let parserIntegrityMismatchCount = 0;
   let temporalChangeObserved = false;
 
   for (const season of SEASONS) {
@@ -220,6 +244,8 @@ async function main() {
       rowsWithXwoba: number;
       rowsWithEra: number;
       rowsWithEraMinusXeraDiff: number;
+      rowsWithProductionExpectedTuple: number;
+      arithmeticDiffCheckedRows: number;
       arithmeticDiffMismatchCount: number;
       rowExamples: ParsedRow[];
       xeraSnippets: string[];
@@ -229,12 +255,18 @@ async function main() {
     for (const row of representatives) {
       const replay = await fetchText(replayUrl(row));
       const extracted = replay.ok ? extractFlatExpectedRows(replay.text) : { rows: [], candidateObjects: 0, xeraSnippets: [] };
-      const arithmeticMismatch = extracted.rows.filter((item) => {
-        if (item.era == null || item.eraMinusXeraDiff == null) return false;
-        return Math.abs((item.era - item.xera) - item.eraMinusXeraDiff) > 0.011;
-      }).length;
+      const arithmeticChecked = extracted.rows.filter((item) => item.era != null && item.eraMinusXeraDiff != null);
+      const arithmeticMismatch = arithmeticChecked.filter((item) => Math.abs((item.era! - item.xera) - item.eraMinusXeraDiff!) > 0.011).length;
+      const productionTuple = extracted.rows.filter(
+        (item) => item.pa != null && item.estWoba != null && item.eraMinusXeraDiff != null,
+      ).length;
+
       parsedCaptureCount += extracted.rows.length > 0 ? 1 : 0;
       parsedRowCount += extracted.rows.length;
+      productionTupleRowCount += productionTuple;
+      parserIntegrityCheckedRowCount += arithmeticChecked.length;
+      parserIntegrityMismatchCount += arithmeticMismatch;
+
       captures.push({
         timestamp: row.timestamp,
         archiveDate: archiveDate(row.timestamp),
@@ -251,6 +283,8 @@ async function main() {
         rowsWithXwoba: extracted.rows.filter((item) => item.estWoba != null).length,
         rowsWithEra: extracted.rows.filter((item) => item.era != null).length,
         rowsWithEraMinusXeraDiff: extracted.rows.filter((item) => item.eraMinusXeraDiff != null).length,
+        rowsWithProductionExpectedTuple: productionTuple,
+        arithmeticDiffCheckedRows: arithmeticChecked.length,
         arithmeticDiffMismatchCount: arithmeticMismatch,
         rowExamples: extracted.rows.slice(0, 8),
         xeraSnippets: extracted.xeraSnippets,
@@ -275,6 +309,9 @@ async function main() {
     });
   }
 
+  const parserIntegritySupported = parserIntegrityCheckedRowCount > 0 && parserIntegrityMismatchCount === 0;
+  const truthAnchorSupported = productionTupleRowCount > 0 && parserIntegritySupported;
+
   const evidence = {
     schemaVersion: SCHEMA,
     status: "WAYBACK_REPLAY_CONTENT_AND_TEMPORAL_COVERAGE_PROBE_ONLY_NOT_PARITY_CERTIFICATION",
@@ -291,6 +328,10 @@ async function main() {
     summary: {
       parsedCaptureCount,
       parsedRowCount,
+      productionTupleRowCount,
+      parserIntegrityCheckedRowCount,
+      parserIntegrityMismatchCount,
+      parserIntegritySupported,
       temporalChangeObserved,
       completeDailyPregameCoverageProven: false,
       exactTargetDateXeraCustodyForFullUniverseProven: false,
@@ -299,18 +340,22 @@ async function main() {
     },
     scientificConclusion: {
       replayedOfficialSavantRowsParsed: parsedRowCount > 0,
+      archivedProductionExpectedTupleRowsParsed: productionTupleRowCount > 0,
+      parserIntegritySupported,
       archivedValuesChangeAcrossSeasonSnapshots: temporalChangeObserved,
-      archiveCanServeAsPrimaryPublisherTruthAnchorAtCapturedStates: parsedRowCount > 0,
+      archiveCanServeAsPrimaryPublisherTruthAnchorAtCapturedStates: truthAnchorSupported,
       archiveCanServeAsCompletePregameHistoricalSource: false,
       familyPromotionAuthorized: false,
-      nextGate: parsedRowCount > 0
+      nextGate: truthAnchorSupported
         ? "USE REPLAYED OFFICIAL SAVANT SNAPSHOTS ONLY AS EXACT TRUTH ANCHORS; VALIDATE DATE-BOUNDED RAW-STATCAST RECONSTRUCTION AGAINST THOSE ANCHORS AND IDENTIFY THE MISSING xERA TRANSFORMATION SEMANTICS. DO NOT INTERPOLATE BETWEEN ARCHIVE CAPTURES."
-        : "ROW EXTRACTION DID_NOT_YET RECOVER OFFICIAL VALUES; REFINE PRIMARY-CONTENT PARSER WITHOUT EMPIRICAL xERA RECONSTRUCTION",
+        : "PARSER_OR_FIELD_INTEGRITY_DID_NOT_SUPPORT_TRUTH_ANCHOR_USE; REFINE PRIMARY-CONTENT EXTRACTION WITHOUT EMPIRICAL xERA RECONSTRUCTION",
     },
     interpretationPolicy: {
+      exactPropertyBoundaryRequired: true,
+      leadingDecimalNumericValuesSupported: true,
       noInterpolationBetweenArchiveSnapshots: true,
       sparseArchiveCoverageCannotAuthorizeFullReplay: true,
-      archivedPrimaryPublisherContentMayBeUsedAsVerificationAnchor: true,
+      archivedPrimaryPublisherContentMayBeUsedAsVerificationAnchor: truthAnchorSupported,
       noThirdPartyComputedXeraAsAuthority: true,
       noEmpiricalXeraFitAuthorized: true,
       noFinalSeasonMappingRetroactiveUse: true,
@@ -335,7 +380,24 @@ async function main() {
   const out = outArg?.slice("--out=".length) ?? "artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe/evidence.json";
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify({ status: evidence.status, summary: evidence.summary, scientificConclusion: evidence.scientificConclusion, seasonEvidence: seasonEvidence.map((item: any) => ({ season: item.season, strict: item.strictQualifiedAllPitcherCapturesAllArchiveYears, sameYear: item.sameCalendarYearCaptureCount, uniqueDates: item.sameCalendarYearUniqueCaptureDates, first: item.firstSameYearCaptureDate, last: item.lastSameYearCaptureDate, maxGapDays: item.maxGapDaysBetweenSameYearCaptureDates, representativeParsedRows: item.representativeCaptures.map((capture: any) => capture.parsedRows), temporalComparisons: item.temporalComparisons })) }, null, 2));
+  console.log(JSON.stringify({
+    status: evidence.status,
+    summary: evidence.summary,
+    scientificConclusion: evidence.scientificConclusion,
+    seasonEvidence: seasonEvidence.map((item: any) => ({
+      season: item.season,
+      strict: item.strictQualifiedAllPitcherCapturesAllArchiveYears,
+      sameYear: item.sameCalendarYearCaptureCount,
+      uniqueDates: item.sameCalendarYearUniqueCaptureDates,
+      first: item.firstSameYearCaptureDate,
+      last: item.lastSameYearCaptureDate,
+      maxGapDays: item.maxGapDaysBetweenSameYearCaptureDates,
+      representativeParsedRows: item.representativeCaptures.map((capture: any) => capture.parsedRows),
+      representativeProductionTupleRows: item.representativeCaptures.map((capture: any) => capture.rowsWithProductionExpectedTuple),
+      representativeArithmeticMismatchCounts: item.representativeCaptures.map((capture: any) => capture.arithmeticDiffMismatchCount),
+      temporalComparisons: item.temporalComparisons,
+    })),
+  }, null, 2));
 }
 
 main().catch((error) => {
