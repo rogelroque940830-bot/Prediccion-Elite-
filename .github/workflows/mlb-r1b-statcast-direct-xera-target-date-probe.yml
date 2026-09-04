@@ -1,0 +1,76 @@
+name: MLB R1B Statcast Direct xERA Target-Date Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-direct-xera-target-date-probe.ts
+      - .github/workflows/mlb-r1b-statcast-direct-xera-target-date-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-direct-xera-target-date-probe.ts
+      - .github/workflows/mlb-r1b-statcast-direct-xera-target-date-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Probe direct aggregate xERA/ERA target-date fields
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-direct-xera-target-date-probe
+          npx tsx scripts/mlb-r1b-statcast-direct-xera-target-date-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-direct-xera-target-date-probe/evidence.json
+      - name: Enforce diagnostic-only fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-direct-xera-target-date-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-direct-xera-target-date-probe/evidence.json','utf8'));
+          if(e.status!=='DIRECT_XERA_TARGET_DATE_SOURCE_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.season!==2025||e.cutoff!=='2025-05-31') throw new Error('probe boundary');
+          if(!Array.isArray(e.variants)||e.variants.length<5) throw new Error('variant coverage');
+          if(e.interpretationPolicy?.headerPresenceRequiredBeforeTreatingARequestedStatAsEmitted!==true) throw new Error('header authority');
+          if(e.interpretationPolicy?.fullSeasonExactParityRequiredBeforeTargetDateUse!==true) throw new Error('parity authority');
+          if(e.interpretationPolicy?.cutoffMustBeDemonstrablyActive!==true) throw new Error('cutoff authority');
+          if(e.interpretationPolicy?.approximationForbidden!==true||e.interpretationPolicy?.absenceOfDirectFieldDoesNotAuthorizeEmpiricalCurveFit!==true) throw new Error('approximation boundary');
+          if(e.decision?.familyPromotionAuthorized!==false||e.decision?.authoritativeExactXeraTargetDateSemanticsProvenByThisProbe!==false) throw new Error('premature promotion');
+          const s=e.scientificBoundary;
+          if(s?.researchOnly!==true||s?.productionChanged!==false||s?.weightsChanged!==false||s?.routingChanged!==false||s?.stakingChanged!==false||s?.betEliteChanged!==false||s?.marketPricesRead!==false||s?.targetOutcomeReadForModeling!==false||s?.automaticBetPlacementAllowed!==false||s?.realFinancialExposure!==0||s?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-direct-xera-target-date-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'approximationForbidden: true' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload direct-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-direct-xera-target-date-probe
+          path: artifacts/mlb-r1b-statcast-direct-xera-target-date-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
