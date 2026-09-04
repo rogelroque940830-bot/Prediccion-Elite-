@@ -1,0 +1,33 @@
+name: Validate MLB Early ERE History V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-ledger-history-view.ts'
+      - 'server/mlb-ledger-history-view.test.ts'
+      - '.github/workflows/validate-mlb-early-ere-history-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Test immutable MLB history projection
+        run: npx tsx --test server/mlb-ledger-history-view.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Diff integrity
+        run: git diff --check origin/main...HEAD
