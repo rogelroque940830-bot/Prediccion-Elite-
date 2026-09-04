@@ -14,6 +14,18 @@ type SportingUiStatus =
   | "CERTIFIED_INPUT_ASSEMBLY_BLOCKED"
   | "RUN_COMPLETED";
 
+type SportingMarketProbabilities = {
+  ml: {
+    homeWinProbability: number;
+    awayWinProbability: number;
+  };
+  f5Ml: {
+    homeWinProbability: number;
+    awayWinProbability: number;
+    pushProbability: number;
+  } | null;
+};
+
 type SportingSlateLeader = {
   gamePk: number;
   awayTeam: string;
@@ -24,6 +36,7 @@ type SportingSlateLeader = {
   selectedSideProbability: number | null;
   robustSelectedSideProbability: number | null;
   probabilityStage: string;
+  marketProbabilities?: SportingMarketProbabilities | null;
 };
 
 type SportingSlateGame = {
@@ -202,6 +215,33 @@ export function MlbSportingDailyPickControl() {
                   <div><div className="text-muted-foreground">Slate evaluado</div><div className="font-semibold">{slateEvaluated ?? "N/D"}</div></div>
                   <div><div className="text-muted-foreground">Competidores ranking</div><div className="font-semibold">{rankedCompetitors ?? "N/D"}</div></div>
                 </div>
+
+                {leader.marketProbabilities && (
+                  <div className="mt-3 overflow-hidden rounded-md border border-border/70 bg-background/35" data-testid="mlb-leader-market-probabilities">
+                    <div className="border-b border-border/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">
+                      Probabilidades V16 por mercado · sin cuotas
+                    </div>
+                    <div className="grid grid-cols-4 text-xs">
+                      <div className="px-3 py-2 text-muted-foreground">Mercado</div>
+                      <div className="px-3 py-2 text-muted-foreground">{leader.awayTeam}</div>
+                      <div className="px-3 py-2 text-muted-foreground">{leader.homeTeam}</div>
+                      <div className="px-3 py-2 text-muted-foreground">Empate / Push</div>
+
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">ML</div>
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">{percent(leader.marketProbabilities.ml.awayWinProbability)}</div>
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">{percent(leader.marketProbabilities.ml.homeWinProbability)}</div>
+                      <div className="border-t border-border/50 px-3 py-2 text-muted-foreground">—</div>
+
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">ML F5</div>
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">{percent(leader.marketProbabilities.f5Ml?.awayWinProbability)}</div>
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">{percent(leader.marketProbabilities.f5Ml?.homeWinProbability)}</div>
+                      <div className="border-t border-border/50 px-3 py-2 font-semibold">{percent(leader.marketProbabilities.f5Ml?.pushProbability)}</div>
+                    </div>
+                    <p className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+                      Estos porcentajes son del modelo V16 y siguen siendo price-independent. No implican que ya se hayan consultado cuotas ni que exista una apuesta oficial.
+                    </p>
+                  </div>
+                )}
 
                 {screenedOut != null && screenedOut > 0 && (
                   <div className="mt-3 rounded-md border border-border/70 bg-background/35 p-3" data-testid="mlb-slate-screened-out-audit">
