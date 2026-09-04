@@ -2,12 +2,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const SCHEMA = "courtedge-mlb-r1b-statcast-xera-square-law-probe.v1" as const;
-const UA = "Mozilla/5.0 (compatible; CourtEdge-MLB-R1B-xERA-Square-Law/1.0)";
+const SCHEMA = "courtedge-mlb-r1b-statcast-xera-square-law-probe.v2" as const;
+const UA = "Mozilla/5.0 (compatible; CourtEdge-MLB-R1B-xERA-Square-Law/2.0)";
 const SEASONS = [2022, 2023, 2024, 2025, 2026] as const;
 const PRODUCTION_MIN_PA = 50;
 const DISPLAY_XWOBA_HALF_STEP = 0.0005;
 const DISPLAY_XERA_HALF_STEP = 0.005;
+const EPS = 1e-12;
 
 type CsvRow = Record<string, string>;
 type Point = {
@@ -16,6 +17,18 @@ type Point = {
   xwoba: number;
   xwobaRaw: string;
   xera: number;
+};
+
+type IntervalPoint = {
+  playerId: number;
+  x: number;
+  y: number;
+  xLo: number;
+  xHi: number;
+  yLo: number;
+  yHi: number;
+  zLo: number;
+  zHi: number;
 };
 
 function splitCsvLine(line: string): string[] {
@@ -28,9 +41,7 @@ function splitCsvLine(line: string): string[] {
       if (quoted && line[i + 1] === '"') {
         cell += '"';
         i++;
-      } else {
-        quoted = !quoted;
-      }
+      } else quoted = !quoted;
     } else if (c === "," && !quoted) {
       out.push(cell);
       cell = "";
@@ -45,19 +56,17 @@ function splitCsvLine(line: string): string[] {
 function parseCsv(text: string): { headers: string[]; rows: CsvRow[] } {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
   if (!lines.length) return { headers: [], rows: [] };
-  const headers = splitCsvLine(lines[0]).map((h) => h.trim());
+  const headers = splitCsvLine(lines[0]).map((header) => header.trim());
   const rows = lines.slice(1).map((line) => {
-    const values = splitCsvLine(line);
+    const cells = splitCsvLine(line);
     const row: CsvRow = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] ?? "";
-    });
+    headers.forEach((header, index) => { row[header] = cells[index] ?? ""; });
     return row;
   });
   return { headers, rows };
 }
 
-function numberOrNull(value: string | undefined): number | null {
+function num(value: string | undefined): number | null {
   if (value == null || value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -87,10 +96,7 @@ async function fetchText(url: string): Promise<string> {
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
       const response = await fetch(url, {
-        headers: {
-          Accept: "text/csv,text/plain;q=0.9,*/*;q=0.8",
-          "User-Agent": UA,
-        },
+        headers: { Accept: "text/csv,text/plain;q=0.9,*/*;q=0.8", "User-Agent": UA },
         signal: AbortSignal.timeout(90_000),
       });
       const body = await response.text();
@@ -108,36 +114,80 @@ async function fetchText(url: string): Promise<string> {
 function toPoints(rows: readonly CsvRow[]): Point[] {
   const points: Point[] = [];
   for (const row of rows) {
-    const playerId = numberOrNull(row.player_id);
-    const pa = numberOrNull(row.pa);
-    const xwoba = numberOrNull(row.est_woba);
-    const xera = numberOrNull(row.xera);
+    const playerId = num(row.player_id);
+    const pa = num(row.pa);
+    const xwoba = num(row.est_woba);
+    const xera = num(row.xera);
     if (playerId == null || pa == null || xwoba == null || xera == null) continue;
-    points.push({
-      playerId,
-      pa,
-      xwoba,
-      xwobaRaw: String(row.est_woba).trim(),
-      xera,
-    });
+    points.push({ playerId, pa, xwoba, xwobaRaw: String(row.est_woba).trim(), xera });
   }
   return points;
 }
 
 function uniqueDisplayedMapping(points: readonly Point[]): Point[] {
   const byX = new Map<string, Point>();
-  const conflicts = new Map<string, Set<string>>();
+  const valuesByX = new Map<string, Set<string>>();
   for (const point of points) {
-    const values = conflicts.get(point.xwobaRaw) ?? new Set<string>();
+    const values = valuesByX.get(point.xwobaRaw) ?? new Set<string>();
     values.add(point.xera.toFixed(2));
-    conflicts.set(point.xwobaRaw, values);
+    valuesByX.set(point.xwobaRaw, values);
     if (!byX.has(point.xwobaRaw)) byX.set(point.xwobaRaw, point);
   }
-  const collision = [...conflicts.entries()].find(([, values]) => values.size > 1);
+  const collision = [...valuesByX.entries()].find(([, values]) => values.size > 1);
   if (collision) {
     throw new Error(`XERA_SQUARE_LAW_DISPLAY_MAPPING_COLLISION:${collision[0]}:${[...collision[1]].join("|")}`);
   }
   return [...byX.values()].sort((a, b) => a.xwoba - b.xwoba);
+}
+
+function intervals(points: readonly Point[]): IntervalPoint[] {
+  return points.map((point) => {
+    const xLo = Math.max(0, point.xwoba - DISPLAY_XWOBA_HALF_STEP);
+    const xHi = point.xwoba + DISPLAY_XWOBA_HALF_STEP;
+    return {
+      playerId: point.playerId,
+      x: point.xwoba,
+      y: point.xera,
+      xLo,
+      xHi,
+      yLo: point.xera - DISPLAY_XERA_HALF_STEP,
+      yHi: point.xera + DISPLAY_XERA_HALF_STEP,
+      zLo: xLo * xLo,
+      zHi: xHi * xHi,
+    };
+  });
+}
+
+function evaluateModel(
+  points: readonly Point[],
+  family: string,
+  parameters: Record<string, number>,
+  predict: (x: number) => number,
+) {
+  const residuals = points.map((point) => {
+    const predicted = predict(point.xwoba);
+    return {
+      playerId: point.playerId,
+      xwoba: point.xwoba,
+      xera: point.xera,
+      predicted,
+      absResidual: Math.abs(point.xera - predicted),
+      exactAfterRound2: round2(predicted) === point.xera,
+    };
+  });
+  return {
+    family,
+    parameters,
+    total: points.length,
+    exactAfterRound2: residuals.filter((item) => item.exactAfterRound2).length,
+    allExactAfterRound2: residuals.every((item) => item.exactAfterRound2),
+    meanAbsResidual: residuals.reduce((sum, item) => sum + item.absResidual, 0) / residuals.length,
+    maxAbsResidual: Math.max(...residuals.map((item) => item.absResidual)),
+    mismatchExamples: residuals
+      .filter((item) => !item.exactAfterRound2)
+      .sort((a, b) => b.absResidual - a.absResidual)
+      .slice(0, 20),
+  };
 }
 
 function proportionalSquareFit(points: readonly Point[]) {
@@ -166,74 +216,156 @@ function linearXwobaFit(points: readonly Point[]) {
   return evaluateModel(points, "AFFINE_XWOBA_UNSQUARED_CONTROL", { a, b }, (x) => a + b * x);
 }
 
-function evaluateModel(
-  points: readonly Point[],
-  family: string,
-  parameters: Record<string, number>,
-  predict: (x: number) => number,
-) {
-  const residuals = points.map((point) => {
-    const predicted = predict(point.xwoba);
-    return {
-      playerId: point.playerId,
-      xwoba: point.xwoba,
-      xera: point.xera,
-      predicted,
-      absResidual: Math.abs(point.xera - predicted),
-      exactAfterRound2: round2(predicted) === point.xera,
-    };
-  });
-  const abs = residuals.map((item) => item.absResidual);
+/**
+ * Exact interval-feasibility test for y = k*x^2 when both published xwOBA and xERA
+ * may be rounded display values. This does not fit a coefficient; it intersects every
+ * coefficient interval that could produce the displayed pair from latent precision.
+ */
+function proportionalLatentPrecisionFeasibility(points: readonly Point[]) {
+  const iv = intervals(points);
+  let lower = 0;
+  let upper = Number.POSITIVE_INFINITY;
+  let lowerWitness: unknown = null;
+  let upperWitness: unknown = null;
+  for (const point of iv) {
+    const candidateLower = point.yLo / point.zHi;
+    const candidateUpper = point.yHi / point.zLo;
+    if (candidateLower > lower) {
+      lower = candidateLower;
+      lowerWitness = { playerId: point.playerId, xwoba: point.x, xera: point.y, candidateLower };
+    }
+    if (candidateUpper < upper) {
+      upper = candidateUpper;
+      upperWitness = { playerId: point.playerId, xwoba: point.x, xera: point.y, candidateUpper };
+    }
+  }
+  const feasible = lower <= upper + EPS;
   return {
-    family,
-    parameters,
-    total: points.length,
-    exactAfterRound2: residuals.filter((item) => item.exactAfterRound2).length,
-    allExactAfterRound2: residuals.every((item) => item.exactAfterRound2),
-    meanAbsResidual: abs.reduce((sum, value) => sum + value, 0) / abs.length,
-    maxAbsResidual: Math.max(...abs),
-    mismatchExamples: residuals
-      .filter((item) => !item.exactAfterRound2)
-      .sort((a, b) => b.absResidual - a.absResidual)
-      .slice(0, 20),
+    family: "PROPORTIONAL_XWOBA_SQUARED_LATENT_PRECISION_FEASIBILITY",
+    feasible,
+    kRange: { lower, upper },
+    lowerWitness,
+    upperWitness,
+    assumptions: {
+      xwobaDisplayRoundingHalfStep: DISPLAY_XWOBA_HALF_STEP,
+      xeraDisplayRoundingHalfStep: DISPLAY_XERA_HALF_STEP,
+      positiveCoefficientOnly: true,
+    },
+    authority: "FEASIBILITY_ONLY_NOT_PARAMETER_PROVENANCE",
   };
 }
 
-function intervalCompatibilityForAffineSquare(
-  points: readonly Point[],
-  parameters: { a: number; b: number },
-) {
-  const compatible: Array<{ playerId: number; xwoba: number; xera: number }> = [];
-  const incompatible: Array<{
-    playerId: number;
-    xwoba: number;
-    xera: number;
-    predictedMin: number;
-    predictedMax: number;
-    displayMin: number;
-    displayMax: number;
-  }> = [];
+/**
+ * Exact pairwise inequality reduction for existence of y = a + b*x^2, b>=0,
+ * with one latent x and y inside each published display interval.
+ *
+ * For fixed b, each point admits an intercept interval:
+ *   a >= yLo - b*zHi
+ *   a <= yHi - b*zLo
+ * A global solution exists iff every lower bound is <= every upper bound. Each pair
+ * is linear in b, so intersecting the resulting b inequalities is exact up to normal
+ * floating-point arithmetic; no regression fit is used to decide feasibility.
+ */
+function affineLatentPrecisionFeasibility(points: readonly Point[]) {
+  const iv = intervals(points);
+  let bLower = 0;
+  let bUpper = Number.POSITIVE_INFINITY;
+  let lowerWitness: unknown = null;
+  let upperWitness: unknown = null;
+  let impossibleConstantPair: unknown = null;
 
-  for (const point of points) {
-    const xLo = Math.max(0, point.xwoba - DISPLAY_XWOBA_HALF_STEP);
-    const xHi = point.xwoba + DISPLAY_XWOBA_HALF_STEP;
-    const p1 = parameters.a + parameters.b * xLo * xLo;
-    const p2 = parameters.a + parameters.b * xHi * xHi;
-    const predictedMin = Math.min(p1, p2);
-    const predictedMax = Math.max(p1, p2);
-    const displayMin = point.xera - DISPLAY_XERA_HALF_STEP;
-    const displayMax = point.xera + DISPLAY_XERA_HALF_STEP;
-    const overlaps = predictedMax >= displayMin && predictedMin < displayMax;
-    if (overlaps) compatible.push({ playerId: point.playerId, xwoba: point.xwoba, xera: point.xera });
-    else incompatible.push({ playerId: point.playerId, xwoba: point.xwoba, xera: point.xera, predictedMin, predictedMax, displayMin, displayMax });
+  for (const left of iv) {
+    for (const right of iv) {
+      const c = right.zLo - left.zHi;
+      const d = right.yHi - left.yLo;
+      if (Math.abs(c) <= EPS) {
+        if (d < -EPS) {
+          impossibleConstantPair = {
+            left: { playerId: left.playerId, xwoba: left.x, xera: left.y },
+            right: { playerId: right.playerId, xwoba: right.x, xera: right.y },
+            c,
+            d,
+          };
+          break;
+        }
+        continue;
+      }
+      const bound = d / c;
+      if (c > 0) {
+        if (bound < bUpper) {
+          bUpper = bound;
+          upperWitness = {
+            left: { playerId: left.playerId, xwoba: left.x, xera: left.y },
+            right: { playerId: right.playerId, xwoba: right.x, xera: right.y },
+            bound,
+          };
+        }
+      } else if (bound > bLower) {
+        bLower = bound;
+        lowerWitness = {
+          left: { playerId: left.playerId, xwoba: left.x, xera: left.y },
+          right: { playerId: right.playerId, xwoba: right.x, xera: right.y },
+          bound,
+        };
+      }
+    }
+    if (impossibleConstantPair) break;
+  }
+
+  bLower = Math.max(0, bLower);
+  const feasibleB = impossibleConstantPair == null && bLower <= bUpper + EPS && bUpper >= -EPS;
+  let witness: null | { a: number; b: number; aRange: { lower: number; upper: number } } = null;
+  if (feasibleB) {
+    const b = Number.isFinite(bUpper) ? Math.max(0, (bLower + bUpper) / 2) : bLower;
+    const aLower = Math.max(...iv.map((point) => point.yLo - b * point.zHi));
+    const aUpper = Math.min(...iv.map((point) => point.yHi - b * point.zLo));
+    if (aLower <= aUpper + 1e-10) {
+      witness = { a: (aLower + aUpper) / 2, b, aRange: { lower: aLower, upper: aUpper } };
+    }
   }
 
   return {
-    assumption: "TRUE_XWOBA_MAY_LIE_WITHIN_DISPLAYED_THREE_DECIMAL_ROUNDING_INTERVAL_AND_XERA_IS_DISPLAYED_TO_TWO_DECIMALS",
-    xwobaHalfStep: DISPLAY_XWOBA_HALF_STEP,
-    xeraHalfStep: DISPLAY_XERA_HALF_STEP,
+    family: "AFFINE_XWOBA_SQUARED_LATENT_PRECISION_FEASIBILITY",
+    feasible: feasibleB && witness != null,
+    bRange: { lower: bLower, upper: bUpper },
+    witness,
+    lowerWitness,
+    upperWitness,
+    impossibleConstantPair,
+    assumptions: {
+      xwobaDisplayRoundingHalfStep: DISPLAY_XWOBA_HALF_STEP,
+      xeraDisplayRoundingHalfStep: DISPLAY_XERA_HALF_STEP,
+      nonNegativeSlope: true,
+    },
+    authority: "EXACT_INTERVAL_FEASIBILITY_ONLY_NOT_SAVANT_PARAMETER_PROVENANCE_OR_TARGET_DATE_CUSTODY",
+  };
+}
+
+function displayedRoundingCompatibility(
+  points: readonly Point[],
+  parameters: { a: number; b: number },
+) {
+  const incompatible: unknown[] = [];
+  for (const point of intervals(points)) {
+    const predictedMin = parameters.a + parameters.b * point.zLo;
+    const predictedMax = parameters.a + parameters.b * point.zHi;
+    const overlaps = predictedMax >= point.yLo && predictedMin <= point.yHi;
+    if (!overlaps) {
+      incompatible.push({
+        playerId: point.playerId,
+        xwoba: point.x,
+        xera: point.y,
+        predictedMin,
+        predictedMax,
+        displayMin: point.yLo,
+        displayMax: point.yHi,
+      });
+    }
+  }
+  return {
+    assumption: "CENTER_VALUE_LEAST_SQUARES_COEFFICIENTS_WITH_DISPLAY_ROUNDING_INTERVALS",
     total: points.length,
-    compatible: compatible.length,
+    compatible: points.length - incompatible.length,
     incompatible: incompatible.length,
     allCompatible: incompatible.length === 0,
     incompatibleExamples: incompatible.slice(0, 20),
@@ -272,8 +404,8 @@ function compareQualified(min1: readonly Point[], qualified: readonly Point[]) {
 }
 
 function weightedMean(points: readonly Point[], select: (point: Point) => number): number {
-  const weight = points.reduce((sum, point) => sum + point.pa, 0);
-  return points.reduce((sum, point) => sum + point.pa * select(point), 0) / weight;
+  const totalWeight = points.reduce((sum, point) => sum + point.pa, 0);
+  return points.reduce((sum, point) => sum + point.pa * select(point), 0) / totalWeight;
 }
 
 function ratioDiagnostics(points: readonly Point[]) {
@@ -293,7 +425,7 @@ function ratioDiagnostics(points: readonly Point[]) {
 async function main() {
   const outArg = process.argv.find((arg) => arg.startsWith("--out="));
   const outputPath = outArg?.slice("--out=".length) || "artifacts/mlb-r1b-statcast-xera-square-law-probe/evidence.json";
-  const seasonEvidence: unknown[] = [];
+  const seasonEvidence: Array<any> = [];
 
   for (const season of SEASONS) {
     const min1Url = expectedStatisticsUrl(season, "1");
@@ -317,7 +449,9 @@ async function main() {
     const proportional = proportionalSquareFit(unique);
     const affineSquare = affineSquareFit(unique);
     const linearControl = linearXwobaFit(unique);
-    const params = affineSquare.parameters as { a: number; b: number };
+    const fittedParams = affineSquare.parameters as { a: number; b: number };
+    const proportionalLatent = proportionalLatentPrecisionFeasibility(unique);
+    const affineLatent = affineLatentPrecisionFeasibility(unique);
 
     seasonEvidence.push({
       season,
@@ -342,21 +476,36 @@ async function main() {
         affineSquare,
         unsquaredLinearControl: linearControl,
         xeraOverXwobaSquaredRatio: ratioDiagnostics(unique),
-        displayedRoundingIntervalCompatibility: intervalCompatibilityForAffineSquare(unique, params),
+        displayedRoundingIntervalCompatibility: displayedRoundingCompatibility(unique, fittedParams),
+        latentPrecisionFeasibility: {
+          proportional: proportionalLatent,
+          affine: affineLatent,
+        },
       },
     });
   }
 
-  const seasons = seasonEvidence as Array<any>;
   const evidence = {
     schemaVersion: SCHEMA,
     status: "XERA_SQUARE_LAW_MECHANISM_PROBE_ONLY_NOT_PARITY_CERTIFICATION",
     family: "STATCAST_QUALITY",
     generatedAt: new Date().toISOString(),
     sourceAuthorityContext: {
-      baseballSavantExpectedStatistics: "xERA is documented as a 1:1 translation of xwOBA converted to the ERA scale.",
-      tangoMechanismHypothesis: "Research hypothesis under test: the xwOBA-to-ERA conversion becomes linear in xwOBA squared. This probe tests the observable square-law shape but does not treat fitted coefficients as source authority.",
-      expectedStatisticsUrl: "https://baseballsavant.mlb.com/leaderboard/expected_statistics",
+      mlbGlossary: {
+        url: "https://www.mlb.com/glossary/statcast/expected-era",
+        statement: "xERA is a simple 1:1 translation of xwOBA, converted to the ERA scale.",
+        linksToTangotigerAsMoreAboutXera: true,
+      },
+      tangotigerStatcastLab: {
+        url: "https://tangotiger.com/index.php/site/comments/statcast-lab-xera",
+        published: "2020-03-13",
+        mechanismStatements: [
+          "If you square xwOBA, the curved xwOBA-to-xERA relationship becomes a straight line.",
+          "Create an xERA that is proportionate to xwOBA squared.",
+          "The page notes the data are shown after every game.",
+        ],
+      },
+      evidencePolicy: "Official MLB defines the translation and links the Tangotiger Statcast Lab explanation. The statements motivate a square-law feasibility test but do not by themselves publish the exact time-varying coefficient/intercept series used by production Savant.",
     },
     productionSemanticContext: {
       evaluatePitcherMinimumPa: PRODUCTION_MIN_PA,
@@ -365,28 +514,35 @@ async function main() {
       productionNeedsExactEraMinusXeraDiff: true,
     },
     seasonEvidence,
-    crossSeasonCoefficientDiagnostics: seasons.map((season) => ({
+    crossSeasonCoefficientDiagnostics: seasonEvidence.map((season) => ({
       season: season.season,
       affineSquareA: season.squareLawDiagnostics.affineSquare.parameters.a,
       affineSquareB: season.squareLawDiagnostics.affineSquare.parameters.b,
       affineSquareExactAfterRound2: season.squareLawDiagnostics.affineSquare.exactAfterRound2,
       affineSquareTotal: season.squareLawDiagnostics.affineSquare.total,
       roundingIntervalAllCompatible: season.squareLawDiagnostics.displayedRoundingIntervalCompatibility.allCompatible,
+      proportionalLatentPrecisionFeasible: season.squareLawDiagnostics.latentPrecisionFeasibility.proportional.feasible,
+      affineLatentPrecisionFeasible: season.squareLawDiagnostics.latentPrecisionFeasibility.affine.feasible,
+      affineLatentBRange: season.squareLawDiagnostics.latentPrecisionFeasibility.affine.bRange,
+      affineLatentWitness: season.squareLawDiagnostics.latentPrecisionFeasibility.affine.witness,
     })),
     scientificConclusion: {
-      exactProportionalSquareLawOnDisplayedValuesEverySeason: seasons.every((season) => season.squareLawDiagnostics.proportional.allExactAfterRound2 === true),
-      exactAffineSquareLawOnDisplayedValuesEverySeason: seasons.every((season) => season.squareLawDiagnostics.affineSquare.allExactAfterRound2 === true),
-      fittedAffineSquareRoundingIntervalsCompatibleEverySeason: seasons.every((season) => season.squareLawDiagnostics.displayedRoundingIntervalCompatibility.allCompatible === true),
-      currentQualifiedSurfaceValueParityWithMin1EverySeason: seasons.every((season) => season.qualifiedVsMin1.mismatchCount === 0),
+      exactProportionalSquareLawOnDisplayedValuesEverySeason: seasonEvidence.every((season) => season.squareLawDiagnostics.proportional.allExactAfterRound2 === true),
+      exactAffineSquareLawOnDisplayedValuesEverySeason: seasonEvidence.every((season) => season.squareLawDiagnostics.affineSquare.allExactAfterRound2 === true),
+      fittedAffineSquareRoundingIntervalsCompatibleEverySeason: seasonEvidence.every((season) => season.squareLawDiagnostics.displayedRoundingIntervalCompatibility.allCompatible === true),
+      proportionalSquareLawLatentPrecisionFeasibleEverySeason: seasonEvidence.every((season) => season.squareLawDiagnostics.latentPrecisionFeasibility.proportional.feasible === true),
+      affineSquareLawLatentPrecisionFeasibleEverySeason: seasonEvidence.every((season) => season.squareLawDiagnostics.latentPrecisionFeasibility.affine.feasible === true),
+      currentQualifiedSurfaceValueParityWithMin1EverySeason: seasonEvidence.every((season) => season.qualifiedVsMin1.mismatchCount === 0),
       authoritativeExactFormulaProven: false,
       authoritativeTargetDateRunEnvironmentProven: false,
       targetDateXeraCustodyProven: false,
       familyPromotionAuthorized: false,
-      nextGate: "IF_SQUARE_LAW_SHAPE_IS_SUPPORTED_IDENTIFY_AUTHORITATIVE_SEASON_AND_TARGET_DATE_RUN_ENVIRONMENT_PARAMETERS_OR_IMMUTABLE_ASOF_XERA_SNAPSHOTS; OTHERWISE_RECORD_FORMULA_BLOCKER",
+      nextGate: "USE_EXACT_LATENT_PRECISION_FEASIBILITY_TO_CLASSIFY_THE_DOCUMENTED_SQUARE_LAW; IF_FEASIBLE, IDENTIFY_AUTHORITATIVE_TIME_VARYING_PARAMETERS_OR_IMMUTABLE_PRIMARY_ASOF_XERA; IF_INFEASIBLE, RECORD_THAT_THE_PUBLIC_DESCRIPTION_IS_INSUFFICIENT_FOR_EXACT_RECONSTRUCTION",
     },
     interpretationPolicy: {
       fittedCoefficientsAreDiagnosticOnly: true,
       displayedRoundingCompatibilityIsNotFormulaAuthority: true,
+      latentPrecisionFeasibilityIsNotParameterProvenance: true,
       exactEmpiricalFitWouldStillRequireAuthoritativeProvenance: true,
       finalSeasonCoefficientsMayNotBeAppliedRetroactively: true,
       paWeightedLeagueDiagnosticsAreNotAuthoritativeRunEnvironment: true,
