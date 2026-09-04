@@ -10,6 +10,13 @@ on:
       - scripts/mlb-r1b-statcast-xera-era-scale-probe.ts
       - research/mlb-r1b-statcast-contact-quality-historical-adapter-contract.json
       - .github/workflows/validate-mlb-r1b-statcast-contact-adapter-xera-probe.yml
+  pull_request:
+    paths:
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.ts
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.test.ts
+      - scripts/mlb-r1b-statcast-xera-era-scale-probe.ts
+      - research/mlb-r1b-statcast-contact-quality-historical-adapter-contract.json
+      - .github/workflows/validate-mlb-r1b-statcast-contact-adapter-xera-probe.yml
   workflow_dispatch:
 
 permissions:
