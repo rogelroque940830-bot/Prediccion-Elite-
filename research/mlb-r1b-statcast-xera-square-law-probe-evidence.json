@@ -1,90 +1,109 @@
 {
-  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-square-law-probe-evidence.v1",
-  "status": "PINNED_XERA_SQUARE_LAW_PROBE_NOT_PARITY_CERTIFICATION",
+  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-square-law-probe-evidence.v2",
+  "status": "PINNED_XERA_SQUARE_LAW_LATENT_PRECISION_PROBE_NOT_PARITY_CERTIFICATION",
   "family": "STATCAST_QUALITY",
   "classification": "PARTIAL_PARITY",
+  "previousProbe": {
+    "runId": 33917572942,
+    "headSha": "145dde420dce262f43c9038d45f348d3d03201e0",
+    "artifactId": 9953803036,
+    "artifactDigest": "sha256:f257f15a370020913ad0c4af3d5dcdf4d6697ca5526aad174c42c89c5f23cd24"
+  },
   "workflow": {
     "name": "MLB R1B Statcast xERA Square-Law Probe",
-    "runId": 33917572942,
-    "runNumber": 1,
-    "headSha": "145dde420dce262f43c9038d45f348d3d03201e0",
+    "runId": 33918613342,
+    "runNumber": 7,
+    "headSha": "72108cb9532b8f3adb29f84d2f010a9e03a47431",
     "conclusion": "success"
   },
   "artifact": {
-    "id": 9953803036,
+    "id": 9954188757,
     "name": "mlb-r1b-statcast-xera-square-law-probe",
-    "digest": "sha256:f257f15a370020913ad0c4af3d5dcdf4d6697ca5526aad174c42c89c5f23cd24",
-    "expiresAt": "2026-10-04T20:45:07Z"
+    "digest": "sha256:ffca2ccbe5495ca9e22cd48e15f699a73bd7d0e9c1ad422760bb12c6815ed90a",
+    "expiresAt": "2026-10-04T20:58:01Z"
   },
-  "productionDomain": {
-    "minimumPa": 50,
-    "seasons": [2022, 2023, 2024, 2025, 2026],
-    "currentQualifiedSurfaceValueParityWithMin1EverySeason": true
+  "generatedAt": "2026-09-04T20:58:01.031Z",
+  "sourceAuthority": {
+    "mlbGlossary": "https://www.mlb.com/glossary/statcast/expected-era",
+    "tangotigerStatcastLab": "https://tangotiger.com/index.php/site/comments/statcast-lab-xera",
+    "frozenInterpretation": "MLB defines xERA as xwOBA converted to ERA scale and links Tango; Tango describes a square-law relation. Neither publishes the exact time-varying production parameter series required for historical reconstruction."
   },
-  "affineSquareDiagnostics": [
+  "productionSemantics": {
+    "evaluatePitcherMinimumPa": 50,
+    "productionExpectedStatisticsMin": "q",
+    "productionNeedsExactXera": true,
+    "productionNeedsExactEraMinusXeraDiff": true
+  },
+  "seasons": [
     {
       "season": 2022,
-      "a": -0.5367191300423348,
-      "b": 47.142365010303365,
-      "exactAfterRound2": 5,
-      "uniqueDisplayedXwobaValues": 172,
-      "displayRoundingIntervalsAllCompatible": false
+      "rowCounts": {"min1Usable":871,"productionDomainPaGte50":637,"qualifiedUsable":358,"uniqueDisplayedXwobaValuesInProductionDomain":172},
+      "qualifiedVsMin1MismatchCount": 0,
+      "centerValueAffineSquare": {"a":-0.5367191300423348,"b":47.142365010303365,"exactAfterRound2":5,"total":172},
+      "latentPrecision": {
+        "proportional": {"feasible":false,"kRange":{"lower":46.468147735945465,"upper":40.18122706134559}},
+        "affine": {"feasible":false,"bRange":{"lower":57.21861698416024,"upper":38.66070795204652},"witness":null}
+      }
     },
     {
       "season": 2023,
-      "a": -0.6780050005435934,
-      "b": 49.76811440237814,
-      "exactAfterRound2": 3,
-      "uniqueDisplayedXwobaValues": 165,
-      "displayRoundingIntervalsAllCompatible": false
+      "rowCounts": {"min1Usable":863,"productionDomainPaGte50":647,"qualifiedUsable":372,"uniqueDisplayedXwobaValuesInProductionDomain":165},
+      "qualifiedVsMin1MismatchCount": 0,
+      "centerValueAffineSquare": {"a":-0.6780050005435934,"b":49.76811440237814,"exactAfterRound2":3,"total":165},
+      "latentPrecision": {
+        "proportional": {"feasible":false,"kRange":{"lower":51.24859515912392,"upper":41.5056374159585}},
+        "affine": {"feasible":false,"bRange":{"lower":66.48490936050122,"upper":41.1740725642071},"witness":null}
+      }
     },
     {
       "season": 2024,
-      "a": -0.619794596753942,
-      "b": 47.96039422933568,
-      "exactAfterRound2": 5,
-      "uniqueDisplayedXwobaValues": 168,
-      "displayRoundingIntervalsAllCompatible": false
+      "rowCounts": {"min1Usable":854,"productionDomainPaGte50":630,"qualifiedUsable":366,"uniqueDisplayedXwobaValuesInProductionDomain":168},
+      "qualifiedVsMin1MismatchCount": 0,
+      "centerValueAffineSquare": {"a":-0.619794596753942,"b":47.96039422933568,"exactAfterRound2":5,"total":168},
+      "latentPrecision": {
+        "proportional": {"feasible":false,"kRange":{"lower":48.99032277372412,"upper":40.18122706134559}},
+        "affine": {"feasible":false,"bRange":{"lower":63.51791530944628,"upper":40.285094515029456},"witness":null}
+      }
     },
     {
       "season": 2025,
-      "a": -0.7416812561825603,
-      "b": 49.833145931141814,
-      "exactAfterRound2": 2,
-      "uniqueDisplayedXwobaValues": 164,
-      "displayRoundingIntervalsAllCompatible": false
+      "rowCounts": {"min1Usable":873,"productionDomainPaGte50":644,"qualifiedUsable":349,"uniqueDisplayedXwobaValuesInProductionDomain":164},
+      "qualifiedVsMin1MismatchCount": 0,
+      "centerValueAffineSquare": {"a":-0.7416812561825603,"b":49.833145931141814,"exactAfterRound2":2,"total":164},
+      "latentPrecision": {
+        "proportional": {"feasible":false,"kRange":{"lower":52.008554716689424,"upper":40.946366292770286}},
+        "affine": {"feasible":false,"bRange":{"lower":70.07518796992481,"upper":41.728031418753055},"witness":null}
+      }
     },
     {
       "season": 2026,
-      "a": -0.48592467715677135,
-      "b": 47.87638981847301,
-      "exactAfterRound2": 6,
-      "uniqueDisplayedXwobaValues": 170,
-      "displayRoundingIntervalsAllCompatible": false
+      "rowCounts": {"min1Usable":844,"productionDomainPaGte50":594,"qualifiedUsable":352,"uniqueDisplayedXwobaValuesInProductionDomain":170},
+      "qualifiedVsMin1MismatchCount": 0,
+      "centerValueAffineSquare": {"a":-0.48592467715677135,"b":47.87638981847301,"exactAfterRound2":6,"total":170},
+      "latentPrecision": {
+        "proportional": {"feasible":false,"kRange":{"lower":47.49908115874236,"upper":41.436728566450036}},
+        "affine": {"feasible":false,"bRange":{"lower":57.910839160839195,"upper":41.04863746119352},"witness":null}
+      }
     }
   ],
   "scientificConclusion": {
     "exactProportionalSquareLawOnDisplayedValuesEverySeason": false,
     "exactAffineSquareLawOnDisplayedValuesEverySeason": false,
     "fittedAffineSquareRoundingIntervalsCompatibleEverySeason": false,
+    "proportionalSquareLawLatentPrecisionFeasibleEverySeason": false,
+    "affineSquareLawLatentPrecisionFeasibleEverySeason": false,
+    "currentQualifiedSurfaceValueParityWithMin1EverySeason": true,
     "authoritativeExactFormulaProven": false,
     "authoritativeTargetDateRunEnvironmentProven": false,
     "targetDateXeraCustodyProven": false,
     "familyPromotionAuthorized": false,
-    "interpretation": "The documented xwOBA-to-ERA relationship is not an exact recoverable production formula from displayed xwOBA using either proportional or affine xwOBA-squared forms. Even allowing the displayed three-decimal xwOBA rounding interval does not make the fitted affine-square model universally compatible. Fitted coefficients are therefore rejected as historical authority.",
-    "nextGate": "AUTHORITATIVE_IMMUTABLE_ASOF_XERA_SNAPSHOT_OR_SOURCE_MECHANISM_REQUIRED"
+    "nextGate": "USE_EXACT_LATENT_PRECISION_FEASIBILITY_TO_CLASSIFY_THE_DOCUMENTED_SQUARE_LAW; IF_FEASIBLE, IDENTIFY_AUTHORITATIVE_TIME_VARYING_PARAMETERS_OR_IMMUTABLE_PRIMARY_ASOF_XERA; IF_INFEASIBLE, RECORD_THAT_THE_PUBLIC_DESCRIPTION_IS_INSUFFICIENT_FOR_EXACT_RECONSTRUCTION"
   },
-  "policy": {
-    "researchOnly": true,
-    "productionChanged": false,
-    "weightsChanged": false,
-    "routingChanged": false,
-    "stakingChanged": false,
-    "betEliteChanged": false,
-    "marketPricesRead": false,
-    "targetOutcomeReadForModeling": false,
-    "automaticBetPlacementAllowed": false,
-    "realFinancialExposure": 0,
-    "r1b2Authorized": false
+  "policy": {"researchOnly":true,"productionChanged":false,"weightsChanged":false,"routingChanged":false,"stakingChanged":false,"betEliteChanged":false,"marketPricesRead":false,"targetOutcomeReadForModeling":false,"automaticBetPlacementAllowed":false,"realFinancialExposure":0,"r1b2Authorized":false},
+  "interpretation": {
+    "publicSquareLawExactlyRecoverableUnderTestedPublishedPrecision": false,
+    "reason": "For every tested season, both proportional and affine xwOBA-squared latent-precision feasibility intervals are empty after allowing displayed xwOBA ±0.0005 and displayed xERA ±0.005.",
+    "doesNotFalsifyConceptualDescription": true,
+    "requiredNextGate": "PRIMARY_AUTHORITATIVE_ASOF_XERA_CUSTODY_OR_EXACT_TIME_VARYING_SAVANT_CONVERSION_MECHANISM"
   }
 }
