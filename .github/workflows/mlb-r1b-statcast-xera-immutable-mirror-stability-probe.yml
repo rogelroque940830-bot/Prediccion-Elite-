@@ -1,0 +1,74 @@
+name: MLB R1B Statcast xERA Immutable Mirror Stability Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Probe immutable timestamped xERA mapping stability
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe/evidence.json
+      - name: Enforce mirror diagnostic and fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe/evidence.json','utf8'));
+          if(e.status!=='IMMUTABLE_THIRD_PARTY_MIRROR_STABILITY_PROBE_ONLY_NOT_SOURCE_AUTHORITY') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY'||e.subjectSeason!==2026) throw new Error('family/season');
+          if(e.mirror?.primarySourceAuthority!==false||e.mirror?.immutableGitCommits!==true) throw new Error('mirror authority boundary');
+          if(!Array.isArray(e.snapshots)||e.snapshots.length!==6) throw new Error('snapshot coverage');
+          for(const s of e.snapshots){
+            if(!(s.rows>0)||!(s.usableRows>0)||!(s.uniqueDisplayedXwobaValues>=50)||!/^[a-f0-9]{40}$/.test(s.commit)||!/^[a-f0-9]{64}$/.test(s.sha256)) throw new Error(`snapshot integrity:${s.commit}`);
+          }
+          if(!Array.isArray(e.adjacentComparisons)||e.adjacentComparisons.length!==5) throw new Error('comparison coverage');
+          if(e.scientificConclusion?.observedSameSeasonDisplayedXwobaToXeraMappingChangedAcrossImmutableSnapshots!==true) throw new Error('expected mapping-change evidence absent');
+          if(e.scientificConclusion?.finalSeasonMappingRetroactiveUseSupportedByThisProbe!==false||e.scientificConclusion?.primaryAuthoritativeAsOfCustodyProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature authority');
+          if(e.interpretationPolicy?.thirdPartyMirrorCannotCertifySourceAuthority!==true||e.interpretationPolicy?.finalSeasonLookupRetroactiveUseForbidden!==true||e.interpretationPolicy?.approximationForbidden!==true) throw new Error('interpretation boundary');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'primarySourceAuthority: false' "$src"
+          grep -F 'approximationForbidden: true' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload immutable mirror evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-immutable-mirror-stability-probe
+          path: artifacts/mlb-r1b-statcast-xera-immutable-mirror-stability-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
