@@ -32,12 +32,14 @@ jobs:
         run: npx tsx --test server/mlb-whole-slate-sporting-finalization-v1.test.ts
       - name: Bundle-check finalization helper
         run: npx esbuild server/mlb-whole-slate-sporting-finalization-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-screened-out-audit.mjs
-      - name: Prove qualification boundary is observability-only
+      - name: Prove qualification boundary distinguishes missing data from true no-signal
         shell: bash
         run: |
           set -euo pipefail
           grep -F 'rankedGamePks' server/mlb-whole-slate-sporting-finalization-v1.ts
-          grep -F 'AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'missingDataCountsAsNegativeEvidence: false' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'incompleteProvisionalEvidenceMayFinalizeAsInferior: false' server/mlb-whole-slate-sporting-finalization-v1.ts
           grep -F 'modelThresholdChanged: false' server/mlb-whole-slate-sporting-finalization-v1.ts
           grep -F 'priceMayCreateSportingPick: false' server/mlb-whole-slate-sporting-finalization-v1.ts
           git diff --check origin/main...HEAD

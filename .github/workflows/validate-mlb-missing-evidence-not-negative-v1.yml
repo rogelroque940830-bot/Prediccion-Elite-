@@ -1,0 +1,56 @@
+name: Validate MLB Missing Evidence Not Negative V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-shortlist.ts'
+      - 'server/mlb-shortlist.test.ts'
+      - 'server/mlb-daily-opportunity-context-v1.ts'
+      - 'server/mlb-daily-opportunity-live-v1.ts'
+      - 'server/mlb-whole-slate-sporting-finalization-v1.ts'
+      - 'server/mlb-whole-slate-sporting-finalization-v1.test.ts'
+      - '.github/workflows/validate-mlb-missing-evidence-not-negative-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Test missing-data semantics and whole-slate finalization
+        run: |
+          npx tsx --test \
+            server/mlb-shortlist.test.ts \
+            server/mlb-daily-opportunity-context-v1.test.ts \
+            server/mlb-whole-slate-sporting-finalization-v1.test.ts \
+            server/mlb-unified-v16-ui-orchestration.test.ts
+      - name: Prove missing evidence is never encoded as negative evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'missingDataCountsAsNegativeEvidence: false' server/mlb-shortlist.ts
+          grep -F 'pendingCoreEvidencePreservedInCompetition: true' server/mlb-shortlist.ts
+          grep -F 'PROVISIONAL_CORE_EVIDENCE_INCOMPLETE' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'incompleteProvisionalEvidenceMayFinalizeAsInferior: false' server/mlb-whole-slate-sporting-finalization-v1.ts
+          grep -F 'missingEvidenceCountsAsNegativeEvidence: false' server/mlb-daily-opportunity-live-v1.ts
+      - name: Bundle-check touched runtime modules
+        run: |
+          npx esbuild server/mlb-shortlist.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-shortlist.mjs
+          npx esbuild server/mlb-daily-opportunity-live-v1.ts --bundle --platform=node --format=esm --external:better-sqlite3 --outfile=/tmp/mlb-daily-opportunity-live.mjs
+          npx esbuild server/mlb-whole-slate-sporting-finalization-v1.ts --bundle --platform=node --format=esm --outfile=/tmp/mlb-finalization.mjs
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Diff integrity
+        run: git diff --check origin/main...HEAD

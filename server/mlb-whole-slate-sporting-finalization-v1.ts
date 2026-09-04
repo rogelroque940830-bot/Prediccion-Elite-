@@ -24,16 +24,30 @@ export interface MlbWholeSlateSportingLeaderView {
   researchEligibilityIgnoredAsProductionGate: true;
 }
 
+export interface MlbWholeSlateEvidencePendingView {
+  gamePk: number;
+  awayTeam: string;
+  homeTeam: string;
+  inputStage: "FINAL" | "PROVISIONAL";
+  contextRank: number;
+  coreState: "PARTIAL" | "UNAVAILABLE";
+  unavailableCoreComponents: readonly string[];
+  missingDataCountsAsNegativeEvidence: false;
+}
+
 export interface MlbWholeSlateSportingFinalizationResult {
   schemaVersion: typeof MLB_WHOLE_SLATE_SPORTING_FINALIZATION_SCHEMA;
   state: MlbWholeSlateSportingFinalizationState;
   reason:
+    | "PROVISIONAL_CORE_EVIDENCE_INCOMPLETE"
     | "NO_FINAL_SPORTING_PICK_WHILE_PROVISIONAL_GAMES_REMAIN"
     | "PROVISIONAL_GAME_CAN_STILL_OUTRANK_FINAL_A_PLUS"
     | "PROVISIONAL_GAME_CAN_STILL_PROMOTE_ABOVE_FINAL_LOWER_TIER"
     | "FINAL_SPORTING_HIERARCHY_RESOLVED"
     | "WHOLE_SLATE_RESOLVED_NO_SPORTING_PICK";
   sportingSlateLeader: MlbWholeSlateSportingLeaderView | null;
+  evidencePendingGames: readonly MlbWholeSlateEvidencePendingView[];
+  provisionalEvidencePendingGamePks: readonly number[];
   unresolvedProvisionalGamePks: readonly number[];
   rankedGamePks: readonly number[];
   wholeSlateEvaluatedGames: number;
@@ -41,7 +55,9 @@ export interface MlbWholeSlateSportingFinalizationResult {
   finalGamesEvaluated: number;
   policy: {
     wholeSlateRankRead: true;
-    shortlistQualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT";
+    shortlistQualificationRule: "NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE";
+    missingDataCountsAsNegativeEvidence: false;
+    incompleteProvisionalEvidenceMayFinalizeAsInferior: false;
     researchEliteCandidateIsProductionHardGate: false;
     finalSportingAuthorityUsesFrozenHierarchy: true;
     aPlusPrecedesPremium: true;
@@ -75,6 +91,21 @@ function leaderView(entry: MlbDailyOpportunityEntry | undefined): MlbWholeSlateS
   });
 }
 
+function pendingEvidenceView(entry: MlbDailyOpportunityEntry): MlbWholeSlateEvidencePendingView | null {
+  const coverage = entry.evidenceCoverage;
+  if (!coverage?.pending || coverage.coreState === "COMPLETE") return null;
+  return Object.freeze({
+    gamePk: entry.gamePk,
+    awayTeam: entry.awayTeam,
+    homeTeam: entry.homeTeam,
+    inputStage: entry.inputStage,
+    contextRank: entry.contextRank,
+    coreState: coverage.coreState,
+    unavailableCoreComponents: Object.freeze([...coverage.unavailableCoreComponents]),
+    missingDataCountsAsNegativeEvidence: false as const,
+  });
+}
+
 function pickTier(
   dailyBestPick: MlbUnifiedEliteVisibleDailyBestPick,
 ): "A_PLUS" | "PREMIUM" | "PP_HORIZON" | "FULL_MODULAR" | null {
@@ -92,13 +123,11 @@ function pickGamePk(dailyBestPick: MlbUnifiedEliteVisibleDailyBestPick): number 
  * Resolve whether the frozen sporting hierarchy can be finalized while some games
  * are still provisional.
  *
- * This deliberately separates two concepts:
- * - whole-slate context ranking is used to expose unresolved competitors;
- * - only the existing FINAL frozen hierarchy can create the official Daily BEST PICK.
- *
- * The research-only `researchEliteCandidate` flag is never consulted as an eligibility
- * gate here. It may influence the already-existing intrinsic ordering, but it cannot
- * erase a game from the whole-slate competition by itself.
+ * Missing core evidence is treated as uncertainty, never as a zero/negative sporting
+ * signal. A provisional game with incomplete core evidence remains an unresolved
+ * competitor regardless of its current observed rank, because a recovered source can
+ * materially change its context position. Only FINAL frozen routes may create the
+ * official Daily BEST PICK.
  */
 export function finalizeMlbWholeSlateSportingAuthority(input: {
   dailyBestPick: MlbUnifiedEliteVisibleDailyBestPick;
@@ -110,6 +139,8 @@ export function finalizeMlbWholeSlateSportingAuthority(input: {
   );
   const provisional = ranked.filter((entry) => entry.inputStage === "PROVISIONAL");
   const final = ranked.filter((entry) => entry.inputStage === "FINAL");
+  const evidencePendingEntries = ranked.filter((entry) => entry.evidenceCoverage?.pending === true);
+  const provisionalEvidencePending = evidencePendingEntries.filter((entry) => entry.inputStage === "PROVISIONAL");
   const parentPopulationSize = Math.max(0, Math.trunc(input.parentPrepricePopulationSize));
   const provisionalInsideParentPopulation = provisional.filter(
     (entry) => entry.contextRank <= parentPopulationSize,
@@ -125,7 +156,11 @@ export function finalizeMlbWholeSlateSportingAuthority(input: {
   let reason: MlbWholeSlateSportingFinalizationResult["reason"];
   let blockers: MlbDailyOpportunityEntry[] = [];
 
-  if (selectedGamePk == null || tier == null) {
+  if (provisionalEvidencePending.length > 0) {
+    state = "WAIT_FOR_PROVISIONAL_COMPETITOR";
+    reason = "PROVISIONAL_CORE_EVIDENCE_INCOMPLETE";
+    blockers = provisionalEvidencePending;
+  } else if (selectedGamePk == null || tier == null) {
     if (provisional.length > 0) {
       state = "WAIT_FOR_PROVISIONAL_COMPETITOR";
       reason = "NO_FINAL_SPORTING_PICK_WHILE_PROVISIONAL_GAMES_REMAIN";
@@ -175,12 +210,17 @@ export function finalizeMlbWholeSlateSportingAuthority(input: {
     : state === "FINAL_SPORTING_PICK"
       ? selectedEntry
       : undefined;
+  const evidencePendingGames = evidencePendingEntries
+    .map(pendingEvidenceView)
+    .filter((entry): entry is MlbWholeSlateEvidencePendingView => entry != null);
 
   return Object.freeze({
     schemaVersion: MLB_WHOLE_SLATE_SPORTING_FINALIZATION_SCHEMA,
     state,
     reason,
     sportingSlateLeader: leaderView(leaderEntry),
+    evidencePendingGames: Object.freeze(evidencePendingGames),
+    provisionalEvidencePendingGamePks: Object.freeze(provisionalEvidencePending.map((entry) => entry.gamePk)),
     unresolvedProvisionalGamePks: Object.freeze(blockers.map((entry) => entry.gamePk)),
     rankedGamePks: Object.freeze(ranked.map((entry) => entry.gamePk)),
     wholeSlateEvaluatedGames: ranked.length,
@@ -188,7 +228,9 @@ export function finalizeMlbWholeSlateSportingAuthority(input: {
     finalGamesEvaluated: final.length,
     policy: Object.freeze({
       wholeSlateRankRead: true as const,
-      shortlistQualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT" as const,
+      shortlistQualificationRule: "NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE" as const,
+      missingDataCountsAsNegativeEvidence: false as const,
+      incompleteProvisionalEvidenceMayFinalizeAsInferior: false as const,
       researchEliteCandidateIsProductionHardGate: false as const,
       finalSportingAuthorityUsesFrozenHierarchy: true as const,
       aPlusPrecedesPremium: true as const,

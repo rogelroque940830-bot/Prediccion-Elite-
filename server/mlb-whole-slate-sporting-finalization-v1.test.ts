@@ -9,7 +9,11 @@ function opportunity(input: {
   rank: number;
   stage: "FINAL" | "PROVISIONAL";
   eligible?: boolean;
+  missing?: readonly ("STATCAST_QUALITY" | "DISCIPLINE_SPEED" | "SOS")[];
 }): MlbDailyOpportunityEntry {
+  const missing = input.missing ?? [];
+  const certified = ["STATCAST_QUALITY", "DISCIPLINE_SPEED", "SOS"]
+    .filter((component) => !missing.includes(component as any)) as Array<"STATCAST_QUALITY" | "DISCIPLINE_SPEED" | "SOS">;
   return {
     gamePk: input.gamePk,
     officialDate: "2026-09-03",
@@ -20,6 +24,16 @@ function opportunity(input: {
     contextRank: input.rank,
     intrinsicClassification: input.eligible ? "GAME_ELITE_RESEARCH_CANDIDATE" : "INTRINSIC_WATCH",
     eligibleSportingOpportunity: input.eligible ?? false,
+    evidenceCoverage: {
+      coreState: missing.length === 0 ? "COMPLETE" : certified.length === 0 ? "UNAVAILABLE" : "PARTIAL",
+      qualificationDisposition: input.eligible ? "QUALIFIED_SIGNAL" : missing.length > 0 ? "PENDING_EVIDENCE" : "QUALIFIED_SIGNAL",
+      pending: missing.length > 0,
+      certifiedCoreComponents: certified,
+      signalCoreComponents: certified,
+      neutralCoreComponents: [],
+      unavailableCoreComponents: [...missing],
+      missingDataCountsAsNegativeEvidence: false,
+    },
     context: {
       thesisKinds: [],
       thesisStructures: [],
@@ -113,7 +127,7 @@ test("whole-slate provisional leader is visible even when researchEliteCandidate
   assert.deepEqual(result.rankedGamePks, [10]);
   assert.equal(
     result.policy.shortlistQualificationRule,
-    "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT",
+    "NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE",
   );
 });
 
@@ -132,7 +146,27 @@ test("ranked game identities preserve context-rank order for slate exclusion aud
   assert.equal(result.wholeSlateEvaluatedGames, 3);
 });
 
-test("a FINAL A+ pick waits only for a better-ranked provisional competitor inside the frozen parent population", () => {
+test("provisional missing evidence remains unresolved even when its observed rank is below a FINAL A+", () => {
+  const result = finalizeMlbWholeSlateSportingAuthority({
+    dailyBestPick: parentPick({ gamePk: 20, tier: "A_PLUS", rank: 1 }),
+    rankedOpportunities: [
+      opportunity({ gamePk: 20, rank: 1, stage: "FINAL" }),
+      opportunity({ gamePk: 10, rank: 7, stage: "PROVISIONAL", missing: ["SOS"] }),
+    ],
+    parentPrepricePopulationSize: 8,
+  });
+
+  assert.equal(result.state, "WAIT_FOR_PROVISIONAL_COMPETITOR");
+  assert.equal(result.reason, "PROVISIONAL_CORE_EVIDENCE_INCOMPLETE");
+  assert.deepEqual(result.unresolvedProvisionalGamePks, [10]);
+  assert.deepEqual(result.provisionalEvidencePendingGamePks, [10]);
+  assert.equal(result.evidencePendingGames[0].gamePk, 10);
+  assert.deepEqual(result.evidencePendingGames[0].unavailableCoreComponents, ["SOS"]);
+  assert.equal(result.policy.missingDataCountsAsNegativeEvidence, false);
+  assert.equal(result.policy.incompleteProvisionalEvidenceMayFinalizeAsInferior, false);
+});
+
+test("a FINAL A+ pick waits only for a better-ranked provisional competitor when core evidence is complete", () => {
   const blocked = finalizeMlbWholeSlateSportingAuthority({
     dailyBestPick: parentPick({ gamePk: 20, tier: "A_PLUS", rank: 2 }),
     rankedOpportunities: [
@@ -159,7 +193,7 @@ test("a FINAL A+ pick waits only for a better-ranked provisional competitor insi
   assert.equal(resolved.sportingSlateLeader?.gamePk, 20);
 });
 
-test("a FINAL Premium pick waits for any provisional game still inside the frozen parent population", () => {
+test("a FINAL Premium pick waits for any complete-evidence provisional game still inside the frozen parent population", () => {
   const blocked = finalizeMlbWholeSlateSportingAuthority({
     dailyBestPick: parentPick({ gamePk: 20, tier: "PREMIUM", rank: 1 }),
     rankedOpportunities: [

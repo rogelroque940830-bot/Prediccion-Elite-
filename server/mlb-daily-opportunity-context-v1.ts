@@ -7,6 +7,11 @@ import {
 } from "./mlb-intrinsic-edge";
 import type { MlbP1DailySlate } from "./mlb-p1-daily-slate";
 import type { MlbV16SettlementEvidence } from "./mlb-pure-settlement-evidence-adapter";
+import type {
+  MlbShortlistCoreComponent,
+  MlbShortlistCoreEvidenceState,
+  MlbShortlistQualificationDisposition,
+} from "./mlb-shortlist";
 
 export const MLB_DAILY_OPPORTUNITY_CONTEXT_SCHEMA =
   "courtedge-mlb-daily-opportunity-context.v1" as const;
@@ -31,6 +36,22 @@ export interface MlbDailyOpportunityMarketProbabilities {
   } | null;
 }
 
+export interface MlbDailyOpportunityEvidenceCoverage {
+  coreState: MlbShortlistCoreEvidenceState;
+  qualificationDisposition: MlbShortlistQualificationDisposition;
+  pending: boolean;
+  certifiedCoreComponents: readonly MlbShortlistCoreComponent[];
+  signalCoreComponents: readonly MlbShortlistCoreComponent[];
+  neutralCoreComponents: readonly MlbShortlistCoreComponent[];
+  unavailableCoreComponents: readonly MlbShortlistCoreComponent[];
+  missingDataCountsAsNegativeEvidence: false;
+}
+
+export type MlbDailyOpportunityEvidenceCoverageByGame = Readonly<Record<
+  number,
+  MlbDailyOpportunityEvidenceCoverage | undefined
+>>;
+
 export interface MlbDailyOpportunityEntry {
   gamePk: number;
   officialDate: string;
@@ -41,6 +62,7 @@ export interface MlbDailyOpportunityEntry {
   contextRank: number;
   intrinsicClassification: MlbIntrinsicGameProfile["researchClassification"];
   eligibleSportingOpportunity: boolean;
+  evidenceCoverage?: MlbDailyOpportunityEvidenceCoverage | null;
   context: {
     thesisKinds: readonly MlbIntrinsicThesisKind[];
     thesisStructures: readonly MlbIntrinsicThesisStructure[];
@@ -73,6 +95,8 @@ export interface MlbDailyOpportunityContextResult {
     provisionalEligibleOpportunities: number;
     finalEligibleOpportunities: number;
     frontierSize: number;
+    evidencePendingGames?: number;
+    provisionalEvidencePendingGames?: number;
   };
   decisionReason:
     | "NO_CONTEXT_QUALIFIED_OPPORTUNITY"
@@ -91,6 +115,8 @@ export interface MlbDailyOpportunityContextResult {
     empiricalLineupUncertaintyAppliedToProvisionalV16Only: true;
     probabilityThresholdCreatesOpportunityEligibility: false;
     confirmationMayDowngradeToNoPlay: true;
+    missingDataCountsAsNegativeEvidence?: false;
+    incompleteEvidenceRemainsExplicitlyUnresolved?: true;
     v68Changed: false;
     v80Changed: false;
     productionDailyBestPickChanged: false;
@@ -194,6 +220,7 @@ function entryFor(
   contextRank: number,
   finalV16ByGame: EvidenceByGame,
   provisionalV16ByGame: EvidenceByGame,
+  coverageByGame: MlbDailyOpportunityEvidenceCoverageByGame,
 ): MlbDailyOpportunityEntry {
   const eliteTheses = [
     ...game.projections.fullGame.theses,
@@ -212,6 +239,7 @@ function entryFor(
     eligibleSportingOpportunity:
       game.researchEliteCandidate
       && game.researchClassification === "GAME_ELITE_RESEARCH_CANDIDATE",
+    evidenceCoverage: coverageByGame[game.gamePk] ?? null,
     context: Object.freeze({
       thesisKinds: Object.freeze(uniqueSorted(eliteTheses.map((thesis) => thesis.kind))) as readonly MlbIntrinsicThesisKind[],
       thesisStructures: Object.freeze(uniqueSorted(eliteTheses.map((thesis) => thesis.structure))) as readonly MlbIntrinsicThesisStructure[],
@@ -261,10 +289,12 @@ export function buildMlbDailyOpportunityContext(input: {
   intrinsic: MlbIntrinsicEdgeResult;
   finalV16ByGame?: EvidenceByGame;
   provisionalV16ByGame?: EvidenceByGame;
+  evidenceCoverageByGame?: MlbDailyOpportunityEvidenceCoverageByGame;
 }): MlbDailyOpportunityContextResult {
   validateIdentity(input.slate, input.intrinsic);
   const finalV16ByGame = input.finalV16ByGame ?? {};
   const provisionalV16ByGame = input.provisionalV16ByGame ?? {};
+  const evidenceCoverageByGame = input.evidenceCoverageByGame ?? {};
 
   // Market discovery intentionally keeps a top-8 quota-control cap. The Daily Opportunity
   // decision has a different job: identify the best sporting opportunity of the entire
@@ -272,13 +302,14 @@ export function buildMlbDailyOpportunityContext(input: {
   // can never disappear merely because it was not needed for paid market discovery.
   const fullContextRanking = rankMlbIntrinsicGames(input.intrinsic.games);
   const rankedOpportunities = Object.freeze(fullContextRanking.map((game, index) =>
-    entryFor(game, index + 1, finalV16ByGame, provisionalV16ByGame),
+    entryFor(game, index + 1, finalV16ByGame, provisionalV16ByGame, evidenceCoverageByGame),
   ));
   const eligible = rankedOpportunities.filter((entry) => entry.eligibleSportingOpportunity);
   const frontier = Object.freeze(eligible.filter((candidate) =>
     !eligible.some((other) => other.gamePk !== candidate.gamePk && dominates(other, candidate)),
   ));
   const primaryOpportunity = frontier[0] ?? null;
+  const evidencePending = rankedOpportunities.filter((entry) => entry.evidenceCoverage?.pending === true);
 
   let action: MlbDailyOpportunityAction = "NO_PLAY";
   let decisionReason: MlbDailyOpportunityContextResult["decisionReason"] =
@@ -308,6 +339,8 @@ export function buildMlbDailyOpportunityContext(input: {
       provisionalEligibleOpportunities: eligible.filter((entry) => entry.inputStage === "PROVISIONAL").length,
       finalEligibleOpportunities: eligible.filter((entry) => entry.inputStage === "FINAL").length,
       frontierSize: frontier.length,
+      evidencePendingGames: evidencePending.length,
+      provisionalEvidencePendingGames: evidencePending.filter((entry) => entry.inputStage === "PROVISIONAL").length,
     }),
     decisionReason,
     policy: Object.freeze({
@@ -323,6 +356,8 @@ export function buildMlbDailyOpportunityContext(input: {
       empiricalLineupUncertaintyAppliedToProvisionalV16Only: true as const,
       probabilityThresholdCreatesOpportunityEligibility: false as const,
       confirmationMayDowngradeToNoPlay: true as const,
+      missingDataCountsAsNegativeEvidence: false as const,
+      incompleteEvidenceRemainsExplicitlyUnresolved: true as const,
       v68Changed: false as const,
       v80Changed: false as const,
       productionDailyBestPickChanged: false as const,
