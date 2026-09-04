@@ -174,8 +174,8 @@ function assertSnapshotMatchesPick(pick: SavedMlbPickLike, snapshot: MlbScientif
     throw error;
   }
   if (snapshot.game.commenceTime && snapshot.market.capturedAt
-    && Date.parse(snapshot.market.capturedAt) > Date.parse(snapshot.game.commenceTime)) {
-    const error = new Error("Scientific snapshot was captured after the official game start");
+    && Date.parse(snapshot.market.capturedAt) >= Date.parse(snapshot.game.commenceTime)) {
+    const error = new Error("Scientific snapshot was captured at or after the official game start");
     (error as Error & { status?: number }).status = 409;
     throw error;
   }
