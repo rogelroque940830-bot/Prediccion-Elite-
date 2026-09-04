@@ -88,9 +88,20 @@ function evidence(input: Partial<MlbShortlistFactorPayloads>): MlbShortlistFacto
   return input;
 }
 
-test("uncertified or degraded factor payloads never create shortlist signals", () => {
+function neutralCore() {
+  return evidence({
+    statcastQuality: certified({ homeSP: { runsDelta: 0 }, awaySP: { runsDelta: 0 } }),
+    disciplineSpeed: certified({ homeRunsDelta: 0, awayRunsDelta: 0 }),
+    sos: certified({
+      home: { recentRpg: 4.2, adjustedRpg: 4.2 },
+      away: { recentRpg: 4.1, adjustedRpg: 4.1 },
+    }),
+  });
+}
+
+test("uncertified or missing core evidence creates PENDING_EVIDENCE, never a fake zero or negative signal", () => {
   const result = buildMlbShortlist({
-    cheapScreen: cheapScreen([game(1)]),
+    cheapScreen: cheapScreen([game(1, "ADVANCE_PROVISIONAL")]),
     evidenceByGame: {
       1: evidence({
         statcastQuality: {
@@ -107,13 +118,21 @@ test("uncertified or degraded factor payloads never create shortlist signals", (
     },
   });
 
-  assert.equal(result.selected.length, 0);
+  assert.equal(result.selected.length, 1);
   assert.equal(result.candidates[0].certifiedComponentCount, 0);
   assert.equal(result.candidates[0].independentSignalCount, 0);
+  assert.equal(result.candidates[0].qualificationDisposition, "PENDING_EVIDENCE");
+  assert.equal(result.candidates[0].coreEvidenceCoverage.state, "UNAVAILABLE");
+  assert.deepEqual(result.candidates[0].coreEvidenceCoverage.unavailableComponents, [
+    "STATCAST_QUALITY",
+    "DISCIPLINE_SPEED",
+    "SOS",
+  ]);
   assert.deepEqual(result.candidates[0].warnings.sort(), [
     "DISCIPLINE_SPEED_CERTIFIED",
     "STATCAST_QUALITY_DEGRADED",
   ]);
+  assert.equal(result.policy.missingDataCountsAsNegativeEvidence, false);
 });
 
 test("native run signals are preserved without weighted aggregation", () => {
@@ -139,6 +158,8 @@ test("native run signals are preserved without weighted aggregation", () => {
   assert.equal(candidate.certifiedComponentCount, 4);
   assert.equal(candidate.independentSignalCount, 4);
   assert.equal(candidate.maxAbsoluteNativeRunSignal, 0.9);
+  assert.equal(candidate.coreEvidenceCoverage.state, "COMPLETE");
+  assert.equal(candidate.qualificationDisposition, "QUALIFIED_SIGNAL");
   assert.deepEqual(
     candidate.signals.map((signal) => [signal.component, signal.metric, signal.valueRuns]),
     [
@@ -154,7 +175,7 @@ test("native run signals are preserved without weighted aggregation", () => {
   assert.equal(result.policy.weightsApplied, false);
 });
 
-test("ranking is deterministic: independent certified signal count, then max native magnitude, then coverage", () => {
+test("ranking uses observed signals and magnitude; missing coverage is not a sporting tie-breaker", () => {
   const result = buildMlbShortlist({
     cheapScreen: cheapScreen([game(10), game(11), game(12), game(13, "ADVANCE_PROVISIONAL")]),
     evidenceByGame: {
@@ -178,26 +199,23 @@ test("ranking is deterministic: independent certified signal count, then max nat
     },
   });
 
-  assert.deepEqual(result.selected.map((candidate) => candidate.gamePk), [12, 13, 11, 10]);
-  assert.equal(result.selected[0].certifiedComponentCount, 3);
-  assert.equal(result.selected[0].independentSignalCount, 2);
-  assert.equal(result.selected[1].finalInputsAvailable, false);
+  assert.deepEqual(result.selected.map((candidate) => candidate.gamePk), [11, 12, 13, 10]);
+  assert.equal(result.selected[0].coreEvidenceCoverage.state, "PARTIAL");
+  assert.equal(result.selected[1].coreEvidenceCoverage.state, "COMPLETE");
+  assert.equal(result.selected[0].independentSignalCount, result.selected[1].independentSignalCount);
+  assert.equal(result.selected[1].finalInputsAvailable, true);
+  assert.equal(result.selected[2].finalInputsAvailable, false);
 
   const reversed = rankMlbShortlistCandidates([...result.selected].reverse());
-  assert.deepEqual(reversed.map((candidate) => candidate.gamePk), [12, 13, 11, 10]);
+  assert.deepEqual(reversed.map((candidate) => candidate.gamePk), [11, 12, 13, 10]);
 });
 
-test("zero certified native run signals means zero shortlist; there is no forced quota", () => {
+test("only COMPLETE certified zero-signal evidence is a true sporting no-signal exclusion", () => {
   const result = buildMlbShortlist({
     cheapScreen: cheapScreen([game(20), game(21)]),
     evidenceByGame: {
-      20: evidence({ disciplineSpeed: certified({ homeRunsDelta: 0, awayRunsDelta: 0 }) }),
-      21: evidence({
-        sos: certified({
-          home: { recentRpg: 4.5, adjustedRpg: 4.5 },
-          away: { recentRpg: 3.9, adjustedRpg: 3.9 },
-        }),
-      }),
+      20: neutralCore(),
+      21: neutralCore(),
     },
   });
 
@@ -205,7 +223,28 @@ test("zero certified native run signals means zero shortlist; there is no forced
   assert.equal(result.summary.qualified, 0);
   assert.equal(result.summary.selected, 0);
   assert.equal(result.summary.noCertifiedSignal, 2);
+  assert.equal(result.summary.completeNoSignal, 2);
+  assert.equal(result.summary.pendingEvidence, 0);
+  assert.equal(result.candidates[0].qualificationDisposition, "COMPLETE_NO_SIGNAL");
   assert.equal(result.policy.forcedQuota, false);
+});
+
+test("a zero-signal game with one unavailable core source remains in competition as pending evidence", () => {
+  const result = buildMlbShortlist({
+    cheapScreen: cheapScreen([game(22, "ADVANCE_PROVISIONAL")]),
+    evidenceByGame: {
+      22: evidence({
+        statcastQuality: certified({ homeSP: { runsDelta: 0 }, awaySP: { runsDelta: 0 } }),
+        disciplineSpeed: certified({ homeRunsDelta: 0, awayRunsDelta: 0 }),
+      }),
+    },
+  });
+
+  assert.equal(result.summary.qualified, 1);
+  assert.equal(result.summary.pendingEvidence, 1);
+  assert.equal(result.candidates[0].qualificationDisposition, "PENDING_EVIDENCE");
+  assert.equal(result.candidates[0].coreEvidenceCoverage.state, "PARTIAL");
+  assert.deepEqual(result.candidates[0].coreEvidenceCoverage.unavailableComponents, ["SOS"]);
 });
 
 test("deferred and dropped cheap-screen games cannot enter shortlist even with strong certified evidence", () => {
@@ -266,4 +305,5 @@ test("shortlist source has no odds provider, timer, polling, model formula, stak
   assert.match(source, /theOddsApiCreditsConsumed: 0/);
   assert.match(source, /weightsApplied: false/);
   assert.match(source, /forcedQuota: false/);
+  assert.match(source, /missingDataCountsAsNegativeEvidence: false/);
 });
