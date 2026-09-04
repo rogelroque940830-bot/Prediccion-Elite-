@@ -49,16 +49,20 @@ jobs:
       - name: Install frozen parent dependency
         run: python -m pip install --disable-pip-version-check 'numpy==2.2.6'
 
-      - name: Prove audit contract predates scorer
+      - name: Prove audit contract and scorer were co-frozen
         shell: bash
         run: |
           set -euo pipefail
-          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/mlb-daily-best-pick-historical-coverage-v1-contract.json | tail -1)"
-          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/mlb-daily-best-pick-historical-coverage-v1.py | tail -1)"
+          CONTRACT_PATH='research/mlb-daily-best-pick-historical-coverage-v1-contract.json'
+          SCORER_PATH='scripts/mlb-daily-best-pick-historical-coverage-v1.py'
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- "$CONTRACT_PATH" | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- "$SCORER_PATH" | tail -1)"
           test -n "$CONTRACT_ADD"
           test -n "$SCORER_ADD"
-          test "$CONTRACT_ADD" != "$SCORER_ADD"
-          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          test "$CONTRACT_ADD" = "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" HEAD
+          test "$(git rev-parse "${CONTRACT_ADD}:${CONTRACT_PATH}")" = "$(git rev-parse "HEAD:${CONTRACT_PATH}")"
+          test "$(git rev-parse "${SCORER_ADD}:${SCORER_PATH}")" = "$(git rev-parse "HEAD:${SCORER_PATH}")"
           python - <<'PY'
           import json
           c=json.load(open('research/mlb-daily-best-pick-historical-coverage-v1-contract.json'))
@@ -70,7 +74,7 @@ jobs:
           assert c['populationLimitation']['historicalParentRouteAvailabilityIsUpperBoundForCurrentPipeline'] is True
           assert c['rankingLimitation']['v69DailyCapMaySubstituteForCurrentPrepriceRank'] is False
           assert c['selectionBoundary']['forcedDailyPlayAllowed'] is False
-          print('DAILY_BEST_PICK_AUDIT_CONTRACT_PRE_SCORER_FREEZE_PROVED')
+          print('DAILY_BEST_PICK_AUDIT_CONTRACT_SCORER_COFREEZE_PROVED')
           PY
 
       - name: Syntax check audit scorer
