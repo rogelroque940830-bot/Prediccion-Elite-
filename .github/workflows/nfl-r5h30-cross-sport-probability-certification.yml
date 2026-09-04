@@ -1,0 +1,85 @@
+name: NFL R5H30 Cross-Sport Probability Certification
+
+on:
+  pull_request:
+    branches: ['research/nfl-r5-leakage-safe-v1']
+    paths:
+      - 'research/nfl/R5H29_CROSS_SPORT_PROBABILITY_CONTRACT.json'
+      - 'research/nfl/nfl_r5h30_cross_sport_probability_contract_certify.py'
+      - '.github/workflows/nfl-r5h30-cross-sport-probability-certification.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  nfl-r5h30-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate frozen R5H29 contract and certifier
+        run: |
+          python -m py_compile research/nfl/nfl_r5h30_cross_sport_probability_contract_certify.py
+          python - <<'PY'
+          import json
+          c=json.load(open('research/nfl/R5H29_CROSS_SPORT_PROBABILITY_CONTRACT.json'))
+          assert c['schemaVersion']=='courtedge-nfl-r5h29-cross-sport-probability-contract.v1'
+          assert c['frozenBeforeR5H30Certification'] is True
+          assert c['evidenceCustody']['r5h28WorkflowRunId']==32879218968
+          assert c['evidenceCustody']['r5h28ArtifactId']==9575114564
+          assert c['evidenceCustody']['r5h28ArtifactDigest']=='sha256:c48a51915c929c3736a2601534410871bef36b760702c39044360ceff2e07a55'
+          assert c['probabilitySemantics']['formula']=='p_win_selected_side = reference_confidence'
+          assert c['probabilitySemantics']['freeParameters']==0
+          assert c['routes']['R5H8_CORE']['routeStatus']=='QUALIFIED_STANDARD_MONITORING'
+          assert c['routes']['R5H21_LATE_DOWN']['routeStatus']=='QUALIFIED_ELEVATED_MONITORING_REQUIRED'
+          assert c['globalEliteRankerPolicy']['nflMayEnterRankerNow'] is False
+          print('NFL_R5H29_CONTRACT_FROZEN')
+          PY
+
+      - name: Download certified R5H28 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nfl-r5h28-identity-probability-qualification-evidence
+          path: nfl-r5h28-output
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32879218968
+
+      - name: Run R5H30 custody certification
+        run: |
+          python research/nfl/nfl_r5h30_cross_sport_probability_contract_certify.py \
+            --r5h28-dir nfl-r5h28-output \
+            --contract research/nfl/R5H29_CROSS_SPORT_PROBABILITY_CONTRACT.json \
+            --out-dir nfl-r5h30-output
+
+      - name: Enforce final certification boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('nfl-r5h30-output/nfl_r5h30_certification.json'))
+          assert r['contractCustodyPassed'] is True
+          assert r['probabilitySemanticsPassed'] is True
+          assert r['routeUncertaintyCustodyPassed'] is True
+          assert r['prequentialSkillCustodyPassed'] is True
+          assert r['researchBoundaryPassed'] is True
+          assert r['crossSportCandidateStatus']=='NFL_PROBABILITY_INTERFACE_CERTIFIED_AS_CANDIDATE'
+          assert r['globalEliteRankerStatus']=='BLOCKED_PENDING_EQUIVALENT_OTHER_SPORT_CONTRACTS'
+          print('NFL_R5H30_CERTIFICATION_VERIFIED')
+          PY
+
+      - name: Show R5H30 evidence
+        run: cat nfl-r5h30-output/nfl_r5h30_certification.json
+
+      - name: Upload R5H30 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-r5h30-cross-sport-probability-certification-evidence
+          path: nfl-r5h30-output/
+          if-no-files-found: error
+          retention-days: 30

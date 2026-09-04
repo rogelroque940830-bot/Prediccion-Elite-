@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "courtedge-mlb-v68-cross-sport-probability-qualification-contract.v1",
+  "stage": "MLB_V68_FULL_GAME_SELECTED_SIDE_CROSS_SPORT_PROBABILITY_QUALIFICATION_CONTRACT",
+  "sport": "MLB",
+  "researchOnly": true,
+  "frozenBeforeAnyV68ProspectiveOutcomeScoring": true,
+  "frozenBeforeCrossSportQualificationEvaluator": true,
+  "objective": "Predeclare the absolute probability gates that the already-frozen V68 Full Game winner candidate must pass, after its existing prospective embargo and original one-shot V68 evaluation, before its selected-side probability may become a cross-sport candidate. No V68 outcome may be inspected or used to choose these gates.",
+  "governingProspectiveExperiment": {
+    "contractPath": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json",
+    "contractBlobSha": "e8e3e9dec96ef06c339507c63882378b968e8b8e",
+    "evaluatorPath": "scripts/p0-step12v68-fg-winner-prospective-evaluate.py",
+    "evaluatorBlobSha": "628ccce73d2d2cd49b6476cd4660c9167453334c",
+    "contractSchema": "courtedge-p0-step12v68-fg-winner-prospective-confirmation-contract.v1",
+    "captureSchema": "courtedge-p0-step12v68-fg-winner-prospective-capture.v1",
+    "finalEvaluationSchema": "courtedge-p0-step12v68-fg-winner-prospective-evaluation.v1",
+    "firstEligibleOfficialDate": "2026-08-17",
+    "minimumCanonicalGamesBeforeOutcomeScoring": 500,
+    "minimumDistinctOfficialDatesBeforeOutcomeScoring": 30,
+    "bothMinimumsRequired": true,
+    "singlePrimaryEvaluationAfterEmbargo": true,
+    "interimOutcomePeekingAllowed": false,
+    "interimModelComparisonAllowed": false,
+    "candidateRefitAllowed": false,
+    "candidateRecalibrationAllowed": false,
+    "candidateFeatureChangeAllowed": false
+  },
+  "prospectiveDataCustody": {
+    "branch": "data/p0-step12v68-prospective",
+    "canonicalCapturePath": "v68/captures/canonical.json",
+    "finalOutcomesPath": "v68/final/outcomes.json",
+    "finalOriginalEvaluationPath": "v68/final/evaluation.json",
+    "finalReceiptPath": "v68/final/receipt.json",
+    "crossSportQualificationMayExecuteBeforeOriginalFinalEvaluationExists": false,
+    "crossSportQualificationMayReadOutcomesBeforeOriginalFinalEvaluationExists": false,
+    "canonicalCaptureMustRemainImmutablePerGame": true,
+    "capturedRowsMustContainOutcome": false,
+    "capturedRowsMustContainMarketPrice": false,
+    "wholeOfficialDateUsesPriorDateStateOnly": true
+  },
+  "crossSportSemantic": {
+    "marketConcept": "FULL_GAME_WINNER_ONLY",
+    "targetEvent": "SELECTED_SIDE_WINS_OFFICIAL_FINAL_GAME",
+    "extraInningsIncluded": true,
+    "tiesAllowed": false,
+    "pushProbability": 0.0,
+    "interfaceName": "p_win_selected_side",
+    "first5Excluded": true,
+    "first5ExclusionReason": "V16/V68 First-5 settlement semantics include explicit tie/push mass and are not the same binary selected-side win event used by the certified NFL interface."
+  },
+  "frozenProbabilityMapping": {
+    "sourceField": "capture.rows[].v68.homeWinProbability",
+    "selectedSideHomeFormula": "p_win_selected_side = v68.homeWinProbability",
+    "selectedSideAwayFormula": "p_win_selected_side = 1 - v68.homeWinProbability",
+    "requiredComplementTolerance": 1e-12,
+    "freeParameters": 0,
+    "fitPerformedForMapping": false,
+    "newCalibrationTransformAllowed": false,
+    "historicalHitRateMayReplaceProbability": false,
+    "sportsbookPriceMayAlterProbability": false,
+    "marketOddsMayAlterProbability": false
+  },
+  "qualificationOrientation": {
+    "statisticalReferenceSide": "HOME_ONCE_PER_GAME",
+    "reason": "The Full Game binary vector is complementary. HOME is tested once per game to avoid duplicate statistical observations; AWAY selected-side semantics follow exactly from p_away=1-p_home and y_away=1-y_home.",
+    "awayMappingRequiresNoNewFit": true,
+    "selectedSideComplementIdentityMustBeProved": true
+  },
+  "originalV68ProspectivePassPrerequisite": {
+    "required": true,
+    "requiredScientificStatus": "SINGLE_PROSPECTIVE_EVALUATION_COMPLETED_AFTER_FROZEN_EMBARGO",
+    "requiredClassification": "V68_FULL_GAME_WINNER_PROSPECTIVELY_CONFIRMED_FOR_NEXT_RESEARCH_STAGE",
+    "requiredPassedField": true,
+    "requiredPromotionChecksAllTrue": true,
+    "originalChecks": [
+      "prospectiveLogLossImprovementPositive",
+      "prospectiveBrierImprovementPositive",
+      "bootstrapLogLoss95CiLowerBoundPositive",
+      "bootstrapBrier95CiLowerBoundPositive",
+      "v68Ece10Le002",
+      "v68AbsoluteMeanProbabilityGapLe002",
+      "noCaptureChronologyViolations",
+      "noModelOrFeatureDriftFromFrozenSnapshot"
+    ],
+    "interpretation": "Cross-sport qualification cannot rescue a V68 candidate that fails its own preregistered prospective experiment."
+  },
+  "frozenAbsoluteBaseline": {
+    "name": "V16_DEVELOPMENT_2023_HOME_CLIMATOLOGY",
+    "probability": 0.5214672780325136,
+    "fitSeason": "2023",
+    "sourceModel": "rogel-pure-settlement-ml-f5-v1",
+    "evaluationOutcomesUsedToSetBaseline": false,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureOutcomeLeakageAllowed": false
+  },
+  "absoluteCrossSportProbabilityGates": {
+    "significanceAlpha": 0.05,
+    "calibrationInTheLarge": {
+      "test": "standardized Bernoulli residual z = sum(y-p)/sqrt(sum(p*(1-p)))",
+      "twoSidedCriticalAbsZ": 1.959963984540054,
+      "mustPassCombined": true
+    },
+    "identityAffineLikelihoodRatio": {
+      "null": "alpha=0 and beta=1 in logit(q)=alpha+beta*logit(p_v68)",
+      "alternative": "alpha free and beta=exp(log_beta) positive",
+      "alternativeFreeParameters": 2,
+      "degreesOfFreedom": 2,
+      "rejectIdentityIfPValueBelow": 0.05,
+      "mustNotRejectCombined": true,
+      "alternativeFitUsedForPrediction": false
+    },
+    "properScoreSkillVsFrozenClimatology": {
+      "requireV68BrierLowerCombined": true,
+      "requireV68LogLossLowerCombined": true
+    },
+    "preExistingV68CalibrationGates": {
+      "combinedEce10Max": 0.02,
+      "combinedAbsoluteMeanProbabilityGapMax": 0.02
+    },
+    "minimumEvidence": {
+      "canonicalGames": 500,
+      "distinctOfficialDates": 30,
+      "bothRequired": true
+    },
+    "integrity": {
+      "allProbabilitiesFiniteAndStrictlyInsideUnitInterval": true,
+      "oneOutcomePerCapturedGame": true,
+      "noDuplicateGamePk": true,
+      "captureAndOutcomeIdentityMustMatch": true,
+      "captureChronologyMustRemainValid": true,
+      "candidateSnapshotMustMatchFrozenParentContract": true,
+      "marketPriceOrOddsMayNotEnterQualificationProbability": true
+    }
+  },
+  "diagnosticsReportOnly": [
+    "combined_v68_mean_probability",
+    "combined_observed_home_win_rate",
+    "combined_absolute_mean_probability_gap",
+    "combined_ece10",
+    "combined_brier",
+    "combined_log_loss",
+    "combined_calibration_in_the_large_z",
+    "combined_identity_affine_alternative_alpha_beta",
+    "by_date_probability_gap",
+    "rolling_probability_gap_without_adaptive_stopping",
+    "v16_control_metrics_from_original_v68_evaluation"
+  ],
+  "knownPreFreezeEvidenceAndAntiTuningDisclosure": {
+    "v16CrossSportQualificationResultKnown": true,
+    "v16CrossSportQualificationResultPath": "research/MLB_V16_C4_SELECTED_SIDE_PROBABILITY_QUALIFICATION_RESULT.json",
+    "v16CrossSportQualificationResultBlobSha": "b64230c9467fa2cf644aaecea6614c504aa516e4",
+    "v16Classification": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_NOT_QUALIFIED_FOR_CROSS_SPORT_USE",
+    "v16FailureWasCombinedCalibrationInTheLarge": true,
+    "v68ProspectiveOutcomesReadBeforeThisContract": false,
+    "v68FinalEvaluationExistsBeforeThisContract": false,
+    "rubricSelectedByGridSearch": false,
+    "fixedConventions": [
+      "NFL R5H27 two-sided alpha 0.05 calibration-in-the-large gate",
+      "NFL R5H27 two-degree-of-freedom identity affine likelihood-ratio gate",
+      "strict combined Brier and log-loss skill versus a frozen leakage-safe climatology",
+      "already-preregistered V68 ECE10 <= 0.02 gate",
+      "already-preregistered V68 absolute mean probability gap <= 0.02 gate",
+      "already-preregistered V68 minimum 500 games and 30 distinct official dates",
+      "already-preregistered V68 requirement to beat V16 on both proper scores with positive date-cluster bootstrap lower bounds"
+    ],
+    "prohibitedReactionToFutureResult": [
+      "do not weaken the calibration-in-the-large gate",
+      "do not deploy the diagnostic affine alternative",
+      "do not exclude losing dates or subsets after results",
+      "do not refit or recalibrate V68 on the prospective qualification cohort and reuse it as independent evidence",
+      "do not substitute hit rate for event probability"
+    ]
+  },
+  "acceptanceRubric": {
+    "allOriginalV68ProspectiveChecksMustPass": true,
+    "allAbsoluteCrossSportGatesMustPass": true,
+    "passClassification": "MLB_V68_FULL_GAME_SELECTED_SIDE_PROBABILITY_PROSPECTIVELY_QUALIFIED_FOR_CROSS_SPORT_CANDIDACY",
+    "failClassification": "MLB_V68_FULL_GAME_SELECTED_SIDE_PROBABILITY_NOT_QUALIFIED_FOR_CROSS_SPORT_USE",
+    "embargoBlockedClassification": "MLB_V68_CROSS_SPORT_QUALIFICATION_BLOCKED_BY_PROSPECTIVE_EMBARGO"
+  },
+  "postPassBoundary": {
+    "fullGameMlbCrossSportInterfaceMayAdvanceIfPasses": true,
+    "first5MlbCrossSportInterfaceAuthorized": false,
+    "globalEliteRankerAutomaticallyAuthorizedByMlbPass": false,
+    "reason": "A V68 pass would qualify only the MLB Full Game probability interface. Global ranking still requires compatible certified interfaces for every candidate market admitted to the ranker and a separately frozen global ranking contract."
+  },
+  "safety": {
+    "v68ParentContractChanged": false,
+    "v68ModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "selectorHierarchyChanged": false,
+    "sportsbookPricesRead": false,
+    "prospectiveOutcomesRead": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "stakeChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextAction": "IMPLEMENT_READ_ONLY_V68_CROSS_SPORT_QUALIFICATION_EVALUATOR_NOW_BUT_DO_NOT_EXECUTE_IT_UNTIL_THE_FROZEN_V68_EMBARGO_AND_ORIGINAL_ONE_SHOT_EVALUATION_ARE_COMPLETE"
+}

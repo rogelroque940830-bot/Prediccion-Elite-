@@ -1,0 +1,181 @@
+{
+  "schemaVersion": "courtedge-mlb-v16-c4-selected-side-probability-qualification-contract.v1",
+  "stage": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_QUALIFICATION_CONTRACT",
+  "sport": "MLB",
+  "researchOnly": true,
+  "frozenBeforeQualificationEvaluation": true,
+  "objective": "Determine whether the already-frozen, price-independent V16 C4 Full Game winner probability can be used as a historically qualified p_win_selected_side interface for cross-sport comparison without refitting, retuning, changing MLB selections, or using cohort hit rate as event probability.",
+  "crossSportSemantic": {
+    "marketConcept": "FULL_GAME_WINNER_ONLY",
+    "targetEvent": "SELECTED_SIDE_WINS_OFFICIAL_FINAL_GAME",
+    "extraInningsIncluded": true,
+    "tiesAllowed": false,
+    "pushProbability": 0.0,
+    "interfaceName": "p_win_selected_side",
+    "first5Excluded": true,
+    "first5ExclusionReason": "The frozen V16 First-5 model has explicit TIE/PUSH mass and therefore is not the same binary event interface as NFL selected-side win probability."
+  },
+  "frozenProbabilityMapping": {
+    "sourceProbability": "V16_C4_FULL_GAME_HOME_WIN_PROBABILITY",
+    "selectedSideHomeFormula": "p_win_selected_side = p_home_win",
+    "selectedSideAwayFormula": "p_win_selected_side = p_away_win = 1 - p_home_win",
+    "requiredComplementTolerance": 1e-12,
+    "freeParameters": 0,
+    "fitPerformedForMapping": false,
+    "historicalHitRateMayReplaceProbability": false,
+    "sportsbookPriceMayAlterProbability": false,
+    "marketOddsMayAlterProbability": false
+  },
+  "v16FrozenAuthority": {
+    "workflowRunId": 31704085189,
+    "workflowHeadSha": "71e28c06ff8a92a3cc921ca5594138f25ab88057",
+    "artifactId": 9182440949,
+    "artifactName": "p0-step12v16-pure-ml-f5-settlement-probability",
+    "artifactDigest": "sha256:ec1cc188d725b465ff1aeec6fba8b9d6ab400600968e3aedff3807ed52ae9063",
+    "modelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "manifestCanonicalSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb",
+    "manifestArtifactFileSha256": "8627c6b33eca58ae6ee2a1ca0bb7b2802e865395d42069df83817affac09904a",
+    "reportArtifactFileSha256": "95f1de311cd87b9a44b02e6c590f26aa082b0345f6f461c5d5e6d14fff463484",
+    "originalContractPath": "research/p0-step12v16-pure-ml-f5-settlement-probability-contract.json",
+    "originalContractBlobSha": "843420c5b44a74e6b258e1125c2125db578547d6",
+    "originalScorerPath": "scripts/p0-step12v16-pure-settlement-probability.py",
+    "originalScorerBlobSha": "25bfed9b54bea2b4afc4e030ca53ce5afaad51ba",
+    "fullGameFeatureSet": "C4",
+    "trainingSeason": "2022",
+    "calibrationSeason": "2023",
+    "evaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "evaluationOutcomesMayMutateModel": false,
+    "evaluationOutcomesMayMutateCalibration": false,
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "thresholdSearchAllowed": false
+  },
+  "sourceCustody": {
+    "winnerAnatomyWorkflowRunId": 31649438822,
+    "winnerAnatomyWorkflowHeadSha": "074453445ef8f2a1152149d52eadd519e28a3a71",
+    "winnerAnatomyArtifactId": 9162508658,
+    "winnerAnatomyArtifactName": "p0-step12v-winner-anatomy-walkforward",
+    "winnerAnatomyArtifactDigest": "sha256:3b650cadb489d06715ce98d91c3c6981c52d77d2aaec05bf042a2b2ba6df05b8",
+    "tableSchema": "courtedge-p0-step12v-game-anatomy-feature-table.v1",
+    "rowEligibility": "t5PregameValid == true",
+    "opportunityFilteringAllowed": false,
+    "exactEvaluationTables": {
+      "2024": {
+        "path": "2024/game-anatomy-feature-table.json",
+        "fileSha256": "454b48bd6f6159b18cfccb1bad20dbe6e7a3c2814e44dd25ce4fa9bf19db9f06",
+        "eligibleRows": 2406
+      },
+      "2025": {
+        "path": "2025/game-anatomy-feature-table.json",
+        "fileSha256": "6040f300f40802327876ee00eb28d0da8bb58c599ea719e813935f3d9e36efe7",
+        "eligibleRows": 2423
+      },
+      "2026_YTD": {
+        "path": "2026_YTD/game-anatomy-feature-table.json",
+        "fileSha256": "cf01ffaa10b7191734557e01c28c252b44bb962e96fd8aabbab04a1278c897d7",
+        "eligibleRows": 1781
+      }
+    },
+    "requiredCombinedEvaluationRows": 6610,
+    "duplicateGamePkAllowed": false,
+    "oneStatisticalObservationPerGame": true
+  },
+  "qualificationOrientation": {
+    "statisticalTestOrientation": "HOME_AS_REFERENCE_SIDE_ONCE_PER_GAME",
+    "reason": "The V16 binary full-game vector is complementary. Testing HOME once per game avoids artificial duplication; AWAY selected-side semantics follow algebraically from p_away = 1-p_home and y_away = 1-y_home.",
+    "selectedSideMappingMustBeProvedByComplementIdentity": true,
+    "currentDailyBestPickFullGameRoutesUseHomeSide": true,
+    "futureAwaySelectionWouldRequireNoNewFit": true
+  },
+  "frozenBaseline": {
+    "name": "2023_FROZEN_HOME_CLIMATOLOGY",
+    "probability": 0.5214672780325136,
+    "fitSeason": "2023",
+    "evaluationOutcomesUsedToSetBaseline": false,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureOutcomeLeakageAllowed": false
+  },
+  "statisticalQualification": {
+    "inheritance": "Use the conventional absolute probability qualification logic frozen for NFL R5H27 wherever the binary semantics are equivalent, while retaining V16's pre-existing frozen temporal-stability and ECE gates rather than inventing MLB-specific post-result thresholds.",
+    "significanceAlpha": 0.05,
+    "calibrationInTheLarge": {
+      "test": "standardized Bernoulli residual z = sum(y-p)/sqrt(sum(p*(1-p)))",
+      "twoSidedCriticalAbsZ": 1.959963984540054,
+      "mustPassCombined": true,
+      "bySeason": "REPORT_ONLY"
+    },
+    "identityAffineLikelihoodRatio": {
+      "null": "alpha=0 and beta=1 in logit(p)=alpha+beta*logit(p_v16)",
+      "alternative": "logit(q)=alpha+beta*logit(p_v16), beta constrained positive",
+      "alternativeFreeParameters": 2,
+      "degreesOfFreedom": 2,
+      "rejectIdentityIfPValueBelow": 0.05,
+      "mustNotRejectCombined": true,
+      "bySeason": "REPORT_ONLY",
+      "alternativeFitUsedForPrediction": false
+    },
+    "properScoreSkillVsFrozenClimatology": {
+      "requireV16BrierLowerCombined": true,
+      "requireV16LogLossLowerCombined": true,
+      "bySeasonStrictSkill": "REPORT_ONLY"
+    },
+    "preExistingV16FrozenGates": {
+      "minimumEvaluationCoverageShareEachSeason": 0.99,
+      "combinedEce10Max": 0.05,
+      "everySeasonLogLossMaxFrozenPriorPlus": 0.03,
+      "allProbabilitiesFiniteAndUnitInterval": true,
+      "fullGameProbabilityVectorSumTolerance": 1e-12
+    },
+    "diagnosticsReportOnly": [
+      "absolute_mean_calibration_gap",
+      "ece10_equal_width",
+      "season_level_calibration_gap",
+      "season_level_brier",
+      "season_level_log_loss",
+      "season_level_calibration_in_the_large_z",
+      "season_level_identity_affine_likelihood_ratio_p_value"
+    ]
+  },
+  "antiTuningDisclosure": {
+    "priorV16SummaryMetricsWereKnownBeforeThisContractWasFrozen": true,
+    "newQualificationLikelihoodRatioAndCalibrationInTheLargeTestsWereNotUsedToChooseThisRubric": true,
+    "rubricSelectedByGridSearch": false,
+    "fixedConventions": [
+      "R5H27 two-sided alpha 0.05 calibration-in-the-large gate",
+      "R5H27 two-degree-of-freedom likelihood-ratio test of identity affine probability map",
+      "strict combined Brier and log-loss skill versus leakage-safe frozen climatology",
+      "original V16 combined ECE10 <= 0.05 gate",
+      "original V16 every-season log-loss no-catastrophe tolerance of prior + 0.03"
+    ],
+    "interpretationLimit": "A pass would historically qualify the frozen Full Game V16 C4 probability engine for MLB cross-sport candidacy. It would not certify First-5 probabilities, would not convert historical hit rate into event probability, and would not by itself authorize the Global Elite Ranker."
+  },
+  "acceptanceRubric": {
+    "allMandatoryStatisticalAndCustodyGatesMustPass": true,
+    "passClassification": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_HISTORICALLY_QUALIFIED_FOR_CROSS_SPORT_CANDIDACY",
+    "failClassification": "MLB_V16_C4_FULL_GAME_SELECTED_SIDE_PROBABILITY_NOT_QUALIFIED_FOR_CROSS_SPORT_USE"
+  },
+  "prospectiveDailyBestPickBoundary": {
+    "dailyCanonicalizationContract": "research/MLB_DAILY_BEST_PICK_DAILY_CANONICALIZATION_CONTRACT.json",
+    "dailyCanonicalizationIsSeparateFromHistoricalProbabilityEngineQualification": true,
+    "prospectiveDailyBestPickOutcomesRemainEmbargoed": true,
+    "minimumCanonicalOfficialDatesBeforeProspectiveOutcomeEvaluationContractMayExecute": 30,
+    "historicalQualificationPassWouldNotUnlockEmbargo": true
+  },
+  "safety": {
+    "mlbModelChanged": false,
+    "featuresChanged": false,
+    "calibrationChanged": false,
+    "thresholdsChanged": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "selectorHierarchyChanged": false,
+    "v68ProspectiveContractChanged": false,
+    "sportsbookPricesRead": false,
+    "crossSportPoolingPerformed": false,
+    "globalEliteRankingPerformed": false,
+    "stakeChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextAction": "REBUILD_EXACT_V16_C4_2024_2026_YTD_ROWSET_AND_RUN_FROZEN_QUALIFICATION_WITHOUT_RETUNING"
+}
