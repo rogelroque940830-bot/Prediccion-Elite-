@@ -112,7 +112,7 @@ test("later provisional context-rank #1 forces WAIT instead of taking earlier fi
   assert.equal(result.primaryOpportunity?.inputStage, "PROVISIONAL");
 });
 
-test("empirical P95 lineup uncertainty is applied only to provisional V16", () => {
+test("empirical P95 lineup uncertainty is applied only to provisional V16 while ML and F5 vectors stay visible", () => {
   const finalGame = profile({ gamePk: 1, startTime: `${date}T17:00:00.000Z`, stage: "FINAL" });
   const provisionalGame = profile({ gamePk: 2, startTime: `${date}T23:00:00.000Z`, stage: "PROVISIONAL" });
   const result = buildMlbDailyOpportunityContext({
@@ -130,6 +130,12 @@ test("empirical P95 lineup uncertainty is applied only to provisional V16", () =
   assert.equal(final.probability.robustSelectedSideProbability, 0.72);
   assert.equal(provisional.probability.lineupUncertaintyP95, MLB_DAILY_OPPORTUNITY_LINEUP_P95_DELTA);
   assert.ok(Math.abs((provisional.probability.robustSelectedSideProbability ?? 0) - 0.7567) < 1e-12);
+
+  assert.equal(provisional.probability.marketProbabilities?.ml.homeWinProbability, 0.81);
+  assert.ok(Math.abs((provisional.probability.marketProbabilities?.ml.awayWinProbability ?? 0) - 0.19) < 1e-12);
+  assert.equal(provisional.probability.marketProbabilities?.f5Ml?.homeWinProbability, 0.45);
+  assert.equal(provisional.probability.marketProbabilities?.f5Ml?.awayWinProbability, 0.40);
+  assert.equal(provisional.probability.marketProbabilities?.f5Ml?.pushProbability, 0.15);
 });
 
 test("context-probability tradeoff keeps both games on frontier and WAITs", () => {
@@ -192,6 +198,8 @@ test("start time and FINAL/PROVISIONAL stage never rewrite the existing intrinsi
   assert.equal(result.rankedOpportunities[0].contextRank, 1);
   assert.equal(result.rankedOpportunities[1].gamePk, 9);
   assert.equal(result.rankedOpportunities[1].contextRank, 2);
+  assert.equal(result.rankedOpportunities[0].probability.marketProbabilities, null);
+  assert.equal(result.rankedOpportunities[1].probability.marketProbabilities, null);
   assert.equal(result.policy.finalInputStatusAffectsContextRank, false);
   assert.equal(result.policy.gameStartTimeAffectsContextRank, false);
 });
