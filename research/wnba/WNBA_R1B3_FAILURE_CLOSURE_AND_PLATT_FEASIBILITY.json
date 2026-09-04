@@ -1,0 +1,73 @@
+{
+  "name": "WNBA_R1B3_FAILURE_CLOSURE_AND_PLATT_FEASIBILITY_V1",
+  "status": "PREREGISTERED_POST_R1B2_NO_RETUNE_FEASIBILITY_ONLY",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_failure": "research/wnba/WNBA_R1B2_METRICS_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "candidate_status": "FAILED_RAW_PROBABILITY_CERTIFICATION_FROZEN",
+  "candidate_may_be_retuned_on_2021_2025": false,
+  "scored_rowset": {
+    "rows": 1143,
+    "sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319"
+  },
+  "preexisting_cross_sport_protocol": {
+    "pull_request": 671,
+    "branch": "feat/cross-sport-calibration-v1",
+    "engine_path": "server/cross-sport-calibration.ts",
+    "engine_git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+    "method": "PLATT_LOGIT_1D",
+    "split": "ROLLING_ORIGIN_SEASON",
+    "minimum_target_seasons_when_applicable": 5,
+    "minimum_fit_observations": 20,
+    "required_metrics": ["BRIER", "LOG_LOSS", "ECE10"],
+    "method_was_frozen_before_wnba_r1b_outcomes": true
+  },
+  "feasibility_input": {
+    "signal_family": "WNBA_R1_FALLBACK_BASE_SIGNAL_FEASIBILITY_ONLY",
+    "raw_signal": "p_win_selected_side from the frozen R1A6 probability rowset",
+    "binary_outcome": "selectedSideOutcome from the frozen R1B2 scored rowset",
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "sport_elite_gate_passed": false,
+    "cross_sport_observation_certified": false,
+    "reason": "The fallback base signal failed the preregistered raw probability calibration gates and no WNBA Elite selection gate has been certified."
+  },
+  "runtime_engine_use": {
+    "functions": ["fitPlattCalibrator", "applyPlatt", "calibrationMetrics", "walkForwardPlatt"],
+    "runtime_note": "The PR #671 validator does not inspect sportEliteGatePassed at runtime. Feasibility rows deliberately carry sportEliteGatePassed=false; acceptance by the mathematical functions must not be interpreted as contract certification.",
+    "engine_source_must_match_blob_before_execution": true,
+    "engine_source_may_not_be_modified": true
+  },
+  "rolling_origin": {
+    "training_rule": "For each target season, fit only rows from seasons strictly earlier than the target season.",
+    "available_target_folds": [2022, 2023, 2024, 2025],
+    "available_target_fold_count": 4,
+    "five_target_season_certification_possible_now": false,
+    "2021_role": "training seed only in this feasibility run",
+    "target_season_ranking_or_cap": false
+  },
+  "feasibility_outputs": {
+    "per_fold": ["trainingSeasons", "trainingObservations", "testObservations", "raw Brier/logLoss/ECE10", "calibrated Brier/logLoss/ECE10", "Platt intercept", "Platt slope"],
+    "pooled_oos_2022_2025": ["raw Brier/logLoss/ECE10", "calibrated Brier/logLoss/ECE10"],
+    "calibrated_rowset": "Only target folds 2022-2025; 2021 receives no calibrated probability because no prior-season fit exists."
+  },
+  "predeclared_feasibility_interpretation": {
+    "promising": "Calibrated pooled Brier, log loss and ECE10 are each no worse than raw pooled values, with at least Brier and log loss strictly improved.",
+    "not_promising": "Any of pooled Brier or pooled log loss worsens, or pooled ECE10 worsens.",
+    "certification_effect": "NONE regardless of result"
+  },
+  "forbidden": [
+    "change Platt method or regularization after seeing feasibility output",
+    "change raw candidate coefficients",
+    "select target-season rows by calibrated probability",
+    "discover an Elite threshold from these folds and call it certified",
+    "claim five-season calibration certification from four target folds",
+    "set sportEliteGatePassed=true",
+    "promote WNBA to cross-sport/global ranker"
+  ],
+  "next_if_promising": "R2A_SEED_SEASON_FEASIBILITY_FOR_FIVE_TARGET_FOLDS_USING_THE_SAME_FROZEN_METHOD",
+  "next_if_not_promising": "STOP_FALLBACK_CALIBRATION_PATH_AND_DEFINE_A_NEW_INDEPENDENT_WNBA_SIGNAL_RESEARCH_PROGRAM",
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false
+}

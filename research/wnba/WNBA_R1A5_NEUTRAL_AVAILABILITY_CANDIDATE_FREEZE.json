@@ -1,0 +1,80 @@
+{
+  "name": "WNBA_R1A5_NEUTRAL_AVAILABILITY_CANDIDATE_FREEZE_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_CANDIDATE_FREEZE",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "expected_rows": 1143,
+    "target_outcomes_opened": false,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "parents": {
+    "prefix_travel_rowset": "research/wnba/WNBA_R1A4D3_TRAVEL_ENRICHED_PREFIX_CERTIFICATION.json",
+    "injury_source_audit": "research/wnba/WNBA_R1A1_INJURY_SOURCE_CERTIFICATION.json",
+    "input_audit": "research/wnba/WNBA_R1A_INPUT_AUDIT.json"
+  },
+  "why_distinct_candidate_is_required": {
+    "historical_injury_state": "NOT_CERTIFIED_FOR_2021_2025",
+    "historical_manual_override_state": "NO_TIMESTAMPED_HISTORICAL_LOG",
+    "exact_product_replay": false,
+    "no_silent_zero_imputation": true,
+    "interpretation": "Zero is not asserted as the unknown historical truth. Instead injury and manual adjustments are explicitly excluded feature groups in this separately named research candidate, frozen before any target outcomes are opened."
+  },
+  "frozen_candidate_definition": {
+    "base_features": "Use every non-availability feature exactly as frozen in the certified R1A.4D3 1,143-row travel-enriched prefix rowset.",
+    "automatic_injury_feature": "OMITTED_BY_CANDIDATE_DEFINITION",
+    "manual_adjustment_feature": "OMITTED_BY_CANDIDATE_DEFINITION",
+    "home_injury_delta_for_model_input": 0.0,
+    "away_injury_delta_for_model_input": 0.0,
+    "home_manual_adjustment_for_model_input": 0.0,
+    "away_manual_adjustment_for_model_input": 0.0,
+    "rating_mutation_from_availability": "NONE; prefix netRtg/offRtg/defRtg remain unchanged.",
+    "market_input": "EXCLUDED",
+    "travel": "INCLUDED_EXACT_DEPLOYED_SEMANTICS_FROM_R1A4D3",
+    "coefficients": "UNCHANGED_CURRENT_WNBA_MODEL",
+    "logit_cap": "UNCHANGED_CURRENT_WNBA_MODEL",
+    "no_threshold_or_selection_rule": true,
+    "no_calibration_fit": true
+  },
+  "row_mutation_contract": {
+    "allowed": {
+      "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+      "home.injuryAdj": 0.0,
+      "home.injuryStatus": "OMITTED_BY_PREREGISTERED_CANDIDATE",
+      "home.manualAdjustment": 0.0,
+      "home.manualStatus": "OMITTED_BY_PREREGISTERED_CANDIDATE",
+      "away.injuryAdj": 0.0,
+      "away.injuryStatus": "OMITTED_BY_PREREGISTERED_CANDIDATE",
+      "away.manualAdjustment": 0.0,
+      "away.manualStatus": "OMITTED_BY_PREREGISTERED_CANDIDATE",
+      "availabilityPolicy": "NEUTRAL_FEATURE_OMISSION_V1"
+    },
+    "all_other_fields": "IMMUTABLE_RELATIVE_TO_R1A4D3"
+  },
+  "empirical_gate": {
+    "r1a4d3_sha256_must_reproduce": "c071a027ba08f5c279215042c84f403102e933604ad3c4f3a89ed60d98b29f60",
+    "rows": 1143,
+    "non_availability_mutation_count": 0,
+    "travel_ready_rows": 1143,
+    "outcome_fields": 0,
+    "market_attached_rows": 0,
+    "special_event_rows": 0,
+    "duplicate_game_ids": 0
+  },
+  "decision_policy": {
+    "if_gate_passes": "FROZEN_NEUTRAL_AVAILABILITY_RESEARCH_CANDIDATE",
+    "otherwise": "CANDIDATE_NOT_FROZEN",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A6_OUTCOME_BLIND_MODEL_REPLAY_AND_PROBABILITY_ROWSET_FREEZE"
+  }
+}

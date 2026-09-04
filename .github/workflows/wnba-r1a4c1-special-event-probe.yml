@@ -1,0 +1,36 @@
+# Operational trigger revision 1; no scientific rule changed.
+name: WNBA R1A.4C1 Special Event Metadata Probe
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1A4C1_SPECIAL_EVENT_METADATA_PROBE.json'
+      - 'scripts/wnba-r1a4c1-special-event-probe.py'
+      - '.github/workflows/wnba-r1a4c1-special-event-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet pyarrow
+      - name: Probe non-outcome special-event metadata
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r1a4c1-special-event-probe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r1a4c1-special-event-${{ github.run_id }}
+          path: wnba-r1a4c1-special-event-metadata.json
+          if-no-files-found: error
+          retention-days: 90

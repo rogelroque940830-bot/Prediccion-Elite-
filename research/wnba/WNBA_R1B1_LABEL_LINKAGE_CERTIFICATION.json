@@ -1,0 +1,41 @@
+{
+  "name": "WNBA_R1B1_LABEL_LINKAGE_CERTIFICATION_V1",
+  "status": "FROZEN_PASS",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "workflow_run_id": 33090672162,
+  "artifact_id": 9654203020,
+  "artifact_digest": "sha256:e360edb982f8bb0e024da07c56e9d68b5ecb19583d629fcfbd2186d36243433b",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "probability_rowset_sha256": "6621ad59210bdcac959b21168813f597a3c4914706eac3f2dde1fb13b56d5960",
+  "label_asset_id": 532156071,
+  "label_asset_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+  "label_asset_bytes": 448575,
+  "label_asset_verified_before_first_outcome_opening": true,
+  "labeled_rowset": {
+    "rows": 1143,
+    "bytes": 737690,
+    "sha256": "4b4dc3086d9f6a322f01089a7bd828d6cc4095ff793d343e0c25eb1b147dbe4a"
+  },
+  "linkage": {
+    "matched_rows": 1143,
+    "unmatched_probability_rows": 0,
+    "duplicate_probability_game_ids": 0,
+    "duplicate_matched_label_game_ids": 0,
+    "team_identity_mismatches": 0,
+    "season_mismatches": 0,
+    "winner_consistency_failures": 0,
+    "score_consistency_failures": 0,
+    "label_validation_errors": 0
+  },
+  "metrics_computed_in_r1b1": false,
+  "selected_side_correctness_computed_in_r1b1": false,
+  "thresholds_tuned": false,
+  "probability_refit": false,
+  "candidate_switched": false,
+  "decision": "R1B1_LABELED_ROWSET_FROZEN_AND_R1B2_METRICS_AUTHORIZED",
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false,
+  "next_gate": "R1B2_PREREGISTERED_METRICS_ON_FROZEN_LABELED_ROWSET"
+}

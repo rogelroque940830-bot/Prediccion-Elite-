@@ -1,0 +1,75 @@
+{
+  "name": "WNBA_R1A4D1_SEASON_VENUE_REGISTRY_PROBE_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_VENUE_PROBE",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_certification": "research/wnba/WNBA_R1A4C_PREFIX_CONSTRUCTOR_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "production_semantics_frozen": {
+    "frontend": "getAwayTravelDistance(awayTeam, homeTeam, 'wnba')",
+    "home_travel_miles": 0,
+    "away_distance": "Haversine distance between away franchise registered home arena coordinate and home franchise registered home arena coordinate.",
+    "probability_effect": {
+      "lt_500": 0.0,
+      "500_to_lt_1000": 0.007,
+      "1000_to_lt_2000": 0.014,
+      "2000_to_lt_2500": 0.020,
+      "gte_2500": 0.028
+    },
+    "no_real_trip_reconstruction": true,
+    "no_previous_game_location_reconstruction": true
+  },
+  "source": {
+    "schedule_pin": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json#schedule_master",
+    "allowed_columns": [
+      "game_id", "season", "season_type", "game_date_time", "game_date",
+      "home_id", "away_id", "home_display_name", "away_display_name",
+      "home_venue_id", "away_venue_id", "venue_id", "venue_full_name",
+      "venue_address_city", "venue_address_state", "neutral_site", "notes_headline"
+    ],
+    "forbidden_columns": [
+      "home_score", "away_score", "home_winner", "away_winner",
+      "home_linescores", "away_linescores"
+    ]
+  },
+  "special_event_exclusion": {
+    "source": "research/wnba/WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY.json",
+    "excluded_game_ids": [
+      "401341447", "401353913", "401455978", "401430112", "401558893",
+      "401507376", "401620458", "401677672", "401781604", "401736430"
+    ],
+    "special_event_values_loaded": false
+  },
+  "probe_questions": [
+    "Are home_venue_id and away_venue_id populated for every certified regular-season target?",
+    "For each franchise-season, how many distinct registered venue ids appear on schedule rows?",
+    "Does the registered home venue id agree with the actual venue id on ordinary home fixtures, and where does it intentionally differ?",
+    "Which venue ids/names/cities require season-specific coordinate custody before travel can be certified?",
+    "Can every one of the 1,143 frozen R1A.4C target rows be mapped to two registered venue ids without using an outcome field?"
+  ],
+  "empirical_gate": {
+    "schedule_asset_custody_must_match": true,
+    "forbidden_outcome_values_loaded": false,
+    "special_event_rows_used": 0,
+    "registered_venue_pair_coverage_min": 0.99,
+    "required_seasons": 5
+  },
+  "decision_policy": {
+    "if_gate_passes": "VENUE_REGISTRY_SURFACE_CERTIFIED_COORDINATE_CUSTODY_NEXT",
+    "if_gate_fails": "VENUE_REGISTRY_NOT_CERTIFIED",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A4D2_COORDINATE_AND_TRAVEL_BUCKET_CUSTODY"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "WNBA_R1A6_EXECUTION_AMENDMENT_1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_OPERATIONAL_AMENDMENT",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_contract": "research/wnba/WNBA_R1A6_OUTCOME_BLIND_MODEL_REPLAY_CONTRACT.json",
+  "scientific_scope_changed": false,
+  "target_outcomes_opened": false,
+  "market_data_consumed": false,
+  "model_coefficients_changed": false,
+  "candidate_inputs_changed": false,
+  "candidate_input_expected_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+  "frozen_model_path": "frontend/client/src/lib/wnba-model.ts",
+  "frozen_model_git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+  "function": "predictWNBA",
+  "market_argument": "OMITTED",
+  "failed_execution_attempts": [
+    {
+      "workflow_run_id": 33086943170,
+      "failure_class": "NODE_ESM_EXTENSIONLESS_TYPESCRIPT_IMPORT",
+      "detail": "Node 22 type stripping could not resolve ./wnba-shadow-emission from the production TypeScript source.",
+      "candidate_input_reproduced_before_failure": true,
+      "candidate_input_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53"
+    },
+    {
+      "workflow_run_id": 33087175165,
+      "failure_class": "FRONTEND_DEPENDENCY_NOT_INSTALLED",
+      "detail": "tsx resolved the TypeScript import chain, then queryClient.ts could not resolve @tanstack/react-query because frontend dependencies were absent from the runner.",
+      "candidate_input_reproduced_before_failure": true,
+      "candidate_input_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53"
+    }
+  ],
+  "amended_execution_transport": {
+    "dependency_install": "npm ci --prefix frontend --ignore-scripts using frontend/package-lock.json",
+    "source_compiler": "frontend lockfile-resolved esbuild binary",
+    "bundle_source": "frontend/client/src/lib/wnba-model.ts",
+    "bundle_platform": "node",
+    "bundle_format": "esm",
+    "vite_environment_defines": {
+      "import.meta.env.VITE_API_BASE_URL": "",
+      "import.meta.env.DEV": false
+    },
+    "execution": "Import temporary ESM bundle compiled from the verified frozen production source and invoke predictWNBA(home, away) with market argument omitted.",
+    "source_verification_rule": "The replay script must verify the original production file Git blob SHA before importing the execution module.",
+    "no_equation_copy": true,
+    "no_model_source_edit": true,
+    "no_shadow_emission_mock": true
+  },
+  "decision": "ALLOW_OPERATIONAL_TRANSPORT_REPAIR_WITHOUT_SCIENTIFIC_CHANGE",
+  "r1b_outcome_opening_authorized": false
+}

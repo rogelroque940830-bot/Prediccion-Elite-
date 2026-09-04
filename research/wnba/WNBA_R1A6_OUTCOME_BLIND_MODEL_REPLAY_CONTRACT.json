@@ -1,0 +1,90 @@
+{
+  "name": "WNBA_R1A6_OUTCOME_BLIND_MODEL_REPLAY_CONTRACT_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_MODEL_REPLAY",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "parent_candidate_certification": "research/wnba/WNBA_R1A5_NEUTRAL_AVAILABILITY_CANDIDATE_CERTIFICATION.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "expected_rows": 1143,
+    "target_outcomes_opened": false,
+    "market_data_consumed": false,
+    "calibration_fit": false,
+    "threshold_tuning": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "frozen_candidate_input": {
+    "expected_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+    "expected_rows": 1143,
+    "regenerator": "scripts/wnba-r1a5-neutral-availability-candidate.py",
+    "rule": "The candidate input rowset must be regenerated and match this SHA-256 byte-for-byte before the model is called."
+  },
+  "frozen_model": {
+    "path": "frontend/client/src/lib/wnba-model.ts",
+    "git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "function": "predictWNBA",
+    "execution_rule": "Import and execute the production TypeScript function directly under Node 22 type stripping; do not reproduce the probability equation in a parallel research implementation.",
+    "market_argument": "OMITTED",
+    "probability_semantics": "SPORTS_ONLY_HOME_WIN_PROBABILITY_BEFORE_ANY_MARKET_BLEND"
+  },
+  "frozen_input_mapping": {
+    "netRtg": "side.netRtg",
+    "offRtg": "side.offRtg",
+    "defRtg": "side.defRtg",
+    "pace": "side.pace",
+    "daysRest": "side.daysRest",
+    "winRate": "side.winRate",
+    "isB2B": "side.isB2B",
+    "streak": "side.streak",
+    "injuryAdj": "side.injuryAdj = 0 by distinct candidate definition",
+    "recentNetRtg": "side.recentNetRtg",
+    "recentOffRtg": "side.recentOffRtg",
+    "recentDefRtg": "side.recentDefRtg",
+    "recentWinRate": "side.recentWinPct",
+    "gamesPlayed": "side.gamesPlayed",
+    "oppAvgNetRtg": "side.sos.oppAvgNetRtg",
+    "b2bWasRoad": "side.b2bWasRoad",
+    "gamesLast7Days": "side.gamesLast7",
+    "travelMiles": "side.travelMiles"
+  },
+  "selected_side_semantics": {
+    "homeProbability": "predictWNBA(home, away) with market argument omitted",
+    "awayProbability": "1-homeProbability",
+    "selectedSide": "HOME when homeProbability >= 0.5, otherwise AWAY",
+    "p_win_selected_side": "max(homeProbability, awayProbability)",
+    "no_elite_gate_applied": true,
+    "no_bet_recommendation_created": true
+  },
+  "probability_rowset_fields": [
+    "schemaVersion", "candidate", "gameId", "season", "targetDate",
+    "homeTeamId", "awayTeamId", "homeProbability", "awayProbability",
+    "selectedSide", "selectedTeamId", "p_win_selected_side",
+    "marketAttached", "targetOutcomeAttached", "modelBlobSha"
+  ],
+  "empirical_gate": {
+    "candidate_input_sha256_matches": true,
+    "candidate_input_rows": 1143,
+    "model_blob_sha_matches": true,
+    "probability_rows": 1143,
+    "finite_probability_rows": 1143,
+    "probabilities_between_0_and_1": true,
+    "selected_probability_ge_0_5": true,
+    "duplicate_game_ids": 0,
+    "market_attached_rows": 0,
+    "outcome_attached_rows": 0,
+    "special_event_rows": 0
+  },
+  "decision_policy": {
+    "if_all_gates_pass": "FROZEN_OUTCOME_BLIND_SPORTS_ONLY_PROBABILITY_ROWSET",
+    "otherwise": "MODEL_REPLAY_NOT_CERTIFIED",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A7_PROBABILITY_ROWSET_CUSTODY_AND_R1A_CLOSURE"
+  }
+}

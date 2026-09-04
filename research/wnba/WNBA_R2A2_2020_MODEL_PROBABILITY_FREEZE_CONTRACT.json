@@ -1,0 +1,46 @@
+{
+  "name": "WNBA_R2A2_2020_MODEL_PROBABILITY_FREEZE_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_2020_LABEL_OPENING",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "seed_season": 2020,
+  "frozen_candidate_input": {
+    "rows": 126,
+    "sha256": "8e037e9a688e62952f5c323ac6d48dbe3f437c8c28d6658f8c5147e4572da863"
+  },
+  "frozen_model": {
+    "path": "frontend/client/src/lib/wnba-model.ts",
+    "git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "function": "predictWNBA",
+    "call": "predictWNBA(home, away)",
+    "market_argument": "OMITTED"
+  },
+  "probability_output": {
+    "home_probability": "predictWNBA(home,away)",
+    "away_probability": "1-home_probability",
+    "selected_side": "HOME iff home_probability>=0.5 else AWAY",
+    "p_win_selected_side": "home_probability for HOME else away_probability"
+  },
+  "gates": {
+    "rows": 126,
+    "finite_probabilities": 126,
+    "strictly_between_0_and_1": 126,
+    "selected_probability_at_least_0_5": 126,
+    "duplicate_game_ids": 0,
+    "market_attached_rows": 0,
+    "target_outcome_attached_rows": 0
+  },
+  "chronology": {
+    "2020_labels_may_be_opened_before_probability_sha_freeze": false,
+    "next_if_pass": "R2B_OPEN_2020_SEED_LABELS_ONCE_AND_RUN_FIVE_TARGET_FOLD_PLATT"
+  },
+  "forbidden": [
+    "market argument",
+    "calibration fit before probability freeze",
+    "threshold tuning",
+    "2020 outcome access",
+    "coefficient changes",
+    "candidate changes"
+  ],
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false
+}

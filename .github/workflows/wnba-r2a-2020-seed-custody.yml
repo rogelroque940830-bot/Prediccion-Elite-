@@ -1,0 +1,63 @@
+name: WNBA R2A 2020 Seed Custody
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R2A_2020_SEED_SEASON_CUSTODY_CONTRACT.json'
+      - 'research/wnba/WNBA_R2A1_2020_IDENTITY_FALLBACK_AMENDMENT.json'
+      - 'research/wnba/WNBA_R2A_2020_SOURCE_PINS.json'
+      - 'scripts/wnba-r2a-2020-seed-candidate.py'
+      - '.github/workflows/wnba-r2a-2020-seed-custody.yml'
+      - 'research/wnba/WNBA_R2A_EXECUTION_MARKER.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install prefix dependency
+        run: python -m pip install --quiet pyarrow
+      - name: Verify frozen production source blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object frontend/client/src/lib/travel.ts)" = "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b"
+          test "$(git hash-object frontend/client/src/lib/wnba-model.ts)" = "095527160535655d28e989c0cfe9638fc6681b4c"
+      - name: Build 2020 seed candidate before calibration-label opening
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/wnba-r2a-2020-seed-candidate.py
+      - name: Assert R2A1 outcome-blind custody gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.decision == "R2A1_2020_PREGAME_CANDIDATE_FROZEN_LABELS_STILL_CLOSED"' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.competition.expectedRegularGames == 132 and .competition.actualRegularGames == 132 and .competition.joinedRegularGames == 132 and .competition.joinRate == 1' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.identityFallback.count == 1 and .identityFallback.identityOnly == true and .identityFallback.outcomeColumnsProjected == false' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.candidateRowset.rows == 126' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.gates.candidateJoinRate == 1 and .gates.missingJoinCount == 0 and .gates.duplicateGameIds == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.gates.targetOutcomeAttachedRows == 0 and .gates.marketAttachedRows == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.gates.selfLeakage == 0 and .gates.sameDayLeakage == 0 and .gates.futureLeakage == 0' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+          jq -e '.["2020_labels_opened_for_calibration"] == false' wnba-r2a-2020-seed-candidate-evidence.json >/dev/null
+      - name: Upload R2A 2020 pregame custody evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r2a-2020-seed-custody-${{ github.run_id }}
+          path: |
+            wnba-r2a-2020-seed-candidate-evidence.json
+            wnba-r2a-2020-seed-candidate-rowset.jsonl
+            wnba-r2a-2020-prefix-evidence.json
+            wnba-r2a-2020-prefix-rowset.jsonl
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,68 @@
+{
+  "name": "WNBA_R2A1_2020_IDENTITY_FALLBACK_AMENDMENT_V1",
+  "status": "PREREGISTERED_BEFORE_INSPECTING_MISSING_GAME_IDENTITY_OR_TARGET_LABELS",
+  "parent_contract": "research/wnba/WNBA_R2A_2020_SEED_SEASON_CUSTODY_CONTRACT.json",
+  "triggering_fact_only": {
+    "regular_team_box_games": 132,
+    "schedule_game_id_joins": 131,
+    "missing_count": 1,
+    "missing_game_identity_inspected_before_this_amendment": false
+  },
+  "allowed_fallback": {
+    "primary_identity_source": "frozen schedule master by game_id",
+    "fallback_only_when_primary_game_id_absent": true,
+    "fallback_source": "same frozen team_box_2020.parquet",
+    "allowed_columns": [
+      "game_id",
+      "season",
+      "season_type",
+      "game_date",
+      "game_date_time",
+      "team_id",
+      "team_home_away",
+      "opponent_team_id"
+    ],
+    "forbidden_columns_before_target_row_seal": [
+      "team_score",
+      "opponent_team_score",
+      "team_winner",
+      "home_score",
+      "away_score",
+      "home_winner",
+      "away_winner"
+    ],
+    "requirements": [
+      "exactly two identity rows for the missing game",
+      "one HOME and one AWAY row",
+      "reciprocal opponent_team_id consistency",
+      "same game_date/game_date_time identity",
+      "season=2020 and regular season",
+      "no score/winner field projected during fallback construction"
+    ],
+    "maximum_fallback_games": 1,
+    "otherwise": "FAIL_CLOSED"
+  },
+  "anti_leakage": {
+    "target stats remain unread until all target rows on that date are sealed": true,
+    "same_day_values_as_features": false,
+    "future_values_as_features": false,
+    "target_self_as_feature": false
+  },
+  "success_gate": {
+    "regular_games": 132,
+    "identity_joined_games_after_fallback": 132,
+    "identity_join_rate": 1.0,
+    "fallback_games": 1,
+    "prefix_ingest_missing_games": 0,
+    "target_outcomes_attached": 0
+  },
+  "scientific_effect": {
+    "candidate_definition_changed": false,
+    "model_changed": false,
+    "travel_changed": false,
+    "availability_policy_changed": false,
+    "calibration_method_changed": false,
+    "2020_labels_opened": false,
+    "previous_r2a_candidate_rowset_status": "PROVISIONAL_SUPERSEDED_IF_R2A1_PASSES"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "name": "WNBA_R1A4B_ADVANCED_ASOF_SEMANTICS_AUDIT_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_SOURCE_SEMANTICS_AUDIT",
+  "decision": "PENDING_EMPIRICAL_PROBE",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "probe_launch_revision": 1,
+  "probe_launch_note": "Operational trigger only. No scientific rule, formula, tolerance, cohort, feature, threshold or decision policy changed.",
+  "parent": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+  "scope": {
+    "target_seasons": [2021, 2022, 2023, 2024, 2025],
+    "candidate": "SPORTS_ONLY_V1",
+    "goal": "Determine whether season-to-date offRtg, defRtg, netRtg and pace can be reconstructed as-of from prior-game data with semantics sufficiently equivalent to the frozen production source chain.",
+    "target_outcomes_opened": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "frozen_production_semantics": {
+    "source_blob": "server/wnba-independent-routes.ts@090f32f9b1753eb7b53dbf7140529c27e824433e",
+    "advanced_endpoint": "/team_season_advanced_stats",
+    "advanced_params": {
+      "season_type": "regular",
+      "scope": "general",
+      "measure_type": "advanced",
+      "per_mode": "per_game"
+    },
+    "preferred_advanced_fields": {
+      "pace": ["pace", "pace_per_game"],
+      "offRtg": ["off_rating", "offensive_rating", "off_rtg"],
+      "defRtg": ["def_rating", "defensive_rating", "def_rtg"],
+      "netRtg": ["net_rating", "net_rtg"]
+    },
+    "pace_fallback": "fga + 0.44*fta - oreb + turnovers from team_season_stats",
+    "off_fallback": "100 * ppg / pace",
+    "def_fallback": "100 * oppPpg / pace",
+    "net_fallback": "offRtg - defRtg",
+    "production_quantization": "round to one decimal before model consumption"
+  },
+  "candidate_historical_source": {
+    "provider": "BALLDONTLIE WNBA API",
+    "base": "https://api.balldontlie.io/wnba/v1",
+    "game_advanced_endpoint": "/team_game_advanced_stats",
+    "game_basic_endpoint": "/team_stats",
+    "season_advanced_endpoint": "/team_season_advanced_stats",
+    "season_basic_endpoint": "/team_season_stats",
+    "documented_history": "WNBA data 2008-current",
+    "documented_game_advanced_filters": ["season", "seasons", "start_date", "end_date", "season_type", "period"],
+    "credential_env": "BDL_API_KEY"
+  },
+  "target_cohort_access_probe": {
+    "purpose": "Prove historical game-level advanced access without requesting a hypothetical target date.",
+    "windows": {
+      "2021": ["2021-06-01", "2021-06-07"],
+      "2022": ["2022-06-01", "2022-06-07"],
+      "2023": ["2023-06-01", "2023-06-07"],
+      "2024": ["2024-06-01", "2024-06-07"],
+      "2025": ["2025-06-01", "2025-06-07"]
+    },
+    "hypothetical_target_date": "June 15 of each target season",
+    "required": "Each season must return nonzero full-game advanced rows from dates strictly before the hypothetical target date."
+  },
+  "semantic_equivalence_validation": {
+    "validation_season": 2026,
+    "reason": "2026 is outside the 2021-2025 historical evaluation cohort and is used only to validate source aggregation semantics, not to tune model coefficients, thresholds or candidate selection.",
+    "candidate_formula_frozen_before_probe": {
+      "name": "POSSESSION_RATIO_FROM_GAME_ADVANCED_V1",
+      "per_game_possessions": "team_points * 100 / game_offensive_rating",
+      "season_offRtg": "100 * sum(team_points) / sum(inferred_possessions)",
+      "season_defRtg": "100 * sum(opponent_points) / sum(inferred_possessions)",
+      "season_netRtg": "season_offRtg - season_defRtg",
+      "pace_if_advanced_season_field_absent": "mean game-level [FGA + 0.44*FTA - OREB + TOV], equivalent to production base-stat fallback before one-decimal quantization",
+      "simple_mean_game_ratings": "diagnostic only; may not replace the preregistered possession-ratio formula after results are observed"
+    },
+    "comparison_population": "Only 2026 teams whose game-level advanced/basic row counts exactly match the season snapshot gp are eligible for the equivalence comparison.",
+    "minimum_matched_teams": 10,
+    "pass_tolerance_after_one_decimal_quantization": 0.1,
+    "fields_required_to_pass": ["offRtg", "defRtg", "netRtg", "pace"],
+    "no_posthoc_tolerance_change": true
+  },
+  "anti_leakage_rules": [
+    "The 2021-2025 probe requests only June 1-7 prior-game windows for hypothetical June 15 targets.",
+    "No June 15 target-game advanced row, target score, target winner, market price, target participation or post-tip target information may be requested during R1A.4B.",
+    "2026 may be used only for source-semantic equivalence and cannot change WNBA model coefficients, thresholds, feature definitions or the SPORTS_ONLY_V1 candidate.",
+    "A final-season advanced snapshot from 2021-2025 may not be substituted backward to construct earlier target rows.",
+    "If the preregistered reconstruction exceeds the frozen tolerance, R1A.4B is not certified; the tolerance may not be widened after observing the comparison.",
+    "Unknown historical injury/manual state remains unresolved and is not zero-filled by this gate."
+  ],
+  "decision_policy": {
+    "if_historical_game_advanced_access_and_2026_equivalence_pass": "CERTIFIED_ADVANCED_ASOF_RECONSTRUCTION_SEMANTICS",
+    "if_access_exists_but_equivalence_fails": "ACCESS_CERTIFIED_SEMANTICS_NOT_EQUIVALENT",
+    "if_credentials_or_endpoint_access_fail": "ACCESS_NOT_CERTIFIED",
+    "if_required_game_fields_are_missing": "GAME_ADVANCED_SCHEMA_INSUFFICIENT",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_opened": false,
+    "next_gate_if_pass": "R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY",
+    "next_gate_if_fail": "PREREGISTER_DISTINCT_HISTORICAL_ADVANCED_ANALOGUE_OR_FIND_NEW_SOURCE"
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "name": "WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SOURCE_CERTIFICATION",
+  "decision": "PARTIAL_CERTIFIED_GAME_LEVEL_STATIC_SOURCE_ADVANCED_ASOF_UNRESOLVED",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent_contract": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_AUDIT.json",
+  "target_outcomes_opened": false,
+  "production_mutation": false,
+  "r1b_outcome_opening_authorized": false,
+  "source": {
+    "provider": "SportsDataverse",
+    "repository": "sportsdataverse/sportsdataverse-data",
+    "schedule_release_tag": "espn_wnba_schedules",
+    "team_box_release_tag": "espn_wnba_team_boxscores",
+    "release_tags_mutable": true,
+    "custody_method": "Exact release asset id + filename + size + SHA-256 pins; audit downloads by asset id and fails on changed frozen bytes."
+  },
+  "final_evidence": {
+    "workflow": "WNBA R1A.4 Static Versioned Dataset Audit",
+    "run_id": 33077317864,
+    "head_sha": "224886a3aebad94d0a2431c178fb0f0bdb4d2294",
+    "artifact_id": 9648420691,
+    "artifact_name": "wnba-r1a4-static-dataset-audit-33077317864",
+    "artifact_digest": "sha256:87acecf57a963bfeb9e9fe98a4d9917d03a5ad46df0e8d1d229d22ac6019ce12",
+    "evidence_version": "WNBA_R1A4_STATIC_VERSIONED_DATASET_AUDIT_EVIDENCE_V1",
+    "forbidden_outcome_values_loaded": false
+  },
+  "frozen_asset_pins": {
+    "schedule_master": {
+      "asset_id": 532156071,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb"
+    },
+    "2021_team_box": {
+      "asset_id": 479696175,
+      "size": 40196,
+      "sha256": "02e574a18b06c883247bd67d0e4b29423f0b6a5cba04c8b1579bf12d7af28d8e"
+    },
+    "2022_team_box": {
+      "asset_id": 479697715,
+      "size": 42711,
+      "sha256": "7919b2f7de526350476c868d1048162cc9b3bf6f9f059f41298e1d40450f871c"
+    },
+    "2023_team_box": {
+      "asset_id": 165078397,
+      "size": 55000,
+      "sha256": "ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9",
+      "digest_provenance": "First computed in outcome-blind R1A.4 run 33077182651, frozen before final run, then independently matched in final run 33077317864."
+    },
+    "2024_team_box": {
+      "asset_id": 417936297,
+      "size": 50957,
+      "sha256": "b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c"
+    },
+    "2025_team_box": {
+      "asset_id": 505304728,
+      "size": 49409,
+      "sha256": "b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09"
+    }
+  },
+  "empirical_coverage": {
+    "2021": {
+      "games": 211,
+      "two_sided_games": 211,
+      "schedule_join_rate": 1.0,
+      "missing_identity_rows": 0
+    },
+    "2022": {
+      "games": 241,
+      "two_sided_games": 241,
+      "schedule_join_rate": 1.0,
+      "missing_identity_rows": 0
+    },
+    "2023": {
+      "games": 262,
+      "two_sided_games": 262,
+      "schedule_join_rate": 1.0,
+      "missing_identity_rows": 0
+    },
+    "2024": {
+      "games": 264,
+      "two_sided_games": 264,
+      "schedule_join_rate": 1.0,
+      "missing_identity_rows": 0
+    },
+    "2025": {
+      "games": 312,
+      "two_sided_games": 312,
+      "schedule_join_rate": 1.0,
+      "missing_identity_rows": 0
+    }
+  },
+  "certified_capabilities": [
+    "Pinned static fixture identity for the intended 2021-2025 cohort.",
+    "Pinned static game-level two-sided team-box structure for every audited game.",
+    "Canonical game_id joins from each audited team-box asset to schedule identity at 100%.",
+    "Pregame chronology/team identity fields can be projected without loading score/winner/linescore values.",
+    "The source can support a later prefix constructor that first excludes the target game and future games, then uses only prior finalized games under separately frozen rules."
+  ],
+  "not_certified_by_r1a4": {
+    "advanced_asof": {
+      "status": "UNRESOLVED",
+      "reason": "The published ESPN game-level team_box assets do not contain off_rating, def_rating, net_rating, pace or possessions. The published WNBA Stats team_season_stats surface is season-level, and no dated historical snapshots were certified for 2021-2025. Production prefers advanced values when available, so a basic-boxscore estimate cannot be silently declared exact equivalence."
+    },
+    "injury_archive": "UNRESOLVED_R1A1",
+    "manual_adjustment_history": "UNRESOLVED_NO_HISTORICAL_LOG",
+    "market_control": "OUT_OF_SCOPE_FOR_SPORTS_ONLY_AND_SEPARATE_FOR_CURRENT_65_35_CONTROL"
+  },
+  "anti_leakage_closure": [
+    "The R1A.4 empirical audit loaded only contract-allowlisted non-outcome columns.",
+    "Forbidden score/winner/linescore columns were visible only as Parquet schema names; their values were never projected into memory.",
+    "No target-game result, target participation, market price, injury inference or post-tip state was used to choose the source or decision.",
+    "No end-of-season advanced snapshot is authorized for backward historical substitution."
+  ],
+  "closure": {
+    "scientific_result": "R1A4_GAME_LEVEL_STATIC_LAYER_CERTIFIED_ADVANCED_ASOF_OPEN",
+    "full_sports_only_v1_reconstruction_certified": false,
+    "target_outcomes_may_be_opened": false,
+    "next_gate": "R1A4B_ADVANCED_ASOF_SEMANTICS_CERTIFICATION"
+  }
+}

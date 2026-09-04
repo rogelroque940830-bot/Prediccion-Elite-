@@ -1,0 +1,135 @@
+{
+  "name": "WNBA_R1A4_STATIC_VERSIONED_DATASET_AUDIT_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_STATIC_SOURCE_AUDIT",
+  "decision": "PENDING_FINAL_PINNED_RERUN",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent": "research/wnba/WNBA_R1A3_ESPN_PRIOR_GAME_SOURCE_CERTIFICATION.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "candidate": "SPORTS_ONLY_V1",
+    "goal": "Certify static/versioned custody and structural coverage for target identity and prior-game reconstruction without opening target-game outcome values.",
+    "target_outcomes_opened": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "source_architecture": {
+    "provider": "SportsDataverse",
+    "repository": "sportsdataverse/sportsdataverse-data",
+    "schedule_release_tag": "espn_wnba_schedules",
+    "team_box_release_tag": "espn_wnba_team_boxscores",
+    "schedule_role": "Fixture identity, season, team identities and pregame chronology only.",
+    "team_box_role": "Game-level structural source for prior-game context/basic statistics; target-game outcome values remain forbidden during R1A.4.",
+    "release_tags_are_mutable": true,
+    "custody_rule": "Pin release asset id, name, size and SHA-256. A mutable tag or filename alone is not sufficient source custody. Any changed asset requires a new explicit audit before use."
+  },
+  "pinned_assets": {
+    "schedule_master": {
+      "asset_id": 532156071,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb"
+    },
+    "team_box_by_season": {
+      "2021": {
+        "asset_id": 479696175,
+        "name": "team_box_2021.parquet",
+        "size": 40196,
+        "sha256": "02e574a18b06c883247bd67d0e4b29423f0b6a5cba04c8b1579bf12d7af28d8e"
+      },
+      "2022": {
+        "asset_id": 479697715,
+        "name": "team_box_2022.parquet",
+        "size": 42711,
+        "sha256": "7919b2f7de526350476c868d1048162cc9b3bf6f9f059f41298e1d40450f871c"
+      },
+      "2023": {
+        "asset_id": 165078397,
+        "name": "team_box_2023.parquet",
+        "size": 55000,
+        "sha256": "ea2e4f2907e01dc4b1cff0c8ab0035ff03505e6aa8b934c7a0380260d1ee54b9",
+        "digest_provenance": "Computed outcome-blind from asset-id-addressed bytes in R1A.4 run 33077182651 before final pinned rerun."
+      },
+      "2024": {
+        "asset_id": 417936297,
+        "name": "team_box_2024.parquet",
+        "size": 50957,
+        "sha256": "b807c953d2f305325bfcc1eab0c0c4711fa02faf8cd86b822de19dbe931ed32c"
+      },
+      "2025": {
+        "asset_id": 505304728,
+        "name": "team_box_2025.parquet",
+        "size": 49409,
+        "sha256": "b241743395be6808821a05134d2ea9386a585e6d60c3aa21dfe7c70f7893bf09"
+      }
+    }
+  },
+  "allowed_schedule_columns": [
+    "game_id",
+    "season",
+    "season_type",
+    "game_date_time",
+    "game_date",
+    "home_id",
+    "away_id",
+    "team_box",
+    "time_valid"
+  ],
+  "allowed_team_box_columns": [
+    "game_id",
+    "season",
+    "season_type",
+    "game_date",
+    "game_date_time",
+    "team_id",
+    "team_home_away",
+    "opponent_team_id"
+  ],
+  "forbidden_target_outcome_columns": [
+    "home_score",
+    "home_winner",
+    "away_score",
+    "away_winner",
+    "home_linescores",
+    "away_linescores",
+    "team_score",
+    "team_winner",
+    "opponent_team_score"
+  ],
+  "anti_leakage_rules": [
+    "R1A.4 may inspect Parquet schema metadata, but it may not load values from forbidden target-outcome columns.",
+    "Only explicitly allowlisted columns may be projected during the empirical audit.",
+    "A later constructor may read outcomes/statistics only from games proven final strictly before the target cutoff and only after excluding the target game by canonical game_id.",
+    "No season-end/current advanced snapshot may be projected backward to an earlier target game.",
+    "Unknown historical injury or manual-adjustment state is not zero.",
+    "No target outcome, market price, target participation or post-tip information may be used to choose a source or feature rule."
+  ],
+  "known_outcome_blind_semantics_findings": {
+    "espn_team_box_advanced_gap": "The documented SportsDataverse ESPN team_box schema contains game identity and traditional/basic boxscore fields but does not contain off_rating, def_rating, net_rating, pace or possessions.",
+    "wnba_stats_team_season_stats_grain": "SportsDataverse declares team_season_stats as a season-level leaguedashteamstats dataset, not a game-level or dated snapshot dataset.",
+    "wnba_stats_team_season_stats_asof_status": "UNSAFE_FOR_HISTORICAL_ASOF_WITHOUT_DATED_SNAPSHOTS",
+    "production_preference": "server/wnba-independent-routes.ts prefers advanced pace/off_rating/def_rating/net_rating and only uses estimated formulas as fallback, so a basic-boxscore derivation cannot be silently declared exact production equivalence.",
+    "referenced_raw_store": "sportsdataverse/wehoop-wnba-stats-raw is referenced by current build code but is not publicly resolvable through the GitHub access path used in this audit as of 2026-08-27; it is therefore not an eligible certified source for R1A.4."
+  },
+  "empirical_pass_requirements": {
+    "all_assets_download_by_pinned_asset_id": true,
+    "known_asset_sizes_match": true,
+    "all_frozen_sha256_match": true,
+    "2023_sha256_is_computed_and_then_frozen_before_final_certification": true,
+    "allowed_columns_exist": true,
+    "forbidden_outcome_values_are_never_loaded": true,
+    "each_season_has_nonzero_game_level_rows": true,
+    "team_box_game_ids_join_to_schedule_identity": true,
+    "team_box_rows_have_two_sides_per_game": true
+  },
+  "decision_policy": {
+    "if_game_level_static_gate_passes_but_advanced_asof_remains_unproven": "PARTIAL_CERTIFIED_GAME_LEVEL_STATIC_SOURCE_ADVANCED_ASOF_UNRESOLVED",
+    "if_any_pinned_asset_or_structural_gate_fails": "NOT_CERTIFIED",
+    "full_sports_only_v1_reconstruction_certification_requires": "A separately frozen exact-enough advanced as-of source/derivation plus resolution of the injury/manual-state gates.",
+    "r1b_outcomes_remain_closed_in_all_r1a4_results": true
+  },
+  "closure": {
+    "target_outcomes_may_be_opened": false,
+    "next_gate_if_partial": "R1A4B_ADVANCED_ASOF_SEMANTICS_CERTIFICATION"
+  }
+}

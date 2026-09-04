@@ -1,0 +1,17 @@
+{
+  "name": "WNBA_R2A_2020_SOURCE_PINS_V1",
+  "frozen_asset_pins": {
+    "schedule_master": {
+      "asset_id": 532156071,
+      "name": "wnba_games_in_data_repo.parquet",
+      "size": 448575,
+      "sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb"
+    },
+    "2020_team_box": {
+      "asset_id": 479694512,
+      "name": "team_box_2020.parquet",
+      "size": 35358,
+      "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53"
+    }
+  }
+}

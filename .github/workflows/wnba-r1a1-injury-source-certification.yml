@@ -1,0 +1,31 @@
+name: WNBA R1A.1 Injury Source Certification
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1A1_INJURY_SOURCE_CERTIFICATION.json'
+      - 'scripts/wnba-r1a1-validate.py'
+      - '.github/workflows/wnba-r1a1-injury-source-certification.yml'
+  pull_request:
+    paths:
+      - 'research/wnba/WNBA_R1A1_INJURY_SOURCE_CERTIFICATION.json'
+      - 'scripts/wnba-r1a1-validate.py'
+      - '.github/workflows/wnba-r1a1-injury-source-certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-r1a1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen WNBA R1A.1 injury-source certification
+        run: python scripts/wnba-r1a1-validate.py

@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "wnba-r1-historical-foundation-contract.v1",
+  "phase": "WNBA-R1",
+  "title": "Historical Foundation and Cross-Sport Candidate Freeze",
+  "preregisteredDate": "2026-08-26",
+  "status": "PREREGISTERED_INPUT_AUDIT_ONLY",
+  "objective": "Establish a leakage-safe historical foundation for WNBA full-game winner probability before any Elite threshold discovery, coefficient retuning, cross-sport promotion, or outcome-driven candidate switching.",
+  "sourceCustody": {
+    "baseCommit": "1665355c3e7b845fdabf35a7b2c3b5bce516d86f",
+    "modelSource": {
+      "path": "frontend/client/src/lib/wnba-model.ts",
+      "gitBlobSha": "095527160535655d28e989c0cfe9638fc6681b4c"
+    },
+    "runtimeSource": {
+      "path": "frontend/client/src/pages/wnba-predictor.tsx",
+      "gitBlobSha": "2eeb7bca4c66894dbfe63d5ae149adf215a2344b"
+    },
+    "existingProspectiveCustody": [
+      "server/wnba-s6e-evaluation-emission-service.ts",
+      "server/wnba-s6c-shadow-service.ts"
+    ],
+    "productionModelChangesAllowedInR1": false
+  },
+  "scientificScope": {
+    "sport": "WNBA",
+    "market": "FULL_GAME_MONEYLINE",
+    "target": "GAME_WINNER",
+    "binaryOutcome": "HOME_WIN=1, AWAY_WIN=0",
+    "crossSportOutput": "p_win_selected_side",
+    "spreadIncluded": false,
+    "totalIncluded": false,
+    "reasonSpreadTotalExcluded": "Current spread and total probability-like outputs are heuristic transformations and are not the clean binary winner probability required by the cross-sport ranker."
+  },
+  "frozenPrimaryCandidate": {
+    "id": "SPORTS_ONLY_V1",
+    "role": "PRIMARY_CROSS_SPORT_CANDIDATE",
+    "selectionRule": "HOME if p_home >= 0.5 else AWAY",
+    "selectedSideProbability": "p_home for HOME; 1-p_home for AWAY",
+    "marketInputsAllowed": false,
+    "definition": "Exact current predictWNBA sports logit through sigmoid and the frozen +/-2.0 logit cap, evaluated with marketImpliedHomeProb omitted.",
+    "coefficients": {
+      "intercept": 0.12,
+      "diff_net_rtg": 0.09,
+      "diff_off_rtg": 0.035,
+      "diff_def_rtg": -0.035,
+      "diff_pace": 0.006,
+      "diff_rest": 0.07,
+      "home_win_rate": 1.3,
+      "away_win_rate": -1.3,
+      "home_b2b_road_prev": -0.28,
+      "home_b2b_home_prev": -0.18,
+      "away_b2b_road_prev": 0.32,
+      "away_b2b_home_prev": 0.22,
+      "diff_streak": 0.06,
+      "schedule_overload": -0.08
+    },
+    "fixedMechanics": {
+      "recentSeasonBlendBaseRecentWeight": 0.60,
+      "sosRecentWeightRange": [0.40, 0.75],
+      "sampleTrustIfGamesPlayedBelow15": "clamp(0.30 + gamesPlayed*0.047, 0.30, 1.00)",
+      "ratingClamp": [88, 112],
+      "defenseTierEliteBelow": 97,
+      "defenseTierWeakAbove": 103,
+      "offenseMultiplierVsEliteDefense": 0.975,
+      "offenseMultiplierVsWeakDefense": 1.025,
+      "logitHardCap": 2.0,
+      "travelAdjustments": {
+        "below500": 0,
+        "500to999": 0.007,
+        "1000to1999": 0.014,
+        "2000to2499": 0.020,
+        "2500plus": 0.028
+      }
+    }
+  },
+  "frozenDeployedControl": {
+    "id": "CURRENT_65_35_V1",
+    "role": "DEPLOYED_MARKET_INFORMED_CONTROL_NOT_GLOBAL_CANDIDATE",
+    "definition": "Exact deployed WNBA probability: SPORTS_ONLY_V1 blended 65% with the raw implied HOME probability from the HOME moneyline, plus the existing extreme-gap sanity pull and final [0.05,0.95] clamp.",
+    "sportsWeight": 0.65,
+    "marketWeight": 0.35,
+    "marketProbability": "americanToProb(homeMoneyline); not de-vigged",
+    "extremeGapRule": "If abs(sportsProb-marketProb) >= 0.25 and sportsProb >= 0.80 or <= 0.20, average the 65/35 blend with marketProb + gap*0.40.",
+    "finalProbabilityClamp": [0.05, 0.95],
+    "eligibleForGlobalRanker": false,
+    "reason": "The common cross-sport winner signal must not gain an undeclared advantage from sportsbook information when other sport-specific candidate probabilities are sports-information-only."
+  },
+  "historicalReplay": {
+    "requestedCompleteSeasons": [2021, 2022, 2023, 2024, 2025],
+    "seasonPolicy": "Use the five complete seasons only if all required pre-tip fields can be reconstructed without future information. A season or row failing exact custody is excluded transparently, never imputed from future/current state.",
+    "minimumSeasonsForR1Evaluation": 5,
+    "minimumEligibleGamesTotal": 500,
+    "minimumEligibleGamesPerSeason": 80,
+    "sameRowsRequiredForPrimaryAndControlComparison": true,
+    "2026Use": "PROSPECTIVE_CONFIRMATION_ONLY_AFTER_R1_FREEZE; no 2026 settled outcomes may be used to tune R1 coefficients, thresholds, gates, or candidate identity."
+  },
+  "requiredPregameFields": {
+    "identity": ["gameDate", "commenceTime", "homeTeam", "awayTeam"],
+    "seasonToDateBeforeGame": ["netRtg", "offRtg", "defRtg", "pace", "winRate", "gamesPlayed"],
+    "recentBeforeGame": ["recentNetRtg", "recentOffRtg", "recentDefRtg", "recentWinRate", "recentPace"],
+    "scheduleBeforeGame": ["daysRest", "isB2B", "b2bWasRoad", "gamesLast7Days", "streak"],
+    "contextBeforeGame": ["oppAvgNetRtg_last10", "awayTravelMiles", "injuryAdj"],
+    "marketOnlyForControl": ["homeMoneyline", "marketTimestampBeforeTip"],
+    "outcomeLockedUntilInputAuditPasses": ["homeScore", "awayScore", "homeOutcome"]
+  },
+  "missingDataPolicy": {
+    "futureBackfillAllowed": false,
+    "currentSeasonStateSubstitutionAllowed": false,
+    "silentZeroImputationAllowed": false,
+    "injuryDefaultZeroAllowed": false,
+    "marketDefaultAllowed": false,
+    "rule": "A field may be absent only where the frozen live model itself treats that field as optional and the historical reconstruction proves that omission reflects information availability at that pre-tip timestamp. Otherwise the row is ineligible for exact replay."
+  },
+  "leakageControls": {
+    "sameGameOutcomeAsFeature": false,
+    "postTipData": false,
+    "futureSeasonGamesInPregameState": false,
+    "targetSeasonThresholdTuning": false,
+    "targetSeasonRankingCap": false,
+    "postResultCandidateSwitching": false,
+    "postResultGateWeakening": false,
+    "historicalHitRateAsPerGameProbability": false
+  },
+  "evaluationProtocol": {
+    "firstStage": "INPUT_AVAILABILITY_AND_TIMESTAMP_AUDIT_WITH_OUTCOMES_CLOSED",
+    "secondStage": "DETERMINISTIC_PREGAME_ROWSET_FREEZE",
+    "thirdStage": "OPEN_OUTCOMES_ONCE_AND_SCORE_FROZEN_ROWSET",
+    "metrics": ["ACCURACY", "BRIER", "LOG_LOSS", "ECE10", "CALIBRATION_IN_THE_LARGE", "MEAN_PREDICTED_MINUS_OBSERVED", "SEASON_STABILITY"],
+    "probabilityQualificationGates": {
+      "calibrationInTheLargeAbsZMax": 1.959963984540054,
+      "ece10Max": 0.02,
+      "absMeanPredictedMinusObservedMax": 0.02,
+      "brierMustBeatFrozenTrainingClimatology": true,
+      "logLossMustBeatFrozenTrainingClimatology": true
+    },
+    "accuracy80RequirementForAllGames": false,
+    "note": "R1 certifies the probability foundation. High-accuracy selective Elite rules, if scientifically justified, are a later preregistered phase and may not be mined in R1."
+  },
+  "decisionPolicy": {
+    "primaryCandidateCannotBeReplacedByControlBecauseOfObservedResults": true,
+    "ifPrimaryFailsProbabilityGates": "WNBA cross-sport probability remains BLOCKED; create a separately versioned future research phase rather than retuning R1 after outcomes.",
+    "ifPrimaryPassesProbabilityGates": "Freeze SPORTS_ONLY_V1 as the WNBA base p_win_selected_side candidate; this alone does not authorize Global Elite Ranker promotion or betting.",
+    "automaticPromotion": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "r1ExitCriteria": [
+    "Frozen source custody verified",
+    "Historical pre-tip input availability audit completed without opening outcomes",
+    "At least 500 eligible games across five complete seasons with at least 80 eligible games per season",
+    "Deterministic rowset digest frozen",
+    "Outcomes opened exactly once after rowset freeze",
+    "SPORTS_ONLY_V1 scored against all preregistered probability gates",
+    "CURRENT_65_35_V1 reported only as the deployed market-informed control",
+    "No production model, coefficient, threshold, recommendation, staking, or global ranking change"
+  ]
+}

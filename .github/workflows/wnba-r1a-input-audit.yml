@@ -1,0 +1,34 @@
+name: WNBA R1A Input Audit
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1A_INPUT_AUDIT.json'
+      - 'scripts/wnba-r1a-validate.py'
+      - '.github/workflows/wnba-r1a-input-audit.yml'
+  pull_request:
+    paths:
+      - 'research/wnba/WNBA_R1A_INPUT_AUDIT.json'
+      - 'scripts/wnba-r1a-validate.py'
+      - '.github/workflows/wnba-r1a-input-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-r1a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate frozen WNBA R1A audit
+        run: python scripts/wnba-r1a-validate.py

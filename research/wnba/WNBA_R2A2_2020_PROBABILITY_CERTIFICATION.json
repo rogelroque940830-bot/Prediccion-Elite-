@@ -1,0 +1,43 @@
+{
+  "name": "WNBA_R2A2_2020_PROBABILITY_CERTIFICATION_V1",
+  "status": "FROZEN_BEFORE_2020_LABEL_OPENING",
+  "workflow": {
+    "run_id": 33104850854,
+    "job_id": 98631841812,
+    "conclusion": "SUCCESS"
+  },
+  "artifact": {
+    "id": 9660009957,
+    "digest": "sha256:24859385b580ca1748cd8364b6e02b8698290f9f672d010d092648559c171958"
+  },
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "seed_season": 2020,
+  "seed_role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
+  "candidate_input": {
+    "rows": 126,
+    "sha256": "8e037e9a688e62952f5c323ac6d48dbe3f437c8c28d6658f8c5147e4572da863"
+  },
+  "model": {
+    "git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "function": "predictWNBA(home, away)",
+    "market_argument_passed": false
+  },
+  "probability_rowset": {
+    "rows": 126,
+    "bytes": 56993,
+    "sha256": "5cba8333071a4fde151ccf972712d0e67172c07cfaf7548217df13e675a5517d",
+    "home_probability_min": 0.11920292202211755,
+    "home_probability_max": 0.8807970779778823,
+    "selected_probability_min": 0.5100986264895117,
+    "selected_probability_max": 0.8807970779778824
+  },
+  "chronology": {
+    "2020_labels_opened_before_probability_freeze": false,
+    "calibration_fit_before_probability_freeze": false,
+    "threshold_tuning_before_probability_freeze": false,
+    "2020_labels_may_now_be_opened_once": true
+  },
+  "next_gate": "R2B_2020_LABEL_LINKAGE_AND_FIVE_TARGET_FOLD_PLATT",
+  "production_change_authorized": false,
+  "global_ranker_promotion_authorized": false
+}

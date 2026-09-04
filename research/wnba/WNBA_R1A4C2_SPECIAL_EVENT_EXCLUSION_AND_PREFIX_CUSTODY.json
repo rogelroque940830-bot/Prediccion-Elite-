@@ -1,0 +1,89 @@
+{
+  "name": "WNBA_R1A4C2_SPECIAL_EVENT_EXCLUSION_AND_PREFIX_CUSTODY_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_CORRECTED_PREFIX_CONSTRUCTOR",
+  "decision": "PENDING_CORRECTED_EMPIRICAL_RUN",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "supersedes_for_final_certification": "research/wnba/WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY.json",
+  "reason_for_correction": "The first R1A.4C run treated every ESPN season_type=2 event as regular season and empirically found exactly two extra fixtures per target season. An outcome-blind metadata probe demonstrated that the extras are the annual WNBA All-Star Game and the separate Commissioner's Cup Championship.",
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "special_event_classification": {
+    "evidence_run_id": 33083822921,
+    "evidence_artifact_id": 9651231078,
+    "evidence_artifact_digest": "sha256:f51e9d54cc694318e6917d5f001cc7bbe1d61c40274233d3a736b40c33090fcf",
+    "forbidden_outcome_values_loaded": false,
+    "classification_inputs": ["game_id", "season", "season_type", "game_date_time", "game_date", "home_id", "away_id", "home_display_name", "away_display_name", "neutral_site", "notes_type", "notes_headline"],
+    "is_active_not_used": true,
+    "neutral_site_not_used_as_universal_rule": true,
+    "headline_not_used_as_universal_rule": true,
+    "why_exact_ids_are_frozen": "2023 All-Star has an empty notes_headline; 2021 Cup Championship shares the generic Cup headline; Cup qualifying games also carry Cup headlines. Exact game IDs were reconciled outcome-blind against official event dates/participants, then frozen before the corrected rowset run.",
+    "excluded_game_ids_by_season": {
+      "2021": ["401341447", "401353913"],
+      "2022": ["401455978", "401430112"],
+      "2023": ["401558893", "401507376"],
+      "2024": ["401620458", "401677672"],
+      "2025": ["401781604", "401736430"]
+    },
+    "event_identity": {
+      "401341447": "2021 WNBA All-Star Game, Team WNBA vs Team USA, 2021-07-14",
+      "401353913": "2021 Commissioner's Cup Championship, Seattle Storm vs Connecticut Sun, 2021-08-12",
+      "401455978": "2022 WNBA All-Star Game, Team Wilson vs Team Stewart, 2022-07-10",
+      "401430112": "2022 Commissioner's Cup Championship, Chicago Sky vs Las Vegas Aces, 2022-07-26",
+      "401558893": "2023 WNBA All-Star Game, Team Wilson vs Team Stewart, 2023-07-15",
+      "401507376": "2023 Commissioner's Cup Championship, Las Vegas Aces vs New York Liberty, 2023-08-15",
+      "401620458": "2024 WNBA All-Star Game, Team WNBA vs Team USA, 2024-07-20",
+      "401677672": "2024 Commissioner's Cup Championship, New York Liberty vs Minnesota Lynx, 2024-06-25",
+      "401781604": "2025 WNBA All-Star Game, Team Clark vs Team Collier, 2025-07-19",
+      "401736430": "2025 Commissioner's Cup Championship, Minnesota Lynx vs Indiana Fever, 2025-07-01"
+    }
+  },
+  "official_regular_season_structure_gate": {
+    "2021": {"teams": 12, "games_per_team": 32, "expected_games": 192},
+    "2022": {"teams": 12, "games_per_team": 36, "expected_games": 216},
+    "2023": {"teams": 12, "games_per_team": 40, "expected_games": 240},
+    "2024": {"teams": 12, "games_per_team": 40, "expected_games": 240},
+    "2025": {"teams": 13, "games_per_team": 44, "expected_games": 286},
+    "role": "Post-classification structural gate only; counts were not derived from target outcomes and may not be adjusted after the corrected rowset is observed."
+  },
+  "prefix_semantics": {
+    "inherits": "research/wnba/WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY.json",
+    "change_from_v1": "Only special-event exclusion before target construction and before any special-event stat value can enter phase-2 prefix ingestion.",
+    "two_phase_daily_chokepoint_unchanged": true,
+    "fallback_formula_unchanged": true,
+    "recent_semantics_unchanged": true,
+    "schedule_context_semantics_unchanged": true,
+    "sos_semantics_unchanged": true,
+    "minimum_prior_games_unchanged": true
+  },
+  "anti_leakage_rules": {
+    "special_event_ids_are_removed_from_safe_identity projections before target grouping": true,
+    "special_event_stat_or_score values_may_not_be_projected": true,
+    "target_self_in_prefix_count": 0,
+    "same_day_value_used_count": 0,
+    "future_value_used_count": 0,
+    "target_outcome_fields_in_rowset": 0,
+    "market_data_consumed": false
+  },
+  "empirical_gate": {
+    "exact_regular_fixture_count_by_season_required": true,
+    "minimum_total_targets_with_two_team_prefix": 500,
+    "minimum_targets_per_season_with_two_team_prefix": 80,
+    "identity_join_rate_min": 0.99,
+    "source_hashes_must_match": true,
+    "special_event_target_rows": 0,
+    "special_event_prefix_ingest_rows": 0,
+    "all_leakage_counters": 0
+  },
+  "still_open": {
+    "travelMiles": "PENDING_SEASON_VENUE_CERTIFICATION",
+    "injuryAdj": "UNRESOLVED_R1A1_UNKNOWN_IS_NOT_ZERO",
+    "manualAdjustment": "UNRESOLVED_NO_HISTORICAL_LOG",
+    "preferred_BDL_advanced_exact_replay": "ACCESS_NOT_CERTIFIED"
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A4D_SEASON_VENUE_TRAVEL_CUSTODY_OR_R1A5_INJURY_NEUTRAL_CANDIDATE_FREEZE"
+  }
+}

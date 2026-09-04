@@ -1,0 +1,107 @@
+{
+  "name": "WNBA_R1A4C_FULL_PREFIX_CONSTRUCTOR_CUSTODY_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_PREFIX_CONSTRUCTOR",
+  "decision": "PENDING_EMPIRICAL_RUN",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_certification": "research/wnba/WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "season_type": "regular season only",
+    "target_outcomes_used_for_own_features": false,
+    "evaluation_labels_attached": false,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "purpose": "Construct and freeze point-in-time WNBA historical prefix feature rows from pinned static sources. Each target row must be sealed before any score/stat value from that target date is read. Raw completed-game values may enter only the prefix of later dates.",
+  "source_custody": {
+    "schedule_and_team_box_pins": "research/wnba/WNBA_R1A4_STATIC_VERSIONED_DATASET_CERTIFICATION.json",
+    "advanced_fallback_semantics": "research/wnba/WNBA_R1A4B1_FALLBACK_ASOF_CERTIFICATION.json",
+    "download_rule": "Every source asset is addressed by frozen GitHub release asset_id and must match frozen byte size and SHA-256 before use."
+  },
+  "two_phase_daily_chokepoint": {
+    "phase_1": "For target date D, construct and serialize every eligible regular-season target row using only the in-memory prefix from dates strictly earlier than D.",
+    "phase_2": "Only after every target row for D is sealed may the constructor project score/stat columns for game_ids on D and append those completed-game records to the prefix for dates after D.",
+    "same_day_prior_games": "Never used. Even if one game on date D actually ended before another game on D tipped, no date-D box value may enter another date-D target row because final timestamps are not certified in the static source.",
+    "future_games": "Never projected into memory before their date becomes the phase-2 ingest date.",
+    "target_game": "Never present in its own prefix."
+  },
+  "frozen_fallback_formula": {
+    "pace": "mean(FGA) + 0.44*mean(FTA) - mean(OREB) + mean(TOV)",
+    "ppg": "mean(points_scored)",
+    "oppPpg": "mean(points_allowed)",
+    "offRtg": "100*ppg/pace",
+    "defRtg": "100*oppPpg/pace",
+    "netRtg": "offRtg-defRtg",
+    "winRate": "wins/gamesPlayed",
+    "quantization": "pace/offRtg/defRtg/netRtg/ppg/recentPpg/SOS outputs round to one decimal; winRate/recentWinPct round to two decimals",
+    "minimum_prior_games": 1,
+    "cold_start": "COLD_START_UNAVAILABLE",
+    "missing_required_box_field": "ROW_UNAVAILABLE"
+  },
+  "frozen_recent_semantics": {
+    "recentNetRtg": "alias of prefix season netRtg",
+    "recentOffRtg": "alias of prefix season offRtg",
+    "recentDefRtg": "alias of prefix season defRtg",
+    "recentPace": "alias of prefix season pace",
+    "recentPpg": "mean points scored over latest up to 10 prior finalized games",
+    "recentWinPct": "wins/latest up to 10 prior finalized games"
+  },
+  "frozen_schedule_context_semantics": {
+    "gamesPlayed": "count of prior finalized regular-season games in prefix",
+    "daysRest": "integer calendar-day difference between target date and latest prior-game date",
+    "isB2B": "preserve deployed quirk: true when calendar-day gap between latest and second-latest prior games is <=1 day; it is NOT target-vs-last-game B2B",
+    "b2bWasRoad": "true only when isB2B is true and the second-latest prior game was road",
+    "gamesLast7": "prior games with game date >= target date minus 7 calendar days",
+    "streak": "signed consecutive W/L run beginning with latest prior final; wins positive and losses negative"
+  },
+  "frozen_sos_semantics": {
+    "opponent_occurrences": "Use the target team's latest up to 10 prior opponents in game order; repeated opponents remain repeated and therefore retain deployed occurrence weighting.",
+    "opponent_season_stats": "For each opponent occurrence, calculate fallback offRtg/defRtg from that opponent's full prefix strictly before target date.",
+    "opponent_recent_stats": "For each opponent occurrence, calculate fallback offRtg/defRtg from that opponent's latest up to 10 prefix games strictly before target date.",
+    "blend": "If recent stats exist, blendedOff=0.4*seasonOff+0.6*recentOff and blendedDef=0.4*seasonDef+0.6*recentDef; otherwise use season stats.",
+    "output": "Average blended off and def over usable opponent occurrences; oppAvgNetRtg=avgOff-avgDef. Round outputs to one decimal.",
+    "missingness": "If no opponent occurrence has usable prefix stats, mark SOS_UNAVAILABLE; do not use season-end/future values."
+  },
+  "explicitly_not_resolved_by_r1a4c": {
+    "travelMiles": "PENDING_SEASON_VENUE_CERTIFICATION. Current WNBA_ARENAS cannot be silently projected backward because R1A requires season-correct venue custody.",
+    "injuryAdj": "UNRESOLVED_R1A1. UNKNOWN_IS_NOT_ZERO.",
+    "manualAdjustment": "UNRESOLVED_NO_HISTORICAL_LOG. Do not assume zero while claiming exact product replay.",
+    "preferred_BDL_advanced_replay": "ACCESS_NOT_CERTIFIED. This constructor remains the separately certified fallback analogue."
+  },
+  "rowset_rules": {
+    "target_identity_source": "Pinned schedule plus certified two-sided team_box identity join.",
+    "regular_season_filter": "A target must be regular season in both certified identity surfaces; unknown season_type is excluded and reported.",
+    "eligible_target": "Both target teams require at least one prior regular-season game and usable fallback season state. SOS may be unavailable and is reported separately rather than zero-filled.",
+    "row_contains_target_score": false,
+    "row_contains_target_winner": false,
+    "row_contains_market": false,
+    "row_contains_injury_or_manual_imputation": false,
+    "rowset_digest": "Canonical JSON Lines sorted by season,target_date,game_id; SHA-256 frozen from exact bytes."
+  },
+  "empirical_gate": {
+    "minimum_total_targets_with_two_team_prefix": 500,
+    "minimum_targets_per_season_with_two_team_prefix": 80,
+    "source_hashes_must_match": true,
+    "identity_join_rate_min": 0.99,
+    "target_self_in_prefix_count": 0,
+    "same_day_value_used_count": 0,
+    "future_value_used_count": 0,
+    "target_outcome_fields_in_rowset": 0,
+    "required_seasons": 5
+  },
+  "decision_policy": {
+    "if_gate_passes": "CERTIFIED_PREFIX_CUSTODY_RECONSTRUCTIBLE_GROUPS_TRAVEL_INJURY_MANUAL_STILL_OPEN",
+    "if_source_or_leakage_gate_fails": "NOT_CERTIFIED_PREFIX_CUSTODY",
+    "if_volume_gate_fails": "INSUFFICIENT_PREFIX_VOLUME",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A4D_SEASON_VENUE_TRAVEL_CUSTODY_OR_R1A5_INJURY_NEUTRAL_CANDIDATE_FREEZE"
+  }
+}

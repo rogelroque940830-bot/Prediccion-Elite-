@@ -1,0 +1,141 @@
+{
+  "name": "WNBA_R1A7_PROBABILITY_CUSTODY_AND_R1B_PROTOCOL_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_R1A_CLOSURE_AND_R1B_PROTOCOL",
+  "date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent_contract": "research/wnba/WNBA_R1_HISTORICAL_FOUNDATION_CONTRACT.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "candidate_role": "DISTINCT_HISTORICALLY_CERTIFIABLE_RESEARCH_CANDIDATE",
+  "exact_production_sports_only_v1_status": "BLOCKED_BY_UNCERTIFIED_2021_2025_INJURY_AND_MANUAL_STATE",
+  "target_outcomes_opened_at_preregistration": false,
+  "market_data_consumed": false,
+  "coefficient_tuning": false,
+  "threshold_tuning": false,
+  "elite_gate_discovery": false,
+  "production_mutation": false,
+  "r1a6_success_custody": {
+    "workflow_run_id": 33089505577,
+    "artifact_id": 9653696479,
+    "artifact_name": "wnba-r1a6-probabilities-33089505577",
+    "artifact_digest": "sha256:eb5a3dfd9ea05262f47fbbd2ecf6492cb2bee6b62b2baf7dffb35c3fbe79cb1a",
+    "candidate_input_sha256": "adba4e61185573b1f13655086646cb6883b6b46df5d6996d2d88661ef9251f53",
+    "model_git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "probability_rowset_sha256": "6621ad59210bdcac959b21168813f597a3c4914706eac3f2dde1fb13b56d5960",
+    "probability_rows": 1143,
+    "probability_bytes": 517297,
+    "execution_module_sha256": "5031dde5c22a863a6ea5bce50fb4d93e8831b1f35066cca5abff3e78edab8b4b"
+  },
+  "frozen_cohort": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "rows_total": 1143,
+    "rows_by_season": {
+      "2021": 186,
+      "2022": 210,
+      "2023": 234,
+      "2024": 234,
+      "2025": 279
+    },
+    "minimum_games_total_gate": 500,
+    "minimum_games_per_season_gate": 80,
+    "special_event_rows": 0,
+    "duplicate_game_ids": 0
+  },
+  "probability_semantics": {
+    "homeProbability": "Frozen production predictWNBA(home, away) with the market argument omitted, evaluated on the distinct fallback candidate inputs.",
+    "awayProbability": "1-homeProbability",
+    "selectedSide": "HOME if homeProbability >= 0.5 else AWAY",
+    "p_win_selected_side": "max(homeProbability, awayProbability)",
+    "probability_rowset_mutable_after_outcomes": false,
+    "candidate_identity_mutable_after_outcomes": false
+  },
+  "r1b_label_source": {
+    "provider": "SportsDataverse",
+    "repository": "sportsdataverse/sportsdataverse-data",
+    "release_tag": "espn_wnba_schedules",
+    "asset_id": 532156071,
+    "asset_name": "wnba_games_in_data_repo.parquet",
+    "asset_size": 448575,
+    "asset_sha256": "b2e28d109f7b8bfcc72df0e02d19daee46d710b8d53f833a9e8e706f436815eb",
+    "join_key": "exact game_id",
+    "allowed_label_columns_after_r1a_closure": [
+      "game_id",
+      "season",
+      "home_id",
+      "away_id",
+      "home_score",
+      "away_score",
+      "home_winner",
+      "away_winner"
+    ],
+    "primary_binary_label": "homeOutcome = 1 when home_winner is true; 0 when away_winner is true",
+    "consistency_rules": [
+      "Exactly one of home_winner and away_winner must be true.",
+      "home_score and away_score must be finite and unequal for a final WNBA game.",
+      "home_winner must agree with home_score > away_score.",
+      "home_id and away_id must match the frozen probability row identity for the same game_id."
+    ],
+    "missing_or_ambiguous_label_policy": "FAIL_CLOSED; never infer a label from another source inside R1B without a separately preregistered amendment."
+  },
+  "r1b_evaluation_protocol": {
+    "outcomes_open_once": true,
+    "probabilities_refit_after_opening": false,
+    "model_refit_after_opening": false,
+    "candidate_switching_after_opening": false,
+    "threshold_discovery_after_opening": false,
+    "elite_selection_not_part_of_r1b": true,
+    "primary_scoring_unit": "selected side",
+    "selected_side_label": "1 when selectedTeamId is the winner, else 0",
+    "metrics": [
+      "ACCURACY",
+      "BRIER",
+      "LOG_LOSS",
+      "ECE10",
+      "CALIBRATION_IN_THE_LARGE_ABS_Z",
+      "MEAN_PREDICTED_MINUS_OBSERVED",
+      "SEASON_STABILITY"
+    ],
+    "ece10_bins": [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0],
+    "probability_gates": {
+      "calibration_in_the_large_abs_z_max": 1.959963984540054,
+      "ece10_max": 0.02,
+      "abs_mean_predicted_minus_observed_max": 0.02,
+      "brier_must_beat_walk_forward_climatology": true,
+      "log_loss_must_beat_walk_forward_climatology": true
+    },
+    "walk_forward_climatology": {
+      "2021": 0.5,
+      "2022": "home win rate from final 2021 rows only",
+      "2023": "home win rate from final 2021-2022 rows only",
+      "2024": "home win rate from final 2021-2023 rows only",
+      "2025": "home win rate from final 2021-2024 rows only",
+      "use": "Comparator only; never fed into the frozen candidate probability."
+    },
+    "accuracy_80_required_for_all_games": false,
+    "selective_elite_rules": "FORBIDDEN_IN_R1B; any later Elite gate requires a new preregistered phase with leakage-safe training/held-out logic."
+  },
+  "r1b_decision_policy": {
+    "if_all_probability_gates_pass": "FALLBACK_BASE_PROBABILITY_RESEARCH_QUALIFIED",
+    "if_any_probability_gate_fails": "WNBA_BASE_PROBABILITY_REMAINS_BLOCKED_AND_R1_MAY_NOT_RETUNE_AFTER_RESULTS",
+    "exact_production_sports_only_v1_is_not_rehabilitated_by_fallback_results": true,
+    "global_ranker_promotion": false,
+    "betting_authorization": false,
+    "production_change": false
+  },
+  "r1a7_pass_requirements": {
+    "probability_rowset_sha256_matches": true,
+    "probability_rows": 1143,
+    "season_counts_match": true,
+    "model_blob_sha_matches": true,
+    "candidate_input_sha_matches": true,
+    "market_rows": 0,
+    "outcome_rows": 0,
+    "special_event_rows": 0,
+    "duplicate_game_ids": 0,
+    "r1a6_reproduction_passes": true
+  },
+  "closure_policy": {
+    "if_r1a7_passes": "R1A_CLOSED_AND_R1B_OUTCOME_OPENING_AUTHORIZED",
+    "if_r1a7_fails": "R1A_REMAINS_OPEN_AND_OUTCOMES_REMAIN_FORBIDDEN"
+  }
+}

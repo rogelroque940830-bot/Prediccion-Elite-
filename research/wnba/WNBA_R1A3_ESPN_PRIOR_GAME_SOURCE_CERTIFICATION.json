@@ -1,0 +1,75 @@
+{
+  "name": "WNBA_R1A3_ESPN_PRIOR_GAME_SOURCE_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_SOURCE_ACCESS_AUDIT",
+  "decision": "ACCESS_DENIED_NOT_CERTIFIED",
+  "audited_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "parent": "research/wnba/WNBA_R1A2_STATS_SOURCE_CERTIFICATION.json",
+  "outcomes_opened": false,
+  "production_mutation": false,
+  "r1b_outcome_opening_authorized": false,
+  "candidate_source": {
+    "vendor": "ESPN",
+    "base": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba",
+    "endpoints": ["scoreboard", "summary"],
+    "credentials_required_by_probe": false,
+    "intended_role": "prior-game schedule and boxscore source for point-in-time reconstruction"
+  },
+  "probe_evidence": {
+    "run_id": 33073753836,
+    "head_sha": "ca6f2cf028a5787e1df22bc94e5e73ce3f10c71d",
+    "artifact_id": 9646919844,
+    "artifact_name": "wnba-r1a3-espn-prior-game-probe-33073753836",
+    "artifact_digest": "sha256:c24ce0d7ee171d61d350972ee33a19326672a5c5a8b425e26ee2abebd336a676",
+    "probe_version": "WNBA_R1A3_ESPN_PRIOR_GAME_SOURCE_PROBE_V1",
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "prior_windows": "June 1-7, with hypothetical June 15 targets",
+    "successful_seasons": 0,
+    "scoreboard_http_status_by_season": {
+      "2021": 403,
+      "2022": 403,
+      "2023": 403,
+      "2024": 403,
+      "2025": 403
+    },
+    "event_counts": {
+      "2021": 0,
+      "2022": 0,
+      "2023": 0,
+      "2024": 0,
+      "2025": 0
+    },
+    "summary_requests_reached": false
+  },
+  "scientific_interpretation": {
+    "historical_coverage_proven": false,
+    "historical_coverage_disproven": false,
+    "source_access_from_github_actions_proven_usable": false,
+    "access_failure": "HTTP_403_FORBIDDEN",
+    "reason": "Every season-level scoreboard request received HTTP 403 before any event or summary payload could be inspected. Access denial is not evidence that the historical games or boxscores do not exist.",
+    "can_certify_as_constructor_source_now": false
+  },
+  "anti_leakage_guards": [
+    "Only June 1-7 prior-game windows were requested for hypothetical June 15 target dates.",
+    "No hypothetical target-date game was requested.",
+    "No target outcome, market price or injury inference was requested.",
+    "Prior-game outcomes are permitted only as information that would already have been known before the hypothetical target cutoff.",
+    "HTTP 403 may not be converted into zero/default statistics."
+  ],
+  "allowed_next_actions": [
+    "Audit a static, versioned historical WNBA game/boxscore dataset accessible from the research environment.",
+    "Retest ESPN from a network environment where access is demonstrated without changing scientific rules.",
+    "Use a credentialed historical provider only after source custody and as-of rules are frozen before target outcomes are opened."
+  ],
+  "prohibited_next_actions": [
+    "Declare ESPN historical WNBA coverage absent based on HTTP 403.",
+    "Fill inaccessible ESPN inputs with zeros or current values.",
+    "Use target-game boxscores to infer pregame state.",
+    "Open target outcomes before choosing and freezing the fallback source."
+  ],
+  "closure": {
+    "scientific_result": "R1A3_ACCESS_DENIED_NOT_COVERAGE_FAILURE",
+    "next_gate": "R1A4_STATIC_VERSIONED_HISTORICAL_DATASET_AUDIT",
+    "target_outcomes_may_be_opened": false
+  }
+}

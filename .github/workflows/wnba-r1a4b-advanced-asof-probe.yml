@@ -1,0 +1,41 @@
+name: WNBA R1A.4B Advanced As-Of Semantics Probe
+
+on:
+  push:
+    branches:
+      - research/wnba-r1-historical-foundation
+    paths:
+      - 'research/wnba/WNBA_R1A4B_ADVANCED_ASOF_SEMANTICS_AUDIT.json'
+      - 'scripts/wnba-r1a4b-bdl-advanced-asof-probe.py'
+      - '.github/workflows/wnba-r1a4b-advanced-asof-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Probe BALLDONTLIE historical advanced as-of semantics
+        env:
+          BDL_API_KEY: ${{ secrets.BDL_API_KEY }}
+        run: python scripts/wnba-r1a4b-bdl-advanced-asof-probe.py
+
+      - name: Upload R1A.4B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wnba-r1a4b-advanced-asof-${{ github.run_id }}
+          path: wnba-r1a4b-bdl-advanced-asof-evidence.json
+          if-no-files-found: error
+          retention-days: 90

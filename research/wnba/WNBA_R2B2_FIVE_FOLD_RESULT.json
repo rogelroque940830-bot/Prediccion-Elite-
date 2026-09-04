@@ -1,0 +1,234 @@
+{
+  "name": "WNBA_R2B2_FIVE_FOLD_PLATT_RESULT_V1",
+  "date": "2026-08-27",
+  "decision": "WNBA_CALIBRATED_FALLBACK_PROBABILITY_REMAINS_BLOCKED_NO_RETUNE",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "calibration_candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1__PLATT_LOGIT_1D_ROLLING_ORIGIN",
+  "scientific_contract": {
+    "path": "research/wnba/WNBA_R2B_FIVE_FOLD_PLATT_CERTIFICATION_CONTRACT.json",
+    "git_blob_sha": "da4277bf0ad059dca6fef63f1ddb6a1801593234",
+    "status": "PREREGISTERED_BEFORE_FIRST_2020_LABEL_OPENING"
+  },
+  "execution": {
+    "workflow": "WNBA R2B2 Five-Fold Platt Certification",
+    "run_id": 33108042245,
+    "job_id": 98643115020,
+    "head_sha": "8b74d4cb0678f31b2bccbde474170ff242fc333f",
+    "conclusion": "SUCCESS_OPERATIONALLY_SCIENTIFIC_DECISION_BLOCKED",
+    "artifact_id": 9661302701,
+    "artifact_zip_sha256": "ff0d2757c233186150addc77b8bb9e45505c4acb2eb63937d8848f0c3e37a636"
+  },
+  "input_custody": {
+    "seed_2020": {
+      "role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
+      "rows": 126,
+      "bytes": 84310,
+      "sha256": "a0082ac89e732e56abb7f713f56d12d6749d0d6d75246efa5bd50d28897f84b2",
+      "match": true
+    },
+    "targets_2021_2025": {
+      "rows": 1143,
+      "sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319",
+      "match": true
+    },
+    "duplicate_game_ids": 0
+  },
+  "calibration_engine": {
+    "source_pull_request": 671,
+    "path": "server/cross-sport-calibration.ts",
+    "git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+    "method": "PLATT_LOGIT_1D",
+    "split": "ROLLING_ORIGIN_SEASON",
+    "exact_walk_forward_function_parity_all_folds": true
+  },
+  "folds": [
+    {
+      "target_season": 2021,
+      "training_seasons": [2020],
+      "training_observations": 126,
+      "test_observations": 186,
+      "platt_intercept": 0.34549699736990663,
+      "platt_slope": 0.430002267514999,
+      "selected_side_accuracy": 0.6559139784946236,
+      "raw_brier": 0.22822188695550322,
+      "calibrated_brier": 0.21943386281636298,
+      "raw_log_loss": 0.6576403975592972,
+      "calibrated_log_loss": 0.6289432631548141,
+      "raw_ece10": 0.11729112184924848,
+      "calibrated_ece10": 0.06015908755667326,
+      "calibrated_abs_z": 1.54366093360771,
+      "calibrated_bias": 0.051015652753855445,
+      "climatology_home_probability": 0.5,
+      "climatology_brier": 0.25,
+      "climatology_log_loss": 0.6931471805599464
+    },
+    {
+      "target_season": 2022,
+      "training_seasons": [2020, 2021],
+      "training_observations": 312,
+      "test_observations": 210,
+      "platt_intercept": 0.007412632267545725,
+      "platt_slope": 0.5848008883748538,
+      "selected_side_accuracy": 0.6428571428571429,
+      "raw_brier": 0.2358787553072116,
+      "calibrated_brier": 0.2222589566380967,
+      "raw_log_loss": 0.6752728794051343,
+      "calibrated_log_loss": 0.63505635141164,
+      "raw_ece10": 0.11002200873097784,
+      "calibrated_ece10": 0.025403602812318203,
+      "calibrated_abs_z": 0.796103724465906,
+      "calibrated_bias": 0.02540360281231835,
+      "climatology_home_probability": 0.5256410256410257,
+      "climatology_brier": 0.24821545975392043,
+      "climatology_log_loss": 0.6895755439648451
+    },
+    {
+      "target_season": 2023,
+      "training_seasons": [2020, 2021, 2022],
+      "training_observations": 522,
+      "test_observations": 234,
+      "platt_intercept": -0.04563086716091568,
+      "platt_slope": 0.58907579634047,
+      "selected_side_accuracy": 0.6581196581196581,
+      "raw_brier": 0.22769215528813125,
+      "calibrated_brier": 0.21638679948398926,
+      "raw_log_loss": 0.6583480204971784,
+      "calibrated_log_loss": 0.6228150473563325,
+      "raw_ece10": 0.10229671909055915,
+      "calibrated_ece10": 0.012103652148670242,
+      "calibrated_abs_z": 0.09195911015930523,
+      "calibrated_bias": 0.0027902262304303482,
+      "climatology_home_probability": 0.5344827586206896,
+      "climatology_brier": 0.24971543847881444,
+      "climatology_log_loss": 0.6925790449922612
+    },
+    {
+      "target_season": 2024,
+      "training_seasons": [2020, 2021, 2022, 2023],
+      "training_observations": 756,
+      "test_observations": 234,
+      "platt_intercept": -0.0506830885054659,
+      "platt_slope": 0.5899476410250627,
+      "selected_side_accuracy": 0.688034188034188,
+      "raw_brier": 0.21104286681632906,
+      "calibrated_brier": 0.2035266970958263,
+      "raw_log_loss": 0.6229504136339172,
+      "calibrated_log_loss": 0.5957884069019744,
+      "raw_ece10": 0.08890724489919143,
+      "calibrated_ece10": 0.03692722062268354,
+      "calibrated_abs_z": 0.4020352940761681,
+      "calibrated_bias": -0.01205977720557394,
+      "climatology_home_probability": 0.5304232804232805,
+      "climatology_brier": 0.24936540776487795,
+      "climatology_log_loss": 0.6918775719467155
+    },
+    {
+      "target_season": 2025,
+      "training_seasons": [2020, 2021, 2022, 2023, 2024],
+      "training_observations": 990,
+      "test_observations": 279,
+      "platt_intercept": -0.06981781768878914,
+      "platt_slope": 0.6167988251811898,
+      "selected_side_accuracy": 0.6487455197132617,
+      "raw_brier": 0.23705895605389546,
+      "calibrated_brier": 0.22105408178077907,
+      "raw_log_loss": 0.6839497587299852,
+      "calibrated_log_loss": 0.6333073771024074,
+      "raw_ece10": 0.12399703992895879,
+      "calibrated_ece10": 0.02998808455189842,
+      "calibrated_abs_z": 0.9307563882699502,
+      "calibrated_bias": 0.025598402795480868,
+      "climatology_home_probability": 0.5292929292929293,
+      "climatology_brier": 0.2473933206289019,
+      "climatology_log_loss": 0.6879288293238454
+    }
+  ],
+  "pooled_oos_2021_2025": {
+    "observations": 1143,
+    "selected_side_accuracy": 0.6587926509186351,
+    "raw": {
+      "brier": 0.22816032677140807,
+      "log_loss": 0.6603449124177205,
+      "ece10": 0.10571230582524387
+    },
+    "calibrated": {
+      "brier": 0.21646800209480224,
+      "log_loss": 0.6230894551629546,
+      "ece10": 0.022279398253892586,
+      "calibration_in_the_large_abs_z": 1.274546849103619,
+      "mean_predicted_minus_observed": 0.01731981404598637
+    },
+    "walk_forward_climatology": {
+      "brier": 0.24884768243640615,
+      "log_loss": 0.6908409724950532,
+      "ece10": 0.1576815040989762
+    }
+  },
+  "frozen_gates": {
+    "calibration_in_the_large_abs_z": {
+      "value": 1.274546849103619,
+      "limit_max": 1.959963984540054,
+      "pass": true
+    },
+    "ece10": {
+      "value": 0.022279398253892586,
+      "limit_max": 0.02,
+      "excess_over_limit": 0.002279398253892586,
+      "pass": false
+    },
+    "abs_mean_predicted_minus_observed": {
+      "value": 0.01731981404598637,
+      "limit_max": 0.02,
+      "pass": true
+    },
+    "brier_vs_walk_forward_climatology": {
+      "model": 0.21646800209480224,
+      "baseline": 0.24884768243640615,
+      "pass": true
+    },
+    "log_loss_vs_walk_forward_climatology": {
+      "model": 0.6230894551629546,
+      "baseline": 0.6908409724950532,
+      "pass": true
+    }
+  },
+  "gate_summary": {
+    "passed": 4,
+    "required": 5,
+    "failed": ["ece10"],
+    "all_five_probability_gates_pass": false,
+    "exact_five_fold_gate_pass": true,
+    "row_custody_gate_pass": true,
+    "research_probability_foundation_qualified": false
+  },
+  "calibrated_oos_rowset": {
+    "rows": 1143,
+    "bytes": 768523,
+    "sha256": "054048506b27131e1d4d02ea187ccd31819c53413b262409ef699dd7ca205b74"
+  },
+  "safety": {
+    "rows_dropped_after_outcomes": 0,
+    "coefficient_retune_performed": false,
+    "feature_search_performed": false,
+    "threshold_search_performed": false,
+    "candidate_switch_performed": false,
+    "platt_method_changed": false,
+    "optimizer_changed": false,
+    "gate_weakening_performed": false,
+    "target_season_ranking_or_cap_used": false,
+    "market_data_consumed": false,
+    "historical_hit_rate_used_as_game_probability": false,
+    "sport_elite_gate_passed": false,
+    "exact_production_sports_only_v1_rehabilitated": false,
+    "global_ranker_promotion_authorized": false,
+    "production_change_authorized": false,
+    "automatic_betting_authorized": false,
+    "real_financial_exposure": 0
+  },
+  "closure": {
+    "this_calibration_path": "CLOSED_NO_POST_RESULT_RETUNE",
+    "wnba_cross_sport_probability_status": "BLOCKED",
+    "global_ranker_eligibility": false,
+    "next_gate": "STOP_CALIBRATION_PATH_NO_POST_RESULT_RETUNE"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "name": "WNBA_R1A4D3_TRAVEL_ENRICHED_PREFIX_CERTIFICATION_V1",
+  "status": "FROZEN_OUTCOME_BLIND_CERTIFICATION",
+  "decision": "CERTIFIED_TRAVEL_ENRICHED_PREFIX_ROWSET",
+  "certified_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "parent_contract": "research/wnba/WNBA_R1A4D3_TRAVEL_ENRICHED_PREFIX_CUSTODY.json",
+  "parent_travel_certification": "research/wnba/WNBA_R1A4D2_DEPLOYED_TRAVEL_CUSTODY_CERTIFICATION.json",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "outcome_fields_loaded_from_schedule": 0,
+    "market_data_consumed": false,
+    "injury_or_manual_imputation": 0,
+    "r1b_outcome_opening_authorized": false
+  },
+  "evidence": {
+    "workflow": "WNBA R1A.4D3 Travel Enriched Prefix Custody",
+    "run_id": 33086113881,
+    "head_sha": "24051e2e6393e63c12c76bd22eb19fa9ebb495d9",
+    "artifact_id": 9652204017,
+    "artifact_name": "wnba-r1a4d3-travel-prefix-33086113881",
+    "artifact_digest": "sha256:7053d0b86d72755960829f941457a7fc8a0e3e6b8d9f929ef9d0a63d4ab59eef"
+  },
+  "base_rowset_reproduction": {
+    "expected_sha256": "47432224e80153617df70261d33bbbca26935fe71d5ec45552705c6aaf7f487f",
+    "reproduced_sha256": "47432224e80153617df70261d33bbbca26935fe71d5ec45552705c6aaf7f487f",
+    "byte_exact_match": true,
+    "rows": 1143
+  },
+  "travel_enriched_rowset": {
+    "rows": 1143,
+    "bytes": 1841611,
+    "sha256": "c071a027ba08f5c279215042c84f403102e933604ad3c4f3a89ed60d98b29f60",
+    "game_id_join_coverage": 1.0,
+    "travel_ready_rows": 1143,
+    "missing_join_count": 0,
+    "missing_coordinate_count": 0,
+    "non_travel_mutation_count": 0,
+    "duplicate_game_ids": 0,
+    "special_event_rows": 0,
+    "target_outcome_fields": 0,
+    "market_attached_rows": 0,
+    "injury_or_manual_imputation": 0
+  },
+  "travel_bucket_counts_on_prefix_rows": {
+    "LT500": 180,
+    "500_999": 334,
+    "1000_1999": 426,
+    "2000_2499": 180,
+    "GTE2500": 23
+  },
+  "production_source_custody": {
+    "travel_ts_blob_sha": "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b",
+    "travel_ts_match": true,
+    "wnba_model_ts_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+    "wnba_model_ts_match": true
+  },
+  "scientific_interpretation": {
+    "certified": "The corrected 1,143-row prefix cohort can be reproduced byte-for-byte and enriched with the exact deployed travel feature without changing any non-travel historical feature value.",
+    "travel_status": "CLOSED_FOR_HISTORICAL_FALLBACK_CANDIDATE",
+    "still_open": ["historical injury state", "historical manual adjustment state", "preferred BDL advanced exact replay"],
+    "no_outcome_selection": true
+  },
+  "closure": {
+    "r1a4d3": "PASS",
+    "travel_closed_for_historical_fallback_candidate": true,
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate": "R1A5_INJURY_AND_MANUAL_STATE_CANDIDATE_FREEZE"
+  }
+}

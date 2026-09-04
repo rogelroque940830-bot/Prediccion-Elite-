@@ -1,0 +1,73 @@
+{
+  "name": "WNBA_R1A4D2_DEPLOYED_COORDINATE_TRAVEL_BUCKET_CUSTODY_V1",
+  "status": "PREREGISTERED_OUTCOME_BLIND_TRAVEL_CUSTODY",
+  "preregistered_date": "2026-08-27",
+  "branch": "research/wnba-r1-historical-foundation",
+  "pull_request": 693,
+  "parent": "research/wnba/WNBA_R1A4D1_SEASON_VENUE_REGISTRY_CERTIFICATION.json",
+  "candidate": "SPORTS_ONLY_FALLBACK_ASOF_V1",
+  "scope": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "target_outcomes_opened": false,
+    "market_data_consumed": false,
+    "production_mutation": false,
+    "r1b_outcome_opening_authorized": false
+  },
+  "frozen_production_sources": {
+    "travel_ts": {
+      "path": "frontend/client/src/lib/travel.ts",
+      "git_blob_sha": "82f9eed3b30b2eb994c6ff5f2e4fa9bf5f0e946b",
+      "required_symbols": ["WNBA_ARENAS", "haversineDistance", "getAwayTravelDistance"]
+    },
+    "wnba_model_ts": {
+      "path": "frontend/client/src/lib/wnba-model.ts",
+      "git_blob_sha": "095527160535655d28e989c0cfe9638fc6681b4c",
+      "required_travel_bucket_expression": "away.travelMiles < 500 ? 0 : away.travelMiles < 1000 ? 0.007 : away.travelMiles < 2000 ? 0.014 : away.travelMiles < 2500 ? 0.020 : 0.028"
+    },
+    "schedule_custody": "research/wnba/WNBA_R1A4D1_SEASON_VENUE_REGISTRY_CERTIFICATION.json"
+  },
+  "scientific_claim": {
+    "target": "Exact replay of the DEPLOYED travel feature semantics, not reconstruction of physical trip mileage.",
+    "distance_rule": "Use production WNBA_ARENAS coordinates keyed by historical away/home franchise display names and production Haversine R=3959 miles.",
+    "home_travel_miles": 0,
+    "away_travel_miles": "getAwayTravelDistance(awayTeam, homeTeam, 'wnba')",
+    "bucket_only_affects_probability": true,
+    "physical_arena_accuracy_not_reinterpreted": true,
+    "no_posthoc_coordinate_correction": true
+  },
+  "season_versioning_rule": {
+    "franchise_keys": "Derive the exact franchise display names appearing in each corrected season from the pinned outcome-blind schedule.",
+    "coordinate_assignment": "A season/franchise key is eligible only if that exact name exists in the frozen production WNBA_ARENAS map. Copy that frozen production coordinate into an explicit season-versioned mapping.",
+    "expansion_guard": "Never apply a current franchise coordinate to a season in which that franchise does not appear in the pinned schedule.",
+    "missing_key": "TRAVEL_UNAVAILABLE; never silently coerce missing coordinates to zero for research replay."
+  },
+  "travel_bucket": {
+    "LT500": {"min_miles": 0, "max_exclusive": 500, "logit_adjustment": 0.0},
+    "500_999": {"min_miles": 500, "max_exclusive": 1000, "logit_adjustment": 0.007},
+    "1000_1999": {"min_miles": 1000, "max_exclusive": 2000, "logit_adjustment": 0.014},
+    "2000_2499": {"min_miles": 2000, "max_exclusive": 2500, "logit_adjustment": 0.020},
+    "GTE2500": {"min_miles": 2500, "max_exclusive": null, "logit_adjustment": 0.028}
+  },
+  "special_event_exclusion": "Use the same 10 frozen gameIds from R1A.4C2; never calculate travel for those excluded special events inside the certified regular-season cohort.",
+  "empirical_gate": {
+    "travel_ts_blob_matches": true,
+    "wnba_model_ts_blob_matches": true,
+    "regular_fixture_count": 1174,
+    "all_fixture_team_names_have_production_coordinates": true,
+    "travel_pair_coverage": 1.0,
+    "missing_coordinate_count": 0,
+    "special_event_rows_used": 0,
+    "outcome_fields_loaded": 0,
+    "required_seasons": 5
+  },
+  "decision_policy": {
+    "if_gate_passes": "CERTIFIED_DEPLOYED_TRAVEL_COORDINATE_AND_BUCKET_CUSTODY",
+    "if_gate_fails": "TRAVEL_CUSTODY_NOT_CERTIFIED",
+    "r1b_outcomes_remain_closed": true
+  },
+  "closure": {
+    "target_outcomes_may_be_evaluated": false,
+    "r1b_remains_closed": true,
+    "next_gate_if_pass": "R1A4D3_ATTACH_TRAVEL_TO_FROZEN_PREFIX_ROWSET"
+  }
+}

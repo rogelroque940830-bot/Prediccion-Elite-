@@ -1,0 +1,113 @@
+{
+  "name": "WNBA_R2B_FIVE_FOLD_PLATT_CERTIFICATION_CONTRACT_V1",
+  "status": "PREREGISTERED_BEFORE_FIRST_2020_LABEL_OPENING",
+  "date": "2026-08-27",
+  "candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1",
+  "raw_candidate_status": "FAILED_FROZEN_NO_RETUNE",
+  "calibration_candidate": "SPORTS_ONLY_FALLBACK_TRAVEL_NEUTRAL_AVAILABILITY_V1__PLATT_LOGIT_1D_ROLLING_ORIGIN",
+  "seed": {
+    "season": 2020,
+    "role": "TRAINING_ONLY_NEVER_TARGET_FOLD",
+    "probability_rows": 126,
+    "probability_sha256": "5cba8333071a4fde151ccf972712d0e67172c07cfaf7548217df13e675a5517d",
+    "labels_opened_at_contract_freeze": false
+  },
+  "frozen_target_signal": {
+    "seasons": [2021, 2022, 2023, 2024, 2025],
+    "rows": 1143,
+    "scored_rowset_sha256": "786d674b53cf7027ab9e5030bb11ff906cbbd3bba65fd4c9fdceea1dad1c8319"
+  },
+  "2020_label_source": {
+    "provider": "SportsDataverse",
+    "asset_id": 479694512,
+    "asset_name": "team_box_2020.parquet",
+    "asset_size": 35358,
+    "sha256": "e636f54194d2aa51533316bfe58a2b0393e80a486718bc3acc9ee27282dc4b53",
+    "verify_exact_bytes_before_parquet_open": true,
+    "allowed_columns_only": [
+      "game_id",
+      "season",
+      "season_type",
+      "game_date",
+      "team_id",
+      "team_home_away",
+      "opponent_team_id",
+      "team_score",
+      "opponent_team_score",
+      "team_winner"
+    ],
+    "linkage": "exact game_id + reciprocal HOME/AWAY team identity",
+    "label": "selectedSideOutcome = 1 iff frozen selectedTeamId equals validated winnerTeamId"
+  },
+  "calibration_engine": {
+    "source_pull_request": 671,
+    "path": "server/cross-sport-calibration.ts",
+    "git_blob_sha": "9099ed5182d64b6e20768b6d305e7867ed2b69ce",
+    "method": "PLATT_LOGIT_1D",
+    "split": "ROLLING_ORIGIN_SEASON",
+    "minimum_fit_rows": 20
+  },
+  "folds": [
+    {"target": 2021, "training": [2020]},
+    {"target": 2022, "training": [2020, 2021]},
+    {"target": 2023, "training": [2020, 2021, 2022]},
+    {"target": 2024, "training": [2020, 2021, 2022, 2023]},
+    {"target": 2025, "training": [2020, 2021, 2022, 2023, 2024]}
+  ],
+  "target_fold_count_required": 5,
+  "target_rows_required": 1143,
+  "target_rows_may_be_dropped_after_outcomes": false,
+  "metric_mechanics": {
+    "brier": "mean((p-y)^2)",
+    "log_loss": "binary negative log likelihood",
+    "ece10": "10 equal-width bins [0,.1),...,[.9,1], observation weighted",
+    "calibration_in_the_large_abs_z": "abs(sum(y-p))/sqrt(sum(p*(1-p)))",
+    "mean_predicted_minus_observed": "mean(p)-mean(y)",
+    "accuracy": "report only; not an 80 percent gate"
+  },
+  "walk_forward_climatology_baseline": {
+    "home_probability_for_target_season": "home-win rate over all frozen prior seasons beginning with 2020",
+    "selected_side_probability": "q_home for frozen HOME selections; 1-q_home for frozen AWAY selections",
+    "target_season_outcomes_used_to_set_its_baseline": false
+  },
+  "absolute_probability_gates_on_pooled_oos_2021_2025": {
+    "calibration_in_the_large_abs_z_max": 1.959963984540054,
+    "ece10_max": 0.02,
+    "abs_mean_predicted_minus_observed_max": 0.02,
+    "brier_must_be_strictly_better_than_walk_forward_climatology": true,
+    "log_loss_must_be_strictly_better_than_walk_forward_climatology": true,
+    "all_five_gates_required": true
+  },
+  "report_only_stability": {
+    "per_target_fold_metrics": true,
+    "per_target_fold_platt_parameters": true,
+    "per_target_fold_accuracy": true,
+    "no_new_post_result_season_gate": true
+  },
+  "decision": {
+    "if_all_five_gates_pass_and_five_folds_exact": "CALIBRATED_FALLBACK_PROBABILITY_FOUNDATION_QUALIFIED",
+    "otherwise": "WNBA_CALIBRATED_FALLBACK_PROBABILITY_REMAINS_BLOCKED_NO_RETUNE"
+  },
+  "critical_scope_boundary": {
+    "passing_does_not_rehabilitate_exact_production_SPORTS_ONLY_V1": true,
+    "passing_does_not_certify_WNBA_sport_Elite_selection_policy": true,
+    "sportEliteGatePassed_remains_false": true,
+    "passing_does_not_authorize_Global_Ranker_promotion": true,
+    "passing_does_not_change_production": true,
+    "passing_does_not_authorize_betting": true
+  },
+  "forbidden_after_2020_label_opening": [
+    "coefficient retune",
+    "feature search",
+    "threshold search",
+    "candidate switching",
+    "Platt method change",
+    "optimizer change",
+    "gate weakening",
+    "target-season ranking/cap",
+    "dropping rows or seasons because of results",
+    "market data",
+    "historical hit rate as game probability"
+  ],
+  "real_financial_exposure": 0
+}

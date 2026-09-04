@@ -1,0 +1,24 @@
+name: WNBA R1 Historical Foundation
+
+on:
+  pull_request:
+    paths:
+      - "research/wnba/**"
+      - "scripts/wnba-r1-**"
+      - "frontend/client/src/lib/wnba-model.ts"
+      - "frontend/client/src/pages/wnba-predictor.tsx"
+      - ".github/workflows/wnba-r1-historical-foundation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-preregistration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify frozen WNBA-R1 contract and source custody
+        run: node scripts/wnba-r1-preregistered-contract-verify.mjs
