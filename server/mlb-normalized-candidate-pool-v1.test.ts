@@ -165,7 +165,7 @@ test("preserves explicit Full Game F5 push probability and blocks Early F5 settl
   const early = pool.candidates.find((candidate) => candidate.engine.family === "EARLY")!;
   assert.equal(full.sporting.modelWinProbability, 0.58);
   assert.equal(full.sporting.modelPushProbability, 0.07);
-  assert.equal(full.sporting.modelLossProbability, 0.35);
+  assert.ok(Math.abs((full.sporting.modelLossProbability ?? Number.NaN) - 0.35) < 1e-12);
   assert.equal(full.sporting.probabilitySemantics, "EXPLICIT_WIN_PUSH_LOSS");
   assert.equal(full.globalRank.blockers.includes("SETTLEMENT_MODEL_INCOMPLETE"), false);
 
