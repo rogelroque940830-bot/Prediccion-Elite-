@@ -19,6 +19,18 @@ export type MlbDailyOpportunityProbabilityStage =
   | "PROVISIONAL_V16"
   | "INTRINSIC_ONLY";
 
+export interface MlbDailyOpportunityMarketProbabilities {
+  ml: {
+    homeWinProbability: number;
+    awayWinProbability: number;
+  };
+  f5Ml: {
+    homeWinProbability: number;
+    awayWinProbability: number;
+    pushProbability: number;
+  } | null;
+}
+
 export interface MlbDailyOpportunityEntry {
   gamePk: number;
   officialDate: string;
@@ -43,6 +55,7 @@ export interface MlbDailyOpportunityEntry {
     selectedSideProbability: number | null;
     lineupUncertaintyP95: number;
     robustSelectedSideProbability: number | null;
+    marketProbabilities?: MlbDailyOpportunityMarketProbabilities | null;
   };
 }
 
@@ -92,6 +105,43 @@ function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
+function validProbability(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function validF5Vector(evidence: MlbV16SettlementEvidence): boolean {
+  const first5 = evidence.first5;
+  return [
+    first5.homeWinProbability,
+    first5.awayWinProbability,
+    first5.pushProbability,
+  ].every(validProbability)
+    && Math.abs(
+      first5.homeWinProbability
+      + first5.awayWinProbability
+      + first5.pushProbability
+      - 1,
+    ) <= 1e-10;
+}
+
+function marketProbabilitiesFor(
+  evidence: MlbV16SettlementEvidence,
+): MlbDailyOpportunityMarketProbabilities {
+  return Object.freeze({
+    ml: Object.freeze({
+      homeWinProbability: evidence.fullGame.homeWinProbability,
+      awayWinProbability: evidence.fullGame.awayWinProbability,
+    }),
+    f5Ml: validF5Vector(evidence)
+      ? Object.freeze({
+          homeWinProbability: evidence.first5.homeWinProbability,
+          awayWinProbability: evidence.first5.awayWinProbability,
+          pushProbability: evidence.first5.pushProbability,
+        })
+      : null,
+  });
+}
+
 function probabilityFor(
   game: MlbIntrinsicGameProfile,
   finalV16ByGame: EvidenceByGame,
@@ -110,6 +160,7 @@ function probabilityFor(
         ? MLB_DAILY_OPPORTUNITY_LINEUP_P95_DELTA
         : 0,
       robustSelectedSideProbability: null,
+      marketProbabilities: null,
     };
   }
 
@@ -134,6 +185,7 @@ function probabilityFor(
     selectedSideProbability,
     lineupUncertaintyP95,
     robustSelectedSideProbability,
+    marketProbabilities: marketProbabilitiesFor(evidence),
   };
 }
 
