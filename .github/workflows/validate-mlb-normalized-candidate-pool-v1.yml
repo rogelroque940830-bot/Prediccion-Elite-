@@ -1,0 +1,40 @@
+name: Validate MLB Normalized Candidate Pool V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/mlb-normalized-candidate-pool-v1.ts'
+      - 'server/mlb-normalized-candidate-pool-routes.ts'
+      - 'server/mlb-normalized-candidate-pool-v1.test.ts'
+      - 'server/mlb-early-whole-slate-candidates.ts'
+      - 'server/mlb-daily-best-pick-runtime-adapter.ts'
+      - 'server/mlb-daily-opportunity-live-v1.ts'
+      - 'server/routes.ts'
+      - '.github/workflows/validate-mlb-normalized-candidate-pool-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Prove normalized cross-engine sporting pool
+        run: npx tsx --test server/mlb-normalized-candidate-pool-v1.test.ts
+      - name: Preserve Early whole-slate producer
+        run: npx tsx --test server/mlb-early-whole-slate-candidates.test.ts
+      - name: Build production backend
+        run: npm run build:backend
+      - name: Diff integrity
+        run: git diff --check origin/main...HEAD

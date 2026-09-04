@@ -24,6 +24,7 @@ import { registerMlbUnifiedPricedV16Routes } from "./mlb-unified-priced-v16-rout
 import { registerMlbUnifiedV16UiRoutes } from "./mlb-unified-v16-ui-routes";
 import { registerMlbDailyOpportunityUiRoutes } from "./mlb-daily-opportunity-ui-route-v1";
 import { registerMlbDailyOpportunityPricedRoute } from "./mlb-daily-opportunity-priced-route-v1";
+import { registerMlbNormalizedCandidatePoolRoutes } from "./mlb-normalized-candidate-pool-routes";
 import { createMlbUnifiedEliteSharedLiveProviderBundle } from "./mlb-unified-elite-shared-live-provider-bundle";
 import { registerMlbTeamTotalShadowRoutes } from "./mlb-team-total-shadow-routes";
 import { registerMlbBatterProspectiveCustodyRoutes } from "./mlb-batter-prospective-custody-routes";
@@ -76,11 +77,15 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerMlbBatterProspectiveCustodyRoutes(app);
 
   // One shared certified provider bundle serves the visible whole-slate sporting command,
-  // pre-odds Daily Opportunity, and the explicit priced Daily Opportunity command.
-  // The normal V16 button now receives the same strictly-prior provisional V16 scorer so all
-  // analysis-eligible games compete before the price boundary without making provisional rows official.
+  // pre-odds Daily Opportunity, the normalized cross-engine candidate pool, and the explicit
+  // priced Daily Opportunity command. All consumers remain pre-price unless their own route
+  // explicitly crosses the paid odds boundary.
   const mlbUnifiedLive = createMlbUnifiedEliteSharedLiveProviderBundle();
   registerMlbDailyOpportunityUiRoutes(app, {
+    liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
+    provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider,
+  });
+  registerMlbNormalizedCandidatePoolRoutes(app, {
     liveEvidenceProviders: mlbUnifiedLive.liveEvidenceProviders,
     provisionalV16Provider: mlbUnifiedLive.dailyOpportunityProvisionalV16Provider,
   });
