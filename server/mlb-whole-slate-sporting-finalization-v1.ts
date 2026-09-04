@@ -34,11 +34,13 @@ export interface MlbWholeSlateSportingFinalizationResult {
     | "WHOLE_SLATE_RESOLVED_NO_SPORTING_PICK";
   sportingSlateLeader: MlbWholeSlateSportingLeaderView | null;
   unresolvedProvisionalGamePks: readonly number[];
+  rankedGamePks: readonly number[];
   wholeSlateEvaluatedGames: number;
   provisionalGamesEvaluated: number;
   finalGamesEvaluated: number;
   policy: {
     wholeSlateRankRead: true;
+    shortlistQualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT";
     researchEliteCandidateIsProductionHardGate: false;
     finalSportingAuthorityUsesFrozenHierarchy: true;
     aPlusPrecedesPremium: true;
@@ -178,11 +180,13 @@ export function finalizeMlbWholeSlateSportingAuthority(input: {
     reason,
     sportingSlateLeader: leaderView(leaderEntry),
     unresolvedProvisionalGamePks: Object.freeze(blockers.map((entry) => entry.gamePk)),
+    rankedGamePks: Object.freeze(ranked.map((entry) => entry.gamePk)),
     wholeSlateEvaluatedGames: ranked.length,
     provisionalGamesEvaluated: provisional.length,
     finalGamesEvaluated: final.length,
     policy: Object.freeze({
       wholeSlateRankRead: true as const,
+      shortlistQualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT" as const,
       researchEliteCandidateIsProductionHardGate: false as const,
       finalSportingAuthorityUsesFrozenHierarchy: true as const,
       aPlusPrecedesPremium: true as const,
