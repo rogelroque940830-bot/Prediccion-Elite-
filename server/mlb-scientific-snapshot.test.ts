@@ -164,7 +164,16 @@ test("FINAL snapshot captured after game start is rejected", () => {
   snapshot.market.capturedAt = "2026-07-26T17:36:00.000Z";
   assert.throws(
     () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
-    /captured after the official game start/i,
+    /captured at or after the official game start/i,
+  );
+});
+
+test("FINAL snapshot captured exactly at game start is rejected", () => {
+  const snapshot = fullSnapshot();
+  snapshot.market.capturedAt = snapshot.game.commenceTime;
+  assert.throws(
+    () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
+    /captured at or after the official game start/i,
   );
 });
 
@@ -212,7 +221,6 @@ test("provisional snapshot captured after known game start is also rejected", ()
   snapshot.market.capturedAt = "2026-07-26T17:36:00.000Z";
   assert.throws(
     () => buildMlbLedgerPredictionFromPick({ ...basePick(), scientificSnapshot: snapshot }),
-    /captured after the official game start/i,
+    /captured at or after the official game start/i,
   );
 });
-
