@@ -1,0 +1,69 @@
+name: MLB R1B Statcast Player-Services As-Of xERA Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-player-services-asof-xera-probe.ts
+      - .github/workflows/mlb-r1b-statcast-player-services-asof-xera-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-player-services-asof-xera-probe.ts
+      - .github/workflows/mlb-r1b-statcast-player-services-asof-xera-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Probe Baseball Savant player-services date/xERA behavior
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-player-services-asof-xera-probe
+          npx tsx scripts/mlb-r1b-statcast-player-services-asof-xera-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-player-services-asof-xera-probe/evidence.json
+      - name: Enforce research-only fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-player-services-asof-xera-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-player-services-asof-xera-probe/evidence.json','utf8'));
+          if(e.status!=='PLAYER_SERVICES_ASOF_XERA_SOURCE_DISCOVERY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.summary?.totalProbes!==40) throw new Error(`probe coverage:${e.summary?.totalProbes}`);
+          if(!(e.summary?.successfulJsonResponses>0)) throw new Error('no json');
+          if(e.scientificConclusion?.directAsOfXeraCustodyProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature authority');
+          if(e.interpretationPolicy?.parameterPresenceAloneDoesNotProveServerSideFiltering!==true||e.interpretationPolicy?.thirdPartyEndpointDiscoveryIsNotDataAuthority!==true||e.interpretationPolicy?.noEmpiricalXeraFitAuthorized!==true) throw new Error('interpretation boundary');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-player-services-asof-xera-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noEmpiricalXeraFitAuthorized: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload player-services as-of xERA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-player-services-asof-xera-probe
+          path: artifacts/mlb-r1b-statcast-player-services-asof-xera-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

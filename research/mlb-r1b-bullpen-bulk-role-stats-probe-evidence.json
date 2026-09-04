@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-bullpen-bulk-role-stats-probe-evidence.v1",
+  "status": "SAMPLE_ROUTE_SELECTION_ONLY_NOT_FULL_UNIVERSE_CERTIFICATION",
+  "family": "BULLPEN_FULL_GAME",
+  "workflow": {
+    "name": "Validate MLB R1B Bullpen Bulk RoleStats Probe",
+    "runId": 33564653034,
+    "headSha": "2e0b40f7359e4bfc443f6bb9cbe6e15bea39bcfd",
+    "allFiveSeasonJobsPassed": true
+  },
+  "reference": {
+    "semantics": "PER_PITCHER_BY_DATE_RANGE",
+    "currentSeasonWindow": "SEASON_START_THROUGH_D_MINUS_1",
+    "fullRoleFieldParityRequired": true
+  },
+  "routeDecision": {
+    "selectedFullUniverseCandidate": "PEOPLE_HYDRATED_BY_DATE_RANGE",
+    "selectedUrlShape": "/people?personIds=...&hydrate=stats(...byDateRange...)",
+    "reason": "This route reproduced every per-pitcher role-stat reference line on both sides of the deterministic sample in all five seasons. The team-scoped /stats byDateRange route did not: it mismatched one active-roster pitcher in 2022 and one in 2026_YTD, while the people-hydrated route remained exact on those same sides.",
+    "teamStatsByDateRangeAuthoritativeForFullUniverse": false,
+    "peopleHydratedByDateRangeFullUniverseCertificationClaimed": false
+  },
+  "seasons": {
+    "2022": {
+      "artifactId": 9822839484,
+      "artifactDigest": "sha256:5373dfa21a90103066c33303b3abbe674e96769de3b13d1b4da97673c863d494",
+      "classification": "BULK_ROLE_STATS_ROUTE_EXACT_ON_SAMPLE",
+      "acceptedRoutes": ["peopleHydratedByDateRange"],
+      "peopleHydratedExactHome": true,
+      "peopleHydratedExactAway": true,
+      "teamStatsExactHome": true,
+      "teamStatsExactAway": false,
+      "teamStatsAwayMismatchedPitcherIds": [542888]
+    },
+    "2023": {
+      "artifactId": 9822854271,
+      "artifactDigest": "sha256:7586ede2461a9f69ecf0bbc153c9181ef4a905dba2825156ab97dd104b522321",
+      "classification": "BULK_ROLE_STATS_ROUTE_EXACT_ON_SAMPLE",
+      "acceptedRoutes": ["teamStatsByDateRange", "peopleHydratedByDateRange"],
+      "peopleHydratedExactHome": true,
+      "peopleHydratedExactAway": true,
+      "teamStatsExactHome": true,
+      "teamStatsExactAway": true
+    },
+    "2024": {
+      "artifactId": 9822794505,
+      "artifactDigest": "sha256:bd8d246e05a0d5262ab16a07e3e89fd782dd1c00158be0f9e9d704c958054c4e",
+      "classification": "BULK_ROLE_STATS_ROUTE_EXACT_ON_SAMPLE",
+      "acceptedRoutes": ["teamStatsByDateRange", "peopleHydratedByDateRange"],
+      "peopleHydratedExactHome": true,
+      "peopleHydratedExactAway": true,
+      "teamStatsExactHome": true,
+      "teamStatsExactAway": true
+    },
+    "2025": {
+      "artifactId": 9822781725,
+      "artifactDigest": "sha256:1e53f226844819b0363fc7ded9c43d6615c99444bc170deacaa9478483bc3aa3",
+      "classification": "BULK_ROLE_STATS_ROUTE_EXACT_ON_SAMPLE",
+      "acceptedRoutes": ["teamStatsByDateRange", "peopleHydratedByDateRange"],
+      "peopleHydratedExactHome": true,
+      "peopleHydratedExactAway": true,
+      "teamStatsExactHome": true,
+      "teamStatsExactAway": true
+    },
+    "2026_YTD": {
+      "artifactId": 9822812080,
+      "artifactDigest": "sha256:832df1ba64228c058e0fdc2a43faa44a74ce3bf96f830176a34c075993018b92",
+      "classification": "BULK_ROLE_STATS_ROUTE_EXACT_ON_SAMPLE",
+      "acceptedRoutes": ["peopleHydratedByDateRange"],
+      "peopleHydratedExactHome": true,
+      "peopleHydratedExactAway": true,
+      "teamStatsExactHome": false,
+      "teamStatsExactAway": true,
+      "teamStatsHomeMismatchedPitcherIds": [663992]
+    }
+  },
+  "finding": {
+    "peopleHydratedExactAcrossAllFiveSeasonSamples": true,
+    "teamStatsByDateRangeExactAcrossAllFiveSeasonSamples": false,
+    "teamStatsConsensusMustNotBeRequiredForPeopleHydratedFullUniverseTest": true,
+    "fullUniverseStillRequired": true,
+    "bullpenFullGameParityCertified": false,
+    "gateCountBefore": 3,
+    "gateCountAfter": 3
+  },
+  "policy": {
+    "researchOnly": true,
+    "targetOutcomeFieldsAllowed": false,
+    "sameDateFinalGameReadAllowed": false,
+    "futureSeasonAggregateAllowed": false,
+    "marketPricesAllowed": false,
+    "modelRefitAllowed": false,
+    "newWeightsAllowed": false,
+    "thresholdSearchAllowed": false,
+    "productionChangeAllowed": false,
+    "v16ChangeAllowed": false,
+    "v68ChangeAllowed": false,
+    "v80ChangeAllowed": false,
+    "r1b2AuthorizationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}

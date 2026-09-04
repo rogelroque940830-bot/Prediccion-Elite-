@@ -1,0 +1,76 @@
+name: MLB R1B Statcast xERA Production-Domain Mechanism Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-production-domain-mechanism-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-production-domain-mechanism-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-xera-production-domain-mechanism-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-production-domain-mechanism-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Probe production-relevant xERA mapping mechanism
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-production-domain-mechanism-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-production-domain-mechanism-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-production-domain-mechanism-probe/evidence.json
+      - name: Enforce diagnostic-only and fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-production-domain-mechanism-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-production-domain-mechanism-probe/evidence.json','utf8'));
+          if(e.status!=='XERA_PRODUCTION_DOMAIN_MECHANISM_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.productionSemanticContext?.evaluatePitcherMinimumPa!==50) throw new Error('production PA boundary');
+          if(!Array.isArray(e.seasonEvidence)||e.seasonEvidence.length!==5) throw new Error('season coverage');
+          for(const s of e.seasonEvidence){
+            if(!(s.rowCounts?.productionDomainPaGte50>0)||!(s.rowCounts?.qualifiedUsable>0)) throw new Error(`empty domain:${s.season}`);
+            if(s.productionDomainMapping?.collisionGroups!==0) throw new Error(`displayed mapping collision:${s.season}`);
+            if(s.qualifiedMapping?.collisionGroups!==0) throw new Error(`qualified mapping collision:${s.season}`);
+            if(!Array.isArray(s.candidateFits)||s.candidateFits.length<6) throw new Error(`candidate coverage:${s.season}`);
+          }
+          if(e.interpretationPolicy?.candidateFormulaFitsAreDiagnosticOnly!==true) throw new Error('diagnostic boundary');
+          if(e.interpretationPolicy?.exactEmpiricalFitWouldStillRequireAuthoritativeProvenance!==true) throw new Error('authority boundary');
+          if(e.interpretationPolicy?.minQCurrentSeasonSurfaceDoesNotProveHistoricalAsOfQualifierSemantics!==true) throw new Error('qualifier boundary');
+          if(e.interpretationPolicy?.finalOrCurrentSeasonMappingMayNotBeAppliedRetroactivelyToTargetDatesWithoutStabilityProof!==true) throw new Error('target-date boundary');
+          if(e.interpretationPolicy?.approximationForbidden!==true) throw new Error('approximation boundary');
+          if(e.decision?.familyPromotionAuthorized!==false||e.decision?.authoritativeExactXeraMechanismProvenByThisProbe!==false) throw new Error('premature promotion');
+          if(e.scientificBoundary?.researchOnly!==true||e.scientificBoundary?.productionChanged!==false||e.scientificBoundary?.weightsChanged!==false||e.scientificBoundary?.routingChanged!==false||e.scientificBoundary?.stakingChanged!==false||e.scientificBoundary?.betEliteChanged!==false||e.scientificBoundary?.marketPricesRead!==false||e.scientificBoundary?.targetOutcomeReadForModeling!==false||e.scientificBoundary?.automaticBetPlacementAllowed!==false||e.scientificBoundary?.realFinancialExposure!==0||e.scientificBoundary?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' scripts/mlb-r1b-statcast-xera-production-domain-mechanism-probe.ts
+          grep -F 'approximationForbidden: true' scripts/mlb-r1b-statcast-xera-production-domain-mechanism-probe.ts
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload mechanism evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-production-domain-mechanism-probe
+          path: artifacts/mlb-r1b-statcast-xera-production-domain-mechanism-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

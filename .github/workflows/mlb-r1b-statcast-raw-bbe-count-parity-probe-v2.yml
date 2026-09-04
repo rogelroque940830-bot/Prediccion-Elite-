@@ -1,0 +1,63 @@
+name: MLB R1B Statcast Raw BBE Count Parity Probe V2
+
+on:
+  push:
+    branches: [research/mlb-unified-sporting-authority-r1]
+    paths:
+      - 'scripts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2.ts'
+      - '.github/workflows/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Probe corrected raw BBE count parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2.ts \
+            --out=artifacts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2/evidence.json
+      - name: Validate corrected filter and research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2/evidence.json','utf8'));
+          if(e.status!=='RAW_BBE_FILTER_CORRECTED_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.filterContract?.hfFlagDecoded!=='is\\.\\.hit\\.\\.into\\.\\.play|') throw new Error('filter serialization');
+          if(e.filterContract?.serializationVerifiedBeforeFetch!==true) throw new Error('pre-fetch serialization guard');
+          if(e.filterContract?.filterAccepted!==true) throw new Error('Savant did not accept the corrected BBE filter');
+          if(e.rawCustody?.nonHitIntoPlayDescriptions!==0) throw new Error('non-BBE rows leaked through filter');
+          if(e.rawCustody?.everyChunkBelowCsvSafetyCap!==true) throw new Error('raw chunk hit CSV safety cap');
+          if(e.scientificBoundary?.productionChanged!==false) throw new Error('production');
+          if(e.scientificBoundary?.weightsChanged!==false) throw new Error('weights');
+          if(e.scientificBoundary?.marketPricesRead!==false) throw new Error('prices');
+          if(e.scientificBoundary?.targetOutcomeReadForModeling!==false) throw new Error('outcomes');
+          if(e.scientificBoundary?.statcastQualityParityCertifiedByThisProbe!==false) throw new Error('premature certification');
+          if(e.scientificBoundary?.r1b2Authorized!==false) throw new Error('r1b2');
+          NODE
+      - name: Upload corrected probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-raw-bbe-count-parity-probe-v2
+          path: artifacts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v2/evidence.json
+          if-no-files-found: error
+          retention-days: 30

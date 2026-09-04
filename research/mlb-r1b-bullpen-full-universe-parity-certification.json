@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-bullpen-full-universe-parity-certification.v1",
+  "status": "PARITY_CERTIFIED",
+  "family": "BULLPEN_FULL_GAME",
+  "classification": "PARITY_CERTIFIED",
+  "exactSemanticParity": true,
+  "familyPromotionAuthorized": true,
+  "researchOnly": true,
+  "horizonRestriction": "FULL_GAME_ONLY; EARLY_WINDOW_IS_NOT_APPLICABLE_NOT_ZERO",
+  "certificationAuthority": {
+    "workflowRunId": 33635623186,
+    "workflowRunNumber": 28,
+    "headSha": "bf356be288456c332f2eb4c756b8d7504405e2e1",
+    "independentVerificationArtifactId": 9857291642,
+    "independentVerificationArtifactDigest": "sha256:d2372b753241f97a62ff9947dbd188f88d21fa06bd48e15e86d33f8201b604ed",
+    "v16CombinedRowsetSha256": "b06d003b8412f886afd03da1765d0f03af4ee031a3a8ed83fc81aa1a7d308f7e",
+    "combinedPackSha256": "58941cfd3eebd7408191046bb480f6cd6bbd991c693cfe1a06d6d0a5f4bf41c3",
+    "combinedWitnessSha256": "3f40624e1c9f2f6d6f2d4af31a3a8df97ab29168126ba187670492f74b04f0cc"
+  },
+  "verification": {
+    "totalRows": 44016,
+    "expectedGames": 11004,
+    "fullGameRows": 22008,
+    "earlyWindowRows": 22008,
+    "eligibleFullGameRows": 231,
+    "missingFullGameRows": 21777,
+    "recomputedEligibleRows": 231,
+    "duplicateIdentityCount": 0,
+    "forbiddenOutcomeFieldCount": 0,
+    "forbiddenPriceFieldCount": 0,
+    "fingerprintMismatchEligibleRows": 0,
+    "promotionEligible": true
+  },
+  "seasons": [
+    {
+      "season": "2022",
+      "rows": 9276,
+      "games": 2319,
+      "artifactId": 9850559897,
+      "artifactDigest": "sha256:0fbc97066e1a272ba51d3a4124b316077c308add1fc91bf35774ab1f3a4292c6",
+      "packSha256": "2cb9e9a663e8b84da141d159216d444eac08a28a7cc011a248ab89d6ada47774",
+      "witnessSha256": "41328faca395499bdccaae5fba2fb9eb2ec709cf5dc2dbb1b5aba7d873a3f989"
+    },
+    {
+      "season": "2023",
+      "rows": 9280,
+      "games": 2320,
+      "artifactId": 9852811168,
+      "artifactDigest": "sha256:653a902a4728daa9080626d3b5926f3e46595403ea1720f3d715c91a2b29cbff",
+      "packSha256": "709238167a1ee00da07549ad3fca93373535ca614f560bd2415080231ee9bdb0",
+      "witnessSha256": "0347d3af0254388863e7fa445b7aea11f29537a4c0f33e2dc707f7b171da1f9a"
+    },
+    {
+      "season": "2024",
+      "rows": 9296,
+      "games": 2324,
+      "artifactId": 9854579307,
+      "artifactDigest": "sha256:4e73a0e90369277bf3bd07327eee8af7d2173cb55fb554ded38ce82dffa190d7",
+      "packSha256": "95912ea5337c480ffb330f1e83a6cbb305e612030cf90baf3d71b9f7f0dc94bc",
+      "witnessSha256": "9c538ef6164ce0acdc2742aec41fead7547188f5df8884d10a77c51464b73543"
+    },
+    {
+      "season": "2025",
+      "rows": 9356,
+      "games": 2339,
+      "artifactId": 9856318980,
+      "artifactDigest": "sha256:0c7003b2a2af7ad37827a08822d52ae4a3a436b374de091e8064b8be10ac0c70",
+      "packSha256": "748977cfde3af299a6f537ef7affe6bf5dd20f9c1a883286cbda111000b6284d",
+      "witnessSha256": "d66cb0da4dd2497feb175efecf39ea91fc9824ab4f675c78fddf8826cda3f6fe"
+    },
+    {
+      "season": "2026_YTD",
+      "rows": 6808,
+      "games": 1702,
+      "artifactId": 9857222784,
+      "artifactDigest": "sha256:dcf9fedb81dd5b8ba68b8d3e7341efe70d9bc7d7eb40d1eba7a4da0e92cb8213",
+      "packSha256": "d2ed4c7f8538ebca3e55db17970f53d1300a5f2bd37808c50f1e0f4c0f44b0f7",
+      "witnessSha256": "92a74276f8bf9f853d2c5e0487d52af761c5a6b0b00e5cd8bd2b33db505a5c1f"
+    }
+  ],
+  "policy": {
+    "targetOutcomeFieldsRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "productionChanged": false,
+    "r1b2Authorized": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "r1b1StateAfterPromotion": {
+    "requiredFamilyCount": 9,
+    "parityCertified": 4,
+    "partialParity": 1,
+    "blocked": 4,
+    "allRequiredFamiliesParityCertified": false,
+    "r1b2Authorized": false,
+    "nextRemediationFamily": "STATCAST_QUALITY"
+  }
+}

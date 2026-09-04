@@ -1,0 +1,148 @@
+name: Materialize MLB R1B V16 Full Historical Rowset
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-v16-full-rowset-materialize.ts
+      - scripts/mlb-r1b-v16-full-rowset-verify.ts
+      - .github/workflows/materialize-mlb-r1b-v16-full-rowset.yml
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-pure-settlement-scorer.ts
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - name: Compile full-rowset materializer and verifier
+        run: |
+          npx esbuild scripts/mlb-r1b-v16-full-rowset-materialize.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-full-materialize.cjs
+          npx esbuild scripts/mlb-r1b-v16-full-rowset-verify.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/v16-full-verify.cjs
+      - name: Verify research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='scripts/mlb-r1b-v16-full-rowset-materialize.ts'
+          verify='scripts/mlb-r1b-v16-full-rowset-verify.ts'
+          grep -F 'targetOutcomeUsedAsFeature:false' "$src" "$verify"
+          grep -F 'sameDateHistoryAllowed:false' "$src" "$verify"
+          grep -F 'marketPricesRead:false' "$src" "$verify"
+          grep -F 'modelRefit:false' "$src" "$verify"
+          grep -F 'newWeightsCreated:false' "$src" "$verify"
+          grep -F 'productionChanged:false' "$src" "$verify"
+          ! grep -Ei 'placeBet|automaticBetPlacement:true|realFinancialExposure:[1-9]' "$src" "$verify"
+
+  materialize:
+    needs: static-validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - season: '2022'
+            v60_artifact: p0-step12v60-matchup-custody-2022
+          - season: '2023'
+            v60_artifact: p0-step12v60-matchup-custody-2023
+          - season: '2024'
+            v60_artifact: p0-step12v60-matchup-custody-2024
+          - season: '2025'
+            v60_artifact: p0-step12v60-matchup-custody-2025
+          - season: '2026_YTD'
+            v60_artifact: p0-step12v60-matchup-custody-2026_YTD
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - name: Download frozen Step12V3 lineup custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/v16-full/step12v3
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+      - name: Download frozen V60 starter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.v60_artifact }}
+          path: artifacts/v16-full/v60
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31919873754
+      - name: Materialize complete frozen-T5 eligible season rowset
+        run: |
+          npx tsx scripts/mlb-r1b-v16-full-rowset-materialize.ts \
+            --season '${{ matrix.season }}' \
+            --root artifacts/v16-full \
+            --out-dir 'artifacts/v16-full/out/${{ matrix.season }}' \
+            --concurrency 10
+      - name: Upload season rowset evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-v16-full-rowset-${{ matrix.season }}
+          path: artifacts/v16-full/out/${{ matrix.season }}/*
+          if-no-files-found: error
+          retention-days: 90
+
+  pin-and-verify:
+    if: github.event_name == 'push'
+    needs: materialize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/mlb-unified-sporting-authority-r1
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - name: Download all five season rowsets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mlb-r1b-v16-full-rowset-*
+          path: research/mlb-r1b-v16-baseline-historical
+          merge-multiple: true
+      - name: Verify every pinned row against locked V16 scorer and build combined digest
+        run: |
+          npx tsx scripts/mlb-r1b-v16-full-rowset-verify.ts \
+            --root research/mlb-r1b-v16-baseline-historical \
+            --out research/mlb-r1b-v16-baseline-historical/combined-manifest.json
+      - name: Pin immutable rowsets in research branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/mlb-r1b-v16-baseline-historical
+          if git diff --cached --quiet; then
+            echo 'Rowsets already pinned; no commit required.'
+          else
+            git commit -m 'research(mlb): pin complete V16 historical baseline rowsets [skip ci]'
+            git push origin HEAD:research/mlb-unified-sporting-authority-r1
+          fi

@@ -1,0 +1,159 @@
+name: MLB R1B1 Remediate Hand Split 2022-2023
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - '.github/workflows/mlb-r1b1-remediate-hand-split-2022-2023.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  materialize-hand-split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        season: ['2022','2023']
+    name: hand-split-${{ matrix.season }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/mlb-unified-sporting-authority-r1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download immutable canonical Step 12V3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+
+      - name: Verify canonical V3 artifact custody
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          expected='sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26'
+          actual="$(gh api "repos/${REPO}/actions/runs/31659518059/artifacts" --jq '.artifacts[] | select(.name=="p0-step12v3-expanded-regimes") | .digest' | head -n1)"
+          test "$actual" = "$expected"
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json"
+          echo 'R1B1_V3_SOURCE_CUSTODY_VERIFIED'
+
+      - name: Fetch exact frozen V9 acquisition implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen-v9
+          curl --fail --silent --show-error --location \
+            'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/aa81f9f576b49b944ac2e27e8388bc11cb8d30a3/scripts/p0-step12v9-acquire-hand-splits.py' \
+            -o frozen-v9/p0-step12v9-acquire-hand-splits.py
+          curl --fail --silent --show-error --location \
+            'https://raw.githubusercontent.com/rogelroque940830-bot/Prediccion-Elite-/aa81f9f576b49b944ac2e27e8388bc11cb8d30a3/research/p0-step12v9-rolling-platoon-contract.json' \
+            -o frozen-v9/p0-step12v9-rolling-platoon-contract.json
+          test -s frozen-v9/p0-step12v9-acquire-hand-splits.py
+          test -s frozen-v9/p0-step12v9-rolling-platoon-contract.json
+          python -m py_compile frozen-v9/p0-step12v9-acquire-hand-splits.py
+
+      - name: Verify frozen V9 semantic boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          c=json.load(open('frozen-v9/p0-step12v9-rolling-platoon-contract.json'))
+          assert c['schemaVersion']=='courtedge-p0-step12v9-rolling-platoon-contract.v1'
+          assert c['acquisition']['source']=='MLB_STATS_API_FINAL_PLAY_BY_PLAY'
+          assert c['acquisition']['gameUniverse']=='CANONICAL_STEP12V3_GAMES_ONLY'
+          assert c['acquisition']['maximumExcludedPlateAppearanceShare']==0.005
+          assert c['chronology']['sameDateOutcomeMayTrainSameDate'] is False
+          assert c['chronology']['featuresComputedBeforeApplyingAnyGamesFromThatOfficialDate'] is True
+          assert c['chronology']['futureSeasonStatsAllowed'] is False
+          assert c['reliability']['noMissingSplitImputation'] is True
+          assert c['policy']['historicalPricesUsed'] is False
+          print('R1B1_FROZEN_V9_SEMANTICS_VERIFIED')
+          PY
+
+      - name: Materialize immutable historical hand aggregates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/r1b1-hand-split-${{ matrix.season }}"
+          python frozen-v9/p0-step12v9-acquire-hand-splits.py \
+            --season '${{ matrix.season }}' \
+            --table 'artifacts/p0-step12v3/${{ matrix.season }}/game-anatomy-feature-table.json' \
+            --out 'artifacts/r1b1-hand-split-${{ matrix.season }}/hand-splits-${{ matrix.season }}.json' \
+            --workers 6
+
+      - name: Validate output and write provenance
+        shell: bash
+        env:
+          SEASON: ${{ matrix.season }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os,pathlib
+          s=os.environ['SEASON']
+          p=pathlib.Path(f'artifacts/r1b1-hand-split-{s}/hand-splits-{s}.json')
+          r=json.load(open(p))
+          c=json.load(open('frozen-v9/p0-step12v9-rolling-platoon-contract.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v9-game-team-hand-aggregates.v1'
+          assert r['season']==s
+          assert r['gamesExpected']==r['gamesFetched']
+          assert not r['failures']
+          assert r['policy']['sameDateOutcomeLeakageAllowed'] is False
+          assert r['policy']['thisFileContainsFinalPastGameAggregatesOnly'] is True
+          assert r['policy']['featureScorerMustApplyGamesOnlyAfterCompletingThatOfficialDate'] is True
+          denom=r['validPlateAppearances']+r['excludedPlateAppearances']
+          share=(r['excludedPlateAppearances']/denom) if denom else 0.0
+          assert share <= c['acquisition']['maximumExcludedPlateAppearanceShare'], (s,share)
+          script=pathlib.Path('frozen-v9/p0-step12v9-acquire-hand-splits.py')
+          contract=pathlib.Path('frozen-v9/p0-step12v9-rolling-platoon-contract.json')
+          manifest={
+            'schemaVersion':'courtedge-mlb-r1b1-hand-split-remediation-custody.v1',
+            'season':s,
+            'status':'PREGAME_CUSTODY_MATERIALIZED_PENDING_R1B1_PARITY_PROMOTION',
+            'sourceBuilderCommit':'aa81f9f576b49b944ac2e27e8388bc11cb8d30a3',
+            'sourceBuilderPath':'scripts/p0-step12v9-acquire-hand-splits.py',
+            'sourceBuilderSha256':hashlib.sha256(script.read_bytes()).hexdigest(),
+            'sourceContractPath':'research/p0-step12v9-rolling-platoon-contract.json',
+            'sourceContractSha256':hashlib.sha256(contract.read_bytes()).hexdigest(),
+            'canonicalV3RunId':31659518059,
+            'canonicalV3ArtifactId':9166442982,
+            'canonicalV3ArtifactDigest':'sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26',
+            'outputSha256':hashlib.sha256(p.read_bytes()).hexdigest(),
+            'gamesExpected':r['gamesExpected'],
+            'gamesFetched':r['gamesFetched'],
+            'validPlateAppearances':r['validPlateAppearances'],
+            'excludedPlateAppearanceShare':share,
+            'sameDateOutcomeLeakageAllowed':False,
+            'marketPricesRead':False,
+            'outcomesJoinedToTargetRows':False,
+            'missingSplitImputation':False,
+            'productionChanged':False
+          }
+          out=p.parent/'custody-manifest.json'
+          out.write_text(json.dumps(manifest,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(manifest,sort_keys=True,indent=2))
+          PY
+
+      - name: Upload immutable R1B1 hand-split remediation pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1b1-hand-splits-${{ matrix.season }}
+          path: artifacts/r1b1-hand-split-${{ matrix.season }}/
+          if-no-files-found: error
+          retention-days: 30

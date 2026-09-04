@@ -1,0 +1,34 @@
+name: Validate MLB Unified Sporting Authority R1B1
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
+      - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
+      - research/mlb-r1b-bullpen-full-universe-parity-certification.json
+      - scripts/validate-mlb-unified-sporting-authority-r1b1.py
+      - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
+  pull_request:
+    paths:
+      - research/mlb-unified-sporting-authority-r1b1-source-custody-semantic-parity.json
+      - research/mlb-unified-sporting-authority-r1b-materialization-certification.json
+      - research/mlb-r1b-bullpen-full-universe-parity-certification.json
+      - scripts/validate-mlb-unified-sporting-authority-r1b1.py
+      - .github/workflows/validate-mlb-unified-sporting-authority-r1b1.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-r1b1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate frozen R1B1 source-custody certification and parent gate
+        run: python scripts/validate-mlb-unified-sporting-authority-r1b1.py

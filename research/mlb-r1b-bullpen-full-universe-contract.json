@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-bullpen-full-universe-contract.v1",
+  "status": "FROZEN_BEFORE_FULL_UNIVERSE_MATERIALIZATION",
+  "family": "BULLPEN_FULL_GAME",
+  "objective": "Materialize and audit the complete pinned V16 identity universe for the production bullpen runsAdjustment without target outcomes, prices, model changes, or post-result rule changes.",
+  "universe": {
+    "authority": "PINNED_V16_BASELINE_IDENTITY_ROWSETS",
+    "combinedV16RowsetSha256": "b06d003b8412f886afd03da1765d0f03af4ee031a3a8ed83fc81aa1a7d308f7e",
+    "expectedRows": 44016,
+    "expectedGames": 11004,
+    "seasons": ["2022", "2023", "2024", "2025", "2026_YTD"],
+    "identitiesPerGame": [
+      {"side": "HOME", "market": "FG_ML", "horizon": "FULL_GAME"},
+      {"side": "AWAY", "market": "FG_ML", "horizon": "FULL_GAME"},
+      {"side": "HOME", "market": "F5_ML", "horizon": "EARLY_WINDOW"},
+      {"side": "AWAY", "market": "F5_ML", "horizon": "EARLY_WINDOW"}
+    ]
+  },
+  "productionSemantics": {
+    "implementation": "server/mlb-bullpen.ts:getBullpenStatus",
+    "familyValue": "runsAdjustment",
+    "allowedValues": [0, 0.15, 0.3, 0.5, 0.7],
+    "rosterLimit": 18,
+    "fullGameOnly": true,
+    "earlyHorizonMissingnessReason": "NOT_APPLICABLE_EARLY_HORIZON",
+    "secondaryBullpenEraAdjustment": 0
+  },
+  "targetIdentityCustody": {
+    "frozenT5RunId": 31659518059,
+    "frozenT5ArtifactId": 9166442982,
+    "frozenT5ArtifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+    "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4",
+    "reacquireExactTimecodeFeed": true,
+    "requireGameTeamIdentityMatch": true,
+    "requireFrozenBattingOrderMatch": true,
+    "requireSourceMetadataAtOrBeforeRequestedTimecode": true
+  },
+  "rosterPolicy": {
+    "dateRosterSource": "MLB_STATS_ACTIVE_ROSTER_DATE",
+    "preserveProviderOrder": true,
+    "t5PitcherMembershipRequired": true,
+    "t5RosterNeverBlindlySubstitutesDateRoster": true,
+    "runProductionStatusUnderDateRoster": true,
+    "runProductionStatusUnderT5Roster": true,
+    "eligibilityRequiresDecisionFingerprintParity": true,
+    "ambiguousMembershipOrOrderingDisposition": "EXPLICIT_MISSINGNESS"
+  },
+  "roleStatsPolicy": {
+    "currentSeasonWindow": "SEASON_START_THROUGH_D_MINUS_1",
+    "authoritativeCurrentSeasonRoute": "PEOPLE_HYDRATED_BY_DATE_RANGE",
+    "authoritativeUrlShape": "/people?personIds=...&hydrate=stats(...byDateRange...)",
+    "diagnosticNonAuthoritativeRoute": "/stats?stats=byDateRange&group=pitching&teamId=...&playerPool=ALL",
+    "crossRouteConsensusRequired": false,
+    "authoritativeRouteFullUniverseCoverageRequired": true,
+    "routeSelectionEvidence": {
+      "file": "research/mlb-r1b-bullpen-bulk-role-stats-probe-evidence.json",
+      "workflowRunId": 33564653034,
+      "status": "SAMPLE_ROUTE_SELECTION_ONLY_NOT_FULL_UNIVERSE_CERTIFICATION",
+      "peopleHydratedExactAcrossAllFiveSeasonSamples": true,
+      "teamStatsByDateRangeExactAcrossAllFiveSeasonSamples": false
+    },
+    "roleFields": ["gamesStarted", "gamesPlayed", "inningsPitched", "saves", "holds"],
+    "previousSeasonFallback": "FULL_PRIOR_SEASON_OFFICIAL_MLB",
+    "careerFallback": "OFFICIAL_MLB_BY_DATE_RANGE_THROUGH_D_MINUS_1",
+    "futureSeasonAggregateAllowed": false
+  },
+  "usagePolicy": {
+    "window": "D_MINUS_3_THROUGH_D_MINUS_1",
+    "scheduleClosedAtDMinus1": true,
+    "sameDateFinalGameAllowed": false,
+    "priorFinalFeedSource": "MLB_STATS_FEED_LIVE",
+    "priorFinalFeedNetworkFetchAtMostOncePerGamePerSeasonJob": true
+  },
+  "eligibility": {
+    "fullGameRowEligibleOnlyIf": [
+      "T5_SOURCE_IDENTITY_VALID",
+      "DATE_ROSTER_VALID",
+      "AUTHORITATIVE_CURRENT_ROLE_STATS_ROUTE_APPLIED",
+      "PRODUCTION_DATE_ROSTER_STATUS_COMPLETE",
+      "PRODUCTION_T5_ROSTER_STATUS_COMPLETE",
+      "DECISION_FINGERPRINTS_IDENTICAL",
+      "RUNS_ADJUSTMENT_ALLOWED_VALUE"
+    ],
+    "allowedFullGameMissingnessReasons": [
+      "ROSTER_MEMBERSHIP_OR_ORDER_DECISION_AMBIGUOUS",
+      "DATE_ROSTER_EMPTY",
+      "T5_ROSTER_EMPTY",
+      "BULLPEN_RELIEVERS_EMPTY"
+    ],
+    "allOtherNonTransportErrorsAreCertificationFailures": true,
+    "missingCurrentSeasonLineDisposition": "USE_UNCHANGED_PRODUCTIVE_PREVIOUS_SEASON_THEN_CAREER_FALLBACK",
+    "missingnessNeverConvertedToZero": true,
+    "transportFailureMayNotBePromotedAsStructuralMissingness": true
+  },
+  "normalizedPack": {
+    "schemaConsumer": "scripts/mlb-unified-sporting-authority-r1b-materialize-pregame.py",
+    "identity": ["officialDate", "gamePk", "side", "market", "horizon"],
+    "requiredFeatureFields": ["eligible", "values", "sourceVersion", "sourceTimestampOrPriorWindow", "inputStage", "missingnessReason"],
+    "eligibleValues": {"runsAdjustment": "NUMBER_FROM_ALLOWED_VALUES"},
+    "inputStage": "PREGAME_T5"
+  },
+  "certificationGate": {
+    "all44016IdentitiesAccountedFor": true,
+    "all22008EarlyWindowRowsNotApplicable": true,
+    "everyEligibleFullGameRowExactProductionSemantics": true,
+    "allAmbiguityExplicitMissingness": true,
+    "onlyPredeclaredStructuralMissingnessMayPassVerification": true,
+    "authoritativeRoleStatsRouteMustSurviveFullUniverse": true,
+    "sampleRouteSelectionDoesNotCertifyFamily": true,
+    "duplicateIdentityCount": 0,
+    "forbiddenOutcomeFieldCount": 0,
+    "forbiddenPriceFieldCount": 0,
+    "canonicalJsonlSha256Required": true,
+    "favorableCoverageResultRequired": false,
+    "promotionOnlyAfterIndependentVerification": true
+  },
+  "policy": {
+    "researchOnly": true,
+    "targetOutcomeFieldsAllowed": false,
+    "sameDateFinalGameReadAllowed": false,
+    "marketPricesAllowed": false,
+    "modelRefitAllowed": false,
+    "newWeightsAllowed": false,
+    "thresholdSearchAllowed": false,
+    "productionChangeAllowed": false,
+    "v16ChangeAllowed": false,
+    "v68ChangeAllowed": false,
+    "v80ChangeAllowed": false,
+    "r1b2AuthorizationChanged": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}

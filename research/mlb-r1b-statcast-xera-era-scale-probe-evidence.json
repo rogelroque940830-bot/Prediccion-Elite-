@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-era-scale-probe-evidence.v1",
+  "status": "PINNED_XERA_ERA_SCALE_IDENTIFIABILITY_PROBE_NOT_PARITY_CERTIFICATION",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "workflow": {
+    "name": "Validate MLB R1B Statcast Contact Adapter and xERA Probe",
+    "runId": 33913492488,
+    "runNumber": 3,
+    "headSha": "f8ad78d0eff893402808da36d6637d29c2cdd790",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 9952323554,
+    "name": "mlb-r1b-statcast-xera-era-scale-probe",
+    "digest": "sha256:2f29f45382295944f56fc0e1a0628a6f9ff4658c1d975a6fbb71dc6180334761",
+    "expiresAt": "2026-10-04T19:56:28Z"
+  },
+  "generatedAt": "2026-09-04T19:56:27.614Z",
+  "seasonEvidence": [
+    {
+      "season": 2022,
+      "source": {
+        "url": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2022&min=1&csv=true",
+        "sha256": "65e79555d8d082d21e89ec8616cc7c73778890f92b66feb772e21c0bf0e31973",
+        "rows": 871
+      },
+      "usableRows": 871,
+      "displayedMapping": { "uniqueDisplayedXwobaValues": 260, "sameDisplayedXwobaDifferentXeraGroups": 0 },
+      "monotonicity": { "observations": 871, "inversions": 0 },
+      "polynomialDiagnostics": [
+        { "degree": 1, "exactAfterRound2": 0, "total": 871, "allExactAfterRound2": false, "meanAbsResidual": 0.901653962266373, "maxAbsResidual": 25.974110378659283 },
+        { "degree": 2, "exactAfterRound2": 7, "total": 871, "allExactAfterRound2": false, "meanAbsResidual": 0.2976644445125325, "maxAbsResidual": 11.416587176452332 },
+        { "degree": 3, "exactAfterRound2": 29, "total": 871, "allExactAfterRound2": false, "meanAbsResidual": 0.12347143722450962, "maxAbsResidual": 4.885969993281563 },
+        { "degree": 4, "exactAfterRound2": 79, "total": 871, "allExactAfterRound2": false, "meanAbsResidual": 0.04325813576865645, "maxAbsResidual": 1.7089206335957172 }
+      ]
+    },
+    {
+      "season": 2023,
+      "source": {
+        "url": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2023&min=1&csv=true",
+        "sha256": "0915ca8d471a67014862729578cd15fb81457609cd8fe0cd2bb7c9808b8bd1a5",
+        "rows": 863
+      },
+      "usableRows": 863,
+      "displayedMapping": { "uniqueDisplayedXwobaValues": 252, "sameDisplayedXwobaDifferentXeraGroups": 0 },
+      "monotonicity": { "observations": 863, "inversions": 0 },
+      "polynomialDiagnostics": [
+        { "degree": 1, "exactAfterRound2": 0, "total": 863, "allExactAfterRound2": false, "meanAbsResidual": 0.9854342156601522, "maxAbsResidual": 33.144793066297844 },
+        { "degree": 2, "exactAfterRound2": 13, "total": 863, "allExactAfterRound2": false, "meanAbsResidual": 0.3717054158254668, "maxAbsResidual": 16.21565437239658 },
+        { "degree": 3, "exactAfterRound2": 10, "total": 863, "allExactAfterRound2": false, "meanAbsResidual": 0.18559045262625656, "maxAbsResidual": 6.388303977714365 },
+        { "degree": 4, "exactAfterRound2": 44, "total": 863, "allExactAfterRound2": false, "meanAbsResidual": 0.05993698466580246, "maxAbsResidual": 1.7674196147346706 }
+      ]
+    },
+    {
+      "season": 2024,
+      "source": {
+        "url": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2024&min=1&csv=true",
+        "sha256": "5671bb53afb1571ce9885f34c408dfd5fc8bfe7172099aad9ae61773d45ce71d",
+        "rows": 855
+      },
+      "usableRows": 854,
+      "displayedMapping": { "uniqueDisplayedXwobaValues": 244, "sameDisplayedXwobaDifferentXeraGroups": 0 },
+      "monotonicity": { "observations": 854, "inversions": 0 },
+      "polynomialDiagnostics": [
+        { "degree": 1, "exactAfterRound2": 0, "total": 854, "allExactAfterRound2": false, "meanAbsResidual": 0.7605634695789276, "maxAbsResidual": 32.17946092914972 },
+        { "degree": 2, "exactAfterRound2": 8, "total": 854, "allExactAfterRound2": false, "meanAbsResidual": 0.2566872988289566, "maxAbsResidual": 14.273001488322649 },
+        { "degree": 3, "exactAfterRound2": 32, "total": 854, "allExactAfterRound2": false, "meanAbsResidual": 0.11497376347679195, "maxAbsResidual": 5.01313717191249 },
+        { "degree": 4, "exactAfterRound2": 47, "total": 854, "allExactAfterRound2": false, "meanAbsResidual": 0.046563814186358674, "maxAbsResidual": 1.0352034548146918 }
+      ]
+    },
+    {
+      "season": 2025,
+      "source": {
+        "url": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2025&min=1&csv=true",
+        "sha256": "bc1db04a625a0f0fad382626784854f6681af90cb31334e8709aeee0f6bffe52",
+        "rows": 873
+      },
+      "usableRows": 873,
+      "displayedMapping": { "uniqueDisplayedXwobaValues": 254, "sameDisplayedXwobaDifferentXeraGroups": 0 },
+      "monotonicity": { "observations": 873, "inversions": 0 },
+      "polynomialDiagnostics": [
+        { "degree": 1, "exactAfterRound2": 7, "total": 873, "allExactAfterRound2": false, "meanAbsResidual": 0.8260724513771939, "maxAbsResidual": 18.739902625535645 },
+        { "degree": 2, "exactAfterRound2": 4, "total": 873, "allExactAfterRound2": false, "meanAbsResidual": 0.33965366251498275, "maxAbsResidual": 7.869003999685795 },
+        { "degree": 3, "exactAfterRound2": 31, "total": 873, "allExactAfterRound2": false, "meanAbsResidual": 0.11480190290995997, "maxAbsResidual": 2.6578245544139847 },
+        { "degree": 4, "exactAfterRound2": 67, "total": 873, "allExactAfterRound2": false, "meanAbsResidual": 0.03211141540330097, "maxAbsResidual": 0.7685812566562262 }
+      ]
+    },
+    {
+      "season": 2026,
+      "source": {
+        "url": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=2026&min=1&csv=true",
+        "sha256": "5ac6a69aec3b3fe904bccadee452a8c2af0bb33d59e71f782dd266c9f22b7944",
+        "rows": 844
+      },
+      "usableRows": 844,
+      "displayedMapping": { "uniqueDisplayedXwobaValues": 262, "sameDisplayedXwobaDifferentXeraGroups": 0 },
+      "monotonicity": { "observations": 844, "inversions": 0 },
+      "polynomialDiagnostics": [
+        { "degree": 1, "exactAfterRound2": 0, "total": 844, "allExactAfterRound2": false, "meanAbsResidual": 1.1760197320641432, "maxAbsResidual": 73.250855555125 },
+        { "degree": 2, "exactAfterRound2": 2, "total": 844, "allExactAfterRound2": false, "meanAbsResidual": 0.6085904079344564, "maxAbsResidual": 39.512018737376835 },
+        { "degree": 3, "exactAfterRound2": 10, "total": 844, "allExactAfterRound2": false, "meanAbsResidual": 0.38697525783479014, "maxAbsResidual": 15.417907552111856 },
+        { "degree": 4, "exactAfterRound2": 17, "total": 844, "allExactAfterRound2": false, "meanAbsResidual": 0.15616667144879903, "maxAbsResidual": 3.9870115757395155 }
+      ]
+    }
+  ],
+  "crossSeasonExamples": [
+    { "xwoba": "0.270", "observations": ["2022:2.92", "2023:3.02", "2024:2.92", "2026:3.01"] },
+    { "xwoba": "0.300", "observations": ["2022:3.64", "2023:3.77", "2024:3.64", "2025:3.71", "2026:3.76"] },
+    { "xwoba": "0.310", "observations": ["2022:3.91", "2023:4.04", "2024:3.91", "2025:3.99", "2026:4.04"] },
+    { "xwoba": "0.350", "observations": ["2022:5.13", "2023:5.30", "2024:5.13", "2025:5.23", "2026:5.29"] }
+  ],
+  "scientificConclusion": {
+    "displayedXwobaDeterministicWithinEachFetchedSeason": true,
+    "monotonicWithinEachFetchedSeason": true,
+    "sameDisplayedXwobaCanMapDifferentlyAcrossSeasons": true,
+    "polynomialDegree1To4ExactAuthorityFound": false,
+    "exactXeraEraScaleReconstructionProven": false,
+    "targetDateMappingStabilityProven": false,
+    "familyPromotionAuthorized": false,
+    "nextGate": "IDENTIFY_AUTHORITATIVE_SEASON_RUN_ENVIRONMENT_OR_EXACT_SAVANT_XERA_MAPPING_THEN_PROVE_ASOF_TARGET_DATE_MAPPING_STABILITY"
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "marketPricesRead": false,
+    "targetOutcomeReadForModeling": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "r1b2Authorized": false
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-historical-batch-materializer-evidence.v1",
+  "status": "BATCH_CURRENT_SEMANTICS_PARITY_PROVEN_FULL_ROWSET_NOT_YET_FROZEN",
+  "family": "V16_BASELINE",
+  "classificationImpact": "REMAINS_PARTIAL_PARITY",
+  "objective": "Prove that a research-only season-batch implementation can acquire official prior-final MLB feeds once per batch, replay strictly prior official-date history under the current shared C4 formulas, use only frozen T-minus-5 target identity/lineup/starter custody, score through the locked V16 baseline adapter, and match the certified per-target historical bridge before full 2022-2026_YTD rowset materialization.",
+  "implementation": {
+    "batchMaterializer": "server/mlb-r1b-v16-historical-batch-materializer.ts",
+    "deterministicParityTest": "server/mlb-r1b-v16-historical-batch-materializer.test.ts",
+    "liveParityProbe": "scripts/mlb-r1b-v16-historical-batch-live-parity.ts",
+    "workflow": ".github/workflows/validate-mlb-r1b-v16-historical-batch-materializer.yml",
+    "sharedCurrentFeatureBuilder": "server/mlb-c4-live-feature-builder.ts#buildC4LiveFeatures",
+    "certifiedReferenceBridge": "server/mlb-r1b-v16-historical-target-bridge.ts#materializeR1bV16HistoricalTarget",
+    "lockedV16Adapter": "server/mlb-r1b-v16-final-baseline-adapter.ts#adaptCertifiedFinalC4ToR1bV16Baseline"
+  },
+  "validation": {
+    "workflowRunId": 33448786311,
+    "validationHead": "7f5c016a703ab866925b9442728bd845e64ad4f3",
+    "workflowConclusion": "SUCCESS",
+    "deterministicParity": {
+      "testsPassed": 2,
+      "testsFailed": 0,
+      "provesBatchVsCertifiedBridgeExact": true,
+      "provesPriorFinalFeedFetchedOncePerBatch": true,
+      "provesSameDateHistoryExcluded": true
+    },
+    "liveParity": {
+      "seasons": ["2022", "2023", "2024", "2025", "2026_YTD"],
+      "allFiveJobsPassed": true,
+      "tolerance": 1e-12,
+      "observedReferenceExample2022": {
+        "gamePk": 661327,
+        "officialDate": "2022-06-15",
+        "maxFeatureDelta": 0,
+        "maxProbabilityDelta": 0,
+        "scheduleFetchCount": 1,
+        "priorFeedUrlCount": 928,
+        "duplicatePriorFeedFetches": 0,
+        "targetFeedExternallyRead": false
+      }
+    }
+  },
+  "liveParityArtifacts": {
+    "2022": {"artifactId": 9779063878, "artifactDigest": "sha256:afb7e28b92beff50a4de9bff1c2bdceda2cf14afe5c9cbbd02f6ae3ec9d9c873"},
+    "2023": {"artifactId": 9779067974, "artifactDigest": "sha256:9b763ef6c32c7bdffdaf364b41eff4976b2dbe4fed243be26ca3cefafc4dbebe"},
+    "2024": {"artifactId": 9779073030, "artifactDigest": "sha256:f166b9539a7c1b65b2f3e494309fbb0d20f996d19ba6e0400ba3711d0ea62b7d"},
+    "2025": {"artifactId": 9779070630, "artifactDigest": "sha256:85e4c0b7fd83bd702b369853ab548a02cf1df7e0af1e7d2e65b1d40cdb5c663d"},
+    "2026_YTD": {"artifactId": 9779068678, "artifactDigest": "sha256:24f4f0bda60d48c4aa1d8bda8e9855e5ceb7d9dc9143e8e2ef763641cfa4b987"}
+  },
+  "finding": {
+    "batchArchitectureValidated": true,
+    "exactParityAgainstCertifiedPerTargetBridgeValidated": true,
+    "allFiveSeasonLiveSamplesPassed": true,
+    "directStep12V3FeatureSubstitutionStillForbidden": true,
+    "fullHistoricalProbabilityRowsetMaterialized": false,
+    "fullHistoricalProbabilityRowsetDigestPinned": false,
+    "v16BaselineParityCertified": false,
+    "interpretation": "The research-only batch path is now validated as an exact current-semantics alternative to repeated per-target rebuilding on deterministic and real historical samples. This closes the architectural/parity prerequisite for efficient full-universe materialization, but it does not itself certify V16_BASELINE because the complete immutable 2022-2026_YTD per-game/per-side probability rowset has not yet been emitted and digest-pinned."
+  },
+  "nextPermittedWork": "RUN_THE_VALIDATED_BATCH_MATERIALIZER_OVER_THE_COMPLETE_ELIGIBLE_2022_2026_YTD_FROZEN_T5_TARGET_UNIVERSE, EMIT_ONLY_GAME_DATE_SIDE_STAGE_MARKET_HORIZON_PROBABILITY_PUSH_PROBABILITY_PLUS_CUSTODY_PROVENANCE, PIN_PER_SEASON_AND_COMBINED_SHA256_DIGESTS, THEN VERIFY_FULL_UNIVERSE_PARITY_AND_COVERAGE_BEFORE_PROMOTING_V16_BASELINE_TO_PARITY_CERTIFIED.",
+  "gate": {
+    "parityCertifiedBefore": 2,
+    "parityCertifiedAfter": 2,
+    "v16Baseline": "PARTIAL_PARITY",
+    "r1b2Authorized": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "targetIdentityFromFrozenT5Only": true,
+    "sameDateHistoryAllowed": false,
+    "targetOutcomeUsedAsFeature": false,
+    "historicalPriorResultsReadForTeamForm": true,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

@@ -1,0 +1,130 @@
+name: Validate MLB R1B V16 Historical Batch Materializer
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - server/mlb-r1b-v16-historical-batch-materializer.ts
+      - server/mlb-r1b-v16-historical-batch-materializer.test.ts
+      - scripts/mlb-r1b-v16-historical-batch-live-parity.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-batch-materializer.yml
+  pull_request:
+    paths:
+      - server/mlb-r1b-v16-historical-batch-materializer.ts
+      - server/mlb-r1b-v16-historical-batch-materializer.test.ts
+      - scripts/mlb-r1b-v16-historical-batch-live-parity.ts
+      - server/mlb-r1b-v16-historical-target-bridge.ts
+      - server/mlb-r1b-v16-final-baseline-adapter.ts
+      - server/mlb-c4-live-feature-builder.ts
+      - server/mlb-pure-settlement-scorer.ts
+      - .github/workflows/validate-mlb-r1b-v16-historical-batch-materializer.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run batch-vs-certified-bridge parity tests
+        run: npx tsx --test server/mlb-r1b-v16-historical-batch-materializer.test.ts
+
+      - name: Compile research-only batch materializer
+        run: |
+          npx esbuild server/mlb-r1b-v16-historical-batch-materializer.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-r1b-v16-historical-batch-materializer.cjs
+          npx esbuild scripts/mlb-r1b-v16-historical-batch-live-parity.ts --bundle --platform=node --target=node20 --format=cjs --outfile=/tmp/mlb-r1b-v16-historical-batch-live-parity.cjs
+
+      - name: Verify research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='server/mlb-r1b-v16-historical-batch-materializer.ts'
+          live='scripts/mlb-r1b-v16-historical-batch-live-parity.ts'
+          grep -F 'researchOnly: true' "$source"
+          grep -F 'sameDateHistoryAllowed: false' "$source"
+          grep -F 'targetOutcomeUsedAsFeature: false' "$source"
+          grep -F 'marketPricesRead: false' "$source"
+          grep -F 'modelRefit: false' "$source"
+          grep -F 'newWeightsCreated: false' "$source"
+          grep -F 'productionChanged: false' "$source"
+          grep -F 'targetOutcomeUsedAsFeature: false' "$live"
+          grep -F 'marketPricesRead: false' "$live"
+          ! grep -Ei 'sportsbook|stake|placeBet|automaticBetPlacement: true|realFinancialExposure: [1-9]' "$source" "$live"
+
+  live-parity:
+    needs: parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - season: '2022'
+            v60_artifact: p0-step12v60-matchup-custody-2022
+          - season: '2023'
+            v60_artifact: p0-step12v60-matchup-custody-2023
+          - season: '2024'
+            v60_artifact: p0-step12v60-matchup-custody-2024
+          - season: '2025'
+            v60_artifact: p0-step12v60-matchup-custody-2025
+          - season: '2026_YTD'
+            v60_artifact: p0-step12v60-matchup-custody-2026_YTD
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Download frozen Step12V3 target custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/v16-batch-live/step12v3
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31659518059
+
+      - name: Download frozen V60 starter custody
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.v60_artifact }}
+          path: artifacts/v16-batch-live/v60
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 31919873754
+
+      - name: Compare batch current-semantics output to certified per-target bridge
+        run: |
+          npx tsx scripts/mlb-r1b-v16-historical-batch-live-parity.ts \
+            --season '${{ matrix.season }}' \
+            --root artifacts/v16-batch-live \
+            --out 'artifacts/v16-batch-live/report-${{ matrix.season }}.json'
+
+      - name: Upload live parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-v16-historical-batch-live-parity-${{ matrix.season }}
+          path: artifacts/v16-batch-live/report-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30

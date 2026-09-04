@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-baseline-parity-certification.v1",
+  "family": "V16_BASELINE",
+  "status": "PARITY_CERTIFIED",
+  "scope": "2022-2026_YTD_FROZEN_T5_ELIGIBLE_UNIVERSE_WITH_EXPLICIT_FAIL_CLOSED_MISSINGNESS",
+  "pinnedEvidence": {
+    "commit": "2eb9961ff4e5ab64d7fdf0eb06824888f003f3f2",
+    "combinedManifest": "research/mlb-r1b-v16-baseline-historical/combined-manifest.json",
+    "combinedRowsetSha256": "b06d003b8412f886afd03da1765d0f03af4ee031a3a8ed83fc81aa1a7d308f7e"
+  },
+  "scorerParity": {
+    "checkedRows": 44016,
+    "failedRows": 0,
+    "allRowsRecomputedThroughLockedAdapter": true,
+    "tolerance": 1e-15
+  },
+  "coverage": {
+    "sourceUniverseGameCount": 11505,
+    "frozenT5EligibleGameCount": 11396,
+    "sourceExcludedGameCount": 109,
+    "c4EligibleGameCount": 11004,
+    "c4StructurallyIneligibleGameCount": 392,
+    "rowCount": 44016,
+    "rowsPerEligibleGame": 4,
+    "duplicateCount": 0,
+    "explicitMissingnessPreserved": true,
+    "noPostHocHistoryShrink": true
+  },
+  "locks": {
+    "c4BuilderVersion": "mlb-c4-live-canonical-v1",
+    "v16AdapterSchema": "courtedge-mlb-r1b-v16-final-baseline-adapter.v1",
+    "v16ModelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+  },
+  "temporalAndResearchBoundary": {
+    "targetIdentityFromFrozenT5Only": true,
+    "strictlyPriorOfficialDateHistory": true,
+    "sameDateHistoryAllowed": false,
+    "targetOutcomeUsedAsFeature": false,
+    "historicalPriorResultsReadForTeamForm": true,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "decision": {
+    "exactSemanticParity": true,
+    "familyPromotionAuthorized": true,
+    "r1b2Authorized": false,
+    "reasonR1b2StillBlocked": "R1B2 remains fail-closed until all nine required R1B1 families are PARITY_CERTIFIED."
+  }
+}
