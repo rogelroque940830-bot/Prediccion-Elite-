@@ -6,6 +6,10 @@ on:
     paths:
       - 'server/mlb-scientific-snapshot.ts'
       - 'server/mlb-f5-canonical-lifecycle.e2e.test.ts'
+      - 'server/mlb-early-engine-capture-projection.ts'
+      - 'server/mlb-ledger-csv-export.ts'
+      - 'server/mlb-early-ere-export.test.ts'
+      - 'server/mlb-ledger.ts'
       - '.github/workflows/validate-mlb-f5-lifecycle-e2e-v1.yml'
   workflow_dispatch:
 
@@ -27,6 +31,8 @@ jobs:
       - run: npm ci
       - name: Prove canonical F5 ML/Total lifecycle
         run: npx tsx --test server/mlb-f5-canonical-lifecycle.e2e.test.ts
+      - name: Prove compact Early ERE CSV export
+        run: npx tsx --test server/mlb-early-ere-export.test.ts
       - name: Run ledger regression suite
         run: npm run test:mlb-ledger
       - name: Build production backend
