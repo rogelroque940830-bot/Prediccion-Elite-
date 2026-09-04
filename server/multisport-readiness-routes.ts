@@ -3,6 +3,8 @@ import type {
   MultisportReadinessService,
   ReadinessSport,
 } from "./multisport-readiness-service";
+import { getNflFullElite2026Snapshot } from "./nfl-full-elite-operational-2026";
+import { buildNflCrossSportReadiness } from "./nfl-cross-sport-readiness";
 
 export function registerMultisportReadinessRoutes(
   app: Express,
@@ -75,8 +77,8 @@ export function registerMultisportReadinessRoutes(
 
   app.get("/api/multisport/readiness/v1/sports/:sport", (req, res) => {
     const sport = String(req.params.sport ?? "").toUpperCase() as ReadinessSport;
-    if (sport !== "NBA" && sport !== "WNBA" && sport !== "NHL") {
-      res.status(400).json({ success: false, error: "Sport must be NBA, WNBA, or NHL" });
+    if (sport !== "NBA" && sport !== "WNBA" && sport !== "NHL" && sport !== "NFL") {
+      res.status(400).json({ success: false, error: "Sport must be NBA, WNBA, NHL, or NFL" });
       return;
     }
     const latest = service.readLatest();
@@ -85,5 +87,27 @@ export function registerMultisportReadinessRoutes(
       return;
     }
     res.json({ success: true, data: latest.sports[sport] });
+  });
+
+  app.get("/api/multisport/readiness/v1/nfl-cross-sport", async (_req, res) => {
+    try {
+      const snapshot = await getNflFullElite2026Snapshot();
+      const readiness = buildNflCrossSportReadiness(snapshot);
+      const operational = snapshot.state !== "BLOCKED";
+      return res.status(operational ? 200 : 503).json({
+        success: operational,
+        data: readiness,
+        code: operational
+          ? "NFL_CROSS_SPORT_UNCALIBRATED"
+          : "NFL_CROSS_SPORT_SOURCE_BLOCKED",
+      });
+    } catch (error) {
+      return res.status(503).json({
+        success: false,
+        data: null,
+        code: "NFL_CROSS_SPORT_SOURCE_FAILURE",
+        error: error instanceof Error ? error.message : "Unknown NFL cross-sport readiness error",
+      });
+    }
   });
 }
