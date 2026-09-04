@@ -5,6 +5,7 @@ import { registerIndependentNbaRoutes } from "./nba-independent-routes";
 import { registerNhlManualRoutes } from "./nhl-manual-routes";
 import { registerIndependentWnbaRoutes } from "./wnba-independent-routes";
 import { registerMlbEarlyRoutes } from "./mlb-early-routes";
+import { registerMlbEarlyCandidateRoutes } from "./mlb-early-candidate-routes";
 import { registerLegacyPicksV2Routes } from "./legacy-picks-v2-routes";
 import { registerNbaDataRoutes } from "./nba-data-routes";
 import { registerMlbP1DailySlateRoutes } from "./mlb-p1-daily-slate-routes";
@@ -45,6 +46,7 @@ export function registerRoutes(_httpServer: Server, app: Express): void {
   registerNhlManualRoutes(app);
   registerIndependentWnbaRoutes(app);
   registerMlbEarlyRoutes(app);
+  registerMlbEarlyCandidateRoutes(app);
   registerLegacyPicksV2Routes(app);
   registerNbaDataRoutes(app);
   registerMlbP1DailySlateRoutes(app);
