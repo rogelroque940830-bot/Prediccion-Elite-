@@ -1,0 +1,70 @@
+name: MLB R1B Statcast xERA Wayback Replay-Content Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-wayback-replay-content-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-wayback-replay-content-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-xera-wayback-replay-content-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-wayback-replay-content-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Parse archived official Savant xERA states and measure temporal coverage
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-wayback-replay-content-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe/evidence.json
+      - name: Enforce truth-anchor-only and fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe/evidence.json','utf8'));
+          if(e.status!=='WAYBACK_REPLAY_CONTENT_AND_TEMPORAL_COVERAGE_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.publisherHost!=='baseballsavant.mlb.com'||e.sourceAuthority?.archiveIsPublisher!==false) throw new Error('authority');
+          if(!Array.isArray(e.seasonEvidence)||e.seasonEvidence.length!==5) throw new Error('season coverage');
+          if(e.summary?.completeDailyPregameCoverageProven!==false||e.summary?.exactTargetDateXeraCustodyForFullUniverseProven!==false||e.summary?.exactSavantProductionConversionProven!==false||e.summary?.familyPromotionAuthorized!==false) throw new Error('premature authority');
+          if(e.interpretationPolicy?.noInterpolationBetweenArchiveSnapshots!==true||e.interpretationPolicy?.sparseArchiveCoverageCannotAuthorizeFullReplay!==true||e.interpretationPolicy?.noEmpiricalXeraFitAuthorized!==true||e.interpretationPolicy?.approximationForbidden!==true) throw new Error('interpretation boundary');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-wayback-replay-content-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noInterpolationBetweenArchiveSnapshots: true' "$src"
+          grep -F 'noEmpiricalXeraFitAuthorized: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload replay-content evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-wayback-replay-content-probe
+          path: artifacts/mlb-r1b-statcast-xera-wayback-replay-content-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
