@@ -129,3 +129,12 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Scientific MLB snapshots are created synchronously from the predictor UI. Expose
+// the existing React Query cache through a narrow runtime bridge so the snapshot
+// builder can attach the exact /api/mlb/early-markets response that was already
+// rendered, without re-fetching or recalculating ERE/F5 at save time.
+if (typeof globalThis !== "undefined") {
+  (globalThis as typeof globalThis & { __COURTEDGE_QUERY_CLIENT__?: QueryClient })
+    .__COURTEDGE_QUERY_CLIENT__ = queryClient;
+}
