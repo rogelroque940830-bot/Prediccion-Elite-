@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-normalized-square-quantization-probe-evidence.v1",
+  "status": "PINNED_XERA_NORMALIZED_SQUARE_QUANTIZATION_PROBE_NOT_PARITY_CERTIFICATION",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "workflow": {
+    "name": "MLB R1B Statcast xERA Normalized-Square Quantization Probe",
+    "runId": 33920935522,
+    "runNumber": 2,
+    "headSha": "2373e0e1182b3cc304b1f482c0deabf5966ca8eb",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 9955062544,
+    "name": "mlb-r1b-statcast-xera-normalized-square-quantization-probe",
+    "digest": "sha256:9988a4ee0e8ef978cf71b17ca5ddccf84d5f8405277dcd88733a9eaf3ebd577a",
+    "rawEvidenceSha256": "e51dfa6f59b3511490fed453eca845653aa1bfa425437cdb050d92a7ffaa8eea",
+    "expiresAt": "2026-10-04T21:27:18Z"
+  },
+  "generatedAt": "2026-09-04T21:27:18.244Z",
+  "primarySourceContext": {
+    "mlbGlossary": "https://www.mlb.com/glossary/statcast/expected-era",
+    "tangoStatcastLab": "https://tangotiger.com/index.php/site/comments/statcast-lab-xera",
+    "tangoNormalizedRunsDiscussion": "https://www.reddit.com/r/Sabermetrics/comments/4pi2o3/converting_woba_into_runs_per_9/",
+    "frozenInterpretation": "MLB defines xERA as xwOBA translated to the ERA scale. Tango describes xERA as proportionate to xwOBA squared and separately gives a normalized squared wOBA-to-runs relationship. These sources provide conceptual mechanism authority but do not publish Savant's exact time-varying production parameter series."
+  },
+  "theoryTested": {
+    "form": "xERA = C_t * xwOBA^2",
+    "coefficientPolicy": "C_t may vary independently by season/snapshot; no cross-season coefficient is assumed.",
+    "decisionMethod": "Exact intersection of all coefficient intervals implied by every player row under each explicit public-display quantization hypothesis; no regression fit is used.",
+    "necessaryNotSufficient": true
+  },
+  "quantizationCoverage": {
+    "xwobaModes": [
+      "NEAREST_3DP_[x-0.0005,x+0.0005]",
+      "TRUNCATE_DOWN_3DP_[x,x+0.001]",
+      "TRUNCATE_UP_3DP_[x-0.001,x]",
+      "WIDE_3DP_[x-0.001,x+0.001]"
+    ],
+    "xeraModes": [
+      "NEAREST_2DP_[y-0.005,y+0.005]",
+      "TRUNCATE_DOWN_2DP_[y,y+0.01]",
+      "TRUNCATE_UP_2DP_[y-0.01,y]",
+      "WIDE_2DP_[y-0.01,y+0.01]"
+    ],
+    "combinationsPerDomainPerSeason": 16,
+    "domains": ["PRODUCTION_SOURCE_MIN_Q", "MIN1_FILTERED_PA_GTE_50"]
+  },
+  "qualifiedProductionSourceResults": [
+    {
+      "season": 2022,
+      "rows": 358,
+      "feasibleModes": [],
+      "nearestCoefficientRange": {"lower": 43.430082040120645, "upper": 40.19228956546329, "gap": 3.237792474657354},
+      "mostPermissiveWideRange": {"lower": 43.285465996127435, "upper": 40.42453330103408, "gap": 2.8609326950933536},
+      "wideLowerWitness": {"playerId":665621,"pa":206,"xwoba":0.388,"xera":6.56},
+      "wideUpperWitness": {"playerId":642547,"pa":317,"xwoba":0.258,"xera":2.66}
+    },
+    {
+      "season": 2023,
+      "rows": 372,
+      "feasibleModes": [],
+      "nearestCoefficientRange": {"lower": 45.82490143997226, "upper": 41.5056374159585, "gap": 4.319264024013755},
+      "mostPermissiveWideRange": {"lower": 45.681768545706035, "upper": 41.74058228112282, "gap": 3.941186264583216},
+      "wideLowerWitness": {"playerId":641778,"pa":211,"xwoba":0.405,"xera":7.54},
+      "wideUpperWitness": {"playerId":547973,"pa":249,"xwoba":0.26,"xera":2.79}
+    },
+    {
+      "season": 2024,
+      "rows": 366,
+      "feasibleModes": [],
+      "nearestCoefficientRange": {"lower": 44.16496277149801, "upper": 40.18122706134559, "gap": 3.9837357101524233},
+      "mostPermissiveWideRange": {"lower": 44.024653806131425, "upper": 40.41223484165615, "gap": 3.6124189644752747},
+      "wideLowerWitness": {"playerId":621389,"pa":330,"xwoba":0.402,"xera":7.16},
+      "wideUpperWitness": {"playerId":669373,"pa":753,"xwoba":0.259,"xera":2.68}
+    },
+    {
+      "season": 2025,
+      "rows": 349,
+      "feasibleModes": [],
+      "nearestCoefficientRange": {"lower": 46.244879380974055, "upper": 40.946366292770286, "gap": 5.298513088203769},
+      "mostPermissiveWideRange": {"lower": 46.10767399359523, "upper": 41.18154703326318, "gap": 4.9261269603320486},
+      "wideLowerWitness": {"playerId":669060,"pa":224,"xwoba":0.422,"xera":8.26},
+      "wideUpperWitness": {"playerId":669373,"pa":748,"xwoba":0.258,"xera":2.71}
+    },
+    {
+      "season": 2026,
+      "rows": 352,
+      "feasibleModes": [],
+      "nearestCoefficientRange": {"lower": 45.01602499087184, "upper": 41.436728566450036, "gap": 3.5792964244218055},
+      "mostPermissiveWideRange": {"lower": 44.86918011770876, "upper": 41.676278354479045, "gap": 3.192901763229713},
+      "wideLowerWitness": {"playerId":518876,"pa":616,"xwoba":0.392,"xera":6.94},
+      "wideUpperWitness": {"playerId":680742,"pa":208,"xwoba":0.256,"xera":2.70}
+    }
+  ],
+  "paGte50DomainSummary": {
+    "everySeasonRejectedAll16Modes": true,
+    "rowsBySeason": {"2022":637,"2023":647,"2024":630,"2025":644,"2026":594}
+  },
+  "scientificConclusion": {
+    "everySeasonQualifiedRejectedAll16QuantizationModes": true,
+    "everySeasonPaGte50RejectedAll16QuantizationModes": true,
+    "publicDisplayNearestRoundingCanRescueSimpleNormalizedSquare": false,
+    "publicDisplayTruncationCanRescueSimpleNormalizedSquare": false,
+    "conservativeWideDisplayEnvelopeCanRescueSimpleNormalizedSquare": false,
+    "conceptualSquareLawFalsified": false,
+    "interpretation": "The primary-source square-law concept cannot be converted into exact Savant production xERA from the published xwOBA/xERA surfaces by any tested ordinary rounding/truncation interpretation, even when C_t is allowed to vary by season. Therefore exact historical replay still requires authoritative as-of xERA values or additional undocumented/internal transformation semantics and parameters.",
+    "primaryAsOfXeraCustodyProven": false,
+    "exactSavantProductionConversionProven": false,
+    "familyPromotionAuthorized": false,
+    "nextGate": "SEARCH_FOR_PRIMARY_AUTHORITATIVE_ASOF_XERA_CUSTODY_OR_THE_EXACT_INTERNAL_TIME_VARYING_SAVANT_TRANSFORMATION/PARAMETERS; DO_NOT EXPAND EMPIRICAL FITTING."
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "marketPricesRead": false,
+    "targetOutcomeReadForModeling": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0,
+    "r1b2Authorized": false,
+    "finalSeasonMappingRetroactiveUseForbidden": true,
+    "empiricalCoefficientFittingForbidden": true,
+    "thirdPartyMirrorValuesForbiddenAsHistoricalAuthority": true
+  }
+}
