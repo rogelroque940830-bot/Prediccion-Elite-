@@ -4,8 +4,8 @@ import {
   MlbLedgerStore,
   buildMlbBacktestReport,
   canonicalJson,
-  recordsToCsv,
 } from "./mlb-ledger-store";
+import { recordsToMlbCsv } from "./mlb-ledger-csv-export";
 import { buildMlbInjuryCalibrationReport } from "./mlb-injury-calibration-report";
 import { buildMlbInjuryOutcomesReport } from "./mlb-injury-outcomes-report";
 import { buildMlbInjuryDecisionReport } from "./mlb-injury-decision-report";
@@ -232,7 +232,7 @@ export function registerMlbLedgerRoutes(app: Express): void {
     const format = optionalText(req.query.format) || "jsonl";
 
     if (format === "csv") {
-      res.type("text/csv").send(recordsToCsv(records));
+      res.type("text/csv").send(recordsToMlbCsv(records));
       return;
     }
     if (format !== "jsonl") {
@@ -250,3 +250,4 @@ export { buildMlbInjuryDecisionReport } from "./mlb-injury-decision-report";
 export { buildMlbLedgerHistoryView } from "./mlb-ledger-history-view";
 export { MlbClosingLineStore } from "./mlb-closing-line-store";
 export { buildMlbClosingLineReport } from "./mlb-closing-line-report";
+export { recordsToMlbCsv } from "./mlb-ledger-csv-export";
