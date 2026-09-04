@@ -1,0 +1,38 @@
+{
+  "awayTeamId": 111,
+  "capturedAt": "2026-09-04T22:55:00.258028Z",
+  "exactPregameLineupSemantics": true,
+  "exactPregameProbableStarterSemantics": true,
+  "featureSource": "V68_FROZEN_PROSPECTIVE_ADAPTER_V1",
+  "features": {
+    "combined_team_rs10": 9.7,
+    "fg_exposure_adv": 0.052947056168346496,
+    "lineup_exposure_rate_adv": 0.08037825059101655,
+    "starter_in_zone_adv": -0.0032709716783413324,
+    "starter_in_zone_adv_x_fg_mean_starter_share": -0.0020225978681395955,
+    "starter_kbb_adv": -0.026125011310774104,
+    "starter_spin_adv": 321.82182924138,
+    "starter_spin_adv_x_fg_mean_starter_share": 198.99779324120325,
+    "starter_swing_miss_adv": 0.0,
+    "starter_swing_miss_adv_x_fg_mean_starter_share": 0.0,
+    "starter_velocity_adv": 4.515521858920948,
+    "starter_velocity_adv_x_fg_mean_starter_share": 2.7921626304091154,
+    "starter_weak_contact_adv": -0.048409570413350235,
+    "starter_weak_contact_adv_x_fg_mean_starter_share": -0.029933947323336742,
+    "team_rd10_diff": 3.6999999999999997
+  },
+  "gamePk": 824797,
+  "homeTeamId": 110,
+  "mechanismDiagnostics": {
+    "awayExpectedStarterOuts": 15.980603088061514,
+    "awayFgStarterShare": 0.5918741884467228,
+    "homeExpectedStarterOuts": 17.41017360460687,
+    "homeFgStarterShare": 0.6448212446150693,
+    "meanFgStarterShare": 0.618347716530896
+  },
+  "officialDate": "2026-09-04",
+  "sourceCutoffAt": "2026-09-04T22:55:00.258028Z",
+  "sourceEvidenceDigest": "912a599a564052f5b4245024ca86e98c1d4a1b2b20eabf831b90e2779c42629c",
+  "startTime": "2026-09-04T23:05:00Z",
+  "wholeOfficialDatePriorStateOnly": true
+}
