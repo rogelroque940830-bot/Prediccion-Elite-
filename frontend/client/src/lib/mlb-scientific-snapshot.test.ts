@@ -111,7 +111,7 @@ test("full-game snapshots never inherit an Early/ERE cache entry", () => {
     const snapshot = createMlbScientificSnapshot(input("ML"));
     assert.equal(snapshot.analysis.layers?.earlyEngine, undefined);
     assert.equal(
-      snapshot.analysis.warnings?.some((warning) => warning.includes("EARLY_ENGINE_CAPTURE_MISSING")),
+      snapshot.analysis.warnings?.some((warning) => warning.includes("EARLY_ENGINE_CAPTURE_MISSING")) ?? false,
       false,
     );
   } finally {
@@ -124,7 +124,7 @@ test("early-market snapshots fail visibly when no matching Early/ERE response ex
   const snapshot = createMlbScientificSnapshot(input("F5_ML"));
   assert.equal(snapshot.analysis.layers?.earlyEngine, undefined);
   assert.equal(
-    snapshot.analysis.warnings?.some((warning) => warning.includes("EARLY_ENGINE_CAPTURE_MISSING")),
+    snapshot.analysis.warnings?.some((warning) => warning.includes("EARLY_ENGINE_CAPTURE_MISSING")) ?? false,
     true,
   );
 });
