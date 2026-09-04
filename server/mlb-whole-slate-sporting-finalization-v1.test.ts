@@ -110,6 +110,26 @@ test("whole-slate provisional leader is visible even when researchEliteCandidate
   assert.equal(result.sportingSlateLeader?.gamePk, 10);
   assert.equal(result.sportingSlateLeader?.researchEligibilityIgnoredAsProductionGate, true);
   assert.deepEqual(result.unresolvedProvisionalGamePks, [10]);
+  assert.deepEqual(result.rankedGamePks, [10]);
+  assert.equal(
+    result.policy.shortlistQualificationRule,
+    "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT",
+  );
+});
+
+test("ranked game identities preserve context-rank order for slate exclusion auditing", () => {
+  const result = finalizeMlbWholeSlateSportingAuthority({
+    dailyBestPick: noPlay(),
+    rankedOpportunities: [
+      opportunity({ gamePk: 30, rank: 3, stage: "PROVISIONAL" }),
+      opportunity({ gamePk: 10, rank: 1, stage: "PROVISIONAL" }),
+      opportunity({ gamePk: 20, rank: 2, stage: "PROVISIONAL" }),
+    ],
+    parentPrepricePopulationSize: 3,
+  });
+
+  assert.deepEqual(result.rankedGamePks, [10, 20, 30]);
+  assert.equal(result.wholeSlateEvaluatedGames, 3);
 });
 
 test("a FINAL A+ pick waits only for a better-ranked provisional competitor inside the frozen parent population", () => {
@@ -124,6 +144,7 @@ test("a FINAL A+ pick waits only for a better-ranked provisional competitor insi
   });
   assert.equal(blocked.state, "WAIT_FOR_PROVISIONAL_COMPETITOR");
   assert.deepEqual(blocked.unresolvedProvisionalGamePks, [10]);
+  assert.deepEqual(blocked.rankedGamePks, [10, 20, 30]);
 
   const resolved = finalizeMlbWholeSlateSportingAuthority({
     dailyBestPick: parentPick({ gamePk: 20, tier: "A_PLUS", rank: 1 }),
@@ -169,4 +190,5 @@ test("whole slate resolves to sporting NO PLAY only after no provisional games r
   });
   assert.equal(result.state, "SPORTING_NO_PLAY");
   assert.equal(result.sportingSlateLeader, null);
+  assert.deepEqual(result.rankedGamePks, [20]);
 });
