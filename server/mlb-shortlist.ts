@@ -9,6 +9,19 @@ export type MlbShortlistComponent =
   | "SOS"
   | "ADVANCED_CONTEXT";
 
+export const MLB_SHORTLIST_CORE_COMPONENTS = Object.freeze([
+  "STATCAST_QUALITY",
+  "DISCIPLINE_SPEED",
+  "SOS",
+] as const);
+
+export type MlbShortlistCoreComponent = (typeof MLB_SHORTLIST_CORE_COMPONENTS)[number];
+export type MlbShortlistCoreEvidenceState = "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
+export type MlbShortlistQualificationDisposition =
+  | "QUALIFIED_SIGNAL"
+  | "PENDING_EVIDENCE"
+  | "COMPLETE_NO_SIGNAL";
+
 export interface MlbShortlistNativeSignal {
   component: MlbShortlistComponent;
   metric: string;
@@ -25,6 +38,14 @@ export interface MlbShortlistFactorPayloads {
 
 export type MlbShortlistEvidenceByGame = Readonly<Record<number, MlbShortlistFactorPayloads | undefined>>;
 
+export interface MlbShortlistCoreEvidenceCoverage {
+  state: MlbShortlistCoreEvidenceState;
+  certifiedComponents: readonly MlbShortlistCoreComponent[];
+  signalComponents: readonly MlbShortlistCoreComponent[];
+  neutralComponents: readonly MlbShortlistCoreComponent[];
+  unavailableComponents: readonly MlbShortlistCoreComponent[];
+}
+
 export interface MlbShortlistCandidate {
   gamePk: number;
   officialDate: string;
@@ -38,6 +59,8 @@ export interface MlbShortlistCandidate {
   maxAbsoluteNativeRunSignal: number;
   signals: MlbShortlistNativeSignal[];
   warnings: string[];
+  coreEvidenceCoverage: MlbShortlistCoreEvidenceCoverage;
+  qualificationDisposition: MlbShortlistQualificationDisposition;
   qualifiedForShortlist: boolean;
 }
 
@@ -55,6 +78,11 @@ export interface MlbShortlistResult {
     selected: number;
     overflowQualified: number;
     noCertifiedSignal: number;
+    pendingEvidence: number;
+    completeNoSignal: number;
+    completeEvidence: number;
+    partialEvidence: number;
+    unavailableEvidence: number;
   };
   policy: {
     marketAgnostic: true;
@@ -68,8 +96,11 @@ export interface MlbShortlistResult {
     requiresCertifiedProvenance: true;
     maxCandidates: number;
     hardMaximumCandidates: typeof MLB_SHORTLIST_MAX_CANDIDATES;
-    qualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT";
-    rankingRule: "SIGNAL_COMPONENT_COUNT_THEN_MAX_NATIVE_RUN_MAGNITUDE_THEN_CERTIFIED_COVERAGE";
+    qualificationRule: "NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE";
+    rankingRule: "OBSERVED_SIGNAL_COMPONENT_COUNT_THEN_MAX_NATIVE_RUN_MAGNITUDE";
+    missingDataCountsAsNegativeEvidence: false;
+    pendingCoreEvidencePreservedInCompetition: true;
+    completeCertifiedNoSignalMayBeExcluded: true;
   };
   safety: MlbCheapScreeningResult["safety"];
 }
@@ -156,6 +187,34 @@ function advancedContextSignals(payload: unknown, signals: MlbShortlistNativeSig
   pushSignal(signals, "ADVANCED_CONTEXT", "totalAdjustment", value.totalAdjustment);
 }
 
+function coreCoverage(
+  payloads: MlbShortlistFactorPayloads,
+  signals: readonly MlbShortlistNativeSignal[],
+): MlbShortlistCoreEvidenceCoverage {
+  const corePayloads: Readonly<Record<MlbShortlistCoreComponent, unknown>> = {
+    STATCAST_QUALITY: payloads.statcastQuality,
+    DISCIPLINE_SPEED: payloads.disciplineSpeed,
+    SOS: payloads.sos,
+  };
+  const signalSet = new Set(signals.map((signal) => signal.component));
+  const certifiedComponents = MLB_SHORTLIST_CORE_COMPONENTS.filter((component) => certified(corePayloads[component]));
+  const unavailableComponents = MLB_SHORTLIST_CORE_COMPONENTS.filter((component) => !certified(corePayloads[component]));
+  const signalComponents = certifiedComponents.filter((component) => signalSet.has(component));
+  const neutralComponents = certifiedComponents.filter((component) => !signalSet.has(component));
+  const state: MlbShortlistCoreEvidenceState = certifiedComponents.length === MLB_SHORTLIST_CORE_COMPONENTS.length
+    ? "COMPLETE"
+    : certifiedComponents.length === 0
+      ? "UNAVAILABLE"
+      : "PARTIAL";
+  return Object.freeze({
+    state,
+    certifiedComponents: Object.freeze([...certifiedComponents]),
+    signalComponents: Object.freeze([...signalComponents]),
+    neutralComponents: Object.freeze([...neutralComponents]),
+    unavailableComponents: Object.freeze([...unavailableComponents]),
+  });
+}
+
 function evaluateGame(
   game: MlbCheapScreenGameResult,
   factors: MlbShortlistFactorPayloads | undefined,
@@ -184,6 +243,12 @@ function evaluateGame(
     (maximum, signal) => Math.max(maximum, signal.absoluteRuns),
     0,
   );
+  const coreEvidenceCoverage = coreCoverage(payloads, signals);
+  const qualificationDisposition: MlbShortlistQualificationDisposition = independentSignalCount > 0
+    ? "QUALIFIED_SIGNAL"
+    : coreEvidenceCoverage.state !== "COMPLETE"
+      ? "PENDING_EVIDENCE"
+      : "COMPLETE_NO_SIGNAL";
 
   return {
     gamePk: game.gamePk,
@@ -198,7 +263,9 @@ function evaluateGame(
     maxAbsoluteNativeRunSignal: round3(maxAbsoluteNativeRunSignal),
     signals,
     warnings,
-    qualifiedForShortlist: independentSignalCount > 0,
+    coreEvidenceCoverage,
+    qualificationDisposition,
+    qualifiedForShortlist: qualificationDisposition !== "COMPLETE_NO_SIGNAL",
   };
 }
 
@@ -220,9 +287,9 @@ export function rankMlbShortlistCandidates(
     if (b.maxAbsoluteNativeRunSignal !== a.maxAbsoluteNativeRunSignal) {
       return b.maxAbsoluteNativeRunSignal - a.maxAbsoluteNativeRunSignal;
     }
-    if (b.certifiedComponentCount !== a.certifiedComponentCount) {
-      return b.certifiedComponentCount - a.certifiedComponentCount;
-    }
+    // Coverage is intentionally not a sporting tie-breaker. Missing evidence is
+    // uncertainty, not negative evidence. Completeness is tracked separately and
+    // may keep a provisional comparison unresolved until the source recovers.
     if (a.finalInputsAvailable !== b.finalInputsAvailable) {
       return a.finalInputsAvailable ? -1 : 1;
     }
@@ -254,7 +321,12 @@ export function buildMlbShortlist(input: {
       qualified: qualified.length,
       selected: selected.length,
       overflowQualified: Math.max(0, qualified.length - selected.length),
-      noCertifiedSignal: candidates.filter((candidate) => !candidate.qualifiedForShortlist).length,
+      noCertifiedSignal: candidates.filter((candidate) => candidate.independentSignalCount === 0).length,
+      pendingEvidence: candidates.filter((candidate) => candidate.coreEvidenceCoverage.state !== "COMPLETE").length,
+      completeNoSignal: candidates.filter((candidate) => candidate.qualificationDisposition === "COMPLETE_NO_SIGNAL").length,
+      completeEvidence: candidates.filter((candidate) => candidate.coreEvidenceCoverage.state === "COMPLETE").length,
+      partialEvidence: candidates.filter((candidate) => candidate.coreEvidenceCoverage.state === "PARTIAL").length,
+      unavailableEvidence: candidates.filter((candidate) => candidate.coreEvidenceCoverage.state === "UNAVAILABLE").length,
     },
     policy: {
       marketAgnostic: true,
@@ -268,8 +340,11 @@ export function buildMlbShortlist(input: {
       requiresCertifiedProvenance: true,
       maxCandidates,
       hardMaximumCandidates: MLB_SHORTLIST_MAX_CANDIDATES,
-      qualificationRule: "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT",
-      rankingRule: "SIGNAL_COMPONENT_COUNT_THEN_MAX_NATIVE_RUN_MAGNITUDE_THEN_CERTIFIED_COVERAGE",
+      qualificationRule: "NONZERO_SIGNAL_OR_PENDING_CORE_EVIDENCE",
+      rankingRule: "OBSERVED_SIGNAL_COMPONENT_COUNT_THEN_MAX_NATIVE_RUN_MAGNITUDE",
+      missingDataCountsAsNegativeEvidence: false,
+      pendingCoreEvidencePreservedInCompetition: true,
+      completeCertifiedNoSignalMayBeExcluded: true,
     },
     safety: input.cheapScreen.safety,
   };
