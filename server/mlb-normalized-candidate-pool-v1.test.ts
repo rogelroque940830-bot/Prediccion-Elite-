@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  buildMlbNormalizedCandidatePool,
-  executeMlbNormalizedCandidatePoolCommand,
-} from "./mlb-normalized-candidate-pool-test-exports";
+import { buildMlbNormalizedCandidatePool } from "./mlb-normalized-candidate-pool-v1";
+import { executeMlbNormalizedCandidatePoolCommand } from "./mlb-normalized-candidate-pool-routes";
 
 function slate() {
   return {
