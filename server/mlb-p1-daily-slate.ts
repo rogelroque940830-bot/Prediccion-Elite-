@@ -40,6 +40,13 @@ export interface MlbP1SlateGame {
   lineupState: MlbP1LineupState;
   homeLineupCount: number;
   awayLineupCount: number;
+  /**
+   * Exact official nine-man pregame identities from the same MLB live feed used
+   * for FINAL readiness. Empty until one complete official nine-man list exists.
+   * These are evidence identities only; retaining them does not change readiness.
+   */
+  homeLineupIds?: readonly number[];
+  awayLineupIds?: readonly number[];
   readiness: MlbP1Readiness;
   analysisStage: "FINAL" | "PROVISIONAL" | "BLOCKED";
   analysisAllowed: boolean;
@@ -130,9 +137,22 @@ function pitcherFromFeed(feed: any, side: "home" | "away", fallback: RawSchedule
   };
 }
 
+function uniqueOfficialPlayerIds(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+}
+
 function uniqueOfficialPlayerCount(value: unknown): number {
-  if (!Array.isArray(value)) return 0;
-  return new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0)).size;
+  return uniqueOfficialPlayerIds(value).length;
+}
+
+function officialPregameLineupIds(feed: any, side: "home" | "away"): readonly number[] {
+  const team = feed?.liveData?.boxscore?.teams?.[side];
+  const battingOrder = uniqueOfficialPlayerIds(team?.battingOrder);
+  if (battingOrder.length === 9) return Object.freeze(battingOrder);
+  const batters = uniqueOfficialPlayerIds(team?.batters);
+  if (batters.length === 9) return Object.freeze(batters);
+  return Object.freeze([]);
 }
 
 function lineupCount(feed: any, side: "home" | "away"): number {
@@ -230,6 +250,8 @@ export async function buildMlbP1DailySlate(options: {
     const awayPitcher = pitcherFromFeed(feed, "away", game);
     const homeLineupCount = lineupCount(feed, "home");
     const awayLineupCount = lineupCount(feed, "away");
+    const homeLineupIds = officialPregameLineupIds(feed, "home");
+    const awayLineupIds = officialPregameLineupIds(feed, "away");
     const currentLineupState = lineupState(homeLineupCount, awayLineupCount, Boolean(feed));
     const readiness = classifyMlbP1Readiness({
       state,
@@ -254,6 +276,8 @@ export async function buildMlbP1DailySlate(options: {
       lineupState: currentLineupState,
       homeLineupCount,
       awayLineupCount,
+      homeLineupIds,
+      awayLineupIds,
       ...readiness,
       source: { name: "MLB_STATS_API", fetchedAt: generatedAt, quality },
     };
