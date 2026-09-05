@@ -771,6 +771,32 @@
       }
     },
     {
+      "awayTeamId": 142,
+      "canonicalFirstCaptureImmutable": true,
+      "canonicalSourceRecordDigest": "86bdd2f279af552902714a7a64d39b96463f6032ab6379d11c8c7b4d55b6cbea",
+      "capturedAt": "2026-09-05T23:00:00.223435Z",
+      "containsMarketPrice": false,
+      "containsOutcome": false,
+      "featureDigest": "d541222c6170b4e3c6946c9950f353193eb05b530ea60de3c01f894b16b4fd25",
+      "featureSource": "V68_FROZEN_PROSPECTIVE_ADAPTER_V1",
+      "gamePk": 824553,
+      "homeTeamId": 145,
+      "officialDate": "2026-09-05",
+      "sourceCutoffAt": "2026-09-05T23:00:00.223435Z",
+      "sourceEvidenceDigest": "31bfaf7b687a34fd528c7d1869cb056ee1a74d8155523756872e81a044d82e8b",
+      "startTime": "2026-09-05T23:10:00Z",
+      "v16": {
+        "awayWinProbability": 0.47607651979807275,
+        "homeWinProbability": 0.5239234802019272,
+        "rawLogit": 0.1850671581925301
+      },
+      "v68": {
+        "awayWinProbability": 0.4767945473831866,
+        "homeWinProbability": 0.5232054526168134,
+        "rawLogit": 0.18291220991628382
+      }
+    },
+    {
       "awayTeamId": 111,
       "canonicalFirstCaptureImmutable": true,
       "canonicalSourceRecordDigest": "4d1861d74c00b538662f2dcafb142504096aec39b124cabf870a6cf65c9a5ae1",
@@ -800,7 +826,7 @@
   "schemaVersion": "courtedge-p0-step12v68-fg-winner-prospective-capture.v1",
   "scientificStatus": "PROSPECTIVE_PREGAME_PROBABILITIES_CAPTURED_WITHOUT_OUTCOMES",
   "summary": {
-    "canonicalGames": 30,
+    "canonicalGames": 31,
     "distinctOfficialDates": 12,
     "duplicateCapturesReturnedExisting": 0,
     "firstOfficialDate": "2026-08-20",
