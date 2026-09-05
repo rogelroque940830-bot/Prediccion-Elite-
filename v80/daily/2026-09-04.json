@@ -1,0 +1,37 @@
+{
+  "candidateRowsBeforeDedupe": 3,
+  "captureDigest": "7204954744170d8a6ff861eede2f9c54d91c40c7f028134db251e16e5f33f07c",
+  "capturedEligibleGames": 1,
+  "generalTop1Decision": null,
+  "generalTop1DecisionExists": false,
+  "ledgerGamesAfterDedupe": 1,
+  "officialDate": "2026-09-04",
+  "parentPortfolio": "CONFLUENCE_LEDGER_TOP1_T0.550",
+  "policy": {
+    "betEliteAllowed": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "realFinancialExposure": 0,
+    "researchOnly": true,
+    "routingChanged": false,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "stakingChanged": false,
+    "v68Changed": false
+  },
+  "schemaVersion": "courtedge-p0-step12v80-general-strength-daily-top1.v1",
+  "scientificStatus": "V80_DAILY_PORTFOLIO_MATERIALIZED_WITHOUT_OUTCOMES",
+  "top1": {
+    "classifierScore": 0.6706059609684905,
+    "consensusScore": 0.6011684200845351,
+    "gamePk": 823338,
+    "market": "FULL_GAME_ML",
+    "officialDate": "2026-09-04",
+    "p16Selected": 0.6207081244716743,
+    "p68Selected": 0.6011684200845351,
+    "priority": 1,
+    "route": "PREMIUM_A_V68_AGREE_ROUTE_SWITCH",
+    "side": "HOME"
+  }
+}
