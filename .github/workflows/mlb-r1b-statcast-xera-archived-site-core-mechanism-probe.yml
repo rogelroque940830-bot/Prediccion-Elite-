@@ -1,0 +1,66 @@
+name: MLB R1B Statcast xERA Archived Site-Core Mechanism Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Replay archived primary Savant site-core assets and inspect xERA mechanism surfaces
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe
+          node scripts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe/evidence.json
+      - name: Enforce archived site-core scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe/evidence.json','utf8'));
+          if(e.status!=='ARCHIVED_PRIMARY_SAVANT_SITE_CORE_XERA_MECHANISM_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com'||e.sourceAuthority?.archiveTransportIsPublisher!==false||e.sourceAuthority?.versionedPrimaryPublisherAssetsOnly!==true) throw new Error('authority');
+          if(e.scientificPolicy?.primaryPublisherOnly!==true||e.scientificPolicy?.noThirdPartyAuthority!==true||e.scientificPolicy?.noInterpolation!==true||e.scientificPolicy?.noEmpiricalFit!==true||e.scientificPolicy?.approximationForbidden!==true||e.scientificPolicy?.archivedAssetRequiredForHistoricalMechanismAuthority!==true) throw new Error('policy');
+          if(e.summary?.anchorsRequested!==3) throw new Error('anchors');
+          if(e.summary?.exactSavantProductionConversionProven!==false||e.summary?.exactHistoricalTargetDateXeraCustodyProven!==false||e.summary?.familyPromotionAuthorized!==false) throw new Error('premature certification');
+          if(e.scientificConclusion?.exactSavantProductionConversionProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature conclusion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noInterpolation:true' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload site-core mechanism evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-archived-site-core-mechanism-probe
+          path: artifacts/mlb-r1b-statcast-xera-archived-site-core-mechanism-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
