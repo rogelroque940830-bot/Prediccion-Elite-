@@ -1,0 +1,83 @@
+name: MLB R1B Statcast xERA Savant Vintage Consistency Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-savant-vintage-consistency-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compare archived and current Savant expected-stat vintages
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe/evidence.json
+
+      - name: Enforce vintage-consistency scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='artifacts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe/evidence.json';
+          const e=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(e.status!=='SAVANT_XWOBA_VINTAGE_CONSISTENCY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.sourceAuthority?.archiveTransportIsPublisher!==false) throw new Error('archive authority');
+          if(e.sourceAuthority?.archivedPayloadIsReplayOfPrimaryPublisherSurface!==true) throw new Error('truth anchor');
+          if(e.scientificPolicy?.compareOnlyPublisherValuesAtSharedPlayerIdentity!==true) throw new Error('identity');
+          if(e.scientificPolicy?.paUsedAsStateControl!==true) throw new Error('state control');
+          if(e.scientificPolicy?.noXeraUsedToSelectHistoricalCutoff!==true) throw new Error('xera leakage');
+          if(e.scientificPolicy?.noInterpolationBetweenArchiveSnapshots!==true) throw new Error('interpolation');
+          if(e.scientificPolicy?.noEmpiricalFitAuthorized!==true) throw new Error('empirical fit');
+          if(e.scientificPolicy?.approximationForbidden!==true) throw new Error('approximation');
+          if(e.scientificConclusion?.causeOfAnyObservedRevisionOrVintageDifferenceProven!==false) throw new Error('unproven cause claimed');
+          if(e.summary?.exactSavantProductionConversionProven!==false) throw new Error('premature mechanism');
+          if(e.summary?.exactTargetDateXeraCustodyForFullUniverseProven!==false) throw new Error('premature custody');
+          if(e.summary?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noXeraUsedToSelectHistoricalCutoff: true' "$src"
+          grep -F 'noInterpolationBetweenArchiveSnapshots: true' "$src"
+          grep -F 'noEmpiricalFitAuthorized: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+
+      - name: Backend build regression
+        run: npm run build:backend
+
+      - name: Upload vintage-consistency evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-savant-vintage-consistency-probe
+          path: artifacts/mlb-r1b-statcast-xera-savant-vintage-consistency-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
