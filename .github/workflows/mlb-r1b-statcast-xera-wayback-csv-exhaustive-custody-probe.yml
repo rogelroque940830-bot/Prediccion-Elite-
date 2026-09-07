@@ -1,0 +1,76 @@
+name: MLB R1B Statcast xERA Wayback CSV Exhaustive Custody Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Enumerate and replay archived primary Statcast CSV custody without digest collapse
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe
+          node scripts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe/evidence.json
+      - name: Enforce exhaustive-custody scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe/evidence.json','utf8'));
+          if(e.status!=='WAYBACK_PRIMARY_STATCAST_CSV_EXHAUSTIVE_CUSTODY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.sourceAuthority?.archiveTransportIsPublisher!==false) throw new Error('archive authority');
+          if(e.scientificPolicy?.cdxCollapseDigest!==false) throw new Error('digest collapse must be disabled');
+          if(e.scientificPolicy?.primaryPublisherOnly!==true) throw new Error('publisher only');
+          if(e.scientificPolicy?.noThirdPartyAuthority!==true) throw new Error('third party');
+          if(e.scientificPolicy?.noInterpolation!==true) throw new Error('interpolation');
+          if(e.scientificPolicy?.noEmpiricalFit!==true) throw new Error('empirical fit');
+          if(e.scientificPolicy?.approximationForbidden!==true) throw new Error('approximation');
+          if(e.scientificPolicy?.xeraNotUsedForCaptureSelection!==true) throw new Error('xera leakage');
+          if(e.scientificConclusion?.completeRawEventCoverageToAnyAnchorProven!==false) throw new Error('premature coverage');
+          if(e.scientificConclusion?.completeHistoricalTargetDateXwobaCustodyProven!==false) throw new Error('premature xwoba custody');
+          if(e.scientificConclusion?.exactTargetDateXeraCustodyForFullUniverseProven!==false) throw new Error('premature xera custody');
+          if(e.scientificConclusion?.exactSavantProductionConversionProven!==false) throw new Error('premature conversion');
+          if(e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'cdxCollapseDigest:false' "$src"
+          grep -F 'noInterpolation:true' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload exhaustive Wayback CSV custody evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe
+          path: artifacts/mlb-r1b-statcast-xera-wayback-csv-exhaustive-custody-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

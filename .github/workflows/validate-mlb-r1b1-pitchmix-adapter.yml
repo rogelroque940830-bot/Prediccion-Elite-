@@ -1,0 +1,36 @@
+name: Validate MLB R1B1 Pitchmix Adapter
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - server/mlb-r1b-pitchmix-matchup-adapter.ts
+      - server/mlb-r1b-pitchmix-matchup-adapter.test.ts
+      - server/mlb-frozen-matchup-live-feature-builder.ts
+      - .github/workflows/validate-mlb-r1b1-pitchmix-adapter.yml
+  pull_request:
+    paths:
+      - server/mlb-r1b-pitchmix-matchup-adapter.ts
+      - server/mlb-r1b-pitchmix-matchup-adapter.test.ts
+      - server/mlb-frozen-matchup-live-feature-builder.ts
+      - .github/workflows/validate-mlb-r1b1-pitchmix-adapter.yml
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Falsify warmup boundary, target-date exclusion and canonical parity
+        run: npx tsx --test server/mlb-r1b-pitchmix-matchup-adapter.test.ts
+      - name: Backend type/build regression
+        run: npm run build:backend

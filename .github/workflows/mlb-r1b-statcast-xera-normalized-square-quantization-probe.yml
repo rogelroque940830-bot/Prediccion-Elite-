@@ -1,0 +1,81 @@
+name: MLB R1B Statcast xERA Normalized-Square Quantization Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-normalized-square-quantization-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-normalized-square-quantization-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-xera-normalized-square-quantization-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-normalized-square-quantization-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Probe normalized-square display quantization hypotheses
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-normalized-square-quantization-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-normalized-square-quantization-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-normalized-square-quantization-probe/evidence.json
+      - name: Enforce research-only fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-normalized-square-quantization-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-normalized-square-quantization-probe/evidence.json','utf8'));
+          if(e.status!=='XERA_NORMALIZED_SQUARE_QUANTIZATION_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.theoryUnderTest?.form!=='xERA = C_t * xwOBA^2'||e.theoryUnderTest?.noRegressionFitUsedForDecision!==true) throw new Error('theory');
+          if(e.quantizationHypotheses?.combinationsTested!==16) throw new Error('quantization coverage');
+          if(!Array.isArray(e.seasonEvidence)||e.seasonEvidence.length!==5) throw new Error('season coverage');
+          for(const s of e.seasonEvidence){
+            for(const key of ['productionPaGte50','productionSourceQualifiedMinQ']){
+              const d=s[key];
+              if(!(d?.rows>=100)||!Array.isArray(d.modes)||d.modes.length!==16) throw new Error(`domain coverage:${s.season}:${key}`);
+              if(!d.canonicalNearestMode||!d.mostPermissiveWideMode) throw new Error(`canonical modes:${s.season}:${key}`);
+              for(const m of d.modes){
+                if(typeof m.feasible!=='boolean'||!Number.isFinite(m.coefficientRange?.lower)||!Number.isFinite(m.coefficientRange?.upper)) throw new Error(`mode integrity:${s.season}:${key}:${m.spec?.id}`);
+              }
+            }
+          }
+          if(e.sourceAuthority?.exactSavantProductionParameterSeriesPublishedByTheseSources!==false) throw new Error('source authority');
+          if(e.interpretationPolicy?.conceptualPrimarySourceMechanismIsNotExactParameterAuthority!==true||e.interpretationPolicy?.approximationForbidden!==true) throw new Error('interpretation boundary');
+          if(e.scientificConclusion?.primaryAsOfXeraCustodyProven!==false||e.scientificConclusion?.exactSavantProductionConversionProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature authority');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-normalized-square-quantization-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'approximationForbidden: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload normalized-square quantization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-normalized-square-quantization-probe
+          path: artifacts/mlb-r1b-statcast-xera-normalized-square-quantization-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

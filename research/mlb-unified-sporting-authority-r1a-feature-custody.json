@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "courtedge-mlb-unified-sporting-authority-r1a-feature-custody.v1",
+  "status": "R1A_AUDIT_COMPLETE_NO_OUTCOMES_READ",
+  "parentContract": "research/mlb-unified-sporting-authority-r1.json",
+  "objective": "Audit which existing MLB sporting features can enter a future matchup-relative unified authority without temporal leakage, double counting, market contamination, or unsupported reconstruction.",
+  "auditFindings": {
+    "existingDailyOpportunity": {
+      "authority": "EXISTING_MLB_INTRINSIC_EDGE_RANK_PLUS_ROBUST_V16_PARETO",
+      "marketPricesRead": false,
+      "universalWeightedScore": false,
+      "limitation": "CONTEXT_RANK_COUNTS_ELITE_THESIS_STRUCTURE_COMPONENT_SUPPORT_AND_MAX_NATIVE_RUN_MAGNITUDE; IT IS NOT A COMPLETE TEAM_STRENGTH_X_OPPONENT_MATCHUP AUTHORITY"
+    },
+    "existingDailyBestPick": {
+      "authority": "FROZEN_ROUTE_TIER_THEN_EXISTING_PREPRICE_RANK",
+      "tierPriority": ["A_PLUS", "PREMIUM"],
+      "limitation": "ROUTE TIER CAN CROWN A DIFFERENT GAME THAN DAILY OPPORTUNITY BECAUSE THE AUTHORITIES ARE INDEPENDENT"
+    }
+  },
+  "featureCustody": [
+    {
+      "featureFamily": "V16_SIDE_PROBABILITY",
+      "role": "BASELINE_SPORTING_STRENGTH",
+      "custody": "USABLE_WITH_STAGE_CONTROL",
+      "requirements": ["GAME_IDENTITY_MATCH", "OFFICIAL_DATE_MATCH", "FINAL_OR_PROVISIONAL_STAGE_RECORDED", "PROVISIONAL_LINEUP_UNCERTAINTY_P95_0_0533_APPLIED"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "A_PLUS_AND_PREMIUM_FROZEN_ROUTE_EVIDENCE",
+      "role": "CERTIFIED_ROUTE_EVIDENCE_NOT_ABSOLUTE_PRIORITY",
+      "custody": "USABLE_AS_EXISTING_EVIDENCE_ONLY",
+      "requirements": ["DO_NOT_CHANGE_FROZEN_ROUTE_DEFINITIONS", "DO_NOT_TREAT_TIER_AS_AUTOMATIC_GLOBAL_WINNER", "PRESERVE_SOURCE_EVALUATION_ID_AND_PREPRICE_RANK"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "STATCAST_QUALITY",
+      "role": "STARTER_QUALITY_RELATIVE_RUN_SIGNAL",
+      "custody": "USABLE_WHEN_SOURCESTATUS_AND_PROVENANCE_ARE_CERTIFIED",
+      "nativeMetrics": ["homeSP.runsDelta", "awaySP.runsDelta"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "DISCIPLINE_SPEED",
+      "role": "OFFENSIVE_RUN_CONTEXT",
+      "custody": "USABLE_WHEN_SOURCESTATUS_AND_PROVENANCE_ARE_CERTIFIED",
+      "nativeMetrics": ["homeRunsDelta", "awayRunsDelta"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "SOS",
+      "role": "OPPONENT_QUALITY_RELATIVE_CONTEXT",
+      "custody": "USABLE_WHEN_SOURCESTATUS_AND_PROVENANCE_ARE_CERTIFIED",
+      "nativeMetrics": ["home.adjustedRpgDelta", "away.adjustedRpgDelta"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "ADVANCED_CONTEXT",
+      "role": "CROSS_HORIZON_TOTAL_CONTEXT",
+      "custody": "USABLE_WHEN_SOURCESTATUS_AND_PROVENANCE_ARE_CERTIFIED",
+      "nativeMetrics": ["totalAdjustment"],
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "BULLPEN",
+      "role": "LATE_GAME_OPPONENT_RELATIVE_RUN_SIGNAL",
+      "custody": "USABLE_WHEN_SOURCESTATUS_AND_PROVENANCE_ARE_CERTIFIED",
+      "nativeMetrics": ["homeBullpen.runsAdjustment", "awayBullpen.runsAdjustment"],
+      "horizonRestriction": "FULL_GAME_ONLY_NOT_EARLY_WINDOW",
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "FROZEN_HAND_SPLIT_SLG_MATCHUP",
+      "role": "OFFENSE_VS_OPPOSING_STARTER_HAND",
+      "custody": "HISTORICALLY_RECONSTRUCTABLE_PREGAME",
+      "formula": "HOME_TEAM_PRIOR_SEASON_SLG_VS_AWAY_STARTER_HAND_MINUS_AWAY_TEAM_PRIOR_SEASON_SLG_VS_HOME_STARTER_HAND",
+      "minimumPriorPa": 50,
+      "temporalRule": "ONLY_GAMES_WITH_OFFICIAL_DATE_STRICTLY_BEFORE_TARGET_DATE",
+      "sameDateOutcomeLeakageAllowed": false,
+      "priceIndependent": true
+    },
+    {
+      "featureFamily": "FROZEN_PITCHMIX_MATCHUP",
+      "role": "OFFENSE_VS_OPPOSING_STARTER_PITCH_FAMILY_MIX",
+      "custody": "HISTORICALLY_RECONSTRUCTABLE_PREGAME",
+      "lookbackDays": 365,
+      "starterMinimumAllPitches": 250,
+      "starterMinimumCategorizedShare": 0.9,
+      "teamMinimumSwingsPerFamily": 20,
+      "teamMinimumTerminalPaPerFamily": 20,
+      "minimumWeightedCoverageShare": 0.8,
+      "nativeMetrics": ["contactAdv", "whiffAdv", "tbpaAdv", "hrpaAdv"],
+      "temporalRule": "LOWER_BOUND_INCLUSIVE_AND_TARGET_DATE_EXCLUSIVE",
+      "sameDateOutcomeLeakageAllowed": false,
+      "priceIndependent": true
+    }
+  ],
+  "blockedOrNotYetProven": [
+    {
+      "featureFamily": "NEW_UNVERSIONED_MATCHUP_FEATURES",
+      "status": "BLOCKED",
+      "reason": "NO SOURCE_OR_TIMESTAMP_CUSTODY PROVEN IN R1A"
+    },
+    {
+      "featureFamily": "MARKET_ODDS_OR_IMPLIED_PROBABILITY",
+      "status": "BLOCKED_FROM_SPORTING_AUTHORITY",
+      "reason": "PRICE BELONGS STRICTLY DOWNSTREAM AFTER SPORTING SELECTION"
+    },
+    {
+      "featureFamily": "OUTCOME_DERIVED_FEATURE_OR_SAME_DATE_POSTGAME_DATA",
+      "status": "BLOCKED",
+      "reason": "TARGET LEAKAGE"
+    }
+  ],
+  "doubleCountingControls": {
+    "sameUnderlyingEvidenceMayCountAsIndependentVotes": false,
+    "fullGameAndEarlyWindowDuplicateThesisKindsCountOnceInSportingRank": true,
+    "frozenRouteEvidenceMustNotBeExpandedIntoItsInternalComponentsUnless_PROVEN_NON_DUPLICATIVE": true,
+    "matchupFeaturesRemainDescriptiveUntil_OOS_VALIDATED": true
+  },
+  "r1bMaterializationContract": {
+    "unit": "GAME_SIDE_MARKET_HORIZON",
+    "requiredIdentity": ["officialDate", "gamePk", "side", "market", "horizon"],
+    "requiredCustodyFields": ["sourceVersion", "sourceTimestampOrPriorWindow", "inputStage", "eligibility", "missingnessReason"],
+    "mustMaterialize": [
+      "V16_BASELINE",
+      "FROZEN_ROUTE_EVIDENCE",
+      "STATCAST_QUALITY",
+      "DISCIPLINE_SPEED",
+      "SOS",
+      "ADVANCED_CONTEXT",
+      "BULLPEN_FULL_GAME",
+      "HAND_SPLIT_SLG_MATCHUP",
+      "PITCHMIX_MATCHUP"
+    ],
+    "outcomesMayBeJoinedOnlyAfterFeatureRowsAreFrozen": true,
+    "marketPricesMayBeJoinedDuringSportingMaterialization": false
+  },
+  "policy": {
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "frozenRoutesChanged": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  },
+  "nextStep": "R1B_HISTORICAL_PREGAME_MATERIALIZATION"
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-baseline-season-manifest.v1",
+  "season": "2022",
+  "status": "MATERIALIZED_AND_DIGEST_PINNED",
+  "source": {
+    "lineupArtifact": {
+      "path": "artifacts/v16-full/step12v3/2022/cohort/pregame-lineup-history.json",
+      "sha256": "59c259c083e52976c33b430723cf439934564b259d43b0026027f0652ebab452"
+    },
+    "starterArtifact": {
+      "path": "artifacts/v16-full/v60/pregame-hands-2022.json",
+      "sha256": "2aa8a1da8db72f67e2bdf6437e90d9216b9e8f637eb51d67f85bf5976d061827"
+    },
+    "officialHistoricalSource": "MLB_STATS_API_FINAL_PRIOR_GAMES_ONLY"
+  },
+  "files": {
+    "priorHistory": {
+      "name": "prior-history-2022.jsonl",
+      "sha256": "f13de224cc258837a1ba80772678de26646e8171e9c4f0232b3403b6ec228609",
+      "rowCount": 2414
+    },
+    "c4Features": {
+      "name": "c4-features-2022.jsonl",
+      "sha256": "7b5d3f2c0817bf7817b9bad5996e21858b1852ba5a66a9f79b0be8f48fd9144e",
+      "rowCount": 2319
+    },
+    "v16Baseline": {
+      "name": "v16-baseline-2022.jsonl",
+      "sha256": "9c509a66cc30eea00070dcc42dc3851f932080b09b8b490ecb64c9a7c1af57bf",
+      "rowCount": 9276
+    },
+    "coverage": {
+      "name": "coverage-2022.json",
+      "sha256": "e651abc7e17bbe5fe83cfd4be512b6fb111787fd8ea9cb6856358b2fe98ea65a"
+    }
+  },
+  "locks": {
+    "c4BuilderVersion": "mlb-c4-live-canonical-v1",
+    "v16AdapterSchema": "courtedge-mlb-r1b-v16-final-baseline-adapter.v1",
+    "v16ModelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+  },
+  "coverageSummary": {
+    "sourceUniverseGameCount": 2430,
+    "frozenT5EligibleGameCount": 2397,
+    "sourceExcludedGameCount": 33,
+    "priorHistoryHardFailureCount": 0,
+    "c4EligibleGameCount": 2319,
+    "c4IneligibleGameCount": 78,
+    "rowCount": 9276,
+    "duplicateCount": 0
+  },
+  "policy": {
+    "researchOnly": true,
+    "outcomesUsedOnlyWhenStrictlyPriorToTarget": true,
+    "targetOutcomeUsedAsFeature": false,
+    "explicitFailClosedMissingnessPreserved": true,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "productionChanged": false
+  }
+}

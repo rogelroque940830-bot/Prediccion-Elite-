@@ -1,0 +1,64 @@
+name: MLB R1B Statcast xERA Wayback Target-Date Coverage Upper-Bound Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Measure immutable primary Savant target-date archive coverage upper bound
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe
+          node scripts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe/evidence.json
+      - name: Enforce upper-bound scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe/evidence.json','utf8'));
+          if(e.status!=='PRIMARY_SAVANT_EXPECTED_STATS_TARGET_DATE_ARCHIVE_COVERAGE_UPPER_BOUND_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.scientificPolicy?.primaryPublisherUrlsOnly!==true||e.scientificPolicy?.noInterpolation!==true||e.scientificPolicy?.noEmpiricalFit!==true||e.scientificPolicy?.approximationForbidden!==true||e.scientificPolicy?.upperBoundOnly!==true) throw new Error('policy');
+          if(e.summary?.exactStrictPriorGameDateStateProven!==false||e.summary?.qualifierAsOfSemanticsAcross2022To2026Proven!==false||e.summary?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'noInterpolation:true' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload target-date coverage evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe
+          path: artifacts/mlb-r1b-statcast-xera-wayback-target-date-coverage-upper-bound-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

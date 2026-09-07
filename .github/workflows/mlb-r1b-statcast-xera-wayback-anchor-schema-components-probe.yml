@@ -1,0 +1,67 @@
+name: MLB R1B Statcast xERA Wayback Anchor Schema Components Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Inventory same-vintage Savant xERA anchor schema and conversion clues
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe
+          node scripts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe/evidence.json
+      - name: Enforce anchor-schema scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe/evidence.json','utf8'));
+          if(e.status!=='WAYBACK_PRIMARY_XERA_ANCHOR_SCHEMA_COMPONENTS_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.sourceAuthority?.archiveTransportIsPublisher!==false) throw new Error('archive authority');
+          if(e.scientificPolicy?.primaryPublisherOnly!==true||e.scientificPolicy?.noThirdPartyAuthority!==true||e.scientificPolicy?.noInterpolation!==true||e.scientificPolicy?.noEmpiricalFit!==true||e.scientificPolicy?.approximationForbidden!==true) throw new Error('scientific policy');
+          if(e.summary?.anchorsParsed!==3) throw new Error('anchors');
+          if(e.summary?.exactSavantProductionConversionProven!==false||e.summary?.completeHistoricalTargetDateCustodyProven!==false||e.summary?.familyPromotionAuthorized!==false) throw new Error('premature certification');
+          if(e.scientificConclusion?.exactSavantProductionConversionProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature conclusion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noInterpolation:true' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload anchor schema evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe
+          path: artifacts/mlb-r1b-statcast-xera-wayback-anchor-schema-components-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

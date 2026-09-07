@@ -1,0 +1,75 @@
+name: MLB R1B Statcast Target-Date Source Probe
+
+on:
+  push:
+    branches: [research/mlb-unified-sporting-authority-r1]
+    paths:
+      - 'scripts/mlb-r1b-statcast-target-date-source-probe.ts'
+      - 'research/mlb-r1b-statcast-quality-production-semantics-contract.json'
+      - '.github/workflows/mlb-r1b-statcast-target-date-source-probe.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Validate frozen S1 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s research/mlb-r1b-statcast-quality-production-semantics-contract.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const contract=JSON.parse(fs.readFileSync('research/mlb-r1b-statcast-quality-production-semantics-contract.json','utf8'));
+          if(contract.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(contract.status!=='FROZEN_S1_PRODUCTION_SEMANTICS_PARTIAL_PARITY') throw new Error('status');
+          if(contract.classification!=='PARTIAL_PARITY') throw new Error('classification');
+          if(contract.s1Conclusion?.productionSemanticsFrozen!==true) throw new Error('s1 freeze');
+          if(contract.s1Conclusion?.familyPromotionAuthorized!==false) throw new Error('promotion boundary');
+          if(contract.policy?.productionChanged!==false) throw new Error('production boundary');
+          if(contract.policy?.r1b2Authorized!==false) throw new Error('r1b2 boundary');
+          NODE
+      - name: Probe target-date Savant source capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/mlb-r1b-statcast-target-date-source-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-target-date-source-probe/evidence.json
+      - name: Validate research-only evidence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-target-date-source-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-target-date-source-probe/evidence.json','utf8'));
+          if(e.status!=='SOURCE_CAPABILITY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.scientificBoundary?.productionChanged!==false) throw new Error('production changed');
+          if(e.scientificBoundary?.weightsChanged!==false) throw new Error('weights changed');
+          if(e.scientificBoundary?.targetOutcomesReadForModeling!==false) throw new Error('outcomes');
+          if(e.scientificBoundary?.marketPricesRead!==false) throw new Error('prices');
+          if(e.scientificBoundary?.statcastQualityParityCertifiedByThisProbe!==false) throw new Error('premature certification');
+          if(e.scientificBoundary?.r1b2Authorized!==false) throw new Error('r1b2');
+          NODE
+      - name: Upload source capability evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-target-date-source-probe
+          path: artifacts/mlb-r1b-statcast-target-date-source-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

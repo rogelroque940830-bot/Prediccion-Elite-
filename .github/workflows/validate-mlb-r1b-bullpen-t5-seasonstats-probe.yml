@@ -1,0 +1,100 @@
+name: Validate MLB R1B Bullpen T5 SeasonStats Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-t5-seasonstats-probe.ts'
+      - '.github/workflows/validate-mlb-r1b-bullpen-t5-seasonstats-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        season: [2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Download canonical Step 12V3 T-5 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Verify frozen source input exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
+      - name: Run T5 season-stats custody probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mlb-r1b-bullpen-t5-seasonstats
+          npx tsx scripts/mlb-r1b-bullpen-t5-seasonstats-probe.ts \
+            --season '${{ matrix.season }}' \
+            --lineup-history "artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json" \
+            --out "artifacts/mlb-r1b-bullpen-t5-seasonstats/bullpen-t5-seasonstats-${{ matrix.season }}.json"
+      - name: Validate research-only scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/mlb-r1b-bullpen-t5-seasonstats/bullpen-t5-seasonstats-${{ matrix.season }}.json"
+          node --input-type=module - "$REPORT" <<'NODE'
+          import fs from 'node:fs';
+          const report=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(report.schemaVersion!=='courtedge-mlb-r1b-bullpen-t5-seasonstats-probe.v1') throw new Error('schema');
+          if(report.season!==process.env.SEASON) throw new Error(`season=${report.season}`);
+          if(report.findings.sampleOnlyNotFullUniverseCertification!==true) throw new Error('sample boundary');
+          if(report.findings.noTargetOutcomeRead!==true) throw new Error('outcome boundary');
+          if(report.findings.marketPricesRead!==false) throw new Error('price boundary');
+          const p=report.policy;
+          for(const key of ['targetOutcomeFieldsAllowed','marketPricesAllowed','modelRefitAllowed','newWeightsAllowed','productionChangeAllowed','r1b2AuthorizationChanged']) {
+            if(p[key]!==false) throw new Error(`${key}=${p[key]}`);
+          }
+          if(p.researchOnly!==true || p.favorableResultRequiredForWorkflowSuccess!==false) throw new Error('research policy');
+          console.log(JSON.stringify({
+            season:report.season,
+            classification:report.classification,
+            gamePk:report.sample.gamePk,
+            homeCoverage:report.home.t5SeasonStatsCoverage,
+            awayCoverage:report.away.t5SeasonStatsCoverage,
+            homeRoleExactShare:report.home.roleFieldsExactShare,
+            awayRoleExactShare:report.away.roleFieldsExactShare,
+            roleExactAll:report.findings.t5RoleCriticalFieldsMatchPriorDateRangeOnSample,
+          },null,2));
+          NODE
+        env:
+          SEASON: ${{ matrix.season }}
+      - name: Static no-production boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='scripts/mlb-r1b-bullpen-t5-seasonstats-probe.ts'
+          grep -F 'sampleOnlyNotFullUniverseCertification: true' "$src"
+          grep -F 'noTargetOutcomeRead: true' "$src"
+          grep -F 'productionChangeAllowed: false' "$src"
+          grep -F 'r1b2AuthorizationChanged: false' "$src"
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacementAllowed[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+      - name: Upload season evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-t5-seasonstats-${{ matrix.season }}
+          path: artifacts/mlb-r1b-bullpen-t5-seasonstats/bullpen-t5-seasonstats-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30

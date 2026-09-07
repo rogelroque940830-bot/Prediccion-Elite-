@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-xera-immutable-mirror-stability-probe-evidence.v1",
+  "status": "PINNED_IMMUTABLE_THIRD_PARTY_MIRROR_STABILITY_DIAGNOSTIC_NOT_SOURCE_AUTHORITY",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "workflow": {
+    "name": "MLB R1B Statcast xERA Immutable Mirror Stability Probe",
+    "runId": 33918244347,
+    "runNumber": 2,
+    "headSha": "32a18102d97f8d19f1d10043af08acd9b9d210d7",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 9954041993,
+    "name": "mlb-r1b-statcast-xera-immutable-mirror-stability-probe",
+    "digest": "sha256:30c8bc141e845161f55952d0fa36cbf4dc093c35db0f844763665d28e8be480f",
+    "expiresAt": "2026-10-04T20:53:13Z"
+  },
+  "generatedAt": "2026-09-04T20:53:13.530Z",
+  "subjectSeason": 2026,
+  "mirror": {
+    "repository": "IDBach16/Fantasy_MLB",
+    "path": "data/cache/savant_pit_xstats_2026.csv",
+    "immutableGitCommits": true,
+    "primarySourceAuthority": false,
+    "usePolicy": "INDEPENDENT_TIMESTAMPED_DIAGNOSTIC_ONLY; mirror data cannot replace Baseball Savant as canonical source authority."
+  },
+  "snapshots": [
+    {"capturedAt":"2026-07-16T13:33:36Z","commit":"497dd93f8b2605ca615e34a626400064b7e9eccf","sha256":"8cd72bb43a25163b25ba2d69e11e0311f37191cbd2adcad04ed28d85b485ea90","rows":744,"uniqueDisplayedXwobaValues":243},
+    {"capturedAt":"2026-07-23T14:04:23Z","commit":"34b13ec60660a552ef02aeca8836b6ad8d0a5749","sha256":"05cc2f8b3d97562682a6ebec4e6c31bb9470acb16067d9067fef0ca1eb8083ff","rows":757,"uniqueDisplayedXwobaValues":250},
+    {"capturedAt":"2026-08-02T15:04:17Z","commit":"f4adfe6ec584f4cfe52839e49a49b995d2f20c35","sha256":"c13123d618775e6fd6571ed1470e2598d15dc485072c9028352d2b1339b421d2","rows":774,"uniqueDisplayedXwobaValues":240},
+    {"capturedAt":"2026-08-03T10:26:58Z","commit":"7d3e562806564a69a1f41d074c34ed77c4ab33f6","sha256":"334bbac31c0da7a8e13e3d8d83392d24c74ff14956ac9101c32b845eb46e5c37","rows":776,"uniqueDisplayedXwobaValues":245},
+    {"capturedAt":"2026-08-21T15:02:44Z","commit":"9693a72ff930e637bedf70652ceb6b1a7842b3af","sha256":"4b912fce6db767708b72cd687300f98c50015d7deaf4d58eb23696ae8d8ba012","rows":814,"uniqueDisplayedXwobaValues":251},
+    {"capturedAt":"2026-08-27T15:01:48Z","commit":"c29671f00458e8abbcad59f3d8c3006925bf8465","sha256":"1eec112a3666377d4bf4a2f1dff62d8f921d9baeede42f8098162026dede8489","rows":825,"uniqueDisplayedXwobaValues":256}
+  ],
+  "adjacentComparisons": [
+    {"left":"2026-07-16T13:33:36Z","right":"2026-07-23T14:04:23Z","commonDisplayedXwobaValues":220,"unchanged":2,"changed":218,"maxAbsoluteChange":0.9300000000000068},
+    {"left":"2026-07-23T14:04:23Z","right":"2026-08-02T15:04:17Z","commonDisplayedXwobaValues":219,"unchanged":72,"changed":147,"maxAbsoluteChange":0.15000000000000568},
+    {"left":"2026-08-02T15:04:17Z","right":"2026-08-03T10:26:58Z","commonDisplayedXwobaValues":234,"unchanged":119,"changed":115,"maxAbsoluteChange":0.0799999999999983},
+    {"left":"2026-08-03T10:26:58Z","right":"2026-08-21T15:02:44Z","commonDisplayedXwobaValues":226,"unchanged":8,"changed":218,"maxAbsoluteChange":0.39000000000000057},
+    {"left":"2026-08-21T15:02:44Z","right":"2026-08-27T15:01:48Z","commonDisplayedXwobaValues":231,"unchanged":62,"changed":169,"maxAbsoluteChange":0.1599999999999966}
+  ],
+  "firstVsLast": {"commonDisplayedXwobaValues":203,"unchanged":2,"changed":201,"maxAbsoluteChange":0.9300000000000068},
+  "representativeExamples": [
+    {"xwoba":"0.231","before":2.18,"after":2.2,"delta":0.020000000000000018},
+    {"xwoba":"0.255","before":2.65,"after":2.68,"delta":0.03000000000000025},
+    {"xwoba":"0.256","before":2.67,"after":2.7,"delta":0.03000000000000025},
+    {"xwoba":"0.257","before":2.69,"after":2.72,"delta":0.03000000000000025},
+    {"xwoba":"0.263","before":2.82,"after":2.85,"delta":0.03000000000000025}
+  ],
+  "scientificConclusion": {
+    "observedSameSeasonDisplayedXwobaToXeraMappingChangedAcrossImmutableSnapshots": true,
+    "firstVsLastMappingChanged": true,
+    "finalSeasonMappingRetroactiveUseSupportedByThisProbe": false,
+    "primaryAuthoritativeAsOfCustodyProven": false,
+    "familyPromotionAuthorized": false,
+    "nextGate": "OBTAIN_PRIMARY_AUTHORITATIVE_ASOF_XERA_CUSTODY_OR_EXACT_TIME_VARYING_CONVERSION_PARAMETERS; DO_NOT_APPLY_FINAL_SEASON_MAPPING_RETROACTIVELY"
+  },
+  "interpretationPolicy": {
+    "thirdPartyMirrorCannotCertifySourceAuthority": true,
+    "immutableCommitTimestampIsEvidenceOfMirrorStateNotMLBPublicationTime": true,
+    "mappingChangeMayBeUsedToReject_STABILITY_ASSUMPTION_butNotToAuthorizeHistoricalFeatureValues": true,
+    "finalSeasonLookupRetroactiveUseForbidden": true,
+    "approximationForbidden": true
+  },
+  "policy": {"researchOnly":true,"productionChanged":false,"weightsChanged":false,"routingChanged":false,"stakingChanged":false,"betEliteChanged":false,"marketPricesRead":false,"targetOutcomeReadForModeling":false,"automaticBetPlacementAllowed":false,"realFinancialExposure":0,"r1b2Authorized":false},
+  "interpretation": {
+    "sameSeasonMappingStabilityAssumptionRejectedByDiagnostic": true,
+    "reason": "Six immutable 2026 mirror states show repeated mapping drift; first-to-last 201 of 203 common displayed xwOBA values changed.",
+    "primaryAuthority": false,
+    "requiredNextGate": "PRIMARY_AUTHORITATIVE_ASOF_XERA_CUSTODY_OR_EXACT_TIME_VARYING_SAVANT_CONVERSION_PARAMETERS"
+  }
+}

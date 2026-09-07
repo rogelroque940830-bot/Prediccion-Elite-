@@ -1,0 +1,81 @@
+name: MLB R1B Statcast xERA Expected Statistics Export Custody Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Discover archived official Expected Statistics export custody
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe/evidence.json
+
+      - name: Enforce expected-stat export custody boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='artifacts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe/evidence.json';
+          const e=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(e.status!=='SAVANT_EXPECTED_STATISTICS_EXPORT_CUSTODY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.sourceAuthority?.archiveTransportIsPublisher!==false) throw new Error('archive authority');
+          if(e.scientificPolicy?.primaryPublisherOnly!==true) throw new Error('primary only');
+          if(e.scientificPolicy?.noThirdPartyDataAuthority!==true) throw new Error('third party');
+          if(e.scientificPolicy?.noInterpolationBetweenSnapshots!==true) throw new Error('interpolation');
+          if(e.scientificPolicy?.noEmpiricalFitAuthorized!==true) throw new Error('empirical fit');
+          if(e.scientificPolicy?.approximationForbidden!==true) throw new Error('approximation');
+          if(e.scientificPolicy?.xeraNotUsedToRankArchiveCandidates!==true) throw new Error('xera leakage');
+          if(e.scientificConclusion?.completeDailyPregameHistoricalCustodyProven!==false) throw new Error('premature daily custody');
+          if(e.scientificConclusion?.exactTargetDateXeraCustodyForFullUniverseProven!==false) throw new Error('premature target custody');
+          if(e.scientificConclusion?.exactSavantProductionConversionProven!==false) throw new Error('premature conversion');
+          if(e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noInterpolationBetweenSnapshots: true' "$src"
+          grep -F 'noEmpiricalFitAuthorized: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+
+      - name: Backend build regression
+        run: npm run build:backend
+
+      - name: Upload expected-stat export custody evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-expected-statistics-export-custody-probe
+          path: artifacts/mlb-r1b-statcast-xera-expected-statistics-export-custody-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

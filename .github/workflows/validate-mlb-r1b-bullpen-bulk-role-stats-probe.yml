@@ -1,0 +1,80 @@
+name: Validate MLB R1B Bullpen Bulk RoleStats Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts'
+      - '.github/workflows/validate-mlb-r1b-bullpen-bulk-role-stats-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        season: [2022, 2023, 2024, 2025, 2026_YTD]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - name: Download canonical Step12V3 custody
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v3-expanded-regimes
+          path: artifacts/p0-step12v3
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31659518059
+      - name: Probe bulk role-stat acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="artifacts/p0-step12v3/${{ matrix.season }}/cohort/pregame-lineup-history.json"
+          test -s "$src"
+          mkdir -p artifacts/mlb-r1b-bullpen-bulk
+          npx tsx scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts \
+            --season '${{ matrix.season }}' \
+            --lineup-history "$src" \
+            --out "artifacts/mlb-r1b-bullpen-bulk/bulk-role-stats-${{ matrix.season }}.json"
+      - name: Validate research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="artifacts/mlb-r1b-bullpen-bulk/bulk-role-stats-${{ matrix.season }}.json"
+          node --input-type=module - "$REPORT" <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(r.schemaVersion!=='courtedge-mlb-r1b-bullpen-bulk-role-stats-probe.v1') throw new Error('schema');
+          if(r.season!==process.env.SEASON) throw new Error('season');
+          if(r.findings.perPitcherByDateRangeReference!==true||r.findings.fullRoleFieldParityRequired!==true) throw new Error('reference boundary');
+          if(r.findings.sampleOnlyNotFullUniverseCertification!==true) throw new Error('sample boundary');
+          if(r.findings.noTargetOutcomeRead!==true||r.findings.marketPricesRead!==false) throw new Error('data boundary');
+          if(r.policy.researchOnly!==true||r.policy.favorableResultRequiredForWorkflowSuccess!==false) throw new Error('research policy');
+          for(const k of ['targetOutcomeFieldsAllowed','marketPricesAllowed','modelRefitAllowed','newWeightsAllowed','productionChangeAllowed','r1b2AuthorizationChanged']) if(r.policy[k]!==false) throw new Error(`${k}=${r.policy[k]}`);
+          console.log(JSON.stringify({season:r.season,classification:r.classification,acceptedRoutes:r.acceptedRoutes,home:r.home.candidates,away:r.away.candidates},null,2));
+          NODE
+        env:
+          SEASON: ${{ matrix.season }}
+      - name: Static safety boundary
+        run: |
+          grep -F 'perPitcherByDateRangeReference:true' scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts
+          grep -F 'noTargetOutcomeRead:true' scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts
+          grep -F 'productionChangeAllowed:false' scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|automaticBetPlacementAllowed[^\n]*true|realFinancialExposure[^\n]*[1-9]' scripts/mlb-r1b-bullpen-bulk-role-stats-probe.ts
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-bullpen-bulk-role-stats-${{ matrix.season }}
+          path: artifacts/mlb-r1b-bullpen-bulk/bulk-role-stats-${{ matrix.season }}.json
+          if-no-files-found: error
+          retention-days: 30

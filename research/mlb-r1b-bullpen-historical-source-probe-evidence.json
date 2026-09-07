@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-bullpen-historical-source-probe-evidence.v1",
+  "status": "FIVE_SEASON_SAMPLE_RUNS_ADJUSTMENT_PARITY_PROVEN_FULL_UNIVERSE_NOT_YET_CERTIFIED",
+  "family": "BULLPEN_FULL_GAME",
+  "classificationImpact": "REMAINS_PARTIAL_PARITY",
+  "objective": "Test whether current production getBullpenStatus/runsAdjustment can be replayed historically without target outcomes or prices using target-date roster custody, T-5 pitcher membership, strictly prior-date season statistics, and strictly prior-date recent usage.",
+  "productionSemantics": {
+    "implementation": "server/mlb-bullpen.ts:getBullpenStatus",
+    "familyValue": "runsAdjustment",
+    "allowedValues": [0, 0.15, 0.3, 0.5, 0.7],
+    "fullGameApplication": "opponent bullpen runsAdjustment is added 1:1 to the benefiting team's RPG delta",
+    "earlyHorizons": "NOT_APPLICABLE",
+    "secondaryBullpenEraAdjustment": 0
+  },
+  "historicalReplay": {
+    "probeScript": "scripts/mlb-r1b-bullpen-historical-source-probe.ts",
+    "workflow": ".github/workflows/validate-mlb-r1b-bullpen-historical-source-probe.yml",
+    "workflowRunId": 33527619948,
+    "workflowHeadSha": "0298d41c7619fd7c79195700c9ef3f4e2f4b806c",
+    "allFiveSeasonJobsPassed": true,
+    "frozenT5Custody": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26",
+      "source": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    "chronology": {
+      "runtimeNow": "exact requested T-5 instant",
+      "currentSeasonRoleStats": "MLB byDateRange from season start through D-1",
+      "previousSeasonFallback": "full prior season only",
+      "careerFallback": "MLB byDateRange through D-1",
+      "recentUsageSchedule": "strictly through D-1",
+      "targetFinalFeedRead": false,
+      "sameDateFinalGameRead": false,
+      "targetOutcomeRead": false,
+      "marketPricesRead": false
+    }
+  },
+  "samples": [
+    {
+      "season": "2022",
+      "gamePk": 661327,
+      "officialDate": "2022-06-15",
+      "rawDateRosterVsT5PitcherSetParityBothSides": true,
+      "roleModelPitcherCountsDateVsT5": {"home": [6, 6], "away": [8, 8]},
+      "runsAdjustmentDateVsT5": {"home": [0, 0], "away": [0, 0]},
+      "runsAdjustmentParityBothSides": true,
+      "artifactId": 9808455653,
+      "artifactDigest": "sha256:f2a6e9adf0a4bff82255252f724af412f00b12bc46f4510043cffbc32bdadc6e"
+    },
+    {
+      "season": "2023",
+      "gamePk": 717746,
+      "officialDate": "2023-06-15",
+      "rawDateRosterVsT5PitcherSetParityBothSides": true,
+      "roleModelPitcherCountsDateVsT5": {"home": [9, 9], "away": [5, 5]},
+      "runsAdjustmentDateVsT5": {"home": [0, 0], "away": [0, 0]},
+      "runsAdjustmentParityBothSides": true,
+      "artifactId": 9808475979,
+      "artifactDigest": "sha256:30cf1ef0261d33c98372b6ff7b627b36f1ad7dcffa601ecf2fc85270759c63e1"
+    },
+    {
+      "season": "2024",
+      "gamePk": 744846,
+      "officialDate": "2024-06-15",
+      "rawDateRosterVsT5PitcherSetParityBothSides": true,
+      "roleModelPitcherCountsDateVsT5": {"home": [8, 8], "away": [7, 7]},
+      "runsAdjustmentDateVsT5": {"home": [0, 0], "away": [0, 0]},
+      "runsAdjustmentParityBothSides": true,
+      "artifactId": 9808495934,
+      "artifactDigest": "sha256:7498ac610374333a9d53b31d04b18bd640cd7f563f306a938c706fbbd09ffc11"
+    },
+    {
+      "season": "2025",
+      "gamePk": 777491,
+      "officialDate": "2025-06-15",
+      "rawDateRosterVsT5PitcherSetParityBothSides": false,
+      "rawDifference": {"awayT5OnlyPitcherIds": [601713], "homeT5OnlyPitcherIds": []},
+      "roleModelPitcherCountsDateVsT5": {"home": [5, 5], "away": [8, 8]},
+      "runsAdjustmentDateVsT5": {"home": [0, 0], "away": [0, 0]},
+      "runsAdjustmentParityBothSides": true,
+      "broadFingerprintMismatchCauseObserved": "middle-reliever ordering only; the T-5-only pitcher did not increase the role-model pitcher count",
+      "artifactId": 9808469148,
+      "artifactDigest": "sha256:5b1a995c5743662455c9ea450cb8f8a7dc28b9473330f4a245a1eae367fbe648"
+    },
+    {
+      "season": "2026_YTD",
+      "gamePk": 822724,
+      "officialDate": "2026-06-15",
+      "rawDateRosterVsT5PitcherSetParityBothSides": false,
+      "rawDifference": {"awayT5OnlyPitcherIds": [687765], "homeT5OnlyPitcherIds": []},
+      "roleModelPitcherCountsDateVsT5": {"home": [6, 6], "away": [8, 8]},
+      "runsAdjustmentDateVsT5": {"home": [0, 0], "away": [0, 0]},
+      "runsAdjustmentParityBothSides": true,
+      "broadFingerprintMismatchCauseObserved": "roster ordering can change tie-resolution for equal-save relievers and depth ordering even when the numeric family value remains unchanged",
+      "artifactId": 9808467020,
+      "artifactDigest": "sha256:9f54b21357efc2f6718ebe0109c8ac2e4f74a1943f8776dc596b936d62ce52e4"
+    }
+  ],
+  "findings": {
+    "productionGetBullpenStatusReused": true,
+    "runsAdjustmentParityAcrossAllFiveSamples": true,
+    "rawRosterSetParityAcrossAllFiveSamples": false,
+    "historicalDateRosterAloneIsExactTargetTimeAuthority": false,
+    "t5PitcherMembershipAddsNecessaryIntradayCustody": true,
+    "rosterOrderingCanAffectInternalCloserSetupSelectionOnTies": true,
+    "fullUniverseMaterializationCompleted": false,
+    "fullUniverseRunsAdjustmentParityCertified": false,
+    "bullpenFullGameParityCertified": false
+  },
+  "requiredNextStep": {
+    "action": "MATERIALIZE_AND_AUDIT_FULL_2022_2026_YTD_TARGET_UNIVERSE",
+    "rosterPolicy": "Use official target-date roster order reconciled against frozen T-5 pitcher membership; fail closed whenever an intraday membership difference can enter the reliever role model or otherwise makes exact ordering/role semantics ambiguous.",
+    "roleStatsPolicy": "Use only season-to-D-1 stats with prior-season/career fallbacks that are chronologically safe.",
+    "usagePolicy": "Use only D-1 through D-3 final-game workload with no same-date target result.",
+    "certificationGate": "Every eligible FULL_GAME row must have deterministic exact runsAdjustment provenance; ambiguous targets must be explicit missingness, never zero. Early horizons are NOT_APPLICABLE."
+  },
+  "r1b1Gate": {
+    "beforeThisBlock": {"parityCertified": 3, "partialParity": 2, "blocked": 4},
+    "afterThisBlock": {"parityCertified": 3, "partialParity": 2, "blocked": 4},
+    "bullpenFullGame": "PARTIAL_PARITY",
+    "r1bHistoricalRowsetAuthorized": false,
+    "r1b2Authorized": false
+  },
+  "parentConsistencyRepair": {
+    "commit": "8d3d36e7bc5cd44ad2cf6d4d48c1e814e20e2413",
+    "reason": "Synchronize the parent R1B materialization certification with the already-proven V16_BASELINE promotion from 2/3/4 to 3/2/4; no new family promotion was performed here.",
+    "validationWorkflowRunId": 33527620100,
+    "validationStatus": "SUCCESS",
+    "validatedCounts": {"PARITY_CERTIFIED": 3, "PARTIAL_PARITY": 2, "BLOCKED": 4},
+    "rowsetAuthorized": false
+  },
+  "policy": {
+    "researchOnly": true,
+    "outcomesRead": false,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "r1b2Authorized": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

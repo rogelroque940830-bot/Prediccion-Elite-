@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-quality-production-semantics.v1",
+  "status": "FROZEN_S1_PRODUCTION_SEMANTICS_PARTIAL_PARITY",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "sourceHeadSha": "cb65a34dc13a9a2f97eb71a99f3cac543e1c7b17",
+  "objective": "Freeze the exact current production semantics that any historical R1B1 STATCAST_QUALITY reconstruction must reproduce before this family can be promoted to PARITY_CERTIFIED. This contract does not authorize a semantic substitute, model change, source approximation, production change, or R1B2.",
+  "productionAuthority": {
+    "qualityModule": {
+      "path": "server/mlb-statcast-quality.ts",
+      "blobSha": "2d233200dd142d6285b34dba70fa500f83c6de23"
+    },
+    "certifiedProvider": {
+      "path": "server/mlb-unified-v16-live-providers.ts",
+      "blobSha": "c48ca524a7cd2449b40aa8f94de1272da372a6b8"
+    },
+    "shortlistConsumer": {
+      "path": "server/mlb-shortlist.ts",
+      "blobSha": "d1b382dac50445bacf76cc1f87759d0c1bde57af"
+    },
+    "provenanceTests": {
+      "path": "server/mlb-statcast-quality-provenance.test.ts",
+      "blobSha": "26c57a430f3a8f68f09499ecc44e3298d4863906"
+    }
+  },
+  "certifiedAcquisition": {
+    "evidenceSchema": "courtedge-mlb-statcast-quality-evidence.v1",
+    "cacheTtlSeconds": 21600,
+    "failureDisposition": "THROW_FAIL_CLOSED",
+    "expectedPitchers": {
+      "authority": "BASEBALL_SAVANT_EXPECTED_STATISTICS",
+      "urlTemplate": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=pitcher&year=${yr}&min=q&csv=true",
+      "yearBinding": "SYSTEM_NEW_DATE_CURRENT_YEAR",
+      "qualificationParameter": "min=q",
+      "fields": {
+        "player_id": "playerId",
+        "last_name, first_name": "name",
+        "pa": "pa",
+        "era": "era",
+        "xera": "xera",
+        "era_minus_xera_diff": "eraMinusXeraDiff",
+        "woba": "wOBA",
+        "est_woba": "xwOBA",
+        "est_woba_minus_woba_diff": "xwobaMinusWobaDiff"
+      }
+    },
+    "pitcherQuality": {
+      "authority": "BASEBALL_SAVANT_STATCAST",
+      "urlTemplate": "https://baseballsavant.mlb.com/leaderboard/statcast?type=pitcher&year=${yr}&min=q&csv=true",
+      "yearBinding": "SYSTEM_NEW_DATE_CURRENT_YEAR",
+      "qualificationParameter": "min=q",
+      "fields": {
+        "player_id": "playerId",
+        "ev95percent": "hardHitPct",
+        "brl_percent": "barrelPct"
+      }
+    },
+    "expectedBatters": {
+      "authority": "BASEBALL_SAVANT_EXPECTED_STATISTICS",
+      "urlTemplate": "https://baseballsavant.mlb.com/leaderboard/expected_statistics?type=batter&year=${yr}&min=q&csv=true",
+      "yearBinding": "SYSTEM_NEW_DATE_CURRENT_YEAR",
+      "qualificationParameter": "min=q",
+      "fields": {
+        "player_id": "playerId",
+        "last_name, first_name": "name",
+        "pa": "pa",
+        "woba": "wOBA",
+        "est_woba": "xwOBA"
+      }
+    },
+    "wholeSourceEmptyBehavior": {
+      "expectedPitchers": "FAIL_CLOSED_STATCAST_QUALITY_EXPECTED_PITCHERS_EMPTY",
+      "pitcherQuality": "FAIL_CLOSED_STATCAST_QUALITY_PITCHER_QUALITY_EMPTY",
+      "expectedBatters": "FAIL_CLOSED_STATCAST_QUALITY_EXPECTED_BATTERS_EMPTY"
+    },
+    "perPitcherQualityRowMissingFallback": {
+      "hardHitPct": 0,
+      "barrelPct": 0,
+      "note": "This fallback is part of the currently frozen production merge semantics and must be reproduced exactly if historical parity is claimed; it must not be silently redesigned during R1B1."
+    }
+  },
+  "evaluatePitcherSemantics": {
+    "missingPitcherDisposition": "NULL_SIGNAL",
+    "minimumPa": 50,
+    "fullConfidenceMinimumPa": 120,
+    "partialConfidenceRange": "50_TO_119_PA_INCLUSIVE",
+    "eraGap": "eraMinusXeraDiff",
+    "xwobaGap": "xwobaMinusWobaDiff",
+    "hardHitLeagueBaselinePct": 38,
+    "rawFormula": "(-eraMinusXeraDiff * 0.30) + (xwobaMinusWobaDiff * 5.0) + (((hardHitPct - 38) / 100) * 0.8)",
+    "cap": {
+      "minimum": -0.45,
+      "maximum": 0.45,
+      "appliedBeforeRounding": true
+    },
+    "rounding": "ROUND_TO_0_01_AFTER_CAP",
+    "displaySignalThresholds": {
+      "regressionPendingAtOrAbove": 0.2,
+      "underperformingAtOrBelow": -0.2,
+      "otherwise": "ALIGNED_TEXT"
+    },
+    "returnedFields": [
+      "pitcherId",
+      "pitcherName",
+      "era",
+      "xera",
+      "xwoba",
+      "hardHitPct",
+      "barrelPct",
+      "runsDelta",
+      "confidence",
+      "signal"
+    ]
+  },
+  "evaluateBatterSemantics": {
+    "missingBatterDisposition": "NULL_CORRECTION",
+    "minimumPa": 50,
+    "luckDelta": "ROUND_TO_0_001(wOBA - xwOBA)",
+    "overperformingAtOrAbove": 0.03,
+    "underperformingAtOrBelow": -0.03,
+    "otherwise": "REAL",
+    "correctedWoba": "xwOBA",
+    "currentV16ShortlistConsumption": "NOT_CONSUMED_DIRECTLY",
+    "certifiedSnapshotRequirement": "EXPECTED_BATTER_SOURCE_MUST_STILL_BE_NONEMPTY_FOR_SNAPSHOT_CERTIFICATION"
+  },
+  "certifiedProviderSemantics": {
+    "provider": "createMlbUnifiedV16CertifiedShortlistProvider",
+    "requiresOfficialHomeAndAwayProbablePitcherIds": true,
+    "missingPitcherIdentityDisposition": "SHORTLIST_EVIDENCE_UNAVAILABLE",
+    "snapshotCall": "getStatcastQualityCertifiedSnapshot({ now: () => context.now })",
+    "snapshotFailureDisposition": "SHORTLIST_EVIDENCE_UNAVAILABLE_FOR_ALL_ANALYSIS_ELIGIBLE_GAMES",
+    "requiresSourceStatusCertified": true,
+    "requiresProvenanceStatusCertified": true,
+    "homeSP": "evaluatePitcher(snapshot.pitcherMap[homePitcherId])",
+    "awaySP": "evaluatePitcher(snapshot.pitcherMap[awayPitcherId])",
+    "fallbackToV62OrV66Allowed": false
+  },
+  "shortlistSemantics": {
+    "component": "STATCAST_QUALITY",
+    "certifiedPayloadRequired": true,
+    "nativeSignals": [
+      "homeSP.runsDelta",
+      "awaySP.runsDelta"
+    ],
+    "zeroSignalIgnored": true,
+    "signalSignInverted": false,
+    "marketAgnostic": true,
+    "predictsWinner": false,
+    "recommendsBet": false,
+    "requiresMarketOdds": false,
+    "weightsApplied": false,
+    "qualificationRule": "AT_LEAST_ONE_NONZERO_NATIVE_RUN_SIGNAL_FROM_CERTIFIED_COMPONENT",
+    "rankingRole": "INDEPENDENT_COMPONENT_COUNT_THEN_MAX_NATIVE_RUN_MAGNITUDE_THEN_CERTIFIED_COVERAGE"
+  },
+  "existingHistoricalCustodyAssessment": {
+    "v62": {
+      "path": "research/p0-step12v62-pitch-quality-winner-contract.json",
+      "semanticPayload": "365_DAY_STRICTLY_PRIOR_DATE_PITCH_LEVEL_VELOCITY_SPIN_WHIFF_STRIKE_HARD_HIT_SUPPRESSION_ENGINEERING",
+      "sameAsCurrentSavantLeaderboardSemantics": false
+    },
+    "v66": {
+      "path": "research/p0-step12v66-game-horizon-exposure-suite-contract.json",
+      "semanticPayload": "REUSES_FROZEN_V62_FIVE_FEATURE_STARTER_PHYSICAL_QUALITY_SOURCE",
+      "sameAsCurrentSavantLeaderboardSemantics": false
+    },
+    "substitutionPolicy": "V62_V66_MAY_NOT_BE_SUBSTITUTED_FOR_CURRENT_STATCAST_QUALITY_WITHOUT_AN_EXACT_PROVEN_SEMANTIC_BRIDGE"
+  },
+  "historicalParityGaps": [
+    {
+      "code": "SOURCE_YEAR_NOT_BOUND_TO_RUNTIME_NOW",
+      "detail": "The injected runtime.now controls cache/provenance time, but the current Savant acquisition functions derive year with new Date().getFullYear(). A direct historical invocation with runtime.now set to a historical target date would still request the system current year. This is a historical replay incompatibility, not authority to change live production semantics."
+    },
+    {
+      "code": "TARGET_DATE_SAVANT_EXPECTED_STATS_SNAPSHOT_UNPROVEN",
+      "detail": "Current production consumes season leaderboards. Immutable as-of-target-date expected-statistics snapshots for the required 2022-2026_YTD historical universe have not been pinned or proven."
+    },
+    {
+      "code": "XERA_EXACT_RECONSTRUCTION_UNPROVEN",
+      "detail": "Historical date-bounded Statcast data may permit reconstruction of several constituent metrics, but exact Savant xERA and ERA-minus-xERA semantic parity must be demonstrated rather than inferred."
+    },
+    {
+      "code": "QUALIFIER_ASOF_SEMANTICS_UNPROVEN",
+      "detail": "Production requests min=q. Any historical replay must prove the qualifying population and resulting rows as they would have existed at each target date rather than applying end-of-season qualification retroactively."
+    },
+    {
+      "code": "V62_V66_SEMANTIC_SUBSTITUTION_FORBIDDEN",
+      "detail": "V62/V66 preserve valid pregame physical pitch-quality custody but do not contain the current Baseball Savant expected-statistics/statcast leaderboard semantic payload used by evaluatePitcher."
+    }
+  ],
+  "s1Conclusion": {
+    "productionSemanticsFrozen": true,
+    "exactHistoricalSemanticParityProven": false,
+    "familyPromotionAuthorized": false,
+    "classificationAfterS1": "PARTIAL_PARITY",
+    "nextGate": "S2_S3_PROVE_TARGET_DATE_SAVANT_EQUIVALENCE_OR_IDENTIFY_IMMUTABLE_TARGET_DATE_SNAPSHOTS_THEN_FULL_UNIVERSE_REPLAY_AND_INDEPENDENT_VERIFICATION"
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "marketPricesRead": false,
+    "targetOutcomeRead": false,
+    "r1b2Authorized": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}

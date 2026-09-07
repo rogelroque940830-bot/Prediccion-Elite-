@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-historical-parity-sample-evidence.v1",
+  "status": "FALSIFIED_STEP12V3_TABLE_AS_EXACT_CURRENT_C4_PARITY_SOURCE",
+  "family": "V16_BASELINE",
+  "classificationImpact": "REMAINS_PARTIAL_PARITY",
+  "objective": "Falsify or confirm whether the frozen Step12V3 historical C4-shaped feature table can be substituted as exact current certified FULL13/C4 input for V16_BASELINE before full historical rowset materialization.",
+  "workflow": {
+    "runId": 33447139813,
+    "headSha": "064d505c25ae9fbfaa6e887b0b935d73796f55a7",
+    "workflow": ".github/workflows/validate-mlb-r1b-v16-historical-parity-sample.yml",
+    "probe": "scripts/mlb-r1b-v16-historical-parity-sample.ts",
+    "result": "EXPECTED_FALSIFICATION_FAILURE",
+    "tolerance": 1e-12
+  },
+  "custodyAnchors": {
+    "step12v3": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v60": {
+      "workflowRunId": 31919873754,
+      "seasonArtifacts": {
+        "2022": {"artifactId": 9256317314, "artifactDigest": "sha256:ab7a421bc8f96102983fc7306f7a28bc9d05e4948ea5208a19521ab029e1715a"},
+        "2023": {"artifactId": 9256174564, "artifactDigest": "sha256:486e3ac6101dd00af58489bc3ce36c84bc7f44396b34c087b4ce2ae22c6ac11e"},
+        "2024": {"artifactId": 9256386960, "artifactDigest": "sha256:b677ac06c00886f44bfc452ae799a3231a49985d54cda2400411b5516fc4d3fd"},
+        "2025": {"artifactId": 9256479061, "artifactDigest": "sha256:0222fc79324cf70d1e5a378b8c7c23cf30d41ef4ed90f75e3f694c51e56ecd30"},
+        "2026_YTD": {"artifactId": 9256514869, "artifactDigest": "sha256:be9c7d2696b7dacf1394c46c3b4ea47168ca93e43939c1fbe2bc0e5265a7f5ba"}
+      }
+    }
+  },
+  "samples": [
+    {
+      "season": "2022",
+      "candidateCount": 1484,
+      "gamePk": 661327,
+      "officialDate": "2022-06-15",
+      "requestedTimecode": "20220615_230000",
+      "tableVector": {"lineup_exposure_rate_adv": 0.19307832422586524, "starter_kbb_adv": -0.06367005165597653, "combined_team_rs10": 11.7, "team_rd10_diff": 3.4000000000000004},
+      "currentCertifiedBridgeVector": {"lineup_exposure_rate_adv": 0.14389799635701284, "starter_kbb_adv": -0.0636697665677598, "combined_team_rs10": 11.7, "team_rd10_diff": 3.4000000000000004},
+      "absoluteDeltas": {"lineup_exposure_rate_adv": 0.0491803278688524, "starter_kbb_adv": 2.8508821672823537e-7, "combined_team_rs10": 0, "team_rd10_diff": 0},
+      "maxAbsDelta": 0.0491803278688524,
+      "reportArtifactId": 9778462408,
+      "reportArtifactDigest": "sha256:3fa288c5b32dcf933c1076b38baec66bff9d06f448835ba54a9782f4483c9cb3"
+    },
+    {
+      "season": "2023",
+      "candidateCount": 1393,
+      "gamePk": 717746,
+      "officialDate": "2023-06-15",
+      "requestedTimecode": "20230616_000500",
+      "tableVector": {"lineup_exposure_rate_adv": -0.02906516141810256, "starter_kbb_adv": 0.0008130502470904688, "combined_team_rs10": 8, "team_rd10_diff": 2.5},
+      "currentCertifiedBridgeVector": {"lineup_exposure_rate_adv": -0.03550207961972662, "starter_kbb_adv": 0.0008130502470904688, "combined_team_rs10": 8, "team_rd10_diff": 2.5},
+      "absoluteDeltas": {"lineup_exposure_rate_adv": 0.0064369182016240645, "starter_kbb_adv": 0, "combined_team_rs10": 0, "team_rd10_diff": 0},
+      "maxAbsDelta": 0.0064369182016240645,
+      "reportArtifactId": 9778477433,
+      "reportArtifactDigest": "sha256:5a664554dc582bcaa130de636766a953144263e11cbe94eadd4c4896d6dc3c5e"
+    },
+    {
+      "season": "2024",
+      "candidateCount": 1371,
+      "gamePk": 744846,
+      "officialDate": "2024-06-15",
+      "requestedTimecode": "20240615_200000",
+      "tableVector": {"lineup_exposure_rate_adv": -1.1102230246251565e-16, "starter_kbb_adv": 0.03080809296628581, "combined_team_rs10": 7, "team_rd10_diff": 3.3},
+      "currentCertifiedBridgeVector": {"lineup_exposure_rate_adv": -0.006441223832528209, "starter_kbb_adv": 0.03080809296628581, "combined_team_rs10": 7, "team_rd10_diff": 3.3},
+      "absoluteDeltas": {"lineup_exposure_rate_adv": 0.006441223832528098, "starter_kbb_adv": 0, "combined_team_rs10": 0, "team_rd10_diff": 0},
+      "maxAbsDelta": 0.006441223832528098,
+      "reportArtifactId": 9778468816,
+      "reportArtifactDigest": "sha256:d1454deeaea326dae50951caaeae4732d2a0d2d2efd5809e0b09cc2de3c4eaa9"
+    },
+    {
+      "season": "2025",
+      "candidateCount": 1372,
+      "gamePk": 777491,
+      "officialDate": "2025-06-15",
+      "requestedTimecode": "20250615_200500",
+      "tableVector": {"lineup_exposure_rate_adv": 0.06098458707154364, "starter_kbb_adv": -0.014024167525352016, "combined_team_rs10": 9.6, "team_rd10_diff": 0.5},
+      "currentCertifiedBridgeVector": {"lineup_exposure_rate_adv": 0.02447665056360704, "starter_kbb_adv": -0.014024167525352016, "combined_team_rs10": 9.6, "team_rd10_diff": 0.5},
+      "absoluteDeltas": {"lineup_exposure_rate_adv": 0.0365079365079366, "starter_kbb_adv": 0, "combined_team_rs10": 0, "team_rd10_diff": 0},
+      "maxAbsDelta": 0.0365079365079366,
+      "reportArtifactId": 9778471923,
+      "reportArtifactDigest": "sha256:39eef08b04ec28aaf5e0f591e4419651c42329fdc832ef6f065997ebda626f04"
+    },
+    {
+      "season": "2026_YTD",
+      "candidateCount": 715,
+      "gamePk": 822724,
+      "officialDate": "2026-06-15",
+      "requestedTimecode": "20260615_224000",
+      "tableVector": {"lineup_exposure_rate_adv": 0.03858024691358031, "starter_kbb_adv": -0.01972183935382099, "combined_team_rs10": 11.2, "team_rd10_diff": 1.9},
+      "currentCertifiedBridgeVector": {"lineup_exposure_rate_adv": 0.01388888888888884, "starter_kbb_adv": -0.019735535505158122, "combined_team_rs10": 11.2, "team_rd10_diff": 1.9},
+      "absoluteDeltas": {"lineup_exposure_rate_adv": 0.024691358024691468, "starter_kbb_adv": 0.000013696151337130869, "combined_team_rs10": 0, "team_rd10_diff": 0},
+      "maxAbsDelta": 0.024691358024691468,
+      "reportArtifactId": 9778458972,
+      "reportArtifactDigest": "sha256:b376941b0293e74367419f73d61c4a279e62a2bb50096cc2b3ce3da75d414502"
+    }
+  ],
+  "finding": {
+    "allFiveSeasonsExactParity": false,
+    "teamFormFieldsExactAcrossSamples": true,
+    "lineupExposureExactAcrossSamples": false,
+    "starterKbbExactAcrossSamples": false,
+    "interpretation": "The frozen Step12V3 table is not an exact semantic substitute for the current certified C4 materializer. The repeated lineup-exposure mismatch and occasional starter-KBB mismatch are consistent with different prior-history source semantics. Direct promotion of Step12V3 C4-shaped fields into V16_BASELINE would violate the R1B1 exact-semantic-parity policy."
+  },
+  "forbiddenPromotion": "DO_NOT_USE_STEP12V3_GAME_ANATOMY_C4_SHAPED_FEATURES_AS_EXACT_CURRENT_V16_BASELINE_INPUT",
+  "nextPermittedWork": "BUILD_A_RESEARCH_ONLY_BATCH_CURRENT_SEMANTICS_C4_V16_MATERIALIZER_THAT_ACQUIRES_EACH_OFFICIAL_FINAL_PRIOR_GAME_FEED_ONCE_PER_SEASON, REPLAYS STRICTLY_PRIOR_OFFICIAL_DATE HISTORY WITHOUT SAME_DATE_UPDATES, USES_FROZEN_T5_TARGET_IDENTITY_LINEUPS_AND_STARTERS, DELEGATES_FEATURE_FORMULAS_TO_THE_CURRENT_SHARED_C4_BUILDER, SCORES_WITH_THE_LOCKED_V16_SCORER, AND PARITY_TESTS_BATCH_OUTPUT_AGAINST_THE_CERTIFIED_PER_TARGET_BRIDGE_BEFORE_FULL_2022_2026_YTD_ROWSET_FREEZE.",
+  "gate": {"parityCertifiedBefore": 2, "parityCertifiedAfter": 2, "v16Baseline": "PARTIAL_PARITY", "r1b2Authorized": false},
+  "policy": {"targetOutcomesUsedAsFeatures": false, "marketPricesRead": false, "modelRefit": false, "newWeightsCreated": false, "thresholdSearch": false, "productionChanged": false, "v16Changed": false, "v68Changed": false, "v80Changed": false, "automaticBetPlacement": false, "realFinancialExposure": 0}
+}

@@ -1,0 +1,617 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-baseline-coverage.v1",
+  "season": "2022",
+  "status": "COMPLETE_FAIL_CLOSED_COVERAGE",
+  "sourceUniverse": {
+    "lineupSnapshotCount": 2430,
+    "starterSnapshotCount": 2398,
+    "unionGameCount": 2430,
+    "frozenT5EligibleCount": 2397,
+    "sourceExcludedCount": 33,
+    "sourceExcludedByReason": {
+      "FROZEN_STARTER_NOT_USABLE": 1,
+      "MISSING_STARTER_SNAPSHOT": 32
+    }
+  },
+  "priorHistoryAcquisition": {
+    "scheduledFinalCount": 2414,
+    "parsedFinalCount": 2414,
+    "feedNotFinalSkippedCount": 0,
+    "feedNotFinalSkipped": [],
+    "hardFailureCount": 0,
+    "hardFailures": [],
+    "hardFailurePolicy": "MATCH_CERTIFIED_PER_TARGET_FAIL_CLOSED_SEMANTICS_FOR_ALL_LATER_TARGET_DATES"
+  },
+  "currentC4": {
+    "eligibleGameCount": 2319,
+    "structurallyIneligibleGameCount": 78,
+    "ineligibleByReason": {
+      "C4_FEATURE_INCOMPLETE:combined_team_rs10": 63,
+      "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv": 15
+    }
+  },
+  "rowset": {
+    "rowCount": 9276,
+    "rowsPerEligibleGame": 4,
+    "duplicateCount": 0,
+    "dateRange": {
+      "start": "2022-04-12",
+      "end": "2022-10-05"
+    }
+  },
+  "exclusions": {
+    "source": [
+      {
+        "gamePk": 661045,
+        "officialDate": "2022-09-05",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661095,
+        "officialDate": "2022-10-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661233,
+        "officialDate": "2022-09-08",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661235,
+        "officialDate": "2022-09-07",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661304,
+        "officialDate": "2022-05-08",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661345,
+        "officialDate": "2022-05-08",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661565,
+        "officialDate": "2022-08-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661627,
+        "officialDate": "2022-05-08",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 661896,
+        "officialDate": "2022-06-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662183,
+        "officialDate": "2022-07-10",
+        "reason": "FROZEN_STARTER_NOT_USABLE"
+      },
+      {
+        "gamePk": 662199,
+        "officialDate": "2022-10-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662302,
+        "officialDate": "2022-08-16",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662408,
+        "officialDate": "2022-07-21",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662445,
+        "officialDate": "2022-08-08",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662459,
+        "officialDate": "2022-05-03",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662566,
+        "officialDate": "2022-05-17",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662616,
+        "officialDate": "2022-04-19",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662638,
+        "officialDate": "2022-08-28",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662779,
+        "officialDate": "2022-08-09",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662839,
+        "officialDate": "2022-05-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662840,
+        "officialDate": "2022-05-29",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662855,
+        "officialDate": "2022-05-10",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662948,
+        "officialDate": "2022-08-15",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 662991,
+        "officialDate": "2022-06-01",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663057,
+        "officialDate": "2022-05-07",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663068,
+        "officialDate": "2022-05-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663075,
+        "officialDate": "2022-04-20",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663105,
+        "officialDate": "2022-10-03",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663108,
+        "officialDate": "2022-09-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663134,
+        "officialDate": "2022-06-07",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663272,
+        "officialDate": "2022-10-05",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663291,
+        "officialDate": "2022-08-20",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      },
+      {
+        "gamePk": 663452,
+        "officialDate": "2022-10-04",
+        "reason": "MISSING_STARTER_SNAPSHOT"
+      }
+    ],
+    "c4": [
+      {
+        "gamePk": 661042,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661577,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662021,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662571,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662766,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 663178,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 663418,
+        "officialDate": "2022-04-07",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661041,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661131,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661333,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661576,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661750,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661782,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 661918,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662124,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662559,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662888,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 662933,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:lineup_exposure_rate_adv"
+      },
+      {
+        "gamePk": 663417,
+        "officialDate": "2022-04-08",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661040,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661130,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661332,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661575,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661756,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661803,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661917,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662020,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662123,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662588,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662765,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662864,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662931,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663205,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663404,
+        "officialDate": "2022-04-09",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661039,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661129,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661316,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661573,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661738,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661802,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661916,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662019,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662122,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662570,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662755,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662887,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662934,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663204,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663395,
+        "officialDate": "2022-04-10",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661036,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661315,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661572,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661637,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661754,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661915,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662042,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662116,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662754,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662863,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663403,
+        "officialDate": "2022-04-11",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661038,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661314,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661538,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661636,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661753,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661944,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661995,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662017,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662104,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662318,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662862,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663088,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663295,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 663411,
+        "officialDate": "2022-04-12",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661530,
+        "officialDate": "2022-04-13",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661734,
+        "officialDate": "2022-04-13",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 662317,
+        "officialDate": "2022-04-13",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      },
+      {
+        "gamePk": 661292,
+        "officialDate": "2022-04-14",
+        "reason": "C4_FEATURE_INCOMPLETE:combined_team_rs10"
+      }
+    ]
+  },
+  "policy": {
+    "eligibilityDefinedBeforeOutcomeEvaluation": true,
+    "targetIdentityFromFrozenT5Only": true,
+    "strictlyPriorOfficialDateHistory": true,
+    "sameDateHistoryAllowed": false,
+    "targetOutcomeUsedAsFeature": false,
+    "historicalPriorResultsReadForTeamForm": true,
+    "malformedPriorFinalFeedFailsAllLaterTargetsExactlyLikeCertifiedC4": true,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false
+  }
+}

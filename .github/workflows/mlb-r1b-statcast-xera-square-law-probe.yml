@@ -1,0 +1,80 @@
+name: MLB R1B Statcast xERA Square-Law Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-square-law-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-square-law-probe.yml
+  pull_request:
+    paths:
+      - scripts/mlb-r1b-statcast-xera-square-law-probe.ts
+      - .github/workflows/mlb-r1b-statcast-xera-square-law-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Probe xERA square-law and displayed-rounding semantics
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-square-law-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-square-law-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-square-law-probe/evidence.json
+      - name: Enforce research-only fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-square-law-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-square-law-probe/evidence.json','utf8'));
+          if(e.status!=='XERA_SQUARE_LAW_MECHANISM_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.productionSemanticContext?.evaluatePitcherMinimumPa!==50) throw new Error('production PA boundary');
+          if(!Array.isArray(e.seasonEvidence)||e.seasonEvidence.length!==5) throw new Error('season coverage');
+          for(const s of e.seasonEvidence){
+            if(!(s.rowCounts?.productionDomainPaGte50>0)||!(s.rowCounts?.qualifiedUsable>0)) throw new Error(`empty domain:${s.season}`);
+            if(!(s.rowCounts?.uniqueDisplayedXwobaValuesInProductionDomain>0)) throw new Error(`empty unique mapping:${s.season}`);
+            if(s.qualifiedVsMin1?.mismatchCount!==0) throw new Error(`current min=q value drift:${s.season}`);
+            if(!s.squareLawDiagnostics?.proportional||!s.squareLawDiagnostics?.affineSquare||!s.squareLawDiagnostics?.displayedRoundingIntervalCompatibility) throw new Error(`missing square diagnostics:${s.season}`);
+          }
+          if(e.interpretationPolicy?.fittedCoefficientsAreDiagnosticOnly!==true) throw new Error('fit authority boundary');
+          if(e.interpretationPolicy?.displayedRoundingCompatibilityIsNotFormulaAuthority!==true) throw new Error('rounding authority boundary');
+          if(e.interpretationPolicy?.exactEmpiricalFitWouldStillRequireAuthoritativeProvenance!==true) throw new Error('provenance boundary');
+          if(e.interpretationPolicy?.finalSeasonCoefficientsMayNotBeAppliedRetroactively!==true) throw new Error('target-date boundary');
+          if(e.interpretationPolicy?.paWeightedLeagueDiagnosticsAreNotAuthoritativeRunEnvironment!==true) throw new Error('run environment boundary');
+          if(e.interpretationPolicy?.approximationForbidden!==true||e.interpretationPolicy?.noFamilyPromotionFromThisProbeAlone!==true) throw new Error('promotion boundary');
+          if(e.scientificConclusion?.authoritativeExactFormulaProven!==false||e.scientificConclusion?.authoritativeTargetDateRunEnvironmentProven!==false||e.scientificConclusion?.targetDateXeraCustodyProven!==false||e.scientificConclusion?.familyPromotionAuthorized!==false) throw new Error('premature certification');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-square-law-probe.ts
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'approximationForbidden: true' "$src"
+          grep -F 'familyPromotionAuthorized: false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload square-law evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-square-law-probe
+          path: artifacts/mlb-r1b-statcast-xera-square-law-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

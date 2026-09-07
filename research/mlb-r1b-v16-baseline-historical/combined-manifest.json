@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-v16-baseline-combined-manifest.v1",
+  "status": "FULL_UNIVERSE_PARITY_CERTIFIED_EVIDENCE",
+  "family": "V16_BASELINE",
+  "canonicalShardOrder": [
+    "2022",
+    "2023",
+    "2024",
+    "2025",
+    "2026_YTD"
+  ],
+  "combinedRowsetSha256": "b06d003b8412f886afd03da1765d0f03af4ee031a3a8ed83fc81aa1a7d308f7e",
+  "tolerance": 1e-15,
+  "fullUniverseScorerParity": {
+    "checkedRows": 44016,
+    "failedRows": 0,
+    "allRowsRecomputedThroughLockedAdapter": true
+  },
+  "coverage": {
+    "sourceUniverseGameCount": 11505,
+    "frozenT5EligibleGameCount": 11396,
+    "sourceExcludedGameCount": 109,
+    "c4EligibleGameCount": 11004,
+    "c4StructurallyIneligibleGameCount": 392,
+    "rowCount": 44016,
+    "duplicateCount": 0,
+    "explicitMissingnessPreserved": true,
+    "noPostHocHistoryShrink": true
+  },
+  "locks": {
+    "c4BuilderVersion": "mlb-c4-live-canonical-v1",
+    "v16AdapterSchema": "courtedge-mlb-r1b-v16-final-baseline-adapter.v1",
+    "v16ModelVersion": "rogel-pure-settlement-ml-f5-v1",
+    "v16ManifestSha256": "059f84a7bf644eece80b40f772d5a0c92a188849012eadf7bbf17f93532b8cbb"
+  },
+  "seasons": [
+    {
+      "season": "2022",
+      "rowsetSha256": "9c509a66cc30eea00070dcc42dc3851f932080b09b8b490ecb64c9a7c1af57bf",
+      "featureSha256": "7b5d3f2c0817bf7817b9bad5996e21858b1852ba5a66a9f79b0be8f48fd9144e",
+      "priorHistorySha256": "f13de224cc258837a1ba80772678de26646e8171e9c4f0232b3403b6ec228609",
+      "coverageSha256": "e651abc7e17bbe5fe83cfd4be512b6fb111787fd8ea9cb6856358b2fe98ea65a",
+      "sourceUniverseGameCount": 2430,
+      "frozenT5EligibleGameCount": 2397,
+      "c4EligibleGameCount": 2319,
+      "c4IneligibleGameCount": 78,
+      "rowCount": 9276,
+      "dateRange": {
+        "start": "2022-04-12",
+        "end": "2022-10-05"
+      }
+    },
+    {
+      "season": "2023",
+      "rowsetSha256": "032902e71d0b35b3da7a03e89a90837641fe86854f573f56a3b113854f54aec3",
+      "featureSha256": "7c4b62ee7c61b7de9cd60a6d9993b451804b0f385f3987ad01bc6eae8883735d",
+      "priorHistorySha256": "fc35057ff86ce3535b7f8549b8e857d84b6a4bda9e97d0c2f49e7512dc835d49",
+      "coverageSha256": "b6bc36631ad7d4f2305a201e49fbe0a12c84562224cbdf3d80f05c91405c63f0",
+      "sourceUniverseGameCount": 2430,
+      "frozenT5EligibleGameCount": 2398,
+      "c4EligibleGameCount": 2320,
+      "c4IneligibleGameCount": 78,
+      "rowCount": 9280,
+      "dateRange": {
+        "start": "2023-04-04",
+        "end": "2023-10-01"
+      }
+    },
+    {
+      "season": "2024",
+      "rowsetSha256": "1845aaae6a8dd21eafba01f45729edcf8d7270b93af264caec6fc8059bc77f06",
+      "featureSha256": "343dce30a1a9eb3ccb25136c8237e2276374d613713cac74ff83fbdb10513575",
+      "priorHistorySha256": "c13cb2e8819b98e6471e112817383ba0b3cbb13bd7656b84abe987c20cf14fda",
+      "coverageSha256": "ba7213eee04dad5656d6d7cfe6edde7e648ac77b53cbb66a1b76166c82bf7757",
+      "sourceUniverseGameCount": 2429,
+      "frozenT5EligibleGameCount": 2404,
+      "c4EligibleGameCount": 2324,
+      "c4IneligibleGameCount": 80,
+      "rowCount": 9296,
+      "dateRange": {
+        "start": "2024-04-02",
+        "end": "2024-09-29"
+      }
+    },
+    {
+      "season": "2025",
+      "rowsetSha256": "59728cc36cd39196f8b840d9a5a5f33b58b9c3ebc9aae59f7899b08a700726e8",
+      "featureSha256": "5d93302b2c18a5351c3664ee4dd7898fe99e50ffa7c77b8d8c45b87d8e060ca5",
+      "priorHistorySha256": "b55fd59c9cc1640e2341a6ba3a6b2ad6ca15f1247d0bda638bc6da2fbc5eb69e",
+      "coverageSha256": "454f9b4159732dc20c2a6fb8a972539e5a3077ece0a351f75f616fd4bd4aa64d",
+      "sourceUniverseGameCount": 2430,
+      "frozenT5EligibleGameCount": 2418,
+      "c4EligibleGameCount": 2339,
+      "c4IneligibleGameCount": 79,
+      "rowCount": 9356,
+      "dateRange": {
+        "start": "2025-04-01",
+        "end": "2025-09-28"
+      }
+    },
+    {
+      "season": "2026_YTD",
+      "rowsetSha256": "cf6b0e30790c23fbcc9015cefdd77a8ec44ed7a5f5ffa5417eedc6f52862c0e7",
+      "featureSha256": "9e8c17156c50aa0f7a1c445dca871d81389476912490ebc486ad068372f650d5",
+      "priorHistorySha256": "0563d3180bf25732edd5d26b7fadf9aaaafc4786fc13c25487f1a1ad5a458f4a",
+      "coverageSha256": "755532d40a2c211938eee1c99bf0c691a35056245dd0c54c07b0557944366ae2",
+      "sourceUniverseGameCount": 1786,
+      "frozenT5EligibleGameCount": 1779,
+      "c4EligibleGameCount": 1702,
+      "c4IneligibleGameCount": 77,
+      "rowCount": 6808,
+      "dateRange": {
+        "start": "2026-04-01",
+        "end": "2026-08-10"
+      }
+    }
+  ],
+  "policy": {
+    "researchOnly": true,
+    "targetIdentityFromFrozenT5Only": true,
+    "strictlyPriorOfficialDateHistory": true,
+    "sameDateHistoryAllowed": false,
+    "targetOutcomeUsedAsFeature": false,
+    "historicalPriorResultsReadForTeamForm": true,
+    "marketPricesRead": false,
+    "modelRefit": false,
+    "newWeightsCreated": false,
+    "thresholdSearch": false,
+    "productionChanged": false,
+    "v16Changed": false,
+    "v68Changed": false,
+    "v80Changed": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0
+  }
+}

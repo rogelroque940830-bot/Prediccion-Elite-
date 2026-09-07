@@ -1,0 +1,104 @@
+name: Validate MLB R1B Statcast Contact Adapter and xERA Probe
+
+on:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.ts
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.test.ts
+      - scripts/mlb-r1b-statcast-xera-era-scale-probe.ts
+      - research/mlb-r1b-statcast-contact-quality-historical-adapter-contract.json
+      - .github/workflows/validate-mlb-r1b-statcast-contact-adapter-xera-probe.yml
+  pull_request:
+    paths:
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.ts
+      - server/mlb-r1b-statcast-contact-quality-historical-adapter.test.ts
+      - scripts/mlb-r1b-statcast-xera-era-scale-probe.ts
+      - research/mlb-r1b-statcast-contact-quality-historical-adapter-contract.json
+      - .github/workflows/validate-mlb-r1b-statcast-contact-adapter-xera-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install dependencies reproducibly
+        run: npm ci
+      - name: Lock date-bounded contact-quality adapter semantics
+        run: npx tsx --test server/mlb-r1b-statcast-contact-quality-historical-adapter.test.ts
+      - name: Validate frozen research-only adapter contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('research/mlb-r1b-statcast-contact-quality-historical-adapter-contract.json','utf8'));
+          if(c.schemaVersion!=='courtedge-mlb-r1b-statcast-contact-quality-historical-adapter-contract.v1') throw new Error('schema');
+          if(c.status!=='FROZEN_DATE_BOUNDED_COUNT_BRIDGE_DISPLAY_PARITY_PENDING') throw new Error('status');
+          if(c.family!=='STATCAST_QUALITY'||c.classification!=='PARTIAL_PARITY') throw new Error('family classification');
+          if(c.adapter?.targetDatePolicy!=='STRICTLY_PRIOR_GAME_DATE_ONLY') throw new Error('target-date policy');
+          if(c.provenance?.referenceWorkflowRunId!==33911300212) throw new Error('reference run');
+          if(c.frozenCountSemantics?.attempts?.referenceParity!=='873_OF_873_EXACT') throw new Error('attempts parity');
+          if(c.frozenCountSemantics?.ev95plus?.referenceParity!=='873_OF_873_EXACT') throw new Error('ev95plus parity');
+          if(c.frozenCountSemantics?.barrels?.referenceParity!=='873_OF_873_EXACT') throw new Error('barrels parity');
+          if(c.percentageBoundary?.knownEv95PercentDisplayEdgeCasesIn2025Reference!==5) throw new Error('display edge cases');
+          if(c.percentageBoundary?.productionParityEligible!==false) throw new Error('premature percentage promotion');
+          if(c.xeraBoundary?.eraScaleApproximationAllowed!==false||c.xeraBoundary?.exactXeraReconstructionRequired!==true) throw new Error('xera boundary');
+          if(c.certificationBoundary?.statcastQualityParityCertified!==false||c.certificationBoundary?.familyPromotionAuthorized!==false||c.certificationBoundary?.r1b2Authorized!==false) throw new Error('premature certification');
+          if(c.policy?.researchOnly!==true||c.policy?.productionChanged!==false||c.policy?.weightsChanged!==false||c.policy?.routingChanged!==false||c.policy?.stakingChanged!==false||c.policy?.betEliteChanged!==false||c.policy?.marketPricesRead!==false||c.policy?.targetOutcomeReadForModeling!==false||c.policy?.automaticBetPlacementAllowed!==false||c.policy?.realFinancialExposure!==0) throw new Error('policy');
+          NODE
+      - name: Probe exact Savant xERA ERA-scale identifiability
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-era-scale-probe
+          npx tsx scripts/mlb-r1b-statcast-xera-era-scale-probe.ts \
+            --out=artifacts/mlb-r1b-statcast-xera-era-scale-probe/evidence.json
+      - name: Enforce xERA fail-closed interpretation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-era-scale-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-xera-era-scale-probe/evidence.json','utf8'));
+          if(e.status!=='XERA_ERA_SCALE_IDENTIFIABILITY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(!Array.isArray(e.seasonEvidence)||e.seasonEvidence.length!==5) throw new Error('season coverage');
+          for(const s of e.seasonEvidence){
+            if(!(s.usableRows>0)) throw new Error(`empty season ${s.season}`);
+            if(!Array.isArray(s.polynomialDiagnostics)||s.polynomialDiagnostics.length<1) throw new Error(`missing diagnostics ${s.season}`);
+          }
+          if(e.interpretationPolicy?.regressionOrPolynomialFitIsDiagnosticOnly!==true) throw new Error('fit boundary');
+          if(e.interpretationPolicy?.empiricalFitMayNotBeUsedAsProductionOrHistoricalAuthority!==true) throw new Error('authority boundary');
+          if(e.interpretationPolicy?.approximationForbidden!==true) throw new Error('approximation boundary');
+          if(e.decision?.exactXeraEraScaleReconstructionProvenByThisProbe!==false) throw new Error('premature xera proof');
+          if(e.decision?.familyPromotionAuthorized!==false||e.decision?.familyClassificationAfter!=='PARTIAL_PARITY') throw new Error('premature promotion');
+          if(e.scientificBoundary?.productionChanged!==false||e.scientificBoundary?.weightsChanged!==false||e.scientificBoundary?.routingChanged!==false||e.scientificBoundary?.stakingChanged!==false||e.scientificBoundary?.betEliteChanged!==false||e.scientificBoundary?.marketPricesRead!==false||e.scientificBoundary?.targetOutcomeReadForModeling!==false||e.scientificBoundary?.automaticBetPlacementAllowed!==false||e.scientificBoundary?.realFinancialExposure!==0||e.scientificBoundary?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='server/mlb-r1b-statcast-contact-quality-historical-adapter.ts scripts/mlb-r1b-statcast-xera-era-scale-probe.ts'
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' $src
+          grep -F 'productionParityEligible: false' server/mlb-r1b-statcast-contact-quality-historical-adapter.ts
+          grep -F 'approximationForbidden: true' scripts/mlb-r1b-statcast-xera-era-scale-probe.ts
+      - name: Backend type/build regression
+        run: npm run build:backend
+      - name: Upload xERA probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-era-scale-probe
+          path: artifacts/mlb-r1b-statcast-xera-era-scale-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30

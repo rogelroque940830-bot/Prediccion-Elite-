@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "courtedge-mlb-r1b-statcast-contact-quality-historical-adapter-contract.v1",
+  "status": "FROZEN_DATE_BOUNDED_COUNT_BRIDGE_DISPLAY_PARITY_PENDING",
+  "family": "STATCAST_QUALITY",
+  "classification": "PARTIAL_PARITY",
+  "adapter": {
+    "path": "server/mlb-r1b-statcast-contact-quality-historical-adapter.ts",
+    "version": "mlb-r1b-statcast-contact-quality-historical-adapter-v1",
+    "inputStage": "PREGAME",
+    "sourceAuthority": "BASEBALL_SAVANT_DATE_BOUNDED_RAW_BBE",
+    "targetDatePolicy": "STRICTLY_PRIOR_GAME_DATE_ONLY"
+  },
+  "provenance": {
+    "referenceProbe": "scripts/mlb-r1b-statcast-raw-bbe-count-parity-probe-v3.ts",
+    "referenceWorkflowRunId": 33911300212,
+    "referenceSeason": 2025,
+    "uniqueCanonicalTerminalPitchIdentities": 124888,
+    "matchedLeaderboardPitchers": 873,
+    "bbeDescriptionPurity": 0.9999919928,
+    "everyChunkBelowCsvSafetyCap": true,
+    "rawBbeFlag": "is\\.\\.hit\\.\\.into\\.\\.play|",
+    "windowingPolicy": "MONTHLY_ISH_OVERLAPPING_WINDOWS_DEDUPED_BY_GAME_PK_AT_BAT_PITCH_PITCHER"
+  },
+  "frozenCountSemantics": {
+    "attempts": {
+      "definition": "COUNT_UNIQUE_TERMINAL_HIT_INTO_PLAY_ROWS",
+      "referenceParity": "873_OF_873_EXACT"
+    },
+    "ev95plus": {
+      "definition": "COUNT_ATTEMPTS_WITH_LAUNCH_SPEED_GTE_95_MPH",
+      "referenceParity": "873_OF_873_EXACT"
+    },
+    "barrels": {
+      "definition": "COUNT_ATTEMPTS_WITH_LAUNCH_SPEED_ANGLE_EQ_6",
+      "referenceParity": "873_OF_873_EXACT"
+    }
+  },
+  "percentageBoundary": {
+    "hardHitPctCountDerived": "ROUND_1(100 * EV95PLUS / ATTEMPTS)",
+    "barrelPctCountDerived": "ROUND_1(100 * BARRELS / ATTEMPTS)",
+    "productionEv95PercentParity": "NOT_YET_PROVEN",
+    "knownEv95PercentDisplayEdgeCasesIn2025Reference": 5,
+    "policy": "COUNT_DERIVED_PERCENTAGES_ARE_DIAGNOSTIC_ONLY_UNTIL_EXACT_PRODUCTION_DISPLAY_SEMANTICS_ARE_PROVEN",
+    "productionParityEligible": false
+  },
+  "xeraBoundary": {
+    "xeraDerivedByThisAdapter": false,
+    "eraScaleApproximationAllowed": false,
+    "exactXeraReconstructionRequired": true,
+    "currentStatus": "EXACT_XERA_ERA_SCALE_RECONSTRUCTION_UNPROVEN"
+  },
+  "certificationBoundary": {
+    "statcastQualityParityCertified": false,
+    "familyPromotionAuthorized": false,
+    "historicalRowsetAuthorization": false,
+    "r1b2Authorized": false,
+    "nextGate": "PROVE_EXACT_XERA_ERA_SCALE_AND_TARGET_DATE_ERA_SEMANTICS_THEN_QUALIFIER_ASOF_AND_FULL_UNIVERSE_REPLAY"
+  },
+  "policy": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "weightsChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "marketPricesRead": false,
+    "targetOutcomeReadForModeling": false,
+    "automaticBetPlacementAllowed": false,
+    "realFinancialExposure": 0
+  }
+}
