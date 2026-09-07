@@ -88,7 +88,7 @@ async function main(){
     const ss=states.filter(s=>s.season===season),parsed=ss.filter(s=>s.checks.rows>0),sameYear=parsed.filter(s=>s.sameCalendarYearAsSeason),qualified=parsed.filter(s=>s.query.isQualifiedAllPitchers);
     const allRows=parsed.reduce((n,s)=>n+s.checks.rows,0);
     const exactIdentityRows=parsed.reduce((n,s)=>n+s.checks.xeraExactEraMinusDiffIdentityCount,0);
-    seasonCoverage.push({season,statesAttempted:ss.length,statesParsed:parsed.length,sameCalendarYearStatesParsed:sameYear.length,qualifiedAllPitchersStatesParsed:qualified.length,totalParsedRows:allRows,exactXeraIdentityRows,allParsedRowsPreserveExactXeraIdentity:allRows>0&&exactIdentityRows===allRows,allParsedStatesDisplayRoundHighPrecisionXera:parsed.length>0&&parsed.every(s=>s.checks.xeraDisplayRoundRate===1)});
+    seasonCoverage.push({season,statesAttempted:ss.length,statesParsed:parsed.length,sameCalendarYearStatesParsed:sameYear.length,qualifiedAllPitchersStatesParsed:qualified.length,totalParsedRows:allRows,exactXeraIdentityRows:exactIdentityRows,allParsedRowsPreserveExactXeraIdentity:allRows>0&&exactIdentityRows===allRows,allParsedStatesDisplayRoundHighPrecisionXera:parsed.length>0&&parsed.every(s=>s.checks.xeraDisplayRoundRate===1)});
   }
   const parsed=states.filter(s=>s.checks.rows>0),totalRows=parsed.reduce((n,s)=>n+s.checks.rows,0),identityRows=parsed.reduce((n,s)=>n+s.checks.xeraExactEraMinusDiffIdentityCount,0);
   const seasonsWithParsed=new Set(parsed.map(s=>s.season)).size;
