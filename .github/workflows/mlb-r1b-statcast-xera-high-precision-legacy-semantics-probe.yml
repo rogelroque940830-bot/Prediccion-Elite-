@@ -1,0 +1,81 @@
+name: MLB R1B Statcast xERA High-Precision Legacy Semantics Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validate high-precision historical Savant xERA/xwOBA semantics
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe
+          node scripts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe/evidence.json
+
+      - name: Enforce high-precision scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='artifacts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe/evidence.json';
+          const e=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(e.status!=='PRIMARY_SAVANT_HIGH_PRECISION_LEGACY_XERA_SEMANTICS_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          if(e.sourceAuthority?.archiveTransportIsPublisher!==false) throw new Error('archive authority');
+          if(e.scientificPolicy?.primaryPublisherOnly!==true) throw new Error('primary publisher');
+          if(e.scientificPolicy?.noThirdPartyAuthority!==true) throw new Error('third party');
+          if(e.scientificPolicy?.noInterpolation!==true) throw new Error('interpolation');
+          if(e.scientificPolicy?.noEmpiricalFit!==true) throw new Error('empirical fit');
+          if(e.scientificPolicy?.approximationForbidden!==true) throw new Error('approximation');
+          if(!Array.isArray(e.anchors)||e.anchors.length!==2) throw new Error('anchors');
+          if(e.summary?.exactHistoricalHiddenXwobaRecovered!==false) throw new Error('premature hidden xwoba');
+          if(e.summary?.exactSavantProductionConversionProven!==false) throw new Error('premature mechanism');
+          if(e.summary?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('scientific boundary');
+          NODE
+
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+          grep -F 'exactSavantProductionConversionProven:false' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'approximationForbidden:true' "$src"
+
+      - name: Backend build regression
+        run: npm run build:backend
+
+      - name: Upload high-precision legacy semantics evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe
+          path: artifacts/mlb-r1b-statcast-xera-high-precision-legacy-semantics-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
