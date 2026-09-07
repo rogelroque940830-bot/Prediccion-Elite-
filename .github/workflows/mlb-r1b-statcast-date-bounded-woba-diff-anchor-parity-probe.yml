@@ -1,0 +1,65 @@
+name: MLB R1B Statcast Date-Bounded wOBA Diff Anchor Parity Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-unified-sporting-authority-r1
+    paths:
+      - scripts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe.mjs
+      - .github/workflows/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci
+      - name: Test primary date-bounded wOBA diff against archived Savant pregame anchors
+        run: |
+          mkdir -p artifacts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe
+          node scripts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe.mjs \
+            --out=artifacts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe/evidence.json
+      - name: Enforce scientific boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe/evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('artifacts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe/evidence.json','utf8'));
+          if(e.status!=='PRIMARY_SAVANT_DATE_BOUNDED_WOBA_DIFF_ANCHOR_PARITY_PROBE_ONLY_NOT_PARITY_CERTIFICATION') throw new Error('status');
+          if(e.family!=='STATCAST_QUALITY') throw new Error('family');
+          if(e.sourceAuthority?.canonicalPublisherHost!=='baseballsavant.mlb.com') throw new Error('publisher');
+          const p=e.scientificPolicy;
+          if(p?.primaryPublisherOnly!==true||p?.noInterpolation!==true||p?.noEmpiricalFit!==true||p?.approximationForbidden!==true||p?.alignmentUsesPaOnly!==true) throw new Error('policy');
+          if(e.summary?.exactEraMinusXeraDiffReconstructionProven!==false||e.summary?.qualifierAsOfSemanticsAcross2022To2026Proven!==false||e.summary?.familyPromotionAuthorized!==false) throw new Error('premature promotion');
+          const b=e.scientificBoundary;
+          if(b?.researchOnly!==true||b?.productionChanged!==false||b?.weightsChanged!==false||b?.routingChanged!==false||b?.stakingChanged!==false||b?.betEliteChanged!==false||b?.marketPricesRead!==false||b?.targetOutcomeReadForModeling!==false||b?.automaticBetPlacementAllowed!==false||b?.realFinancialExposure!==0||b?.r1b2Authorized!==false) throw new Error('boundary');
+          NODE
+      - name: Static no-production-write boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=scripts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe.mjs
+          ! grep -E 'appendPrediction\(|appendSettlement\(|BET_ELITE|autobet|automaticBetPlacement[^\n]*true|realFinancialExposure[^\n]*[1-9]' "$src"
+          grep -F 'noEmpiricalFit:true' "$src"
+          grep -F 'noInterpolation:true' "$src"
+          grep -F 'familyPromotionAuthorized:false' "$src"
+      - name: Backend build regression
+        run: npm run build:backend
+      - name: Upload anchor parity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe
+          path: artifacts/mlb-r1b-statcast-date-bounded-woba-diff-anchor-parity-probe/evidence.json
+          if-no-files-found: error
+          retention-days: 30
