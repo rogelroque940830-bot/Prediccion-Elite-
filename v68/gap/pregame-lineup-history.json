@@ -1,10 +1,10 @@
 {
   "cutoffSecondsBeforeScheduledStart": 300,
-  "distinctOfficialDates": 30,
+  "distinctOfficialDates": 31,
   "firstOfficialDate": "2026-08-11",
-  "generatedAt": "2026-09-10T14:29:57.170618+00:00",
+  "generatedAt": "2026-09-11T14:28:54.985967+00:00",
   "kind": "PREGAME_T5_LINEUP_HISTORY",
-  "lastOfficialDate": "2026-09-09",
+  "lastOfficialDate": "2026-09-10",
   "researchOnly": true,
   "schemaVersion": "courtedge-p0-step12v68-prospective-ledger.v1",
   "snapshots": [
@@ -17184,6 +17184,216 @@
       "scheduledStart": "2026-09-09T19:05:00.000Z",
       "sourceDigest": "1d3e36865af7e2654552a458f2014660c124f4f423e6b07a32caee087d0f2897",
       "sourceMetadataTimecode": "20260909_185016",
+      "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    {
+      "availability": "COMPLETE",
+      "awayBattingOrder": [
+        592626,
+        608369,
+        677649,
+        607043,
+        694671,
+        694497,
+        669394,
+        670032,
+        643376
+      ],
+      "awayTeamId": 140,
+      "complete": true,
+      "cutoffAt": "2026-09-10T20:05:00.000Z",
+      "gamePk": 823088,
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "homeBattingOrder": [
+        641487,
+        668227,
+        686527,
+        663728,
+        677594,
+        647304,
+        702284,
+        703155,
+        801126
+      ],
+      "homeTeamId": 136,
+      "officialDate": "2026-09-10",
+      "requestedTimecode": "20260910_200500",
+      "scheduleResolution": "DIRECT",
+      "scheduledStart": "2026-09-10T20:10:00.000Z",
+      "sourceDigest": "73849bef4df467b9882f4e7206a000af4fd4b10c7b436b66fa3265d98bc81e0a",
+      "sourceMetadataTimecode": "20260910_194030",
+      "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    {
+      "availability": "COMPLETE",
+      "awayBattingOrder": [
+        665161,
+        670541,
+        670623,
+        514888,
+        662139,
+        572233,
+        701358,
+        666211,
+        543877
+      ],
+      "awayTeamId": 117,
+      "complete": true,
+      "cutoffAt": "2026-09-10T17:00:00.000Z",
+      "gamePk": 823413,
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "homeBattingOrder": [
+        656941,
+        607208,
+        547180,
+        650333,
+        664761,
+        681082,
+        669016,
+        702222,
+        665561
+      ],
+      "homeTeamId": 143,
+      "officialDate": "2026-09-10",
+      "requestedTimecode": "20260910_170000",
+      "scheduleResolution": "DIRECT",
+      "scheduledStart": "2026-09-10T17:05:00.000Z",
+      "sourceDigest": "1ae598c1a370f880e746326281eb6f0c6b9269b8516898b3b840c4dae092fc3e",
+      "sourceMetadataTimecode": "20260910_164051",
+      "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    {
+      "availability": "COMPLETE",
+      "awayBattingOrder": [
+        664983,
+        681393,
+        696100,
+        681198,
+        694249,
+        691720,
+        691182,
+        687597,
+        678662
+      ],
+      "awayTeamId": 115,
+      "complete": true,
+      "cutoffAt": "2026-09-10T23:00:00.000Z",
+      "gamePk": 823499,
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "homeBattingOrder": [
+        700250,
+        641355,
+        691176,
+        671277,
+        682987,
+        806146,
+        641857,
+        669224,
+        683011
+      ],
+      "homeTeamId": 147,
+      "officialDate": "2026-09-10",
+      "requestedTimecode": "20260910_230000",
+      "scheduleResolution": "DIRECT",
+      "scheduledStart": "2026-09-10T23:05:00.000Z",
+      "sourceDigest": "50fec016124c703cefed418f434f287865f90c51789f2efea7b76f4d7d69e52d",
+      "sourceMetadataTimecode": "20260910_224026",
+      "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    {
+      "availability": "COMPLETE",
+      "awayBattingOrder": [
+        804606,
+        665833,
+        668804,
+        693304,
+        664040,
+        804668,
+        663968,
+        687462,
+        669707
+      ],
+      "awayTeamId": 134,
+      "complete": true,
+      "cutoffAt": "2026-09-10T23:35:00.000Z",
+      "gamePk": 824550,
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "homeBattingOrder": [
+        803011,
+        678246,
+        808959,
+        643217,
+        695657,
+        695731,
+        805367,
+        671976,
+        668670
+      ],
+      "homeTeamId": 145,
+      "officialDate": "2026-09-10",
+      "requestedTimecode": "20260910_233500",
+      "scheduleResolution": "DIRECT",
+      "scheduledStart": "2026-09-10T23:40:00.000Z",
+      "sourceDigest": "732ffe73834acd144874198bed9a8a5022ca56217b7a73d00bd5d913908c9fd4",
+      "sourceMetadataTimecode": "20260910_232543",
+      "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
+    },
+    {
+      "availability": "COMPLETE",
+      "awayBattingOrder": [
+        650490,
+        668723,
+        691406,
+        676356,
+        802415,
+        663611,
+        622761,
+        663743,
+        656775
+      ],
+      "awayTeamId": 139,
+      "complete": true,
+      "cutoffAt": "2026-09-10T16:10:00.000Z",
+      "gamePk": 824872,
+      "gameState": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "homeBattingOrder": [
+        686948,
+        660670,
+        621566,
+        671739,
+        643289,
+        642086,
+        663586,
+        676551,
+        673490
+      ],
+      "homeTeamId": 144,
+      "officialDate": "2026-09-10",
+      "requestedTimecode": "20260910_161000",
+      "scheduleResolution": "DIRECT",
+      "scheduledStart": "2026-09-10T16:15:00.000Z",
+      "sourceDigest": "de1d0a00453c9b19d5aaddb2ab4c8be34c975b87b2f07887d31048f6fb2f9eef",
+      "sourceMetadataTimecode": "20260910_155122",
       "sourceVersion": "statsapi.mlb.com-v1.1-timecode-pregame-lineup.v4"
     }
   ],

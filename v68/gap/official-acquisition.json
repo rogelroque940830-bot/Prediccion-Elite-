@@ -1,5 +1,5 @@
 {
-  "distinctOfficialDates": 30,
+  "distinctOfficialDates": 31,
   "failures": [],
   "firstOfficialDate": "2026-08-11",
   "games": [
@@ -25605,11 +25605,321 @@
       "season": 2026,
       "sourceDigest": "1f36c7b3af52a891ae8471a51449b7f43bd51e4eb523cf43f0db7eaf780a34d2",
       "sourceVersion": "statsapi.mlb.com-v1.1"
+    },
+    {
+      "awayFinalRuns": 3,
+      "awayTeam": "Texas Rangers",
+      "awayTeamId": 140,
+      "finalState": "Final",
+      "gamePk": 823088,
+      "gameType": "R",
+      "homeFinalRuns": 4,
+      "homeTeam": "Seattle Mariners",
+      "homeTeamId": 136,
+      "innings": [
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 1
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 2
+        },
+        {
+          "awayRuns": 2,
+          "homeRuns": 0,
+          "num": 3
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 4
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 5
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 6
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 4,
+          "num": 7
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 8
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": null,
+          "num": 9
+        }
+      ],
+      "officialDate": "2026-09-10",
+      "season": 2026,
+      "sourceDigest": "a107fff78c967537ed8c93125842e084765b649ed57896034763cac95f90ca5f",
+      "sourceVersion": "statsapi.mlb.com-v1.1"
+    },
+    {
+      "awayFinalRuns": 2,
+      "awayTeam": "Houston Astros",
+      "awayTeamId": 117,
+      "finalState": "Final",
+      "gamePk": 823413,
+      "gameType": "R",
+      "homeFinalRuns": 1,
+      "homeTeam": "Philadelphia Phillies",
+      "homeTeamId": 143,
+      "innings": [
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 1
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 2
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 3
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 4
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 1,
+          "num": 5
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 6
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 7
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 8
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 9
+        }
+      ],
+      "officialDate": "2026-09-10",
+      "season": 2026,
+      "sourceDigest": "624b63fd21947e77ba0a3d69f390dad9d30888edcded86ffbf0418220552d3c8",
+      "sourceVersion": "statsapi.mlb.com-v1.1"
+    },
+    {
+      "awayFinalRuns": 3,
+      "awayTeam": "Colorado Rockies",
+      "awayTeamId": 115,
+      "finalState": "Final",
+      "gamePk": 823499,
+      "gameType": "R",
+      "homeFinalRuns": 10,
+      "homeTeam": "New York Yankees",
+      "homeTeamId": 147,
+      "innings": [
+        {
+          "awayRuns": 0,
+          "homeRuns": 2,
+          "num": 1
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 2,
+          "num": 2
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 3
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 4
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 5
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 6
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 6,
+          "num": 7
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 8
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": null,
+          "num": 9
+        }
+      ],
+      "officialDate": "2026-09-10",
+      "season": 2026,
+      "sourceDigest": "9304a7ac6ddfbffd936dd9e53b6cf929277ed70be8fdfcb298b78456e4280f33",
+      "sourceVersion": "statsapi.mlb.com-v1.1"
+    },
+    {
+      "awayFinalRuns": 2,
+      "awayTeam": "Pittsburgh Pirates",
+      "awayTeamId": 134,
+      "finalState": "Final",
+      "gamePk": 824550,
+      "gameType": "R",
+      "homeFinalRuns": 0,
+      "homeTeam": "Chicago White Sox",
+      "homeTeamId": 145,
+      "innings": [
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 1
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 2
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 3
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 4
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 5
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 6
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 7
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": 0,
+          "num": 8
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 9
+        }
+      ],
+      "officialDate": "2026-09-10",
+      "season": 2026,
+      "sourceDigest": "8f895a4ad6ae044a1750f52b4be0df0db7058572189f8a305868c430c9b98eba",
+      "sourceVersion": "statsapi.mlb.com-v1.1"
+    },
+    {
+      "awayFinalRuns": 1,
+      "awayTeam": "Tampa Bay Rays",
+      "awayTeamId": 139,
+      "finalState": "Final",
+      "gamePk": 824872,
+      "gameType": "R",
+      "homeFinalRuns": 3,
+      "homeTeam": "Atlanta Braves",
+      "homeTeamId": 144,
+      "innings": [
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 1
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 2
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 3
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 4
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 5
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 6
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 0,
+          "num": 7
+        },
+        {
+          "awayRuns": 0,
+          "homeRuns": 3,
+          "num": 8
+        },
+        {
+          "awayRuns": 1,
+          "homeRuns": null,
+          "num": 9
+        }
+      ],
+      "officialDate": "2026-09-10",
+      "season": 2026,
+      "sourceDigest": "31401092c9b4c2c232f6c6e6dcd9213de8b5f4efa4bd1ff785ed88840b42e1f4",
+      "sourceVersion": "statsapi.mlb.com-v1.1"
     }
   ],
-  "generatedAt": "2026-09-10T14:29:57.170618+00:00",
+  "generatedAt": "2026-09-11T14:28:54.985967+00:00",
   "kind": "OFFICIAL_FINAL_HISTORY",
-  "lastOfficialDate": "2026-09-09",
+  "lastOfficialDate": "2026-09-10",
   "researchOnly": true,
   "schemaVersion": "courtedge-p0-step12v68-prospective-ledger.v1"
 }
