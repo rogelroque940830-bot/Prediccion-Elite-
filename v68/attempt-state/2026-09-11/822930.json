@@ -1,0 +1,73 @@
+{
+  "attemptOrder": [
+    "T10",
+    "T7",
+    "T4"
+  ],
+  "attempts": [
+    {
+      "abstractGameState": "Live",
+      "clockStatus": "MISSED_STAGE",
+      "codedGameState": "P",
+      "contextRows": null,
+      "detailedState": "Warmup",
+      "disposition": "PREGAME",
+      "leadMinutes": 7.836303883333333,
+      "observedAt": "2026-09-11T23:02:09.821767Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T10",
+      "startTime": "2026-09-11T23:10:00Z",
+      "targetLeadMinutes": 10,
+      "terminal": false
+    },
+    {
+      "abstractGameState": "Live",
+      "clockStatus": "READY",
+      "codedGameState": "P",
+      "contextDiagnostics": {
+        "attemptStage": "T7",
+        "exactReadyGamesInCaptureWindow": 1,
+        "leadMinutes": 6.997652983333333,
+        "maximumLeadMinutes": 7.0,
+        "reason": "EXACT_READY",
+        "targetGameOnlyRevalidation": true,
+        "targetGamePk": 822930
+      },
+      "contextRows": 1,
+      "detailedState": "Warmup",
+      "disposition": "PREGAME",
+      "leadMinutes": 6.998840716666667,
+      "observedAt": "2026-09-11T23:03:00.069557Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T7",
+      "startTime": "2026-09-11T23:10:00Z",
+      "targetLeadMinutes": 7,
+      "terminal": false
+    }
+  ],
+  "captureStage": "T7",
+  "captureSucceeded": true,
+  "gamePk": 822930,
+  "lastObservedAt": "2026-09-11T23:03:00.069557Z",
+  "officialDate": "2026-09-11",
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sameDateCompletedGameOutcomesUsed": false,
+    "scientificCaptureWindowMaximumMinutes": 20,
+    "scientificModelChanged": false
+  },
+  "retryEligible": false,
+  "retryStartTime": null,
+  "scheduledStartFromPlanner": "2026-09-11T23:10:00Z",
+  "schemaVersion": "courtedge-p0-step12v68-per-game-attempts.v1",
+  "terminal": true,
+  "terminalReason": "CAPTURED",
+  "updatedAt": "2026-09-11T23:03:00.226313Z"
+}
