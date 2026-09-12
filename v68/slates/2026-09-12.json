@@ -1,0 +1,348 @@
+{
+  "games": [
+    {
+      "gameDate": "2026-09-12T17:10:00Z",
+      "gamePk": 824224,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Live",
+        "codedGameState": "I",
+        "detailedState": "In Progress"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 115
+          }
+        },
+        "home": {
+          "team": {
+            "id": 116
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T17:35:00Z",
+      "gamePk": 823496,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Live",
+        "codedGameState": "P",
+        "detailedState": "Warmup"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 121
+          }
+        },
+        "home": {
+          "team": {
+            "id": 147
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T18:20:00Z",
+      "gamePk": 824630,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 134
+          }
+        },
+        "home": {
+          "team": {
+            "id": 112
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T19:07:00Z",
+      "gamePk": 822768,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 110
+          }
+        },
+        "home": {
+          "team": {
+            "id": 141
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T20:05:00Z",
+      "gamePk": 822685,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 108
+          }
+        },
+        "home": {
+          "team": {
+            "id": 120
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T20:05:00Z",
+      "gamePk": 823170,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 135
+          }
+        },
+        "home": {
+          "team": {
+            "id": 137
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T20:10:00Z",
+      "gamePk": 823657,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 114
+          }
+        },
+        "home": {
+          "team": {
+            "id": 142
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T20:10:00Z",
+      "gamePk": 823819,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 119
+          }
+        },
+        "home": {
+          "team": {
+            "id": 146
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T20:10:00Z",
+      "gamePk": 824712,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 118
+          }
+        },
+        "home": {
+          "team": {
+            "id": 111
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T22:10:00Z",
+      "gamePk": 822927,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 117
+          }
+        },
+        "home": {
+          "team": {
+            "id": 139
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T23:10:00Z",
+      "gamePk": 823737,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 113
+          }
+        },
+        "home": {
+          "team": {
+            "id": 158
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T23:15:00Z",
+      "gamePk": 823009,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 145
+          }
+        },
+        "home": {
+          "team": {
+            "id": 138
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-12T23:15:00Z",
+      "gamePk": 824870,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 143
+          }
+        },
+        "home": {
+          "team": {
+            "id": 144
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-13T00:10:00Z",
+      "gamePk": 825035,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 140
+          }
+        },
+        "home": {
+          "team": {
+            "id": 109
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-13T01:40:00Z",
+      "gamePk": 824955,
+      "officialDate": "2026-09-12",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 136
+          }
+        },
+        "home": {
+          "team": {
+            "id": 133
+          }
+        }
+      }
+    }
+  ],
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sanitizedScheduleOnly": true,
+    "scoresStored": false
+  },
+  "schemaVersion": "courtedge-p0-step12v68-daily-slate.v1",
+  "snapshottedAt": "2026-09-12T17:18:05.758056Z",
+  "summary": {
+    "games": 15
+  },
+  "targetOfficialDate": "2026-09-12"
+}
