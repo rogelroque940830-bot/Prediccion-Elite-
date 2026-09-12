@@ -1,0 +1,43 @@
+{
+  "attemptOrder": [
+    "T10",
+    "T7",
+    "T4"
+  ],
+  "attempts": [
+    {
+      "clockStatus": "GAME_STARTED_OR_FINAL",
+      "contextRows": null,
+      "detailedState": "Warmup",
+      "disposition": "STARTED_OR_FINAL",
+      "leadMinutes": 12.317661066666666,
+      "observedAt": "2026-09-12T17:22:40.940336Z",
+      "retryEligible": false,
+      "retryStartTime": null,
+      "scheduledStartChanged": false,
+      "stage": "T10",
+      "startTime": "2026-09-12T17:35:00Z",
+      "targetLeadMinutes": 10,
+      "terminal": true
+    }
+  ],
+  "captureStage": null,
+  "captureSucceeded": false,
+  "gamePk": 823496,
+  "lastObservedAt": "2026-09-12T17:22:40.940336Z",
+  "officialDate": "2026-09-12",
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sameDateCompletedGameOutcomesUsed": false
+  },
+  "retryEligible": false,
+  "retryStartTime": null,
+  "scheduledStartFromPlanner": "2026-09-12T17:35:00Z",
+  "schemaVersion": "courtedge-p0-step12v80-per-game-attempts.v2",
+  "terminal": true,
+  "terminalReason": "GAME_STARTED_OR_FINAL",
+  "updatedAt": "2026-09-12T17:22:41.256466Z"
+}
