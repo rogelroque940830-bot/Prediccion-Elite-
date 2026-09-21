@@ -1,0 +1,84 @@
+{
+  "games": [
+    {
+      "gameDate": "2026-09-21T22:35:00Z",
+      "gamePk": 824787,
+      "officialDate": "2026-09-21",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 141
+          }
+        },
+        "home": {
+          "team": {
+            "id": 110
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-21T22:40:00Z",
+      "gamePk": 824221,
+      "officialDate": "2026-09-21",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "P",
+        "detailedState": "Pre-Game"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 120
+          }
+        },
+        "home": {
+          "team": {
+            "id": 116
+          }
+        }
+      }
+    },
+    {
+      "gameDate": "2026-09-22T01:45:00Z",
+      "gamePk": 823169,
+      "officialDate": "2026-09-21",
+      "status": {
+        "abstractGameState": "Preview",
+        "codedGameState": "S",
+        "detailedState": "Scheduled"
+      },
+      "teams": {
+        "away": {
+          "team": {
+            "id": 142
+          }
+        },
+        "home": {
+          "team": {
+            "id": 137
+          }
+        }
+      }
+    }
+  ],
+  "policy": {
+    "oddsUsedAsFeatures": false,
+    "outcomesRead": false,
+    "pricesRead": false,
+    "realFinancialExposure": 0,
+    "sanitizedScheduleOnly": true,
+    "scoresStored": false
+  },
+  "schemaVersion": "courtedge-p0-step12v68-daily-slate.v1",
+  "snapshottedAt": "2026-09-21T19:37:17.261292Z",
+  "summary": {
+    "games": 3
+  },
+  "targetOfficialDate": "2026-09-21"
+}
