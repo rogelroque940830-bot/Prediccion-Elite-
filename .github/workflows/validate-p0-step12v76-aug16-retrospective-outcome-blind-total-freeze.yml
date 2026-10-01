@@ -1,0 +1,241 @@
+name: Validate P0 Step 12V76 Aug16 Retrospective Outcome Blind Total Freeze
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze-contract.json'
+      - 'scripts/p0-step12v76-acquire-aug16-t5-target.mjs'
+      - 'scripts/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.py'
+      - '.github/workflows/validate-p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  freeze-aug16-retrospective-before-results:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prove V76 contract predates scorer
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTRACT_ADD="$(git log --diff-filter=A --format=%H -- research/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze-contract.json | tail -1)"
+          SCORER_ADD="$(git log --diff-filter=A --format=%H -- scripts/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.py | tail -1)"
+          test -n "$CONTRACT_ADD"; test -n "$SCORER_ADD"
+          test "$CONTRACT_ADD" != "$SCORER_ADD"
+          git merge-base --is-ancestor "$CONTRACT_ADD" "$SCORER_ADD"
+          python - <<'PY'
+          import json
+          c=json.load(open('research/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze-contract.json'))
+          assert c['scientificStatus']=='FROZEN_BEFORE_ANY_V76_SCORER_AND_BEFORE_READING_AUG16_RUN_OUTCOMES'
+          assert c['targetOfficialDate']=='2026-08-16'
+          assert c['outcomeEmbargo']['assistantMayReadTargetFinalRunsBeforePredictionArtifactFreeze'] is False
+          assert c['outcomeEmbargo']['assistantMayReadTargetF5RunsBeforePredictionArtifactFreeze'] is False
+          assert c['targetIdentitySemantics']['finalStarterSubstitutionAllowed'] is False
+          assert c['statistics']['targetOutcomePeekAllowed'] is False
+          assert c['policy']['realFinancialExposure']==0
+          print('V76_PRE_SCORER_OUTCOME_BLIND_FREEZE_PROVED')
+          PY
+
+      - name: Syntax checks
+        run: |
+          node --check scripts/p0-step12v76-acquire-aug16-t5-target.mjs
+          python -m py_compile scripts/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.py scripts/p0-step12v74-aug17-totals-blind-line-freeze.py scripts/p0-step12v68-prospective-source.py scripts/p0-step12v68-acquire-gap-pitch-quality.py
+
+      - name: Install frozen dependencies
+        run: |
+          npm ci --ignore-scripts
+          python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'scipy==1.15.3'
+
+      - name: Download frozen V68 prospective source base
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v68-frozen-prospective-source-base
+          path: frozen
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31967561655
+
+      - name: Expand frozen historical base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/base
+          tar -xzf frozen/step12v3/2026_YTD.tgz -C work/base
+          TABLE="$(find work/base -type f -name game-anatomy-feature-table.json -print -quit)"
+          test -n "$TABLE"
+          ROOT="$(dirname "$TABLE")"
+          test -s "$ROOT/cohort/official-acquisition.json"
+          test -s "$ROOT/cohort/starting-pitcher-history.json"
+          test -s "$ROOT/cohort/pregame-lineup-history.json"
+          test -s "$ROOT/t5-audit/t5-starter-identity-audit.json"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire only prior Aug11-Aug15 chronology-safe history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/gap
+          npx tsx scripts/p0-step12v68-build-gap-cohort.mjs --start '2026-08-11' --end '2026-08-15' --out work/gap --concurrency 4
+          python scripts/p0-step12v68-acquire-gap-pitch-quality.py --cohort-root work/gap --contract research/p0-step12v62-pitch-quality-winner-contract.json --out work/gap-pitch.json --workers 4
+          python - <<'PY'
+          import json
+          p=json.load(open('work/gap/official-acquisition.json'))
+          dates=sorted({str(g['officialDate']) for g in p.get('games',[])})
+          assert dates and dates[-1]=='2026-08-15', dates
+          assert all(d<'2026-08-16' for d in dates)
+          print({'priorDates':dates})
+          PY
+
+      - name: Build Aug16 state strictly from prior dates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v68-prospective-source.py prepare \
+            --base-root '${{ steps.base.outputs.root }}' \
+            --v62-2025 frozen/v62-2025/pitch-quality-2025.json \
+            --v62-2026 frozen/v62-2026/pitch-quality-2026_YTD.json \
+            --gap-root work/gap \
+            --gap-pitch work/gap-pitch.json \
+            --target-date '2026-08-16' \
+            --source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --out work/state-2026-08-16.json
+          python - <<'PY'
+          import json
+          s=json.load(open('work/state-2026-08-16.json'))
+          assert s['targetOfficialDate']=='2026-08-16'
+          assert s['chronology']['historyStrictlyBeforeTargetDate'] is True
+          assert s['chronology']['sameDateOutcomesUsed'] is False
+          assert s['chronology']['latestHistoricalOfficialDate']=='2026-08-15'
+          assert s['policy']['containsTargetOutcomes'] is False
+          print({'stateDigest':s['stateDigest'],'latestHistory':s['chronology']['latestHistoricalOfficialDate']})
+          PY
+
+      - name: Acquire archived Aug16 T-minus-5 target identity only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/p0-step12v76-acquire-aug16-t5-target.mjs --out work/v76-aug16-t5-target.json
+          python - <<'PY'
+          import json
+          x=json.load(open('work/v76-aug16-t5-target.json'))
+          assert x['classification']=='V76_AUG16_ARCHIVED_T5_TARGET_IDENTITIES_OUTCOME_FIELDS_NOT_SERIALIZED'
+          assert x['targetOfficialDate']=='2026-08-16'
+          assert x['readyGames']>0
+          p=x['policy']
+          assert p['finalStarterIdentityRead'] is False
+          assert p['targetRunScoresParsedByThisScript'] is False
+          assert p['targetRunScoresSerialized'] is False
+          assert p['sportsbookLinesRead'] is False
+          for r in x['rows']:
+            assert r['officialDate']=='2026-08-16'
+            assert r['ready'] is True
+            assert r['homeProbablePitcherId']>0 and r['awayProbablePitcherId']>0
+          print({'scheduleGames':x['scheduleGames'],'readyGames':x['readyGames'],'excluded':len(x['exclusions'])})
+          PY
+
+      - name: Download immutable V66 totals evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-totals
+          path: inputs/v66-totals
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965267742
+
+      - name: Download immutable V66 custody evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v66-game-horizon-exposure-custody
+          path: inputs/v66-custody
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31962659793
+
+      - name: Download immutable V67 NB2 evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: p0-step12v67-total-distribution-calibration
+          path: inputs/v67
+          github-token: ${{ github.token }}
+          repository: rogelroque940830-bot/Prediccion-Elite-
+          run-id: 31965619576
+
+      - name: Resolve frozen parent files
+        id: parents
+        shell: bash
+        run: |
+          set -euo pipefail
+          V66="$(find inputs/v66-totals -type f -name v66-totals-report.json -print -quit)"
+          CUST="$(find inputs/v66-custody -type f -name v66-custody-report.json -print -quit)"
+          V67="$(find inputs/v67 -type f -name v67-total-distribution-calibration-report.json -print -quit)"
+          test -n "$V66"; test -n "$CUST"; test -n "$V67"
+          echo "v66=$V66" >> "$GITHUB_OUTPUT"; echo "cust=$CUST" >> "$GITHUB_OUTPUT"; echo "v67=$V67" >> "$GITHUB_OUTPUT"
+
+      - name: Freeze Aug16 retrospective total predictions before user results
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.py \
+            --state work/state-2026-08-16.json \
+            --target-snapshot work/v76-aug16-t5-target.json \
+            --v74-shared-scorer scripts/p0-step12v74-aug17-totals-blind-line-freeze.py \
+            --v68-source-script scripts/p0-step12v68-prospective-source.py \
+            --v68-source-manifest research/p0-step12v68-prospective-source-manifests.json \
+            --v62-contract research/p0-step12v62-pitch-quality-winner-contract.json \
+            --v66-totals-report '${{ steps.parents.outputs.v66 }}' \
+            --v66-custody-report '${{ steps.parents.outputs.cust }}' \
+            --v67-report '${{ steps.parents.outputs.v67 }}' \
+            --contract research/p0-step12v76-aug16-retrospective-outcome-blind-total-freeze-contract.json \
+            --out work/v76-aug16-retrospective-outcome-blind-total-freeze.json
+
+      - name: Validate immutable outcome-blind prediction artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          r=json.load(open('work/v76-aug16-retrospective-outcome-blind-total-freeze.json'))
+          assert r['schemaVersion']=='courtedge-p0-step12v76-aug16-retrospective-outcome-blind-total-freeze.v1'
+          assert r['classification']=='V76_AUG16_RETROSPECTIVE_PSEUDO_PREGAME_TOTAL_PREDICTIONS_FROZEN_OUTCOME_BLIND'
+          assert r['targetOfficialDate']=='2026-08-16'
+          assert r['slate']['predictedRows']>0 and r['slate']['predictedRows']==len(r['rows'])
+          assert r['sourceBoundary']['targetFinalStarterIdentityUsed'] is False
+          assert r['sourceBoundary']['targetRunScoresUsed'] is False
+          assert r['sourceBoundary']['targetF5RunsUsed'] is False
+          assert r['sourceBoundary']['sportsbookLinesRead'] is False
+          assert r['policy']['targetOutcomesReadByScorer'] is False
+          assert r['policy']['predictionMayChangeAfterUserDisclosesResults'] is False
+          assert r['policy']['realFinancialExposure']==0
+          for x in r['rows']:
+            assert x['f5ExpectedRunsMu']>0 and x['fullGameExpectedRunsMu']>0
+            assert len(x['f5CountPmf0To20'])==21 and len(x['fullGameCountPmf0To25'])==26
+          print(json.dumps([{'game':x['awayTeam']+' @ '+x['homeTeam'],'F5_mu':x['f5ExpectedRunsMu'],'FG_mu':x['fullGameExpectedRunsMu'],'awaySP':x['awayProbablePitcher'],'homeSP':x['homeProbablePitcher']} for x in r['rows']],indent=2))
+          PY
+
+      - name: Upload immutable V76 predictions
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-step12v76-aug16-retrospective-outcome-blind-total-freeze
+          path: work/v76-aug16-retrospective-outcome-blind-total-freeze.json
+          if-no-files-found: error
+          retention-days: 90
