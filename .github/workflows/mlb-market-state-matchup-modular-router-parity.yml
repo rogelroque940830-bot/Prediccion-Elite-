@@ -1,0 +1,177 @@
+name: MLB Market State Matchup Modular Router Result Parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mlb-market-state-matchup-modular-router-v1
+    paths:
+      - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
+      - ".github/workflows/mlb-market-state-matchup-modular-router-parity.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "research/mlb-market-state-matchup-modular-router-v1-result-summary.json"
+      - ".github/workflows/mlb-market-state-matchup-modular-router-parity.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  result-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+
+      - name: Download immutable successful modular router artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mlb-market-state-matchup-modular-router-v1
+          path: inputs/result
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 32149000672
+
+      - name: Verify frozen summary metric parity and interpretation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT="$(find inputs/result -type f -name mlb-market-state-matchup-modular-router-v1.json -print -quit)"
+          test -n "$RESULT"
+          test -s "$RESULT"
+          python - "$RESULT" <<'PY'
+          import json, math, sys
+
+          result=json.load(open(sys.argv[1]))
+          summary=json.load(open('research/mlb-market-state-matchup-modular-router-v1-result-summary.json'))
+
+          def close(a,b,tol=1e-12):
+              assert math.isclose(float(a),float(b),rel_tol=tol,abs_tol=tol),(a,b)
+
+          assert summary['schemaVersion']=='courtedge-mlb-market-state-matchup-modular-router-result-summary.v1'
+          assert summary['classification']==result['classification']
+          assert summary['sample']==result['sample']
+          assert summary['paretoPolicies']==result['paretoPolicies']==['CONTROL_UNIFORM_Q85','CHALLENGER_FULL_MODULAR']
+          assert summary['sourceArtifact']=={
+              'artifactId':9328974424,
+              'headSha':'513f166dafb79bd1c5f303042ca5186eebc289df',
+              'jobId':95749842086,
+              'runId':32149000672,
+              'sha256':'bcaa835da7b61077a1bb5de734852906f5781074e8480ab9d97b9c62a7c5765b'
+          }
+
+          aggregate_map={
+              'shadowPickDates':'shadowPickDates',
+              'coveragePct':'combinedDailyOpportunityCoveragePct',
+              'remainingNoPlayDates':'remainingNoPlayDates',
+              'wins':'wins','losses':'losses','pushes':'pushes','decisive':'decisive',
+              'hitRate':'hitRate','meanModelProbability':'meanModelProbabilityOnDecisive',
+              'brier':'decisiveBrierScore','calibrationGap':'absoluteCalibrationGap'
+          }
+          assert set(summary['aggregate'])==set(result['policyResults'])
+          for policy,s in summary['aggregate'].items():
+              r=result['policyResults'][policy]
+              for sk,rk in aggregate_map.items():
+                  if isinstance(s[sk],int):
+                      assert s[sk]==r[rk]
+                  else:
+                      close(s[sk],r[rk])
+              assert s['maxNoPlayStreak']==r['remainingNoPlayStreaks']['maximumNoPlayEligibleDateStreak']
+              close(s['wilsonLower'],r['wilson95']['lower'])
+              close(s['wilsonUpper'],r['wilson95']['upper'])
+
+          full=result['policyResults']['CHALLENGER_FULL_MODULAR']
+          for season,s in summary['fullModularBySeason'].items():
+              r=full['bySeason'][season]
+              for key in ('picks','wins','losses','pushes','remainingNoPlayDates'):
+                  assert s[key]==r[key]
+              close(s['hitRate'],r['hitRate'])
+              close(s['wilsonLower'],r['wilson95']['lower'])
+              close(s['brier'],r['decisiveBrierScore'])
+              close(s['calibrationGap'],r['absoluteCalibrationGap'])
+              close(s['coveragePct'],r['combinedDailyOpportunityCoveragePct'])
+
+          diag_sources={
+              'market':'byMarket',
+              'teamState':'byTeamState',
+              'matchupStructure':'byMatchupStructure',
+              'lineGeometry':'bySelectedSideLineGeometry'
+          }
+          for summary_key,result_key in diag_sources.items():
+              assert set(summary['fullModularKeyDiagnostics'][summary_key])==set(full[result_key])
+              for cell,s in summary['fullModularKeyDiagnostics'][summary_key].items():
+                  r=full[result_key][cell]
+                  assert s['picks']==r['picks']
+                  close(s['hitRate'],r['hitRate'])
+                  close(s['wilsonLower'],r['wilson95']['lower'])
+                  close(s['brier'],r['decisiveBrierScore'])
+                  close(s['calibrationGap'],r['absoluteCalibrationGap'])
+
+          assert summary['pairedComparisonsVsUniformQ85']==result['nestedPolicyComparisonsVsUniformQ85']
+          assert all(not v['holmRejectAt005'] for v in result['nestedPolicyComparisonsVsUniformQ85'].values())
+
+          # Exact descriptive findings locked to the immutable artifact; no post-hoc rule changes are authorized.
+          q85=result['policyResults']['CONTROL_UNIFORM_Q85']
+          sx=result['policyResults']['CHALLENGER_STATE_X_STRUCTURE']
+          fm=full
+          assert q85['combinedDailyOpportunityCoveragePct'] > fm['combinedDailyOpportunityCoveragePct']
+          assert fm['hitRate'] > q85['hitRate']
+          assert fm['wilson95']['lower'] > q85['wilson95']['lower']
+          assert fm['decisiveBrierScore'] < q85['decisiveBrierScore']
+          assert fm['absoluteCalibrationGap'] < q85['absoluteCalibrationGap']
+          assert fm['combinedDailyOpportunityCoveragePct'] > sx['combinedDailyOpportunityCoveragePct']
+          assert fm['hitRate'] > sx['hitRate']
+          assert fm['decisiveBrierScore'] < sx['decisiveBrierScore']
+          assert fm['absoluteCalibrationGap'] < sx['absoluteCalibrationGap']
+          assert fm['remainingNoPlayStreaks']['maximumNoPlayEligibleDateStreak'] < sx['remainingNoPlayStreaks']['maximumNoPlayEligibleDateStreak']
+
+          assert fm['bySeason']['2024']['hitRate'] > 0.80
+          assert fm['bySeason']['2025']['hitRate'] == 0.675
+          assert fm['bySeason']['2025']['absoluteCalibrationGap'] > 0.10
+          assert fm['bySeason']['2026_YTD']['hitRate'] > 0.77
+
+          assert fm['bySelectedSideLineGeometry']['PROTECTED']['picks']==196
+          assert fm['bySelectedSideLineGeometry']['PROTECTED']['hitRate'] > 0.77
+          assert fm['bySelectedSideLineGeometry']['AGGRESSIVE']['hitRate'] < 0.62
+          assert fm['byMarket']['F5_RL_HOME_MINUS_0_5']['hitRate']==0.5
+          assert fm['byMarket']['FG_RL_HOME_PLUS_1_5']['hitRate'] > 0.83
+          assert fm['byTeamState']['WEAK']['hitRate'] > 0.73
+          assert fm['byTeamState']['UNSTABLE']['absoluteCalibrationGap'] > 0.13
+          assert fm['byMatchupStructure']['MIXED']['hitRate'] > fm['byMatchupStructure']['SUPPORTIVE']['hitRate']
+
+          interpretation=summary['interpretation']
+          assert interpretation['aggregateDecision']=='RETROSPECTIVE_PARETO_CHALLENGER_NOT_PRODUCTION_WINNER'
+          assert interpretation['pairedSuperiorityEstablished'] is False
+          assert interpretation['nrfiYrfiContribution']==0
+          assert interpretation['seasonRisk']=='FULL_MODULAR_2025_DEGRADATION_IS_A_MAJOR_ROBUSTNESS_BLOCKER'
+          assert interpretation['mixedVsSupportive'].endswith('MUST_NOT_BE_POSTHOC_REVERSED')
+
+          assert summary['scientificBoundary']==result['scientificBoundary']
+          b=result['scientificBoundary']
+          assert b['retrospective2024To2026IsIndependentConfirmation'] is False
+          assert b['prospectiveConfirmationRequired'] is True
+          assert b['historicalPricesUsed'] is False
+          assert b['positiveEvEstablished'] is False
+          assert b['betEliteProduced'] is False
+          assert b['stakeCalculated'] is False
+          assert b['automaticBetPlacement'] is False
+          assert b['realFinancialExposure']==0
+          assert b['productionChanged'] is False
+          assert b['currentAPlusPremiumHierarchyChanged'] is False
+          assert b['generalV68Fallback'] is False
+          assert b['v80Dependency'] is False
+          assert b['forcedDailyPlayAllowed'] is False
+
+          print('MARKET_STATE_MATCHUP_MODULAR_ROUTER_RESULT_PARITY_VERIFIED')
+          print(json.dumps({
+              'paretoPolicies':result['paretoPolicies'],
+              'uniformQ85':summary['aggregate']['CONTROL_UNIFORM_Q85'],
+              'fullModular':summary['aggregate']['CHALLENGER_FULL_MODULAR'],
+              'fullModularBySeason':summary['fullModularBySeason'],
+              'pairedComparison':summary['pairedComparisonsVsUniformQ85']['CHALLENGER_FULL_MODULAR'],
+          },indent=2))
+          PY
