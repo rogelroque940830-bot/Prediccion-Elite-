@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "courtedge-p0-step12v82-general-x-premium-a-contract.v1",
+  "scientificStatus": "FROZEN_GENERAL_X_PREMIUM_A_DISCOVERY_PLAN_BEFORE_ANY_V82_SCORER_EXISTS",
+  "objective": "Test the user-proposed cross between the frozen V69 General consensus selection and the already-frozen Premium-A evidence. Distinguish the exact confluence General route, where exact Premium-A overlap should be structurally absent because Premium-A has higher routing priority, from the pure General TOP1 candidate before confluence deduplication, where Premium-A can be measured as an independent pregame confirmation signal. Then cross that exact frozen Premium-A evidence with the V79 pregame team-strength relation and the already-frozen A+ probability outputs without refit or threshold search.",
+  "immutableParents": {
+    "mainBaseCommit": "51cb2f9f57f4ecf8565b8936eaa3198af3ecbebd",
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v69Contract": {"path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json", "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"},
+    "v68Contract": {"path": "research/p0-step12v68-fg-winner-prospective-confirmation-contract.json", "gitBlobSha": "e8e3e9dec96ef06c339507c63882378b968e8b8e"},
+    "v79Scorer": {"path": "scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py", "gitBlobSha": "4a4f9f8a98d824f529b802477cc98568d9f78b4d"},
+    "v79Contract": {"path": "research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json", "gitBlobSha": "7389806995657451e14df9203dad1cb0a7aff4fc"},
+    "frozenClassifier": {"path": "server/mlb-frozen-a-plus-classifier.ts", "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2", "requiredVersion": "mlb-frozen-a-plus-classifier.v1"},
+    "frozenRouter": {"path": "server/mlb-frozen-research-route-assessor.ts", "gitBlobSha": "7f98543b34332a0f40bf2c40bf0154e4c3045540"}
+  },
+  "targetDefinition": {
+    "consensusThreshold": 0.55,
+    "officialDateMonthDayMinimum": "05-01",
+    "pureGeneralPortfolio": "GENERAL_CONSENSUS_TOP1_T0.550 before specialized-route deduplication",
+    "confluencePortfolio": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "exactConfluenceGeneralRoute": "V16_V68_CONSENSUS_T0.550",
+    "outcomeMarketForCross": "FULL_GAME_ML",
+    "reasonPureGeneralIsRequired": "Exact Premium-A is a HOME-only frozen rule with higher confluence priority. A HOME General candidate satisfying exact Premium-A and V68 agreement is routed as Premium-A rather than retaining the General route label. Therefore exact General-route x exact Premium-A overlap is expected to be zero by construction; the scientifically meaningful cross is the pure General TOP1 candidate before confluence routing priority is applied."
+  },
+  "premiumADefinition": {
+    "orientation": "Use the frozen classifier exactly. Premium-A is defined only for HOME and is not symmetrized or invented for AWAY selections.",
+    "thresholdsExactly": {
+      "team_win10_diff": 0.09999999999999998,
+      "starter_kbb_adv": 0.02481042579422841,
+      "lineup_exposure_rate_adv": 0.09876543209876554
+    },
+    "componentCountThresholds": [1, 2, 3],
+    "exactPremiumA": "all three frozen Premium-A component thresholds satisfied",
+    "exactAPlus": "frozen Premium-A true AND A_PLUS_C4_2022_FROZEN probability >= 0.69 AND A_PLUS_FULL13_2022_FROZEN probability >= 0.64"
+  },
+  "predeclaredCrosses": {
+    "homeBaseline": true,
+    "premiumComponentCounts": [1, 2, 3],
+    "strengthRelations": ["ALL", "SELECTED_STRONGER", "PEER", "SELECTED_WEAKER"],
+    "aPlusMinProbabilityThresholds": [0.60, 0.64, 0.69],
+    "exactPremiumAWithStrength": true,
+    "exactPremiumAWithStrengthAndAPlusProbability": true,
+    "exactAPlusWithStrength": true,
+    "seasonBreakdown": ["2024", "2025", "2026_YTD"],
+    "homeAwayBaselineComparison": true
+  },
+  "requiredDiagnostics": {
+    "proveExactConfluenceGeneralPremiumAOverlapZero": true,
+    "reportPureGeneralParity": true,
+    "reportEveryPredeclaredCross": true,
+    "reportWilson95": true,
+    "reportSeasonBreakdown": true,
+    "reportStrengthRelationBreakdown": true,
+    "reportPremiumComponentDoseResponse": true,
+    "doNotRankTinyCellsAsElite": true,
+    "minimumRowsForSeriousCandidateDisplay": 20
+  },
+  "statisticsBoundary": {
+    "refitAllowed": false,
+    "recalibrationAllowed": false,
+    "newFeatureSearchAllowed": false,
+    "newThresholdSearchAllowed": false,
+    "premiumThresholdRelaxationAllowed": false,
+    "awayPremiumASymmetrizationAllowed": false,
+    "outcomeDrivenCellAdditionAllowed": false,
+    "postOutcomeBestRulePromotionAllowed": false,
+    "claimIndependentConfirmationAllowed": false
+  },
+  "decisionBoundary": {
+    "researchOnly": true,
+    "productionChanged": false,
+    "v80Changed": false,
+    "routingChanged": false,
+    "rankingChanged": false,
+    "stakeChanged": false,
+    "betEliteAllowed": false,
+    "positiveEvEstablished": false,
+    "realFinancialExposure": 0
+  }
+}
