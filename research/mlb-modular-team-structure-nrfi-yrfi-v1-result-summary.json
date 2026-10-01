@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "courtedge-mlb-modular-team-structure-nrfi-yrfi-result-summary.v1",
+  "classification": "MODULAR_TEAM_STRUCTURE_AND_NRFI_YRFI_RETROSPECTIVE_DISCOVERY_COMPLETE_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "sourceWorkflow": {
+    "runId": 32142060951,
+    "jobId": 95726840845,
+    "conclusion": "success",
+    "artifactId": 9326288769,
+    "artifactName": "mlb-modular-team-structure-nrfi-yrfi-v1",
+    "artifactDigest": "sha256:4932b619d73315ca5a848515e289dcfbe17a9156f5ec91ac3aeec725aa07e62c"
+  },
+  "sample": {
+    "trainingRows2022": 2398,
+    "validationRows2023": 2399,
+    "evaluationRows": 6610,
+    "eligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305
+  },
+  "teamStrengthFinding": {
+    "architecture": "PREGAME_STATE_DEPENDENT_NOT_TEAM_NAME_SPECIFIC",
+    "stableTierAfterPriorGames": 20,
+    "ranking": "SEASON_TO_DATE_WIN_PCT_WITH_RUN_DIFF_PER_GAME_TIE_BREAK",
+    "cutoff": "PREVIOUS_CALENDAR_DATE_ONLY",
+    "sameDayDoubleheaderLeakageAllowed": false,
+    "uniformQ85": {
+      "coveragePct": 90.6930693069307,
+      "allSignalHitRate": 0.7193660610746038,
+      "wilson95Lower": 0.7017366872713963,
+      "calibrationGap": 0.03686237877550791,
+      "rescuedParentNoPlayDates": 258
+    },
+    "modularBalanced": {
+      "mapping": {"STRONG": "Q80", "MIDDLE": "Q85", "WEAK": "Q90", "UNSTABLE": "Q95"},
+      "coveragePct": 87.12871287128714,
+      "allSignalHitRate": 0.7286245353159851,
+      "wilson95Lower": 0.7105598493626465,
+      "calibrationGap": 0.031005049184735123,
+      "rescuedParentNoPlayDates": 240,
+      "deltaVsUniformQ85": {
+        "coveragePoints": -3.5643564356435604,
+        "hitRatePoints": 0.9258474241381376,
+        "wilson95LowerPoints": 0.8823162091250225,
+        "calibrationGapPoints": -0.5857329590772786
+      }
+    },
+    "uniformQ90": {
+      "coveragePct": 84.55445544554455,
+      "allSignalHitRate": 0.7319974953036944,
+      "wilson95Lower": 0.7097367182276649,
+      "calibrationGap": 0.031554018694105346,
+      "rescuedParentNoPlayDates": 227
+    },
+    "modularConservative": {
+      "mapping": {"STRONG": "Q85", "MIDDLE": "Q90", "WEAK": "Q95", "UNSTABLE": "NO_PLAY"},
+      "coveragePct": 77.62376237623762,
+      "allSignalHitRate": 0.7382885696439725,
+      "wilson95Lower": 0.716204781607278,
+      "calibrationGap": 0.026038052364343534,
+      "rescuedParentNoPlayDates": 192,
+      "deltaVsUniformQ90": {
+        "coveragePoints": -6.930693069306926,
+        "hitRatePoints": 0.6291074340278091,
+        "wilson95LowerPoints": 0.6468063379613032,
+        "calibrationGapPoints": -0.5515966329761812
+      }
+    },
+    "tierDiagnostics": {
+      "STRONG": {
+        "uniformQ85": {"decisive": 927, "hitRate": 0.7486515641855448, "wilson95Lower": 0.7197396553636747},
+        "balancedQ80": {"decisive": 1198, "hitRate": 0.7504173622704507, "wilson95Lower": 0.7251367265925438},
+        "interpretation": "LOOSENING_Q85_TO_Q80_INCREASED_VOLUME_WITHOUT_OBSERVED_HIT_RATE_DEGRADATION_IN_THIS_RETROSPECTIVE_DIAGNOSTIC"
+      },
+      "MIDDLE": {
+        "q85": {"decisive": 702, "hitRate": 0.6908831908831908, "wilson95Lower": 0.6557360635529388, "calibrationGap": 0.0641273202865964},
+        "q90": {"decisive": 395, "hitRate": 0.6962025316455697, "wilson95Lower": 0.6491388401961573, "calibrationGap": 0.0681187824237397},
+        "interpretation": "SIMPLE_STRICTER_FRONTIER_DID_NOT_MATERIALLY_SOLVE_MIDDLE_TIER_QUALITY_OR_CALIBRATION"
+      },
+      "WEAK": {
+        "q85": {"decisive": 648, "hitRate": 0.6851851851851852, "wilson95Lower": 0.6484231124600335, "calibrationGap": 0.06648339365943101},
+        "q90": {"decisive": 442, "hitRate": 0.7307692307692307, "wilson95Lower": 0.687560099516132, "calibrationGap": 0.031161925884293118},
+        "q95": {"decisive": 279, "hitRate": 0.7634408602150538, "wilson95Lower": 0.7102077195102092, "calibrationGap": 0.005382064071991044},
+        "interpretation": "WEAK_TEAM_STATE_SHOWED_STRONG_RETROSPECTIVE_SUPPORT_FOR_STRICTER_ACCEPTANCE_PRESSURE"
+      },
+      "UNSTABLE": {
+        "q85": {"decisive": 310, "hitRate": 0.7677419354838709, "wilson95Lower": 0.7176317515413765, "calibrationGap": 0.019400164329400393},
+        "q95": {"decisive": 79, "hitRate": 0.7215189873417721, "wilson95Lower": 0.6141755025997595, "calibrationGap": 0.05363846133203898},
+        "interpretation": "EARLY_SEASON_UNSTABLE_STATE_DID_NOT_SUPPORT_A_SIMPLE_MONOTONIC_STRICTER_IS_BETTER_RULE"
+      }
+    },
+    "strongMarketDiagnostics": {
+      "F3_RL_HOME_PLUS_0_5": {
+        "uniformQ85": {"decisive": 481, "hitRate": 0.7484407484407485, "wilson95Lower": 0.7077990984664939},
+        "modularBalanced": {"decisive": 443, "hitRate": 0.7674943566591422, "wilson95Lower": 0.7259597926913048},
+        "modularConservative": {"decisive": 289, "hitRate": 0.8027681660899654, "wilson95Lower": 0.7530499397738727}
+      },
+      "FG_RL_HOME_PLUS_1_5": {
+        "uniformQ85": {"decisive": 504, "hitRate": 0.7757936507936508, "wilson95Lower": 0.7373747260383016},
+        "modularBalanced": {"decisive": 455, "hitRate": 0.7868131868131868, "wilson95Lower": 0.7468608779104868},
+        "modularConservative": {"decisive": 302, "hitRate": 0.7980132450331126, "wilson95Lower": 0.7491194614270323}
+      }
+    },
+    "conclusion": "STATE_MODULAR_ACCEPTANCE_HAS_RETROSPECTIVE_QUALITY_SUPPORT_BUT_A_SINGLE_LINEAR_STRONG_MIDDLE_WEAK_TEMPLATE_IS_NOT_SUFFICIENT; MARKET_X_TEAM_STATE_X_MATCHUP_STRUCTURE_REQUIRES_CONFIRMATORY_DESIGN"
+  },
+  "nrfiYrfiFinding": {
+    "canonicalMarketAlreadySupported": true,
+    "providerMarketKey": "totals_1st_1_innings",
+    "currentPredeclaredModel": "L2_BINARY_LOGISTIC_9_FEATURE_GLOBAL_FIRST_INNING",
+    "validation2023": {
+      "modelBrier": 0.25069162075590523,
+      "baselineBrier": 0.25032902355051495,
+      "brierImprovement": -0.0003625972053902804,
+      "validationQualified": false
+    },
+    "outOfSampleRobustness": {
+      "combinedModelBrier": 0.25264436974655724,
+      "combinedBaselineBrier": 0.2500257724705956,
+      "combinedBrierImprovement": -0.0026185972759616427,
+      "positiveEvaluationSeasons": 0
+    },
+    "coverageContribution": 0,
+    "decision": "REJECT_CURRENT_NRFI_YRFI_MODEL_NO_CHERRY_PICKING_NO_PRODUCTION_PROMOTION",
+    "priorRepositoryEvidence": {
+      "v26": "NRFI_YRFI_FULL13_BASELINE_REJECTED",
+      "v27": "NRFI_YRFI_I1_CAUSAL_CORE_REJECTED",
+      "v27ValidationBrierImprovement": -0.002239752712884069,
+      "v27CombinedEvaluationBrierImprovement": -0.004476276732201967,
+      "nextArchitectureHypothesis": "MODEL_TOP_AND_BOTTOM_FIRST_INNING_HALF_INNINGS_AS_SEPARATE_MATCHUP_HAZARDS_BEFORE_COMBINING_TO_NRFI_YRFI"
+    }
+  },
+  "scientificBoundary": {
+    "retrospective2024To2026IsIndependentConfirmation": false,
+    "prospectiveConfirmationRequired": true,
+    "winnerDeclaredFromRetrospectiveEvaluation": false,
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "productionChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "forcedDailyPlayAllowed": false
+  }
+}

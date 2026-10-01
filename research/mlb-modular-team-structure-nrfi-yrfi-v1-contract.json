@@ -1,0 +1,212 @@
+{
+  "schemaVersion": "courtedge-mlb-modular-team-structure-nrfi-yrfi-contract.v1",
+  "scientificStatus": "RETROSPECTIVE_MODULAR_TEAM_STRUCTURE_AND_FIRST_INNING_DISCOVERY_WITH_PROSPECTIVE_CONFIRMATION_REQUIRED",
+  "purpose": "Test whether the Daily BEST PICK research should replace uniform acceptance pressure with state-dependent modules based on pregame team strength and matchup structure, and add the previously omitted NRFI/YRFI first-inning-runs family. This is research only and cannot alter the frozen production hierarchy.",
+  "productionBase": {
+    "mainCommit": "236a6af9db8b5d03699abb402333a6fff8b44484",
+    "currentHierarchy": ["A_PLUS", "PREMIUM", "NO_PLAY"],
+    "maximumDailyPicks": 1,
+    "productionBehaviorChanged": false,
+    "generalV68FallbackAllowed": false,
+    "v80DependencyAllowed": false,
+    "forcedDailyPlayAllowed": false
+  },
+  "parentResearch": {
+    "multiMarketCoverageStudy": "research/mlb-multi-market-coverage-expansion-v1-result-summary.json",
+    "parentFindingStatus": "PREDICTIVE_QUALITY_DISCOVERY_NOT_PRICE_VALIDATED_NOT_PRODUCTION_PROMOTED",
+    "parentEligibleSlateDates": 505,
+    "parentActiveDates": 200,
+    "parentNoPlayDates": 305,
+    "parentQualifiedVariants": [
+      "F3_RL_HOME_PLUS_0_5",
+      "F5_ML",
+      "F5_RL_HOME_MINUS_0_5",
+      "F5_RL_HOME_PLUS_0_5",
+      "FG_ML",
+      "FG_RL_HOME_MINUS_1_5",
+      "FG_RL_HOME_PLUS_1_5"
+    ]
+  },
+  "immutableHistoricalInputs": {
+    "step12v3HistoricalUniverse": {
+      "workflowRunId": 31659518059,
+      "artifactId": 9166442982,
+      "artifactName": "p0-step12v3-expanded-regimes",
+      "artifactDigest": "sha256:6d834dfd699dbb9f1ee4b50a557b6613ac0791dff41fadbd5521e189c9fc5f26"
+    },
+    "v66PregameCustody": {
+      "workflowRunId": 31962659793,
+      "artifactId": 9267784926,
+      "artifactName": "p0-step12v66-game-horizon-exposure-custody",
+      "artifactDigest": "sha256:c7f48fad5032553c346986c7460972108f874376dbba482a28fa502ac7a7cc12"
+    }
+  },
+  "chronology": {
+    "trainingSeason": "2022",
+    "validationSeason": "2023",
+    "retrospectiveEvaluationSeasons": ["2024", "2025", "2026_YTD"],
+    "retrospectiveEvaluationIsIndependentConfirmation": false,
+    "reasonNotIndependent": "This protocol was designed after prior multi-market research had already inspected 2024-2026_YTD. Those seasons may quantify robustness and volume but cannot be relabeled as untouched confirmation.",
+    "prospectiveConfirmationStartsAfterProtocolFreeze": true,
+    "sameDateOutcomeLeakageAllowed": false,
+    "futureGameDataAllowed": false,
+    "standingsUseGamesCompletedThroughPreviousCalendarDateOnly": true,
+    "doubleheaderGameOneOutcomeMayAffectGameTwoModule": false,
+    "marketOddsUsedAsPredictiveFeatures": false,
+    "historicalPricesUsed": false
+  },
+  "marketScope": {
+    "carryForwardQualifiedVariants": [
+      "F3_RL_HOME_PLUS_0_5",
+      "F5_ML",
+      "F5_RL_HOME_MINUS_0_5",
+      "F5_RL_HOME_PLUS_0_5",
+      "FG_ML",
+      "FG_RL_HOME_MINUS_1_5",
+      "FG_RL_HOME_PLUS_1_5"
+    ],
+    "newFamilyExactly": "FIRST_INNING_RUNS",
+    "newCanonicalSidesExactly": ["NRFI", "YRFI"],
+    "providerMarketKey": "totals_1st_1_innings",
+    "canonicalContractsAlreadySupported": true,
+    "hardRockFirstPartyProductEvidenceAlreadyRegistered": true,
+    "firstInningHistoricalOutcomePath": "rows[].outcomes.FIRST_INNING.totalRuns",
+    "nrfiSettlement": "WIN_IF_FIRST_INNING_TOTAL_RUNS_EQUALS_ZERO",
+    "yrfiSettlement": "WIN_IF_FIRST_INNING_TOTAL_RUNS_IS_AT_LEAST_ONE",
+    "binaryNoPush": true
+  },
+  "teamStrengthModule": {
+    "principle": "Acceptance pressure is state-dependent, not team-name-dependent. A weak pregame team state must clear a stricter frontier than a strong pregame team state; early-season uncertainty receives the strictest treatment.",
+    "pregameStandingsConstruction": {
+      "source": "historical final outcomes reconstructed chronologically",
+      "cutoff": "previous calendar date only",
+      "metrics": ["season_to_date_win_pct", "season_to_date_run_diff_per_game", "season_to_date_games_played"],
+      "usesCurrentGameOutcome": false,
+      "usesFutureOutcome": false
+    },
+    "strengthTierDefinition": {
+      "minimumPriorGamesForStableTier": 20,
+      "stableRankingMetric": "season_to_date_win_pct",
+      "tieBreaker": "season_to_date_run_diff_per_game",
+      "crossSection": "teams with at least 20 completed games before the game date",
+      "STRONG": "top one-third of the pregame cross-sectional ranking",
+      "MIDDLE": "middle one-third",
+      "WEAK": "bottom one-third",
+      "UNSTABLE": "selected team has fewer than 20 prior games"
+    },
+    "selectedTeamForTeamMarkets": "the model-selected side",
+    "selectedTeamForNrfiYrfi": "NONE_GLOBAL_GAME_STATE",
+    "teamTierMayNeverOverrideNegativeModelEdge": true
+  },
+  "matchupStructureModule": {
+    "principle": "Team strength does not stand alone. The model must also represent the actual matchup structure at the relevant horizon.",
+    "directionalCoreFeatures": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "team_rd10_diff",
+      "starter_velocity_adv",
+      "starter_spin_adv",
+      "starter_swing_miss_adv",
+      "starter_in_zone_adv",
+      "starter_weak_contact_adv"
+    ],
+    "horizonSpecificStructure": {
+      "F3": ["f3_exposure_adv", "starter_quality_x_f3_starter_share"],
+      "F5": ["f5_exposure_adv", "starter_quality_x_f5_starter_share", "bullpen_workload_weighted_f5"],
+      "FG": ["fg_exposure_adv", "starter_quality_x_fg_starter_share", "bullpen_workload_weighted_fg"]
+    },
+    "nrfiYrfiFeaturesExactly": [
+      "combined_lineup_continuity_rate",
+      "combined_lineup_exposure_rate",
+      "combined_starter_erbf",
+      "combined_starter_hrbf",
+      "combined_starter_kbb",
+      "combined_team_rs10",
+      "combined_team_ra10",
+      "min_probable_prior_bf",
+      "min_team_prior_games"
+    ],
+    "nrfiYrfiUsesBullpenFeatures": false,
+    "nrfiYrfiUsesFullGameOutcomeFeatures": false,
+    "featureSearchAllowed": false
+  },
+  "modularAcceptancePolicies": {
+    "frontierThresholdSource": "2023 positive-quality-score distribution within the matching market variant and strength tier",
+    "frontiersAvailableExactly": ["Q80", "Q85", "Q90", "Q95"],
+    "uniformControls": {
+      "UNIFORM_Q85": {"STRONG": "Q85", "MIDDLE": "Q85", "WEAK": "Q85", "UNSTABLE": "Q85"},
+      "UNIFORM_Q90": {"STRONG": "Q90", "MIDDLE": "Q90", "WEAK": "Q90", "UNSTABLE": "Q90"}
+    },
+    "modularTemplates": {
+      "MODULAR_BALANCED": {"STRONG": "Q80", "MIDDLE": "Q85", "WEAK": "Q90", "UNSTABLE": "Q95"},
+      "MODULAR_CONSERVATIVE": {"STRONG": "Q85", "MIDDLE": "Q90", "WEAK": "Q95", "UNSTABLE": "NO_PLAY"}
+    },
+    "nrfiYrfiFrontierByPolicy": {
+      "UNIFORM_Q85": "Q85",
+      "UNIFORM_Q90": "Q90",
+      "MODULAR_BALANCED": "Q85",
+      "MODULAR_CONSERVATIVE": "Q90"
+    },
+    "directionConstraint": "WEAK and UNSTABLE may never receive a looser frontier than MIDDLE; MIDDLE may never receive a looser frontier than STRONG.",
+    "postOutcomeTemplateEditingAllowed": false,
+    "postOutcomeTierEditingAllowed": false,
+    "postOutcomeNrfiYrfiFrontierEditingAllowed": false,
+    "forcedCandidateAllowed": false
+  },
+  "nrfiYrfiModel": {
+    "family": "L2_BINARY_LOGISTIC_REGRESSION",
+    "target": "YRFI_EQUALS_ONE_IF_FIRST_INNING_TOTAL_RUNS_AT_LEAST_ONE_ELSE_ZERO",
+    "l2Strength": 1.0,
+    "trainingOnlyMedianImputation": true,
+    "trainingOnlyStandardization": true,
+    "solver": "SCIPY_L_BFGS_B",
+    "maxIter": 12000,
+    "formalBaseline": "EMPIRICAL_2022_YRFI_RATE",
+    "validationGate": "2023_BRIER_IMPROVEMENT_MUST_BE_POSITIVE_VS_2022_EMPIRICAL_BASELINE",
+    "sideSelection": "CHOOSE_NRFI_OR_YRFI_ONLY_WHEN_SELECTED_SIDE_MODEL_PROBABILITY_EXCEEDS_ITS_MATCHING_2022_BASELINE_AND_MINIMUM_MODEL_PROBABILITY",
+    "minimumSelectedSideModelProbability": 0.60,
+    "frontiersExactly": ["Q80", "Q85", "Q90", "Q95"],
+    "frontierSource": "2023 positive selected-side quality-score distribution",
+    "modelSearchAllowed": false,
+    "hyperparameterSearchAllowed": false,
+    "postOutcomeSideSelectionAllowed": false
+  },
+  "validationAndReporting": {
+    "validationSeason": "2023",
+    "allPredeclaredPoliciesMustBeReported": true,
+    "nrfiYrfiMustPassValidationBeforeContributingCoverage": true,
+    "reportByStrengthTier": true,
+    "reportByMarket": true,
+    "reportBySeason": true,
+    "reportParentNoPlayRescue": true,
+    "reportUniqueRescue": true,
+    "reportHitRate": true,
+    "reportWilson95": true,
+    "reportBrier": true,
+    "reportCalibrationGap": true,
+    "reportCoverage": true,
+    "reportNoPlayStreaks": true,
+    "compareModularAgainstUniformControls": true,
+    "winnerMayNotBeDeclaredFrom2024_2026RetrospectiveEvaluation": true
+  },
+  "priceAndPromotionBoundary": {
+    "historicalPricesUsed": false,
+    "positiveEvEstablished": false,
+    "betEliteProduced": false,
+    "stakeCalculated": false,
+    "automaticBetPlacement": false,
+    "realFinancialExposure": 0,
+    "exactLiveLineAndPriceRequiredBeforeAnyFutureExecution": true,
+    "strongTeamMayHaveLowerPredictiveAcceptancePressureButStillRequiresPositiveLiveExecutionEconomics": true
+  },
+  "productionPolicy": {
+    "productionBehaviorChanged": false,
+    "currentAPlusPremiumHierarchyChanged": false,
+    "currentAPlusPremiumDatesMayBeReplacedInThisStudy": false,
+    "newMarketMayOnlyBeStudiedAsNoPlayRescue": true,
+    "dailyBestPickMaximumRemainsOne": true,
+    "noPlayRemainsMandatoryWhenNoValidatedRouteExists": true,
+    "noGeneralV68Fallback": true,
+    "noV80Dependency": true
+  }
+}
