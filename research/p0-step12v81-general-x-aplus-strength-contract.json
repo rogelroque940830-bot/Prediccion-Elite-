@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "courtedge-p0-step12v81-general-x-aplus-strength-contract.v1",
+  "scientificStatus": "FROZEN_GENERAL_X_APLUS_SIGNAL_DISCOVERY_PLAN_BEFORE_ANY_V81_SCORER_EXISTS",
+  "mainBaseSha": "51cb2f9f57f4ecf8565b8936eaa3198af3ecbebd",
+  "objective": "Interrogate the exact historical V69 General TOP1 route for whether the strongest already-frozen A+ model signals can distinguish the General wins from the General losses, alone and jointly with the V79 structural-strength regime. This is a retrospective discovery study only and cannot alter V80, V68, production, ranking, routing, staking, or BET_ELITE.",
+  "targetCohort": {
+    "portfolioExactly": "CONFLUENCE_LEDGER_TOP1_T0.550",
+    "routeExactly": "V16_V68_CONSENSUS_T0.550",
+    "marketExactly": "FULL_GAME_ML",
+    "expectedDecisiveRows": 223,
+    "expectedWins": 128,
+    "expectedLosses": 95,
+    "seasons": ["2024", "2025", "2026_YTD"],
+    "minimumOfficialDateMonthDay": "05-01"
+  },
+  "immutableParents": {
+    "v69Scorer": {"path": "scripts/p0-step12v69-confluence-frequency-quality-frontier.py", "gitBlobSha": "4525311f2ea8dab4c3e252f39fbab7de2e7d9a83"},
+    "v69Contract": {"path": "research/p0-step12v69-confluence-frequency-quality-frontier-contract.json", "gitBlobSha": "d58e159951bf26da54830a2e8f1eba225679dee0"},
+    "v79Scorer": {"path": "scripts/p0-step12v79-dynamic-team-strength-route-threat-regimes.py", "gitBlobSha": "4a4f9f8a98d824f529b802477cc98568d9f78b4d"},
+    "v79Contract": {"path": "research/p0-step12v79-dynamic-team-strength-route-threat-regimes-contract.json", "gitBlobSha": "7389806995657451e14df9203dad1cb0a7aff4fc"},
+    "frozenAPlusClassifier": {"path": "server/mlb-frozen-a-plus-classifier.ts", "gitBlobSha": "b5b23d69aab6f9d8f3cef87af86d88a314b1cca2", "requiredVersion": "mlb-frozen-a-plus-classifier.v1"}
+  },
+  "aPlusSignalFamilies": {
+    "directionalProbabilityDefinition": "For a General HOME selection use the frozen A+ home probability. For a General AWAY selection use one minus the frozen A+ home probability. This does not redefine the frozen home-only A+ route; it is an outcome-blind directional diagnostic of the same two frozen A+ models.",
+    "primaryDirectionalScores": [
+      "aPlusC4Selected",
+      "aPlusFull13Selected",
+      "aPlusMinSelected",
+      "aPlusMeanSelected"
+    ],
+    "predeclaredMinSelectedThresholds": [0.50, 0.55, 0.60, 0.64, 0.69],
+    "frozenThresholdMarginDefinition": "min(aPlusC4Selected-0.69, aPlusFull13Selected-0.64)",
+    "predeclaredMarginThresholds": [-0.15, -0.10, -0.05, 0.0],
+    "premiumComponentFeatures": [
+      "team_win10_diff",
+      "starter_kbb_adv",
+      "lineup_exposure_rate_adv"
+    ],
+    "directionalPremiumComponentSupport": "Multiply each raw advantage feature by +1 for HOME selection and -1 for AWAY selection; count how many are >0. This tests directional support without pretending the frozen HOME Premium-A thresholds are symmetric for AWAY.",
+    "predeclaredDirectionalSupportCounts": [0, 1, 2, 3],
+    "c4StrongDirectionalFeatures": [
+      "lineup_exposure_rate_adv",
+      "starter_kbb_adv",
+      "team_rd10_diff"
+    ],
+    "c4StrongFeatureSupport": "Multiply each feature by +1 HOME / -1 AWAY and count positive signs.",
+    "predeclaredC4SupportCounts": [0, 1, 2, 3]
+  },
+  "structuralStrengthCross": {
+    "useExactV79StrengthFormula": true,
+    "relations": ["ALL", "SELECTED_STRONGER", "PEER", "SELECTED_WEAKER", "PEER_OR_WEAKER"],
+    "primaryJointQuestion": "Within General TOP1, does combining SELECTED_STRONGER with high frozen A+ directional support produce a materially higher and more stable hit rate than General overall and than SELECTED_STRONGER alone?"
+  },
+  "analysisPlan": {
+    "allThresholdsAndCrossesPredeclaredBeforeScorer": true,
+    "minimumRowsForCandidateTable": 15,
+    "minimumRowsForSeriousCandidate": 30,
+    "reportEveryPredeclaredCell": true,
+    "rankCandidateCellsBy": [
+      "hitRateDescending",
+      "wilson95LowerDescending",
+      "decisiveRowsDescending"
+    ],
+    "seasonBreakdownRequired": true,
+    "homeAwayBreakdownRequired": true,
+    "winsLossesSignalDistributionRequired": true,
+    "continuousAssociationRequired": true,
+    "continuousAssociationExactly": [
+      "point_biserial_correlation_aPlusMinSelected_vs_win",
+      "univariate_logistic_win_on_aPlusMinSelected",
+      "Mann_Whitney_two_sided_aPlusMinSelected_wins_vs_losses"
+    ],
+    "noOutcomeDrivenThresholdAddition": true,
+    "noFeatureSearchOutsideFrozenFamilies": true,
+    "noRefit": true,
+    "noRecalibration": true,
+    "noOdds": true
+  },
+  "interpretationBoundary": {
+    "discoveryOnly": true,
+    "bestHistoricalCellMayNotBePromotedDirectly": true,
+    "v80Changed": false,
+    "v68Changed": false,
+    "productionChanged": false,
+    "rankingChanged": false,
+    "routingChanged": false,
+    "stakingChanged": false,
+    "betEliteChanged": false,
+    "realFinancialExposure": 0,
+    "nextStepIfStrongPatternEmerges": "Freeze a separate prospective confirmation contract for the exact chosen A+ cross before using it operationally."
+  }
+}
